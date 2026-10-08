@@ -6,16 +6,17 @@ Rules for typed artifact resolution: `Saml<Idp>::issue_artifact`,
 response. It does not accept a Web SSO session.
 
 This flow is the identity provider storing a protocol message and the service
-provider resolving it. It does not deliver an artifact through the browser,
-and it does not resolve an `AuthnRequest` artifact issued by the service
-provider. It does not claim the IdP or SP operational mode in the SAML V2.0
-conformance specification.
+provider resolving it. Browser delivery of a Web SSO response artifact is in
+[HTTP-Artifact response](web-browser-sso-artifact.md). This flow does not
+resolve an `AuthnRequest` artifact issued by the service provider. It does not
+claim the IdP or SP operational mode in the SAML V2.0 conformance
+specification.
 
 Normative text is SAML Core 2.0, Bindings 2.0, Profiles 2.0, and Metadata
 2.0, as corrected by Approved Errata 05. Schema citations are the OASIS
 protocol and metadata schemas. Errata that change this flow are E4, E19, and
-E31. E2 and E59 govern HTTP-Artifact metadata and browser delivery. That
-binding is outside this flow.
+E31. E2 and E59 govern HTTP-Artifact metadata and browser delivery. They are
+recorded with the [HTTP-Artifact response](web-browser-sso-artifact.md).
 
 The deployment POSTs the SOAP envelope. TLS, HTTP authentication, and an HTTP
 500 SOAP fault stay there. Conformance Requirements §3.5 and §5 are those
@@ -111,7 +112,10 @@ Profiles §4.1.4.4 applies only when the caller stores the message with
 | Only the service provider the response was issued to receives it | Artifact issuer | Generate ArtifactResponse | Mandatory. Profiles §4.1.4.4 |
 
 The binding, not a message signature, is the authentication mechanism from
-§4.1.4.4. The returned XML is not passed through `finish_sso`.
+§4.1.4.4 for this dereference. `ArtifactResolution::finish` returns the
+message and does not accept a session. `finish_sso` accepts it through
+`BrowserInput::artifact`, under the rules in
+[HTTP-Artifact response](web-browser-sso-artifact.md).
 
 ## Service provider acceptance
 
@@ -139,8 +143,7 @@ the assertion query profile are not implemented.
 
 ## Outside this flow
 
-- Browser delivery of an artifact, including HTTP-Redirect and HTTP-POST form encoding in Bindings §3.6.
-- Errata 05 E2 and E59, which clarify HTTP-Artifact metadata and the nested browser exchange.
+- Browser delivery of an artifact, which is the [HTTP-Artifact response](web-browser-sso-artifact.md) for a Web SSO `<Response>`.
 - `AuthnRequest` over HTTP-Artifact.
 - Signing `ArtifactResolve` or `ArtifactResponse`.
 - The IdP operational mode and the SP operational mode.

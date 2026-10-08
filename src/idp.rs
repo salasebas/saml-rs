@@ -15,6 +15,7 @@ use crate::template::{
     validate_tag_prefix, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
 };
 
+mod artifact;
 mod login_response;
 mod paos;
 

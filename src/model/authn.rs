@@ -178,13 +178,18 @@ impl AuthnRequest {
     /// Typed request from the SOAP leg of Enhanced Client/Proxy SSO.
     ///
     /// A `ProtocolBinding` that names the PAOS binding is reported as none.
-    /// The raw flow keeps the attribute.
+    /// The raw flow keeps the attribute. One that names HTTP-Artifact is
+    /// rejected.
     pub(crate) fn try_from_paos_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
         Self::from_flow(raw_flow, |extract| {
             if extract.get_str("request.protocolBinding") == Some(PAOS_BINDING) {
                 return Ok(None);
             }
-            optional_response_binding(extract)
+            match optional_response_binding(extract)? {
+                Some(SsoResponseBinding::Artifact) => Err(SamlError::UndefinedBinding),
+                binding @ (Some(SsoResponseBinding::Post | SsoResponseBinding::SimpleSign)
+                | None) => Ok(binding),
+            }
         })
     }
 

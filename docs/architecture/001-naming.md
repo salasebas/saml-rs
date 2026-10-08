@@ -102,6 +102,7 @@ pub enum SsoRequestBinding {
 pub enum SsoResponseBinding {
     Post,
     SimpleSign,
+    Artifact,
 }
 
 pub enum LogoutBinding {
@@ -115,6 +116,8 @@ Rationale:
 
 - Web SSO AuthnRequests can use Redirect, POST, and SimpleSign.
 - Web SSO Responses should not use Redirect in the typed API.
+- A Web SSO Response can be delivered as an HTTP-Artifact. Its options are
+  `RespondSso<ArtifactDelivery>`, which `respond_sso` does not take.
 - Logout has a separate legal binding set.
 - Raw `Binding::Artifact` remains the browser HTTP-Artifact binding. SOAP
   artifact resolution does not add a `Binding` variant.

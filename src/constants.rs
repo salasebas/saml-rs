@@ -14,7 +14,8 @@ pub enum Binding {
     Post,
     /// HTTP-POST-SimpleSign binding.
     SimpleSign,
-    /// HTTP-Artifact binding (not implemented; present for parity).
+    /// HTTP-Artifact binding. The typed API delivers a Web SSO `<Response>`
+    /// with it. The raw flows do not implement it.
     Artifact,
 }
 
@@ -272,6 +273,8 @@ pub mod url_params {
     pub const SIGNATURE: &str = "Signature";
     /// `RelayState` parameter.
     pub const RELAY_STATE: &str = "RelayState";
+    /// `SAMLart` parameter.
+    pub const SAML_ART: &str = "SAMLart";
 }
 
 /// Certificate use keyword (`wording.certUse`).

@@ -1,6 +1,9 @@
 use core::marker::PhantomData;
 
+use super::artifact::ArtifactEncoding;
 use super::forms::{FormField, PostForm};
+use crate::artifact::Artifact;
+use crate::binding::append_redirect_query;
 use crate::constants::url_params;
 use crate::constants::Binding;
 use crate::entity::BindingContext;
@@ -100,7 +103,8 @@ impl<Message> Outbound<Message> {
         self.relay_state.as_ref()
     }
 
-    /// Redirect URL for Redirect actions.
+    /// Redirect URL for Redirect actions, and for an artifact delivered in a
+    /// redirect.
     ///
     /// # Errors
     ///
@@ -115,11 +119,12 @@ impl<Message> Outbound<Message> {
         Err(SamlError::UndefinedBinding)
     }
 
-    /// POST form for POST and SimpleSign actions.
+    /// POST form for POST and SimpleSign actions, and for an artifact
+    /// delivered in a form.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::UndefinedBinding`] when this action is Redirect.
+    /// Returns [`SamlError::UndefinedBinding`] when this action is a redirect.
     pub fn post_form(&self) -> Result<&PostForm, SamlError> {
         if matches!(self.kind, OutboundKind::Post | OutboundKind::SimpleSignPost) {
             return self
@@ -138,6 +143,62 @@ impl<Message> Outbound<Message> {
     /// Consume the typed action and return the raw compatibility context.
     pub fn into_raw_context(self) -> BindingContext {
         self.raw_context
+    }
+}
+
+impl Outbound<SsoResponse> {
+    /// Browser action that delivers `artifact` to the assertion consumer `acs`.
+    ///
+    /// `id` is the ID of the stored `<Response>`.
+    pub(crate) fn artifact(
+        id: String,
+        relay_state: Option<String>,
+        acs: &str,
+        artifact: &Artifact,
+        encoding: ArtifactEncoding,
+    ) -> Result<Self, SamlError> {
+        let raw_context = BindingContext {
+            id,
+            context: artifact.as_str().to_string(),
+            relay_state,
+            entity_endpoint: acs.to_string(),
+            binding: Binding::Artifact,
+            request_type: url_params::SAML_ART,
+            signature: None,
+            sig_alg: None,
+        };
+        let id = MessageId::try_new(raw_context.id.clone())?;
+        let relay_state = raw_context
+            .relay_state
+            .clone()
+            .map(RelayState::try_new)
+            .transpose()?;
+        let (kind, redirect_url, post_form) = match encoding {
+            ArtifactEncoding::Url => {
+                let query = crate::binding::redirect_binding_query(
+                    url_params::SAML_ART,
+                    artifact.as_str(),
+                    raw_context.relay_state.as_deref(),
+                );
+                let url = append_redirect_query(acs, &query);
+                EndpointUrl::try_new(url.clone())?;
+                (OutboundKind::Redirect, Some(url), None)
+            }
+            ArtifactEncoding::Form => (
+                OutboundKind::Post,
+                None,
+                Some(post_form_from_context(&raw_context, false)?),
+            ),
+        };
+        Ok(Self {
+            id,
+            relay_state,
+            kind,
+            redirect_url,
+            post_form,
+            raw_context,
+            _message: PhantomData,
+        })
     }
 }
 

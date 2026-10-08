@@ -1,6 +1,7 @@
 use crate::browser::{BrowserInput, Outbound, PendingAuthnRequest, SsoResponseBinding, Started};
 use crate::config::IdpDescriptor;
-use crate::flow::{FlowResultWithSignatureEvidence, HttpRequest};
+use crate::constants::Binding;
+use crate::flow::{FlowResultWithSignatureEvidence, HttpRequest, SignedMessageDestination};
 use crate::model::{
     AuthnRequest, OutstandingLogout, SamlValidationContext, SsoResponse, SsoSession,
     VerifiedXmlSignature,
@@ -28,6 +29,74 @@ pub(super) fn session_from_verified_flow(
         })
         .collect();
     SsoSession::try_from_with_verified_xml_signatures(flow, verified_xml_signatures)
+}
+
+/// Raw parse input for a typed SSO response.
+struct ResponseParseInput {
+    binding: Binding,
+    request: HttpRequest,
+    signed_destination: SignedMessageDestination,
+}
+
+impl ResponseParseInput {
+    /// An artifact input is accepted only when `idp` returned the message
+    /// for the delivered artifact. Its XML is parsed as an HTTP-POST response.
+    fn try_new(idp: &IdpDescriptor, input: BrowserInput<SsoResponse>) -> Result<Self, SamlError> {
+        let (delivered, resolved) = match input {
+            BrowserInput::Artifact {
+                delivered,
+                resolved,
+                ..
+            } => (delivered, resolved),
+            BrowserInput::Redirect { .. }
+            | BrowserInput::Post { .. }
+            | BrowserInput::SimpleSignPost { .. } => {
+                return Ok(Self {
+                    binding: input_binding(&input),
+                    request: HttpRequest::try_from(input)?,
+                    signed_destination: SignedMessageDestination::Required,
+                });
+            }
+        };
+        if resolved.identity_provider() != idp.entity_id().as_str() {
+            return Err(SamlError::issuer_mismatch(
+                idp.entity_id().as_str(),
+                Some(resolved.identity_provider()),
+            ));
+        }
+        if resolved.artifact() != delivered.artifact().as_str() {
+            return Err(SamlError::Invalid(
+                "resolved message does not belong to the delivered artifact".into(),
+            ));
+        }
+        if resolved.local_name() != "Response" {
+            return Err(SamlError::ProtocolProfile(
+                "artifact must resolve to a protocol Response".into(),
+            ));
+        }
+        Ok(Self {
+            binding: Binding::Post,
+            request: HttpRequest::post(vec![(
+                crate::constants::url_params::SAML_RESPONSE.into(),
+                crate::binding::base64_encode(resolved.xml().as_bytes()),
+            )]),
+            signed_destination: SignedMessageDestination::Optional,
+        })
+    }
+
+    fn options<'a>(
+        &self,
+        validation: &SamlValidationContext<'_>,
+        expected_recipient: Option<&'a str>,
+    ) -> LoginResponseParseOptions<'a> {
+        let options =
+            LoginResponseParseOptions::at(validation.now(), validation.clock_skew().as_millis())
+                .with_signed_destination(self.signed_destination);
+        match expected_recipient {
+            Some(expected_recipient) => options.with_expected_recipient(expected_recipient),
+            None => options,
+        }
+    }
 }
 
 pub(super) fn finish_validated_session(
@@ -143,11 +212,18 @@ impl Saml<Sp> {
     /// [`Self::finish_sso_with_outstanding_logout`] to reject a later assertion
     /// that matches one.
     ///
+    /// A response delivered as an HTTP-Artifact is passed as
+    /// [`BrowserInput::artifact`], after [`Self::resolve_artifact`]. It needs
+    /// an XML signature on the `Response` or on each assertion, as an
+    /// HTTP-POST response does.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
     /// request, including issuer, binding, relay state, destination, recipient,
-    /// or `InResponseTo` mismatches; when XML, signature, certificate trust,
+    /// or `InResponseTo` mismatches; when an artifact input pairs the artifact
+    /// with a message resolved from another artifact or another identity
+    /// provider; when XML, signature, certificate trust,
     /// audience, condition, or time validation fails; when the assertions do
     /// not share one issuer and one principal; or when replay validation
     /// returns `ReplayDetected` or `TimeWindowInvalid`.
@@ -216,6 +292,10 @@ impl Saml<Sp> {
     /// [`Self::accept_unsolicited_sso_with_outstanding_logout`] to reject a
     /// later assertion that matches one.
     ///
+    /// A [`BrowserInput::artifact`] response must name this service
+    /// provider's default HTTP-Artifact assertion consumer as its recipient,
+    /// or the first one when none is default.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the browser binding is not valid for SSO
@@ -262,19 +342,15 @@ impl Saml<Sp> {
         ensure_sso_response_binding(input_binding(&input), pending.response_binding())?;
         ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
         let raw_idp = raw_idp_descriptor(idp)?;
-        let request = HttpRequest::try_from(input)?;
+        let parse = ResponseParseInput::try_new(idp, input)?;
         let flow = self
             .raw_service_provider()
             .parse_login_response_with_request_id_at(
                 &raw_idp,
-                pending.response_binding().as_binding(),
-                &request,
+                parse.binding,
+                &parse.request,
                 pending.request_id().as_str(),
-                LoginResponseParseOptions::at(
-                    validation.now(),
-                    validation.clock_skew().as_millis(),
-                )
-                .with_expected_recipient(pending.acs().location().as_str()),
+                parse.options(validation, Some(pending.acs().location().as_str())),
             )?;
         session_from_verified_flow(flow)
     }
@@ -288,15 +364,23 @@ impl Saml<Sp> {
         relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input_binding(&input))?;
         let raw_idp = raw_idp_descriptor(idp)?;
-        let request = HttpRequest::try_from(input)?;
+        let artifact_consumer = match binding {
+            SsoResponseBinding::Artifact => Some(
+                self.raw_service_provider()
+                    .metadata
+                    .artifact_assertion_consumer_location()
+                    .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
+            ),
+            SsoResponseBinding::Post | SsoResponseBinding::SimpleSign => None,
+        };
+        let parse = ResponseParseInput::try_new(idp, input)?;
         let flow = self
             .raw_service_provider()
             .parse_unsolicited_login_response_at(
                 &raw_idp,
-                binding.as_binding(),
-                &request,
-                validation.now(),
-                validation.clock_skew().as_millis(),
+                parse.binding,
+                &parse.request,
+                parse.options(validation, artifact_consumer.as_deref()),
             )?;
         session_from_verified_flow(flow)
     }

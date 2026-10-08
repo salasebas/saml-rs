@@ -200,6 +200,21 @@ impl SpMetadata {
             .any(|endpoint| endpoint.binding == binding && endpoint.location == location)
     }
 
+    /// HTTP-Artifact assertion consumer location marked default, or the first
+    /// one when none is default.
+    pub(crate) fn artifact_assertion_consumer_location(&self) -> Option<String> {
+        let mut endpoints = self
+            .assertion_consumer_service_endpoints()
+            .into_iter()
+            .filter(|endpoint| endpoint.binding == Binding::Artifact)
+            .peekable();
+        let first = endpoints.peek().cloned();
+        endpoints
+            .find(|endpoint| endpoint.is_default)
+            .or(first)
+            .map(|endpoint| endpoint.location)
+    }
+
     /// HTTP-POST and HTTP-POST-SimpleSign assertion consumer endpoints.
     fn posted_response_endpoints(&self) -> Vec<AcsMetadataEndpoint> {
         self.assertion_consumer_service_endpoints()

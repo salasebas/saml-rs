@@ -18,6 +18,7 @@ pub(crate) use post_form::{
     try_saml_post_binding_form_with_signature,
 };
 pub use post_form::{saml_post_binding_form, try_saml_post_binding_form};
+pub(crate) use redirect::append_redirect_query;
 pub use redirect::{
     append_signature, build_redirect_octet, build_redirect_url, redirect_binding_query,
 };

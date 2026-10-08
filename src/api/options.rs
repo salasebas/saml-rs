@@ -1,4 +1,4 @@
-use crate::browser::{LogoutBinding, SsoRequestBinding, SsoResponseBinding};
+use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::model::{Attributes, RelayStateParam, Status};
 use crate::sp::WebBrowserSsoProducer;
 
@@ -79,10 +79,22 @@ impl StartSso {
     }
 }
 
+/// Delivery of a `<Response>` the browser carries itself.
+///
+/// This is the delivery of [`RespondSso::post`] and
+/// [`RespondSso::simple_sign`]. [`RespondSso::artifact`] uses
+/// [`ArtifactDelivery`] in its place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MessageDelivery;
+
 /// Options for issuing SAML Responses from an IdP.
+///
+/// `Delivery` is [`MessageDelivery`] when the browser carries the response,
+/// and [`ArtifactDelivery`] when it carries an artifact for a stored one.
 #[derive(Debug, Clone)]
-pub struct RespondSso {
+pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) binding: SsoResponseBinding,
+    pub(super) delivery: Delivery,
     pub(super) relay_state: Option<RelayStateParam>,
     response_signing: ResponseSigning,
     pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
@@ -111,11 +123,41 @@ impl RespondSso {
     fn new(binding: SsoResponseBinding) -> Self {
         Self {
             binding,
+            delivery: MessageDelivery,
             relay_state: None,
             response_signing: ResponseSigning::FollowEncryptedCbcRecommendation,
             web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
             status: None,
             attributes: Attributes::default(),
+        }
+    }
+}
+
+impl RespondSso<ArtifactDelivery> {
+    /// Respond with HTTP-Artifact.
+    ///
+    /// [`Saml<Idp>::respond_sso_artifact`](crate::Saml::respond_sso_artifact)
+    /// and
+    /// [`Saml<Idp>::initiate_sso_artifact`](crate::Saml::initiate_sso_artifact)
+    /// take these options. They store the response until the service
+    /// provider resolves the artifact. The stored response is signed the way
+    /// an HTTP-POST response is.
+    pub fn artifact(delivery: ArtifactDelivery) -> Self {
+        RespondSso::new(SsoResponseBinding::Artifact).delivered(delivery)
+    }
+}
+
+impl<Delivery> RespondSso<Delivery> {
+    /// The same options with another delivery.
+    pub(super) fn delivered<Other>(self, delivery: Other) -> RespondSso<Other> {
+        RespondSso {
+            binding: self.binding,
+            delivery,
+            relay_state: self.relay_state,
+            response_signing: self.response_signing,
+            web_browser_sso_producer: self.web_browser_sso_producer,
+            status: self.status,
+            attributes: self.attributes,
         }
     }
 
@@ -166,7 +208,8 @@ impl RespondSso {
 
     /// Apply Web Browser SSO generation rules to this response.
     ///
-    /// [`Self::post`] and [`Self::simple_sign`] leave this off. When enabled, a
+    /// [`RespondSso::post`], [`RespondSso::simple_sign`], and
+    /// [`RespondSso::artifact`] leave this off. When enabled, a
     /// successful response carries an authentication statement whose
     /// `AuthnInstant` is the assertion `IssueInstant` and whose
     /// `AuthnContextClassRef` is

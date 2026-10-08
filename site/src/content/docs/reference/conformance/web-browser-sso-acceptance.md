@@ -23,7 +23,10 @@ Schema citations are the OASIS assertion and protocol schemas.
 Outbound AuthnRequest signing, identifier creation, and logout are not part of
 the service-provider accept combination. Single Logout acceptance is classified
 in [Logout](single-logout.md). Replay and metadata trust stay caller
-arguments, classified in [Metadata and replay](metadata-and-replay.md).
+arguments, classified in [Metadata and replay](metadata-and-replay.md). A
+response resolved from an HTTP-Artifact follows the HTTP-POST rows below,
+with the differences in
+[HTTP-Artifact response](web-browser-sso-artifact.md).
 
 ## Service provider
 

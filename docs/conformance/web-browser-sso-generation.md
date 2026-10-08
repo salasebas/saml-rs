@@ -19,6 +19,9 @@ The constructors `redirect`, `post`, and `simple_sign` leave that selection
 off, which is the samlify-port generation kept for callers leaving the raw
 API.
 
+A response delivered as an HTTP-Artifact is built by these same rules. Its
+delivery is in [HTTP-Artifact response](web-browser-sso-artifact.md).
+
 ## Service provider AuthnRequest
 
 | Rule | Actor | Direction | Level |

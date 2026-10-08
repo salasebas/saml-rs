@@ -59,8 +59,13 @@ pub fn build_redirect_url(
     let deflated = deflate_raw_encode(xml.as_bytes())?;
     let encoded = base64_encode(&deflated);
     let query = redirect_binding_query(parser_type.query_param(), &encoded, relay_state);
+    Ok(append_redirect_query(base_url, &query))
+}
+
+/// Append an encoded query to `base_url`, after any query it already has.
+pub(crate) fn append_redirect_query(base_url: &str, query: &str) -> String {
     let separator = if has_query(base_url) { '&' } else { '?' };
-    Ok(format!("{base_url}{separator}{query}"))
+    format!("{base_url}{separator}{query}")
 }
 
 /// Build the octet string to sign for a signed HTTP-Redirect message.

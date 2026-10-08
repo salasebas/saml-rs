@@ -240,6 +240,10 @@ pub enum BrowserInput<Message> {
         fields: Vec<FormField>,
         raw_body: String,
     },
+    Artifact {
+        delivered: DeliveredArtifact,
+        resolved: ResolvedProtocolMessage,
+    },
 }
 
 pub enum Outbound<Message> {
@@ -270,10 +274,19 @@ reason is that the signature covers those octets, so a second caller-supplied
 buffer could disagree with the form the browser posted. Raw `raw::HttpRequest` compatibility may still accept manual
 detached octet data for legacy interop.
 
-Constructors are marker-specific. `BrowserInput<SsoResponse>` exposes POST and
-SimpleSign constructors only; a manually constructed Redirect variant is
-rejected by typed conversion. `Outbound<SsoResponse>` rejects Redirect raw
-contexts.
+Constructors are marker-specific. `BrowserInput<SsoResponse>` exposes POST,
+SimpleSign, and artifact constructors only; a manually constructed Redirect
+variant is rejected by typed conversion. `Outbound<SsoResponse>` rejects
+Redirect raw contexts.
+
+`BrowserInput::<SsoResponse>::artifact` takes the `DeliveredArtifact` the
+browser brought and the message `ArtifactResolution::finish` returned for it.
+A manually constructed `Artifact` variant for another message is rejected by
+typed conversion. An artifact response is an `Outbound<SsoResponse>` redirect
+or POST form that carries `SAMLart`. It comes from `respond_sso_artifact` or
+`initiate_sso_artifact`, which take `RespondSso<ArtifactDelivery>`.
+`respond_sso` and `initiate_sso` take `RespondSso`, so an artifact response
+without a place to store it does not compile.
 
 Raw `BindingContext` should remain available through:
 

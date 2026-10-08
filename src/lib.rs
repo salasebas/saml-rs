@@ -282,8 +282,17 @@
 //! [`Saml<Sp>::resolve_artifact`] sends `ArtifactResolve` to the identity
 //! provider's `ArtifactResolutionService`, and [`ArtifactResolution::finish`]
 //! reads the message back. The deployment POSTs the SOAP envelope. This does
-//! not deliver the artifact through the browser and does not claim the IdP or
-//! SP operational mode.
+//! not claim the IdP or SP operational mode.
+//!
+//! # HTTP-Artifact response
+//!
+//! [`Saml<Idp>::respond_sso_artifact`] and
+//! [`Saml<Idp>::initiate_sso_artifact`] store a Web SSO `<Response>` and
+//! return the browser action that carries its artifact. The service provider
+//! reads the artifact with [`DeliveredArtifact`], resolves it with
+//! [`Saml<Sp>::resolve_artifact`], and passes [`BrowserInput::artifact`] to
+//! [`Saml<Sp>::finish_sso`] or [`Saml<Sp>::accept_unsolicited_sso`]. An
+//! `<AuthnRequest>` is not delivered as an artifact.
 //!
 //! # Unsupported profiles
 //!
@@ -291,8 +300,9 @@
 //! SSO over PAOS at the service-provider and identity-provider ends,
 //! metadata-driven SP/IdP setup, XML signature/encryption through `bergshamra`,
 //! Single Logout, and artifact resolution over SOAP. The enhanced-client role
-//! is not a facade. It does not implement HTTP-Artifact browser delivery, SOAP
-//! profiles other than artifact resolution and the identity-provider leg of
+//! is not a facade. It does not implement HTTP-Artifact delivery of an
+//! `<AuthnRequest>` or a logout message, SOAP profiles other than artifact
+//! resolution and the identity-provider leg of
 //! Enhanced Client/Proxy SSO, SAML query protocols, NameID management, or
 //! metadata federation. If you need one of those profiles for a real
 //! interoperability target, please open an issue with the profile, binding,
@@ -374,19 +384,19 @@ pub mod validator;
 pub mod xml;
 
 pub use api::{
-    ForceAuthn, HttpHeader, Idp, IsPassive, LogoutSigning, PaosAuthnRequest, PaosClientRequest,
-    PaosHttpResponse, PaosSsoResponse, PendingPaosSso, PendingPaosSsoSnapshot, RespondSlo,
-    RespondSso, Saml, SamlError, SoapFault, Sp, StartPaosSso, StartSlo, StartSso, StartedPaosSso,
-    Unknown,
+    ForceAuthn, HttpHeader, Idp, IsPassive, LogoutSigning, MessageDelivery, PaosAuthnRequest,
+    PaosClientRequest, PaosHttpResponse, PaosSsoResponse, PendingPaosSso, PendingPaosSsoSnapshot,
+    RespondSlo, RespondSso, Saml, SamlError, SoapFault, Sp, StartPaosSso, StartSlo, StartSso,
+    StartedPaosSso, Unknown,
 };
 pub use artifact::{
     AnsweredArtifact, Artifact, ArtifactDereference, ArtifactRelease, ArtifactResolution,
     ArtifactUses, ArtifactWithheld, IssuedArtifacts, IssuedMessage, ResolvedProtocolMessage,
 };
 pub use browser::{
-    AcsEndpoint, BrowserInput, EndpointUrl, FormField, LogoutBinding, Outbound, Pending,
-    PendingAuthnRequest, PendingLogoutRequest, PendingSnapshot, PostForm, SloEndpoint, SsoEndpoint,
-    SsoRequestBinding, SsoResponseBinding, Started,
+    AcsEndpoint, ArtifactDelivery, BrowserInput, DeliveredArtifact, EndpointUrl, FormField,
+    LogoutBinding, Outbound, Pending, PendingAuthnRequest, PendingLogoutRequest, PendingSnapshot,
+    PostForm, SloEndpoint, SsoEndpoint, SsoRequestBinding, SsoResponseBinding, Started,
 };
 pub use config::{
     AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,

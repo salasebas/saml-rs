@@ -13,10 +13,15 @@ is in [`docs/architecture/`](architecture/README.md).
 | Assertion conditions on an accepted response | `src/assertion_acceptance.rs` |
 | Typed `start_slo`, `receive_slo`, `respond_slo`, `finish_slo` | `src/api/slo.rs` |
 | IdP `issue_artifact`, `answer_artifact_resolve`; SP `resolve_artifact` | `src/api/artifact.rs`, `src/artifact.rs` |
+| IdP `respond_sso_artifact`, `initiate_sso_artifact` | `src/api/artifact.rs`, `src/api/idp.rs` |
+| `ArtifactDelivery`, `DeliveredArtifact` | `src/browser/artifact.rs` |
+| Raw response rendering for an artifact | `src/idp/artifact.rs` |
 | SOAP 1.1 envelope | `src/soap.rs` |
 
 `finish_sso_with_outstanding_logout` and
 `accept_unsolicited_sso_with_outstanding_logout` are in `src/api/sp.rs`.
+`finish_sso` and `accept_unsolicited_sso` take a resolved artifact through
+`BrowserInput::artifact`.
 
 ## Enhanced Client/Proxy SSO
 
@@ -88,6 +93,7 @@ Logout is the directory `src/logout/`.
 | Enhanced Client/Proxy SSO over PAOS | [`enhanced-client-proxy.md`](conformance/enhanced-client-proxy.md) |
 | Identity Provider Discovery | [`identity-provider-discovery.md`](conformance/identity-provider-discovery.md) |
 | SAML-defined identifiers | [`identifiers.md`](conformance/identifiers.md) |
+| Web Browser SSO response over HTTP-Artifact | [`web-browser-sso-artifact.md`](conformance/web-browser-sso-artifact.md) |
 | Artifact resolution over SOAP | [`artifact-resolution.md`](conformance/artifact-resolution.md) |
 | Metadata trust and replay | [`metadata-and-replay.md`](conformance/metadata-and-replay.md) |
 
