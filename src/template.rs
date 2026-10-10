@@ -3,7 +3,8 @@
 //! `{Tag}` placeholders are filled by [`replace_tags_by_value`] or
 //! [`replace_tags_by_optional_value`]. Replacement values are XML-escaped in
 //! both attribute and element-text positions so caller-provided data cannot
-//! become signed SAML markup.
+//! become signed SAML markup. Text inserted for a value is not scanned for
+//! further placeholders.
 
 use crate::binding::xml_escape;
 use crate::error::SamlError;
@@ -65,35 +66,107 @@ pub(crate) fn validate_tag_prefix(name: &str, prefix: &str) -> Result<(), SamlEr
 
 /// Replace `{key}` placeholders in `raw_xml`.
 ///
-/// Placeholder replacement text is XML-escaped before insertion. XML fragments
-/// such as generated attribute statements must be spliced into templates before
-/// calling this helper.
+/// Placeholder replacement text is XML-escaped before insertion and is not
+/// scanned for `{key}` tokens. XML fragments such as generated attribute
+/// statements must be spliced into templates before calling this helper.
 pub fn replace_tags_by_value(raw_xml: &str, tags: &[(&str, String)]) -> String {
-    let mut xml = raw_xml.to_string();
+    let mut xml = conceal_existing_markers(raw_xml);
     for (key, value) in tags {
         xml = replace_tag(&xml, key, Some(value));
     }
-    xml
+    reveal_concealed_text(xml)
 }
 
 /// Replace `{key}` placeholders in `raw_xml`, omitting optional placeholders.
 ///
 /// `Some(value)` is XML-escaped and inserted, including `Some(String::new())`.
-/// `None` removes attributes whose complete value is the placeholder, removes
-/// elements whose complete body is the placeholder, and renders any remaining
-/// occurrences as an empty string.
+/// Inserted text is not scanned for `{key}` tokens. `None` removes attributes
+/// whose complete value is the placeholder, removes elements whose complete
+/// body is the placeholder, and renders any remaining occurrences as an empty
+/// string.
 pub fn replace_tags_by_optional_value(raw_xml: &str, tags: &[(&str, Option<String>)]) -> String {
-    let mut xml = raw_xml.to_string();
+    let mut xml = conceal_existing_markers(raw_xml);
     for (key, value) in tags {
         xml = replace_tag(&xml, key, value.as_deref());
     }
-    xml
+    reveal_concealed_text(xml)
+}
+
+/// Marker that hides `{` in inserted text.
+///
+/// `0` after the marker restores a marker that was already present. `1`
+/// restores `{`.
+const CONCEALED_BRACE: char = '\u{E000}';
+
+fn conceal_existing_markers(raw: &str) -> String {
+    if !raw.contains(CONCEALED_BRACE) {
+        return raw.to_string();
+    }
+    let mut out = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        if ch == CONCEALED_BRACE {
+            out.push(CONCEALED_BRACE);
+            out.push('0');
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn conceal_inserted_braces(escaped: &str) -> String {
+    if !escaped.chars().any(|ch| ch == '{' || ch == CONCEALED_BRACE) {
+        return escaped.to_string();
+    }
+    let mut out = String::with_capacity(escaped.len());
+    for ch in escaped.chars() {
+        match ch {
+            CONCEALED_BRACE => {
+                out.push(CONCEALED_BRACE);
+                out.push('0');
+            }
+            '{' => {
+                out.push(CONCEALED_BRACE);
+                out.push('1');
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+fn reveal_concealed_text(raw: String) -> String {
+    if !raw.contains(CONCEALED_BRACE) {
+        return raw;
+    }
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(ch) = chars.next() {
+        if ch != CONCEALED_BRACE {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('0') => out.push(CONCEALED_BRACE),
+            Some('1') => out.push('{'),
+            Some(other) => {
+                out.push(CONCEALED_BRACE);
+                out.push(other);
+            }
+            None => out.push(CONCEALED_BRACE),
+        }
+    }
+    out
 }
 
 fn replace_tag(raw_xml: &str, key: &str, value: Option<&str>) -> String {
     let needle = format!("{{{key}}}");
     match value {
-        Some(value) => replace_all(raw_xml, &needle, &xml_escape(value)),
+        Some(value) => replace_all(
+            raw_xml,
+            &needle,
+            &conceal_inserted_braces(&xml_escape(value)),
+        ),
         None => {
             let xml = remove_optional_attributes(raw_xml, &needle);
             let xml = remove_optional_elements(&xml, &needle);
@@ -485,5 +558,58 @@ mod tests {
         assert!(built.contains("xsi:type=\"xs:string\""));
         // value_tag -> {attrUserEmail}
         assert!(built.contains("{attrUserEmail}"));
+    }
+
+    #[test]
+    fn inserted_values_are_not_scanned_for_later_placeholders() {
+        let rendered = replace_tags_by_value(
+            "<n>{NameID}</n><a>{attrRole}</a><m>{attrMail}</m><r>{InResponseTo}</r>",
+            &[
+                ("NameID", "a<b>{InResponseTo}".to_string()),
+                ("attrRole", "admin-{attrMail}".to_string()),
+                ("attrMail", "user".to_string()),
+                ("InResponseTo", "_req".to_string()),
+            ],
+        );
+        assert_eq!(
+            rendered,
+            "<n>a&lt;b&gt;{InResponseTo}</n><a>admin-{attrMail}</a><m>user</m><r>_req</r>"
+        );
+    }
+
+    #[test]
+    fn optional_inserted_values_are_not_scanned_for_later_placeholders() {
+        let rendered = replace_tags_by_optional_value(
+            "<root><n>{NameID}</n><s>{SessionIndex}</s></root>",
+            &[
+                ("NameID", Some("{SessionIndex}".to_string())),
+                ("SessionIndex", Some("abc".to_string())),
+            ],
+        );
+        assert_eq!(rendered, "<root><n>{SessionIndex}</n><s>abc</s></root>");
+    }
+
+    #[test]
+    fn optional_none_still_drops_an_element_after_a_value_containing_its_placeholder() {
+        let rendered = replace_tags_by_optional_value(
+            "<root><n>{NameID}</n><s>{SessionIndex}</s></root>",
+            &[
+                ("NameID", Some("{SessionIndex}".to_string())),
+                ("SessionIndex", None),
+            ],
+        );
+        assert_eq!(rendered, "<root><n>{SessionIndex}</n></root>");
+    }
+
+    #[test]
+    fn private_use_text_and_template_markers_round_trip_through_substitution() {
+        let rendered = replace_tags_by_value(
+            "<a>\u{E000}1{V}{Tail}</a>",
+            &[
+                ("V", "\u{E000}{Tail}".to_string()),
+                ("Tail", "end".to_string()),
+            ],
+        );
+        assert_eq!(rendered, "<a>\u{E000}1\u{E000}{Tail}end</a>");
     }
 }
