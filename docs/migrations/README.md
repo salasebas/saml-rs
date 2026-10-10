@@ -16,6 +16,7 @@ compatible additions.
 ## Unreleased
 
 - [Artifact resolution service on IdP metadata](unreleased-artifact-resolution.md)
+- [Limited base64 decoding rejects non-ASCII whitespace](unreleased-base64-whitespace.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
