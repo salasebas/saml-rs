@@ -24,6 +24,10 @@ use super::{Idp, LogoutSigning, RespondSlo, Saml, SamlError, Sp, StartSlo};
 impl Saml<Sp> {
     /// Start SP-initiated Single Logout.
     ///
+    /// The `LogoutRequest` `NameID` uses the subject's format and qualifiers.
+    /// When the subject has no format, the first configured NameID format is
+    /// used.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when relay state is invalid, IdP metadata cannot
@@ -77,8 +81,8 @@ impl Saml<Sp> {
     /// XML parsing or signature/trust validation fails, required
     /// `IssueInstant` or optional `NotOnOrAfter` is not conformant,
     /// `NotOnOrAfter` has expired under saml-rs' fail-closed policy, the
-    /// destination does not match local metadata, or replay validation detects
-    /// a duplicate or unusable expiration.
+    /// destination does not match a published `SingleLogoutService` location,
+    /// or replay validation detects a duplicate or unusable expiration.
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
@@ -99,9 +103,10 @@ impl Saml<Sp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when IdP metadata cannot be parsed, relay state is
-    /// invalid, a compatible logout endpoint or signing key is missing, the
-    /// selected binding is unsupported, or logout response creation fails.
+    /// Returns [`SamlError`] when the `LogoutRequest` issuer does not match the
+    /// IdP descriptor, IdP metadata cannot be parsed, relay state is invalid,
+    /// a compatible logout endpoint or signing key is missing, the selected
+    /// binding is unsupported, or logout response creation fails.
     /// [`RespondSlo::apply_single_logout_generation_rules`] also rejects an
     /// `http` peer endpoint unless
     /// [`RespondSlo::allow_http_single_logout`] is
@@ -116,6 +121,7 @@ impl Saml<Sp> {
         respond_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
+            idp.entity_id(),
             &raw_idp.metadata,
             request,
             options,
@@ -193,7 +199,9 @@ impl Saml<Idp> {
     /// the same captured `IssueInstant`. That attribute cannot be omitted.
     /// [`StartSlo::apply_single_logout_generation_rules`] signs the request
     /// and still allows `SessionIndex` to be omitted. It does not require an
-    /// `https` peer endpoint.
+    /// `https` peer endpoint. The `LogoutRequest` `NameID` uses the subject's
+    /// format and qualifiers. When the subject has no format, the first
+    /// configured NameID format is used.
     ///
     /// # Errors
     ///
@@ -248,9 +256,9 @@ impl Saml<Idp> {
     /// the binding is unsupported for logout, SP metadata cannot be parsed, XML
     /// parsing or signature/trust validation fails, required `IssueInstant` or
     /// optional `NotOnOrAfter` is not conformant, `NotOnOrAfter` has expired
-    /// under saml-rs' fail-closed policy, the destination does not match local
-    /// metadata, or replay validation detects a duplicate or unusable
-    /// expiration.
+    /// under saml-rs' fail-closed policy, the destination does not match a
+    /// published `SingleLogoutService` location, or replay validation detects
+    /// a duplicate or unusable expiration.
     ///
     /// # Examples
     ///
@@ -298,9 +306,10 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when SP metadata cannot be parsed, relay state is
-    /// invalid, a compatible logout endpoint or signing key is missing, the
-    /// selected binding is unsupported, or logout response creation fails.
+    /// Returns [`SamlError`] when the `LogoutRequest` issuer does not match the
+    /// SP descriptor, SP metadata cannot be parsed, relay state is invalid, a
+    /// compatible logout endpoint or signing key is missing, the selected
+    /// binding is unsupported, or logout response creation fails.
     /// [`RespondSlo::apply_single_logout_generation_rules`] does not add an
     /// `https` requirement for this role.
     ///
@@ -329,6 +338,7 @@ impl Saml<Idp> {
         respond_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
+            sp.entity_id(),
             &raw_sp.metadata,
             request,
             options,
@@ -400,7 +410,17 @@ impl Saml<Idp> {
 
 struct TypedLogoutSubject {
     name_id: String,
+    name_id_format: Option<String>,
+    name_qualifier: Option<String>,
+    sp_name_qualifier: Option<String>,
+    sp_provided_id: Option<String>,
     session_indexes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LogoutMessageDirection {
+    Request,
+    Response,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -432,6 +452,7 @@ fn start_slo_impl(
             options.binding.as_binding(),
             follows_rules,
             options.allows_http(),
+            LogoutMessageDirection::Request,
         )?;
     }
     let (issue_instant, not_on_or_after, request_validation) = match role {
@@ -464,6 +485,10 @@ fn start_slo_impl(
         target_meta: peer_metadata,
         binding: options.binding.as_binding(),
         name_id: &subject.name_id,
+        name_id_format: subject.name_id_format.as_deref(),
+        name_qualifier: subject.name_qualifier.as_deref(),
+        sp_name_qualifier: subject.sp_name_qualifier.as_deref(),
+        sp_provided_id: subject.sp_provided_id.as_deref(),
         session_indexes: &subject.session_indexes,
         relay_state: options.relay_state.as_deref(),
         want_signed,
@@ -499,15 +524,16 @@ fn receive_slo_impl(
 ) -> Result<Received<LogoutRequest>, SamlError> {
     let relay_state = relay_state_from_input(&input)?;
     let binding = LogoutBinding::try_from(input_binding(&input))?;
-    let expected_recipient = logout_recipient_endpoint(local_metadata, binding)?;
+    let expected_recipients = logout_recipient_endpoints(local_metadata, binding)?;
+    let expected_refs: Vec<&str> = expected_recipients.iter().map(String::as_str).collect();
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_request_at(
         local_setting,
         peer_metadata,
         binding.as_binding(),
         &request,
-        LogoutFlowValidation::typed(
-            &expected_recipient,
+        LogoutFlowValidation::typed_destinations(
+            &expected_refs,
             validation.now(),
             validation.clock_skew().as_millis(),
         ),
@@ -528,17 +554,20 @@ fn receive_slo_impl(
 fn respond_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
+    peer_entity_id: &EntityId,
     peer_metadata: &Metadata,
     request: &Received<LogoutRequest>,
     options: RespondSlo,
     transport: LogoutResponseTransport,
 ) -> Result<Outbound<LogoutResponse>, SamlError> {
+    ensure_entity_id(request.message().issuer(), peer_entity_id)?;
     if matches!(transport, LogoutResponseTransport::SessionParticipant) {
         enforce_participant_https(
             peer_metadata,
             options.binding.as_binding(),
             options.follows_generation_rules(),
             options.allows_http(),
+            LogoutMessageDirection::Response,
         )?;
     }
     let relay_state = options
@@ -574,7 +603,9 @@ fn finish_slo_impl(
     ensure_entity_id(pending.peer_entity_id(), peer_entity_id)?;
     ensure_logout_response_binding(input_binding(&input), pending.response_binding())?;
     ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
-    let expected_recipient = logout_recipient_endpoint(local_metadata, pending.response_binding())?;
+    let expected_recipients =
+        logout_recipient_endpoints(local_metadata, pending.response_binding())?;
+    let expected_refs: Vec<&str> = expected_recipients.iter().map(String::as_str).collect();
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_response_at(
         local_setting,
@@ -582,8 +613,8 @@ fn finish_slo_impl(
         pending.response_binding().as_binding(),
         &request,
         pending.id().as_str(),
-        LogoutFlowValidation::typed(
-            &expected_recipient,
+        LogoutFlowValidation::typed_destinations(
+            &expected_refs,
             validation.now(),
             validation.clock_skew().as_millis(),
         ),
@@ -608,14 +639,27 @@ fn enforce_participant_https(
     binding: Binding,
     follows_rules: bool,
     allow_http: bool,
+    direction: LogoutMessageDirection,
 ) -> Result<(), SamlError> {
     if !follows_rules || allow_http {
         return Ok(());
     }
-    let destination = peer_metadata
-        .get_single_logout_service(binding)
-        .ok_or_else(|| Error::MissingMetadata("SingleLogoutService".into()))?;
+    let destination = peer_logout_endpoint(peer_metadata, binding, direction)?;
     require_https_logout_endpoint(&destination)
+}
+
+fn peer_logout_endpoint(
+    peer_metadata: &Metadata,
+    binding: Binding,
+    direction: LogoutMessageDirection,
+) -> Result<String, SamlError> {
+    let endpoint = match direction {
+        LogoutMessageDirection::Request => peer_metadata.get_single_logout_service(binding),
+        LogoutMessageDirection::Response => {
+            peer_metadata.get_single_logout_response_service(binding)
+        }
+    };
+    endpoint.ok_or_else(|| Error::MissingMetadata("SingleLogoutService".into()))
 }
 
 fn require_https_logout_endpoint(endpoint: &str) -> Result<(), SamlError> {
@@ -650,18 +694,25 @@ fn ensure_logout_response_binding(
     Err(Error::UnsupportedBinding { binding: actual })
 }
 
-fn logout_recipient_endpoint(
+fn logout_recipient_endpoints(
     local_metadata: &Metadata,
     binding: LogoutBinding,
-) -> Result<String, SamlError> {
-    local_metadata
-        .get_single_logout_service(binding.as_binding())
-        .ok_or_else(|| Error::MissingMetadata("SingleLogoutService".into()))
+) -> Result<Vec<String>, SamlError> {
+    let locations = local_metadata.single_logout_service_locations(binding.as_binding());
+    if locations.is_empty() {
+        return Err(Error::MissingMetadata("SingleLogoutService".into()));
+    }
+    Ok(locations)
 }
 
 fn typed_logout_subject(subject: LogoutSubject) -> TypedLogoutSubject {
+    let name_id = subject.name_id();
     TypedLogoutSubject {
-        name_id: subject.name_id().value().to_string(),
+        name_id: name_id.value().to_string(),
+        name_id_format: name_id.format().map(|format| format.as_uri().to_string()),
+        name_qualifier: name_id.name_qualifier().map(str::to_string),
+        sp_name_qualifier: name_id.sp_name_qualifier().map(str::to_string),
+        sp_provided_id: name_id.sp_provided_id().map(str::to_string),
         session_indexes: subject
             .session_indexes()
             .iter()

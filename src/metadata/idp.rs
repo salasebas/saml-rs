@@ -75,8 +75,7 @@ impl IdpMetadata {
                     "SingleSignOnService",
                 ],
             )
-            .aggregate(&["Binding"], &[])
-            .attrs(&["Location"]),
+            .attrs(&["Binding", "Location", "ResponseLocation"]),
             ExtractorField::new(
                 "artifactResolutionService",
                 &[
@@ -97,14 +96,17 @@ impl IdpMetadata {
         self.inner.meta.get_str("wantAuthnRequestsSigned") == Some("true")
     }
 
-    /// `SingleSignOnService` location for `binding`.
+    /// First `SingleSignOnService` `Location` for `binding`.
+    ///
+    /// AuthnRequests are sent to this URL. Inbound `Destination` checks accept
+    /// every published location for the binding.
     pub fn get_single_sign_on_service(&self, binding: Binding) -> Option<String> {
-        self.inner
-            .meta
-            .get("singleSignOnService")
-            .and_then(|m| m.get_key(binding.urn()))
-            .and_then(Value::as_str)
-            .map(str::to_string)
+        super::location_for_binding(self.inner.meta.get("singleSignOnService"), binding)
+    }
+
+    /// Every `Location` and `ResponseLocation` published on `SingleSignOnService` for `binding`.
+    pub(crate) fn single_sign_on_service_locations(&self, binding: Binding) -> Vec<String> {
+        super::published_locations_for_binding(self.inner.meta.get("singleSignOnService"), binding)
     }
 
     /// `ArtifactResolutionService` endpoints.

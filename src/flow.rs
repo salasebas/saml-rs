@@ -842,6 +842,7 @@ fn validate_message_destination(
     parser_type: ParserType,
     extracted: &Value,
     expected_recipient: Option<&str>,
+    additional_recipients: &[&str],
     message_authenticated: bool,
 ) -> Result<(), SamlError> {
     let Some(expected) = expected_recipient else {
@@ -861,7 +862,12 @@ fn validate_message_destination(
     }
     // SAML Core 2.0 §§3.2.1 and 3.2.2 require the actual recipient to discard
     // any protocol message whose present Destination does not match itself.
-    if destination.is_some_and(|destination| destination != expected) {
+    // Metadata may publish more than one endpoint for the binding; each
+    // published location is this recipient.
+    let matches_recipient = destination.is_some_and(|destination| {
+        destination == expected || additional_recipients.contains(&destination)
+    });
+    if destination.is_some() && !matches_recipient {
         return Err(SamlError::destination_mismatch(expected, destination));
     }
     Ok(())
@@ -873,6 +879,7 @@ fn validate_context(
     extracted: &Value,
     opts: &FlowOptions<'_>,
     expected_recipient: Option<&str>,
+    additional_recipients: &[&str],
     message_authenticated: bool,
 ) -> Result<(), SamlError> {
     let should_validate_issuer = matches!(
@@ -906,6 +913,7 @@ fn validate_context(
         parser_type,
         extracted,
         expected_recipient,
+        additional_recipients,
         message_authenticated,
     )?;
     if parser_type == ParserType::SamlResponse {
@@ -962,6 +970,7 @@ fn flow_inner(
     opts: &FlowOptions<'_>,
     request: &HttpRequest,
     expected_recipient: Option<&str>,
+    additional_recipients: &[&str],
     assertion_signature: AssertionSignatureRequirement,
     response_signature: ResponseSignatureRequirement,
 ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
@@ -1056,6 +1065,7 @@ fn flow_inner(
         &extracted,
         opts,
         expected_recipient,
+        additional_recipients,
         message_authenticated,
     )?;
 
@@ -1079,6 +1089,7 @@ pub(crate) fn flow_with_authentication(
         opts,
         request,
         None,
+        &[],
         AssertionSignatureRequirement::Compatible,
         ResponseSignatureRequirement::Optional,
     )?;
@@ -1091,6 +1102,7 @@ pub fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult,
         opts,
         request,
         None,
+        &[],
         AssertionSignatureRequirement::Compatible,
         ResponseSignatureRequirement::Optional,
     )?
@@ -1104,10 +1116,29 @@ pub(crate) fn flow_with_expected_recipient_and_signature_evidence(
     assertion_signature: AssertionSignatureRequirement,
     response_signature: ResponseSignatureRequirement,
 ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
+    flow_with_expected_recipient_allowing_additional(
+        opts,
+        request,
+        expected_recipient,
+        &[],
+        assertion_signature,
+        response_signature,
+    )
+}
+
+pub(crate) fn flow_with_expected_recipient_allowing_additional(
+    opts: &FlowOptions<'_>,
+    request: &HttpRequest,
+    expected_recipient: &str,
+    additional_recipients: &[&str],
+    assertion_signature: AssertionSignatureRequirement,
+    response_signature: ResponseSignatureRequirement,
+) -> Result<FlowResultWithSignatureEvidence, SamlError> {
     flow_inner(
         opts,
         request,
         Some(expected_recipient),
+        additional_recipients,
         assertion_signature,
         response_signature,
     )

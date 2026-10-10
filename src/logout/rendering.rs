@@ -17,6 +17,9 @@ pub(super) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
 pub(super) struct LogoutRequestSubject<'a> {
     pub(super) name_id: &'a str,
     pub(super) session_indexes: Vec<&'a str>,
+    pub(super) name_qualifier: Option<&'a str>,
+    pub(super) sp_name_qualifier: Option<&'a str>,
+    pub(super) sp_provided_id: Option<&'a str>,
 }
 
 pub(super) struct LogoutRequestTimeAttributes<'a> {
@@ -29,6 +32,9 @@ impl<'a> LogoutRequestSubject<'a> {
         Self {
             name_id: &user.name_id,
             session_indexes: user.session_index.as_deref().into_iter().collect(),
+            name_qualifier: None,
+            sp_name_qualifier: None,
+            sp_provided_id: None,
         }
     }
 }
@@ -126,14 +132,31 @@ pub(super) fn render_default_logout_request(
     let mut writer = XmlWriter::new();
     writer.start(&root_name, &attrs);
     writer.text_element(&issuer_name, &[], &issuer);
-    writer.text_element(
-        &name_id_name,
-        &[("Format", name_id_format)],
-        subject.name_id,
-    );
+    let name_id_attributes = name_id_attributes(name_id_format, subject);
+    writer.text_element(&name_id_name, &name_id_attributes, subject.name_id);
     for session_index in &subject.session_indexes {
         writer.text_element(&session_index_name, &[], session_index);
     }
     writer.end(&root_name);
     Ok(writer.finish())
+}
+
+fn name_id_attributes<'a>(
+    name_id_format: &'a str,
+    subject: &LogoutRequestSubject<'a>,
+) -> Vec<(&'a str, &'a str)> {
+    let mut attributes = Vec::new();
+    if !name_id_format.is_empty() {
+        attributes.push(("Format", name_id_format));
+    }
+    if let Some(name_qualifier) = subject.name_qualifier {
+        attributes.push(("NameQualifier", name_qualifier));
+    }
+    if let Some(sp_name_qualifier) = subject.sp_name_qualifier {
+        attributes.push(("SPNameQualifier", sp_name_qualifier));
+    }
+    if let Some(sp_provided_id) = subject.sp_provided_id {
+        attributes.push(("SPProvidedID", sp_provided_id));
+    }
+    attributes
 }

@@ -18,6 +18,19 @@ use super::rendering::{
 };
 use super::signing::sign_logout;
 
+fn logout_name_id_format<'a>(
+    subject_format: Option<&'a str>,
+    init_setting: &'a EntitySetting,
+) -> &'a str {
+    subject_format.unwrap_or_else(|| {
+        init_setting
+            .name_id_format
+            .first()
+            .map(String::as_str)
+            .unwrap_or("")
+    })
+}
+
 /// Build a `<LogoutRequest>` from `init` to `target`.
 ///
 /// `user` supplies the `<NameID>` and optional `<samlp:SessionIndex>`.
@@ -69,11 +82,7 @@ pub fn create_logout_request_with_id(
     want_signed: bool,
     message_id: Option<&str>,
 ) -> Result<BindingContext, SamlError> {
-    let name_id_format = init_setting
-        .name_id_format
-        .first()
-        .cloned()
-        .unwrap_or_default();
+    let name_id_format = logout_name_id_format(None, init_setting).to_string();
     let issue_instant = now_iso8601();
     let subject = LogoutRequestSubject::from_user(user);
     Ok(create_logout_request_for_subject_inner(LogoutRequestInput {
@@ -105,6 +114,10 @@ pub(crate) struct LogoutRequestSessionIndexes<'a> {
     pub(crate) target_meta: &'a Metadata,
     pub(crate) binding: Binding,
     pub(crate) name_id: &'a str,
+    pub(crate) name_id_format: Option<&'a str>,
+    pub(crate) name_qualifier: Option<&'a str>,
+    pub(crate) sp_name_qualifier: Option<&'a str>,
+    pub(crate) sp_provided_id: Option<&'a str>,
     pub(crate) session_indexes: &'a [String],
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) want_signed: bool,
@@ -130,6 +143,10 @@ pub(crate) fn create_logout_request_with_session_indexes(
         target_meta,
         binding,
         name_id,
+        name_id_format,
+        name_qualifier,
+        sp_name_qualifier,
+        sp_provided_id,
         session_indexes,
         relay_state,
         want_signed,
@@ -138,14 +155,13 @@ pub(crate) fn create_logout_request_with_session_indexes(
         validation,
     } = input;
 
-    let name_id_format = init_setting
-        .name_id_format
-        .first()
-        .cloned()
-        .unwrap_or_default();
+    let name_id_format = logout_name_id_format(name_id_format, init_setting);
     let subject = LogoutRequestSubject {
         name_id,
         session_indexes: session_indexes.iter().map(String::as_str).collect(),
+        name_qualifier,
+        sp_name_qualifier,
+        sp_provided_id,
     };
     create_logout_request_for_subject_inner(LogoutRequestInput {
         init_setting,
@@ -156,7 +172,7 @@ pub(crate) fn create_logout_request_with_session_indexes(
         relay_state,
         want_signed,
         message_id: None,
-        name_id_format: &name_id_format,
+        name_id_format,
         issue_instant,
         not_on_or_after,
         validation,
@@ -231,6 +247,12 @@ fn create_logout_request_for_subject_inner(
             ("Issuer", Some(issuer.clone())),
             ("NameIDFormat", Some(name_id_format.to_string())),
             ("NameID", Some(subject.name_id.to_string())),
+            ("NameQualifier", subject.name_qualifier.map(str::to_string)),
+            (
+                "SPNameQualifier",
+                subject.sp_name_qualifier.map(str::to_string),
+            ),
+            ("SPProvidedID", subject.sp_provided_id.map(str::to_string)),
             (
                 "SessionIndex",
                 subject
@@ -280,6 +302,9 @@ fn create_logout_request_for_subject_inner(
         expiration,
         name_id: subject.name_id,
         name_id_format,
+        name_qualifier: subject.name_qualifier,
+        sp_name_qualifier: subject.sp_name_qualifier,
+        sp_provided_id: subject.sp_provided_id,
         session_indexes,
     });
     if let Some(expectation) = expectation.as_ref() {
@@ -340,6 +365,9 @@ fn create_logout_request_for_subject_inner(
 }
 
 /// Build a `<LogoutResponse>` from `init` to `target`.
+///
+/// `Destination` is the peer `SingleLogoutService` `ResponseLocation` for
+/// `binding` when that attribute is present, and `Location` otherwise.
 ///
 /// # Errors
 ///
@@ -468,7 +496,7 @@ fn create_logout_response_inner(
         });
     }
     let destination = target_meta
-        .get_single_logout_service(binding)
+        .get_single_logout_response_service(binding)
         .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?;
     let id = message_id
         .filter(|value| !value.is_empty())

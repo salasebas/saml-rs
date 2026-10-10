@@ -31,7 +31,8 @@ impl Saml<Idp> {
     /// Returns [`SamlError`] when browser input or relay state is invalid, the
     /// request binding is unsupported, SP metadata cannot be parsed, XML
     /// parsing or signature/trust validation fails, the request destination
-    /// does not match local metadata, an enabled [`crate::AuthnRequestAgePolicy`]
+    /// does not match a published `SingleSignOnService` location for the
+    /// binding, an enabled [`crate::AuthnRequestAgePolicy`]
     /// rejects `IssueInstant`, or replay validation detects a duplicate or
     /// expired request.
     ///
@@ -85,18 +86,21 @@ impl Saml<Idp> {
             .setting
             .verify_authn_request_signature_if_present;
         if authn.destination().is_some() || (message_authenticated && verify_present_signature) {
-            let expected = self
+            let locations = self
                 .raw_identity_provider()
                 .metadata
-                .get_single_sign_on_service(binding.as_binding())
-                .ok_or_else(|| Error::MissingMetadata("SingleSignOnService".into()))?;
-            if authn.destination().map(|destination| destination.as_str())
-                != Some(expected.as_str())
-            {
-                return Err(Error::destination_mismatch(
-                    &expected,
-                    authn.destination().map(|destination| destination.as_str()),
-                ));
+                .single_sign_on_service_locations(binding.as_binding());
+            let Some(expected) = locations.first() else {
+                return Err(Error::MissingMetadata("SingleSignOnService".into()));
+            };
+            let actual = authn.destination().map(|destination| destination.as_str());
+            let matches_published = actual.is_some_and(|destination| {
+                locations
+                    .iter()
+                    .any(|location| location.as_str() == destination)
+            });
+            if !matches_published {
+                return Err(Error::destination_mismatch(expected, actual));
             }
         }
         let mut validation = validation;

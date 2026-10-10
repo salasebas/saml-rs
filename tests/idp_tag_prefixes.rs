@@ -275,7 +275,7 @@ fn logout_request_defaults_render_overridden_prefixes_for_post_redirect_and_simp
         assert!(xml.contains("<samlp2:LogoutRequest"));
         assert!(xml.contains("xmlns:samlp2=\"urn:oasis:names:tc:SAML:2.0:protocol\""));
         assert!(xml.contains("<saml2:Issuer>"));
-        assert!(xml.contains("<saml2:NameID "));
+        assert!(xml.contains("<saml2:NameID"));
         assert!(xml.contains("<samlp2:SessionIndex>_session</samlp2:SessionIndex>"));
     }
     Ok(())
