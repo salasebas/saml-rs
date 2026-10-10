@@ -17,6 +17,7 @@ compatible additions.
 
 - [Artifact resolution service on IdP metadata](unreleased-artifact-resolution.md)
 - [How to update endpoint routing and logout responses](unreleased-slo-and-endpoint-selection.md)
+- [Limited base64 decoding rejects non-ASCII whitespace](unreleased-base64-whitespace.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
