@@ -1079,3 +1079,43 @@ fn default_logout_response_parsing_requires_signature() -> Result<(), Box<dyn st
 
     Ok(())
 }
+
+#[test]
+fn logout_response_uses_response_location_and_request_uses_location(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp_xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com/metadata">
+  <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/slo/request" ResponseLocation="https://sp.example.com/slo/response"/>
+    <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/acs" index="0"/>
+  </SPSSODescriptor>
+</EntityDescriptor>"#;
+    let target = ServiceProvider::from_metadata(sp_xml, EntitySetting::default())?;
+    let sender = idp()?;
+    let response = create_logout_response(
+        &sender.setting,
+        &sender.metadata,
+        &target.metadata,
+        Binding::Post,
+        Some("_req1"),
+        None,
+        false,
+    )?;
+    assert_eq!(
+        response.entity_endpoint,
+        "https://sp.example.com/slo/response"
+    );
+    let request = create_logout_request(
+        &sender.setting,
+        &sender.metadata,
+        &target.metadata,
+        Binding::Post,
+        &User::new("alice"),
+        None,
+        false,
+    )?;
+    assert_eq!(
+        request.entity_endpoint,
+        "https://sp.example.com/slo/request"
+    );
+    Ok(())
+}

@@ -1,5 +1,6 @@
 use super::extract::{
-    optional_endpoint, optional_request_id, required_str, session_indexes_from_value,
+    name_id_format_from_uri, optional_endpoint, optional_request_id, required_str,
+    session_indexes_from_value,
 };
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::subject::NameId;
@@ -133,10 +134,20 @@ impl TryFrom<FlowResult> for LogoutRequest {
             false,
         )?;
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
-        let name_id = raw_flow
-            .extract
-            .get_str("nameID")
-            .map(|value| NameId::new(value, None));
+        let name_id = raw_flow.extract.get_str("nameID").map(|value| {
+            let format = raw_flow
+                .extract
+                .get_str("nameIDFormat")
+                .filter(|format| !format.is_empty())
+                .map(name_id_format_from_uri);
+            NameId::with_qualifiers(
+                value,
+                format,
+                optional_name_id_attribute(&raw_flow.extract, "nameQualifier"),
+                optional_name_id_attribute(&raw_flow.extract, "spNameQualifier"),
+                optional_name_id_attribute(&raw_flow.extract, "spProvidedId"),
+            )
+        });
         let session_indexes = session_indexes_from_value(raw_flow.extract.get("sessionIndex"))?;
         let destination = optional_endpoint(&raw_flow.extract, "request.destination")?;
         Ok(Self {
@@ -150,6 +161,10 @@ impl TryFrom<FlowResult> for LogoutRequest {
             raw_flow,
         })
     }
+}
+
+fn optional_name_id_attribute(extract: &crate::util::Value, path: &str) -> Option<String> {
+    extract.get_str(path).map(str::to_string)
 }
 
 fn logout_request_instant_from_extract(

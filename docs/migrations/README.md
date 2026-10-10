@@ -16,6 +16,7 @@ compatible additions.
 ## Unreleased
 
 - [Artifact resolution service on IdP metadata](unreleased-artifact-resolution.md)
+- [Logout NameID, endpoint selection, and respond_slo issuer](unreleased-slo-and-endpoint-selection.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).

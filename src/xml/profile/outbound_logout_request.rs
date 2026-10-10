@@ -32,6 +32,9 @@ pub(crate) struct OutboundLogoutRequestExpectation<'a> {
     pub(crate) expiration: OutboundLogoutExpiration<'a>,
     pub(crate) name_id: &'a str,
     pub(crate) name_id_format: &'a str,
+    pub(crate) name_qualifier: Option<&'a str>,
+    pub(crate) sp_name_qualifier: Option<&'a str>,
+    pub(crate) sp_provided_id: Option<&'a str>,
     pub(crate) session_indexes: &'a [&'a str],
 }
 
@@ -191,11 +194,25 @@ fn validate_issuer(
     Ok(())
 }
 
+fn require_name_id_attribute(
+    attributes: &[(Vec<u8>, String)],
+    name: &str,
+    expected: Option<&str>,
+) -> Result<(), SamlError> {
+    let actual = attribute_value(attributes, name.as_bytes());
+    if actual == expected {
+        return Ok(());
+    }
+    Err(profile_error(format!(
+        "LogoutRequest NameID {name} mismatch: expected {expected:?}, got {actual:?}"
+    )))
+}
+
 fn validate_name_id(
     reader: &NsReader<&[u8]>,
     element: &BytesStart<'_>,
     element_namespace: NamespaceKind,
-    expected_format: &str,
+    expectation: &OutboundLogoutRequestExpectation<'_>,
 ) -> Result<(), SamlError> {
     if element_namespace != NamespaceKind::Assertion {
         return Err(profile_error(
@@ -213,18 +230,14 @@ fn validate_name_id(
         ],
         &[],
     )?;
-    if [
-        b"NameQualifier".as_slice(),
-        b"SPNameQualifier",
-        b"SPProvidedID",
-    ]
-    .iter()
-    .any(|name| attribute_value(&attributes, name).is_some())
-    {
-        return Err(profile_error(
-            "typed LogoutRequest NameID must omit unmodeled NameQualifier, SPNameQualifier, and SPProvidedID attributes",
-        ));
-    }
+    require_name_id_attribute(&attributes, "NameQualifier", expectation.name_qualifier)?;
+    require_name_id_attribute(
+        &attributes,
+        "SPNameQualifier",
+        expectation.sp_name_qualifier,
+    )?;
+    require_name_id_attribute(&attributes, "SPProvidedID", expectation.sp_provided_id)?;
+    let expected_format = expectation.name_id_format;
     match attribute_value(&attributes, b"Format") {
         Some(format) if format != expected_format => Err(profile_error(format!(
             "LogoutRequest NameID Format mismatch: expected {expected_format}, got {format}",
@@ -313,12 +326,7 @@ fn validate_start(
             NamespaceKind::Assertion,
             RootStage::AfterIssuer | RootStage::AfterSignature | RootStage::AfterExtensions,
         ) => {
-            validate_name_id(
-                reader,
-                element,
-                element_namespace,
-                expectation.name_id_format,
-            )?;
+            validate_name_id(reader, element, element_namespace, expectation)?;
             state.root_stage = RootStage::AfterNameId;
             Ok(Element::NameId)
         }
