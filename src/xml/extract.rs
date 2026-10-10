@@ -242,24 +242,42 @@ pub fn extract(xml: &str, fields: &[ExtractorField]) -> Result<Value, SamlError>
 }
 
 /// Extract `fields` from `xml` with explicit parser resource limits.
+///
+/// Each distinct shortcut string is parsed once. A shortcut equal to `xml`
+/// uses that already parsed root document.
 pub fn extract_with_limits(
     xml: &str,
     fields: &[ExtractorField],
     limits: XmlLimits,
 ) -> Result<Value, SamlError> {
     let root_doc = dom::parse_with_limits(xml, limits)?;
-    let mut out: Vec<(String, Value)> = Vec::new();
+    let mut shortcut_docs: Vec<(&str, dom::Document)> = Vec::new();
+    let mut out: Vec<(String, Value)> = Vec::with_capacity(fields.len());
     for field in fields {
-        let value = match &field.shortcut {
-            Some(sc) => {
-                let doc = dom::parse_with_limits(sc, limits)?;
-                extract_field(sc, &doc.root, field)
+        let value = match field.shortcut.as_deref() {
+            Some(shortcut) if shortcut == xml => extract_field(xml, &root_doc.root, field),
+            Some(shortcut) => {
+                let doc = cached_shortcut(&mut shortcut_docs, shortcut, limits)?;
+                extract_field(shortcut, &doc.root, field)
             }
             None => extract_field(xml, &root_doc.root, field),
         };
         out.push((field.key.clone(), value));
     }
     Ok(Value::Object(out))
+}
+
+fn cached_shortcut<'cache, 'src>(
+    cache: &'cache mut Vec<(&'src str, dom::Document)>,
+    shortcut: &'src str,
+    limits: XmlLimits,
+) -> Result<&'cache dom::Document, SamlError> {
+    if let Some(index) = cache.iter().position(|(cached, _)| *cached == shortcut) {
+        return Ok(&cache[index].1);
+    }
+    cache.push((shortcut, dom::parse_with_limits(shortcut, limits)?));
+    let index = cache.len() - 1;
+    Ok(&cache[index].1)
 }
 
 #[cfg(test)]
@@ -478,5 +496,78 @@ mod tests {
             Some("_41e758fee373d51639552c4b040b1090e97f6685")
         );
         Ok(())
+    }
+
+    #[test]
+    fn identical_shortcut_strings_stay_distinct_from_other_documents(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let shared = "<Assertion ID=\"one\"><NameID>shared</NameID></Assertion>";
+        let shared_again = shared.to_string();
+        let other = "<Assertion ID=\"two\"><NameID>other</NameID></Assertion>";
+        let root = "<Response><Issuer>root-issuer</Issuer></Response>";
+        let result = extract(
+            root,
+            &[
+                ExtractorField::new("sharedId", &["Assertion"])
+                    .attrs(&["ID"])
+                    .with_shortcut(shared),
+                ExtractorField::new("sharedName", &["Assertion", "NameID"])
+                    .with_shortcut(&shared_again),
+                ExtractorField::new("otherName", &["Assertion", "NameID"]).with_shortcut(other),
+                ExtractorField::new("issuer", &["Response", "Issuer"]),
+                ExtractorField::new("sharedContext", &["Assertion"])
+                    .with_context()
+                    .with_shortcut(shared),
+            ],
+        )?;
+
+        assert_eq!(result.get_str("sharedId"), Some("one"));
+        assert_eq!(result.get_str("sharedName"), Some("shared"));
+        assert_eq!(result.get_str("otherName"), Some("other"));
+        assert_eq!(result.get_str("issuer"), Some("root-issuer"));
+        assert_eq!(result.get_str("sharedContext"), Some(shared));
+        Ok(())
+    }
+
+    #[test]
+    fn shortcut_equal_to_the_root_document_reads_that_document(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let xml = "<Assertion ID=\"a\"><NameID>n</NameID></Assertion>";
+        let owned = xml.to_string();
+        let result = extract(
+            xml,
+            &[
+                ExtractorField::new("id", &["Assertion"])
+                    .attrs(&["ID"])
+                    .with_shortcut(&owned),
+                ExtractorField::new("name", &["Assertion", "NameID"]),
+                ExtractorField::new("context", &["Assertion"])
+                    .with_context()
+                    .with_shortcut(&owned),
+            ],
+        )?;
+
+        assert_eq!(result.get_str("id"), Some("a"));
+        assert_eq!(result.get_str("name"), Some("n"));
+        assert_eq!(result.get_str("context"), Some(xml));
+        Ok(())
+    }
+
+    #[test]
+    fn shortcut_parser_limits_still_apply() {
+        let limits = XmlLimits {
+            max_bytes: 4,
+            ..XmlLimits::default()
+        };
+        let result = extract_with_limits(
+            "<R/>",
+            &[ExtractorField::new("name", &["Assertion", "NameID"]).with_shortcut("<Assertion/>")],
+            limits,
+        );
+
+        assert!(
+            matches!(result, Err(SamlError::Invalid(_))),
+            "expected the shortcut to exceed max_bytes, got {result:?}"
+        );
     }
 }
