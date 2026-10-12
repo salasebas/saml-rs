@@ -198,7 +198,7 @@ impl Saml<Idp> {
     ///
     /// A subject `NameId` without a format is sent with the first configured
     /// NameID format, the one [`Self::respond_sso`] writes for that `NameId`.
-    /// With no configured format, `Format` is empty, as in the assertion.
+    /// With no configured format, `Format` is omitted, as in the assertion.
     ///
     /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on the subject
     /// `NameId` are sent as given. [`Self::respond_sso`] does not write them,
@@ -475,15 +475,9 @@ fn start_slo_impl(
     // its assertions carry for that subject.
     let name_id_format = match role {
         StartSloRole::SessionParticipant => subject.name_id_format,
-        StartSloRole::SessionAuthority { .. } => {
-            Some(subject.name_id_format.unwrap_or_else(|| {
-                local_setting
-                    .name_id_format
-                    .first()
-                    .cloned()
-                    .unwrap_or_default()
-            }))
-        }
+        StartSloRole::SessionAuthority { .. } => subject
+            .name_id_format
+            .or_else(|| local_setting.default_name_id_format().map(str::to_string)),
     };
     let created = create_logout_request_with_session_indexes(LogoutRequestSessionIndexes {
         init_setting: local_setting,

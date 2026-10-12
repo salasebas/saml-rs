@@ -265,6 +265,16 @@ impl Default for SignatureConfig {
     }
 }
 
+impl EntitySetting {
+    /// The first configured NameID format, when it is not empty.
+    pub(crate) fn default_name_id_format(&self) -> Option<&str> {
+        self.name_id_format
+            .first()
+            .map(String::as_str)
+            .filter(|format| !format.trim().is_empty())
+    }
+}
+
 impl Default for EntitySetting {
     fn default() -> Self {
         Self {
