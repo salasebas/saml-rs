@@ -16,7 +16,6 @@ compatible additions.
 ## Unreleased
 
 - [Artifact resolution service on IdP metadata](unreleased-artifact-resolution.md)
-- [Logout NameID format and qualifiers](unreleased-logout-name-id.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
