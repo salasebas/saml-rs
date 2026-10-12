@@ -590,6 +590,44 @@ mod tests {
     }
 
     #[test]
+    fn logout_request_name_id_values_are_not_scanned_for_later_qualifiers() {
+        let rendered = replace_tags_by_optional_value(
+            concat!(
+                r#"<LogoutRequest NotOnOrAfter="{NotOnOrAfter}">"#,
+                r#"<NameID Format="{NameIDFormat}" NameQualifier="{NameQualifier}" "#,
+                r#"SPNameQualifier="{SPNameQualifier}" SPProvidedID="{SPProvidedID}">"#,
+                "{NameID}</NameID><SessionIndex>{SessionIndex}</SessionIndex>",
+                "</LogoutRequest>",
+            ),
+            &[
+                ("NameIDFormat", None),
+                (
+                    "NameID",
+                    Some(
+                        "{NameQualifier} & {SPNameQualifier} {SPProvidedID} {SessionIndex} {NotOnOrAfter}"
+                            .to_string(),
+                    ),
+                ),
+                ("NameQualifier", Some("https://idp.example.com".to_string())),
+                ("SPNameQualifier", None),
+                ("SPProvidedID", Some("{SessionIndex}".to_string())),
+                ("SessionIndex", Some("idx-1".to_string())),
+                ("NotOnOrAfter", Some("2020-01-01T00:00:00Z".to_string())),
+            ],
+        );
+        assert_eq!(
+            rendered,
+            concat!(
+                r#"<LogoutRequest NotOnOrAfter="2020-01-01T00:00:00Z">"#,
+                r#"<NameID NameQualifier="https://idp.example.com" SPProvidedID="{SessionIndex}">"#,
+                "{NameQualifier} &amp; {SPNameQualifier} {SPProvidedID} {SessionIndex} {NotOnOrAfter}",
+                "</NameID><SessionIndex>idx-1</SessionIndex>",
+                "</LogoutRequest>",
+            )
+        );
+    }
+
+    #[test]
     fn optional_none_still_drops_an_element_after_a_value_containing_its_placeholder() {
         let rendered = replace_tags_by_optional_value(
             "<root><n>{NameID}</n><s>{SessionIndex}</s></root>",
