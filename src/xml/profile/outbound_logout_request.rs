@@ -31,7 +31,8 @@ pub(crate) struct OutboundLogoutRequestExpectation<'a> {
     pub(crate) issuer: &'a str,
     pub(crate) expiration: OutboundLogoutExpiration<'a>,
     pub(crate) name_id: &'a str,
-    /// Expected `<NameID>` `Format`. `None` expects the attribute to be absent.
+    /// Expected `<NameID>` `Format`. `None` expects the attribute to be absent
+    /// or to name the unspecified format.
     pub(crate) name_id_format: Option<&'a str>,
     pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) session_indexes: &'a [&'a str],
@@ -249,10 +250,10 @@ fn validate_name_id(
                 "LogoutRequest NameID is missing expected Format {expected}",
             )))
         }
-        (Some(format), None) => Err(profile_error(format!(
-            "LogoutRequest NameID Format must be omitted, got {format}",
-        ))),
-        (Some(_), Some(_)) | (None, Some(_) | None) => Ok(()),
+        (Some(format), None) if format != name_id_format::UNSPECIFIED => Err(profile_error(
+            format!("LogoutRequest NameID Format must be omitted or unspecified, got {format}",),
+        )),
+        (Some(_), Some(_) | None) | (None, Some(_) | None) => Ok(()),
     }
 }
 

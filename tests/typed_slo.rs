@@ -3331,6 +3331,44 @@ fn typed_slo_logout_request_template_without_qualifier_placeholders_fails_closed
 }
 
 #[test]
+fn typed_slo_logout_request_template_fixed_format_must_match_a_subject_without_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = Saml::idp(idp_config()?)?;
+    let start = |format: &NameIdFormat| -> Result<_, Box<dyn std::error::Error>> {
+        let template = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
+            .replace("\n    NotOnOrAfter=\"{NotOnOrAfter}\"", "")
+            .replace("{NameIDFormat}", format.as_uri());
+        let sp = Saml::sp(sp_config_with_logout_request_template(&template)?)?;
+        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+        Ok(sp.start_slo(
+            &idp_descriptor,
+            subject()?,
+            StartSlo::post().apply_single_logout_generation_rules(),
+        ))
+    };
+
+    let started = start(&NameIdFormat::Unspecified)??;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(
+        logout_request_name_id(&xml)?,
+        (
+            "alice@example.com".to_string(),
+            vec![(
+                "Format".to_string(),
+                NameIdFormat::Unspecified.as_uri().to_string()
+            )],
+        ),
+    );
+
+    let result = start(&NameIdFormat::EmailAddress)?;
+    assert!(
+        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message.contains("NameID Format")),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn typed_slo_subject_from_sso_session_keeps_name_id_qualifiers(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = SsoSession::try_from(FlowResult {
