@@ -2480,10 +2480,7 @@ fn typed_session_authority_custom_logout_template_requires_explicit_name_id_form
 
     match idp.start_slo(
         &sp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress)),
-            SessionIndex::try_new("_session123")?,
-        ),
+        subject()?,
         StartSlo::post().signing(LogoutSigning::Sign),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("missing expected Format") => {
@@ -3251,7 +3248,7 @@ fn typed_slo_logout_request_keeps_name_id_format_and_qualifiers(
 fn typed_slo_logout_request_without_subject_format_omits_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
@@ -3259,12 +3256,35 @@ fn typed_slo_logout_request_without_subject_format_omits_format(
         logout_request_name_id(&xml)?,
         ("alice@example.com".to_string(), Vec::new())
     );
+    Ok(())
+}
+
+#[test]
+fn typed_session_authority_logout_request_without_subject_format_sends_configured_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(sp_config()?)?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+            .name_id_format(NameIdFormat::EmailAddress)
+            .credentials(credentials())
+            .validation(IdpValidationPolicy::compatibility())
+            .build()?,
+    )?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
     let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
     assert_eq!(
         logout_request_name_id(&xml)?,
-        ("alice@example.com".to_string(), Vec::new())
+        (
+            "alice@example.com".to_string(),
+            vec![(
+                "Format".to_string(),
+                NameIdFormat::EmailAddress.as_uri().to_string()
+            )],
+        ),
     );
     Ok(())
 }

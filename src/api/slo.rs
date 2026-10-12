@@ -196,6 +196,9 @@ impl Saml<Idp> {
     /// and still allows `SessionIndex` to be omitted. It does not require an
     /// `https` peer endpoint.
     ///
+    /// A subject `NameId` without a format is sent with the first configured
+    /// NameID format, the one [`Self::respond_sso`] writes for that `NameId`.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when relay state is invalid, SP metadata cannot be
@@ -463,13 +466,27 @@ fn start_slo_impl(
     } else {
         logout_request_signing(local_setting, options.signing)
     };
+    // A session authority sends a subject without a format with the format
+    // its assertions carry for that subject.
+    let name_id_format = match role {
+        StartSloRole::SessionParticipant => subject.name_id_format,
+        StartSloRole::SessionAuthority { .. } => {
+            Some(subject.name_id_format.unwrap_or_else(|| {
+                local_setting
+                    .name_id_format
+                    .first()
+                    .cloned()
+                    .unwrap_or_default()
+            }))
+        }
+    };
     let created = create_logout_request_with_session_indexes(LogoutRequestSessionIndexes {
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer_metadata,
         binding: options.binding.as_binding(),
         name_id: &subject.name_id,
-        name_id_format: subject.name_id_format.as_deref(),
+        name_id_format: name_id_format.as_deref(),
         name_id_qualifiers: OutboundNameIdQualifiers {
             name_qualifier: subject.name_qualifier.as_deref(),
             sp_name_qualifier: subject.sp_name_qualifier.as_deref(),

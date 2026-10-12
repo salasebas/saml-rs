@@ -3,9 +3,11 @@
 This change is unreleased. It applies to the release that first sends the
 logout subject's full `NameID`.
 
-Typed `start_slo` now copies `Format`, `NameQualifier`, `SPNameQualifier`, and
-`SPProvidedID` from the `LogoutSubject` `NameId` into the `LogoutRequest`.
-`SsoSession` now reads the same qualifiers from the assertion `NameID`, so
+Typed `start_slo` used to send the first local `name_id_format` as the
+`NameID` `Format`, whatever the `LogoutSubject` held, and no qualifiers. It now
+copies `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from
+the `LogoutSubject` `NameId` into the `LogoutRequest`. `SsoSession` now reads
+the same qualifiers from the assertion `NameID`, so
 `SsoSession::logout_subject` carries them into logout.
 
 ## Add qualifier placeholders to a custom logout request template
@@ -33,18 +35,22 @@ assertion `NameID` has qualifiers, the session `NameId` now holds them and is
 no longer equal to a `NameId` without them. Compare `NameId::value()` and
 `NameId::format()` when only those matter.
 
-## Set the NameID format on a logout subject that needs one
+## Set the NameID format on a service provider logout subject that needs one
 
-Typed `start_slo` used to fill a missing `Format` with the first local
-`name_id_format`. It now omits `Format` when the `LogoutSubject` `NameId` has
-none. That matches the assertion that established the session, because an
-omitted `Format` means unspecified.
+A service provider's typed `start_slo` now omits `Format` when the
+`LogoutSubject` `NameId` has none. That matches the assertion that established
+the session, because an omitted `Format` means unspecified.
 
-Who must change: code that builds a `LogoutSubject` with `NameId::new(value,
-None)` for a peer that expects a specific format. Pass the format the session
-used, for example `NameId::new(value, Some(NameIdFormat::EmailAddress))`. A
-subject from `SsoSession::logout_subject` already carries the assertion's
-format.
+Who must change: service provider code that builds a `LogoutSubject` with
+`NameId::new(value, None)` for an identity provider that expects a specific
+format. Pass the format the session used, for example
+`NameId::new(value, Some(NameIdFormat::EmailAddress))`. A subject from
+`SsoSession::logout_subject` already carries the assertion's format.
 
-A custom logout request template keeps working: an attribute whose complete
-value is `{NameIDFormat}` is omitted when the subject has no format.
+An identity provider's typed `start_slo` still sends the first local
+`name_id_format` for a `NameId` without a format. That is the `Format`
+`respond_sso` writes in the assertion for the same `NameId`. A format set on
+the `NameId` is now sent instead of the local one.
+
+A custom logout request template whose `NameID` has `Format="{NameIDFormat}"`
+keeps working: the attribute is omitted when no format is sent.
