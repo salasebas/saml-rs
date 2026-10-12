@@ -22,6 +22,8 @@ use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::raw::{Binding, FlowResult};
 use saml_rs::util::Value;
 use saml_rs::xml::dom::parse;
+use saml_rs::xml::extract;
+use saml_rs::xml::fields::login_response_fields;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, BrowserInput, CertificatePem, ClockSkew, Credentials, EntityId,
@@ -3391,43 +3393,17 @@ fn typed_slo_logout_request_template_fixed_format_must_match_a_subject_without_f
 #[test]
 fn typed_slo_subject_from_sso_session_keeps_name_id_qualifiers(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let assertion = format!(
+        r#"<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_assertion123" Version="2.0" IssueInstant="2024-01-01T00:00:01Z"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer><saml:Subject><saml:NameID NameQualifier="{QUALIFIED_NAME_QUALIFIER}" SPNameQualifier="{QUALIFIED_SP_NAME_QUALIFIER}" Format="{format}" SPProvidedID="{QUALIFIED_SP_PROVIDED_ID}">{QUALIFIED_NAME_ID}</saml:NameID></saml:Subject><saml:AuthnStatement AuthnInstant="2024-01-01T00:00:00Z" SessionIndex="_session123"/></saml:Assertion>"#,
+        format = NameIdFormat::Persistent.as_uri(),
+    );
+    let response = format!(
+        r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response123" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{assertion}</samlp:Response>"#,
+    );
     let session = SsoSession::try_from(FlowResult {
-        saml_content: "<samlp:Response/>".to_string(),
+        extract: extract(&response, &login_response_fields(&assertion))?,
+        saml_content: response,
         sig_alg: None,
-        extract: value_object(vec![
-            (
-                "response",
-                value_object(vec![
-                    ("id", value_str("_response123")),
-                    ("issueInstant", value_str("2024-01-01T00:00:00Z")),
-                ]),
-            ),
-            (
-                "assertion",
-                value_object(vec![
-                    ("id", value_str("_assertion123")),
-                    ("issueInstant", value_str("2024-01-01T00:00:01Z")),
-                ]),
-            ),
-            ("issuer", value_str(IDP_ENTITY_ID)),
-            ("nameID", value_str(QUALIFIED_NAME_ID)),
-            ("nameIDFormat", value_str(NameIdFormat::Persistent.as_uri())),
-            (
-                "nameIDQualifiers",
-                value_object(vec![
-                    ("nameQualifier", value_str(QUALIFIED_NAME_QUALIFIER)),
-                    ("spNameQualifier", value_str(QUALIFIED_SP_NAME_QUALIFIER)),
-                    ("spProvidedId", value_str(QUALIFIED_SP_PROVIDED_ID)),
-                ]),
-            ),
-            (
-                "sessionIndex",
-                Value::Array(vec![value_object(vec![(
-                    "sessionIndex",
-                    value_str("_session123"),
-                )])]),
-            ),
-        ]),
     })?;
     let subject = session.logout_subject().ok_or("missing logout subject")?;
 
