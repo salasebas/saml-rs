@@ -5,81 +5,105 @@ logout subject's full `NameID`.
 
 Typed `start_slo` used to send the first local `name_id_format` as the
 `NameID` `Format`, whatever the `LogoutSubject` held, and no qualifiers. It now
-copies `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from
-the `LogoutSubject` `NameId` into the `LogoutRequest`. `SsoSession` now reads
-the same qualifiers from the assertion `NameID`, so
-`SsoSession::logout_subject` carries them into logout.
+sends the `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` of
+the `LogoutSubject` `NameId`. `SsoSession` now reads the same qualifiers from
+the assertion `NameID`, so `SsoSession::logout_subject` carries them into
+logout.
 
-## Add qualifier placeholders to a custom logout request template
+Go to the sections that match the code:
 
-Who must change: code that sets `TemplatePolicy::logout_request_template` and
-starts typed Single Logout for a subject whose `NameId` has a qualifier. That
-includes a subject taken from an `SsoSession` whose assertion `NameID` had one.
-Session Authority generation, and session participant generation with producer
-rules, now fail with `SamlError::ProtocolProfile` when the rendered `NameID`
-drops or changes a qualifier. Session participant generation without producer
-rules sends the template as written, so a template without the placeholders
-still sends the `NameID` without its qualifiers.
+- It sets `TemplatePolicy::logout_request_template`:
+  [Update a custom logout request template](#update-a-custom-logout-request-template).
+- A service provider builds its own `LogoutSubject`:
+  [Set the format on a service provider logout subject](#set-the-format-on-a-service-provider-logout-subject).
+- An identity provider passes a `NameId` with a format or qualifiers to
+  `start_slo`:
+  [Check the NameID an identity provider passes to logout](#check-the-nameid-an-identity-provider-passes-to-logout).
+- It compares the `NameId` of an `SsoSession`:
+  [Expect qualifiers on the SSO session NameID](#expect-qualifiers-on-the-sso-session-nameid).
 
-Add the placeholders to the template's `NameID`. An attribute whose complete
-value is a placeholder is omitted when the `NameId` has no value for it.
+A service provider that passes `SsoSession::logout_subject` to `start_slo`
+with the default template has nothing to change.
+
+## Update a custom logout request template
+
+Who must change: code that sets `TemplatePolicy::logout_request_template`.
+
+Write the four `NameID` attributes as placeholders:
 
 ```xml
 <saml:NameID NameQualifier="{NameQualifier}" SPNameQualifier="{SPNameQualifier}"
     Format="{NameIDFormat}" SPProvidedID="{SPProvidedID}">{NameID}</saml:NameID>
 ```
 
-## Pass qualifiers to identity provider logout only when the assertion had them
+An attribute whose complete value is a placeholder is omitted when the request
+has no value for it.
 
-Who must change: identity provider code that passes a `NameId` with qualifiers
-to typed `start_slo`, for example the requested subject of an `AuthnRequest`.
-`start_slo` used to drop the qualifiers and now sends them. `respond_sso` and
-`initiate_sso` write the `NameID` value and `Format` only, so the service
-provider never received those qualifiers.
+A template left as it is behaves in one of two ways.
 
-Pass `NameId::new(value, format)` to `start_slo`, unless a custom login
-response template wrote the qualifiers into the assertion.
+Session Authority generation, and session participant generation with producer
+rules, now compare the rendered `NameID` attributes with the ones sent for the
+`LogoutSubject`. They used to compare `Format` with the first local
+`name_id_format` and reject every qualifier. They fail with
+`SamlError::ProtocolProfile` when the template:
+
+- has no qualifier placeholders and the `NameId` has a qualifier. That includes
+  a subject from an `SsoSession` whose assertion `NameID` had one;
+- has a fixed `Format`, such as
+  `Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"`, that is
+  not the format sent;
+- has no `Format` and a format other than unspecified is sent.
+
+When the request has no `Format`, the template must omit `Format` or write
+`urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified`.
+
+Session participant generation without producer rules sends the template as
+written. A template without the qualifier placeholders still sends the `NameID`
+without its qualifiers.
+
+## Set the format on a service provider logout subject
+
+Who must change: service provider code that builds a `LogoutSubject` with
+`NameId::new(value, None)` for an identity provider that expects a specific
+format. A service provider's `start_slo` used to send the first local
+`name_id_format` for that `NameId`. It now omits `Format`.
+
+Pass the format the session used:
+
+```rust
+let name_id = NameId::new(value, Some(NameIdFormat::EmailAddress));
+```
+
+A subject from `SsoSession::logout_subject` already carries the assertion's
+format and qualifiers.
+
+## Check the NameID an identity provider passes to logout
+
+Who must change: identity provider code that passes a `NameId` with a format
+or qualifiers to typed `start_slo`, for example the requested subject of an
+`AuthnRequest`. `start_slo` used to send the first local `name_id_format` and
+drop the qualifiers. It now sends what the `NameId` holds.
+
+Pass the `NameID` the assertion carried:
+
+- If the `NameId` has a format, pass the format it had in `respond_sso` or
+  `initiate_sso`.
+- If the `NameId` has qualifiers, pass them only when a custom login response
+  template wrote them into the assertion. `respond_sso` and `initiate_sso`
+  write the `NameID` value and `Format` only. Otherwise pass
+  `NameId::new(value, format)`.
+
+A `NameId` without a format needs no change. `start_slo` still sends the
+`Format` that `respond_sso` writes for it.
 
 ## Expect qualifiers on the SSO session NameID
 
 Who must change: code that compares `SsoSession::name_id()` or
 `SsoSession::subject()` with a `NameId` built by `NameId::new`. When the
 assertion `NameID` has qualifiers, the session `NameId` now holds them and is
-no longer equal to a `NameId` without them. Compare `NameId::value()` and
-`NameId::format()` when only those matter.
+no longer equal to a `NameId` without them.
 
-## Set the NameID format on a service provider logout subject that needs one
+Compare `NameId::value()` and `NameId::format()` when only those matter.
 
-A service provider's typed `start_slo` now omits `Format` when the
-`LogoutSubject` `NameId` has none. That matches the assertion that established
-the session, because an omitted `Format` means unspecified.
-
-Who must change: service provider code that builds a `LogoutSubject` with
-`NameId::new(value, None)` for an identity provider that expects a specific
-format. Pass the format the session used, for example
-`NameId::new(value, Some(NameIdFormat::EmailAddress))`. A subject from
-`SsoSession::logout_subject` already carries the assertion's format.
-
-An identity provider's typed `start_slo` still sends the first local
-`name_id_format` for a `NameId` without a format. That is the `Format`
-`respond_sso` writes in the assertion for the same `NameId`. With no local
-`name_id_format`, both still carry an empty `Format`. A format set on the
-`NameId` is now sent instead of the local one.
-
-A custom logout request template whose `NameID` has `Format="{NameIDFormat}"`
-keeps working: the attribute is omitted when the request has no `Format`.
-
-## Match the NameID format in a custom logout request template
-
-Who must change: code that sets `TemplatePolicy::logout_request_template` with
-a fixed `Format` on the `NameID`, such as
-`Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"`, or with no
-`Format` at all. Session Authority generation, and session participant
-generation with producer rules, used to compare the rendered `Format` with the
-first local `name_id_format`. They now compare it with the format sent for the
-`LogoutSubject` `NameId` and fail with `SamlError::ProtocolProfile` when the
-two differ. That includes a template without `Format` when a format other than
-unspecified is sent. When the request has no `Format`, the template must omit
-`Format` or write `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified`.
-
-Write `Format="{NameIDFormat}"` in the template.
+The rules behind these changes are in
+[Single Logout conformance](../conformance/single-logout.md).
