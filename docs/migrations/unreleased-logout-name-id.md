@@ -17,7 +17,9 @@ starts typed Single Logout for a subject whose `NameId` has a qualifier. That
 includes a subject taken from an `SsoSession` whose assertion `NameID` had one.
 Session Authority generation, and session participant generation with producer
 rules, now fail with `SamlError::ProtocolProfile` when the rendered `NameID`
-drops or changes a qualifier.
+drops or changes a qualifier. Session participant generation without producer
+rules sends the template as written, so a template without the placeholders
+still sends the `NameID` without its qualifiers.
 
 Add the placeholders to the template's `NameID`. An attribute whose complete
 value is a placeholder is omitted when the `NameId` has no value for it.
@@ -54,3 +56,18 @@ the `NameId` is now sent instead of the local one.
 
 A custom logout request template whose `NameID` has `Format="{NameIDFormat}"`
 keeps working: the attribute is omitted when no format is sent.
+
+## Match the NameID format in a custom logout request template
+
+Who must change: code that sets `TemplatePolicy::logout_request_template` with
+a fixed `Format` on the `NameID`, such as
+`Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"`, or with no
+`Format` at all. Session Authority generation, and session participant
+generation with producer rules, used to compare the rendered `Format` with the
+first local `name_id_format`. They now compare it with the format sent for the
+`LogoutSubject` `NameId` and fail with `SamlError::ProtocolProfile` when the
+two differ. That includes a template without `Format` when a format other than
+unspecified is sent. When no format is sent, the template must omit `Format`
+or write `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified`.
+
+Write `Format="{NameIDFormat}"` in the template.
