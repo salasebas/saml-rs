@@ -62,11 +62,12 @@ format. Pass the format the session used, for example
 
 An identity provider's typed `start_slo` still sends the first local
 `name_id_format` for a `NameId` without a format. That is the `Format`
-`respond_sso` writes in the assertion for the same `NameId`. A format set on
-the `NameId` is now sent instead of the local one.
+`respond_sso` writes in the assertion for the same `NameId`. With no local
+`name_id_format`, both still carry an empty `Format`. A format set on the
+`NameId` is now sent instead of the local one.
 
 A custom logout request template whose `NameID` has `Format="{NameIDFormat}"`
-keeps working: the attribute is omitted when no format is sent.
+keeps working: the attribute is omitted when the request has no `Format`.
 
 ## Match the NameID format in a custom logout request template
 
@@ -78,7 +79,7 @@ generation with producer rules, used to compare the rendered `Format` with the
 first local `name_id_format`. They now compare it with the format sent for the
 `LogoutSubject` `NameId` and fail with `SamlError::ProtocolProfile` when the
 two differ. That includes a template without `Format` when a format other than
-unspecified is sent. When no format is sent, the template must omit `Format`
-or write `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified`.
+unspecified is sent. When the request has no `Format`, the template must omit
+`Format` or write `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified`.
 
 Write `Format="{NameIDFormat}"` in the template.
