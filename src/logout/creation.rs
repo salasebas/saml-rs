@@ -356,6 +356,9 @@ fn create_logout_request_for_subject_inner(
 
 /// Build a `<LogoutResponse>` from `init` to `target`.
 ///
+/// `Destination` is the peer `SingleLogoutService` `ResponseLocation` for
+/// `binding` when that attribute is present, and `Location` otherwise.
+///
 /// # Errors
 ///
 /// Returns an error if `binding` is unsupported, `target_meta` has no SLO
@@ -483,7 +486,7 @@ fn create_logout_response_inner(
         });
     }
     let destination = target_meta
-        .get_single_logout_service(binding)
+        .get_single_logout_response_service(binding)
         .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?;
     let id = message_id
         .filter(|value| !value.is_empty())
