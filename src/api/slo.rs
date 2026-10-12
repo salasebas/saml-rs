@@ -199,6 +199,10 @@ impl Saml<Idp> {
     /// A subject `NameId` without a format is sent with the first configured
     /// NameID format, the one [`Self::respond_sso`] writes for that `NameId`.
     ///
+    /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on the subject
+    /// `NameId` are sent as given. [`Self::respond_sso`] does not write them,
+    /// so pass them only when the assertion carried them.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when relay state is invalid, SP metadata cannot be

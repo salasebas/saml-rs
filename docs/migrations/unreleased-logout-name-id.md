@@ -29,6 +29,17 @@ value is a placeholder is omitted when the `NameId` has no value for it.
     Format="{NameIDFormat}" SPProvidedID="{SPProvidedID}">{NameID}</saml:NameID>
 ```
 
+## Pass qualifiers to identity provider logout only when the assertion had them
+
+Who must change: identity provider code that passes a `NameId` with qualifiers
+to typed `start_slo`, for example the requested subject of an `AuthnRequest`.
+`start_slo` used to drop the qualifiers and now sends them. `respond_sso` and
+`initiate_sso` write the `NameID` value and `Format` only, so the service
+provider never received those qualifiers.
+
+Pass `NameId::new(value, format)` to `start_slo`, unless a custom login
+response template wrote the qualifiers into the assertion.
+
 ## Expect qualifiers on the SSO session NameID
 
 Who must change: code that compares `SsoSession::name_id()` or
