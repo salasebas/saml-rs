@@ -475,6 +475,17 @@ pub struct TemplatePolicy {
     /// Typed Session Authority generation requires a complete unqualified
     /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Typed SP and raw
     /// samlify-port generation do not synthesize the attribute.
+    ///
+    /// `{NameQualifier}`, `{SPNameQualifier}`, and `{SPProvidedID}` are filled
+    /// from the logout subject's `NameID`, and `{NameIDFormat}` with the
+    /// `Format` sent for it. An attribute whose complete value is one of these
+    /// placeholders is omitted when there is no value for it.
+    ///
+    /// Typed Session Authority generation, and typed SP generation with
+    /// [`crate::StartSlo::apply_single_logout_generation_rules`], reject a
+    /// template whose `NameID` attributes differ from the ones sent for the
+    /// subject. Other typed SP generation sends the template's `NameID`
+    /// attributes as written.
     pub logout_request_template: Option<String>,
     /// Logout response template.
     ///

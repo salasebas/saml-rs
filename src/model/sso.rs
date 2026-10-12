@@ -543,7 +543,14 @@ impl SsoSession {
             .extract
             .get_str("nameIDFormat")
             .map(name_id_format_from_uri);
-        let name_id = NameId::new(required_str(&raw_flow.extract, "nameID")?, name_id_format);
+        let name_id_qualifier = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
+        let name_id = NameId::with_qualifiers(
+            required_str(&raw_flow.extract, "nameID")?,
+            name_id_format,
+            name_id_qualifier("nameIDQualifiers.nameQualifier"),
+            name_id_qualifier("nameIDQualifiers.spNameQualifier"),
+            name_id_qualifier("nameIDQualifiers.spProvidedId"),
+        );
         let subject = Subject::new(
             name_id,
             subject_confirmations_from_extract(&raw_flow.extract),

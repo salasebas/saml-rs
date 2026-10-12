@@ -22,6 +22,8 @@ use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::raw::{Binding, FlowResult};
 use saml_rs::util::Value;
 use saml_rs::xml::dom::parse;
+use saml_rs::xml::extract;
+use saml_rs::xml::fields::login_response_fields;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, BrowserInput, CertificatePem, ClockSkew, Credentials, EntityId,
@@ -3147,4 +3149,264 @@ fn typed_logout_response_template_must_carry_the_supplied_top_level_status(
         }
         other => Err(format!("expected template status mismatch, got {other:?}").into()),
     }
+}
+
+const QUALIFIED_NAME_ID: &str = "pseudonym-7f3a";
+const QUALIFIED_NAME_QUALIFIER: &str = "https://idp.example.com/metadata";
+const QUALIFIED_SP_NAME_QUALIFIER: &str = "https://sp.example.com/metadata";
+const QUALIFIED_SP_PROVIDED_ID: &str = "sp-alias-42";
+
+const QUALIFIED_LOGOUT_REQUEST_TEMPLATE: &str = r#"
+<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+    ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}"
+    NotOnOrAfter="{NotOnOrAfter}" Destination="{Destination}">
+    <saml:Issuer>{Issuer}</saml:Issuer>
+    <saml:NameID NameQualifier="{NameQualifier}" SPNameQualifier="{SPNameQualifier}" Format="{NameIDFormat}" SPProvidedID="{SPProvidedID}">{NameID}</saml:NameID>
+    <samlp:SessionIndex>{SessionIndex}</samlp:SessionIndex>
+</samlp:LogoutRequest>
+"#;
+
+fn qualified_subject() -> Result<LogoutSubject, SamlError> {
+    Ok(LogoutSubject::with_session_index(
+        NameId::with_qualifiers(
+            QUALIFIED_NAME_ID,
+            Some(NameIdFormat::Persistent),
+            Some(QUALIFIED_NAME_QUALIFIER.to_string()),
+            Some(QUALIFIED_SP_NAME_QUALIFIER.to_string()),
+            Some(QUALIFIED_SP_PROVIDED_ID.to_string()),
+        ),
+        SessionIndex::try_new("_session123")?,
+    ))
+}
+
+fn qualified_name_id_attrs() -> Vec<(String, String)> {
+    let mut attrs = vec![
+        (
+            "Format".to_string(),
+            NameIdFormat::Persistent.as_uri().to_string(),
+        ),
+        (
+            "NameQualifier".to_string(),
+            QUALIFIED_NAME_QUALIFIER.to_string(),
+        ),
+        (
+            "SPNameQualifier".to_string(),
+            QUALIFIED_SP_NAME_QUALIFIER.to_string(),
+        ),
+        (
+            "SPProvidedID".to_string(),
+            QUALIFIED_SP_PROVIDED_ID.to_string(),
+        ),
+    ];
+    attrs.sort();
+    attrs
+}
+
+type NameIdView = (String, Vec<(String, String)>);
+
+fn logout_request_name_id(xml: &str) -> Result<NameIdView, Box<dyn std::error::Error>> {
+    let document = parse(xml)?;
+    let name_id = document
+        .root
+        .children
+        .iter()
+        .find(|child| child.local_name == "NameID")
+        .ok_or("missing LogoutRequest NameID")?;
+    let mut attrs = name_id.attrs.clone();
+    attrs.sort();
+    Ok((name_id.text.clone(), attrs))
+}
+
+#[test]
+fn typed_slo_logout_request_keeps_name_id_format_and_qualifiers(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    for binding in ALL_LOGOUT_BINDINGS {
+        let started = sp.start_slo(
+            &idp_descriptor,
+            qualified_subject()?,
+            start_slo_for_binding(binding),
+        )?;
+        let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+        assert_eq!(
+            logout_request_name_id(&xml)?,
+            (QUALIFIED_NAME_ID.to_string(), qualified_name_id_attrs()),
+        );
+    }
+
+    let started = idp.start_slo(&sp_descriptor, qualified_subject()?, StartSlo::post())?;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(
+        logout_request_name_id(&xml)?,
+        (QUALIFIED_NAME_ID.to_string(), qualified_name_id_attrs()),
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_slo_logout_request_without_subject_format_omits_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(
+        logout_request_name_id(&xml)?,
+        ("alice@example.com".to_string(), Vec::new())
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_session_authority_logout_request_without_subject_format_sends_configured_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(sp_config()?)?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+            .name_id_format(NameIdFormat::EmailAddress)
+            .credentials(credentials())
+            .validation(IdpValidationPolicy::compatibility())
+            .build()?,
+    )?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+
+    let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(
+        logout_request_name_id(&xml)?,
+        (
+            "alice@example.com".to_string(),
+            vec![(
+                "Format".to_string(),
+                NameIdFormat::EmailAddress.as_uri().to_string()
+            )],
+        ),
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_slo_logout_request_template_renders_name_id_qualifiers(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(sp_config()?)?;
+    let idp = Saml::idp(idp_config_with_issuance(
+        Duration::from_secs(300),
+        Some(QUALIFIED_LOGOUT_REQUEST_TEMPLATE.to_string()),
+        credentials(),
+        IdpValidationPolicy::compatibility(),
+    )?)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+
+    let started = idp.start_slo(&sp_descriptor, qualified_subject()?, StartSlo::post())?;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(
+        logout_request_name_id(&xml)?,
+        (QUALIFIED_NAME_ID.to_string(), qualified_name_id_attrs()),
+    );
+
+    let started = idp.start_slo(
+        &sp_descriptor,
+        LogoutSubject::with_session_index(
+            NameId::new(QUALIFIED_NAME_ID, Some(NameIdFormat::Persistent)),
+            SessionIndex::try_new("_session123")?,
+        ),
+        StartSlo::post(),
+    )?;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(
+        logout_request_name_id(&xml)?,
+        (
+            QUALIFIED_NAME_ID.to_string(),
+            vec![(
+                "Format".to_string(),
+                NameIdFormat::Persistent.as_uri().to_string()
+            )],
+        ),
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_slo_logout_request_template_without_qualifier_placeholders_fails_closed(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(sp_config()?)?;
+    let idp = Saml::idp(idp_config_with_issuance(
+        Duration::from_secs(300),
+        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
+        credentials(),
+        IdpValidationPolicy::compatibility(),
+    )?)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+
+    let result = idp.start_slo(&sp_descriptor, qualified_subject()?, StartSlo::post());
+    assert!(
+        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message.contains("NameQualifier")),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_slo_logout_request_template_fixed_format_must_match_a_subject_without_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = Saml::idp(idp_config()?)?;
+    let start = |format: &NameIdFormat| -> Result<_, Box<dyn std::error::Error>> {
+        let template = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
+            .replace("\n    NotOnOrAfter=\"{NotOnOrAfter}\"", "")
+            .replace("{NameIDFormat}", format.as_uri());
+        let sp = Saml::sp(sp_config_with_logout_request_template(&template)?)?;
+        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+        Ok(sp.start_slo(
+            &idp_descriptor,
+            subject()?,
+            StartSlo::post().apply_single_logout_generation_rules(),
+        ))
+    };
+
+    let started = start(&NameIdFormat::Unspecified)??;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(
+        logout_request_name_id(&xml)?,
+        (
+            "alice@example.com".to_string(),
+            vec![(
+                "Format".to_string(),
+                NameIdFormat::Unspecified.as_uri().to_string()
+            )],
+        ),
+    );
+
+    let result = start(&NameIdFormat::EmailAddress)?;
+    assert!(
+        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message.contains("NameID Format")),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_slo_subject_from_sso_session_keeps_name_id_qualifiers(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let assertion = format!(
+        r#"<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_assertion123" Version="2.0" IssueInstant="2024-01-01T00:00:01Z"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer><saml:Subject><saml:NameID NameQualifier="{QUALIFIED_NAME_QUALIFIER}" SPNameQualifier="{QUALIFIED_SP_NAME_QUALIFIER}" Format="{format}" SPProvidedID="{QUALIFIED_SP_PROVIDED_ID}">{QUALIFIED_NAME_ID}</saml:NameID></saml:Subject><saml:AuthnStatement AuthnInstant="2024-01-01T00:00:00Z" SessionIndex="_session123"/></saml:Assertion>"#,
+        format = NameIdFormat::Persistent.as_uri(),
+    );
+    let response = format!(
+        r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response123" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{assertion}</samlp:Response>"#,
+    );
+    let session = SsoSession::try_from(FlowResult {
+        extract: extract(&response, &login_response_fields(&assertion))?,
+        saml_content: response,
+        sig_alg: None,
+    })?;
+    let subject = session.logout_subject().ok_or("missing logout subject")?;
+
+    assert_eq!(subject.name_id(), qualified_subject()?.name_id());
+    Ok(())
 }

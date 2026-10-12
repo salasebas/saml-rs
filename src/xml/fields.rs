@@ -112,6 +112,9 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
         ExtractorField::new("nameIDFormat", &["Assertion", "Subject", "NameID"])
             .attrs(&["Format"])
             .with_shortcut(assertion),
+        ExtractorField::new("nameIDQualifiers", &["Assertion", "Subject", "NameID"])
+            .attrs(&["NameQualifier", "SPNameQualifier", "SPProvidedID"])
+            .with_shortcut(assertion),
         ExtractorField::new(
             "subjectConfirmation",
             &["Assertion", "Subject", "SubjectConfirmation"],

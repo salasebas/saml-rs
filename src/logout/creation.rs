@@ -9,6 +9,7 @@ use crate::template::{
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
+    OutboundNameIdQualifiers,
 };
 
 use super::bindings::unsigned_context;
@@ -85,7 +86,7 @@ pub fn create_logout_request_with_id(
         relay_state,
         want_signed,
         message_id,
-        name_id_format: &name_id_format,
+        name_id_format: Some(&name_id_format),
         issue_instant: &issue_instant,
         not_on_or_after: None,
         validation: LogoutRequestValidation::Compatibility,
@@ -105,6 +106,9 @@ pub(crate) struct LogoutRequestSessionIndexes<'a> {
     pub(crate) target_meta: &'a Metadata,
     pub(crate) binding: Binding,
     pub(crate) name_id: &'a str,
+    /// `<NameID>` `Format`. `None` omits the attribute.
+    pub(crate) name_id_format: Option<&'a str>,
+    pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) session_indexes: &'a [String],
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) want_signed: bool,
@@ -130,6 +134,8 @@ pub(crate) fn create_logout_request_with_session_indexes(
         target_meta,
         binding,
         name_id,
+        name_id_format,
+        name_id_qualifiers,
         session_indexes,
         relay_state,
         want_signed,
@@ -138,13 +144,9 @@ pub(crate) fn create_logout_request_with_session_indexes(
         validation,
     } = input;
 
-    let name_id_format = init_setting
-        .name_id_format
-        .first()
-        .cloned()
-        .unwrap_or_default();
     let subject = LogoutRequestSubject {
         name_id,
+        qualifiers: name_id_qualifiers,
         session_indexes: session_indexes.iter().map(String::as_str).collect(),
     };
     create_logout_request_for_subject_inner(LogoutRequestInput {
@@ -156,7 +158,7 @@ pub(crate) fn create_logout_request_with_session_indexes(
         relay_state,
         want_signed,
         message_id: None,
-        name_id_format: &name_id_format,
+        name_id_format,
         issue_instant,
         not_on_or_after,
         validation,
@@ -172,7 +174,7 @@ struct LogoutRequestInput<'a> {
     relay_state: Option<&'a str>,
     want_signed: bool,
     message_id: Option<&'a str>,
-    name_id_format: &'a str,
+    name_id_format: Option<&'a str>,
     issue_instant: &'a str,
     not_on_or_after: Option<&'a str>,
     validation: LogoutRequestValidation,
@@ -229,8 +231,20 @@ fn create_logout_request_for_subject_inner(
             ("IssueInstant", Some(issue_instant.to_string())),
             ("Destination", Some(destination.clone())),
             ("Issuer", Some(issuer.clone())),
-            ("NameIDFormat", Some(name_id_format.to_string())),
+            ("NameIDFormat", name_id_format.map(str::to_string)),
             ("NameID", Some(subject.name_id.to_string())),
+            (
+                "NameQualifier",
+                subject.qualifiers.name_qualifier.map(str::to_string),
+            ),
+            (
+                "SPNameQualifier",
+                subject.qualifiers.sp_name_qualifier.map(str::to_string),
+            ),
+            (
+                "SPProvidedID",
+                subject.qualifiers.sp_provided_id.map(str::to_string),
+            ),
             (
                 "SessionIndex",
                 subject
@@ -280,6 +294,7 @@ fn create_logout_request_for_subject_inner(
         expiration,
         name_id: subject.name_id,
         name_id_format,
+        name_id_qualifiers: subject.qualifiers,
         session_indexes,
     });
     if let Some(expectation) = expectation.as_ref() {

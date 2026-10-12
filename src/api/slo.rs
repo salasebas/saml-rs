@@ -14,6 +14,7 @@ use crate::model::{
     LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, ReplayKey,
     SamlInstant, SamlValidationContext, Status,
 };
+use crate::xml::OutboundNameIdQualifiers;
 
 use super::raw_mapping::{
     ensure_entity_id, ensure_relay_state, input_binding, raw_idp_descriptor, raw_sp_descriptor,
@@ -194,6 +195,14 @@ impl Saml<Idp> {
     /// [`StartSlo::apply_single_logout_generation_rules`] signs the request
     /// and still allows `SessionIndex` to be omitted. It does not require an
     /// `https` peer endpoint.
+    ///
+    /// A subject `NameId` without a format is sent with the first configured
+    /// NameID format, the one [`Self::respond_sso`] writes for that `NameId`.
+    /// With no configured format, `Format` is empty, as in the assertion.
+    ///
+    /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on the subject
+    /// `NameId` are sent as given. [`Self::respond_sso`] does not write them,
+    /// so pass them only when the assertion carried them.
     ///
     /// # Errors
     ///
@@ -400,6 +409,10 @@ impl Saml<Idp> {
 
 struct TypedLogoutSubject {
     name_id: String,
+    name_id_format: Option<String>,
+    name_qualifier: Option<String>,
+    sp_name_qualifier: Option<String>,
+    sp_provided_id: Option<String>,
     session_indexes: Vec<String>,
 }
 
@@ -458,12 +471,32 @@ fn start_slo_impl(
     } else {
         logout_request_signing(local_setting, options.signing)
     };
+    // A session authority sends a subject without a format with the format
+    // its assertions carry for that subject.
+    let name_id_format = match role {
+        StartSloRole::SessionParticipant => subject.name_id_format,
+        StartSloRole::SessionAuthority { .. } => {
+            Some(subject.name_id_format.unwrap_or_else(|| {
+                local_setting
+                    .name_id_format
+                    .first()
+                    .cloned()
+                    .unwrap_or_default()
+            }))
+        }
+    };
     let created = create_logout_request_with_session_indexes(LogoutRequestSessionIndexes {
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer_metadata,
         binding: options.binding.as_binding(),
         name_id: &subject.name_id,
+        name_id_format: name_id_format.as_deref(),
+        name_id_qualifiers: OutboundNameIdQualifiers {
+            name_qualifier: subject.name_qualifier.as_deref(),
+            sp_name_qualifier: subject.sp_name_qualifier.as_deref(),
+            sp_provided_id: subject.sp_provided_id.as_deref(),
+        },
         session_indexes: &subject.session_indexes,
         relay_state: options.relay_state.as_deref(),
         want_signed,
@@ -660,8 +693,13 @@ fn logout_recipient_endpoint(
 }
 
 fn typed_logout_subject(subject: LogoutSubject) -> TypedLogoutSubject {
+    let name_id = subject.name_id();
     TypedLogoutSubject {
-        name_id: subject.name_id().value().to_string(),
+        name_id: name_id.value().to_string(),
+        name_id_format: name_id.format().map(|format| format.as_uri().to_string()),
+        name_qualifier: name_id.name_qualifier().map(str::to_string),
+        sp_name_qualifier: name_id.sp_name_qualifier().map(str::to_string),
+        sp_provided_id: name_id.sp_provided_id().map(str::to_string),
         session_indexes: subject
             .session_indexes()
             .iter()

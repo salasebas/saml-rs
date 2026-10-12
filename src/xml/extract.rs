@@ -479,4 +479,30 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn login_response_fields_read_name_id_qualifiers() -> Result<(), Box<dyn std::error::Error>> {
+        let response = r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_r"><saml:Assertion ID="_a"><saml:Subject><saml:NameID NameQualifier="https://idp.example.com" SPNameQualifier="https://sp.example.com" Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent" SPProvidedID="alias">pseudonym</saml:NameID></saml:Subject></saml:Assertion></samlp:Response>"#;
+        let assertion = assertion_of(response)?;
+        let result = extract(response, &fields::login_response_fields(&assertion))?;
+        assert_eq!(
+            [
+                result.get_str("nameIDQualifiers.nameQualifier"),
+                result.get_str("nameIDQualifiers.spNameQualifier"),
+                result.get_str("nameIDQualifiers.spProvidedId"),
+            ],
+            [
+                Some("https://idp.example.com"),
+                Some("https://sp.example.com"),
+                Some("alias"),
+            ]
+        );
+
+        let result = extract(
+            RESPONSE,
+            &fields::login_response_fields(&assertion_of(RESPONSE)?),
+        )?;
+        assert_eq!(result.get_str("nameIDQualifiers.nameQualifier"), None);
+        Ok(())
+    }
 }
