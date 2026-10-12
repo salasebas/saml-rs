@@ -112,11 +112,16 @@ pub struct EntitySetting {
     /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Raw compatibility
     /// generation keeps that optional placeholder omitted.
     ///
-    /// `{NameQualifier}`, `{SPNameQualifier}`, and `{SPProvidedID}` are filled
-    /// from the logout subject's `NameID`. An attribute whose complete value is
-    /// one of these placeholders is omitted when the `NameID` has no value for
-    /// it. Typed generation rejects a template that drops a qualifier the
-    /// subject carries.
+    /// Typed generation fills `{NameQualifier}`, `{SPNameQualifier}`, and
+    /// `{SPProvidedID}` from the logout subject's `NameID`, and
+    /// `{NameIDFormat}` with the `Format` sent for it. An attribute whose
+    /// complete value is one of these placeholders is omitted when there is
+    /// no value for it. Raw compatibility generation fills `{NameIDFormat}`
+    /// from `name_id_format` and omits the qualifier attributes.
+    ///
+    /// Typed Session Authority generation, and typed SP generation with
+    /// Single Logout generation rules, reject a template whose `NameID`
+    /// attributes differ from the subject's.
     pub logout_request_template: Option<String>,
     /// Custom `<LogoutResponse>` template (`None` uses the default).
     ///
