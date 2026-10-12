@@ -483,9 +483,9 @@ pub struct TemplatePolicy {
     ///
     /// Typed Session Authority generation, and typed SP generation with
     /// [`crate::StartSlo::apply_single_logout_generation_rules`], reject a
-    /// template whose `NameID` attributes differ from the subject's. Other
-    /// typed SP generation sends the template's `NameID` attributes as
-    /// written.
+    /// template whose `NameID` attributes differ from the ones sent for the
+    /// subject. Other typed SP generation sends the template's `NameID`
+    /// attributes as written.
     pub logout_request_template: Option<String>,
     /// Logout response template.
     ///

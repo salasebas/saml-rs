@@ -121,7 +121,7 @@ pub struct EntitySetting {
     ///
     /// Typed Session Authority generation, and typed SP generation with
     /// Single Logout generation rules, reject a template whose `NameID`
-    /// attributes differ from the subject's.
+    /// attributes differ from the ones sent for the subject.
     pub logout_request_template: Option<String>,
     /// Custom `<LogoutResponse>` template (`None` uses the default).
     ///
