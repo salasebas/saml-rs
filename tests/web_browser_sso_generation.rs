@@ -846,10 +846,10 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-            .acs_endpoint(AcsEndpoint::simple_sign(
-                "https://sp.example.com/acs/simple-sign",
-            )?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
+            .acs_endpoint(
+                AcsEndpoint::simple_sign("https://sp.example.com/acs/simple-sign")?.mark_default(),
+            )
             .credentials(credentials())
             .validation(signing_sp_validation())
             .build()?,

@@ -3,7 +3,8 @@
 use super::{as_object_list, Metadata};
 use crate::constants::Binding;
 use crate::error::SamlError;
-use crate::xml::{ExtractorField, XmlLimits};
+use crate::util::Value;
+use crate::xml::{extract_with_limits, ExtractorField, XmlLimits};
 use std::ops::Deref;
 
 /// Parsed AssertionConsumerService endpoint from SP metadata.
@@ -35,6 +36,7 @@ impl AcsMetadataEndpoint {
 #[derive(Debug, Clone)]
 pub struct SpMetadata {
     inner: Metadata,
+    saml2_assertion_consumer_services: Value,
 }
 
 impl SpMetadata {
@@ -58,6 +60,8 @@ impl SpMetadata {
         let extra = vec![
             ExtractorField::new("spSSODescriptor", &["EntityDescriptor", "SPSSODescriptor"])
                 .attrs(&["WantAssertionsSigned", "AuthnRequestsSigned"]),
+            ExtractorField::new("spRoleContext", &["EntityDescriptor", "SPSSODescriptor"])
+                .with_context(),
             ExtractorField::new(
                 "assertionConsumerService",
                 &[
@@ -66,10 +70,28 @@ impl SpMetadata {
                     "AssertionConsumerService",
                 ],
             )
-            .attrs(&["Binding", "Location", "isDefault", "index"]),
+            .with_context(),
         ];
+        let mut inner = Metadata::parse_with_limits(xml, extra, limits)?;
+        let role_context = match &mut inner.meta {
+            Value::Object(entries) => entries
+                .iter()
+                .position(|(key, _)| key == "spRoleContext")
+                .map(|index| entries.remove(index).1)
+                .unwrap_or_default(),
+            Value::Null | Value::Str(_) | Value::Array(_) => Value::Null,
+        };
+        let saml2_assertion_consumer_services = saml2_role_acs(&role_context, limits)?;
+        if let Some(fragments) = inner.meta.get("assertionConsumerService") {
+            let endpoints = super::endpoints::parse_endpoint_fragments(
+                fragments,
+                &["Binding", "Location", "isDefault", "index"],
+            )?;
+            inner.meta.insert("assertionConsumerService", endpoints);
+        }
         Ok(Self {
-            inner: Metadata::parse_with_limits(xml, extra, limits)?,
+            inner,
+            saml2_assertion_consumer_services,
         })
     }
 
@@ -109,7 +131,27 @@ impl SpMetadata {
             .into_iter()
             .filter(|endpoint| endpoint.binding == binding)
             .collect();
-        select_indexed_default(endpoints)
+        select_indexed_default(endpoints, |endpoint| {
+            (endpoint.is_default, endpoint.is_default_false)
+        })
+    }
+
+    /// Default `AssertionConsumerService` across the SAML 2.0 role's bindings.
+    pub(crate) fn get_default_assertion_consumer_service_endpoint(
+        &self,
+    ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
+        select_indexed_default(
+            as_object_list(&self.saml2_assertion_consumer_services),
+            |value| indexed_default_flags(value.get_str("isDefault")),
+        )
+        .map(|value| {
+            acs_metadata_endpoint_from_value(value).ok_or_else(|| {
+                SamlError::Invalid(
+                    "default AssertionConsumerService is unsupported or malformed".into(),
+                )
+            })
+        })
+        .transpose()
     }
 
     /// `AssertionConsumerService` endpoint with the declared metadata index.
@@ -145,7 +187,10 @@ impl SpMetadata {
     /// Selection uses the same default rule as
     /// [`Self::get_assertion_consumer_service`].
     pub(crate) fn default_assertion_consumer_location(&self) -> Option<String> {
-        select_indexed_default(self.posted_response_endpoints()).map(|endpoint| endpoint.location)
+        select_indexed_default(self.posted_response_endpoints(), |endpoint| {
+            (endpoint.is_default, endpoint.is_default_false)
+        })
+        .map(|endpoint| endpoint.location)
     }
 
     /// Whether metadata contains `location` for `binding`.
@@ -174,6 +219,47 @@ impl SpMetadata {
     }
 }
 
+fn saml2_role_acs(role_context: &Value, limits: XmlLimits) -> Result<Value, SamlError> {
+    let roles = match role_context {
+        Value::Str(_) => std::slice::from_ref(role_context),
+        Value::Array(roles) => roles.as_slice(),
+        Value::Null | Value::Object(_) => return Ok(Value::Null),
+    };
+    for role in roles {
+        let attributes =
+            super::endpoints::parse_endpoint_fragments(role, &["protocolSupportEnumeration"])?;
+        if !attributes
+            .get_str("protocolSupportEnumeration")
+            .is_some_and(|protocols| {
+                protocols
+                    .split(' ')
+                    .any(|protocol| protocol == "urn:oasis:names:tc:SAML:2.0:protocol")
+            })
+        {
+            continue;
+        }
+        let Some(xml) = role.as_str() else {
+            continue;
+        };
+        let extracted = extract_with_limits(
+            xml,
+            &[ExtractorField::new(
+                "assertionConsumerService",
+                &["SPSSODescriptor", "AssertionConsumerService"],
+            )
+            .with_context()],
+            limits,
+        )?;
+        return super::endpoints::parse_endpoint_fragments(
+            extracted
+                .get("assertionConsumerService")
+                .unwrap_or(&Value::Null),
+            &["Binding", "Location", "isDefault", "index"],
+        );
+    }
+    Ok(Value::Null)
+}
+
 fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMetadataEndpoint> {
     let binding = Binding::from_urn(value.get_str("binding")?)?;
     let location = value.get_str("location")?.to_string();
@@ -191,21 +277,18 @@ fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMet
 }
 
 fn indexed_default_flags(is_default: Option<&str>) -> (bool, bool) {
-    match is_default {
+    match is_default.map(|value| value.trim_matches([' ', '\t', '\r', '\n'])) {
         Some("true" | "1") => (true, false),
         Some("false" | "0") => (false, true),
         Some(_) | None => (false, false),
     }
 }
 
-fn select_indexed_default(endpoints: Vec<AcsMetadataEndpoint>) -> Option<AcsMetadataEndpoint> {
-    if let Some(index) = endpoints.iter().position(|endpoint| endpoint.is_default) {
+fn select_indexed_default<T>(endpoints: Vec<T>, flags: impl Fn(&T) -> (bool, bool)) -> Option<T> {
+    if let Some(index) = endpoints.iter().position(|endpoint| flags(endpoint).0) {
         return endpoints.into_iter().nth(index);
     }
-    if let Some(index) = endpoints
-        .iter()
-        .position(|endpoint| !endpoint.is_default_false)
-    {
+    if let Some(index) = endpoints.iter().position(|endpoint| !flags(endpoint).1) {
         return endpoints.into_iter().nth(index);
     }
     endpoints.into_iter().next()
@@ -283,6 +366,75 @@ mod tests {
                 .as_deref(),
             Some("https://sp.example.com/second")
         );
+
+        for value in ["false", "0"] {
+            let foreign_false = sp_with_acs(&format!(
+                r#"<AssertionConsumerService xmlns:ext="urn:example" Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="0" ext:isDefault="{value}"/>
+                   <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second" index="1"/>"#,
+            ))?;
+            assert_eq!(
+                foreign_false
+                    .get_assertion_consumer_service(Binding::Post)
+                    .as_deref(),
+                Some("https://sp.example.com/first"),
+                "ext:isDefault={value}"
+            );
+        }
+
+        for attributes in [
+            r#"ext:isDefault="false" isDefault="true""#,
+            r#"isDefault="true" ext:isDefault="false""#,
+        ] {
+            let qualified_and_unqualified = sp_with_acs(&format!(
+                r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="0"/>
+                   <AssertionConsumerService xmlns:ext="urn:example" Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second" index="1" {attributes}/>"#,
+            ))?;
+            assert_eq!(
+                qualified_and_unqualified
+                    .get_assertion_consumer_service(Binding::Post)
+                    .as_deref(),
+                Some("https://sp.example.com/second"),
+                "{attributes}"
+            );
+        }
+
+        for is_default in [
+            " true ",
+            " 1 ",
+            "&#x9;&#xA;&#xD;true&#xD;&#xA;&#x9;",
+            "&#x9;&#xA;&#xD;1&#xD;&#xA;&#x9;",
+        ] {
+            let whitespace_true = sp_with_acs(&format!(
+                r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="0"/>
+                   <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second" index="1" isDefault="{is_default}"/>"#,
+            ))?;
+            assert_eq!(
+                whitespace_true
+                    .get_assertion_consumer_service(Binding::Post)
+                    .as_deref(),
+                Some("https://sp.example.com/second"),
+                "isDefault={is_default}"
+            );
+        }
+
+        for is_default in [
+            " false ",
+            " 0 ",
+            "&#x9;&#xA;&#xD;false&#xD;&#xA;&#x9;",
+            "&#x9;&#xA;&#xD;0&#xD;&#xA;&#x9;",
+        ] {
+            let whitespace_false = sp_with_acs(&format!(
+                r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="0" isDefault="{is_default}"/>
+                   <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second" index="1"/>"#,
+            ))?;
+            assert_eq!(
+                whitespace_false
+                    .get_assertion_consumer_service(Binding::Post)
+                    .as_deref(),
+                Some("https://sp.example.com/second"),
+                "isDefault={is_default}"
+            );
+        }
 
         let unrecognized = sp_with_acs(
             r#"<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/first" index="0" isDefault="yes"/>

@@ -1,5 +1,6 @@
 //! SAML metadata parsing and shared SP/IdP metadata accessors.
 
+mod endpoints;
 pub mod generate;
 pub mod idp;
 pub mod sp;
@@ -46,7 +47,7 @@ fn base_fields() -> Vec<ExtractorField> {
             "singleLogoutService",
             &["EntityDescriptor", "~SSODescriptor", "SingleLogoutService"],
         )
-        .attrs(&["Binding", "Location", "ResponseLocation"]),
+        .with_context(),
         ExtractorField::new(
             "nameIDFormat",
             &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
@@ -123,10 +124,17 @@ pub(crate) fn response_location_for_binding(
     None
 }
 
-/// Every `Location` and `ResponseLocation` published for `binding`, in document order.
+#[derive(Clone, Copy)]
+pub(super) enum EndpointDirection {
+    Request,
+    Response,
+}
+
+/// Published locations for the binding and message direction, in document order.
 pub(crate) fn published_locations_for_binding(
     value: Option<&Value>,
     binding: Binding,
+    direction: EndpointDirection,
 ) -> Vec<String> {
     let Some(value) = value else {
         return Vec::new();
@@ -136,11 +144,13 @@ pub(crate) fn published_locations_for_binding(
         if obj.get_str("binding") != Some(binding.urn()) {
             continue;
         }
-        if let Some(location) = non_empty_location(obj.get_str("location")) {
+        let location = match direction {
+            EndpointDirection::Request => non_empty_location(obj.get_str("location")),
+            EndpointDirection::Response => non_empty_location(obj.get_str("responseLocation"))
+                .or_else(|| non_empty_location(obj.get_str("location"))),
+        };
+        if let Some(location) = location {
             push_unique_location(&mut locations, location);
-        }
-        if let Some(response_location) = non_empty_location(obj.get_str("responseLocation")) {
-            push_unique_location(&mut locations, response_location);
         }
     }
     locations
@@ -204,6 +214,13 @@ impl Metadata {
         fields.extend(extra);
         let extraction_xml = entity_descriptor_xml(xml, &roots)?;
         let mut meta = extract_with_limits(extraction_xml, &fields, limits)?;
+        if let Some(fragments) = meta.get("singleLogoutService") {
+            let endpoints = endpoints::parse_endpoint_fragments(
+                fragments,
+                &["Binding", "Location", "ResponseLocation"],
+            )?;
+            meta.insert("singleLogoutService", endpoints);
+        }
 
         // A single shared certificate is used for both signing and encryption.
         if let Some(shared) = meta.get_str("sharedCertificate") {
@@ -284,9 +301,22 @@ impl Metadata {
         response_location_for_binding(self.meta.get("singleLogoutService"), binding)
     }
 
-    /// Every `Location` and `ResponseLocation` published on `SingleLogoutService` for `binding`.
+    /// Every request `Location` published on `SingleLogoutService` for `binding`.
     pub(crate) fn single_logout_service_locations(&self, binding: Binding) -> Vec<String> {
-        published_locations_for_binding(self.meta.get("singleLogoutService"), binding)
+        published_locations_for_binding(
+            self.meta.get("singleLogoutService"),
+            binding,
+            EndpointDirection::Request,
+        )
+    }
+
+    /// Every response location published on `SingleLogoutService` for `binding`.
+    pub(crate) fn single_logout_response_service_locations(&self, binding: Binding) -> Vec<String> {
+        published_locations_for_binding(
+            self.meta.get("singleLogoutService"),
+            binding,
+            EndpointDirection::Response,
+        )
     }
 
     /// Write the metadata XML to `path`.
@@ -481,6 +511,12 @@ mod tests {
             metadata.single_logout_service_locations(Binding::Post),
             vec![
                 "https://sp.example.com/slo/a".to_string(),
+                "https://sp.example.com/slo/c".to_string(),
+            ]
+        );
+        assert_eq!(
+            metadata.single_logout_response_service_locations(Binding::Post),
+            vec![
                 "https://sp.example.com/slo/b".to_string(),
                 "https://sp.example.com/slo/c".to_string(),
             ]
@@ -512,7 +548,6 @@ mod tests {
             idp.single_sign_on_service_locations(Binding::Post),
             vec![
                 "https://idp.example.com/sso/a".to_string(),
-                "https://idp.example.com/sso/b".to_string(),
                 "https://idp.example.com/sso/c".to_string(),
             ]
         );

@@ -2,7 +2,7 @@ use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::flow::{
-    flow, flow_with_expected_recipient_allowing_additional, AssertionSignatureRequirement,
+    flow, flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
     FlowOptions, FlowResult, HttpRequest, ResponseSignatureRequirement,
 };
 use crate::metadata::Metadata;
@@ -11,13 +11,11 @@ use std::time::SystemTime;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogoutFlowValidation<'a> {
     expected_recipient: Option<&'a str>,
-    also_accepted: &'a [&'a str],
     now: Option<SystemTime>,
     clock_drifts: (i64, i64),
 }
 
 impl<'a> LogoutFlowValidation<'a> {
-    #[cfg(test)]
     pub(crate) fn typed(
         expected_recipient: &'a str,
         now: SystemTime,
@@ -25,28 +23,6 @@ impl<'a> LogoutFlowValidation<'a> {
     ) -> Self {
         Self {
             expected_recipient: Some(expected_recipient),
-            also_accepted: &[],
-            now: Some(now),
-            clock_drifts,
-        }
-    }
-
-    /// Accept `Destination` when it equals any published recipient.
-    ///
-    /// The first entry is the primary recipient reported in a mismatch. An
-    /// empty slice skips the destination check.
-    pub(crate) fn typed_destinations(
-        expected_recipients: &'a [&'a str],
-        now: SystemTime,
-        clock_drifts: (i64, i64),
-    ) -> Self {
-        let (expected_recipient, also_accepted) = match expected_recipients.split_first() {
-            Some((primary, rest)) => (Some(*primary), rest),
-            None => (None, &[][..]),
-        };
-        Self {
-            expected_recipient,
-            also_accepted,
             now: Some(now),
             clock_drifts,
         }
@@ -55,7 +31,6 @@ impl<'a> LogoutFlowValidation<'a> {
     fn raw(clock_drifts: (i64, i64)) -> Self {
         Self {
             expected_recipient: None,
-            also_accepted: &[],
             now: None,
             clock_drifts,
         }
@@ -141,7 +116,6 @@ fn parse_logout_request_inner(
         },
         request,
         validation.expected_recipient,
-        validation.also_accepted,
     )
 }
 
@@ -176,7 +150,6 @@ fn parse_logout_response_inner(
         },
         request,
         validation.expected_recipient,
-        validation.also_accepted,
     )
 }
 
@@ -292,14 +265,12 @@ fn run_logout_flow(
     options: &FlowOptions<'_>,
     request: &HttpRequest,
     expected_recipient: Option<&str>,
-    also_accepted: &[&str],
 ) -> Result<FlowResult, SamlError> {
     match expected_recipient {
-        Some(expected_recipient) => Ok(flow_with_expected_recipient_allowing_additional(
+        Some(expected_recipient) => Ok(flow_with_expected_recipient_and_signature_evidence(
             options,
             request,
             expected_recipient,
-            also_accepted,
             AssertionSignatureRequirement::Compatible,
             ResponseSignatureRequirement::Optional,
         )?

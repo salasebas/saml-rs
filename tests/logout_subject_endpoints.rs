@@ -174,11 +174,105 @@ fn logout_response_uses_response_location_and_request_uses_location(
     let response =
         identity_provider.respond_slo(&sp_for_responses, &received, RespondSlo::post())?;
     assert_eq!(response.post_form()?.action().as_str(), SP_SLO_RESPONSE);
+
+    for padded_location in [
+        format!(" {SP_SLO_RESPONSE} "),
+        format!("&#x9;{SP_SLO_RESPONSE}&#xD;&#xA;"),
+    ] {
+        let padded_metadata = sp_for_responses
+            .metadata_xml()
+            .replace(SP_SLO_RESPONSE, &padded_location);
+        let padded_peer = SpDescriptor::from_metadata_xml(
+            &padded_metadata,
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        )?;
+        let response =
+            identity_provider.respond_slo(&padded_peer, &received, RespondSlo::post())?;
+        assert_eq!(response.post_form()?.action().as_str(), SP_SLO_RESPONSE);
+    }
+
+    let extension_metadata = sp_for_responses
+        .metadata_xml()
+        .replace(
+            "<EntityDescriptor ",
+            "<EntityDescriptor xmlns:ext=\"urn:example\" ",
+        )
+        .replace(" ResponseLocation=", " ext:ResponseLocation=");
+    let extension_peer = SpDescriptor::from_metadata_xml(
+        &extension_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let response = identity_provider.respond_slo(&extension_peer, &received, RespondSlo::post())?;
+    assert_eq!(response.post_form()?.action().as_str(), SP_SLO);
     Ok(())
 }
 
 #[test]
-fn second_published_slo_location_is_an_accepted_destination(
+fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::error::Error>> {
+    let service_provider = Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(saml_rs::AcsEndpoint::post(SP_ACS)?)
+            .slo_endpoint(SloEndpoint::post(SP_SLO)?)
+            .slo_endpoint(SloEndpoint::post(SP_SLO_RESPONSE)?)
+            .credentials(credentials())
+            .build()?,
+    )?;
+    let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
+    let peer_sp = sp(SpValidationPolicy::recommended())?;
+    let response_metadata = peer_sp.metadata_xml().replace(SP_SLO, SP_SLO_RESPONSE);
+    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &response_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let (_, idp_descriptor) = descriptor_pair(&service_provider, &identity_provider)?;
+    let started = service_provider.start_slo(
+        &idp_descriptor,
+        LogoutSubject::with_session_index(
+            NameId::new("alice@example.com", None),
+            SessionIndex::try_new("_session")?,
+        ),
+        StartSlo::post(),
+    )?;
+    let received = identity_provider.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = identity_provider.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let response_input = || -> Result<_, SamlError> {
+        Ok(BrowserInput::<saml_rs::LogoutResponse>::post(
+            response.post_form()?.fields().to_vec(),
+        ))
+    };
+    let wrong_handler = service_provider.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        response_input()?,
+        validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(SP_SLO)?),
+    );
+    assert!(matches!(
+        wrong_handler,
+        Err(SamlError::DestinationMismatch { .. })
+    ));
+    let ambiguous = service_provider.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        response_input()?,
+        validation(),
+    );
+    assert!(matches!(ambiguous, Err(SamlError::Invalid(_))));
+    service_provider.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        response_input()?,
+        validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(SP_SLO_RESPONSE)?),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn slo_destination_matches_the_actual_published_receiving_endpoint(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let service_provider = sp(SpValidationPolicy::compatibility())?;
     let identity_provider = idp(
@@ -205,7 +299,7 @@ fn second_published_slo_location_is_an_accepted_destination(
     let accepted = identity_provider.receive_slo(
         &sp_descriptor,
         input(&logout_request(IDP_SLO_SECOND)),
-        validation(),
+        validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO_SECOND)?),
     )?;
     assert_eq!(
         accepted.message().destination().map(|url| url.as_str()),
@@ -215,7 +309,7 @@ fn second_published_slo_location_is_an_accepted_destination(
     let rejected = identity_provider.receive_slo(
         &sp_descriptor,
         input(&logout_request("https://idp.example.com/slo/unknown")),
-        validation(),
+        validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO)?),
     );
     match rejected {
         Err(SamlError::DestinationMismatch { expected, actual }) => {
@@ -227,5 +321,22 @@ fn second_published_slo_location_is_an_accepted_destination(
         }
         other => return Err(format!("expected DestinationMismatch, got {other:?}").into()),
     }
+
+    let wrong_handler = identity_provider.receive_slo(
+        &sp_descriptor,
+        input(&logout_request(IDP_SLO_SECOND)),
+        validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO)?),
+    );
+    assert!(matches!(
+        wrong_handler,
+        Err(SamlError::DestinationMismatch { .. })
+    ));
+
+    let ambiguous = identity_provider.receive_slo(
+        &sp_descriptor,
+        input(&logout_request(IDP_SLO_SECOND)),
+        validation(),
+    );
+    assert!(matches!(ambiguous, Err(SamlError::Invalid(_))));
     Ok(())
 }

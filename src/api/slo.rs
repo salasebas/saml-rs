@@ -78,8 +78,10 @@ impl Saml<Sp> {
     /// XML parsing or signature/trust validation fails, required
     /// `IssueInstant` or optional `NotOnOrAfter` is not conformant,
     /// `NotOnOrAfter` has expired under saml-rs' fail-closed policy, the
-    /// destination does not match a published `SingleLogoutService` location,
-    /// or replay validation detects a duplicate or unusable expiration.
+    /// destination does not match the receiving `SingleLogoutService` location,
+    /// the receiving URL is unpublished, multiple local endpoints have no
+    /// explicit receiving URL, or replay
+    /// validation detects a duplicate or unusable expiration.
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
@@ -133,7 +135,9 @@ impl Saml<Sp> {
     /// Returns [`SamlError`] when the response does not match the pending
     /// request, including issuer, binding, relay state, destination, or
     /// `InResponseTo` mismatches; when IdP metadata cannot be parsed; when XML,
-    /// signature, trust, status, or time validation fails; or when replay
+    /// signature, trust, status, or time validation fails; when the receiving
+    /// URL is unpublished or multiple local endpoints have no explicit
+    /// receiving URL; or when replay
     /// validation detects a duplicate or expired message. Response signatures
     /// follow [`crate::LogoutPolicy::responses`]. The Single Logout accept
     /// combination sets that field to [`crate::LogoutSignaturePolicy::RequireSigned`].
@@ -259,8 +263,10 @@ impl Saml<Idp> {
     /// the binding is unsupported for logout, SP metadata cannot be parsed, XML
     /// parsing or signature/trust validation fails, required `IssueInstant` or
     /// optional `NotOnOrAfter` is not conformant, `NotOnOrAfter` has expired
-    /// under saml-rs' fail-closed policy, the destination does not match a
-    /// published `SingleLogoutService` location, or replay validation detects
+    /// under saml-rs' fail-closed policy, the destination does not match the
+    /// receiving `SingleLogoutService` location, the receiving URL is
+    /// unpublished, multiple local endpoints have
+    /// no explicit receiving URL, or replay validation detects
     /// a duplicate or unusable expiration.
     ///
     /// # Examples
@@ -356,7 +362,9 @@ impl Saml<Idp> {
     /// Returns [`SamlError`] when the response does not match the pending
     /// request, including issuer, binding, relay state, destination, or
     /// `InResponseTo` mismatches; when SP metadata cannot be parsed; when XML,
-    /// signature, trust, status, or time validation fails; or when replay
+    /// signature, trust, status, or time validation fails; when the receiving
+    /// URL is unpublished or multiple local endpoints have no explicit
+    /// receiving URL; or when replay
     /// validation detects a duplicate or expired message. Response signatures
     /// follow [`crate::LogoutPolicy::responses`]. The Single Logout accept
     /// combination sets that field to [`crate::LogoutSignaturePolicy::RequireSigned`].
@@ -537,16 +545,20 @@ fn receive_slo_impl(
 ) -> Result<Received<LogoutRequest>, SamlError> {
     let relay_state = relay_state_from_input(&input)?;
     let binding = LogoutBinding::try_from(input_binding(&input))?;
-    let expected_recipients = logout_recipient_endpoints(local_metadata, binding)?;
-    let expected_refs: Vec<&str> = expected_recipients.iter().map(String::as_str).collect();
+    let expected_recipient = logout_recipient_endpoint(
+        local_metadata,
+        binding,
+        LogoutMessageDirection::Request,
+        &validation,
+    )?;
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_request_at(
         local_setting,
         peer_metadata,
         binding.as_binding(),
         &request,
-        LogoutFlowValidation::typed_destinations(
-            &expected_refs,
+        LogoutFlowValidation::typed(
+            &expected_recipient,
             validation.now(),
             validation.clock_skew().as_millis(),
         ),
@@ -616,9 +628,12 @@ fn finish_slo_impl(
     ensure_entity_id(pending.peer_entity_id(), peer_entity_id)?;
     ensure_logout_response_binding(input_binding(&input), pending.response_binding())?;
     ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
-    let expected_recipients =
-        logout_recipient_endpoints(local_metadata, pending.response_binding())?;
-    let expected_refs: Vec<&str> = expected_recipients.iter().map(String::as_str).collect();
+    let expected_recipient = logout_recipient_endpoint(
+        local_metadata,
+        pending.response_binding(),
+        LogoutMessageDirection::Response,
+        &validation,
+    )?;
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_response_at(
         local_setting,
@@ -626,8 +641,8 @@ fn finish_slo_impl(
         pending.response_binding().as_binding(),
         &request,
         pending.id().as_str(),
-        LogoutFlowValidation::typed_destinations(
-            &expected_refs,
+        LogoutFlowValidation::typed(
+            &expected_recipient,
             validation.now(),
             validation.clock_skew().as_millis(),
         ),
@@ -713,15 +728,24 @@ fn ensure_logout_response_binding(
     Err(Error::UnsupportedBinding { binding: actual })
 }
 
-fn logout_recipient_endpoints(
+fn logout_recipient_endpoint(
     local_metadata: &Metadata,
     binding: LogoutBinding,
-) -> Result<Vec<String>, SamlError> {
-    let locations = local_metadata.single_logout_service_locations(binding.as_binding());
+    direction: LogoutMessageDirection,
+    validation: &SamlValidationContext<'_>,
+) -> Result<String, SamlError> {
+    let locations = match direction {
+        LogoutMessageDirection::Request => {
+            local_metadata.single_logout_service_locations(binding.as_binding())
+        }
+        LogoutMessageDirection::Response => {
+            local_metadata.single_logout_response_service_locations(binding.as_binding())
+        }
+    };
     if locations.is_empty() {
         return Err(Error::MissingMetadata("SingleLogoutService".into()));
     }
-    Ok(locations)
+    validation.resolve_recipient_endpoint(&locations)
 }
 
 fn typed_logout_subject(subject: LogoutSubject) -> TypedLogoutSubject {

@@ -189,7 +189,27 @@ pub(super) fn response_target(
         return Ok((binding, Some(endpoint.location)));
     }
 
+    if request.protocol_binding().is_none() {
+        return default_response_target(sp, binding);
+    }
+
     Ok((binding, None))
+}
+
+pub(super) fn default_response_target(
+    sp: &ServiceProvider,
+    selected_binding: SsoResponseBinding,
+) -> Result<(SsoResponseBinding, Option<String>), SamlError> {
+    let endpoint = sp
+        .metadata
+        .get_default_assertion_consumer_service_endpoint()?
+        .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?;
+    if endpoint.binding != selected_binding.as_binding() {
+        return Err(Error::Invalid(
+            "response binding conflicts with default AssertionConsumerService".into(),
+        ));
+    }
+    Ok((selected_binding, Some(endpoint.location)))
 }
 
 pub(super) fn input_binding<Message>(input: &BrowserInput<Message>) -> Binding {
