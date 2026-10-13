@@ -11,7 +11,7 @@ use std::time::SystemTime;
 use saml_rs::binding::{base64_decode, deflate_raw_decode};
 use saml_rs::constants::status_code;
 use saml_rs::raw::Binding;
-use saml_rs::template::LoginResponseTemplate;
+use saml_rs::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
@@ -277,6 +277,73 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
         validation(),
     )?;
     assert_eq!(session.in_response_to(), None);
+    Ok(())
+}
+
+fn name_id_tag(xml: &str) -> String {
+    let rest = xml.split("<saml:NameID").nth(1).unwrap_or_default();
+    let end = rest.find('>').unwrap_or(rest.len());
+    rest[..end].to_string()
+}
+
+#[test]
+fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    for options in [
+        RespondSso::post(),
+        RespondSso::post().apply_web_browser_sso_generation_rules(),
+    ] {
+        let response = idp.initiate_sso(&sp_descriptor, subject(), options)?;
+        let xml = response_xml(&response)?;
+        assert!(xml.contains("<saml:NameID>alice@example.com</saml:NameID>"));
+
+        let session = sp.accept_unsolicited_sso(
+            &idp_descriptor,
+            BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+            validation(),
+        )?;
+        assert_eq!(session.name_id().format(), None);
+    }
+
+    let mut template_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+        .credentials(credentials())
+        .validation(signed_authn_request_idp_validation())
+        .build()?;
+    template_config.templates.login_response_template = Some(LoginResponseTemplate {
+        context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+        attributes: Vec::new(),
+    });
+    let template_idp = Saml::idp(template_config)?;
+    let (sp_descriptor, _) = descriptors(&sp, &template_idp)?;
+    let response = template_idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    assert!(response_xml(&response)?.contains("<saml:NameID>alice@example.com</saml:NameID>"));
+    Ok(())
+}
+
+#[test]
+fn typed_sso_assertion_name_id_keeps_the_configured_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .name_id_format(NameIdFormat::EmailAddress)
+            .credentials(credentials())
+            .validation(signed_authn_request_idp_validation())
+            .build()?,
+    )?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+
+    let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    assert_eq!(
+        name_id_tag(&response_xml(&response)?),
+        format!(" Format=\"{}\"", NameIdFormat::EmailAddress.as_uri()),
+    );
     Ok(())
 }
 

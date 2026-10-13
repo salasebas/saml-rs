@@ -70,11 +70,6 @@ pub fn create_logout_request_with_id(
     want_signed: bool,
     message_id: Option<&str>,
 ) -> Result<BindingContext, SamlError> {
-    let name_id_format = init_setting
-        .name_id_format
-        .first()
-        .cloned()
-        .unwrap_or_default();
     let issue_instant = now_iso8601();
     let subject = LogoutRequestSubject::from_user(user);
     Ok(create_logout_request_for_subject_inner(LogoutRequestInput {
@@ -86,7 +81,7 @@ pub fn create_logout_request_with_id(
         relay_state,
         want_signed,
         message_id,
-        name_id_format: Some(&name_id_format),
+        name_id_format: init_setting.default_name_id_format(),
         issue_instant: &issue_instant,
         not_on_or_after: None,
         validation: LogoutRequestValidation::Compatibility,

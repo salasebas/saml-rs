@@ -3291,6 +3291,69 @@ fn typed_session_authority_logout_request_without_subject_format_sends_configure
     Ok(())
 }
 
+fn assertion_name_id(xml: &str) -> Result<NameIdView, Box<dyn std::error::Error>> {
+    let document = parse(xml)?;
+    let name_id = document
+        .root
+        .children
+        .iter()
+        .find(|node| node.local_name == "Assertion")
+        .and_then(|assertion| {
+            assertion
+                .children
+                .iter()
+                .find(|node| node.local_name == "Subject")
+        })
+        .and_then(|subject| {
+            subject
+                .children
+                .iter()
+                .find(|node| node.local_name == "NameID")
+        })
+        .ok_or("missing assertion NameID")?;
+    let mut attrs = name_id.attrs.clone();
+    attrs.sort();
+    Ok((name_id.text.clone(), attrs))
+}
+
+#[test]
+fn typed_session_authority_logout_request_without_any_format_omits_format_like_the_assertion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let without_format = ("alice@example.com".to_string(), Vec::new());
+
+    let sso = idp.initiate_sso(
+        &sp_descriptor,
+        Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+        RespondSso::post(),
+    )?;
+    assert_eq!(
+        assertion_name_id(&outbound_xml(&sso, "SAMLResponse")?)?,
+        without_format
+    );
+
+    for options in [
+        StartSlo::post(),
+        StartSlo::post().apply_single_logout_generation_rules(),
+    ] {
+        let started = idp.start_slo(&sp_descriptor, subject()?, options)?;
+        let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+        assert_eq!(logout_request_name_id(&xml)?, without_format);
+    }
+
+    let template_idp = Saml::idp(idp_config_with_issuance(
+        Duration::from_secs(300),
+        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
+        credentials(),
+        IdpValidationPolicy::compatibility(),
+    )?)?;
+    let started = template_idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
+    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+    assert_eq!(logout_request_name_id(&xml)?, without_format);
+    Ok(())
+}
+
 #[test]
 fn typed_slo_logout_request_template_renders_name_id_qualifiers(
 ) -> Result<(), Box<dyn std::error::Error>> {

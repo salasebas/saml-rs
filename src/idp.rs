@@ -11,8 +11,9 @@ use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig}
 use crate::model::{Status, TopLevelStatusCode};
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
-    apply_tag_prefixes, attr_tag, attribute_statement_builder, replace_tags_by_value,
-    validate_tag_prefix, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
+    apply_tag_prefixes, attr_tag, attribute_statement_builder, replace_tags_by_optional_value,
+    replace_tags_by_value, validate_tag_prefix, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
+    LOGIN_RESPONSE_TEMPLATE,
 };
 
 mod login_response;
@@ -182,15 +183,9 @@ impl IdentityProvider {
         }
         if rendering.custom.is_none() && !has_custom_context {
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-            let default_name_id_format = self
-                .setting
-                .name_id_format
-                .first()
-                .cloned()
-                .unwrap_or_default();
             let name_id_format = rendering
                 .name_id_format
-                .unwrap_or(default_name_id_format.as_str());
+                .or_else(|| self.setting.default_name_id_format());
             let id = generate_id();
             let assertion_id = generate_id();
             let audience = sp.metadata.get_entity_id().unwrap_or_default().to_string();
@@ -252,16 +247,14 @@ impl IdentityProvider {
             return Ok(f(&prepared));
         }
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-        let default_name_id_format = self
-            .setting
-            .name_id_format
-            .first()
-            .cloned()
-            .unwrap_or_default();
         let name_id_format = rendering
             .name_id_format
-            .unwrap_or(default_name_id_format.as_str());
+            .or_else(|| self.setting.default_name_id_format());
         let id = generate_id();
+        let prepared = replace_tags_by_optional_value(
+            &prepared,
+            &[("NameIDFormat", name_id_format.map(str::to_string))],
+        );
         let mut tags: Vec<(&str, String)> = vec![
             ("ID", id.clone()),
             ("AssertionID", generate_id()),
@@ -278,7 +271,6 @@ impl IdentityProvider {
             ("ConditionsNotBefore", window.issue_instant),
             ("ConditionsNotOnOrAfter", window.expiration.clone()),
             ("SubjectConfirmationDataNotOnOrAfter", window.expiration),
-            ("NameIDFormat", name_id_format.to_string()),
             ("NameID", user.name_id.clone()),
             (
                 "InResponseTo",
