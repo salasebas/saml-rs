@@ -1677,7 +1677,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opensaml"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "saml-rs",
 ]
@@ -2079,7 +2079,7 @@ dependencies = [
 
 [[package]]
 name = "saml-rs"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "base64 0.23.1",
  "bergshamra",
@@ -2093,14 +2093,14 @@ dependencies = [
 
 [[package]]
 name = "samlet"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "saml-rs",
 ]
 
 [[package]]
 name = "samlify"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "saml-rs",
 ]

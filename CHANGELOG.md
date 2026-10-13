@@ -9,6 +9,26 @@ Entries before the rebrand use the package names that were current at the time.
 
 ## Unreleased
 
+## [0.7.0](https://github.com/salasebas/saml-rs/compare/v0.6.1...v0.7.0) - 2026-10-13
+
+### Added
+
+- *(api)* return the identity provider discovery cookie ([#207](https://github.com/salasebas/saml-rs/pull/207))
+- *(api)* add Enhanced Client/Proxy SSO over PAOS ([#211](https://github.com/salasebas/saml-rs/pull/211))
+- *(api)* [**breaking**] resolve artifacts over SOAP ([#210](https://github.com/salasebas/saml-rs/pull/210))
+- *(api)* [**breaking**] remove strict() and start construction on Recommended ([#212](https://github.com/salasebas/saml-rs/pull/212))
+
+### Fixed
+
+- [**breaking**] enforce scoped metadata endpoints for SSO and logout ([#231](https://github.com/salasebas/saml-rs/pull/231))
+- *(idp)* [**breaking**] omit the NameID Format when no format is configured ([#233](https://github.com/salasebas/saml-rs/pull/233))
+- *(logout)* [**breaking**] send the subject's NameID format and qualifiers in LogoutRequest ([#227](https://github.com/salasebas/saml-rs/pull/227))
+
+### Other
+
+- *(api)* rename unreleased PAOS and discovery names ([#214](https://github.com/salasebas/saml-rs/pull/214))
+- add the public Starlight and mdBook sites ([#208](https://github.com/salasebas/saml-rs/pull/208))
+
 ## [0.6.1](https://github.com/salasebas/saml-rs/compare/v0.6.0...v0.6.1) - 2026-10-07
 
 ### Added
