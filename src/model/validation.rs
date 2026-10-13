@@ -1,4 +1,4 @@
-use super::{AssertionId, MessageId, SamlInstant};
+use super::{AssertionId, EndpointUrl, MessageId, SamlInstant};
 use crate::error::{SamlError, TimeWindowField};
 use std::time::{Duration, SystemTime};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -218,6 +218,7 @@ pub enum AuthnRequestAgePolicy {
 /// Caller-owned validation context for typed inbound SAML messages.
 pub struct SamlValidationContext<'a> {
     now: SystemTime,
+    recipient_endpoint: Option<EndpointUrl>,
     clock_skew: ClockSkew,
     authn_request_age: AuthnRequestAgePolicy,
     replay: ReplayPolicy<'a>,
@@ -233,6 +234,7 @@ impl<'a> SamlValidationContext<'a> {
     pub fn new(now: SystemTime, replay: ReplayPolicy<'a>) -> Self {
         Self {
             now,
+            recipient_endpoint: None,
             clock_skew: ClockSkew::five_minutes(),
             authn_request_age: AuthnRequestAgePolicy::Disabled,
             replay,
@@ -244,6 +246,45 @@ impl<'a> SamlValidationContext<'a> {
     pub fn with_clock_skew(mut self, clock_skew: ClockSkew) -> Self {
         self.clock_skew = clock_skew;
         self
+    }
+
+    /// Set the actual receiving URL for `receive_sso`, `receive_slo`, or `finish_slo`.
+    ///
+    /// Supply the URL from the HTTP handler, never from the message's
+    /// `Destination`. It must be published for the incoming binding and
+    /// message direction. When omitted, these methods infer a unique
+    /// published URL and reject ambiguous metadata.
+    pub fn with_recipient_endpoint(mut self, endpoint: EndpointUrl) -> Self {
+        self.recipient_endpoint = Some(endpoint);
+        self
+    }
+
+    /// Actual receiving URL supplied for browser SSO requests or logout messages.
+    pub fn recipient_endpoint(&self) -> Option<&EndpointUrl> {
+        self.recipient_endpoint.as_ref()
+    }
+
+    pub(crate) fn resolve_recipient_endpoint(
+        &self,
+        published: &[String],
+    ) -> Result<String, SamlError> {
+        if let Some(endpoint) = &self.recipient_endpoint {
+            if published
+                .iter()
+                .any(|location| location == endpoint.as_str())
+            {
+                return Ok(endpoint.as_str().to_string());
+            }
+            return Err(SamlError::Invalid(
+                "receiving endpoint is not published for this binding and message direction".into(),
+            ));
+        }
+        match published {
+            [endpoint] => Ok(endpoint.clone()),
+            _ => Err(SamlError::Invalid(
+                "multiple receiving endpoints require with_recipient_endpoint".into(),
+            )),
+        }
     }
 
     /// Select the maximum age of an inbound `AuthnRequest` `IssueInstant`.

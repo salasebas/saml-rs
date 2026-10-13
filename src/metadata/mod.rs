@@ -1,5 +1,6 @@
 //! SAML metadata parsing and shared SP/IdP metadata accessors.
 
+mod endpoints;
 pub mod generate;
 pub mod idp;
 pub mod sp;
@@ -46,7 +47,7 @@ fn base_fields() -> Vec<ExtractorField> {
             "singleLogoutService",
             &["EntityDescriptor", "~SSODescriptor", "SingleLogoutService"],
         )
-        .attrs(&["Binding", "Location"]),
+        .with_context(),
         ExtractorField::new(
             "nameIDFormat",
             &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
@@ -90,7 +91,7 @@ fn collect_entity_descriptors<'a>(node: &'a dom::Node, found: &mut Vec<&'a dom::
     }
 }
 
-fn location_for_binding(value: Option<&Value>, binding: Binding) -> Option<String> {
+pub(crate) fn location_for_binding(value: Option<&Value>, binding: Binding) -> Option<String> {
     let value = value?;
     for obj in as_object_list(value) {
         if obj.get_str("binding") == Some(binding.urn()) {
@@ -98,6 +99,71 @@ fn location_for_binding(value: Option<&Value>, binding: Binding) -> Option<Strin
         }
     }
     None
+}
+
+/// Response endpoint for the first `binding` match.
+///
+/// `ResponseLocation` is that endpoint when the attribute is present and
+/// non-empty. Otherwise the endpoint's `Location` is used.
+pub(crate) fn response_location_for_binding(
+    value: Option<&Value>,
+    binding: Binding,
+) -> Option<String> {
+    let value = value?;
+    for obj in as_object_list(value) {
+        if obj.get_str("binding") != Some(binding.urn()) {
+            continue;
+        }
+        if let Some(response_location) = non_empty_location(obj.get_str("responseLocation")) {
+            return Some(response_location.to_string());
+        }
+        if let Some(location) = non_empty_location(obj.get_str("location")) {
+            return Some(location.to_string());
+        }
+    }
+    None
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum EndpointDirection {
+    Request,
+    Response,
+}
+
+/// Published locations for the binding and message direction, in document order.
+pub(crate) fn published_locations_for_binding(
+    value: Option<&Value>,
+    binding: Binding,
+    direction: EndpointDirection,
+) -> Vec<String> {
+    let Some(value) = value else {
+        return Vec::new();
+    };
+    let mut locations = Vec::new();
+    for obj in as_object_list(value) {
+        if obj.get_str("binding") != Some(binding.urn()) {
+            continue;
+        }
+        let location = match direction {
+            EndpointDirection::Request => non_empty_location(obj.get_str("location")),
+            EndpointDirection::Response => non_empty_location(obj.get_str("responseLocation"))
+                .or_else(|| non_empty_location(obj.get_str("location"))),
+        };
+        if let Some(location) = location {
+            push_unique_location(&mut locations, location);
+        }
+    }
+    locations
+}
+
+fn non_empty_location(value: Option<&str>) -> Option<&str> {
+    value.filter(|location| !location.is_empty())
+}
+
+fn push_unique_location(locations: &mut Vec<String>, location: &str) {
+    if locations.iter().all(|existing| existing != location) {
+        locations.push(location.to_string());
+    }
 }
 
 /// Parsed entity metadata (the base shared by SP and IdP).
@@ -148,6 +214,13 @@ impl Metadata {
         fields.extend(extra);
         let extraction_xml = entity_descriptor_xml(xml, &roots)?;
         let mut meta = extract_with_limits(extraction_xml, &fields, limits)?;
+        if let Some(fragments) = meta.get("singleLogoutService") {
+            let endpoints = endpoints::parse_endpoint_fragments(
+                fragments,
+                &["Binding", "Location", "ResponseLocation"],
+            )?;
+            meta.insert("singleLogoutService", endpoints);
+        }
 
         // A single shared certificate is used for both signing and encryption.
         if let Some(shared) = meta.get_str("sharedCertificate") {
@@ -212,9 +285,38 @@ impl Metadata {
         self.x509_certificates(use_).into_iter().next()
     }
 
-    /// `SingleLogoutService` location for `binding`.
+    /// First `SingleLogoutService` `Location` for `binding`.
+    ///
+    /// Logout requests are sent to this URL. Logout responses use
+    /// [`Self::get_single_logout_response_service`].
     pub fn get_single_logout_service(&self, binding: Binding) -> Option<String> {
         location_for_binding(self.meta.get("singleLogoutService"), binding)
+    }
+
+    /// `SingleLogoutService` URL where logout responses are sent for `binding`.
+    ///
+    /// This is `ResponseLocation` on the first endpoint for `binding` when that
+    /// attribute is present. Otherwise it is that endpoint's `Location`.
+    pub fn get_single_logout_response_service(&self, binding: Binding) -> Option<String> {
+        response_location_for_binding(self.meta.get("singleLogoutService"), binding)
+    }
+
+    /// Every request `Location` published on `SingleLogoutService` for `binding`.
+    pub(crate) fn single_logout_service_locations(&self, binding: Binding) -> Vec<String> {
+        published_locations_for_binding(
+            self.meta.get("singleLogoutService"),
+            binding,
+            EndpointDirection::Request,
+        )
+    }
+
+    /// Every response location published on `SingleLogoutService` for `binding`.
+    pub(crate) fn single_logout_response_service_locations(&self, binding: Binding) -> Vec<String> {
+        published_locations_for_binding(
+            self.meta.get("singleLogoutService"),
+            binding,
+            EndpointDirection::Response,
+        )
     }
 
     /// Write the metadata XML to `path`.
@@ -381,6 +483,74 @@ mod tests {
         sp.export_metadata(&path)?;
         assert_eq!(std::fs::read_to_string(&path)?, sp.get_metadata());
         std::fs::remove_file(&path)?;
+        Ok(())
+    }
+
+    #[test]
+    fn single_logout_reads_response_location_and_every_published_location(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com">
+  <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/slo/a" ResponseLocation="https://sp.example.com/slo/b"/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/slo/c" ResponseLocation=""/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://sp.example.com/slo/redirect"/>
+  </SPSSODescriptor>
+</EntityDescriptor>"#;
+        let metadata = Metadata::parse(xml, Vec::new())?;
+        assert_eq!(
+            metadata.get_single_logout_service(Binding::Post).as_deref(),
+            Some("https://sp.example.com/slo/a")
+        );
+        assert_eq!(
+            metadata
+                .get_single_logout_response_service(Binding::Post)
+                .as_deref(),
+            Some("https://sp.example.com/slo/b")
+        );
+        assert_eq!(
+            metadata.single_logout_service_locations(Binding::Post),
+            vec![
+                "https://sp.example.com/slo/a".to_string(),
+                "https://sp.example.com/slo/c".to_string(),
+            ]
+        );
+        assert_eq!(
+            metadata.single_logout_response_service_locations(Binding::Post),
+            vec![
+                "https://sp.example.com/slo/b".to_string(),
+                "https://sp.example.com/slo/c".to_string(),
+            ]
+        );
+        assert_eq!(
+            metadata
+                .get_single_logout_response_service(Binding::Redirect)
+                .as_deref(),
+            Some("https://sp.example.com/slo/redirect")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn single_sign_on_keeps_every_location_for_one_binding(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso/a" ResponseLocation="https://idp.example.com/sso/b"/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso/c"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>"#;
+        let idp = IdpMetadata::from_xml(xml)?;
+        assert_eq!(
+            idp.get_single_sign_on_service(Binding::Post).as_deref(),
+            Some("https://idp.example.com/sso/a")
+        );
+        assert_eq!(
+            idp.single_sign_on_service_locations(Binding::Post),
+            vec![
+                "https://idp.example.com/sso/a".to_string(),
+                "https://idp.example.com/sso/c".to_string(),
+            ]
+        );
         Ok(())
     }
 }

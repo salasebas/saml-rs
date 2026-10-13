@@ -9,7 +9,8 @@ use crate::model::{
 };
 
 use super::raw_mapping::{
-    ensure_entity_id, input_binding, raw_sp_descriptor, relay_state_from_input, response_target,
+    default_response_target, ensure_entity_id, input_binding, raw_sp_descriptor,
+    relay_state_from_input, response_target,
 };
 use super::{Idp, RespondSso, Saml, SamlError};
 
@@ -31,7 +32,10 @@ impl Saml<Idp> {
     /// Returns [`SamlError`] when browser input or relay state is invalid, the
     /// request binding is unsupported, SP metadata cannot be parsed, XML
     /// parsing or signature/trust validation fails, the request destination
-    /// does not match local metadata, an enabled [`crate::AuthnRequestAgePolicy`]
+    /// does not match the receiving `SingleSignOnService` location for the
+    /// binding, the receiving URL is unpublished, multiple local endpoints
+    /// have no explicit receiving URL,
+    /// an enabled [`crate::AuthnRequestAgePolicy`]
     /// rejects `IssueInstant`, or replay validation detects a duplicate or
     /// expired request.
     ///
@@ -85,18 +89,17 @@ impl Saml<Idp> {
             .setting
             .verify_authn_request_signature_if_present;
         if authn.destination().is_some() || (message_authenticated && verify_present_signature) {
-            let expected = self
+            let locations = self
                 .raw_identity_provider()
                 .metadata
-                .get_single_sign_on_service(binding.as_binding())
-                .ok_or_else(|| Error::MissingMetadata("SingleSignOnService".into()))?;
-            if authn.destination().map(|destination| destination.as_str())
-                != Some(expected.as_str())
-            {
-                return Err(Error::destination_mismatch(
-                    &expected,
-                    authn.destination().map(|destination| destination.as_str()),
-                ));
+                .single_sign_on_service_locations(binding.as_binding());
+            if locations.is_empty() {
+                return Err(Error::MissingMetadata("SingleSignOnService".into()));
+            }
+            let expected = validation.resolve_recipient_endpoint(&locations)?;
+            let actual = authn.destination().map(|destination| destination.as_str());
+            if actual != Some(expected.as_str()) {
+                return Err(Error::destination_mismatch(&expected, actual));
             }
         }
         let mut validation = validation;
@@ -116,7 +119,9 @@ impl Saml<Idp> {
     /// Returns [`SamlError`] when the request issuer does not match the SP
     /// descriptor, relay state is invalid, the request ACS selection conflicts
     /// with the response binding or SP metadata, required metadata or signing
-    /// keys are missing, the configured issuance expiration overflows the
+    /// keys are missing, a request without ACS or binding selection has an
+    /// unsupported metadata default or a default incompatible with the chosen
+    /// response binding, the configured issuance expiration overflows the
     /// supported timestamp range, producer rules are combined with a custom
     /// login response template, an error status is combined with a login
     /// response template, or response creation fails.
@@ -136,7 +141,8 @@ impl Saml<Idp> {
     /// # Errors
     ///
     /// Returns [`SamlError`] when relay state is invalid, SP metadata cannot be
-    /// parsed, a compatible ACS endpoint or signing key is missing, the
+    /// parsed, the metadata default ACS is unsupported or incompatible with
+    /// the selected response binding, a signing key is missing, the
     /// selected binding is unsupported, the configured issuance expiration
     /// overflows the supported timestamp range, producer rules are combined
     /// with a custom login response template, an error status is combined with
@@ -206,7 +212,7 @@ impl Saml<Idp> {
         raw_sp.setting.want_message_signed = sign_response;
         let (binding, explicit_acs) = match request {
             Some(request) => response_target(&raw_sp, request.message(), options.binding)?,
-            None => (options.binding, None),
+            None => default_response_target(&raw_sp, options.binding)?,
         };
         let name_id_format = subject
             .name_id()
