@@ -4,15 +4,20 @@
 use std::{str::FromStr, time::Duration};
 
 use saml_rs::{
-    AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
-    AudienceValidationPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting,
-    IdpConfig, IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
+    AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AudienceValidationPolicy,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
+    DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting, IdpConfig,
+    IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
     LogoutSignaturePolicy, NameIdCreationPolicy, Passphrase, PrivateKeyPem,
-    ResponseSignaturePolicy, SamlError, SignatureAlgorithm, SloEndpoint, SpConfig,
-    SpMetadataConfig, SpValidationPolicy, SsoEndpoint, TemplatePolicy, TransformAlgorithm,
-    XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
+    ResponseSignaturePolicy, SamlError, SignatureAlgorithm, SpConfig, SpMetadataConfig,
+    SpValidationPolicy, SsoEndpoint, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+use saml_rs::{AlgorithmPolicy, SloEndpoint, TemplatePolicy, XmlEncryptionPolicy};
 
 fn signing_credentials() -> Credentials {
     Credentials {
@@ -36,6 +41,11 @@ fn assert_missing_key(result: Result<impl Sized, SamlError>, field: &str) {
     ));
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn sp_builder_and_struct_literal_reach_same_config() -> Result<(), Box<dyn std::error::Error>> {
     let entity_id = EntityId::try_new("https://sp.example.com/metadata")?;
@@ -77,6 +87,11 @@ fn sp_builder_and_struct_literal_reach_same_config() -> Result<(), Box<dyn std::
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn idp_builder_and_struct_literal_reach_same_config() -> Result<(), Box<dyn std::error::Error>> {
     let entity_id = EntityId::try_new("https://idp.example.com/metadata")?;
@@ -130,6 +145,11 @@ fn idp_config_defaults_issuance_lifetime_to_five_minutes() -> Result<(), Box<dyn
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn idp_builder_sets_issuance_lifetime() -> Result<(), Box<dyn std::error::Error>> {
     let config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
@@ -172,6 +192,11 @@ fn idp_config_rejects_unrepresentable_issuance_lifetime() -> Result<(), Box<dyn 
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     let sp = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
@@ -362,6 +387,11 @@ fn policy_defaults_start_on_recommended_and_field_defaults_stay_permissive() {
     );
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn constructors_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     let sp = SpConfig::try_new(
@@ -417,6 +447,11 @@ fn custom_algorithm_variants_keep_simple_names() {
         .all(|variant| !variant.contains("Compatibility")));
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let elements_order = vec!["AssertionConsumerService".to_string()];
@@ -457,6 +492,11 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let elements_order = vec!["SingleSignOnService".to_string()];
@@ -582,6 +622,11 @@ fn idp_builder_rejects_missing_sso() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -597,6 +642,11 @@ fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn sp_builder_requires_signing_certificate_when_authn_requests_are_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -630,6 +680,11 @@ fn sp_builder_allows_protocol_only_compatibility_without_credentials(
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn sp_builder_requires_decryption_key_when_encrypted_assertions_are_selected(
 ) -> Result<(), Box<dyn std::error::Error>> {
