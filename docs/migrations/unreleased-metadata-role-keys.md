@@ -21,9 +21,8 @@ What changes at runtime:
   the encryption certificate of the role you address. If that role publishes
   none, the call returns `SamlError::MissingMetadata`, even when the other
   role publishes one.
-- A single `KeyDescriptor` certificate in a role is used for both signing and
-  encryption when that role has no other certificate, even when the other
-  role has its own keys.
+- A `KeyDescriptor` without `use` in a role serves both signing and
+  encryption for that role, even when the other role has its own keys.
 
 To upgrade, publish each role's keys in that role's descriptor.
 

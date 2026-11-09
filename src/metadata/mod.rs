@@ -50,29 +50,19 @@ impl SsoDescriptorRole {
             Self::ServiceProvider => "SPSSODescriptor",
             Self::IdentityProvider => "IDPSSODescriptor",
         };
-        vec![
-            ExtractorField::new(
-                "sharedCertificate",
-                &[
-                    "EntityDescriptor",
-                    descriptor,
-                    "KeyDescriptor",
-                    "KeyInfo",
-                    "X509Data",
-                    "X509Certificate",
-                ],
-            ),
-            ExtractorField::new(
-                "certificate",
-                &["EntityDescriptor", descriptor, "KeyDescriptor"],
-            )
-            .aggregate(&["use"], &["KeyInfo", "X509Data", "X509Certificate"]),
-            ExtractorField::new(
-                "singleLogoutService",
-                &["EntityDescriptor", descriptor, "SingleLogoutService"],
-            )
-            .with_context(),
-        ]
+        vec![ExtractorField::new(
+            "singleLogoutService",
+            &["EntityDescriptor", descriptor, "SingleLogoutService"],
+        )
+        .with_context()]
+    }
+
+    fn is_descriptor(self, local_name: &str) -> bool {
+        match self {
+            Self::Any => local_name.contains("SSODescriptor"),
+            Self::ServiceProvider => local_name == "SPSSODescriptor",
+            Self::IdentityProvider => local_name == "IDPSSODescriptor",
+        }
     }
 }
 
@@ -95,17 +85,21 @@ pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     }
 }
 
-fn entity_descriptor_xml<'a>(xml: &'a str, roots: &[dom::Node]) -> Result<&'a str, SamlError> {
+/// The XML that metadata fields are extracted from, and its document element.
+fn entity_descriptor_xml<'a, 'n>(
+    xml: &'a str,
+    roots: &'n [dom::Node],
+) -> Result<(&'a str, Option<&'n dom::Node>), SamlError> {
     let [root] = roots else {
-        return Ok(xml);
+        return Ok((xml, None));
     };
     if root.local_name != "EntitiesDescriptor" {
-        return Ok(xml);
+        return Ok((xml, Some(root)));
     }
     let mut entities = Vec::new();
     collect_entity_descriptors(root, &mut entities);
     match entities.as_slice() {
-        [entity] => Ok(&xml[entity.start..entity.end]),
+        [entity] => Ok((&xml[entity.start..entity.end], Some(*entity))),
         [] => Err(SamlError::MissingMetadata("EntityDescriptor".into())),
         _ => Err(SamlError::Xml(
             "ERR_MULTIPLE_METADATA_ENTITYDESCRIPTOR".into(),
@@ -120,6 +114,70 @@ fn collect_entity_descriptors<'a>(node: &'a dom::Node, found: &mut Vec<&'a dom::
     for child in &node.children {
         collect_entity_descriptors(child, found);
     }
+}
+
+/// X.509 certificates published by the `KeyDescriptor`s of the parsed SSO
+/// role descriptors, in document order.
+///
+/// A `KeyDescriptor` without `use` serves both signing and encryption.
+#[derive(Debug, Clone, Default)]
+struct KeyCertificates {
+    signing: Vec<String>,
+    encryption: Vec<String>,
+}
+
+impl KeyCertificates {
+    fn from_entity(entity: &dom::Node, role: SsoDescriptorRole) -> Self {
+        let mut certificates = Self::default();
+        if entity.local_name != "EntityDescriptor" {
+            return certificates;
+        }
+        let key_descriptors = entity
+            .children
+            .iter()
+            .filter(|descriptor| role.is_descriptor(&descriptor.local_name))
+            .flat_map(|descriptor| &descriptor.children)
+            .filter(|child| child.local_name == "KeyDescriptor");
+        for key_descriptor in key_descriptors {
+            let x509_certificates: Vec<String> = children_named(key_descriptor, "KeyInfo")
+                .flat_map(|key_info| children_named(key_info, "X509Data"))
+                .flat_map(|x509_data| children_named(x509_data, "X509Certificate"))
+                .map(|certificate| certificate.text.clone())
+                .collect();
+            match key_descriptor.attr("use") {
+                None => {
+                    certificates
+                        .signing
+                        .extend(x509_certificates.iter().cloned());
+                    certificates.encryption.extend(x509_certificates);
+                }
+                Some(use_) if use_ == CertUse::Signing.as_str() => {
+                    certificates.signing.extend(x509_certificates);
+                }
+                Some(use_) if use_ == CertUse::Encryption.as_str() => {
+                    certificates.encryption.extend(x509_certificates);
+                }
+                Some(_) => {}
+            }
+        }
+        certificates
+    }
+
+    fn for_use(&self, use_: CertUse) -> &[String] {
+        match use_ {
+            CertUse::Signing => &self.signing,
+            CertUse::Encryption => &self.encryption,
+        }
+    }
+}
+
+fn children_named<'a>(
+    node: &'a dom::Node,
+    local_name: &'a str,
+) -> impl Iterator<Item = &'a dom::Node> {
+    node.children
+        .iter()
+        .filter(move |child| child.local_name == local_name)
 }
 
 pub(crate) fn location_for_binding(value: Option<&Value>, binding: Binding) -> Option<String> {
@@ -202,6 +260,7 @@ fn push_unique_location(locations: &mut Vec<String>, location: &str) {
 pub struct Metadata {
     xml: String,
     pub(crate) meta: Value,
+    key_certificates: KeyCertificates,
 }
 
 impl Metadata {
@@ -257,7 +316,7 @@ impl Metadata {
         let mut fields = base_fields();
         fields.extend(role.fields());
         fields.extend(extra);
-        let extraction_xml = entity_descriptor_xml(xml, &roots)?;
+        let (extraction_xml, entity) = entity_descriptor_xml(xml, &roots)?;
         let mut meta = extract_with_limits(extraction_xml, &fields, limits)?;
         if let Some(fragments) = meta.get("singleLogoutService") {
             let endpoints = endpoints::parse_endpoint_fragments(
@@ -267,21 +326,14 @@ impl Metadata {
             meta.insert("singleLogoutService", endpoints);
         }
 
-        // A single shared certificate is used for both signing and encryption.
-        if let Some(shared) = meta.get_str("sharedCertificate") {
-            let shared = shared.to_string();
-            meta.insert(
-                "certificate",
-                Value::Object(vec![
-                    ("signing".into(), Value::Str(shared.clone())),
-                    ("encryption".into(), Value::Str(shared)),
-                ]),
-            );
-        }
+        let key_certificates = entity
+            .map(|entity| KeyCertificates::from_entity(entity, role))
+            .unwrap_or_default();
 
         Ok(Self {
             xml: xml.to_string(),
             meta,
+            key_certificates,
         })
     }
 
@@ -308,21 +360,13 @@ impl Metadata {
         }
     }
 
-    /// All X.509 certificates declared for `use` (raw, as written in metadata).
+    /// All X.509 certificates declared for `use` (raw, as written in metadata),
+    /// in document order.
+    ///
+    /// A `KeyDescriptor` without a `use` attribute declares its certificates
+    /// for both signing and encryption.
     pub fn x509_certificates(&self, use_: CertUse) -> Vec<String> {
-        match self
-            .meta
-            .get("certificate")
-            .and_then(|c| c.get_key(use_.as_str()))
-        {
-            Some(Value::Str(s)) => vec![s.clone()],
-            Some(Value::Array(items)) => items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect(),
-            _ => Vec::new(),
-        }
+        self.key_certificates.for_use(use_).to_vec()
     }
 
     /// First X.509 certificate declared for `use`.
@@ -682,6 +726,73 @@ mod tests {
                 "https://dual.example.com/idp/slo".to_string(),
                 "https://dual.example.com/sp/slo".to_string(),
             ]
+        );
+        Ok(())
+    }
+
+    fn idp_metadata_with_keys(key_descriptors: &str) -> String {
+        format!(
+            r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="https://idp.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    {key_descriptors}
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>"#
+        )
+    }
+
+    fn key_descriptor(use_attribute: &str, certificate: &str) -> String {
+        format!(
+            "<KeyDescriptor{use_attribute}><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{certificate}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>"
+        )
+    }
+
+    #[test]
+    fn a_key_with_one_use_serves_only_that_use() -> Result<(), Box<dyn std::error::Error>> {
+        let encryption_only = IdpMetadata::from_xml(&idp_metadata_with_keys(&key_descriptor(
+            r#" use="encryption""#,
+            "ENCRYPTION",
+        )))?;
+        assert_eq!(
+            encryption_only.x509_certificates(CertUse::Signing),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            encryption_only.x509_certificates(CertUse::Encryption),
+            vec!["ENCRYPTION".to_string()]
+        );
+
+        let signing_only = IdpMetadata::from_xml(&idp_metadata_with_keys(&key_descriptor(
+            r#" use="signing""#,
+            "SIGNING",
+        )))?;
+        assert_eq!(
+            signing_only.x509_certificates(CertUse::Signing),
+            vec!["SIGNING".to_string()]
+        );
+        assert_eq!(
+            signing_only.x509_certificates(CertUse::Encryption),
+            Vec::<String>::new()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_key_without_use_serves_signing_and_encryption() -> Result<(), Box<dyn std::error::Error>> {
+        let key_descriptors = [
+            key_descriptor(r#" use="signing""#, "OLD"),
+            key_descriptor("", "NEW"),
+            key_descriptor(r#" use="encryption""#, "ENCRYPTION"),
+        ]
+        .concat();
+        let idp = IdpMetadata::from_xml(&idp_metadata_with_keys(&key_descriptors))?;
+        assert_eq!(
+            idp.x509_certificates(CertUse::Signing),
+            vec!["OLD".to_string(), "NEW".to_string()]
+        );
+        assert_eq!(
+            idp.x509_certificates(CertUse::Encryption),
+            vec!["NEW".to_string(), "ENCRYPTION".to_string()]
         );
         Ok(())
     }
