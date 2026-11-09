@@ -106,19 +106,25 @@ impl SpMetadata {
     }
 
     /// `WantAssertionsSigned` flag.
+    ///
+    /// `true` and `1` are true. An absent attribute or another value is false.
     pub fn is_want_assertions_signed(&self) -> bool {
-        self.inner
-            .meta
-            .get_str("spSSODescriptor.wantAssertionsSigned")
-            == Some("true")
+        super::xs_boolean(
+            self.inner
+                .meta
+                .get_str("spSSODescriptor.wantAssertionsSigned"),
+        ) == Some(true)
     }
 
     /// `AuthnRequestsSigned` flag.
+    ///
+    /// `true` and `1` are true. An absent attribute or another value is false.
     pub fn is_authn_request_signed(&self) -> bool {
-        self.inner
-            .meta
-            .get_str("spSSODescriptor.authnRequestsSigned")
-            == Some("true")
+        super::xs_boolean(
+            self.inner
+                .meta
+                .get_str("spSSODescriptor.authnRequestsSigned"),
+        ) == Some(true)
     }
 
     /// Default `AssertionConsumerService` location for `binding`.
@@ -287,11 +293,8 @@ fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMet
 }
 
 fn indexed_default_flags(is_default: Option<&str>) -> (bool, bool) {
-    match is_default.map(|value| value.trim_matches([' ', '\t', '\r', '\n'])) {
-        Some("true" | "1") => (true, false),
-        Some("false" | "0") => (false, true),
-        Some(_) | None => (false, false),
-    }
+    let is_default = super::xs_boolean(is_default);
+    (is_default == Some(true), is_default == Some(false))
 }
 
 fn select_indexed_default<T>(endpoints: Vec<T>, flags: impl Fn(&T) -> (bool, bool)) -> Option<T> {
