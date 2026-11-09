@@ -1,0 +1,48 @@
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "condensed_header, components, condensed_files, condensed_footer"
+
+component_management:
+  individual_components:
+    - component_id: crypto
+      name: Crypto
+      paths:
+        - src/crypto/**
+        - src/encrypted_elements.rs
+    - component_id: validation
+      name: Validation
+      paths:
+        - src/assertion_acceptance.rs
+        - src/validator.rs
+        - src/model/validation.rs
+        - src/config/policies.rs
+    - component_id: xml
+      name: XML
+      paths:
+        - src/xml/**
+    - component_id: bindings
+      name: Bindings
+      paths:
+        - src/binding/**
+        - src/soap.rs
+    - component_id: metadata
+      name: Metadata
+      paths:
+        - src/metadata/**
+    - component_id: logout
+      name: Logout
+      paths:
+        - src/logout/**
+    - component_id: api
+      name: Typed API
+      paths:
+        - src/api/**
+        - src/browser/**
