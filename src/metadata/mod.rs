@@ -44,15 +44,33 @@ fn base_fields() -> Vec<ExtractorField> {
         )
         .aggregate(&["use"], &["KeyInfo", "X509Data", "X509Certificate"]),
         ExtractorField::new(
-            "singleLogoutService",
-            &["EntityDescriptor", "~SSODescriptor", "SingleLogoutService"],
-        )
-        .with_context(),
-        ExtractorField::new(
             "nameIDFormat",
             &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
         ),
     ]
+}
+
+/// The role descriptor whose `SingleLogoutService` endpoints are read.
+#[derive(Clone, Copy)]
+enum SingleLogoutRole {
+    AnySsoDescriptor,
+    ServiceProvider,
+    IdentityProvider,
+}
+
+impl SingleLogoutRole {
+    fn field(self) -> ExtractorField {
+        let descriptor = match self {
+            Self::AnySsoDescriptor => "~SSODescriptor",
+            Self::ServiceProvider => "SPSSODescriptor",
+            Self::IdentityProvider => "IDPSSODescriptor",
+        };
+        ExtractorField::new(
+            "singleLogoutService",
+            &["EntityDescriptor", descriptor, "SingleLogoutService"],
+        )
+        .with_context()
+    }
 }
 
 /// Normalise a "single object or array of objects" value into a node list.
@@ -189,12 +207,25 @@ impl Metadata {
 
     /// Parse `xml` with explicit XML parser resource limits.
     ///
+    /// `SingleLogoutService` endpoints are read from every SSO role descriptor
+    /// of the entity. [`SpMetadata`] and [`IdpMetadata`] read only their own
+    /// role's endpoints.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when XML parsing, parser resource limits,
     /// extraction, or the single-`EntityDescriptor` check fails.
     pub fn parse_with_limits(
         xml: &str,
+        extra: Vec<ExtractorField>,
+        limits: XmlLimits,
+    ) -> Result<Self, SamlError> {
+        Self::parse_role_with_limits(xml, SingleLogoutRole::AnySsoDescriptor, extra, limits)
+    }
+
+    fn parse_role_with_limits(
+        xml: &str,
+        single_logout_role: SingleLogoutRole,
         extra: Vec<ExtractorField>,
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
@@ -211,6 +242,7 @@ impl Metadata {
         }
 
         let mut fields = base_fields();
+        fields.push(single_logout_role.field());
         fields.extend(extra);
         let extraction_xml = entity_descriptor_xml(xml, &roots)?;
         let mut meta = extract_with_limits(extraction_xml, &fields, limits)?;
@@ -547,6 +579,61 @@ mod tests {
                 .get_single_logout_response_service(Binding::Redirect)
                 .as_deref(),
             Some("https://sp.example.com/slo/redirect")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn single_logout_service_comes_from_the_parsed_role() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://dual.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/idp/slo" ResponseLocation="https://dual.example.com/idp/slo/response"/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/idp/sso"/>
+  </IDPSSODescriptor>
+  <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/sp/slo" ResponseLocation="https://dual.example.com/sp/slo/response"/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://dual.example.com/sp/slo/redirect"/>
+    <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/sp/acs" index="0"/>
+  </SPSSODescriptor>
+</EntityDescriptor>"#;
+        let idp = IdpMetadata::from_xml(xml)?;
+        assert_eq!(
+            idp.single_logout_service_locations(Binding::Post),
+            vec!["https://dual.example.com/idp/slo".to_string()]
+        );
+        assert_eq!(
+            idp.single_logout_response_service_locations(Binding::Post),
+            vec!["https://dual.example.com/idp/slo/response".to_string()]
+        );
+        assert_eq!(idp.get_support_bindings(), vec![Binding::Post]);
+
+        let sp = SpMetadata::from_xml(xml)?;
+        assert_eq!(
+            sp.get_single_logout_service(Binding::Post).as_deref(),
+            Some("https://dual.example.com/sp/slo")
+        );
+        assert_eq!(
+            sp.get_single_logout_response_service(Binding::Post)
+                .as_deref(),
+            Some("https://dual.example.com/sp/slo/response")
+        );
+        assert_eq!(
+            sp.single_logout_service_locations(Binding::Post),
+            vec!["https://dual.example.com/sp/slo".to_string()]
+        );
+        assert_eq!(
+            sp.get_support_bindings(),
+            vec![Binding::Redirect, Binding::Post]
+        );
+
+        let any_role = Metadata::parse(xml, Vec::new())?;
+        assert_eq!(
+            any_role.single_logout_service_locations(Binding::Post),
+            vec![
+                "https://dual.example.com/idp/slo".to_string(),
+                "https://dual.example.com/sp/slo".to_string(),
+            ]
         );
         Ok(())
     }

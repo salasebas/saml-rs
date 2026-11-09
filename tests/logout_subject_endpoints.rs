@@ -340,3 +340,60 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
     assert!(matches!(ambiguous, Err(SamlError::Invalid(_))));
     Ok(())
 }
+
+#[test]
+fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn std::error::Error>>
+{
+    const SP_ROLE_OF_IDP_SLO: &str = "https://idp.example.com/as-sp/slo";
+    const IDP_ROLE_OF_SP_SLO: &str = "https://sp.example.com/as-idp/slo";
+    let service_provider = sp(SpValidationPolicy::recommended())?;
+    let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
+    let sp_peer = SpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &service_provider.metadata_xml().replace(
+            "<SPSSODescriptor ",
+            &format!(
+                r#"<IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_ROLE_OF_SP_SLO}"/><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/as-idp/sso"/></IDPSSODescriptor><SPSSODescriptor "#
+            ),
+        ),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let idp_peer = IdpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &identity_provider.metadata_xml().replace(
+            "<IDPSSODescriptor ",
+            &format!(
+                r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_ROLE_OF_IDP_SLO}"/><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/as-sp/acs" index="0"/></SPSSODescriptor><IDPSSODescriptor "#
+            ),
+        ),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+
+    let started = identity_provider.start_slo(
+        &sp_peer,
+        LogoutSubject::with_session_index(
+            NameId::new("alice@example.com", None),
+            SessionIndex::try_new("_session")?,
+        ),
+        StartSlo::post(),
+    )?;
+    let request = started.outbound.post_form()?;
+    assert_eq!(request.action().as_str(), SP_SLO);
+
+    let received = service_provider.receive_slo(
+        &idp_peer,
+        BrowserInput::<LogoutRequest>::post(request.fields().to_vec()),
+        validation(),
+    )?;
+    let response = service_provider.respond_slo(&idp_peer, &received, RespondSlo::post())?;
+    let response = response.post_form()?;
+    assert_eq!(response.action().as_str(), IDP_SLO);
+
+    identity_provider.finish_slo(
+        &sp_peer,
+        &started.pending,
+        BrowserInput::<saml_rs::LogoutResponse>::post(response.fields().to_vec()),
+        validation(),
+    )?;
+    Ok(())
+}

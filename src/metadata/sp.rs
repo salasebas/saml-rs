@@ -77,7 +77,12 @@ impl SpMetadata {
             )
             .with_context(),
         ];
-        let mut inner = Metadata::parse_with_limits(xml, extra, limits)?;
+        let mut inner = Metadata::parse_role_with_limits(
+            xml,
+            super::SingleLogoutRole::ServiceProvider,
+            extra,
+            limits,
+        )?;
         let role_context = match &mut inner.meta {
             Value::Object(entries) => entries
                 .iter()

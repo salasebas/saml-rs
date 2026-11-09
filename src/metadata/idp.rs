@@ -96,7 +96,12 @@ impl IdpMetadata {
             .attrs(&["Binding", "Location", "ResponseLocation"]),
         ];
         Ok(Self {
-            inner: Metadata::parse_with_limits(xml, extra, limits)?,
+            inner: Metadata::parse_role_with_limits(
+                xml,
+                super::SingleLogoutRole::IdentityProvider,
+                extra,
+                limits,
+            )?,
         })
     }
 
