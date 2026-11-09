@@ -2,6 +2,7 @@ use super::{
     classify_namespace, element_label, profile_error, require_version_2,
     validate_closed_unqualified_attributes, NamespaceKind,
 };
+use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
 use crate::xml::dom::{parse_with_limits, Document, XmlLimits};
@@ -11,8 +12,20 @@ use quick_xml::NsReader;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutboundLogoutRequestValidation {
+    /// The plaintext request, before the `<NameID>` is encrypted.
     BeforeSigning,
-    AfterEmbeddedSigning,
+    /// The signed request. `EncryptIdentifiers` expects an `<EncryptedID>` in
+    /// place of the `<NameID>`.
+    AfterEmbeddedSigning(IdentifierEncryptionPolicy),
+}
+
+impl OutboundLogoutRequestValidation {
+    fn expects_encrypted_id(self) -> bool {
+        matches!(
+            self,
+            Self::AfterEmbeddedSigning(IdentifierEncryptionPolicy::EncryptIdentifiers)
+        )
+    }
 }
 
 /// How outbound `LogoutRequest` checks treat `NotOnOrAfter`.
@@ -57,6 +70,8 @@ enum Element {
     Extensions { child_seen: bool },
     ExtensionContent,
     NameId,
+    EncryptedId,
+    EncryptedIdContent,
     SessionIndex,
 }
 
@@ -296,6 +311,9 @@ fn validate_start(
             ));
         }
         Element::Signature | Element::SignatureContent => return Ok(Element::SignatureContent),
+        Element::EncryptedId | Element::EncryptedIdContent => {
+            return Ok(Element::EncryptedIdContent)
+        }
     }
 
     match (
@@ -309,7 +327,10 @@ fn validate_start(
             Ok(Element::Issuer)
         }
         (b"Signature", NamespaceKind::Dsig, RootStage::AfterIssuer) => {
-            if !matches!(validation, OutboundLogoutRequestValidation::AfterEmbeddedSigning) {
+            if !matches!(
+                validation,
+                OutboundLogoutRequestValidation::AfterEmbeddedSigning(_)
+            ) {
                 return Err(profile_error(
                     "outbound LogoutRequest templates must not contain a root ds:Signature before library signing",
                 ));
@@ -328,10 +349,19 @@ fn validate_start(
             Ok(Element::Extensions { child_seen: false })
         }
         (
+            b"EncryptedID",
+            NamespaceKind::Assertion,
+            RootStage::AfterIssuer | RootStage::AfterSignature | RootStage::AfterExtensions,
+        ) if validation.expects_encrypted_id() => {
+            validate_closed_unqualified_attributes(reader, element, &[], &[])?;
+            state.root_stage = RootStage::AfterNameId;
+            Ok(Element::EncryptedId)
+        }
+        (
             b"NameID",
             NamespaceKind::Assertion,
             RootStage::AfterIssuer | RootStage::AfterSignature | RootStage::AfterExtensions,
-        ) => {
+        ) if !validation.expects_encrypted_id() => {
             validate_name_id(
                 reader,
                 element,
@@ -352,7 +382,7 @@ fn validate_start(
             Ok(Element::SessionIndex)
         }
         _ => Err(profile_error(
-            "LogoutRequest children must be Issuer, optional library-owned Signature, optional Extensions, NameID, and SessionIndex values in schema order",
+            "LogoutRequest children must be Issuer, optional library-owned Signature, optional Extensions, NameID or the selected EncryptedID, and SessionIndex values in schema order",
         )),
     }
 }
@@ -480,7 +510,7 @@ pub(crate) fn validate_logout_request_outbound(
     }
     if matches!(
         validation,
-        OutboundLogoutRequestValidation::AfterEmbeddedSigning
+        OutboundLogoutRequestValidation::AfterEmbeddedSigning(_)
     ) && !state.saw_signature
     {
         return Err(profile_error(
@@ -511,7 +541,7 @@ pub(crate) fn validate_logout_request_outbound(
             .next()
             .ok_or_else(|| profile_error("LogoutRequest is missing NameID"))?;
     }
-    if child.text != expectation.name_id {
+    if !validation.expects_encrypted_id() && child.text != expectation.name_id {
         return Err(SamlError::Invalid(format!(
             "outbound LogoutRequest NameID mismatch: expected {}, got {}",
             expectation.name_id, child.text

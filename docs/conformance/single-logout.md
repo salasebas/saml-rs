@@ -36,7 +36,7 @@ matches it.
 | `Issuer` is present and omits `Format` or sets it to `entity` | Session participant | Generate LogoutRequest | Mandatory. Profiles §4.4.4.1. Enforced when producer rules are selected |
 | `ID`, `Version` `2.0`, and UTC `IssueInstant` are present | Session participant | Generate LogoutRequest | Mandatory. Protocol schema `RequestAbstractType`; Core §1.3.3 |
 | Do not generate a leap-second time | Session participant | Generate any instant | Mandatory. Core §1.3.3 `MUST NOT` generate leap seconds. Receivers are not required to reject them |
-| Identify the principal with `NameID` | Session participant | Generate LogoutRequest | Mandatory. Profiles §4.4.4.1 and the schema's required identifier choice. Typed generation emits `NameID` |
+| Identify the principal with `NameID` | Session participant | Generate LogoutRequest | Mandatory. Profiles §4.4.4.1 and the schema's required identifier choice. Typed generation emits `NameID`, or `EncryptedID` when [selected](#encrypted-principal-identifier) |
 | Send the `NameID` with the attributes the principal is known by | Session participant | Generate LogoutRequest | Mandatory. Core §3.7.1 names the identifier and its associated attributes as currently recognized by both providers. Typed generation copies `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the `LogoutSubject` `NameId`. When the `NameId` has no `Format`, the request omits it. Core §2.2.2 treats an omitted `Format` as unspecified (§8.3.1), so a custom template may write that URI for such a `NameId`. When producer rules are selected, the outbound check rejects a custom template that drops or changes these attributes |
 | Include at least one `SessionIndex` | Session participant | Generate LogoutRequest | Mandatory. Profiles §4.4.4.1 as replaced by Errata 05 E38. Enforced when producer rules are selected. Samlify-port generation may omit it |
 | Sign the message on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign | Session participant | Generate LogoutRequest | Mandatory for these bindings. Profiles §4.4.3.1 requires a signature for HTTP POST and HTTP Redirect. §4.4.4.1 requires the requester to authenticate by signing or a binding-specific mechanism; SimpleSign's mechanism is its signature. Core §3.7.1's general `SHOULD` is not applied on top of that profile rule. `LogoutSigning::DoNotSignForCompatibility` is rejected when producer rules are selected. Samlify-port generation may still omit the signature. Requiring it on generation does not add a receiver rule; the recipient's duty to authenticate is the separate accept rule below |
@@ -95,6 +95,25 @@ Propagating logout to every other participant is outside one `start_slo` or
 An `http` `Destination` remains acceptable when it is the recipient's
 endpoint. The TLS recommendation obligates the party sending the user agent.
 It does not become a receiver rejection.
+
+## Encrypted principal identifier
+
+`StartSlo::identifier_encryption` and `receive_slo` on both roles, on
+HTTP-Redirect, HTTP-POST, HTTP-POST-SimpleSign, and SOAP. Conformance
+Requirements §3.4 requires every relevant operational mode to process or
+generate `<saml:EncryptedID>` wherever it processes or generates
+`<saml:NameID>`, and Core §3.7.1 lets a `LogoutRequest` carry either. These
+rows do not claim the IdP or SP operational mode.
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| Send the principal as `EncryptedID` | Session participant or session authority | Generate LogoutRequest | Optional. Core §3.7.1. Off until `StartSlo::identifier_encryption` selects `IdentifierEncryptionPolicy::EncryptIdentifiers`, matching `XmlEncryptionPolicy::encrypt_ids` for the assertion. That configuration field does not select it. The `<NameID>` is replaced in the same location (Core §6.1) after the outbound checks and before signing, so the signature covers the `EncryptedID`. Its plaintext is the inclusive canonical form of the `<NameID>`, as for the assertion |
+| Encrypt for the responder's `KeyDescriptor` with `use="encryption"` | Requester | Generate LogoutRequest | Profiles §4.4.5. The first encryption certificate in the peer metadata is used, with the configured data and key encryption algorithms. A peer without one returns `MissingMetadata` |
+| Process a received `EncryptedID` | Logout recipient | Inbound `receive_slo` | Mandatory. Conformance Requirements §3.4. Decrypted with the local `decryption_key` whatever the configured `XmlEncryptionPolicy`, and returned as the request `NameID`. The `EncryptedKey` is found as for the assertion `EncryptedID`. A receiver without a `decryption_key` cannot process it: the request is accepted with no `NameID`, as before, so its `SessionIndex` values stay usable. A plaintext `NameID` is still accepted: no receiver rule requires the encrypted form |
+| One `BaseID`, `NameID`, or `EncryptedID` | Logout recipient | Inbound `receive_slo` | Mandatory. Protocol schema `LogoutRequestType`. Checked when an `EncryptedID` is present. Another count returns `ProtocolProfile` |
+| The plaintext is one `<NameID>` in the assertion namespace | Logout recipient | Inbound `receive_slo` | Library policy, as for the assertion `EncryptedID`. A `<BaseID>`, which Core allows, returns `Unsupported`. Any other content returns `ProtocolProfile`. The decrypted request is validated again against the protocol profile |
+| Decrypt only an authenticated request | Logout recipient | Inbound `receive_slo` | Library policy. A verified signature, or a `SoapChannel` that authenticates the peer, must cover the `EncryptedID`, so unauthenticated ciphertext never reaches the decryptor. An unsigned request accepted under `LogoutPolicy::compatibility` keeps its `EncryptedID` unread and has no `NameID` |
+| Outstanding logout uses the decrypted `NameID` | Session participant | Inbound `finish_sso_with_outstanding_logout` | Core §3.7.3.1. The `NameID` that `receive_slo` returns is the plaintext, so an `OutstandingLogout` built from it matches later assertions for the same principal |
 
 ## Browser bindings
 

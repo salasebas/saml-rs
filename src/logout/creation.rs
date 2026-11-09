@@ -1,3 +1,4 @@
+use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, User};
 use crate::error::SamlError;
@@ -11,6 +12,7 @@ use crate::xml::{
 };
 
 use super::bindings::unsigned_context;
+use super::encrypted_id::encrypt_name_id_for_peer;
 use super::rendering::{
     issuer_of, render_default_logout_request, render_default_logout_response, LogoutRequestSubject,
     LogoutRequestTimeAttributes,
@@ -84,6 +86,7 @@ pub fn create_logout_request_with_id(
         issue_instant: &issue_instant,
         not_on_or_after: None,
         validation: LogoutRequestValidation::Compatibility,
+        name_id_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
     })?
     .context)
 }
@@ -109,6 +112,9 @@ pub(crate) struct LogoutRequestSessionIndexes<'a> {
     pub(crate) issue_instant: &'a str,
     pub(crate) not_on_or_after: Option<&'a str>,
     pub(crate) validation: LogoutRequestValidation,
+    /// `EncryptIdentifiers` sends the `<NameID>` as an `<EncryptedID>` for the
+    /// peer's encryption key.
+    pub(crate) name_id_encryption: IdentifierEncryptionPolicy,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -136,6 +142,7 @@ pub(crate) fn create_logout_request_with_session_indexes(
         issue_instant,
         not_on_or_after,
         validation,
+        name_id_encryption,
     } = input;
 
     let subject = LogoutRequestSubject {
@@ -156,6 +163,7 @@ pub(crate) fn create_logout_request_with_session_indexes(
         issue_instant,
         not_on_or_after,
         validation,
+        name_id_encryption,
     })
 }
 
@@ -172,6 +180,7 @@ struct LogoutRequestInput<'a> {
     issue_instant: &'a str,
     not_on_or_after: Option<&'a str>,
     validation: LogoutRequestValidation,
+    name_id_encryption: IdentifierEncryptionPolicy,
 }
 
 fn create_logout_request_for_subject_inner(
@@ -190,6 +199,7 @@ fn create_logout_request_for_subject_inner(
         issue_instant,
         not_on_or_after,
         validation,
+        name_id_encryption,
     } = input;
 
     reject_soap_relay_state(binding, relay_state)?;
@@ -299,6 +309,7 @@ fn create_logout_request_for_subject_inner(
             OutboundLogoutRequestValidation::BeforeSigning,
         )?;
     }
+    let xml = encrypt_name_id_for_peer(xml, name_id_encryption, init_setting, target_meta)?;
     let (context, signature, sig_alg) = if want_signed {
         sign_browser_message(
             init_setting,
@@ -326,7 +337,7 @@ fn create_logout_request_for_subject_inner(
             validate_logout_request_outbound(
                 &signed_xml,
                 expectation,
-                OutboundLogoutRequestValidation::AfterEmbeddedSigning,
+                OutboundLogoutRequestValidation::AfterEmbeddedSigning(name_id_encryption),
             )?;
         }
     }

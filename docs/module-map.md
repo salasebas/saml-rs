@@ -100,6 +100,7 @@ mapping is not implemented.
 | Parsing | `src/logout/parsing.rs` |
 | Rendering | `src/logout/rendering.rs` |
 | Signing | `src/logout/signing.rs` |
+| `EncryptedID` in place of the `LogoutRequest` `NameID` | `src/logout/encrypted_id.rs`, `src/crypto/enc.rs` |
 
 Logout is the directory `src/logout/`.
 
