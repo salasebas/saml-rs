@@ -9,6 +9,11 @@ use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{IdentityProvider, ServiceProvider};
 
 const DUMPES_ISSUER: &str = include_str!("fixtures/misc/dumpes_issuer_response.xml");
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
 const SP_META_98: &str = include_str!("fixtures/misc/sp_metadata_98.xml");
 
