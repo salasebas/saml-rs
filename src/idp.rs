@@ -353,10 +353,8 @@ impl IdentityProvider {
         options: &LoginResponseOptions<'_>,
         overrides: LoginResponseOverrides<'_>,
     ) -> Result<BindingContext, SamlError> {
-        if matches!(binding, Binding::Artifact) {
-            return Err(SamlError::UnsupportedBinding {
-                binding: Binding::Artifact,
-            });
+        if matches!(binding, Binding::Artifact | Binding::Soap) {
+            return Err(SamlError::UnsupportedBinding { binding });
         }
         let acs = match overrides.acs {
             Some(acs) => acs.to_string(),
@@ -454,9 +452,7 @@ impl IdentityProvider {
                     Some(sig_alg.clone()),
                 ))
             }
-            Binding::Artifact => Err(SamlError::UnsupportedBinding {
-                binding: Binding::Artifact,
-            }),
+            Binding::Artifact | Binding::Soap => Err(SamlError::UnsupportedBinding { binding }),
         }
     }
 

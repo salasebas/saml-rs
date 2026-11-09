@@ -16,7 +16,8 @@ is in [`docs/architecture/`](architecture/README.md).
 | IdP `respond_sso_artifact`, `initiate_sso_artifact` | `src/api/artifact.rs`, `src/api/idp.rs` |
 | `ArtifactDelivery`, `DeliveredArtifact` | `src/browser/artifact.rs` |
 | Raw response rendering for an artifact | `src/idp/artifact.rs` |
-| SOAP 1.1 envelope | `src/soap.rs` |
+| SOAP 1.1 envelope, `SoapRequest`, `SoapResponse` | `src/soap.rs` |
+| Single Logout over SOAP: `StartSlo::soap`, `BrowserInput::soap`, `Outbound::soap_request` and `soap_response` | `src/api/slo.rs`, `src/browser/input.rs`, `src/browser/outbound.rs` |
 
 `finish_sso_with_outstanding_logout` and
 `accept_unsolicited_sso_with_outstanding_logout` are in `src/api/sp.rs`.

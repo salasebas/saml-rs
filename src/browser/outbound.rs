@@ -11,12 +11,15 @@ use crate::error::SamlError;
 use crate::model::{
     AuthnRequest, EndpointUrl, LogoutRequest, LogoutResponse, MessageId, RelayState, SsoResponse,
 };
+use crate::soap::{SoapProtocolMessage, SoapRequest, SoapResponse};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum OutboundKind {
-    Redirect,
-    Post,
-    SimpleSignPost,
+#[derive(Debug, Clone)]
+enum OutboundAction {
+    Redirect(String),
+    Post(PostForm),
+    SimpleSignPost(PostForm),
+    SoapRequest(SoapRequest),
+    SoapResponse(SoapResponse),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +44,8 @@ impl MessageField {
     }
 }
 
-/// Typed outbound browser action.
+/// Typed outbound browser action, or the SOAP message of a back-channel
+/// exchange.
 ///
 /// # Examples
 ///
@@ -85,9 +89,7 @@ impl MessageField {
 pub struct Outbound<Message> {
     id: MessageId,
     relay_state: Option<RelayState>,
-    kind: OutboundKind,
-    redirect_url: Option<String>,
-    post_form: Option<PostForm>,
+    action: OutboundAction,
     raw_context: BindingContext,
     _message: PhantomData<Message>,
 }
@@ -110,13 +112,13 @@ impl<Message> Outbound<Message> {
     ///
     /// Returns [`SamlError::UndefinedBinding`] when this action is not Redirect.
     pub fn redirect_url(&self) -> Result<&str, SamlError> {
-        if self.kind == OutboundKind::Redirect {
-            return self
-                .redirect_url
-                .as_deref()
-                .ok_or_else(|| SamlError::Invalid("missing redirect URL".into()));
+        match &self.action {
+            OutboundAction::Redirect(url) => Ok(url),
+            OutboundAction::Post(_)
+            | OutboundAction::SimpleSignPost(_)
+            | OutboundAction::SoapRequest(_)
+            | OutboundAction::SoapResponse(_) => Err(SamlError::UndefinedBinding),
         }
-        Err(SamlError::UndefinedBinding)
     }
 
     /// POST form for POST and SimpleSign actions, and for an artifact
@@ -124,15 +126,15 @@ impl<Message> Outbound<Message> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::UndefinedBinding`] when this action is a redirect.
+    /// Returns [`SamlError::UndefinedBinding`] when this action is a redirect
+    /// or a SOAP message.
     pub fn post_form(&self) -> Result<&PostForm, SamlError> {
-        if matches!(self.kind, OutboundKind::Post | OutboundKind::SimpleSignPost) {
-            return self
-                .post_form
-                .as_ref()
-                .ok_or_else(|| SamlError::Invalid("missing POST form".into()));
+        match &self.action {
+            OutboundAction::Post(form) | OutboundAction::SimpleSignPost(form) => Ok(form),
+            OutboundAction::Redirect(_)
+            | OutboundAction::SoapRequest(_)
+            | OutboundAction::SoapResponse(_) => Err(SamlError::UndefinedBinding),
         }
-        Err(SamlError::UndefinedBinding)
     }
 
     /// Raw compatibility context used to build this typed action.
@@ -143,6 +145,45 @@ impl<Message> Outbound<Message> {
     /// Consume the typed action and return the raw compatibility context.
     pub fn into_raw_context(self) -> BindingContext {
         self.raw_context
+    }
+}
+
+impl Outbound<LogoutRequest> {
+    /// SOAP request for a [`crate::LogoutBinding::Soap`] logout.
+    ///
+    /// POST [`SoapRequest::envelope`] to [`SoapRequest::endpoint`] and pass the
+    /// SOAP response body to `finish_slo`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::UndefinedBinding`] when this request uses another
+    /// binding.
+    pub fn soap_request(&self) -> Result<&SoapRequest, SamlError> {
+        match &self.action {
+            OutboundAction::SoapRequest(request) => Ok(request),
+            OutboundAction::Redirect(_)
+            | OutboundAction::Post(_)
+            | OutboundAction::SimpleSignPost(_)
+            | OutboundAction::SoapResponse(_) => Err(SamlError::UndefinedBinding),
+        }
+    }
+}
+
+impl Outbound<LogoutResponse> {
+    /// SOAP response that answers a logout request received over SOAP.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::UndefinedBinding`] when this response uses another
+    /// binding.
+    pub fn soap_response(&self) -> Result<&SoapResponse, SamlError> {
+        match &self.action {
+            OutboundAction::SoapResponse(response) => Ok(response),
+            OutboundAction::Redirect(_)
+            | OutboundAction::Post(_)
+            | OutboundAction::SimpleSignPost(_)
+            | OutboundAction::SoapRequest(_) => Err(SamlError::UndefinedBinding),
+        }
     }
 }
 
@@ -173,7 +214,7 @@ impl Outbound<SsoResponse> {
             .clone()
             .map(RelayState::try_new)
             .transpose()?;
-        let (kind, redirect_url, post_form) = match encoding {
+        let action = match encoding {
             ArtifactEncoding::Url => {
                 let query = crate::binding::redirect_binding_query(
                     url_params::SAML_ART,
@@ -182,20 +223,16 @@ impl Outbound<SsoResponse> {
                 );
                 let url = append_redirect_query(acs, &query);
                 EndpointUrl::try_new(url.clone())?;
-                (OutboundKind::Redirect, Some(url), None)
+                OutboundAction::Redirect(url)
             }
-            ArtifactEncoding::Form => (
-                OutboundKind::Post,
-                None,
-                Some(post_form_from_context(&raw_context, false)?),
-            ),
+            ArtifactEncoding::Form => {
+                OutboundAction::Post(post_form_from_context(&raw_context, false)?)
+            }
         };
         Ok(Self {
             id,
             relay_state,
-            kind,
-            redirect_url,
-            post_form,
+            action,
             raw_context,
             _message: PhantomData,
         })
@@ -222,6 +259,12 @@ impl TryFrom<BindingContext> for Outbound<LogoutRequest> {
     type Error = SamlError;
 
     fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+        if raw_context.binding == Binding::Soap {
+            validate_context_message_kind(&raw_context, MessageField::Request)?;
+            let endpoint = EndpointUrl::try_new(raw_context.entity_endpoint.clone())?;
+            let request = SoapProtocolMessage::request(endpoint, &raw_context.context)?;
+            return soap_outbound(raw_context, OutboundAction::SoapRequest(request));
+        }
         outbound_from_context(raw_context, true, MessageField::Request)
     }
 }
@@ -230,8 +273,32 @@ impl TryFrom<BindingContext> for Outbound<LogoutResponse> {
     type Error = SamlError;
 
     fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+        if raw_context.binding == Binding::Soap {
+            validate_context_message_kind(&raw_context, MessageField::Response)?;
+            let response = SoapResponse::new(&raw_context.context)?;
+            return soap_outbound(raw_context, OutboundAction::SoapResponse(response));
+        }
         outbound_from_context(raw_context, true, MessageField::Response)
     }
+}
+
+fn soap_outbound<Message>(
+    raw_context: BindingContext,
+    action: OutboundAction,
+) -> Result<Outbound<Message>, SamlError> {
+    if raw_context.relay_state.is_some() {
+        return Err(SamlError::Invalid(
+            "a SOAP message does not carry RelayState".into(),
+        ));
+    }
+    reject_detached_signature_for_post(&raw_context)?;
+    Ok(Outbound {
+        id: MessageId::try_new(raw_context.id.clone())?,
+        relay_state: None,
+        action,
+        raw_context,
+        _message: PhantomData,
+    })
 }
 
 fn outbound_from_context<Message>(
@@ -256,9 +323,7 @@ fn outbound_from_context<Message>(
             Ok(Outbound {
                 id,
                 relay_state,
-                kind: OutboundKind::Redirect,
-                redirect_url: Some(raw_context.context.clone()),
-                post_form: None,
+                action: OutboundAction::Redirect(raw_context.context.clone()),
                 raw_context,
                 _message: PhantomData,
             })
@@ -269,9 +334,7 @@ fn outbound_from_context<Message>(
             Ok(Outbound {
                 id,
                 relay_state,
-                kind: OutboundKind::Post,
-                redirect_url: None,
-                post_form: Some(form),
+                action: OutboundAction::Post(form),
                 raw_context,
                 _message: PhantomData,
             })
@@ -282,14 +345,12 @@ fn outbound_from_context<Message>(
             Ok(Outbound {
                 id,
                 relay_state,
-                kind: OutboundKind::SimpleSignPost,
-                redirect_url: None,
-                post_form: Some(form),
+                action: OutboundAction::SimpleSignPost(form),
                 raw_context,
                 _message: PhantomData,
             })
         }
-        Binding::Artifact => Err(SamlError::UndefinedBinding),
+        Binding::Artifact | Binding::Soap => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -352,7 +413,7 @@ fn reject_partial_detached_signature(context: &BindingContext) -> Result<(), Sam
 fn reject_detached_signature_for_post(context: &BindingContext) -> Result<(), SamlError> {
     if context.sig_alg.is_some() || context.signature.is_some() {
         return Err(SamlError::Invalid(
-            "POST outbound must not carry detached signature fields".into(),
+            "POST and SOAP outbound must not carry detached signature fields".into(),
         ));
     }
     Ok(())

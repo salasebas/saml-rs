@@ -17,12 +17,12 @@ pub enum Binding {
     /// HTTP-Artifact binding. The typed API delivers a Web SSO `<Response>`
     /// with it. The raw flows do not implement it.
     Artifact,
+    /// SOAP binding for a synchronous request and response. The typed API
+    /// sends Single Logout with it. The raw flows do not implement it.
+    Soap,
 }
 
-/// SOAP binding for a synchronous SAML request and response.
-///
-/// This is not a browser binding. Artifact resolution and later back-channel
-/// exchanges name it directly.
+/// SOAP binding URN, the value of [`Binding::Soap`]'s [`Binding::urn`].
 pub const SOAP_BINDING_URN: &str = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
 
 impl Binding {
@@ -33,6 +33,7 @@ impl Binding {
             Binding::Post => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
             Binding::SimpleSign => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign",
             Binding::Artifact => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact",
+            Binding::Soap => SOAP_BINDING_URN,
         }
     }
 
@@ -43,16 +44,19 @@ impl Binding {
             Binding::Post => "post",
             Binding::SimpleSign => "simpleSign",
             Binding::Artifact => "artifact",
+            Binding::Soap => "soap",
         }
     }
 
-    /// Resolve from a short keyword (`redirect`, `post`, `simpleSign`, `artifact`).
+    /// Resolve from a short keyword (`redirect`, `post`, `simpleSign`,
+    /// `artifact`, `soap`).
     pub fn from_short_name(name: &str) -> Option<Self> {
         match name {
             "redirect" => Some(Binding::Redirect),
             "post" => Some(Binding::Post),
             "simpleSign" => Some(Binding::SimpleSign),
             "artifact" => Some(Binding::Artifact),
+            "soap" => Some(Binding::Soap),
             _ => None,
         }
     }
@@ -64,6 +68,7 @@ impl Binding {
             Binding::Post,
             Binding::SimpleSign,
             Binding::Artifact,
+            Binding::Soap,
         ]
         .into_iter()
         .find(|b| b.urn() == urn)
@@ -420,6 +425,10 @@ mod tests {
             Binding::Artifact.urn(),
             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"
         );
+        assert_eq!(
+            Binding::Soap.urn(),
+            "urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+        );
     }
 
     #[test]
@@ -429,6 +438,7 @@ mod tests {
             Binding::Post,
             Binding::SimpleSign,
             Binding::Artifact,
+            Binding::Soap,
         ] {
             assert_eq!(Binding::from_short_name(b.short_name()), Some(b));
             assert_eq!(Binding::from_urn(b.urn()), Some(b));

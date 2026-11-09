@@ -71,7 +71,7 @@ fn validate_with_issuer(
     validate_logout_response_outbound(
         xml,
         expected_id,
-        DESTINATION,
+        Some(DESTINATION),
         expected_issuer,
         expected_in_response_to,
         OutboundLogoutValidation::BeforeSigning {

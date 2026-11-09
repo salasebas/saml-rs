@@ -71,6 +71,15 @@ impl SoapChannel {
         }
     }
 
+    /// No protection attested.
+    pub fn unattested() -> Self {
+        Self::new(
+            PartyAuthentication::Absent,
+            MessageIntegrity::Absent,
+            MessageConfidentiality::Absent,
+        )
+    }
+
     /// Mutual authentication, integrity protection, and confidentiality.
     pub fn mutually_authenticated_confidential() -> Self {
         Self::new(
@@ -93,6 +102,12 @@ impl SoapChannel {
     /// Whether the exchange is confidential.
     pub fn confidentiality(self) -> MessageConfidentiality {
         self.confidentiality
+    }
+
+    /// Mutual authentication with integrity protection.
+    pub(crate) fn authenticates_peer(self) -> bool {
+        self.authentication == PartyAuthentication::Mutual
+            && self.integrity == MessageIntegrity::Protected
     }
 }
 
@@ -125,6 +140,43 @@ impl SoapRequest {
     }
 
     /// `Pragma` value a requester should send.
+    pub fn pragma(&self) -> &'static str {
+        PRAGMA
+    }
+
+    /// `Content-Type` for SOAP 1.1.
+    pub fn content_type(&self) -> &'static str {
+        CONTENT_TYPE
+    }
+}
+
+/// SOAP 1.1 response carrying one SAML protocol element.
+///
+/// The deployment returns [`Self::envelope`] as the HTTP 200 body of the SOAP
+/// request it answers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoapResponse {
+    envelope: String,
+}
+
+impl SoapResponse {
+    pub(crate) fn new(protocol_xml: &str) -> Result<Self, SamlError> {
+        Ok(Self {
+            envelope: SoapProtocolMessage::response_envelope(protocol_xml)?,
+        })
+    }
+
+    /// SOAP 1.1 envelope.
+    pub fn envelope(&self) -> &str {
+        &self.envelope
+    }
+
+    /// `Cache-Control` value a responder should send.
+    pub fn cache_control(&self) -> &'static str {
+        RESPONSE_CACHE_CONTROL
+    }
+
+    /// `Pragma` value a responder should send.
     pub fn pragma(&self) -> &'static str {
         PRAGMA
     }

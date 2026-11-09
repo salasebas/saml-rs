@@ -12,6 +12,7 @@ pub(super) fn unsigned_context(
     match binding {
         Binding::Redirect => build_redirect_url(destination, parser_type, xml, relay),
         Binding::Post | Binding::SimpleSign => Ok(base64_encode(xml.as_bytes())),
+        Binding::Soap => Ok(xml.to_string()),
         Binding::Artifact => Err(SamlError::UnsupportedBinding {
             binding: Binding::Artifact,
         }),

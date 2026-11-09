@@ -127,7 +127,7 @@ fn authn_request_xml(
         Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(
             &outbound.raw_context().context,
         )?)?),
-        Binding::Artifact => Err("artifact binding is unsupported".into()),
+        Binding::Artifact | Binding::Soap => Err("binding is unsupported".into()),
     }
 }
 
@@ -395,6 +395,22 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let xml = response_xml(&response)?;
     assert!(xml.contains("<saml:AuthnStatement "));
     assert!(!xml.contains("SessionIndex="));
+
+    let soap_only_idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .slo_endpoint(SloEndpoint::soap(IDP_SLO)?)
+            .credentials(credentials())
+            .validation(signed_authn_request_idp_validation())
+            .build()?,
+    )?;
+    let (sp_descriptor, _) = descriptors(&sp, &soap_only_idp)?;
+    let response = soap_only_idp.initiate_sso(
+        &sp_descriptor,
+        subject(),
+        RespondSso::post().apply_web_browser_sso_generation_rules(),
+    )?;
+    assert!(response_xml(&response)?.contains("SessionIndex="));
     Ok(())
 }
 

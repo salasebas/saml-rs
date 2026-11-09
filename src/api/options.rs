@@ -346,6 +346,24 @@ impl StartSlo {
         Self::new(LogoutBinding::SimpleSign)
     }
 
+    /// Start SLO over SOAP.
+    ///
+    /// The Single Logout generation rules always apply: the request carries
+    /// an XML signature, [`LogoutSigning::DoNotSignForCompatibility`] is
+    /// rejected, and a service provider includes at least one `SessionIndex`.
+    /// The request carries no RelayState, so a present
+    /// [`Self::relay_state`] is rejected. The `https` check and
+    /// [`Self::allow_http_single_logout`] apply only to the browser bindings.
+    ///
+    /// POST [`Outbound::soap_request`](crate::Outbound::soap_request) with the
+    /// deployment's HTTP client, then pass the SOAP response body to
+    /// `finish_slo` as [`BrowserInput::soap`](crate::BrowserInput::soap).
+    pub fn soap() -> Self {
+        let mut options = Self::new(LogoutBinding::Soap);
+        options.rules = options.rules.apply_generation_rules();
+        options
+    }
+
     fn new(binding: LogoutBinding) -> Self {
         Self {
             binding,
@@ -428,6 +446,16 @@ impl RespondSlo {
     /// Respond with HTTP-POST-SimpleSign.
     pub fn simple_sign() -> Self {
         Self::new(LogoutBinding::SimpleSign)
+    }
+
+    /// Respond over SOAP to a request received as
+    /// [`BrowserInput::soap`](crate::BrowserInput::soap).
+    ///
+    /// The response is signed and carries no `Destination` and no RelayState.
+    /// Return [`Outbound::soap_response`](crate::Outbound::soap_response) as the
+    /// HTTP 200 body of that SOAP request.
+    pub fn soap() -> Self {
+        Self::new(LogoutBinding::Soap)
     }
 
     fn new(binding: LogoutBinding) -> Self {

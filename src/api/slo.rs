@@ -6,7 +6,7 @@ use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
 use crate::logout::{
     create_logout_request_with_session_indexes, create_logout_response_with_status,
-    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation,
+    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
     LogoutRequestSessionIndexes, LogoutRequestValidation,
 };
 use crate::metadata::Metadata;
@@ -448,13 +448,13 @@ fn start_slo_impl(
     let follows_rules = options.follows_generation_rules();
     if follows_rules && matches!(options.signing, LogoutSigning::DoNotSignForCompatibility) {
         return Err(Error::ProtocolProfile(
-            "a LogoutRequest signature cannot be disabled for HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign when Single Logout generation rules are selected".into(),
+            "a LogoutRequest signature cannot be disabled when Single Logout generation rules apply".into(),
         ));
     }
     if matches!(role, StartSloRole::SessionParticipant) {
         enforce_participant_https(
             peer_metadata,
-            options.binding.as_binding(),
+            options.binding,
             follows_rules,
             options.allows_http(),
             LogoutMessageDirection::Request,
@@ -545,14 +545,15 @@ fn receive_slo_impl(
         LogoutMessageDirection::Request,
         &validation,
     )?;
+    let receipt = LogoutReceipt::of_input(&input)?;
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_request_at(
         local_setting,
         peer_metadata,
-        binding.as_binding(),
+        receipt,
         &request,
         LogoutFlowValidation::typed(
-            &expected_recipient,
+            Some(&expected_recipient),
             validation.now(),
             validation.clock_skew().as_millis(),
         ),
@@ -583,7 +584,7 @@ fn respond_slo_impl(
     if matches!(transport, LogoutResponseTransport::SessionParticipant) {
         enforce_participant_https(
             peer_metadata,
-            options.binding.as_binding(),
+            options.binding,
             options.follows_generation_rules(),
             options.allows_http(),
             LogoutMessageDirection::Response,
@@ -622,21 +623,29 @@ fn finish_slo_impl(
     ensure_entity_id(pending.peer_entity_id(), peer_entity_id)?;
     ensure_logout_response_binding(input_binding(&input), pending.response_binding())?;
     ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
-    let expected_recipient = logout_recipient_endpoint(
-        local_metadata,
-        pending.response_binding(),
-        LogoutMessageDirection::Response,
-        &validation,
-    )?;
+    // A SOAP response returns on this party's own HTTP exchange, so no local
+    // endpoint received it.
+    let expected_recipient = match pending.response_binding() {
+        LogoutBinding::Soap => None,
+        binding @ (LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign) => {
+            Some(logout_recipient_endpoint(
+                local_metadata,
+                binding,
+                LogoutMessageDirection::Response,
+                &validation,
+            )?)
+        }
+    };
+    let receipt = LogoutReceipt::of_input(&input)?;
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_response_at(
         local_setting,
         peer_metadata,
-        pending.response_binding().as_binding(),
+        receipt,
         &request,
         pending.id().as_str(),
         LogoutFlowValidation::typed(
-            &expected_recipient,
+            expected_recipient.as_deref(),
             validation.now(),
             validation.clock_skew().as_millis(),
         ),
@@ -662,17 +671,22 @@ enum LogoutMessageDirection {
     Response,
 }
 
+/// The `https` check covers the exchanges that pass through the user agent.
 fn enforce_participant_https(
     peer_metadata: &Metadata,
-    binding: Binding,
+    binding: LogoutBinding,
     follows_rules: bool,
     allow_http: bool,
     direction: LogoutMessageDirection,
 ) -> Result<(), SamlError> {
+    match binding {
+        LogoutBinding::Soap => return Ok(()),
+        LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => {}
+    }
     if !follows_rules || allow_http {
         return Ok(());
     }
-    let destination = peer_logout_endpoint(peer_metadata, binding, direction)?;
+    let destination = peer_logout_endpoint(peer_metadata, binding.as_binding(), direction)?;
     require_https_logout_endpoint(&destination)
 }
 

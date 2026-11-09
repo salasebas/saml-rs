@@ -60,6 +60,30 @@ When the identity provider starts logout itself, `Saml<Idp>::start_slo` is the s
 
 `LogoutPolicy::recommended()` requires a signature on logout requests and responses. `LogoutPolicy::compatibility()` is the legacy unsigned hatch.
 
+## Over SOAP
+
+`StartSlo::soap()` and `RespondSlo::soap()` run the same calls as one back-channel SOAP exchange. Your HTTP client sends the request, and saml-rs reads the reply. Both peers publish `SloEndpoint::soap(...)`. saml-rs signs every SOAP logout message it writes, and none carries `RelayState`. A received SOAP message must be signed under every `LogoutPolicy`. When your server or client authenticated the peer with mutual TLS, pass that with `BrowserInput::soap_with_channel(body, channel)`; an unsigned message is then accepted, and a present signature is still checked.
+
+```rust
+let logout = sp.start_slo(&idp, subject, StartSlo::soap())?;
+let request = logout.outbound.soap_request()?;
+let reply_body = post_soap(request.endpoint().as_str(), request.envelope())?;
+let completed = sp.finish_slo(
+    &idp,
+    &logout.pending,
+    BrowserInput::<LogoutResponse>::soap(reply_body),
+    validation,
+)?;
+```
+
+The receiving side reads the posted body and returns the response envelope as the HTTP 200 body:
+
+```rust
+let logout_request = idp.receive_slo(&sp, BrowserInput::<LogoutRequest>::soap(body), validation)?;
+let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::soap())?;
+let reply_body = logout_response.soap_response()?.envelope();
+```
+
 ## Next
 
 ```sh

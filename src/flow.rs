@@ -324,7 +324,7 @@ fn decode_message(
                 .ok_or_else(|| missing_binding_parameter(direction))?;
             base64_decode_with_limit(content, xml_limits.max_bytes)?
         }
-        Binding::Artifact => return Err(unsupported_binding(binding)),
+        Binding::Artifact | Binding::Soap => return Err(unsupported_binding(binding)),
     };
     xml_limits.check_input_bytes(bytes.len())?;
     String::from_utf8(bytes).map_err(|e| SamlError::Xml(e.to_string()))
@@ -493,7 +493,7 @@ fn ensure_detached_octet_matches_consumed_fields(
             sig_alg,
             octet,
         ),
-        Binding::Post | Binding::Artifact => Ok(()),
+        Binding::Post | Binding::Artifact | Binding::Soap => Ok(()),
     }
 }
 
@@ -952,7 +952,7 @@ fn signature_is_present(
     let detached = match binding {
         Binding::Redirect => request.query.iter().any(|(name, _)| name == "Signature"),
         Binding::SimpleSign => request.body.iter().any(|(name, _)| name == "Signature"),
-        Binding::Post | Binding::Artifact => false,
+        Binding::Post | Binding::Artifact | Binding::Soap => false,
     };
     if detached {
         return Ok(true);

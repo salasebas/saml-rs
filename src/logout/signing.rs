@@ -38,28 +38,29 @@ pub(super) fn sign_logout(
         .as_deref()
         .ok_or_else(|| SamlError::MissingKey("private_key".into()))?;
     let key = load_private_key(key_pem, setting.private_key_pass.as_deref())?;
+    let embedded_signature = || {
+        let cert = setting
+            .signing_cert
+            .as_deref()
+            .ok_or_else(|| SamlError::MissingKey("signing_cert".into()))?;
+        construct_saml_signature(
+            xml,
+            true,
+            &key,
+            cert,
+            sig_alg,
+            &setting.transformation_algorithms,
+            setting.signature_config.as_ref(),
+        )
+    };
     match binding {
         Binding::Redirect => {
             let octet = build_redirect_octet(parser_type, xml, relay, sig_alg)?;
             let sig = construct_message_signature(&octet, &key, sig_alg)?;
             Ok((append_signature(destination, &octet, &sig), None, None))
         }
-        Binding::Post => {
-            let cert = setting
-                .signing_cert
-                .as_deref()
-                .ok_or_else(|| SamlError::MissingKey("signing_cert".into()))?;
-            let signed = construct_saml_signature(
-                xml,
-                true,
-                &key,
-                cert,
-                sig_alg,
-                &setting.transformation_algorithms,
-                setting.signature_config.as_ref(),
-            )?;
-            Ok((base64_encode(signed.as_bytes()), None, None))
-        }
+        Binding::Post => Ok((base64_encode(embedded_signature()?.as_bytes()), None, None)),
+        Binding::Soap => Ok((embedded_signature()?, None, None)),
         Binding::SimpleSign => {
             let octet = crate::binding::build_simplesign_octet(
                 parser_type.query_param(),

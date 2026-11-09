@@ -140,8 +140,8 @@ message and does not accept a session. `finish_sso` accepts it through
 ## SOAP for another protocol message
 
 `SoapProtocolMessage` places one SAML protocol element in a SOAP 1.1 body and
-reads one element back. A later logout or name-identifier exchange can use
-that envelope. This ticket does not implement those profiles. ECP, PAOS, and
+reads one element back. Single Logout uses that envelope; its rules are in
+[SOAP binding](single-logout.md#soap-binding). Name identifier management and
 the assertion query profile are not implemented.
 
 ## Outside this flow

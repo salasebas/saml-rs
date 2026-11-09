@@ -1,5 +1,6 @@
 use super::*;
 use crate::binding::{base64_decode, base64_encode, deflate_raw_decode};
+use crate::browser::BrowserInput;
 use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting, User};
 use crate::error::SamlError;
@@ -107,6 +108,7 @@ fn decode_logout_response_context(
         Binding::Post | Binding::SimpleSign => {
             Ok(String::from_utf8(base64_decode(&context.context)?)?)
         }
+        Binding::Soap => Ok(context.context.clone()),
         Binding::Redirect => {
             let url = Url::parse(&context.context)?;
             let encoded = url
@@ -181,9 +183,9 @@ fn parse_unsigned_logout_request_at(
     parse_logout_request_at(
         &receiver.setting,
         &sender.metadata,
-        Binding::Post,
+        LogoutReceipt::of_input(&BrowserInput::<crate::LogoutRequest>::post(Vec::new()))?,
         &logout_request_request(issue_instant, not_on_or_after),
-        LogoutFlowValidation::typed("https://idp/slo", now, clock_drifts),
+        LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_drifts),
     )
 }
 
@@ -499,7 +501,7 @@ mod signed_tests {
 
         assert_protocol_profile_error(
             result,
-            "signed POST LogoutResponse must contain a root ds:Signature in schema order",
+            "signed POST or SOAP LogoutResponse must contain a root ds:Signature in schema order",
         )
     }
 
@@ -1153,5 +1155,42 @@ fn logout_response_uses_response_location_and_request_uses_location(
         request.entity_endpoint,
         "https://sp.example.com/slo/request"
     );
+    Ok(())
+}
+
+#[test]
+fn raw_logout_generation_rejects_soap() -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp()?;
+    let idp = idp()?;
+    let request = create_logout_request(
+        &sp.setting,
+        &sp.metadata,
+        &idp.metadata,
+        Binding::Soap,
+        &User::new("alice@example.com"),
+        None,
+        false,
+    );
+    assert!(matches!(
+        request,
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Soap
+        })
+    ));
+    let response = create_logout_response(
+        &idp.setting,
+        &idp.metadata,
+        &sp.metadata,
+        Binding::Soap,
+        Some("_request"),
+        None,
+        false,
+    );
+    assert!(matches!(
+        response,
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Soap
+        })
+    ));
     Ok(())
 }

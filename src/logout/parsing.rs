@@ -1,3 +1,4 @@
+use crate::browser::BrowserInput;
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
@@ -16,13 +17,15 @@ pub(crate) struct LogoutFlowValidation<'a> {
 }
 
 impl<'a> LogoutFlowValidation<'a> {
+    /// `expected_recipient` is the local endpoint a present `Destination`
+    /// must name. `None` is a SOAP response, which has no receiving endpoint.
     pub(crate) fn typed(
-        expected_recipient: &'a str,
+        expected_recipient: Option<&'a str>,
         now: SystemTime,
         clock_drifts: (i64, i64),
     ) -> Self {
         Self {
-            expected_recipient: Some(expected_recipient),
+            expected_recipient,
             now: Some(now),
             clock_drifts,
         }
@@ -33,6 +36,67 @@ impl<'a> LogoutFlowValidation<'a> {
             expected_recipient: None,
             now: None,
             clock_drifts,
+        }
+    }
+}
+
+/// How the flow reads a logout message from one typed input.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LogoutReceipt {
+    decode_as: Binding,
+    signature: LogoutReceiptSignature,
+    signed_destination: SignedMessageDestination,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LogoutReceiptSignature {
+    FollowLocalPolicy,
+    Required,
+    /// The deployment authenticated the peer. A present signature is verified.
+    VerifyIfPresent,
+}
+
+impl LogoutReceipt {
+    fn raw(binding: Binding) -> Self {
+        Self {
+            decode_as: binding,
+            signature: LogoutReceiptSignature::FollowLocalPolicy,
+            signed_destination: SignedMessageDestination::Required,
+        }
+    }
+
+    /// The SOAP body XML arrives as an HTTP-POST message. It must carry an
+    /// XML signature unless `channel` authenticated the peer.
+    pub(crate) fn of_input<Message>(input: &BrowserInput<Message>) -> Result<Self, SamlError> {
+        match input {
+            BrowserInput::Redirect { .. } => Ok(Self::raw(Binding::Redirect)),
+            BrowserInput::Post { .. } => Ok(Self::raw(Binding::Post)),
+            BrowserInput::SimpleSignPost { .. } => Ok(Self::raw(Binding::SimpleSign)),
+            BrowserInput::Soap { channel, .. } => Ok(Self {
+                decode_as: Binding::Post,
+                signature: if channel.authenticates_peer() {
+                    LogoutReceiptSignature::VerifyIfPresent
+                } else {
+                    LogoutReceiptSignature::Required
+                },
+                signed_destination: SignedMessageDestination::Optional,
+            }),
+            BrowserInput::Artifact { .. } => Err(SamlError::UndefinedBinding),
+        }
+    }
+
+    fn check_signature(self, local_policy: bool) -> bool {
+        match self.signature {
+            LogoutReceiptSignature::FollowLocalPolicy => local_policy,
+            LogoutReceiptSignature::Required => true,
+            LogoutReceiptSignature::VerifyIfPresent => false,
+        }
+    }
+
+    fn verify_signature_if_present(self) -> bool {
+        match self.signature {
+            LogoutReceiptSignature::FollowLocalPolicy | LogoutReceiptSignature::Required => false,
+            LogoutReceiptSignature::VerifyIfPresent => true,
         }
     }
 }
@@ -70,7 +134,7 @@ pub fn parse_logout_request(
     parse_logout_request_inner(
         self_setting,
         from_meta,
-        binding,
+        LogoutReceipt::raw(binding),
         request,
         LogoutFlowValidation::raw(self_setting.clock_drifts),
     )
@@ -79,27 +143,27 @@ pub fn parse_logout_request(
 pub(crate) fn parse_logout_request_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
-    binding: Binding,
+    receipt: LogoutReceipt,
     request: &HttpRequest,
     validation: LogoutFlowValidation<'_>,
 ) -> Result<FlowResult, SamlError> {
-    parse_logout_request_inner(self_setting, from_meta, binding, request, validation)
+    parse_logout_request_inner(self_setting, from_meta, receipt, request, validation)
 }
 
 fn parse_logout_request_inner(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
-    binding: Binding,
+    receipt: LogoutReceipt,
     request: &HttpRequest,
     validation: LogoutFlowValidation<'_>,
 ) -> Result<FlowResult, SamlError> {
     let signing_certs = from_meta.x509_certificates(CertUse::Signing);
     run_logout_flow(
         &FlowOptions {
-            binding: Some(binding),
+            binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutRequest),
-            check_signature: self_setting.want_logout_request_signed,
-            verify_signature_if_present: false,
+            check_signature: receipt.check_signature(self_setting.want_logout_request_signed),
+            verify_signature_if_present: receipt.verify_signature_if_present(),
             require_audience_restriction: true,
             strict_xml_signature_profile: self_setting.strict_xml_signature_profile,
             from_issuer: from_meta.get_entity_id(),
@@ -116,13 +180,14 @@ fn parse_logout_request_inner(
         },
         request,
         validation.expected_recipient,
+        receipt.signed_destination,
     )
 }
 
 fn parse_logout_response_inner(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
-    binding: Binding,
+    receipt: LogoutReceipt,
     request: &HttpRequest,
     expected_in_response_to: Option<&str>,
     validation: LogoutFlowValidation<'_>,
@@ -130,10 +195,10 @@ fn parse_logout_response_inner(
     let signing_certs = from_meta.x509_certificates(CertUse::Signing);
     run_logout_flow(
         &FlowOptions {
-            binding: Some(binding),
+            binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutResponse),
-            check_signature: self_setting.want_logout_response_signed,
-            verify_signature_if_present: false,
+            check_signature: receipt.check_signature(self_setting.want_logout_response_signed),
+            verify_signature_if_present: receipt.verify_signature_if_present(),
             require_audience_restriction: true,
             strict_xml_signature_profile: self_setting.strict_xml_signature_profile,
             from_issuer: from_meta.get_entity_id(),
@@ -150,6 +215,7 @@ fn parse_logout_response_inner(
         },
         request,
         validation.expected_recipient,
+        receipt.signed_destination,
     )
 }
 
@@ -196,7 +262,7 @@ pub fn parse_logout_response(
     parse_logout_response_inner(
         self_setting,
         from_meta,
-        binding,
+        LogoutReceipt::raw(binding),
         request,
         Some(request_id),
         LogoutFlowValidation::raw(self_setting.clock_drifts),
@@ -206,7 +272,7 @@ pub fn parse_logout_response(
 pub(crate) fn parse_logout_response_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
-    binding: Binding,
+    receipt: LogoutReceipt,
     request: &HttpRequest,
     request_id: &str,
     validation: LogoutFlowValidation<'_>,
@@ -217,7 +283,7 @@ pub(crate) fn parse_logout_response_at(
     parse_logout_response_inner(
         self_setting,
         from_meta,
-        binding,
+        receipt,
         request,
         Some(request_id),
         validation,
@@ -254,7 +320,7 @@ pub fn parse_logout_response_without_request_id(
     parse_logout_response_inner(
         self_setting,
         from_meta,
-        binding,
+        LogoutReceipt::raw(binding),
         request,
         None,
         LogoutFlowValidation::raw(self_setting.clock_drifts),
@@ -265,6 +331,7 @@ fn run_logout_flow(
     options: &FlowOptions<'_>,
     request: &HttpRequest,
     expected_recipient: Option<&str>,
+    signed_destination: SignedMessageDestination,
 ) -> Result<FlowResult, SamlError> {
     match expected_recipient {
         Some(expected_recipient) => Ok(flow_with_expected_recipient_and_signature_evidence(
@@ -273,7 +340,7 @@ fn run_logout_flow(
             expected_recipient,
             AssertionSignatureRequirement::Compatible,
             ResponseSignatureRequirement::Optional,
-            SignedMessageDestination::Required,
+            signed_destination,
         )?
         .into_parts()
         .0),
