@@ -195,6 +195,8 @@ pub mod signature_algorithm {
     pub const RSA_SHA1: &str = "http://www.w3.org/2000/09/xmldsig#rsa-sha1";
     /// DSA-SHA1.
     pub const DSA_SHA1: &str = "http://www.w3.org/2000/09/xmldsig#dsa-sha1";
+    /// HMAC-SHA1.
+    pub const HMAC_SHA1: &str = "http://www.w3.org/2000/09/xmldsig#hmac-sha1";
     /// RSA-SHA256.
     pub const RSA_SHA256: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
     /// RSASSA-PSS with SHA-256 and MGF1.
@@ -220,9 +222,9 @@ pub mod digest_algorithm {
 /// Map a signature algorithm URI to its digest algorithm URI (`getDigestMethod`).
 pub fn digest_for_signature(sig_alg: &str) -> Option<&'static str> {
     match sig_alg {
-        signature_algorithm::RSA_SHA1 | signature_algorithm::DSA_SHA1 => {
-            Some(digest_algorithm::SHA1)
-        }
+        signature_algorithm::RSA_SHA1
+        | signature_algorithm::DSA_SHA1
+        | signature_algorithm::HMAC_SHA1 => Some(digest_algorithm::SHA1),
         signature_algorithm::RSA_SHA256 => Some(digest_algorithm::SHA256),
         signature_algorithm::RSA_SHA256_MGF1 => Some(digest_algorithm::SHA256),
         signature_algorithm::RSA_SHA384 => Some(digest_algorithm::SHA384),
@@ -477,6 +479,10 @@ mod tests {
         );
         assert_eq!(
             digest_for_signature(signature_algorithm::DSA_SHA1),
+            Some(digest_algorithm::SHA1)
+        );
+        assert_eq!(
+            digest_for_signature(signature_algorithm::HMAC_SHA1),
             Some(digest_algorithm::SHA1)
         );
         assert_eq!(digest_for_signature("unknown"), None);

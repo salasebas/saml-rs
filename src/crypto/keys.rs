@@ -4,7 +4,7 @@
 use crate::error::SamlError;
 use crate::util::normalize_cert_string;
 use bergshamra::keys::keyinfo::build_x509_key_info;
-use bergshamra::keys::loader::{load_pem_auto, load_x509_cert_pem};
+use bergshamra::keys::loader::{load_hmac_key, load_pem_auto, load_x509_cert_pem};
 use bergshamra::keys::Key;
 
 fn crypto_err(err: impl std::fmt::Display) -> SamlError {
@@ -16,6 +16,11 @@ fn crypto_err(err: impl std::fmt::Display) -> SamlError {
 pub fn load_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     load_pem_auto(pem.as_bytes(), password).map_err(crypto_err)
+}
+
+pub(crate) fn load_hmac_secret(secret: &[u8]) -> Result<Key, SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    load_hmac_key(secret).map_err(crypto_err)
 }
 
 /// Wrap a bare base64 certificate (as found in metadata) into a PEM block.

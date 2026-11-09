@@ -92,7 +92,7 @@ impl Saml<Sp> {
         receive_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
-            &raw_idp.metadata,
+            SloPeer::from_metadata_and_setting(&raw_idp.metadata, &raw_idp.setting),
             input,
             validation,
         )
@@ -184,7 +184,7 @@ impl Saml<Sp> {
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
             idp.entity_id(),
-            &raw_idp.metadata,
+            SloPeer::from_metadata_and_setting(&raw_idp.metadata, &raw_idp.setting),
             pending,
             input,
             validation,
@@ -305,7 +305,7 @@ impl Saml<Idp> {
         receive_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
-            &raw_sp.metadata,
+            SloPeer::from_metadata_and_setting(&raw_sp.metadata, &raw_sp.setting),
             input,
             validation,
         )
@@ -411,7 +411,7 @@ impl Saml<Idp> {
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
             sp.entity_id(),
-            &raw_sp.metadata,
+            SloPeer::from_metadata_and_setting(&raw_sp.metadata, &raw_sp.setting),
             pending,
             input,
             validation,
@@ -530,10 +530,25 @@ fn start_slo_impl(
     Ok(Started { pending, outbound })
 }
 
+#[derive(Clone, Copy)]
+struct SloPeer<'a> {
+    metadata: &'a Metadata,
+    hmac_secret: Option<&'a [u8]>,
+}
+
+impl<'a> SloPeer<'a> {
+    fn from_metadata_and_setting(metadata: &'a Metadata, setting: &'a EntitySetting) -> Self {
+        Self {
+            metadata,
+            hmac_secret: setting.hmac_secret.as_deref(),
+        }
+    }
+}
+
 fn receive_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer_metadata: &Metadata,
+    peer: SloPeer<'_>,
     input: BrowserInput<LogoutRequest>,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
@@ -549,13 +564,14 @@ fn receive_slo_impl(
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_request_at(
         local_setting,
-        peer_metadata,
+        peer.metadata,
         receipt,
         &request,
         LogoutFlowValidation::typed(
             Some(&expected_recipient),
             validation.now(),
             validation.clock_skew().as_millis(),
+            peer.hmac_secret,
         ),
     )?;
     let replay_deadline = crate::validator::logout_request_not_on_or_after_deadline(
@@ -615,7 +631,7 @@ fn finish_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
     peer_entity_id: &EntityId,
-    peer_metadata: &Metadata,
+    peer: SloPeer<'_>,
     pending: &PendingLogoutRequest,
     input: BrowserInput<LogoutResponse>,
     mut validation: SamlValidationContext<'_>,
@@ -640,7 +656,7 @@ fn finish_slo_impl(
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_response_at(
         local_setting,
-        peer_metadata,
+        peer.metadata,
         receipt,
         &request,
         pending.id().as_str(),
@@ -648,6 +664,7 @@ fn finish_slo_impl(
             expected_recipient.as_deref(),
             validation.now(),
             validation.clock_skew().as_millis(),
+            peer.hmac_secret,
         ),
     )?;
     let response = LogoutResponse::try_from(flow)?;

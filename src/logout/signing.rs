@@ -22,9 +22,7 @@ pub(super) fn sign_logout(
     parser_type: ParserType,
 ) -> Result<(String, Option<String>, Option<String>), SamlError> {
     use crate::binding::{append_signature, build_redirect_octet};
-    use crate::crypto::{
-        construct_message_signature, construct_saml_signature, keys::load_private_key,
-    };
+    use crate::crypto::SigningCredential;
 
     if matches!(binding, Binding::Artifact) {
         return Err(SamlError::UnsupportedBinding {
@@ -33,34 +31,28 @@ pub(super) fn sign_logout(
     }
 
     let sig_alg = &setting.request_signature_algorithm;
-    let key_pem = setting
-        .private_key
-        .as_deref()
-        .ok_or_else(|| SamlError::MissingKey("private_key".into()))?;
-    let key = load_private_key(key_pem, setting.private_key_pass.as_deref())?;
-    let embedded_signature = || {
-        let cert = setting
-            .signing_cert
-            .as_deref()
-            .ok_or_else(|| SamlError::MissingKey("signing_cert".into()))?;
-        construct_saml_signature(
+    let credential = SigningCredential::from_setting(setting)?;
+    let embedded_signature = |transforms: &[String]| {
+        credential.sign_xml(
             xml,
             true,
-            &key,
-            cert,
             sig_alg,
-            &setting.transformation_algorithms,
+            transforms,
             setting.signature_config.as_ref(),
         )
     };
     match binding {
         Binding::Redirect => {
             let octet = build_redirect_octet(parser_type, xml, relay, sig_alg)?;
-            let sig = construct_message_signature(&octet, &key, sig_alg)?;
+            let sig = credential.sign_detached(&octet, sig_alg)?;
             Ok((append_signature(destination, &octet, &sig), None, None))
         }
-        Binding::Post => Ok((base64_encode(embedded_signature()?.as_bytes()), None, None)),
-        Binding::Soap => Ok((embedded_signature()?, None, None)),
+        Binding::Post => Ok((
+            base64_encode(embedded_signature(&setting.transformation_algorithms)?.as_bytes()),
+            None,
+            None,
+        )),
+        Binding::Soap => Ok((embedded_signature(&[])?, None, None)),
         Binding::SimpleSign => {
             let octet = crate::binding::build_simplesign_octet(
                 parser_type.query_param(),
@@ -68,7 +60,7 @@ pub(super) fn sign_logout(
                 relay,
                 sig_alg,
             );
-            let sig = construct_message_signature(&octet, &key, sig_alg)?;
+            let sig = credential.sign_detached(&octet, sig_alg)?;
             Ok((
                 base64_encode(xml.as_bytes()),
                 Some(sig),

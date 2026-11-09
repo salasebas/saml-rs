@@ -31,6 +31,7 @@ impl ArtifactResolutionService {
 }
 
 use super::algorithms::NameIdFormat;
+use super::credentials::HmacSecret;
 use super::metadata_trust::{
     ensure_expected_entity_id, ensure_metadata_trust, metadata_entity_id, AppliedMetadataTrust,
     MetadataTrustPolicy,
@@ -224,6 +225,7 @@ pub struct IdpDescriptor {
     metadata_xml: String,
     metadata: IdpMetadata,
     trust: AppliedMetadataTrust,
+    hmac_secret: Option<HmacSecret>,
 }
 
 impl IdpDescriptor {
@@ -248,6 +250,7 @@ impl IdpDescriptor {
             metadata_xml: xml.to_string(),
             metadata,
             trust,
+            hmac_secret: None,
         })
     }
 
@@ -268,6 +271,7 @@ impl IdpDescriptor {
             metadata_xml: xml.to_string(),
             metadata,
             trust,
+            hmac_secret: None,
         })
     }
 
@@ -284,6 +288,19 @@ impl IdpDescriptor {
     /// Parsed IdP metadata.
     pub fn metadata(&self) -> &IdpMetadata {
         &self.metadata
+    }
+
+    /// Verify this identity provider's HMAC signatures with `secret`.
+    ///
+    /// Use it when the peer signs with [`crate::SignatureAlgorithm::HmacSha1`].
+    /// Its metadata certificates still verify its other signatures.
+    pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
+        self.hmac_secret = Some(secret);
+        self
+    }
+
+    pub(crate) fn hmac_secret(&self) -> Option<&HmacSecret> {
+        self.hmac_secret.as_ref()
     }
 
     /// Whether this descriptor was verified with pinned signing certificates.
@@ -313,6 +330,7 @@ pub struct SpDescriptor {
     metadata_xml: String,
     metadata: SpMetadata,
     trust: AppliedMetadataTrust,
+    hmac_secret: Option<HmacSecret>,
 }
 
 impl SpDescriptor {
@@ -337,6 +355,7 @@ impl SpDescriptor {
             metadata_xml: xml.to_string(),
             metadata,
             trust,
+            hmac_secret: None,
         })
     }
 
@@ -357,6 +376,7 @@ impl SpDescriptor {
             metadata_xml: xml.to_string(),
             metadata,
             trust,
+            hmac_secret: None,
         })
     }
 
@@ -373,6 +393,19 @@ impl SpDescriptor {
     /// Parsed SP metadata.
     pub fn metadata(&self) -> &SpMetadata {
         &self.metadata
+    }
+
+    /// Verify this service provider's HMAC signatures with `secret`.
+    ///
+    /// Use it when the peer signs with [`crate::SignatureAlgorithm::HmacSha1`].
+    /// Its metadata certificates still verify its other signatures.
+    pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
+        self.hmac_secret = Some(secret);
+        self
+    }
+
+    pub(crate) fn hmac_secret(&self) -> Option<&HmacSecret> {
+        self.hmac_secret.as_ref()
     }
 
     /// Whether this descriptor was verified with pinned signing certificates.

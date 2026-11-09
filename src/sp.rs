@@ -453,22 +453,11 @@ impl ServiceProvider {
         id: String,
     ) -> Result<BindingContext, SamlError> {
         use crate::binding::{append_signature, build_redirect_octet};
-        use crate::crypto::{
-            construct_message_signature, construct_saml_signature, keys::load_private_key,
-        };
+        use crate::crypto::SigningCredential;
 
-        let key_pem = self
-            .setting
-            .private_key
-            .as_deref()
-            .ok_or_else(|| SamlError::MissingKey("private_key".into()))?;
-        let cert = self
-            .setting
-            .signing_cert
-            .as_deref()
-            .ok_or_else(|| SamlError::MissingKey("signing_cert".into()))?;
+        let credential = SigningCredential::from_setting(&self.setting)?;
+        credential.require_certificate()?;
         let sig_alg = &self.setting.request_signature_algorithm;
-        let key = load_private_key(key_pem, self.setting.private_key_pass.as_deref())?;
 
         let (context, signature, sig_alg_out) = match binding {
             Binding::Redirect => {
@@ -478,15 +467,13 @@ impl ServiceProvider {
                     relay_state.as_deref(),
                     sig_alg,
                 )?;
-                let sig = construct_message_signature(&octet, &key, sig_alg)?;
+                let sig = credential.sign_detached(&octet, sig_alg)?;
                 (append_signature(&destination, &octet, &sig), None, None)
             }
             Binding::Post => {
-                let signed = construct_saml_signature(
+                let signed = credential.sign_xml(
                     xml,
                     true,
-                    &key,
-                    cert,
                     sig_alg,
                     &self.setting.transformation_algorithms,
                     self.setting.signature_config.as_ref(),
@@ -500,7 +487,7 @@ impl ServiceProvider {
                     relay_state.as_deref(),
                     sig_alg,
                 );
-                let sig = construct_message_signature(&octet, &key, sig_alg)?;
+                let sig = credential.sign_detached(&octet, sig_alg)?;
                 (
                     base64_encode(xml.as_bytes()),
                     Some(sig),
@@ -721,6 +708,7 @@ impl ServiceProvider {
                 strict_xml_signature_profile: self.setting.strict_xml_signature_profile,
                 from_issuer: idp.metadata.get_entity_id(),
                 signing_certs: &signing_certs,
+                hmac_secret: idp.setting.hmac_secret.as_deref(),
                 decrypt_key,
                 decrypt_key_pass: self.setting.enc_private_key_pass.as_deref(),
                 allow_insecure_software_rsa_key_transport_decryption: self

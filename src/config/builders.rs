@@ -4,7 +4,9 @@ use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 
-use super::algorithms::{name_id_format_uris, transform_algorithm_uris, NameIdFormat};
+use super::algorithms::{
+    name_id_format_uris, transform_algorithm_uris, NameIdFormat, SignatureAlgorithm,
+};
 use super::credentials::Credentials;
 use super::descriptors::{
     validate_entity_id, ArtifactResolutionService, EntityId, IdpMetadataConfig, SpMetadataConfig,
@@ -455,7 +457,7 @@ fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
         config.validation.authn_requests,
         AuthnRequestSigningPolicy::Sign
     ) {
-        validate_signing_credentials(&config.credentials)?;
+        validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
     }
     if matches!(
         config.xml.encryption.assertions,
@@ -488,7 +490,16 @@ pub(crate) fn validated_idp_issuance_lifetime(
     })
 }
 
-fn validate_signing_credentials(credentials: &Credentials) -> Result<(), SamlError> {
+fn validate_signing_credentials(
+    credentials: &Credentials,
+    algorithm: &SignatureAlgorithm,
+) -> Result<(), SamlError> {
+    if matches!(algorithm, SignatureAlgorithm::HmacSha1) {
+        if credentials.hmac_secret.is_none() {
+            return Err(SamlError::MissingKey("hmac_secret".into()));
+        }
+        return Ok(());
+    }
     if credentials.signing_key.is_none() {
         return Err(SamlError::MissingKey("signing_key".into()));
     }
@@ -636,6 +647,10 @@ fn apply_common_settings(
         .signing_certificate
         .as_ref()
         .map(|certificate| certificate.as_str().to_string());
+    setting.hmac_secret = credentials
+        .hmac_secret
+        .as_ref()
+        .map(|secret| secret.as_bytes().to_vec());
     setting.encrypt_cert = credentials
         .encryption_certificate
         .as_ref()

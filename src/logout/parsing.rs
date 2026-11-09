@@ -14,6 +14,7 @@ pub(crate) struct LogoutFlowValidation<'a> {
     expected_recipient: Option<&'a str>,
     now: Option<SystemTime>,
     clock_drifts: (i64, i64),
+    peer_hmac_secret: Option<&'a [u8]>,
 }
 
 impl<'a> LogoutFlowValidation<'a> {
@@ -23,11 +24,13 @@ impl<'a> LogoutFlowValidation<'a> {
         expected_recipient: Option<&'a str>,
         now: SystemTime,
         clock_drifts: (i64, i64),
+        peer_hmac_secret: Option<&'a [u8]>,
     ) -> Self {
         Self {
             expected_recipient,
             now: Some(now),
             clock_drifts,
+            peer_hmac_secret,
         }
     }
 
@@ -36,6 +39,7 @@ impl<'a> LogoutFlowValidation<'a> {
             expected_recipient: None,
             now: None,
             clock_drifts,
+            peer_hmac_secret: None,
         }
     }
 }
@@ -168,6 +172,7 @@ fn parse_logout_request_inner(
             strict_xml_signature_profile: self_setting.strict_xml_signature_profile,
             from_issuer: from_meta.get_entity_id(),
             signing_certs: &signing_certs,
+            hmac_secret: validation.peer_hmac_secret,
             decrypt_key: None,
             decrypt_key_pass: None,
             allow_insecure_software_rsa_key_transport_decryption: false,
@@ -203,6 +208,7 @@ fn parse_logout_response_inner(
             strict_xml_signature_profile: self_setting.strict_xml_signature_profile,
             from_issuer: from_meta.get_entity_id(),
             signing_certs: &signing_certs,
+            hmac_secret: validation.peer_hmac_secret,
             decrypt_key: None,
             decrypt_key_pass: None,
             allow_insecure_software_rsa_key_transport_decryption: false,

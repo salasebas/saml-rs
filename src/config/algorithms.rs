@@ -5,8 +5,8 @@ use crate::constants::{
 
 /// XML signature algorithm used for outgoing signed messages.
 ///
-/// [`Self::RsaSha256`] is the default. [`Self::RsaSha1`] and [`Self::DsaSha1`]
-/// use a SHA-1 digest and are used only when selected.
+/// [`Self::RsaSha256`] is the default. [`Self::RsaSha1`], [`Self::DsaSha1`],
+/// and [`Self::HmacSha1`] use a SHA-1 digest and are used only when selected.
 ///
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
@@ -27,6 +27,11 @@ pub enum SignatureAlgorithm {
     ///
     /// Needs the RustCrypto provider and `crypto-legacy-algorithms`.
     DsaSha1,
+    /// HMAC-SHA1, signed with [`crate::Credentials::hmac_secret`].
+    ///
+    /// The verifier sets the same secret with `IdpDescriptor::with_hmac_secret`
+    /// or `SpDescriptor::with_hmac_secret`.
+    HmacSha1,
     /// Backend-specific signature algorithm URI.
     Custom(String),
 }
@@ -40,6 +45,7 @@ impl SignatureAlgorithm {
             Self::RsaSha512 => signature_algorithm::RSA_SHA512,
             Self::RsaSha1 => signature_algorithm::RSA_SHA1,
             Self::DsaSha1 => signature_algorithm::DSA_SHA1,
+            Self::HmacSha1 => signature_algorithm::HMAC_SHA1,
             Self::Custom(uri) => uri.as_str(),
         }
     }

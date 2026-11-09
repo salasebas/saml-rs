@@ -80,6 +80,10 @@ pub struct EntitySetting {
     pub private_key_pass: Option<String>,
     /// Signing certificate (PEM/base64).
     pub signing_cert: Option<String>,
+    /// Shared secret this entity signs with when `request_signature_algorithm`
+    /// is an HMAC algorithm, and that verifies this entity's HMAC signatures
+    /// when the setting describes a peer.
+    pub hmac_secret: Option<Vec<u8>>,
     /// Encryption certificate (PEM/base64).
     pub encrypt_cert: Option<String>,
     /// Decryption private key (PEM).
@@ -139,7 +143,7 @@ pub struct EntitySetting {
     pub transformation_algorithms: Vec<String>,
 }
 
-fn redacted_option(value: &Option<String>) -> Option<&'static str> {
+fn redacted_option<T>(value: &Option<T>) -> Option<&'static str> {
     value.as_ref().map(|_| "<redacted>")
 }
 
@@ -197,6 +201,7 @@ impl fmt::Debug for EntitySetting {
             .field("private_key", &redacted_option(&self.private_key))
             .field("private_key_pass", &redacted_option(&self.private_key_pass))
             .field("signing_cert", &redacted_option(&self.signing_cert))
+            .field("hmac_secret", &redacted_option(&self.hmac_secret))
             .field("encrypt_cert", &redacted_option(&self.encrypt_cert))
             .field("enc_private_key", &redacted_option(&self.enc_private_key))
             .field(
@@ -302,6 +307,7 @@ impl Default for EntitySetting {
             private_key: None,
             private_key_pass: None,
             signing_cert: None,
+            hmac_secret: None,
             encrypt_cert: None,
             enc_private_key: None,
             enc_private_key_pass: None,

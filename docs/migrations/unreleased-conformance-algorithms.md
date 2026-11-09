@@ -12,7 +12,7 @@ RSA-OAEP, unless the caller selects another algorithm.
 Who must change: code with an exhaustive `match` on `SignatureAlgorithm` or
 `TransformAlgorithm`.
 
-`SignatureAlgorithm` gains `RsaSha1` and `DsaSha1`. `TransformAlgorithm`
+`SignatureAlgorithm` gains `RsaSha1`, `DsaSha1`, and `HmacSha1`. `TransformAlgorithm`
 gains `CanonicalXml`, which is Canonical XML 1.0 without comments. Add an arm
 for each:
 
@@ -26,6 +26,7 @@ fn label(algorithm: &SignatureAlgorithm) -> &str {
         SignatureAlgorithm::RsaSha512 => "rsa-sha512",
         SignatureAlgorithm::RsaSha1 => "rsa-sha1",
         SignatureAlgorithm::DsaSha1 => "dsa-sha1",
+        SignatureAlgorithm::HmacSha1 => "hmac-sha1",
         SignatureAlgorithm::Custom(uri) => uri,
     }
 }
@@ -36,6 +37,26 @@ select `SignatureAlgorithm::RsaSha1` instead. Both write the same XML.
 `SignatureAlgorithm::Custom` with the DSA-SHA1 URI used to fail with
 `SamlError::Crypto` because no digest was known for it. It now signs with a
 SHA-1 digest.
+
+## Add the HMAC secret field to struct literals
+
+Who must change: code that builds `Credentials`, the raw `EntitySetting`, or
+the raw `FlowOptions` with a struct literal that lists every field.
+
+Each gains `hmac_secret`. On `Credentials` it is an `Option<HmacSecret>`, the
+secret `SignatureAlgorithm::HmacSha1` signs with. On `EntitySetting` it is the
+same secret as bytes. On `FlowOptions` it is the peer's secret that verifies
+an HMAC signature. Set it to `None`, or end the literal with `..Default::default()`:
+
+```rust
+use saml_rs::{CertificatePem, Credentials, PrivateKeyPem};
+
+let credentials = Credentials {
+    signing_key: Some(PrivateKeyPem::new("-----BEGIN PRIVATE KEY-----...")),
+    signing_certificate: Some(CertificatePem::new("-----BEGIN CERTIFICATE-----...")),
+    ..Credentials::default()
+};
+```
 
 ## Expect the identity provider's own reference transforms on a response
 

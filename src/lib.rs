@@ -410,12 +410,12 @@ pub use config::{
     AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,
     AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
-    DigestAlgorithm, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig,
-    IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy,
-    MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
-    ResponseSignaturePolicy, SignatureAlgorithm, SpConfig, SpConfigBuilder, SpDescriptor,
-    SpMetadataConfig, SpValidationPolicy, TemplatePolicy, TransformAlgorithm, XmlEncryptionPolicy,
-    XmlPolicy, XmlSignatureProfile,
+    DigestAlgorithm, EntityId, HmacSecret, IdpConfig, IdpConfigBuilder, IdpDescriptor,
+    IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
+    LogoutSignaturePolicy, MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase,
+    PrivateKeyPem, ResponseSignaturePolicy, SignatureAlgorithm, SpConfig, SpConfigBuilder,
+    SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy, TransformAlgorithm,
+    XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(any(
     feature = "crypto-rustcrypto",
