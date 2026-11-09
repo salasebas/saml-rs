@@ -1,4 +1,4 @@
-use crate::config::SpDescriptor;
+use crate::config::{IdentifierEncryptionPolicy, SpDescriptor};
 use crate::model::{NameId, Received, SamlValidationContext, Status};
 use crate::name_id_management::{
     self, LocalIdentityProvider, ManageNameIdRequest, NameIdChange, ReceivedNameIdManagement,
@@ -22,6 +22,12 @@ impl Saml<Idp> {
     /// identifier without `NameQualifier` or `SPNameQualifier` is sent with
     /// this identity provider and the service provider as those qualifiers.
     ///
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`] sends the
+    /// identifier as `EncryptedID`, and a new value as `NewEncryptedID`, for
+    /// the first encryption certificate in the service provider's metadata.
+    /// [`IdentifierEncryptionPolicy::PlaintextIdentifiers`] sends `NameID`
+    /// and `NewID`.
+    ///
     /// To end the principal's sessions before [`NameIdChange::Terminate`],
     /// send `LogoutRequest` first: a `LogoutRequest` must not follow the
     /// termination.
@@ -37,12 +43,17 @@ impl Saml<Idp> {
     /// metadata has none. Returns [`SamlError::SoapChannelProtection`] when
     /// `channel` does not authenticate both parties and protect integrity.
     /// Returns [`SamlError::Invalid`] when a persistent or transient new value
-    /// is longer than 256 characters.
+    /// is longer than 256 characters. With
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`], returns
+    /// [`SamlError::MissingMetadata`] when the service provider publishes no
+    /// encryption certificate.
     ///
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{NameId, NameIdChange, Saml, SoapChannel, SpDescriptor};
+    /// use saml_rs::{
+    ///     IdentifierEncryptionPolicy, NameId, NameIdChange, Saml, SoapChannel, SpDescriptor,
+    /// };
     ///
     /// # fn change(
     /// #     idp: &Saml<saml_rs::Idp>,
@@ -54,6 +65,7 @@ impl Saml<Idp> {
     ///     sp,
     ///     &current,
     ///     &NameIdChange::NewId("new-value".into()),
+    ///     IdentifierEncryptionPolicy::PlaintextIdentifiers,
     ///     SoapChannel::mutually_authenticated_confidential(),
     /// )?;
     /// let envelope = started.request().envelope();
@@ -66,6 +78,7 @@ impl Saml<Idp> {
         sp: &SpDescriptor,
         name_id: &NameId,
         change: &NameIdChange,
+        identifier_encryption: IdentifierEncryptionPolicy,
         channel: SoapChannel,
     ) -> Result<StartedNameIdManagement, SamlError> {
         name_id_management::start(
@@ -73,6 +86,7 @@ impl Saml<Idp> {
             sp,
             name_id,
             change,
+            identifier_encryption,
             channel,
         )
     }
@@ -180,7 +194,7 @@ impl Saml<Idp> {
                 .get_entity_id()
                 .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?,
             metadata: &idp.metadata,
-            default_name_id_format: idp.setting.default_name_id_format(),
+            setting: &idp.setting,
         })
     }
 }

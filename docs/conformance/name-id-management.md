@@ -21,7 +21,7 @@ record does not claim the IdP or SP operational mode.
 
 Normative text is SAML Core 2.0 §§3.2 and 3.6, Profiles 2.0 §4.5, Bindings 2.0
 §§3.2 and 3.4, and Metadata 2.0 §2.4.2, as corrected by Approved Errata 05.
-Errata that change this flow are E8, E11, E12, E14, E19, and E55. Schema
+Errata that change this flow are E8, E11, E12, E14, E19, E43, and E55. Schema
 citations are the OASIS protocol and metadata schemas.
 
 For SOAP, the deployment POSTs the envelope. TLS, HTTP authentication, and an
@@ -94,7 +94,7 @@ and 3.6.3, Profiles §4.5.3.2 and §4.5.4.1.
 | `Issuer` is present, equals the service provider, and omits `Format` or sets it to `entity` | Responder | Inbound ManageNameIDRequest | Library policy. Profiles §4.5.4.1 requires the requester to send that `Issuer` and does not require the responder to reject another request. The looser rule cannot be applied because the responder ties the change to the service provider by that `Issuer` together with `SoapChannel`. A missing or different `Issuer` is `SamlError::IssuerMismatch`. A second `Issuer` is malformed |
 | A present `Destination` is the receiving endpoint | Responder | Inbound ManageNameIDRequest | Mandatory. Core §3.2.1: a request whose `Destination` is not the receiving location is discarded. The receiving location is this identity provider's SOAP `ManageNameIDService`. With more than one, `SamlValidationContext::with_recipient_endpoint` selects it. An absent `Destination` is accepted |
 | One `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate` | Responder | Inbound ManageNameIDRequest | Protocol schema `ManageNameIDRequestType`. Another element, a missing one, or a second one is malformed. `Issuer`, `ds:Signature`, and `Extensions` are not counted. `NameID` and `NewID` are `xs:string` content and `Terminate` is empty, so a child element, or text in `Terminate`, is malformed |
-| `EncryptedID` or `NewEncryptedID` is answered with an error status | Responder | Generate ManageNameIDResponse | Profiles §4.5.3.2 requires a response with an appropriate status. This identity provider does not decrypt either element. The response is `Responder` with `RequestUnsupported`, in `ReceivedNameIdManagement::Refused` with `NameIdManagementRefusal::EncryptedIdentifier`. Errata 05 E19 recommends a SAML status, not a SOAP fault, for a SAML-domain error |
+| `EncryptedID` and `NewEncryptedID` are decrypted | Responder | Inbound ManageNameIDRequest | Mandatory. Conformance §3.4. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid) |
 | The request `ID` is recorded for replay detection | Responder | Inbound ManageNameIDRequest | Library policy, active when the caller selects `ReplayPolicy::RequireCache`. The key is `ReplayKey::ManageNameIdRequestId`. A repeated `ID` is `SamlError::ReplayDetected` |
 | The `NameID` is returned as sent | Responder | Inbound ManageNameIDRequest | Core §3.6.3 makes the requester send the most recent identifier. `ManageNameIdRequest::name_id` carries the value, `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. A persistent identifier without its qualifiers is not rejected: the qualifier rule binds the requester |
 
@@ -130,7 +130,7 @@ Profiles §4.5.3.1 and §4.5.4.1, Bindings §3.4.
 | Send the user agent over TLS | Requester | Generate ManageNameIDRequest | Recommendation. Profiles §4.5.3.1. The peer endpoint must be `https`. `StartNameIdManagement::allow_http_name_id_management` relaxes that recommendation alone and leaves the request signed |
 | `RelayState` does not exceed 80 bytes and reveals as little as possible | Requester | Generate ManageNameIDRequest | Mandatory length, Bindings §3.4.3. The content is a recommendation, Profiles §4.5.3.1, and the caller chooses it with `StartNameIdManagement::relay_state` |
 | Send no `LogoutRequest` after a `ManageNameIDRequest` | Requester | Sequence of exchanges | Mandatory prohibition. Errata 05 E8. A logout, if intended, goes first. One call is one request, so the order belongs to the caller |
-| `EncryptedID` and `NewEncryptedID` | Requester | Generate ManageNameIDRequest | Optional. Core §3.6.3. Not implemented: the identifier is sent as `NameID` and the change as `NewID` |
+| `EncryptedID` and `NewEncryptedID` | Requester | Generate ManageNameIDRequest | Optional. Core §3.6.1. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid) |
 
 ## HTTP-Redirect: receiving a ManageNameIDRequest
 
@@ -145,7 +145,7 @@ Profiles §4.5.3.1 and §4.5.4.1, Bindings §3.4.
 | UTC `IssueInstant` | Responder | Inbound ManageNameIDRequest | Mandatory. Protocol schema; Core §1.3.3 |
 | One `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate` | Responder | Inbound ManageNameIDRequest | Mandatory. Protocol schema `ManageNameIDRequestType`, checked by the same reader as SOAP. Another count, another order, another element, a child element in `NameID` or `NewID`, or content in `Terminate` is `SamlError::ProtocolProfile` |
 | A `Version` other than `2.0` is answered with `VersionMismatch` | Responder | Generate ManageNameIDResponse | Core §3.2.2.2 and Profiles §4.5.3.2. The signature, `Issuer`, and `Destination` are verified first; then `ReceivedNameIdManagement::Refused` carries the signed answer, with `NameIdManagementRefusal::VersionMismatch`. Other HTTP-Redirect messages still reject another `Version` before authentication |
-| `EncryptedID` or `NewEncryptedID` is answered with an error status | Responder | Generate ManageNameIDResponse | Profiles §4.5.3.2 requires a response with an appropriate status. Neither element is decrypted. `ReceivedNameIdManagement::Refused` carries the signed browser action to the requester, with `Responder` and `RequestUnsupported`, under the same `https` rule as a response. With an `http` peer endpoint the refusal cannot be built and the call returns that error: there is no relaxation for an automatic answer |
+| `EncryptedID` and `NewEncryptedID` are decrypted | Responder | Inbound ManageNameIDRequest | Mandatory. Conformance §3.4. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid). The refusal for one that does not decrypt is signed and goes to the requester's `ManageNameIDService` |
 | The request ID is stored for replay detection | Responder | Inbound ManageNameIDRequest | Library policy, active with `ReplayPolicy::RequireCache`. The key is `ReplayKey::ManageNameIdRequestId` |
 
 ## HTTP-Redirect: ManageNameIDResponse
@@ -163,7 +163,7 @@ Profiles §4.5.3.2 and §4.5.4.2, Bindings §3.4.
 | Sign the message | Responder | Generate ManageNameIDResponse | Mandatory for this binding. Profiles §4.5.3.2. Always signed |
 | Send the response to `ResponseLocation` when present, otherwise `Location` | Responder | Generate ManageNameIDResponse | Metadata §2.2.2. The peer's first HTTP-Redirect `ManageNameIDService` supplies it, and it is `Destination` |
 | Return the exact `RelayState` received with the request | Responder | Generate ManageNameIDResponse | Mandatory. Bindings §3.4.3. The response always echoes it. A responder may add `RelayState` to a request that had none; that is not implemented |
-| Send the user agent over TLS | Responder | Generate ManageNameIDResponse | Recommendation. Profiles §4.5.3.2. Same `https` rule, relaxed alone by `RespondNameIdManagement::allow_http_name_id_management` |
+| Send the user agent over TLS | Responder | Generate ManageNameIDResponse | Recommendation. Profiles §4.5.3.2. Same `https` rule, relaxed alone by `RespondNameIdManagement::allow_http_name_id_management`, and for the automatic refusal by `ReceiveNameIdManagement::allow_http_name_id_management` |
 
 ## HTTP-Redirect: receiving a ManageNameIDResponse
 
@@ -179,6 +179,23 @@ Profiles §4.5.3.2 and §4.5.4.2, Bindings §3.4.
 | One `Status` with one `StatusCode` | Requester | Inbound ManageNameIDResponse | Protocol schema `StatusResponseType` and `StatusType`. A second `Status` or a second direct `StatusCode` is `SamlError::ProtocolProfile`, so a later error status is never hidden behind a first `Success` |
 | A status other than `Success` is returned as an error | Requester | Inbound ManageNameIDResponse | `SamlError::StatusNotSuccess` with both codes. Library policy: the status is read only after the signature, `Issuer`, `InResponseTo`, and `Destination` checks pass, so an unauthenticated or unrelated error response returns that check's error. Web SSO still reports the status first |
 | The response ID is stored for replay detection | Requester | Inbound ManageNameIDResponse | Library policy, active with `ReplayPolicy::RequireCache`. The key is `ReplayKey::ManageNameIdResponseId` |
+
+## EncryptedID and NewEncryptedID
+
+Both bindings, at the identity provider and the service provider. Core
+§3.6.1, Conformance Requirements §3.4, and Profiles §4.5.5, as corrected by
+Approved Errata 05 E12, E19, and E43.
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| Send `EncryptedID` in place of `NameID`, and `NewEncryptedID` in place of `NewID` | Requester | Generate ManageNameIDRequest | Optional. Core §3.6.1 allows either form. Conformance §3.4 requires the capability, which stays off until the caller selects `IdentifierEncryptionPolicy::EncryptIdentifiers` for one request: the `identifier_encryption` argument of `start_name_id_management`, or `StartNameIdManagement::identifier_encryption` for `start_name_id_management_redirect`, as `StartSlo::identifier_encryption` does for logout. `XmlEncryptionPolicy::identifiers` does not select it. `Terminate` is not encrypted. Unselected, the request carries `NameID` and `NewID` |
+| `NewEncryptedID` carries a `NewID` with the new value only | Requester | Generate ManageNameIDRequest | Mandatory. Errata 05 E12 |
+| Encrypt for the responder | Requester | Generate ManageNameIDRequest | Optional. Profiles §4.5.5: the requester can use the responder's `KeyDescriptor` with `use="encryption"`. The first encryption certificate the peer's metadata publishes is the recipient. None is `SamlError::MissingMetadata`. `AlgorithmPolicy::data_encryption` and `key_encryption` choose the algorithms. The encrypted element is its inclusive canonical form, and the `EncryptedKey` is in the `ds:KeyInfo` of `EncryptedData` |
+| Decrypt `EncryptedID` and `NewEncryptedID` | Responder | Inbound ManageNameIDRequest | Mandatory. Conformance §3.4: every operational mode processes the encrypted form wherever it processes `NameID`, and Table 2 makes this protocol such a context. Decryption does not depend on `XmlEncryptionPolicy::identifiers`. The key is the receiver's `Credentials::decryption_key`. It runs after the request is authenticated: by `SoapChannel` over SOAP, by the signature over HTTP-Redirect. `ManageNameIdRequest::name_id` and `ManageNameIdRequest::change` return the plaintext |
+| Find the `EncryptedKey` | Responder | Inbound ManageNameIDRequest | Core §6.2 as replaced by Errata 05 E43. A key embedded in `EncryptedData`, or beside it and named by a `ds:RetrievalMethod`, is resolved, as for the assertion `EncryptedID` |
+| The `EncryptedID` plaintext is one `NameID`, and the `NewEncryptedID` plaintext one `NewID`, each with text content only | Responder | Inbound ManageNameIDRequest | Library policy. Core §3.6.1 and Errata 05 E12 require that content of the requester. Other content is treated as an element that does not decrypt |
+| A plaintext `NameID` or `NewID` is accepted | Responder | Inbound ManageNameIDRequest | No receiver rule. Core §3.6.1 allows either form, whatever this provider's `XmlEncryptionPolicy` |
+| An element that does not decrypt is answered with an error status | Responder | Generate ManageNameIDResponse | Core §3.6.2 requires an answer. Errata 05 E19 recommends a SAML status, not a SOAP fault, for a SAML-domain error. The codes are library policy, as the Shibboleth SP answers: `EncryptedID` gets `Requester` with `UnknownPrincipal`, which Core §3.6.3 names for an unrecognized principal, and `NewEncryptedID` gets `Requester`. `ReceivedNameIdManagement::Refused` carries the response, with `NameIdManagementRefusal::UndecryptableIdentifier` or `UndecryptableNewIdentifier`. A missing decryption key, a key that does not match, an unsupported algorithm, and RustCrypto RSA key transport without `XmlEncryptionPolicy::allow_insecure_software_rsa_key_transport_decryption` are such elements. `RefusedNameIdManagement::decryption_error` returns that cause to the caller; the response carries only the status |
 
 ## After the exchange
 
@@ -196,7 +213,6 @@ Profiles §4.5.3.2 and §4.5.4.2, Bindings §3.4.
 
 - Name identifier management over HTTP-POST and HTTP-Artifact.
 - SOAP name identifier management at the service provider.
-- Decrypting `EncryptedID` and `NewEncryptedID`, or generating them (#256).
 - Signing or verifying `ManageNameIDRequest` and `ManageNameIDResponse` over
   SOAP.
 - Name identifier mapping.

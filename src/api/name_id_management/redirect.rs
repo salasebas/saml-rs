@@ -6,9 +6,7 @@ use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
 use crate::metadata::{EndpointDirection, Metadata};
-use crate::model::{
-    MessageId, NameId, Received, ReplayKey, SamlValidationContext, Status, SubordinateStatusCode,
-};
+use crate::model::{MessageId, NameId, Received, ReplayKey, SamlValidationContext, Status};
 use crate::name_id_management::redirect::{
     create_request, create_response, parse_request, parse_response, request_from_flow,
     response_id_from_flow, InboundValidation, ParsedRequest,
@@ -23,7 +21,10 @@ use super::super::raw_mapping::{
     ensure_entity_id, ensure_relay_state, input_binding, raw_idp_descriptor, raw_sp_descriptor,
     relay_state_from_input,
 };
-use super::super::{Idp, RespondNameIdManagement, Saml, SamlError, Sp, StartNameIdManagement};
+use super::super::{
+    Idp, ReceiveNameIdManagement, RespondNameIdManagement, Saml, SamlError, Sp,
+    StartNameIdManagement,
+};
 
 /// Answer to a `ManageNameIDRequest` received over HTTP-Redirect.
 pub type ReceivedNameIdManagementRedirect =
@@ -100,9 +101,12 @@ impl Saml<Sp> {
     /// A [`ReceivedNameIdManagement::Request`] is ready to apply. Answer it
     /// with [`Self::respond_name_id_management_redirect`]. After a
     /// [`NameIdChange::NewId`], expect the new value as the `NameID` content
-    /// of later assertions. A [`ReceivedNameIdManagement::Refused`] already
-    /// carries the browser action that answers the request: a request with
-    /// `EncryptedID` or `NewEncryptedID`, or a `Version` other than `2.0`.
+    /// of later assertions. An `EncryptedID` or `NewEncryptedID` is decrypted
+    /// with this service provider's decryption key. A
+    /// [`ReceivedNameIdManagement::Refused`] already carries the browser
+    /// action that answers the request: one of those elements does not
+    /// decrypt, or the `Version` is not `2.0`. That action goes to the
+    /// identity provider's `ManageNameIDService` under `options`.
     ///
     /// # Errors
     ///
@@ -112,11 +116,16 @@ impl Saml<Sp> {
     /// receiving `ManageNameIDService`, this service provider publishes no
     /// HTTP-Redirect `ManageNameIDService` or several without
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
-    /// malformed, or replay validation detects a duplicate.
+    /// malformed, or replay validation detects a duplicate. Returns
+    /// [`SamlError::ProtocolProfile`] when a refused request would be answered
+    /// at an `http` endpoint and
+    /// [`ReceiveNameIdManagement::allow_http_name_id_management`] is not
+    /// selected.
     pub fn receive_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
         input: BrowserInput<ManageNameIdRequest>,
+        options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
         let raw_idp = raw_idp_descriptor(idp)?;
@@ -124,6 +133,7 @@ impl Saml<Sp> {
             self.local(),
             Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
             input,
+            options,
             validation,
         )
     }
@@ -269,8 +279,10 @@ impl Saml<Idp> {
     /// with [`Self::respond_name_id_management_redirect`]. After a
     /// [`NameIdChange::NewId`], send that value as the identifier's
     /// `SPProvidedID`: [`Self::respond_sso`] writes it from
-    /// [`NameId::with_qualifiers`]. A [`ReceivedNameIdManagement::Refused`]
-    /// already carries the browser action that answers the request.
+    /// [`NameId::with_qualifiers`]. An `EncryptedID` or `NewEncryptedID` is
+    /// decrypted with this identity provider's decryption key. A
+    /// [`ReceivedNameIdManagement::Refused`] already carries the browser
+    /// action that answers the request.
     ///
     /// # Errors
     ///
@@ -282,8 +294,8 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     BrowserInput, ManageNameIdRequest, ReceivedNameIdManagement, ReplayPolicy,
-    ///     RespondNameIdManagement, Saml, SamlValidationContext, SpDescriptor,
+    ///     BrowserInput, ManageNameIdRequest, ReceiveNameIdManagement, ReceivedNameIdManagement,
+    ///     ReplayPolicy, RespondNameIdManagement, Saml, SamlValidationContext, SpDescriptor,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -295,7 +307,13 @@ impl Saml<Idp> {
     /// let validation =
     ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
     /// let input = BrowserInput::<ManageNameIdRequest>::redirect(raw_query);
-    /// let response = match idp.receive_name_id_management_redirect(sp, input, validation)? {
+    /// let received = idp.receive_name_id_management_redirect(
+    ///     sp,
+    ///     input,
+    ///     ReceiveNameIdManagement::redirect(),
+    ///     validation,
+    /// )?;
+    /// let response = match received {
     ///     ReceivedNameIdManagement::Request(request) => idp
     ///         .respond_name_id_management_redirect(sp, &request, RespondNameIdManagement::redirect())?,
     ///     ReceivedNameIdManagement::Refused(refused) => refused.response().clone(),
@@ -308,6 +326,7 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         input: BrowserInput<ManageNameIdRequest>,
+        options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
         let raw_sp = raw_sp_descriptor(sp)?;
@@ -315,6 +334,7 @@ impl Saml<Idp> {
             self.local(),
             Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
             input,
+            options,
             validation,
         )
     }
@@ -434,6 +454,7 @@ fn start(
     let id = generate_id();
     let context = create_request(
         local.setting,
+        peer.metadata,
         &RequestXml {
             id: &id,
             issuer: &issuer,
@@ -445,6 +466,7 @@ fn start(
             idp_entity_id,
             sp_entity_id,
         },
+        options.identifier_encryption,
         options.relay_state.as_deref(),
     )?;
     let outbound = Outbound::<ManageNameIdRequest>::try_from(context)?;
@@ -461,6 +483,7 @@ fn receive(
     local: Local<'_>,
     peer: Peer<'_>,
     input: BrowserInput<ManageNameIdRequest>,
+    options: ReceiveNameIdManagement,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
     require_redirect_input(&input)?;
@@ -479,12 +502,10 @@ fn receive(
             clock_drifts: validation.clock_skew().as_millis(),
         },
     )?;
-    let parsed = request_from_flow(&flow, local.setting.xml_limits)?;
+    let parsed = request_from_flow(&flow, local.setting)?;
     let (id, issuer) = match &parsed {
         ParsedRequest::Plain(message) => (message.id().clone(), message.issuer().clone()),
-        ParsedRequest::Encrypted { id, issuer } | ParsedRequest::VersionMismatch { id, issuer } => {
-            (id.clone(), issuer.clone())
-        }
+        ParsedRequest::Refused { id, issuer, .. } => (id.clone(), issuer.clone()),
     };
     ensure_entity_id(&issuer, peer.entity_id)?;
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequestId(id.clone()))?;
@@ -492,21 +513,18 @@ fn receive(
         ParsedRequest::Plain(message) => Ok(ReceivedNameIdManagement::Request(Box::new(
             Received::new(message).with_relay_state(relay_state),
         ))),
-        ParsedRequest::Encrypted { .. } => refuse(
+        ParsedRequest::Refused {
+            reason,
+            decryption_error,
+            ..
+        } => refuse(
             local,
             &peer,
             &id,
             relay_state.as_deref(),
-            Status::responder().with_subordinate(SubordinateStatusCode::request_unsupported()),
-            NameIdManagementRefusal::EncryptedIdentifier,
-        ),
-        ParsedRequest::VersionMismatch { .. } => refuse(
-            local,
-            &peer,
-            &id,
-            relay_state.as_deref(),
-            Status::version_mismatch(),
-            NameIdManagementRefusal::VersionMismatch,
+            reason,
+            decryption_error,
+            options.allows_http(),
         ),
     }
 }
@@ -516,19 +534,20 @@ fn refuse(
     peer: &Peer<'_>,
     in_response_to: &MessageId,
     relay_state: Option<&str>,
-    status: Status,
     reason: NameIdManagementRefusal,
+    decryption_error: Option<SamlError>,
+    allows_http: bool,
 ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
     let response = response_outbound(
         local,
         peer,
         in_response_to.as_str(),
-        &status,
+        &reason.status(),
         relay_state,
-        RespondNameIdManagement::redirect(),
+        allows_http,
     )?;
     Ok(ReceivedNameIdManagement::Refused(
-        RefusedNameIdManagement::new(response, reason),
+        RefusedNameIdManagement::new(response, reason, decryption_error),
     ))
 }
 
@@ -546,7 +565,7 @@ fn respond(
         request.message().id().as_str(),
         &status,
         request.relay_state().as_deref(),
-        options,
+        options.allows_http(),
     )
 }
 
@@ -556,10 +575,10 @@ fn response_outbound(
     in_response_to: &str,
     status: &Status,
     relay_state: Option<&str>,
-    options: RespondNameIdManagement,
+    allows_http: bool,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
     let destination = peer_location(peer, EndpointDirection::Response)?;
-    if !options.allows_http() {
+    if !allows_http {
         require_https(&destination)?;
     }
     let context = create_response(
