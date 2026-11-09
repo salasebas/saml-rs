@@ -1383,6 +1383,63 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
     Ok(())
 }
 
+/// Move the `EncryptedKey` from the `KeyInfo` of `EncryptedData` to after
+/// `EncryptedData`, named by a `RetrievalMethod`: the SAML Core Errata 05 E43
+/// placement that OpenSAML's `Encrypter` writes by default.
+#[cfg(not(feature = "crypto-fips"))]
+fn with_peer_encrypted_key(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
+    const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
+    let start = xml
+        .find("<xenc:EncryptedKey>")
+        .ok_or("missing EncryptedKey")?;
+    let key_end_tag = "</xenc:EncryptedKey>";
+    let end = xml.find(key_end_tag).ok_or("missing EncryptedKey end")? + key_end_tag.len();
+    let key = xml[start..end].replacen(
+        "<xenc:EncryptedKey>",
+        &format!("<xenc:EncryptedKey xmlns:xenc=\"{ENC}\" Id=\"_peer_key\">"),
+        1,
+    );
+    let retrieval = format!("<ds:RetrievalMethod URI=\"#_peer_key\" Type=\"{ENC}EncryptedKey\"/>");
+    let data_end_tag = "</xenc:EncryptedData>";
+    let data_end = xml.find(data_end_tag).ok_or("missing EncryptedData end")? + data_end_tag.len();
+    Ok(format!(
+        "{}{retrieval}{}{key}{}",
+        &xml[..start],
+        &xml[end..data_end],
+        &xml[data_end..]
+    ))
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+#[test]
+fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(encrypted_sp_config()?)?;
+    let idp = Saml::idp(encrypted_idp_config()?)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        validation(),
+    )?;
+    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let fields = post_fields(&response)?;
+    let peer = resign_response(&with_peer_encrypted_key(&response_xml_from_fields(
+        &fields,
+    )?)?)?;
+    assert!(peer.contains("</xenc:EncryptedData><xenc:EncryptedKey"));
+
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(response_fields_with_xml(fields, &peer)?),
+        validation(),
+    )?;
+    assert_eq!(session.name_id().value(), "alice@example.com");
+    Ok(())
+}
+
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn typed_sp_rejects_explicit_unsigned_encrypted_cbc() -> Result<(), Box<dyn std::error::Error>> {

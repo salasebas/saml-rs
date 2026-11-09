@@ -28,6 +28,7 @@ compatible additions.
 - [LogoutResponse status after authentication](unreleased-logout-response-status.md)
 - [Single Logout endpoints from the peer's role](unreleased-slo-role-endpoints.md)
 - [RSA-v1.5 key-transport decryption](unreleased-rsa15-key-transport-decryption.md)
+- [EncryptedAssertion content](unreleased-encrypted-assertion-content.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
