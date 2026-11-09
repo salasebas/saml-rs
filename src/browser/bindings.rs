@@ -133,3 +133,29 @@ impl TryFrom<Binding> for LogoutBinding {
         }
     }
 }
+
+/// Name identifier management bindings supported by the typed API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NameIdManagementBinding {
+    /// HTTP-Redirect binding, for the identity provider and the service
+    /// provider.
+    Redirect,
+    /// SOAP binding, for the identity provider only.
+    Soap,
+}
+
+impl NameIdManagementBinding {
+    /// Convert to the raw compatibility binding.
+    pub fn as_binding(self) -> Binding {
+        match self {
+            Self::Redirect => Binding::Redirect,
+            Self::Soap => Binding::Soap,
+        }
+    }
+}
+
+impl From<NameIdManagementBinding> for Binding {
+    fn from(value: NameIdManagementBinding) -> Self {
+        value.as_binding()
+    }
+}

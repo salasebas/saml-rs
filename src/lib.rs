@@ -310,8 +310,14 @@
 //! [`StartedNameIdManagement::finish`]. It answers a service provider's
 //! request with [`Saml<Idp>::receive_name_id_management`] and
 //! [`Saml<Idp>::respond_name_id_management`]. The service provider has no
-//! SOAP name identifier management. This does not claim the IdP or SP
-//! operational mode.
+//! SOAP name identifier management.
+//!
+//! Over HTTP-Redirect, both roles publish a `ManageNameIDService` and use
+//! `start_name_id_management_redirect`, `receive_name_id_management_redirect`,
+//! `respond_name_id_management_redirect`, and
+//! `finish_name_id_management_redirect`, for example
+//! [`Saml<Sp>::start_name_id_management_redirect`]. This does not claim the IdP
+//! or SP operational mode.
 //!
 //! # Unsupported profiles
 //!
@@ -319,13 +325,13 @@
 //! SSO over PAOS at the service-provider and identity-provider ends,
 //! metadata-driven SP/IdP setup, XML signature/encryption through `bergshamra`,
 //! Single Logout, artifact resolution over SOAP, and name identifier
-//! management over SOAP at the identity provider. The enhanced-client role
+//! management. The enhanced-client role
 //! is not a facade. It does not implement HTTP-Artifact delivery of an
 //! `<AuthnRequest>` or a logout message, SOAP profiles other than artifact
 //! resolution, Single Logout, name identifier management at the identity
 //! provider, and the identity-provider leg of Enhanced Client/Proxy SSO, SAML
-//! query protocols, name identifier management over HTTP-Redirect or at the
-//! service provider, name identifier mapping, or metadata federation. If you
+//! query protocols, SOAP name identifier management at the service provider,
+//! name identifier mapping, or metadata federation. If you
 //! need one of those profiles for a real
 //! interoperability target, please open an issue with the profile, binding,
 //! IdP/SP product, and a minimal expected flow so we can consider the
@@ -411,7 +417,8 @@ pub mod xml;
 pub use api::{
     ForceAuthn, HttpHeader, Idp, IsPassive, LogoutSigning, MessageDelivery, PaosAuthnRequest,
     PaosClientRequest, PaosHttpResponse, PaosSsoResponse, PendingPaosSso, PendingPaosSsoSnapshot,
-    RespondSlo, RespondSso, Saml, SamlError, SoapFault, Sp, StartPaosSso, StartSlo, StartSso,
+    ReceivedNameIdManagementRedirect, RespondNameIdManagement, RespondSlo, RespondSso, Saml,
+    SamlError, SoapFault, Sp, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
     StartedPaosSso, Unknown,
 };
 pub use artifact::{
@@ -420,8 +427,9 @@ pub use artifact::{
 };
 pub use browser::{
     AcsEndpoint, ArtifactDelivery, BrowserInput, DeliveredArtifact, EndpointUrl, FormField,
-    LogoutBinding, Outbound, Pending, PendingAuthnRequest, PendingLogoutRequest, PendingSnapshot,
-    PostForm, SloEndpoint, SsoEndpoint, SsoRequestBinding, SsoResponseBinding, Started,
+    LogoutBinding, NameIdManagementBinding, Outbound, Pending, PendingAuthnRequest,
+    PendingLogoutRequest, PendingManageNameIdRequest, PendingSnapshot, PostForm, SloEndpoint,
+    SsoEndpoint, SsoRequestBinding, SsoResponseBinding, Started,
 };
 pub use config::{
     AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,
@@ -465,8 +473,8 @@ pub use model::{
     TopLevelStatusCode, VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
-    ManageNameIdRequest, NameIdChange, NameIdManagementRefusal, ReceivedNameIdManagement,
-    RefusedNameIdManagement, StartedNameIdManagement,
+    ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementRefusal,
+    ReceivedNameIdManagement, RefusedNameIdManagement, StartedNameIdManagement,
 };
 pub use soap::{
     MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,

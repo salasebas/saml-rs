@@ -6,6 +6,10 @@ use crate::name_id_management::{
 };
 use crate::soap::{SoapChannel, SoapResponse};
 
+mod redirect;
+
+pub use redirect::ReceivedNameIdManagementRedirect;
+
 use super::{Idp, Saml, SamlError};
 
 impl Saml<Idp> {

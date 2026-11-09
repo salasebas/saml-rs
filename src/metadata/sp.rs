@@ -66,7 +66,7 @@ impl SpMetadata {
                 "manageNameIDService",
                 &["EntityDescriptor", "SPSSODescriptor", "ManageNameIDService"],
             )
-            .attrs(&["Binding", "Location"]),
+            .attrs(&["Binding", "Location", "ResponseLocation"]),
             ExtractorField::new(
                 "assertionConsumerService",
                 &[

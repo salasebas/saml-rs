@@ -13,7 +13,7 @@ use crate::error::SamlError;
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
-pub(super) fn sign_logout(
+pub(crate) fn sign_browser_message(
     setting: &EntitySetting,
     binding: Binding,
     xml: &str,
@@ -86,7 +86,7 @@ pub(super) fn sign_logout(
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 )))]
-pub(super) fn sign_logout(
+pub(crate) fn sign_browser_message(
     _setting: &EntitySetting,
     _binding: Binding,
     _xml: &str,

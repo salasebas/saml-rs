@@ -140,11 +140,11 @@ let session = sp_saml.finish_sso(
 | peer `ServiceProvider` | `SpDescriptor` | Peer SP metadata and trust state. |
 | peer `IdentityProvider` | `IdpDescriptor` | Peer IdP metadata and trust state. |
 | `EntitySetting` | `SpConfig`, `IdpConfig` | Typed config with redacted credentials. |
-| raw `Binding` | `SsoRequestBinding`, `SsoResponseBinding`, `LogoutBinding` | Operation-specific binding sets. |
-| `Endpoint` | `SsoEndpoint`, `AcsEndpoint`, `SloEndpoint` | Endpoint role matters. |
+| raw `Binding` | `SsoRequestBinding`, `SsoResponseBinding`, `LogoutBinding`, `NameIdManagementBinding` | Operation-specific binding sets. |
+| `Endpoint` | `SsoEndpoint`, `AcsEndpoint`, `SloEndpoint`, `ManageNameIdService` | Endpoint role matters. |
 | `BindingContext` | `Outbound<Message>` | Binding-specific browser output. |
 | `HttpRequest` | `BrowserInput<Message>` | Typed inbound browser input. |
-| bare request ID string | `PendingAuthnRequest`, `PendingLogoutRequest`, `PendingSnapshot<_>` | Correlation state. |
+| bare request ID string | `PendingAuthnRequest`, `PendingLogoutRequest`, `PendingManageNameIdRequest`, `PendingSnapshot<_>` | Correlation state. |
 | `FlowResult` | `SsoSession`, `Received<_>`, `LogoutCompleted` | Typed results with raw escape hatches. |
 | `FlowResult.extract.get_str(...)` | typed accessors | String keys become internal. |
 

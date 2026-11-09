@@ -39,14 +39,16 @@ under discussion.
 - HTTP-Artifact delivery of an `AuthnRequest` or a logout message, SOAP
   profiles other than artifact resolution, name identifier management at the
   identity provider, and the identity-provider leg of Enhanced Client/Proxy
-  SSO, the enhanced-client role, SAML queries, name identifier management over
-  HTTP-Redirect or at the service provider, name identifier mapping, and
-  metadata federation stay outside the high-level typed API. SOAP artifact
+  SSO, the enhanced-client role, SAML queries, SOAP name identifier
+  management at the service provider, name identifier mapping, and metadata
+  federation stay outside the high-level typed API. SOAP artifact
   resolution is `issue_artifact`, `answer_artifact_resolve`, and
   `resolve_artifact`. A Web SSO response delivered as an HTTP-Artifact is
   `respond_sso_artifact` and `initiate_sso_artifact`. SOAP name identifier
   management is `start_name_id_management`, `receive_name_id_management`, and
-  `respond_name_id_management` on `Saml<Idp>`.
+  `respond_name_id_management` on `Saml<Idp>`. HTTP-Redirect name identifier
+  management is the `_redirect` counterparts plus
+  `finish_name_id_management_redirect` on `Saml<Idp>` and `Saml<Sp>`.
 
 ## Shape of an SP round trip
 

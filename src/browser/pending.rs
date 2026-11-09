@@ -1,6 +1,8 @@
 use core::marker::PhantomData;
 
-use super::bindings::{LogoutBinding, SsoRequestBinding, SsoResponseBinding};
+use super::bindings::{
+    LogoutBinding, NameIdManagementBinding, SsoRequestBinding, SsoResponseBinding,
+};
 use super::endpoints::AcsEndpoint;
 use super::outbound::Outbound;
 use crate::config::EntityId;
@@ -9,6 +11,7 @@ use crate::error::SamlError;
 use crate::model::{
     AuthnRequest, EndpointUrl, LogoutRequest, MessageId, RelayStateParam, SamlInstant,
 };
+use crate::name_id_management::ManageNameIdRequest;
 
 mod sealed {
     pub trait Sealed {}
@@ -41,6 +44,13 @@ pub struct LogoutPendingDetails {
     binding: LogoutBinding,
 }
 
+/// Protocol-specific pending ManageNameIDRequest details.
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManageNameIdPendingDetails {
+    binding: NameIdManagementBinding,
+}
+
 impl sealed::Sealed for AuthnRequest {}
 
 impl PendingMessage for AuthnRequest {
@@ -55,6 +65,14 @@ impl PendingMessage for LogoutRequest {
     type Details = LogoutPendingDetails;
     type RequestBinding = LogoutBinding;
     type ResponseBinding = LogoutBinding;
+}
+
+impl sealed::Sealed for ManageNameIdRequest {}
+
+impl PendingMessage for ManageNameIdRequest {
+    type Details = ManageNameIdPendingDetails;
+    type RequestBinding = NameIdManagementBinding;
+    type ResponseBinding = NameIdManagementBinding;
 }
 
 /// Persistable correlation snapshot for a pending SAML message.
@@ -187,6 +205,50 @@ impl PendingSnapshot<LogoutRequest> {
     }
 }
 
+impl PendingSnapshot<ManageNameIdRequest> {
+    /// Build a ManageNameIDRequest snapshot from persistence fields.
+    ///
+    /// ACS fields are AuthnRequest-only and are left empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use saml_rs::{
+    ///     ManageNameIdRequest, NameIdManagementBinding, PendingSnapshot, RelayStateParam,
+    /// };
+    ///
+    /// let snapshot = PendingSnapshot::<ManageNameIdRequest>::manage_name_id_request(
+    ///     "_manage123",
+    ///     RelayStateParam::absent(),
+    ///     "https://idp.example.com/metadata",
+    ///     NameIdManagementBinding::Redirect,
+    /// );
+    ///
+    /// assert_eq!(snapshot.expected_binding, "redirect");
+    /// ```
+    pub fn manage_name_id_request(
+        id: impl Into<String>,
+        relay_state: RelayStateParam,
+        peer_entity_id: impl Into<String>,
+        binding: NameIdManagementBinding,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            relay_state,
+            peer_entity_id: peer_entity_id.into(),
+            expected_binding: binding.as_binding().short_name().to_string(),
+            request_binding: Some(binding.as_binding().short_name().to_string()),
+            acs_url: String::new(),
+            acs_binding: String::new(),
+            acs_index: None,
+            acs_is_default: false,
+            issued_at: None,
+            expires_at: None,
+            _message: PhantomData,
+        }
+    }
+}
+
 /// Pending SAML message correlation state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pending<Message: PendingMessage> {
@@ -204,6 +266,9 @@ pub type PendingAuthnRequest = Pending<AuthnRequest>;
 
 /// Pending LogoutRequest correlation state.
 pub type PendingLogoutRequest = Pending<LogoutRequest>;
+
+/// Pending ManageNameIDRequest correlation state.
+pub type PendingManageNameIdRequest = Pending<ManageNameIdRequest>;
 
 impl<Message: PendingMessage> Pending<Message> {
     fn validate_common(
@@ -511,6 +576,101 @@ impl Pending<LogoutRequest> {
     }
 }
 
+impl Pending<ManageNameIdRequest> {
+    /// Create pending HTTP-Redirect ManageNameIDRequest state without storing
+    /// keys or metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when RelayState or peer entity ID are
+    /// malformed, and [`SamlError::UnsupportedBinding`] for
+    /// [`NameIdManagementBinding::Soap`], which has no pending browser state.
+    pub fn try_new(
+        request_id: MessageId,
+        relay_state: RelayStateParam,
+        binding: NameIdManagementBinding,
+        peer_entity_id: EntityId,
+    ) -> Result<Self, SamlError> {
+        Self::validate_common(&relay_state, &peer_entity_id)?;
+        if binding == NameIdManagementBinding::Soap {
+            return Err(SamlError::UnsupportedBinding {
+                binding: Binding::Soap,
+            });
+        }
+        Ok(Self {
+            id: request_id,
+            relay_state,
+            details: ManageNameIdPendingDetails { binding },
+            peer_entity_id,
+            issued_at: None,
+            expires_at: None,
+            _message: PhantomData,
+        })
+    }
+
+    /// Reconstruct pending ManageNameIDRequest state from a snapshot.
+    ///
+    /// AuthnRequest-only ACS snapshot fields are ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] when any snapshot field is malformed or
+    /// inconsistent, or names a binding other than HTTP-Redirect.
+    pub fn from_snapshot(
+        snapshot: PendingSnapshot<ManageNameIdRequest>,
+    ) -> Result<Self, SamlError> {
+        snapshot.relay_state.validate()?;
+        Self::validate_snapshot_timing(&snapshot.issued_at, &snapshot.expires_at)?;
+        let request_id = MessageId::try_new(snapshot.id)?;
+        let peer_entity_id = EntityId::try_new(snapshot.peer_entity_id)?;
+        let response_binding =
+            name_id_management_binding_from_snapshot_value(&snapshot.expected_binding)?;
+        let request_binding = snapshot
+            .request_binding
+            .as_deref()
+            .map(name_id_management_binding_from_snapshot_value)
+            .transpose()?
+            .unwrap_or(response_binding);
+        if request_binding != response_binding {
+            return Err(SamlError::Invalid(
+                "name identifier management request and response bindings must match".into(),
+            ));
+        }
+        let mut pending = Self::try_new(
+            request_id,
+            snapshot.relay_state,
+            response_binding,
+            peer_entity_id,
+        )?;
+        pending.issued_at = snapshot.issued_at;
+        pending.expires_at = snapshot.expires_at;
+        Ok(pending)
+    }
+
+    /// Build a persistable snapshot.
+    pub fn snapshot(&self) -> PendingSnapshot<ManageNameIdRequest> {
+        let mut snapshot = PendingSnapshot::manage_name_id_request(
+            self.id.as_str(),
+            self.relay_state.clone(),
+            self.peer_entity_id.as_str(),
+            self.details.binding,
+        );
+        snapshot.issued_at = self.issued_at.clone();
+        snapshot.expires_at = self.expires_at.clone();
+        snapshot
+    }
+
+    /// ManageNameIDRequest binding selected for dispatch.
+    pub fn request_binding(&self) -> NameIdManagementBinding {
+        self.details.binding
+    }
+
+    /// Expected ManageNameIDResponse binding.
+    pub fn response_binding(&self) -> NameIdManagementBinding {
+        self.details.binding
+    }
+}
+
 fn sso_response_binding_from_snapshot_value(value: &str) -> Result<SsoResponseBinding, SamlError> {
     let binding = Binding::from_short_name(value)
         .or_else(|| Binding::from_urn(value))
@@ -530,6 +690,20 @@ fn logout_binding_from_snapshot_value(value: &str) -> Result<LogoutBinding, Saml
         .or_else(|| Binding::from_urn(value))
         .ok_or(SamlError::UndefinedBinding)?;
     LogoutBinding::try_from(binding)
+}
+
+fn name_id_management_binding_from_snapshot_value(
+    value: &str,
+) -> Result<NameIdManagementBinding, SamlError> {
+    let binding = Binding::from_short_name(value)
+        .or_else(|| Binding::from_urn(value))
+        .ok_or(SamlError::UndefinedBinding)?;
+    match binding {
+        Binding::Redirect => Ok(NameIdManagementBinding::Redirect),
+        Binding::Post | Binding::SimpleSign | Binding::Artifact | Binding::Soap => {
+            Err(SamlError::UnsupportedBinding { binding })
+        }
+    }
 }
 
 /// Started browser flow with pending state and outbound browser action.

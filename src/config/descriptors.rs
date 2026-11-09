@@ -1,7 +1,7 @@
 use core::str::FromStr;
 use std::collections::HashSet;
 
-use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
+use crate::browser::{AcsEndpoint, NameIdManagementBinding, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
 use crate::metadata::{IdpMetadata, SpMetadata};
 use crate::model::EndpointUrl;
@@ -30,25 +30,49 @@ impl ArtifactResolutionService {
     }
 }
 
-/// SOAP `ManageNameIDService` published by an identity provider.
+/// `ManageNameIDService` published by an identity or service provider.
 ///
-/// Publishing it turns on name identifier management for this identity
-/// provider. Without it, the identity provider neither sends nor accepts
-/// `ManageNameIDRequest`.
+/// Publishing one turns on name identifier management for that binding.
+/// Without it, the provider neither sends nor accepts `ManageNameIDRequest`
+/// on that binding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManageNameIdService {
+    binding: NameIdManagementBinding,
     location: EndpointUrl,
 }
 
 impl ManageNameIdService {
     /// Publish a SOAP name identifier management endpoint.
+    ///
+    /// Only an identity provider publishes it. A service provider
+    /// configuration with it does not build.
     pub fn soap(location: EndpointUrl) -> Self {
-        Self { location }
+        Self {
+            binding: NameIdManagementBinding::Soap,
+            location,
+        }
+    }
+
+    /// Publish an HTTP-Redirect name identifier management endpoint.
+    pub fn redirect(location: EndpointUrl) -> Self {
+        Self {
+            binding: NameIdManagementBinding::Redirect,
+            location,
+        }
+    }
+
+    /// Endpoint binding.
+    pub fn binding(&self) -> NameIdManagementBinding {
+        self.binding
     }
 
     /// Endpoint location.
     pub fn location(&self) -> &EndpointUrl {
         &self.location
+    }
+
+    pub(crate) fn to_raw(&self) -> crate::metadata::Endpoint {
+        crate::metadata::Endpoint::new(self.binding.as_binding(), self.location.as_str())
     }
 }
 
@@ -133,6 +157,8 @@ pub struct SpMetadataConfig {
     pub single_logout_service: Vec<SloEndpoint>,
     /// `AssertionConsumerService` endpoints.
     pub assertion_consumer_service: Vec<AcsEndpoint>,
+    /// HTTP-Redirect `ManageNameIDService` endpoints.
+    pub manage_name_id_service: Vec<ManageNameIdService>,
     /// Element ordering profile for generated metadata.
     pub elements_order: Option<Vec<String>>,
 }
@@ -147,6 +173,7 @@ impl SpMetadataConfig {
             name_id_format: Vec::new(),
             single_logout_service: Vec::new(),
             assertion_consumer_service,
+            manage_name_id_service: Vec::new(),
             elements_order: None,
         }
     }
@@ -166,11 +193,21 @@ impl SpMetadataConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::MissingMetadata`] when no ACS endpoint is supplied.
+    /// Returns [`SamlError::MissingMetadata`] when no ACS endpoint is supplied,
+    /// and [`SamlError::Unsupported`] for a SOAP `ManageNameIDService`.
     pub fn validate(&self) -> Result<(), SamlError> {
         if self.assertion_consumer_service.is_empty() {
             return Err(SamlError::MissingMetadata(
                 "AssertionConsumerService".into(),
+            ));
+        }
+        if self
+            .manage_name_id_service
+            .iter()
+            .any(|service| service.binding() == NameIdManagementBinding::Soap)
+        {
+            return Err(SamlError::Unsupported(
+                "a service provider has no SOAP name identifier management".into(),
             ));
         }
         Ok(())
@@ -188,7 +225,7 @@ pub struct IdpMetadataConfig {
     pub single_logout_service: Vec<SloEndpoint>,
     /// SOAP `ArtifactResolutionService` endpoints.
     pub artifact_resolution_service: Vec<ArtifactResolutionService>,
-    /// SOAP `ManageNameIDService` endpoints.
+    /// SOAP and HTTP-Redirect `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<ManageNameIdService>,
     /// Element ordering profile for generated metadata.
     pub elements_order: Option<Vec<String>>,

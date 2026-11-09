@@ -1,7 +1,7 @@
 use crate::browser::{AcsEndpoint, BrowserInput, SsoResponseBinding};
 use crate::config::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, EntityId, HmacSecret,
-    IdpConfig, IdpDescriptor, NameIdFormat, SpConfig, SpDescriptor,
+    IdpConfig, IdpDescriptor, ManageNameIdService, NameIdFormat, SpConfig, SpDescriptor,
 };
 use crate::constants::Binding;
 use crate::entity::EntitySetting;
@@ -42,6 +42,12 @@ pub(super) fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
+        manage_name_id_service: config
+            .metadata
+            .manage_name_id_service
+            .iter()
+            .map(ManageNameIdService::to_raw)
+            .collect(),
         elements_order: config.metadata.elements_order.clone(),
     }
 }
@@ -81,7 +87,7 @@ pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfi
             .metadata
             .manage_name_id_service
             .iter()
-            .map(|service| service.location().as_str().to_string())
+            .map(ManageNameIdService::to_raw)
             .collect(),
         elements_order: config.metadata.elements_order.clone(),
     }

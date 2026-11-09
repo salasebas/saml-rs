@@ -15,7 +15,7 @@ use super::rendering::{
     issuer_of, render_default_logout_request, render_default_logout_response, LogoutRequestSubject,
     LogoutRequestTimeAttributes,
 };
-use super::signing::sign_logout;
+use super::signing::sign_browser_message;
 
 /// Build a `<LogoutRequest>` from `init` to `target`.
 ///
@@ -300,7 +300,7 @@ fn create_logout_request_for_subject_inner(
         )?;
     }
     let (context, signature, sig_alg) = if want_signed {
-        sign_logout(
+        sign_browser_message(
             init_setting,
             binding,
             &xml,
@@ -554,7 +554,7 @@ fn create_logout_response_inner(
     )?;
     let entity_endpoint = destination.clone().unwrap_or_default();
     let (context, signature, sig_alg) = if want_signed {
-        sign_logout(
+        sign_browser_message(
             init_setting,
             binding,
             &xml,

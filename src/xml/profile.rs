@@ -68,6 +68,8 @@ fn parser_root(parser_type: ParserType) -> &'static [u8] {
         ParserType::SamlResponse => b"Response",
         ParserType::LogoutRequest => b"LogoutRequest",
         ParserType::LogoutResponse => b"LogoutResponse",
+        ParserType::ManageNameIdRequest => b"ManageNameIDRequest",
+        ParserType::ManageNameIdResponse => b"ManageNameIDResponse",
     }
 }
 
@@ -244,13 +246,14 @@ fn root_consumed_attributes(parser_type: ParserType) -> &'static [&'static [u8]]
             b"Destination",
             b"NotOnOrAfter",
         ],
-        ParserType::LogoutResponse => &[
+        ParserType::LogoutResponse | ParserType::ManageNameIdResponse => &[
             b"ID",
             b"Version",
             b"IssueInstant",
             b"Destination",
             b"InResponseTo",
         ],
+        ParserType::ManageNameIdRequest => &[b"ID", b"Version", b"IssueInstant", b"Destination"],
     }
 }
 
@@ -276,6 +279,8 @@ fn validate_root(
         ParserType::SamlResponse => &[b"ID", b"Version", b"IssueInstant"],
         ParserType::LogoutRequest => &[b"ID", b"Version", b"IssueInstant"],
         ParserType::LogoutResponse => &[b"ID", b"Version", b"IssueInstant"],
+        ParserType::ManageNameIdRequest => &[b"ID", b"Version", b"IssueInstant"],
+        ParserType::ManageNameIdResponse => &[b"ID", b"Version", b"IssueInstant"],
     };
     let attributes = validate_unqualified_attributes(
         reader,
@@ -283,13 +288,17 @@ fn validate_root(
         root_consumed_attributes(parser_type),
         required,
     )?;
-    require_version_2(&attributes, element)?;
+    if parser_type != ParserType::ManageNameIdRequest {
+        require_version_2(&attributes, element)?;
+    }
     if matches!(
         parser_type,
         ParserType::SamlRequest
             | ParserType::SamlResponse
             | ParserType::LogoutRequest
             | ParserType::LogoutResponse
+            | ParserType::ManageNameIdRequest
+            | ParserType::ManageNameIdResponse
     ) {
         require_issue_instant(&attributes, element)?;
     }
@@ -331,7 +340,17 @@ fn expected_child_namespace(stack: &[ExpandedName], child: &[u8]) -> Option<Name
                 _ => None,
             };
         }
-        if root.is(b"LogoutResponse", NamespaceKind::Protocol) && child == b"Status" {
+        if root.is(b"ManageNameIDRequest", NamespaceKind::Protocol) {
+            return match child {
+                b"NameID" | b"EncryptedID" => Some(NamespaceKind::Assertion),
+                b"NewID" | b"NewEncryptedID" | b"Terminate" => Some(NamespaceKind::Protocol),
+                _ => None,
+            };
+        }
+        if (root.is(b"LogoutResponse", NamespaceKind::Protocol)
+            || root.is(b"ManageNameIDResponse", NamespaceKind::Protocol))
+            && child == b"Status"
+        {
             return Some(NamespaceKind::Protocol);
         }
     }
@@ -390,7 +409,9 @@ fn consumed_attributes_for(
     element: &ExpandedName,
     stack: &[ExpandedName],
 ) -> &'static [&'static [u8]] {
-    if element.is(b"NameID", NamespaceKind::Assertion) && authn_request_subject(stack) {
+    if element.is(b"NameID", NamespaceKind::Assertion)
+        && (authn_request_subject(stack) || manage_name_id_request_child(stack))
+    {
         return &[
             b"Format",
             b"NameQualifier",
@@ -399,6 +420,10 @@ fn consumed_attributes_for(
         ];
     }
     consumed_attributes(element)
+}
+
+fn manage_name_id_request_child(stack: &[ExpandedName]) -> bool {
+    matches!(stack, [root] if root.is(b"ManageNameIDRequest", NamespaceKind::Protocol))
 }
 
 fn authn_request_subject(stack: &[ExpandedName]) -> bool {
