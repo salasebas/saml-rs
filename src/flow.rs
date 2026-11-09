@@ -646,95 +646,6 @@ fn response_signature_is_required(
     }
 }
 
-/// The key that decrypts the `<EncryptedAssertion>` of `xml`. A selected
-/// `decrypt_key` requires one. A typed service provider also decrypts one it
-/// did not select.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
-fn encrypted_assertion_key<'a>(
-    xml: &str,
-    parser_type: ParserType,
-    opts: &FlowOptions<'a>,
-) -> Result<Option<&'a str>, SamlError> {
-    if opts.decrypt_key.is_some() {
-        return Ok(opts.decrypt_key);
-    }
-    match (opts.received_encrypted_elements, parser_type) {
-        (ReceivedEncryptedElements::DecryptReceived, ParserType::SamlResponse) => {
-            let document = crate::xml::dom::parse_with_limits(xml, opts.xml_limits)?;
-            let carries_encrypted_assertion = document
-                .root
-                .children
-                .iter()
-                .any(|child| child.local_name == "EncryptedAssertion");
-            if carries_encrypted_assertion {
-                Ok(opts.element_decrypt_key)
-            } else {
-                Ok(None)
-            }
-        }
-        (ReceivedEncryptedElements::DecryptReceived, _)
-        | (ReceivedEncryptedElements::DecryptSelected, _) => Ok(None),
-    }
-}
-
-/// `xml`, whose detached signature verified, with its `<EncryptedAssertion>`
-/// decrypted for a typed service provider, and the decrypted `<Assertion>`.
-/// `None` when no key applies, and for the raw service provider.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
-fn decrypt_detached_signed_assertion(
-    xml: &str,
-    parser_type: ParserType,
-    opts: &FlowOptions<'_>,
-) -> Result<Option<(String, String)>, SamlError> {
-    use crate::crypto::{
-        decrypt_assertion_with_limits, enc::AssertionDecryptionOptions, keys::load_private_key,
-    };
-
-    let key_pem = match opts.received_encrypted_elements {
-        ReceivedEncryptedElements::DecryptReceived => {
-            encrypted_assertion_key(xml, parser_type, opts)?
-        }
-        ReceivedEncryptedElements::DecryptSelected => None,
-    };
-    let Some(key_pem) = key_pem else {
-        return Ok(None);
-    };
-    let (content, assertion) = decrypt_assertion_with_limits(
-        xml,
-        &load_private_key(key_pem, opts.decrypt_key_pass)?,
-        AssertionDecryptionOptions {
-            allow_insecure_software_rsa_key_transport_decryption: opts
-                .allow_insecure_software_rsa_key_transport_decryption,
-            allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
-        },
-        opts.xml_limits,
-    )?;
-    is_valid_xml_with_limits(&content, opts.xml_limits)?;
-    validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-    Ok(Some((content, assertion)))
-}
-
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
-fn decrypt_detached_signed_assertion(
-    _xml: &str,
-    _parser_type: ParserType,
-    _opts: &FlowOptions<'_>,
-) -> Result<Option<(String, String)>, SamlError> {
-    Ok(None)
-}
-
 /// Verify and optionally decrypt the message, returning the authenticated
 /// `(saml_content, assertion)`. Requires a crypto provider.
 #[cfg(any(
@@ -766,7 +677,7 @@ fn verify_and_prepare(
         }
         require_response_coverage(response_signature_required, evidence.response_covered)?;
     }
-    let decrypt_key = encrypted_assertion_key(xml, parser_type, opts)?;
+    let decrypt_key = crate::encrypted_elements::encrypted_assertion_key(xml, parser_type, opts)?;
     let decrypt_required = decrypt_key.is_some();
     let decrypt_options = AssertionDecryptionOptions {
         allow_insecure_software_rsa_key_transport_decryption: opts
@@ -1173,7 +1084,11 @@ fn flow_inner(
                             ResponseSignatureRequirement::Optional,
                         )?
                     } else if let Some((saml_content, assertion)) =
-                        decrypt_detached_signed_assertion(&xml, parser_type, opts)?
+                        crate::encrypted_elements::decrypt_detached_signed_assertion(
+                            &xml,
+                            parser_type,
+                            opts,
+                        )?
                     {
                         PreparedMessage {
                             saml_content,

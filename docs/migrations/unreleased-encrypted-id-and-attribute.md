@@ -42,6 +42,12 @@ was not decrypted: there is no `decryption_key`, the request is unsigned and
 uses CBC, or the ciphertext does not decrypt to one `<NameID>`. Answer it with
 an error `<Response>`, as for a requested subject you do not recognize.
 
+`receive_sso` and `receive_paos_sso` now fail for such a request when the
+`decryption_key` does not load, or with `SamlError::Unsupported` when the
+default RustCrypto provider decrypts without
+`XmlEncryptionPolicy::with_insecure_software_rsa_key_transport_decryption_allowed`,
+as a service provider already does.
+
 ## Handle the new error
 
 Who must change: code that maps every `SamlError` variant to its own outcome,

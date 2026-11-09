@@ -53,6 +53,13 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
+    idp_with(
+        XmlEncryptionPolicy::default()
+            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+    )
+}
+
+fn idp_with(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
@@ -65,8 +72,7 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
             })
             .validation(IdpValidationPolicy::recommended())
             .xml(XmlPolicy {
-                encryption: XmlEncryptionPolicy::default()
-                    .with_insecure_software_rsa_key_transport_decryption_allowed(),
+                encryption,
                 ..XmlPolicy::default()
             })
             .build()?,
@@ -102,8 +108,15 @@ fn received_identifier(
     subject: &str,
     signing: Signing,
 ) -> Result<RequestedSubjectIdentifier, Box<dyn std::error::Error>> {
+    received_by(&idp()?, subject, signing)
+}
+
+fn received_by(
+    idp: &Saml<saml_rs::Idp>,
+    subject: &str,
+    signing: Signing,
+) -> Result<RequestedSubjectIdentifier, Box<dyn std::error::Error>> {
     let sp = sp()?;
-    let idp = idp()?;
     let sp_descriptor = SpDescriptor::from_metadata_xml_for(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -203,4 +216,15 @@ fn encrypted_id_that_does_not_decrypt_stays_unread() -> Result<(), Box<dyn std::
         RequestedSubjectIdentifier::EncryptedId
     );
     Ok(())
+}
+
+#[cfg(feature = "crypto-rustcrypto")]
+#[test]
+fn encrypted_id_without_the_software_rsa_opt_in_is_an_error(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = idp_with(XmlEncryptionPolicy::default())?;
+    match received_by(&idp, &encrypted_id(AES128_GCM)?, Signing::Signed) {
+        Err(error) if matches!(error.downcast_ref(), Some(SamlError::Unsupported(_))) => Ok(()),
+        other => Err(format!("expected Unsupported, got {other:?}").into()),
+    }
 }

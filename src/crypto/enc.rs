@@ -577,19 +577,23 @@ pub(crate) enum RequestAuthentication {
 }
 
 /// `xml` with the `<EncryptedID>` of the `<Subject>` of its `<AuthnRequest>`
-/// replaced by the `<NameID>` it carries, decrypted with `enc_key`.
+/// replaced by the `<NameID>` it carries, decrypted with the private key in
+/// `key_pem`.
 ///
-/// Returns `None` when the `<Subject>` carries no `<EncryptedID>`, and for an
-/// unauthenticated request whose `EncryptedData` does not name AES-GCM: CBC
-/// ciphertext is decrypted only under a verified signature.
+/// Returns `None` when the `<Subject>` carries no `<EncryptedID>`, for an
+/// unauthenticated request whose `EncryptedData` does not name AES-GCM (CBC
+/// ciphertext is decrypted only under a verified signature), and when the
+/// `<EncryptedID>` does not decrypt to one `<NameID>`.
 ///
 /// # Errors
 ///
-/// Returns [`SamlError`] when decryption fails or the plaintext is not one
-/// `<NameID>`, as [`decrypt_assertion_elements`] does.
+/// Returns [`SamlError::Unsupported`] when software RSA key-transport
+/// decryption is not allowed, and another [`SamlError`] when the key does not
+/// load.
 pub(crate) fn decrypt_authn_request_encrypted_id(
     xml: &str,
-    enc_key: &Key,
+    key_pem: &str,
+    key_pass: Option<&str>,
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
     authentication: RequestAuthentication,
@@ -614,14 +618,17 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
         }
     }
     require_software_rsa_opt_in(options)?;
-    let replacement = decrypted_element(
+    let enc_key = super::keys::load_private_key(key_pem, key_pass)?;
+    let Ok(replacement) = decrypted_element(
         &document,
         encrypted_id,
         ENCRYPTED_ID,
-        enc_key,
+        &enc_key,
         options,
         limits,
-    )?;
+    ) else {
+        return Ok(None);
+    };
     let decrypted = splice(xml, vec![replacement]);
     limits.check_input_bytes(decrypted.len())?;
     Ok(Some(decrypted))

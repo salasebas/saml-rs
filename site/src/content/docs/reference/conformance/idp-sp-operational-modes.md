@@ -11,9 +11,10 @@ disposition. The rules of a claimed feature are on the record it links to.
 The IdP operational mode and the SP operational mode are not claimed. Every
 Table 2 `MUST` cell of the IdP and SP columns has a claimed feature. Two
 §3.4 limits remain: an `EncryptedAssertion` after the first one in a response,
-which is not decrypted, and the unsigned CBC `AuthnRequest` subject that the
-identity provider leaves unread by library policy. This page is the inventory,
-not the claim.
+which is not decrypted
+([#273](https://github.com/salasebas/saml-rs/issues/273)), and the unsigned
+CBC `AuthnRequest` subject that the identity provider leaves unread by library
+policy. This page is the inventory, not the claim.
 
 Normative text is Conformance Requirements, as corrected by Approved
 Errata 05. E11 relabels the name identifier management rows. E25 adds the
@@ -26,6 +27,7 @@ A disposition is one of:
 - **Claimed feature**: implemented, with its rules on the linked record.
 - **Prohibited**: a `MUST NOT` cell. The column does not use the feature.
 - **Not implemented, off**: an `OPTIONAL` cell this crate does not implement.
+- **Open issue**: an obligation with a tracked gap.
 - **Exclusion**: the obligated actor is the deployment, not this crate.
 
 The ECP column of Table 2 is a separate operational mode. The enhanced client
@@ -81,7 +83,7 @@ receives.
 | Context | Actor | Disposition |
 | --- | --- | --- |
 | `<EncryptedAssertion>`, assertion `<EncryptedID>`, and `<EncryptedAttribute>` in a `<Response>` | Identity provider, generate | Claimed feature. `encrypt_assertions`, `encrypt_ids`, and `encrypt_attributes`. [SSO generation](web-browser-sso-generation.md) |
-| The same three in a received `<Response>`, on every response binding and over PAOS | Service provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). Only the first `<EncryptedAssertion>` of a response is decrypted |
+| The same three in a received `<Response>`, on every response binding and over PAOS | Service provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). Open issue for an `<EncryptedAssertion>` after the first: [#273](https://github.com/salasebas/saml-rs/issues/273) |
 | `<EncryptedID>` in the requested `<Subject>` of an `<AuthnRequest>` | Identity provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). Library policy leaves an unsigned request whose data encryption is CBC unread |
 | `<EncryptedID>` in a `<LogoutRequest>` | Both roles, generate and process | Claimed feature. [Encrypted principal identifier](single-logout.md#encrypted-principal-identifier) |
 | `<EncryptedID>` and `<NewEncryptedID>` in a `<ManageNameIDRequest>` | Requester, generate. Responder, process | Claimed feature. [EncryptedID and NewEncryptedID](name-id-management.md#encryptedid-and-newencryptedid) |

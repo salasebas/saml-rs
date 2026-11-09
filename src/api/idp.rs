@@ -98,7 +98,7 @@ impl Saml<Idp> {
             flow,
             &self.raw_identity_provider().setting,
             message_authenticated,
-        );
+        )?;
         let authn = AuthnRequest::try_from(flow)?;
         let verify_present_signature = self
             .raw_identity_provider()

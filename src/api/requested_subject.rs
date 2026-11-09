@@ -8,18 +8,22 @@ use crate::flow::FlowResult;
 /// decryption key.
 ///
 /// Without a decryption key, for an unauthenticated request whose
-/// `EncryptedData` is not AES-GCM, and when decryption fails, `flow` is
-/// returned unchanged. Its `<EncryptedID>` then stays unread, and the identity
-/// provider answers with an error `<Response>` (Core §3.4.1.4).
+/// `EncryptedData` is not AES-GCM, and when the `<EncryptedID>` does not
+/// decrypt to one `<NameID>`, `flow` is returned unchanged. Its
+/// `<EncryptedID>` then stays unread, and the identity provider answers with
+/// an error `<Response>` (Core §3.4.1.4).
+///
+/// # Errors
+///
+/// Returns [`crate::error::SamlError::Unsupported`] when software RSA
+/// key-transport decryption is not allowed, and another error when the
+/// decryption key does not load.
 pub(super) fn decrypt_requested_subject(
     flow: FlowResult,
     setting: &EntitySetting,
     message_authenticated: bool,
-) -> FlowResult {
-    match decrypted(&flow, setting, message_authenticated) {
-        Ok(Some(decrypted)) => decrypted,
-        Ok(None) | Err(_) => flow,
-    }
+) -> Result<FlowResult, crate::error::SamlError> {
+    Ok(decrypted(&flow, setting, message_authenticated)?.unwrap_or(flow))
 }
 
 #[cfg(any(
@@ -45,11 +49,10 @@ fn decrypted(
     } else {
         RequestAuthentication::Unauthenticated
     };
-    let key =
-        crate::crypto::keys::load_private_key(key_pem, setting.enc_private_key_pass.as_deref())?;
     let Some(saml_content) = decrypt_authn_request_encrypted_id(
         &flow.saml_content,
-        &key,
+        key_pem,
+        setting.enc_private_key_pass.as_deref(),
         AssertionDecryptionOptions {
             allow_insecure_software_rsa_key_transport_decryption: setting
                 .allow_insecure_software_rsa_key_transport_decryption,
