@@ -74,8 +74,9 @@ pub(crate) fn effective_not_on_or_after(
 /// bounds. When neither bound is present the document is treated as valid.
 /// A present-but-unparseable timestamp fails closed (mirrors JS `Invalid Date`).
 /// A `NotOnOrAfter` bound whose skew passes the maximum supported instant is
-/// treated as not expired. A `NotBefore` bound that cannot be shifted inside
-/// the supported range fails closed.
+/// treated as not expired, and one whose skew passes the minimum supported
+/// instant is treated as expired. A `NotBefore` bound that cannot be shifted
+/// inside the supported range fails closed.
 pub fn verify_time(
     not_before: Option<&str>,
     not_on_or_after: Option<&str>,
