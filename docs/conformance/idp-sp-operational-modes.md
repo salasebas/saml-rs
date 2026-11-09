@@ -31,7 +31,7 @@ The ECP column of Table 2 is a separate operational mode. The enhanced client
 is not a facade, and this page does not record that column. The IdP Extended
 and SP Extended modes of Table 3, the authorities and requester of Table 4,
 and the attribute profiles are in
-[#186](https://github.com/salasebas/saml-rs/issues/186).
+[Extended, authority, and requester modes](extended-and-authority-modes.md).
 
 ## Feature matrix
 
@@ -53,8 +53,8 @@ and the attribute profiles are in
 | Identity Provider Discovery (cookie) | `MUST` | `MUST` | `OPTIONAL` | `OPTIONAL` | Claimed feature for the IdP and IdP Lite: `remember_identity_provider`. [Identity Provider Discovery](identity-provider-discovery.md). Not implemented, off, for the SP and SP Lite |
 | Metadata Structures | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. Errata 05 E25 and §3.6 below. The crate reads and writes metadata, as in [Metadata and replay](metadata-and-replay.md), and does not elect this option |
 | Metadata Interoperation | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. Errata 05 E25 and §3.7 below |
-| Request for Assertion by Identifier | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. `AssertionIDRequest` is in #186 |
-| SAML URI Binding | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. In #186 |
+| Request for Assertion by Identifier | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. `AssertionIDRequest` is in [Extended, authority, and requester modes](extended-and-authority-modes.md) |
+| SAML URI Binding | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. In [Extended, authority, and requester modes](extended-and-authority-modes.md) |
 
 ## SAML-defined identifiers
 
@@ -92,7 +92,8 @@ unencrypted element there:
 - The identifier of a `<SubjectConfirmation>` (Core §2.4.1.1), kept as raw XML
   and never generated.
 - An assertion inside `<Advice>` (Core §2.6.1) or `<Evidence>`.
-- Attribute queries and name identifier mapping, in #186.
+- Attribute queries and name identifier mapping, in
+  [Extended, authority, and requester modes](extended-and-authority-modes.md).
 
 ## SOAP and URI security models
 

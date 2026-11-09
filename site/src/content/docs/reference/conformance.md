@@ -10,6 +10,7 @@ Each record is a table for one flow. A row names the rule, the obligated actor, 
 Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, as corrected by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
 
 - [IdP and SP operational modes](conformance/idp-sp-operational-modes.md) for every Table 2 cell and Conformance §§3.3 to 5, and what each one is.
+- [Extended, authority, and requester modes](conformance/extended-and-authority-modes.md) for every Table 3 and Table 4 cell and the attribute profiles, none of them claimed.
 - [SSO acceptance](conformance/web-browser-sso-acceptance.md) for `finish_sso`, `accept_unsolicited_sso`, and `receive_sso`.
 - [SSO generation](conformance/web-browser-sso-generation.md) for `start_sso`, `respond_sso`, and `initiate_sso`.
 - [Enhanced Client/Proxy](conformance/enhanced-client-proxy.md) for `start_paos_sso`, `finish_paos_sso`, `receive_paos_sso`, and `respond_paos_sso`.
