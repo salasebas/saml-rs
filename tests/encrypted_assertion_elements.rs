@@ -447,8 +447,11 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
         BrowserInput::<SsoResponse>::post(fields),
         validation(),
     ) {
-        Err(SamlError::Unsupported(message)) if message.contains("several assertions") => Ok(()),
-        other => Err(format!("expected Unsupported before decryption, got {other:?}").into()),
+        Err(SamlError::PotentialWrappingAttack) => Ok(()),
+        other => Err(format!(
+            "expected the unsigned sibling to be rejected before decryption, got {other:?}"
+        )
+        .into()),
     }
 }
 

@@ -1054,6 +1054,75 @@ mod encrypted_assertions {
         )
     }
 
+    fn require_signed() -> SpValidationPolicy {
+        SpValidationPolicy {
+            assertions: AssertionSignaturePolicy::RequireSigned,
+            ..SpValidationPolicy::recommended()
+        }
+    }
+
+    /// `xml` with its first plaintext `<Assertion>` signed, then encrypted.
+    fn sign_and_encrypt_first(
+        xml: &str,
+        data_algorithm: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        encrypt_first(
+            &sign_first_assertion(xml, RSA_SHA256)?,
+            data_algorithm,
+            CERT,
+        )
+    }
+
+    #[test]
+    fn each_assertion_signed_inside_its_encryption_must_be_signed_when_assertions_must_be_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(require_signed())?;
+        let first_signed = sign_and_encrypt_first(&two_assertions(&exchange)?, AES_128_GCM)?;
+
+        accept(
+            &exchange,
+            &sign_and_encrypt_first(&first_signed, AES_128_GCM)?,
+        )?;
+
+        let second_unsigned = encrypt_first(&first_signed, AES_128_GCM, CERT)?;
+        assert!(!second_unsigned.contains("<ds:Signature"));
+        expect_error(accept(&exchange, &second_unsigned), |error| {
+            matches!(error, SamlError::PotentialWrappingAttack)
+        })
+    }
+
+    #[test]
+    fn an_unsigned_plaintext_assertion_beside_a_signed_encrypted_one_is_rejected_when_assertions_must_be_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(require_signed())?;
+        let xml = sign_and_encrypt_first(&two_assertions(&exchange)?, AES_128_GCM)?;
+        assert_eq!(xml.matches("<saml:EncryptedAssertion").count(), 1);
+        assert!(xml.contains("<saml:Assertion "));
+        expect_error(accept(&exchange, &xml), |error| {
+            matches!(error, SamlError::PotentialWrappingAttack)
+        })
+    }
+
+    #[test]
+    fn each_encrypted_assertion_must_be_signed_over_simple_sign_when_assertions_must_be_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = Exchange {
+            sp: decrypting_sp(
+                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default(),
+                require_signed(),
+            )?,
+            ..exchange_simple_sign()?
+        };
+        let first_signed = sign_and_encrypt_first(&two_assertions(&exchange)?, AES_256)?;
+
+        accept_simple_sign(&exchange, &sign_and_encrypt_first(&first_signed, AES_256)?)?;
+
+        let second_unsigned = encrypt_first(&first_signed, AES_256, CERT)?;
+        expect_error(accept_simple_sign(&exchange, &second_unsigned), |error| {
+            matches!(error, SamlError::PotentialWrappingAttack)
+        })
+    }
+
     #[test]
     fn every_assertion_signed_inside_its_encryption_is_evaluated(
     ) -> Result<(), Box<dyn std::error::Error>> {

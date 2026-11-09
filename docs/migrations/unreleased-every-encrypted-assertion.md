@@ -17,7 +17,10 @@ and the rest were ignored. A later assertion that fails one of those checks now
 rejects the response with that check's error, for example
 `SamlError::AudienceMismatch`. Under `AssertionSignaturePolicy::RequireSigned`,
 each decrypted assertion must carry its own signature, or the response fails
-with `SamlError::SignatureMissing`.
+with `SamlError::SignatureMissing` or `SamlError::PotentialWrappingAttack`. In a
+response with no verified signature, a plaintext `<Assertion>` beside an
+`<EncryptedAssertion>` must be signed too. Before, under `RequireSigned` it was
+accepted unsigned.
 
 An `<EncryptedAssertion>` that does not decrypt, for example one encrypted for
 another recipient, now fails with `SamlError::Crypto`. There is no setting to

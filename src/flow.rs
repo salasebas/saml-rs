@@ -744,23 +744,19 @@ fn verify_and_prepare(
     }
     if decrypt_required && !evidence.verified {
         // encrypted-then-signed: decrypt first, then verify the result.
-        let (content, assertions) =
+        let (content, _) =
             decrypt_assertions_with_limits(xml, &load_key()?, decrypt_options, opts.xml_limits)?;
         is_valid_xml_with_limits(&content, opts.xml_limits)?;
         validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-        if assertion_signature == AssertionSignatureRequirement::Direct {
-            return Ok(PreparedMessage {
-                verified_xml_signatures: verify_decrypted_assertions(&assertions, opts)?,
-                assertion: assertion_shortcut(&content, opts.xml_limits)?,
-                saml_content: content,
-                message_authenticated: false,
-            });
-        }
         let signature_present = has_xml_signature_with_limits(&content, opts.xml_limits)?;
         let re_evidence = verify_embedded_signature(&content, opts)?;
         if !re_evidence.verified {
             return Err(required_xml_signature_failed(signature_present));
         }
+        require_direct_assertion_coverage(
+            assertion_signature,
+            re_evidence.assertion_directly_covered,
+        )?;
         return Ok(PreparedMessage {
             saml_content: content,
             assertion: re_evidence.verified_node,
