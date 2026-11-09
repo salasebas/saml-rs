@@ -166,20 +166,21 @@ pub fn encrypt_assertion(
     ))
 }
 
-/// Decrypt the `<EncryptedAssertion>` in `xml` using `enc_key`, replacing it
-/// with the plaintext `<Assertion>`.
+/// Decrypt each `<EncryptedAssertion>` child of the document element of `xml`
+/// using `enc_key`, replacing each one with its plaintext `<Assertion>`.
 ///
 /// The `<xenc:EncryptedKey>` is the one in the `ds:KeyInfo` of
 /// `<xenc:EncryptedData>`, or one after `<xenc:EncryptedData>` that a
 /// `ds:RetrievalMethod` of type `http://www.w3.org/2001/04/xmlenc#EncryptedKey`
 /// names.
 ///
-/// Returns `(response_with_decrypted_assertion, decrypted_assertion)`.
+/// Returns `(response_with_decrypted_assertions, first_decrypted_assertion)`.
 ///
 /// # Errors
 ///
-/// Returns [`SamlError::ProtocolProfile`] when the `<EncryptedAssertion>`
-/// holds anything other than one `<xenc:EncryptedData>` followed only by
+/// Fails when any `<EncryptedAssertion>` does not decrypt. Returns
+/// [`SamlError::ProtocolProfile`] when an `<EncryptedAssertion>` holds
+/// anything other than one `<xenc:EncryptedData>` followed only by
 /// `<xenc:EncryptedKey>` elements, or when its plaintext is not one
 /// `<Assertion>`. Returns [`SamlError::Unsupported`] for a refused key
 /// transport, and another [`SamlError`] when decryption fails.
@@ -191,7 +192,7 @@ pub fn decrypt_assertion(
     decrypt_assertion_with_limits(xml, enc_key, options, XmlLimits::default())
 }
 
-/// Decrypt the `<EncryptedAssertion>` with explicit XML parser resource limits.
+/// Decrypt each `<EncryptedAssertion>` with explicit XML parser resource limits.
 ///
 /// # Errors
 ///
@@ -202,25 +203,54 @@ pub fn decrypt_assertion_with_limits(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<(String, String), SamlError> {
+    let (response, assertions) = decrypt_assertions_with_limits(xml, enc_key, options, limits)?;
+    let assertion = assertions
+        .into_iter()
+        .next()
+        .ok_or_else(undefined_encrypted_assertion)?;
+    Ok((response, assertion))
+}
+
+/// `xml` with each `<EncryptedAssertion>` child of its document element
+/// decrypted, and each decrypted `<Assertion>` in document order.
+pub(crate) fn decrypt_assertions_with_limits(
+    xml: &str,
+    enc_key: &Key,
+    options: AssertionDecryptionOptions,
+    limits: XmlLimits,
+) -> Result<(String, Vec<String>), SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     require_software_rsa_opt_in(options)?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
-    let encrypted = *root_children(&document, namespace::ASSERTION, "EncryptedAssertion")?
-        .first()
-        .ok_or_else(|| SamlError::Crypto("ERR_UNDEFINED_ENCRYPTED_ASSERTION".into()))?;
-    let (range, assertion) = decrypted_element(
-        &document,
-        encrypted,
-        ENCRYPTED_ASSERTION,
-        enc_key,
-        options,
-        limits,
-    )?;
-    let response = splice(xml, vec![(range, assertion.clone())]);
+    let encrypted = root_children(&document, namespace::ASSERTION, "EncryptedAssertion")?;
+    if encrypted.is_empty() {
+        return Err(undefined_encrypted_assertion());
+    }
+    let replacements = encrypted
+        .into_iter()
+        .map(|element| {
+            decrypted_element(
+                &document,
+                element,
+                ENCRYPTED_ASSERTION,
+                enc_key,
+                options,
+                limits,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let assertions = replacements
+        .iter()
+        .map(|(_, assertion)| assertion.clone())
+        .collect();
+    let response = splice(xml, replacements);
     limits.check_input_bytes(response.len())?;
-    limits.check_input_bytes(assertion.len())?;
-    Ok((response, assertion))
+    Ok((response, assertions))
+}
+
+fn undefined_encrypted_assertion() -> SamlError {
+    SamlError::Crypto("ERR_UNDEFINED_ENCRYPTED_ASSERTION".into())
 }
 
 /// Plaintext element, its encrypted wrapper, and the parent that holds it.
@@ -890,6 +920,29 @@ mod tests {
         assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
         assert!(response.contains("Assertion"));
         assert!(!response.contains("EncryptedAssertion"));
+        Ok(())
+    }
+
+    #[test]
+    fn decrypt_assertion_decrypts_every_encrypted_assertion(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let start = RESPONSE
+            .find("<saml:Assertion ")
+            .ok_or("missing assertion")?;
+        let end_tag = "</saml:Assertion>";
+        let end = RESPONSE.find(end_tag).ok_or("missing assertion end")? + end_tag.len();
+        let assertion = &RESPONSE[start..end];
+        let two = format!("{}{assertion}{}", &RESPONSE[..end], &RESPONSE[end..]);
+        let first = encrypt_assertion(&two, SP_CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
+        let encrypted = encrypt_assertion(&first, SP_CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
+        assert_eq!(encrypted.matches("<saml:EncryptedAssertion").count(), 2);
+
+        let key = load_private_key(SP_PRIVKEY, None)?;
+        let (response, decrypted) =
+            decrypt_assertion(&encrypted, &key, software_rsa_test_options())?;
+        assert!(!response.contains("EncryptedAssertion"));
+        assert_eq!(response.matches(assertion).count(), 2);
+        assert_eq!(decrypted, assertion);
         Ok(())
     }
 

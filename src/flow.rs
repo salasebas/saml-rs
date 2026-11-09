@@ -569,6 +569,34 @@ fn verify_embedded_signature(
     })
 }
 
+/// Verify the signature over each decrypted `<Assertion>`, which must cover
+/// that assertion directly.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+fn verify_decrypted_assertions(
+    assertions: &[String],
+    opts: &FlowOptions<'_>,
+) -> Result<Vec<VerifiedXmlSignatureEvidence>, SamlError> {
+    let mut verified_xml_signatures = Vec::new();
+    for assertion in assertions {
+        let signature_present =
+            crate::crypto::verify::has_xml_signature_with_limits(assertion, opts.xml_limits)?;
+        let evidence = verify_embedded_signature(assertion, opts)?;
+        if !evidence.verified {
+            return Err(required_xml_signature_failed(signature_present));
+        }
+        require_direct_assertion_coverage(
+            AssertionSignatureRequirement::Direct,
+            evidence.assertion_directly_covered,
+        )?;
+        verified_xml_signatures.extend(evidence.verified_xml_signatures);
+    }
+    Ok(verified_xml_signatures)
+}
+
 #[cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
@@ -661,8 +689,9 @@ fn verify_and_prepare(
     response_signature: ResponseSignatureRequirement,
 ) -> Result<PreparedMessage, SamlError> {
     use crate::crypto::{
-        decrypt_assertion_with_limits,
-        enc::{require_software_rsa_opt_in, AssertionDecryptionOptions},
+        enc::{
+            decrypt_assertions_with_limits, require_software_rsa_opt_in, AssertionDecryptionOptions,
+        },
         keys::load_private_key,
         verify::has_xml_signature_with_limits,
     };
@@ -693,8 +722,8 @@ fn verify_and_prepare(
         if let Some(node) = evidence.verified_node.as_deref() {
             let mut verified_xml_signatures = evidence.verified_xml_signatures.clone();
             // signed-then-encrypted: the verified content is a Response carrying
-            // an EncryptedAssertion.
-            let (content, assertion) = decrypt_assertion_with_limits(
+            // EncryptedAssertions.
+            let (content, assertions) = decrypt_assertions_with_limits(
                 node,
                 &load_key()?,
                 decrypt_options,
@@ -703,21 +732,11 @@ fn verify_and_prepare(
             is_valid_xml_with_limits(&content, opts.xml_limits)?;
             validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
             if assertion_signature == AssertionSignatureRequirement::Direct {
-                let decrypted_signature_present =
-                    has_xml_signature_with_limits(&assertion, opts.xml_limits)?;
-                let decrypted_evidence = verify_embedded_signature(&assertion, opts)?;
-                if !decrypted_evidence.verified {
-                    return Err(required_xml_signature_failed(decrypted_signature_present));
-                }
-                require_direct_assertion_coverage(
-                    assertion_signature,
-                    decrypted_evidence.assertion_directly_covered,
-                )?;
-                verified_xml_signatures.extend(decrypted_evidence.verified_xml_signatures);
+                verified_xml_signatures.extend(verify_decrypted_assertions(&assertions, opts)?);
             }
             return Ok(PreparedMessage {
+                assertion: assertion_shortcut(&content, opts.xml_limits)?,
                 saml_content: content,
-                assertion: Some(assertion),
                 message_authenticated: evidence.response_covered,
                 verified_xml_signatures,
             });
@@ -725,37 +744,29 @@ fn verify_and_prepare(
     }
     if decrypt_required && !evidence.verified {
         // encrypted-then-signed: decrypt first, then verify the result.
-        let (content, assertion) =
-            decrypt_assertion_with_limits(xml, &load_key()?, decrypt_options, opts.xml_limits)?;
+        let (content, assertions) =
+            decrypt_assertions_with_limits(xml, &load_key()?, decrypt_options, opts.xml_limits)?;
         is_valid_xml_with_limits(&content, opts.xml_limits)?;
         validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-        let verification_xml = if assertion_signature == AssertionSignatureRequirement::Direct {
-            assertion.as_str()
-        } else {
-            content.as_str()
-        };
-        let signature_present = has_xml_signature_with_limits(verification_xml, opts.xml_limits)?;
-        let re_evidence = verify_embedded_signature(verification_xml, opts)?;
-        return if re_evidence.verified {
-            require_direct_assertion_coverage(
-                assertion_signature,
-                re_evidence.assertion_directly_covered,
-            )?;
-            let verified_assertion = if assertion_signature == AssertionSignatureRequirement::Direct
-            {
-                Some(assertion)
-            } else {
-                re_evidence.verified_node
-            };
-            Ok(PreparedMessage {
+        if assertion_signature == AssertionSignatureRequirement::Direct {
+            return Ok(PreparedMessage {
+                verified_xml_signatures: verify_decrypted_assertions(&assertions, opts)?,
+                assertion: assertion_shortcut(&content, opts.xml_limits)?,
                 saml_content: content,
-                assertion: verified_assertion,
                 message_authenticated: false,
-                verified_xml_signatures: re_evidence.verified_xml_signatures,
-            })
-        } else {
-            Err(required_xml_signature_failed(signature_present))
-        };
+            });
+        }
+        let signature_present = has_xml_signature_with_limits(&content, opts.xml_limits)?;
+        let re_evidence = verify_embedded_signature(&content, opts)?;
+        if !re_evidence.verified {
+            return Err(required_xml_signature_failed(signature_present));
+        }
+        return Ok(PreparedMessage {
+            saml_content: content,
+            assertion: re_evidence.verified_node,
+            message_authenticated: false,
+            verified_xml_signatures: re_evidence.verified_xml_signatures,
+        });
     }
     if evidence.verified {
         require_direct_assertion_coverage(
@@ -1083,16 +1094,16 @@ fn flow_inner(
                             assertion_signature,
                             ResponseSignatureRequirement::Optional,
                         )?
-                    } else if let Some((saml_content, assertion)) =
-                        crate::encrypted_elements::decrypt_detached_signed_assertion(
+                    } else if let Some(saml_content) =
+                        crate::encrypted_elements::decrypt_detached_signed_assertions(
                             &xml,
                             parser_type,
                             opts,
                         )?
                     {
                         PreparedMessage {
+                            assertion: assertion_shortcut(&saml_content, opts.xml_limits)?,
                             saml_content,
-                            assertion: Some(assertion),
                             message_authenticated: false,
                             verified_xml_signatures: Vec::new(),
                         }
