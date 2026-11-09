@@ -12,7 +12,7 @@ use crate::constants::url_params;
 use crate::error::SamlError;
 use crate::model::{AuthnRequest, LogoutRequest, LogoutResponse, SsoResponse};
 use crate::raw::HttpRequest;
-use crate::soap::read_soap_body;
+use crate::soap::{read_soap_body, SoapChannel};
 use crate::xml::XmlLimits;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +99,8 @@ pub enum BrowserInput<Message> {
     Soap {
         /// SOAP envelope received as an HTTP body.
         envelope: String,
+        /// Protection the deployment attests for this exchange.
+        channel: SoapChannel,
         /// Message marker.
         _message: PhantomData<Message>,
     },
@@ -166,8 +168,21 @@ impl BrowserInput<LogoutRequest> {
 
     /// Create SOAP input from the envelope POSTed to a SOAP
     /// `SingleLogoutService`.
+    ///
+    /// The `LogoutRequest` must carry an XML signature.
     pub fn soap(envelope: impl Into<String>) -> Self {
-        soap_input(envelope)
+        soap_input(envelope, SoapChannel::unattested())
+    }
+
+    /// Create SOAP input from an exchange the deployment protected itself.
+    ///
+    /// When `channel` attests mutual authentication and integrity, an
+    /// unsigned `LogoutRequest` is accepted. Attest that only when the TLS
+    /// or HTTP credential that authenticated the client belongs to the peer
+    /// descriptor passed to `receive_slo`. A present XML signature is still
+    /// verified.
+    pub fn soap_with_channel(envelope: impl Into<String>, channel: SoapChannel) -> Self {
+        soap_input(envelope, channel)
     }
 
     /// Create POST input from parsed fields.
@@ -193,8 +208,20 @@ impl BrowserInput<LogoutResponse> {
     }
 
     /// Create SOAP input from the response body of a SOAP logout request.
+    ///
+    /// The `LogoutResponse` must carry an XML signature.
     pub fn soap(envelope: impl Into<String>) -> Self {
-        soap_input(envelope)
+        soap_input(envelope, SoapChannel::unattested())
+    }
+
+    /// Create SOAP input from an exchange the deployment protected itself.
+    ///
+    /// When `channel` attests mutual authentication and integrity, an
+    /// unsigned `LogoutResponse` is accepted. Attest that only when the TLS
+    /// server certificate belongs to the peer descriptor passed to
+    /// `finish_slo`. A present XML signature is still verified.
+    pub fn soap_with_channel(envelope: impl Into<String>, channel: SoapChannel) -> Self {
+        soap_input(envelope, channel)
     }
 
     /// Create POST input from parsed fields.
@@ -273,9 +300,10 @@ fn simple_sign_input<Message>(fields: Vec<FormField>) -> BrowserInput<Message> {
     }
 }
 
-fn soap_input<Message>(envelope: impl Into<String>) -> BrowserInput<Message> {
+fn soap_input<Message>(envelope: impl Into<String>, channel: SoapChannel) -> BrowserInput<Message> {
     BrowserInput::Soap {
         envelope: envelope.into(),
+        channel,
         _message: PhantomData,
     }
 }

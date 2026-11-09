@@ -62,7 +62,7 @@ When the identity provider starts logout itself, `Saml<Idp>::start_slo` is the s
 
 ## Over SOAP
 
-`StartSlo::soap()` and `RespondSlo::soap()` run the same calls as one back-channel SOAP exchange. Your HTTP client sends the request, and saml-rs reads the reply. Both peers publish `SloEndpoint::soap(...)`. Every SOAP logout message is signed, under every `LogoutPolicy`, and carries no `RelayState`.
+`StartSlo::soap()` and `RespondSlo::soap()` run the same calls as one back-channel SOAP exchange. Your HTTP client sends the request, and saml-rs reads the reply. Both peers publish `SloEndpoint::soap(...)`. saml-rs signs every SOAP logout message it writes, and none carries `RelayState`. A received SOAP message must be signed under every `LogoutPolicy`. When your server or client authenticated the peer with mutual TLS, pass that with `BrowserInput::soap_with_channel(body, channel)`; an unsigned message is then accepted, and a present signature is still checked.
 
 ```rust
 let logout = sp.start_slo(&idp, subject, StartSlo::soap())?;

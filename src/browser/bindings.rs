@@ -97,7 +97,7 @@ pub enum LogoutBinding {
     /// HTTP-POST-SimpleSign binding.
     SimpleSign,
     /// SOAP binding. The request and its response are one synchronous SOAP
-    /// exchange that the deployment sends. Each message carries an XML
+    /// exchange that the deployment sends. Generated messages carry an XML
     /// signature and no RelayState.
     Soap,
 }

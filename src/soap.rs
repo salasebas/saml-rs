@@ -71,6 +71,15 @@ impl SoapChannel {
         }
     }
 
+    /// No protection attested.
+    pub fn unattested() -> Self {
+        Self::new(
+            PartyAuthentication::Absent,
+            MessageIntegrity::Absent,
+            MessageConfidentiality::Absent,
+        )
+    }
+
     /// Mutual authentication, integrity protection, and confidentiality.
     pub fn mutually_authenticated_confidential() -> Self {
         Self::new(
@@ -93,6 +102,12 @@ impl SoapChannel {
     /// Whether the exchange is confidential.
     pub fn confidentiality(self) -> MessageConfidentiality {
         self.confidentiality
+    }
+
+    /// Mutual authentication with integrity protection.
+    pub(crate) fn authenticates_peer(self) -> bool {
+        self.authentication == PartyAuthentication::Mutual
+            && self.integrity == MessageIntegrity::Protected
     }
 }
 

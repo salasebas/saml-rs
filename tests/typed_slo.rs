@@ -29,11 +29,12 @@ use saml_rs::{
     AuthnRequestValidationPolicy, BrowserInput, CertificatePem, ClockSkew, Credentials, EntityId,
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutBinding, LogoutCompleted,
     LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning,
-    LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PendingLogoutRequest,
-    PendingSnapshot, PrivateKeyPem, Received, RelayStateParam, ReplayCache, ReplayKey,
-    ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
-    SloEndpoint, SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoSession, StartSlo, Status, Subject, SubordinateStatusCode, TemplatePolicy,
+    LogoutSubject, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
+    NameIdFormat, Outbound, PartyAuthentication, PendingLogoutRequest, PendingSnapshot,
+    PrivateKeyPem, Received, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy, RespondSlo,
+    RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel,
+    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession,
+    StartSlo, Status, Subject, SubordinateStatusCode, TemplatePolicy,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -3719,5 +3720,93 @@ fn soap_respond_slo_rejects_relay_state() -> Result<(), Box<dyn std::error::Erro
     ) {
         Err(SamlError::ProtocolProfile(_)) => Ok(()),
         other => Err(format!("expected ProtocolProfile, got {other:?}").into()),
+    }
+}
+
+fn mutual_tls() -> SoapChannel {
+    SoapChannel::new(
+        PartyAuthentication::Mutual,
+        MessageIntegrity::Protected,
+        MessageConfidentiality::Protected,
+    )
+}
+
+#[test]
+fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let server_only = SoapChannel::new(
+        PartyAuthentication::Absent,
+        MessageIntegrity::Protected,
+        MessageConfidentiality::Protected,
+    );
+
+    let request_xml = logout_request_xml("_soap_mutual_tls", SP_ENTITY_ID, Some(IDP_SLO_SOAP));
+    let request_envelope = SoapProtocolMessage::response_envelope(&request_xml)?;
+    match idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap_with_channel(&request_envelope, server_only),
+        validation(),
+    ) {
+        Err(SamlError::SignatureMissing) => {}
+        other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
+    }
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap_with_channel(&request_envelope, mutual_tls()),
+        validation(),
+    )?;
+    assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
+
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+    let response_xml = logout_response_xml(
+        "_soap_mutual_tls_response",
+        IDP_ENTITY_ID,
+        started.pending.id().as_str(),
+        None,
+    );
+    let response_envelope = SoapProtocolMessage::response_envelope(&response_xml)?;
+    match sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<LogoutResponse>::soap(&response_envelope),
+        validation(),
+    ) {
+        Err(SamlError::SignatureMissing) => {}
+        other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
+    }
+    sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<LogoutResponse>::soap_with_channel(&response_envelope, mutual_tls()),
+        validation(),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn soap_logout_verifies_a_present_signature_over_an_attested_mutual_channel(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+    let signed_xml = soap_body_xml(started.outbound.soap_request()?.envelope())?;
+    let tampered = signed_xml.replace("alice@example.com", "mallory@example.com");
+    if tampered == signed_xml {
+        return Err("failed to tamper the signed LogoutRequest".into());
+    }
+    match idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap_with_channel(
+            SoapProtocolMessage::response_envelope(&tampered)?,
+            mutual_tls(),
+        ),
+        validation(),
+    ) {
+        Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature,
+        }) => Ok(()),
+        other => Err(format!("expected XmlSignature failure, got {other:?}").into()),
     }
 }

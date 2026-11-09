@@ -20,8 +20,7 @@ use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
 use crate::model::EndpointUrl;
 use crate::soap::{
-    read_soap_body, MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
-    SoapProtocolMessage, SoapRequest,
+    read_soap_body, MessageConfidentiality, SoapChannel, SoapProtocolMessage, SoapRequest,
 };
 use crate::xml::dom::{self, Node};
 use crate::xml::fragment::standalone_element;
@@ -656,8 +655,7 @@ fn require_channel(channel: SoapChannel, web_browser_sso: bool) -> Result<(), Sa
 }
 
 fn channel_allows(channel: SoapChannel, web_browser_sso: bool) -> bool {
-    let authenticated = channel.authentication() == PartyAuthentication::Mutual
-        && channel.integrity() == MessageIntegrity::Protected;
+    let authenticated = channel.authenticates_peer();
     if web_browser_sso {
         authenticated && channel.confidentiality() == MessageConfidentiality::Protected
     } else {

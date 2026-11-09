@@ -6,7 +6,7 @@ use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
 use crate::logout::{
     create_logout_request_with_session_indexes, create_logout_response_with_status,
-    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation,
+    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
     LogoutRequestSessionIndexes, LogoutRequestValidation,
 };
 use crate::metadata::Metadata;
@@ -545,11 +545,12 @@ fn receive_slo_impl(
         LogoutMessageDirection::Request,
         &validation,
     )?;
+    let receipt = LogoutReceipt::of_input(&input)?;
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_request_at(
         local_setting,
         peer_metadata,
-        binding,
+        receipt,
         &request,
         LogoutFlowValidation::typed(
             Some(&expected_recipient),
@@ -635,11 +636,12 @@ fn finish_slo_impl(
             )?)
         }
     };
+    let receipt = LogoutReceipt::of_input(&input)?;
     let request = HttpRequest::try_from(input)?;
     let flow = parse_logout_response_at(
         local_setting,
         peer_metadata,
-        pending.response_binding(),
+        receipt,
         &request,
         pending.id().as_str(),
         LogoutFlowValidation::typed(

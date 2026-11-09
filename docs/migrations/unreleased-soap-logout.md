@@ -33,9 +33,9 @@ only that endpoint now writes `SessionIndex` in its assertions.
 
 Who must change: code that matches `saml_rs::BrowserInput` by variant.
 
-Add an arm for `BrowserInput::Soap { envelope, .. }`. Build it with
-`BrowserInput::<LogoutRequest>::soap` or
-`BrowserInput::<LogoutResponse>::soap`.
+Add an arm for `BrowserInput::Soap { envelope, channel, .. }`. Build it with
+`soap` or `soap_with_channel` on `BrowserInput::<LogoutRequest>` or
+`BrowserInput::<LogoutResponse>`.
 
 ## Other changes
 

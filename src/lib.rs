@@ -181,7 +181,10 @@
 //! [`StartSlo::soap`] and [`RespondSlo::soap`] run the same four calls over
 //! SOAP. [`Outbound::soap_request`] is the envelope the deployment POSTs, and
 //! [`BrowserInput::soap`] reads the envelope that comes back. Each SOAP
-//! logout message carries an XML signature and no RelayState.
+//! logout message saml-rs writes carries an XML signature and no RelayState.
+//! A received one must be signed, unless
+//! [`BrowserInput::soap_with_channel`] attests that the deployment mutually
+//! authenticated the peer.
 //!
 //! ```no_run
 //! use saml_rs::{

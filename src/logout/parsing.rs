@@ -1,4 +1,4 @@
-use crate::browser::LogoutBinding;
+use crate::browser::BrowserInput;
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
@@ -40,9 +40,9 @@ impl<'a> LogoutFlowValidation<'a> {
     }
 }
 
-/// How the flow reads a logout message that arrived on `binding`.
+/// How the flow reads a logout message from one typed input.
 #[derive(Debug, Clone, Copy)]
-struct LogoutReceipt {
+pub(crate) struct LogoutReceipt {
     decode_as: Binding,
     signature: LogoutReceiptSignature,
     signed_destination: SignedMessageDestination,
@@ -52,6 +52,8 @@ struct LogoutReceipt {
 enum LogoutReceiptSignature {
     FollowLocalPolicy,
     Required,
+    /// The deployment authenticated the peer. A present signature is verified.
+    VerifyIfPresent,
 }
 
 impl LogoutReceipt {
@@ -63,18 +65,23 @@ impl LogoutReceipt {
         }
     }
 
-    /// The SOAP body XML arrives as an HTTP-POST message. Its XML signature
-    /// is the only sender authentication the typed SOAP exchange accepts.
-    fn typed(binding: LogoutBinding) -> Self {
-        match binding {
-            LogoutBinding::Soap => Self {
+    /// The SOAP body XML arrives as an HTTP-POST message. It must carry an
+    /// XML signature unless `channel` authenticated the peer.
+    pub(crate) fn of_input<Message>(input: &BrowserInput<Message>) -> Result<Self, SamlError> {
+        match input {
+            BrowserInput::Redirect { .. } => Ok(Self::raw(Binding::Redirect)),
+            BrowserInput::Post { .. } => Ok(Self::raw(Binding::Post)),
+            BrowserInput::SimpleSignPost { .. } => Ok(Self::raw(Binding::SimpleSign)),
+            BrowserInput::Soap { channel, .. } => Ok(Self {
                 decode_as: Binding::Post,
-                signature: LogoutReceiptSignature::Required,
+                signature: if channel.authenticates_peer() {
+                    LogoutReceiptSignature::VerifyIfPresent
+                } else {
+                    LogoutReceiptSignature::Required
+                },
                 signed_destination: SignedMessageDestination::Optional,
-            },
-            LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => {
-                Self::raw(binding.as_binding())
-            }
+            }),
+            BrowserInput::Artifact { .. } => Err(SamlError::UndefinedBinding),
         }
     }
 
@@ -82,6 +89,14 @@ impl LogoutReceipt {
         match self.signature {
             LogoutReceiptSignature::FollowLocalPolicy => local_policy,
             LogoutReceiptSignature::Required => true,
+            LogoutReceiptSignature::VerifyIfPresent => false,
+        }
+    }
+
+    fn verify_signature_if_present(self) -> bool {
+        match self.signature {
+            LogoutReceiptSignature::FollowLocalPolicy | LogoutReceiptSignature::Required => false,
+            LogoutReceiptSignature::VerifyIfPresent => true,
         }
     }
 }
@@ -128,17 +143,11 @@ pub fn parse_logout_request(
 pub(crate) fn parse_logout_request_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
-    binding: LogoutBinding,
+    receipt: LogoutReceipt,
     request: &HttpRequest,
     validation: LogoutFlowValidation<'_>,
 ) -> Result<FlowResult, SamlError> {
-    parse_logout_request_inner(
-        self_setting,
-        from_meta,
-        LogoutReceipt::typed(binding),
-        request,
-        validation,
-    )
+    parse_logout_request_inner(self_setting, from_meta, receipt, request, validation)
 }
 
 fn parse_logout_request_inner(
@@ -154,7 +163,7 @@ fn parse_logout_request_inner(
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutRequest),
             check_signature: receipt.check_signature(self_setting.want_logout_request_signed),
-            verify_signature_if_present: false,
+            verify_signature_if_present: receipt.verify_signature_if_present(),
             require_audience_restriction: true,
             strict_xml_signature_profile: self_setting.strict_xml_signature_profile,
             from_issuer: from_meta.get_entity_id(),
@@ -189,7 +198,7 @@ fn parse_logout_response_inner(
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutResponse),
             check_signature: receipt.check_signature(self_setting.want_logout_response_signed),
-            verify_signature_if_present: false,
+            verify_signature_if_present: receipt.verify_signature_if_present(),
             require_audience_restriction: true,
             strict_xml_signature_profile: self_setting.strict_xml_signature_profile,
             from_issuer: from_meta.get_entity_id(),
@@ -263,7 +272,7 @@ pub fn parse_logout_response(
 pub(crate) fn parse_logout_response_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
-    binding: LogoutBinding,
+    receipt: LogoutReceipt,
     request: &HttpRequest,
     request_id: &str,
     validation: LogoutFlowValidation<'_>,
@@ -274,7 +283,7 @@ pub(crate) fn parse_logout_response_at(
     parse_logout_response_inner(
         self_setting,
         from_meta,
-        LogoutReceipt::typed(binding),
+        receipt,
         request,
         Some(request_id),
         validation,
