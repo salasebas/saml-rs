@@ -33,6 +33,8 @@ pub(super) struct LoginResponseXml<'a> {
     /// `<NameID>` `Format`. `None` omits the attribute.
     pub(super) name_id_format: Option<&'a str>,
     pub(super) name_id: &'a str,
+    /// `<NameID>` `SPProvidedID`. `None` omits the attribute.
+    pub(super) sp_provided_id: Option<&'a str>,
     pub(super) in_response_to: Option<&'a str>,
     pub(super) authn_statement: Option<AuthnStatementXml<'a>>,
     pub(super) attributes: &'a [LoginResponseAttribute],
@@ -78,11 +80,13 @@ pub(super) fn render_default_login_response(
     );
     writer.text_element(&qname(input.assertion_prefix, "Issuer"), &[], input.issuer);
     writer.start(&qname(input.assertion_prefix, "Subject"), &[]);
-    let name_id_attrs: Vec<(&str, &str)> = input
-        .name_id_format
-        .map(|format| ("Format", format))
-        .into_iter()
-        .collect();
+    let name_id_attrs: Vec<(&str, &str)> = [
+        ("Format", input.name_id_format),
+        ("SPProvidedID", input.sp_provided_id),
+    ]
+    .into_iter()
+    .filter_map(|(name, value)| value.map(|value| (name, value)))
+    .collect();
     writer.text_element(
         &qname(input.assertion_prefix, "NameID"),
         &name_id_attrs,

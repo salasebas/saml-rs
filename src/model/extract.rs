@@ -77,7 +77,7 @@ fn parse_bool(value: &str) -> Result<bool, SamlError> {
     }
 }
 
-pub(super) fn name_id_format_from_uri(uri: &str) -> NameIdFormat {
+pub(crate) fn name_id_format_from_uri(uri: &str) -> NameIdFormat {
     match uri {
         name_id_format::EMAIL_ADDRESS => NameIdFormat::EmailAddress,
         name_id_format::PERSISTENT => NameIdFormat::Persistent,

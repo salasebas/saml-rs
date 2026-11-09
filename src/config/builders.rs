@@ -9,7 +9,8 @@ use super::algorithms::{
 };
 use super::credentials::Credentials;
 use super::descriptors::{
-    validate_entity_id, ArtifactResolutionService, EntityId, IdpMetadataConfig, SpMetadataConfig,
+    validate_entity_id, ArtifactResolutionService, EntityId, IdpMetadataConfig,
+    ManageNameIdService, SpMetadataConfig,
 };
 use super::policies::{
     assertion_signature_required, audience_restriction_required, audience_validation_enabled,
@@ -363,6 +364,18 @@ impl IdpConfigBuilder {
     /// Publish a SOAP `ArtifactResolutionService` endpoint.
     pub fn artifact_resolution_service(mut self, service: ArtifactResolutionService) -> Self {
         self.metadata.artifact_resolution_service.push(service);
+        self
+    }
+
+    /// Publish a SOAP `ManageNameIDService` endpoint.
+    ///
+    /// This turns on name identifier management over SOAP:
+    /// [`Saml::start_name_id_management`](crate::Saml::start_name_id_management)
+    /// and
+    /// [`Saml::receive_name_id_management`](crate::Saml::receive_name_id_management)
+    /// fail without it.
+    pub fn manage_name_id_service(mut self, service: ManageNameIdService) -> Self {
+        self.metadata.manage_name_id_service.push(service);
         self
     }
 

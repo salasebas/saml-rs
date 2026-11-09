@@ -302,17 +302,31 @@
 //! [`Saml<Sp>::finish_sso`] or [`Saml<Sp>::accept_unsolicited_sso`]. An
 //! `<AuthnRequest>` is not delivered as an artifact.
 //!
+//! # Name identifier management
+//!
+//! An identity provider that publishes a SOAP `ManageNameIDService` changes
+//! or ends a principal's identifier at a service provider with
+//! [`Saml<Idp>::start_name_id_management`] and
+//! [`StartedNameIdManagement::finish`]. It answers a service provider's
+//! request with [`Saml<Idp>::receive_name_id_management`] and
+//! [`Saml<Idp>::respond_name_id_management`]. The service provider has no
+//! SOAP name identifier management. This does not claim the IdP or SP
+//! operational mode.
+//!
 //! # Unsupported profiles
 //!
 //! The high-level [`Saml`] API focuses on browser Web SSO, Enhanced Client/Proxy
 //! SSO over PAOS at the service-provider and identity-provider ends,
 //! metadata-driven SP/IdP setup, XML signature/encryption through `bergshamra`,
-//! Single Logout, and artifact resolution over SOAP. The enhanced-client role
+//! Single Logout, artifact resolution over SOAP, and name identifier
+//! management over SOAP at the identity provider. The enhanced-client role
 //! is not a facade. It does not implement HTTP-Artifact delivery of an
 //! `<AuthnRequest>` or a logout message, SOAP profiles other than artifact
-//! resolution, Single Logout, and the identity-provider leg of
-//! Enhanced Client/Proxy SSO, SAML query protocols, NameID management, or
-//! metadata federation. If you need one of those profiles for a real
+//! resolution, Single Logout, name identifier management at the identity
+//! provider, and the identity-provider leg of Enhanced Client/Proxy SSO, SAML
+//! query protocols, name identifier management over HTTP-Redirect or at the
+//! service provider, name identifier mapping, or metadata federation. If you
+//! need one of those profiles for a real
 //! interoperability target, please open an issue with the profile, binding,
 //! IdP/SP product, and a minimal expected flow so we can consider the
 //! implementation.
@@ -378,6 +392,7 @@ pub mod idp;
 pub mod logout;
 pub mod metadata;
 pub mod model;
+mod name_id_management;
 pub mod raw;
 mod soap;
 #[doc(hidden)]
@@ -412,10 +427,10 @@ pub use config::{
     AuthnRequestValidationPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
     DigestAlgorithm, EntityId, HmacSecret, IdpConfig, IdpConfigBuilder, IdpDescriptor,
     IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
-    LogoutSignaturePolicy, MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase,
-    PrivateKeyPem, ResponseSignaturePolicy, SignatureAlgorithm, SpConfig, SpConfigBuilder,
-    SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy, TransformAlgorithm,
-    XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
+    LogoutSignaturePolicy, ManageNameIdService, MetadataTrustPolicy, NameIdCreationPolicy,
+    NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy, SignatureAlgorithm, SpConfig,
+    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
+    TransformAlgorithm, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(any(
     feature = "crypto-rustcrypto",
@@ -445,6 +460,10 @@ pub use model::{
     RequestedSubject, RequestedSubjectIdentifier, SamlInstant, SamlValidationContext, SessionIndex,
     SsoResponse, SsoSession, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
     TopLevelStatusCode, VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RELAY_STATE_BYTES,
+};
+pub use name_id_management::{
+    ManageNameIdRequest, NameIdChange, NameIdManagementRefusal, ReceivedNameIdManagement,
+    RefusedNameIdManagement, StartedNameIdManagement,
 };
 pub use soap::{
     MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,

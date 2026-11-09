@@ -113,6 +113,10 @@ export default defineConfig({
 									label: 'Algorithms',
 									slug: 'reference/conformance/xml-security-algorithms',
 								},
+								{
+									label: 'Name identifier management',
+									slug: 'reference/conformance/name-id-management',
+								},
 							],
 						},
 					],

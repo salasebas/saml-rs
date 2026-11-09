@@ -632,6 +632,57 @@ fn stored_persistent_identifier_is_reissued_unchanged() -> Result<(), Box<dyn st
 }
 
 #[test]
+fn identity_provider_sends_the_alternative_identifier_the_service_provider_set(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let name_id = NameId::with_qualifiers(
+        NameId::generate_persistent().value(),
+        Some(NameIdFormat::Persistent),
+        None,
+        None,
+        Some("sp-alias".into()),
+    );
+
+    let exchange = exchange(subject(name_id.clone()), RespondSso::post())?;
+
+    assert_eq!(
+        name_id_element(&exchange.xml)?,
+        format!(
+            "<saml:NameID Format=\"{}\" SPProvidedID=\"sp-alias\">{}",
+            NameIdFormat::Persistent.as_uri(),
+            name_id.value()
+        )
+    );
+    assert_eq!(exchange.session.name_id(), &name_id);
+    Ok(())
+}
+
+#[test]
+fn a_login_response_template_does_not_drop_the_alternative_identifier(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp()?;
+    let idp = idp_with(TemplatePolicy {
+        login_response_template: Some(LoginResponseTemplate {
+            context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+            attributes: Vec::new(),
+        }),
+        ..TemplatePolicy::default()
+    })?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let name_id = NameId::with_qualifiers(
+        "pseudonym",
+        Some(NameIdFormat::Persistent),
+        None,
+        None,
+        Some("sp-alias".into()),
+    );
+
+    match idp.initiate_sso(&sp_descriptor, subject(name_id), RespondSso::post()) {
+        Err(SamlError::Invalid(message)) if message.contains("SPProvidedID") => Ok(()),
+        other => Err(format!("expected SPProvidedID template error, got {other:?}").into()),
+    }
+}
+
+#[test]
 fn stored_persistent_identifier_is_at_most_256_characters() -> Result<(), Box<dyn std::error::Error>>
 {
     // The limit counts characters, not bytes.

@@ -46,6 +46,7 @@ pub struct LoginResponseOptions<'a> {
 pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) acs: Option<&'a str>,
     pub(crate) name_id_format: Option<&'a str>,
+    pub(crate) sp_provided_id: Option<&'a str>,
     pub(crate) issuance_lifetime: Option<time::Duration>,
     pub(crate) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(crate) status: Option<&'a Status>,
@@ -55,6 +56,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
 #[derive(Clone, Copy)]
 struct LoginResponseRendering<'a> {
     name_id_format: Option<&'a str>,
+    sp_provided_id: Option<&'a str>,
     custom: Option<CustomTagReplacement<'a>>,
     issuance_lifetime: time::Duration,
     web_browser_sso_producer: WebBrowserSsoProducer,
@@ -166,6 +168,11 @@ impl IdentityProvider {
                     .into(),
             ));
         }
+        if rendering.sp_provided_id.is_some() && uses_template {
+            return Err(SamlError::Invalid(
+                "a NameID SPProvidedID cannot be combined with a login response template".into(),
+            ));
+        }
         if !rendering.typed_attributes.is_empty() && (uses_template || !attributes.is_empty()) {
             return Err(SamlError::Invalid(
                 "response attributes cannot be combined with a login response template".into(),
@@ -223,6 +230,7 @@ impl IdentityProvider {
                 audience: &audience,
                 name_id_format,
                 name_id: &user.name_id,
+                sp_provided_id: rendering.sp_provided_id,
                 in_response_to: emitted_in_response_to,
                 authn_statement: rendering.web_browser_sso_producer.follows().then_some(
                     login_response::AuthnStatementXml {
@@ -370,6 +378,7 @@ impl IdentityProvider {
             &acs,
             LoginResponseRendering {
                 name_id_format: overrides.name_id_format,
+                sp_provided_id: overrides.sp_provided_id,
                 custom: options.custom,
                 issuance_lifetime: overrides
                     .issuance_lifetime

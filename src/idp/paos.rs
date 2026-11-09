@@ -13,6 +13,7 @@ pub(crate) struct PaosSsoResponseInput<'a> {
     pub(crate) in_response_to: &'a str,
     pub(crate) user: &'a User,
     pub(crate) name_id_format: Option<&'a str>,
+    pub(crate) sp_provided_id: Option<&'a str>,
     pub(crate) issuance_lifetime: time::Duration,
     pub(crate) status: Option<&'a Status>,
 }
@@ -40,6 +41,7 @@ impl IdentityProvider {
             LoginResponseOverrides {
                 acs: Some(input.acs),
                 name_id_format: input.name_id_format,
+                sp_provided_id: input.sp_provided_id,
                 issuance_lifetime: Some(input.issuance_lifetime),
                 web_browser_sso_producer: WebBrowserSsoProducer::Follow,
                 status: input.status,

@@ -5,16 +5,12 @@
 //! returns the protocol message from `ArtifactResponse`.
 
 use std::collections::{HashMap, HashSet};
-use std::ops::Range;
 
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine;
-use quick_xml::events::Event;
-use quick_xml::name::{Namespace, ResolveResult};
-use quick_xml::reader::NsReader;
 
 use crate::config::{IdpDescriptor, SpDescriptor};
-use crate::constants::{name_id_format, namespace, status_code};
+use crate::constants::{namespace, status_code};
 use crate::entity::{generate_id, now_iso8601};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
@@ -22,9 +18,11 @@ use crate::model::EndpointUrl;
 use crate::soap::{
     read_soap_body, MessageConfidentiality, SoapChannel, SoapProtocolMessage, SoapRequest,
 };
-use crate::xml::dom::{self, Node};
 use crate::xml::fragment::standalone_element;
 use crate::xml::parse_saml_utc_date_time;
+use crate::xml::protocol_element::{
+    issuer, issuer_format_is_entity, parse_saml, status_codes, PartyName, SamlElement,
+};
 use crate::xml::write::XmlWriter;
 
 const ARTIFACT_TYPE_CODE: u16 = 0x0004;
@@ -356,14 +354,14 @@ impl ArtifactResolution {
             ));
         }
         let response = parse_saml(&body.xml)?;
-        let version = required_attr(&response, "Version")?;
+        let version = response.required_attr("Version")?;
         if version != "2.0" {
             return Err(SamlError::ProtocolProfile(
                 "ArtifactResponse Version must be 2.0".into(),
             ));
         }
-        let _response_id = required_attr(&response, "ID")?;
-        let response_instant = required_attr(&response, "IssueInstant")?;
+        let _response_id = response.required_attr("ID")?;
+        let response_instant = response.required_attr("IssueInstant")?;
         if parse_saml_utc_date_time(&response_instant).is_none() {
             return Err(SamlError::ProtocolProfile(
                 "ArtifactResponse IssueInstant must be a UTC xs:dateTime".into(),
@@ -706,11 +704,6 @@ struct ResolveRequest {
     artifact: String,
 }
 
-struct PartyName {
-    value: String,
-    format: Option<String>,
-}
-
 fn parse_resolve(xml: &str) -> Result<ResolveRequest, SamlError> {
     let element = parse_saml(xml)?;
     if element.local_name != "ArtifactResolve" || element.namespace != namespace::PROTOCOL {
@@ -718,9 +711,9 @@ fn parse_resolve(xml: &str) -> Result<ResolveRequest, SamlError> {
             "SOAP body must be an ArtifactResolve".into(),
         ));
     }
-    let id = required_attr(&element, "ID")?;
-    let version = required_attr(&element, "Version")?;
-    let issue_instant = required_attr(&element, "IssueInstant")?;
+    let id = element.required_attr("ID")?;
+    let version = element.required_attr("Version")?;
+    let issue_instant = element.required_attr("IssueInstant")?;
     if parse_saml_utc_date_time(&issue_instant).is_none() {
         return Err(SamlError::ProtocolProfile(
             "ArtifactResolve IssueInstant must be a UTC xs:dateTime".into(),
@@ -766,58 +759,6 @@ fn parse_resolve(xml: &str) -> Result<ResolveRequest, SamlError> {
     })
 }
 
-fn issuer(element: &SamlElement) -> Option<PartyName> {
-    let issuer = element
-        .children
-        .iter()
-        .find(|child| child.local_name == "Issuer" && child.namespace == namespace::ASSERTION)?;
-    let value = issuer.text.trim();
-    if value.is_empty() {
-        return None;
-    }
-    Some(PartyName {
-        value: value.to_string(),
-        format: issuer.attr("Format").map(str::to_string),
-    })
-}
-
-fn issuer_format_is_entity(format: Option<&str>) -> bool {
-    match format {
-        None => true,
-        Some(format) => format == name_id_format::ENTITY,
-    }
-}
-
-fn status_codes(response: &SamlElement) -> Result<(String, Option<String>), SamlError> {
-    let mut statuses = response
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Status" && child.namespace == namespace::PROTOCOL);
-    let status = statuses.next().ok_or(SamlError::UndefinedStatus)?;
-    if statuses.next().is_some() {
-        return Err(SamlError::ProtocolProfile(
-            "ArtifactResponse requires one Status".into(),
-        ));
-    }
-    let code = status
-        .children
-        .iter()
-        .find(|child| child.local_name == "StatusCode" && child.namespace == namespace::PROTOCOL)
-        .ok_or(SamlError::UndefinedStatus)?;
-    let top = code
-        .attr("Value")
-        .filter(|value| !value.is_empty())
-        .ok_or(SamlError::UndefinedStatus)?
-        .to_string();
-    let second = code
-        .children
-        .iter()
-        .find(|child| child.local_name == "StatusCode" && child.namespace == namespace::PROTOCOL)
-        .and_then(|child| child.attr("Value"))
-        .map(str::to_string);
-    Ok((top, second))
-}
-
 fn protocol_payload(response: &SamlElement) -> Result<Option<&SamlElement>, SamlError> {
     let mut payloads = response.children.iter().filter(|child| {
         !matches!(
@@ -834,101 +775,6 @@ fn protocol_payload(response: &SamlElement) -> Result<Option<&SamlElement>, Saml
         ));
     }
     Ok(payload)
-}
-
-fn required_attr(element: &SamlElement, name: &str) -> Result<String, SamlError> {
-    element
-        .attr(name)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .ok_or_else(|| {
-            SamlError::ProtocolProfile(format!(
-                "{} is missing required attribute {name}",
-                element.local_name
-            ))
-        })
-}
-
-struct SamlElement {
-    local_name: String,
-    namespace: String,
-    attributes: Vec<(String, String)>,
-    text: String,
-    children: Vec<SamlElement>,
-    /// Byte range of the element in the parsed XML.
-    span: Range<usize>,
-}
-
-impl SamlElement {
-    fn attr(&self, name: &str) -> Option<&str> {
-        self.attributes
-            .iter()
-            .find(|(key, _)| key == name)
-            .map(|(_, value)| value.as_str())
-    }
-}
-
-fn parse_saml(xml: &str) -> Result<SamlElement, SamlError> {
-    let document = dom::parse(xml)?;
-    let mut namespaces = element_namespaces(xml)?;
-    annotate(&document.root, xml.len(), &mut namespaces)
-}
-
-fn annotate(
-    node: &Node,
-    xml_len: usize,
-    namespaces: &mut std::vec::IntoIter<(String, String)>,
-) -> Result<SamlElement, SamlError> {
-    let (local_name, namespace) = namespaces
-        .next()
-        .ok_or_else(|| SamlError::Xml("protocol element is missing a namespace".into()))?;
-    if local_name != node.local_name {
-        return Err(SamlError::Xml(
-            "protocol element namespace does not match the element".into(),
-        ));
-    }
-    let mut children = Vec::new();
-    for child in &node.children {
-        children.push(annotate(child, xml_len, namespaces)?);
-    }
-    if node.end < node.start || node.end > xml_len {
-        return Err(SamlError::Xml("protocol element is incomplete".into()));
-    }
-    Ok(SamlElement {
-        local_name,
-        namespace,
-        attributes: node.attrs.clone(),
-        text: node.text.clone(),
-        children,
-        span: node.start..node.end,
-    })
-}
-
-fn element_namespaces(xml: &str) -> Result<std::vec::IntoIter<(String, String)>, SamlError> {
-    let mut reader = NsReader::from_str(xml);
-    let mut buf = Vec::new();
-    let mut names = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(element) | Event::Empty(element)) => {
-                let (namespace, local_name) = reader.resolver().resolve_element(element.name());
-                let local_name = local_name.as_ref().to_string();
-                let namespace = match namespace {
-                    ResolveResult::Bound(Namespace(uri)) => uri.to_string(),
-                    ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
-                };
-                names.push((local_name, namespace));
-            }
-            Ok(Event::DocType(_)) => {
-                return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
-            }
-            Ok(Event::Eof) => break,
-            Ok(_) => {}
-            Err(err) => return Err(SamlError::Xml(err.to_string())),
-        }
-        buf.clear();
-    }
-    Ok(names.into_iter())
 }
 
 fn sha1(input: &[u8]) -> [u8; 20] {

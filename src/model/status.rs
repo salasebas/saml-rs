@@ -46,6 +46,22 @@ impl SubordinateStatusCode {
         }
     }
 
+    /// `urn:oasis:names:tc:SAML:2.0:status:UnknownPrincipal`.
+    ///
+    /// A name identifier management responder may answer with it when it does
+    /// not recognize the identifier.
+    pub fn unknown_principal() -> Self {
+        Self {
+            uri: status_code::UNKNOWN_PRINCIPAL.to_string(),
+        }
+    }
+
+    pub(crate) fn request_unsupported() -> Self {
+        Self {
+            uri: status_code::REQUEST_UNSUPPORTED.to_string(),
+        }
+    }
+
     /// Wrap an absolute status-code URI.
     ///
     /// # Errors

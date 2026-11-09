@@ -81,6 +81,8 @@ pub struct IdpMetadataConfig {
     pub single_logout_service: Vec<Endpoint>,
     /// `ArtifactResolutionService` endpoints. Each binding is SOAP.
     pub artifact_resolution_service: Vec<ArtifactResolutionEndpoint>,
+    /// `ManageNameIDService` locations. Each binding is SOAP.
+    pub manage_name_id_service: Vec<String>,
     /// Element ordering profile (defaults to [`elements_order::idp::DEFAULT`]).
     pub elements_order: Option<Vec<String>>,
 }
@@ -167,6 +169,18 @@ fn write_artifact_resolution_service(
     }
 }
 
+fn write_manage_name_id_service(w: &mut MetadataWriter, locations: &[String]) {
+    for location in locations {
+        w.empty(
+            "ManageNameIDService",
+            &[
+                ("Binding", crate::constants::SOAP_BINDING_URN),
+                ("Location", location.as_str()),
+            ],
+        );
+    }
+}
+
 fn write_sp_group(w: &mut MetadataWriter, cfg: &SpMetadataConfig, name: &str) {
     match name {
         "KeyDescriptor" => write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs),
@@ -188,6 +202,7 @@ fn idp_group_has_content(cfg: &IdpMetadataConfig, name: &str) -> bool {
         "SingleSignOnService" => is_non_empty_array(&cfg.single_sign_on_service),
         "SingleLogoutService" => is_non_empty_array(&cfg.single_logout_service),
         "ArtifactResolutionService" => is_non_empty_array(&cfg.artifact_resolution_service),
+        "ManageNameIDService" => is_non_empty_array(&cfg.manage_name_id_service),
         _ => false,
     }
 }
@@ -201,6 +216,7 @@ fn write_idp_group(w: &mut MetadataWriter, cfg: &IdpMetadataConfig, name: &str) 
         "ArtifactResolutionService" => {
             write_artifact_resolution_service(w, &cfg.artifact_resolution_service)
         }
+        "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
         _ => {}
     }
 }
@@ -273,12 +289,20 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> String {
             .map_or(0, |position| position + 1);
         order.insert(after_key_descriptor, "ArtifactResolutionService".into());
     }
+    if is_custom_order && !order.iter().any(|ordered| ordered == "ManageNameIDService") {
+        let after_single_logout = order
+            .iter()
+            .position(|ordered| ordered == "SingleLogoutService")
+            .map_or(order.len(), |position| position + 1);
+        order.insert(after_single_logout, "ManageNameIDService".into());
+    }
     let descriptors = [
         "KeyDescriptor",
         "NameIDFormat",
         "ArtifactResolutionService",
         "SingleSignOnService",
         "SingleLogoutService",
+        "ManageNameIDService",
     ];
     let mut w = MetadataWriter::new();
     w.start(
@@ -691,6 +715,40 @@ mod tests {
 
         assert_eq!(xml.matches("<SingleSignOnService").count(), 1);
         assert!(key < sso);
+    }
+
+    #[test]
+    fn idp_custom_elements_order_writes_omitted_manage_name_id_service_after_logout() {
+        let cfg = IdpMetadataConfig {
+            entity_id: "https://idp.example.com/metadata".into(),
+            name_id_format: vec![name_id_format::PERSISTENT.to_string()],
+            single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+            single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
+            manage_name_id_service: vec!["https://idp/nameid".into()],
+            elements_order: Some(
+                elements_order::idp::SHIBBOLETH
+                    .iter()
+                    .map(|name| (*name).to_string())
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let xml = generate_idp_metadata(&cfg);
+        let positions = [
+            "<SingleLogoutService",
+            "<ManageNameIDService",
+            "<NameIDFormat",
+            "<SingleSignOnService",
+        ]
+        .map(|element| xml.find(element));
+
+        assert!(xml.contains(
+            r#"<ManageNameIDService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp/nameid"/>"#
+        ));
+        assert_eq!(xml.matches("<ManageNameIDService").count(), 1);
+        assert!(positions.iter().all(Option::is_some));
+        assert!(positions.is_sorted());
     }
 
     #[test]

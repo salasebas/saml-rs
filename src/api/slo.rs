@@ -207,8 +207,9 @@ impl Saml<Idp> {
     /// With no configured format, `Format` is omitted, as in the assertion.
     ///
     /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` on the subject
-    /// `NameId` are sent as given. [`Self::respond_sso`] does not write them,
-    /// so pass them only when the assertion carried them.
+    /// `NameId` are sent as given. [`Self::respond_sso`] writes `SPProvidedID`
+    /// but not the other two, so pass those only when the assertion carried
+    /// them.
     ///
     /// # Errors
     ///

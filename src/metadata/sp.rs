@@ -63,6 +63,11 @@ impl SpMetadata {
             ExtractorField::new("spRoleContext", &["EntityDescriptor", "SPSSODescriptor"])
                 .with_context(),
             ExtractorField::new(
+                "manageNameIDService",
+                &["EntityDescriptor", "SPSSODescriptor", "ManageNameIDService"],
+            )
+            .attrs(&["Binding", "Location"]),
+            ExtractorField::new(
                 "assertionConsumerService",
                 &[
                     "EntityDescriptor",

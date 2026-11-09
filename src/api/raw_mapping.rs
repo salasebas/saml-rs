@@ -77,6 +77,12 @@ pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfi
                 location: service.location().as_str().to_string(),
             })
             .collect(),
+        manage_name_id_service: config
+            .metadata
+            .manage_name_id_service
+            .iter()
+            .map(|service| service.location().as_str().to_string())
+            .collect(),
         elements_order: config.metadata.elements_order.clone(),
     }
 }
