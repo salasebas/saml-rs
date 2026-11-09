@@ -140,6 +140,8 @@ impl Saml<Idp> {
     /// resolution does not read those presets.
     ///
     /// ```
+    /// use std::time::Duration;
+    ///
     /// use saml_rs::{
     ///     ArtifactDereference, ArtifactResolutionService, ArtifactUses, EndpointUrl,
     ///     EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, IssuedArtifacts,
@@ -183,7 +185,7 @@ impl Saml<Idp> {
     ///     &idp_descriptor,
     ///     &artifact,
     ///     ArtifactDereference::web_browser_sso(channel)?,
-    ///     &mut ArtifactUses::enforce_single_use(),
+    ///     &mut ArtifactUses::enforce_single_use(Duration::from_secs(10 * 60)),
     /// )?;
     /// let answer = idp.answer_artifact_resolve(
     ///     &sp_descriptor,

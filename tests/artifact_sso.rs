@@ -11,7 +11,7 @@
     feature = "crypto-fips"
 ))]
 
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::transform_algorithm;
@@ -37,6 +37,7 @@ const SP_ACS_POST: &str = "https://sp.example.com/acs/post";
 const SP_ACS_ARTIFACT: &str = "https://sp.example.com/acs/artifact";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const RESOLUTION_URL: &str = "https://idp.example.com/artifact";
+const BLOCKED_FOR: Duration = Duration::from_secs(10 * 60);
 const USER: &str = "user@example.com";
 const AUTHN_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
 
@@ -236,7 +237,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
         &parties.idp_metadata,
         delivered.artifact(),
         ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -354,7 +355,7 @@ fn resolve(
         &parties.idp_metadata,
         delivered.artifact(),
         ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -723,7 +724,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
         &other_metadata,
         delivered.artifact(),
         ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = other.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -853,7 +854,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
         &parties.idp_metadata,
         delivered.artifact(),
         ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &sp_metadata,

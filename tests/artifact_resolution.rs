@@ -8,6 +8,8 @@
 //! Config helpers select `compatibility()` so they build without a crypto
 //! provider. Artifact resolution does not read that preset.
 
+use std::time::Duration;
+
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
@@ -22,6 +24,7 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const OTHER_ENTITY_ID: &str = "https://other.example.com/metadata";
 const RESOLUTION_URL: &str = "https://idp.example.com/artifact";
+const BLOCKED_FOR: Duration = Duration::from_secs(10 * 60);
 const PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 const ASSERTION: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
 const SUCCESS: &str = "urn:oasis:names:tc:SAML:2.0:status:Success";
@@ -172,7 +175,7 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let request = resolution.request();
     assert_eq!(request.endpoint().as_str(), RESOLUTION_URL);
@@ -227,7 +230,7 @@ fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn st
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.other_metadata,
@@ -247,7 +250,7 @@ fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn st
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let second = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -277,7 +280,7 @@ fn web_sso_without_confidentiality_withholds_the_message() -> Result<(), Box<dyn
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -395,7 +398,7 @@ fn artifact_source_id_is_the_sha1_of_the_issuer_entity_id() -> Result<(), Box<dy
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let unpadded = artifact.as_str().trim_end_matches('=').to_string();
     assert_ne!(unpadded, artifact.as_str());
@@ -520,7 +523,7 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let redirected = resolution.request().envelope().replace(
         &format!("Destination=\"{RESOLUTION_URL}\""),
@@ -553,7 +556,7 @@ fn the_service_provider_rejects_a_repeated_artifact() -> Result<(), Box<dyn std:
     let mut issued = IssuedArtifacts::new();
     let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
     let channel = confidential();
-    let mut uses = ArtifactUses::enforce_single_use();
+    let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);
     parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
@@ -594,7 +597,7 @@ fn an_artifact_from_another_issuer_is_rejected_before_it_is_recorded(
         bytes[4] ^= 0xff;
     })?;
     let channel = confidential();
-    let mut uses = ArtifactUses::enforce_single_use();
+    let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);
     let first = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &foreign,
@@ -628,7 +631,7 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
         &parties.idp_metadata,
         &other_index,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     );
     assert!(matches!(
         missing,
@@ -649,7 +652,7 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
         &peer,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     );
     assert!(matches!(unsupported, Err(SamlError::Unsupported(_))));
     Ok(())
@@ -665,7 +668,7 @@ fn another_protocol_message_uses_the_same_soap_channel() -> Result<(), Box<dyn s
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::protocol(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -732,7 +735,7 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -825,7 +828,7 @@ fn a_release_that_cannot_be_built_leaves_the_artifact_outstanding(
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let first = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -880,7 +883,7 @@ fn the_service_provider_rejects_an_artifact_response_without_id_or_instant(
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -956,7 +959,7 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
     let peer =
         IdpDescriptor::from_metadata_xml(&posted, MetadataTrustPolicy::UnsignedForCompatibility)?;
     let channel = confidential();
-    let mut uses = ArtifactUses::enforce_single_use();
+    let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);
     let first = parties.sp.resolve_artifact(
         &peer,
         &artifact,
@@ -1022,7 +1025,7 @@ fn the_service_provider_rejects_an_artifact_response_with_two_statuses(
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -1059,7 +1062,7 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let declarations = format!(r#" xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}""#);
     let hoisted_request = resolution
@@ -1112,7 +1115,7 @@ fn a_protocol_dereference_does_not_return_a_response() -> Result<(), Box<dyn std
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::protocol(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -1140,7 +1143,7 @@ fn a_removed_artifact_is_no_longer_outstanding() -> Result<(), Box<dyn std::erro
         &parties.idp_metadata,
         &artifact,
         ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(),
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
     )?;
     assert!(issued.remove(&artifact));
     assert!(!issued.remove(&artifact));

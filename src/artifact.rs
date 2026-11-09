@@ -4,7 +4,8 @@
 //! answers `ArtifactResolve`. The service provider sends that request and
 //! returns the protocol message from `ArtifactResponse`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::time::{Duration, Instant};
 
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine;
@@ -230,16 +231,29 @@ impl IssuedArtifacts {
 /// the receiver single-use recommendation.
 #[derive(Debug)]
 pub struct ArtifactUses {
-    enforce: bool,
-    seen: HashSet<String>,
+    blocked: Option<BlockedArtifacts>,
+}
+
+#[derive(Debug)]
+struct BlockedArtifacts {
+    period: Duration,
+    values: HashSet<String>,
+    oldest_first: VecDeque<(Instant, String)>,
 }
 
 impl ArtifactUses {
-    /// Reject a second resolution of the same artifact value.
-    pub fn enforce_single_use() -> Self {
+    /// Reject a second resolution of the same artifact value for `period`.
+    ///
+    /// Choose a `period` longer than the identity provider would still resolve
+    /// the artifact. Each resolution drops the values recorded more than
+    /// `period` ago, so memory holds only the artifacts of the last `period`.
+    pub fn enforce_single_use(period: Duration) -> Self {
         Self {
-            enforce: true,
-            seen: HashSet::new(),
+            blocked: Some(BlockedArtifacts {
+                period,
+                values: HashSet::new(),
+                oldest_first: VecDeque::new(),
+            }),
         }
     }
 
@@ -248,18 +262,28 @@ impl ArtifactUses {
     /// This relaxes the receiver single-use recommendation. The artifact issuer
     /// still returns the message only once.
     pub fn allow_reuse() -> Self {
-        Self {
-            enforce: false,
-            seen: HashSet::new(),
-        }
+        Self { blocked: None }
     }
 
-    fn record(&mut self, artifact: &str) -> Result<(), SamlError> {
-        if self.enforce && !self.seen.insert(artifact.to_string()) {
+    fn record(&mut self, artifact: &str, now: Instant) -> Result<(), SamlError> {
+        let Some(blocked) = &mut self.blocked else {
+            return Ok(());
+        };
+        while blocked
+            .oldest_first
+            .front()
+            .is_some_and(|(at, _)| now.saturating_duration_since(*at) >= blocked.period)
+        {
+            if let Some((_, expired)) = blocked.oldest_first.pop_front() {
+                blocked.values.remove(&expired);
+            }
+        }
+        if !blocked.values.insert(artifact.to_string()) {
             return Err(SamlError::ReplayDetected {
                 key: artifact.to_string(),
             });
         }
+        blocked.oldest_first.push_back((now, artifact.to_string()));
         Ok(())
     }
 }
@@ -514,7 +538,7 @@ pub(crate) fn resolve(
     writer.end("samlp:ArtifactResolve");
     let request =
         SoapProtocolMessage::request(EndpointUrl::try_new(service.location())?, &writer.finish())?;
-    uses.record(artifact.as_str())?;
+    uses.record(artifact.as_str(), Instant::now())?;
     Ok(ArtifactResolution {
         request,
         request_id,
@@ -868,6 +892,25 @@ mod tests {
     fn sha1_matches_the_quick_brown_fox_vector() {
         let digest = sha1(b"The quick brown fox jumps over the lazy dog");
         assert_eq!(hex(&digest), "2fd4e1c67a2d28fced849ee1bb76e7391b93eb12");
+    }
+
+    #[test]
+    fn single_use_blocks_an_artifact_only_for_the_period() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let period = Duration::from_secs(60);
+        let start = Instant::now();
+        let mut uses = ArtifactUses::enforce_single_use(period);
+        for n in 0u32..1_000 {
+            uses.record(&n.to_string(), start)?;
+        }
+        let repeated = uses.record("0", start + period - Duration::from_secs(1));
+        assert!(matches!(repeated, Err(SamlError::ReplayDetected { key }) if key == "0"));
+
+        uses.record("0", start + period)?;
+        let blocked = uses.blocked.as_ref().ok_or("single use is enforced")?;
+        assert_eq!(blocked.values, HashSet::from(["0".to_string()]));
+        assert_eq!(blocked.oldest_first.len(), 1);
+        Ok(())
     }
 
     fn hex(bytes: &[u8]) -> String {
