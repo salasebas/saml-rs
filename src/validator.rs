@@ -73,6 +73,9 @@ pub(crate) fn effective_not_on_or_after(
 /// `drift` is `(not_before_ms, not_on_or_after_ms)` added to the respective
 /// bounds. When neither bound is present the document is treated as valid.
 /// A present-but-unparseable timestamp fails closed (mirrors JS `Invalid Date`).
+/// A `NotOnOrAfter` bound whose skew passes the maximum supported instant is
+/// treated as not expired. A `NotBefore` bound that cannot be shifted inside
+/// the supported range fails closed.
 pub fn verify_time(
     not_before: Option<&str>,
     not_on_or_after: Option<&str>,
@@ -86,31 +89,53 @@ pub fn verify_time(
     )
 }
 
+fn shift_instant(instant: OffsetDateTime, drift_ms: i64) -> Option<OffsetDateTime> {
+    instant.checked_add(Duration::milliseconds(drift_ms))
+}
+
+fn not_before_has_elapsed(bound: OffsetDateTime, drift_ms: i64, now: OffsetDateTime) -> bool {
+    shift_instant(bound, drift_ms).is_some_and(|effective| effective <= now)
+}
+
+/// `NotOnOrAfter` is exclusive.
+///
+/// A positive skew that passes the maximum supported instant is still after
+/// every representable `now`. A negative skew that passes the minimum
+/// supported instant is before every representable `now`.
+fn not_on_or_after_is_open(bound: OffsetDateTime, drift_ms: i64, now: OffsetDateTime) -> bool {
+    match shift_instant(bound, drift_ms) {
+        Some(effective) => now < effective,
+        None => drift_ms >= 0,
+    }
+}
+
 pub(crate) fn verify_time_at(
     not_before: Option<&str>,
     not_on_or_after: Option<&str>,
     drift: (i64, i64),
     now: OffsetDateTime,
 ) -> bool {
-    let (nb_drift, na_drift) = (
-        Duration::milliseconds(drift.0),
-        Duration::milliseconds(drift.1),
-    );
+    let (not_before_ms, not_on_or_after_ms) = drift;
 
     match (not_before, not_on_or_after) {
         (None, None) => true,
-        (Some(nb), None) => match parse(nb) {
-            Some(t) => t + nb_drift <= now,
+        (Some(not_before), None) => match parse(not_before) {
+            Some(bound) => not_before_has_elapsed(bound, not_before_ms, now),
             None => false,
         },
-        (None, Some(na)) => match parse(na) {
-            Some(t) => now < t + na_drift,
+        (None, Some(not_on_or_after)) => match parse(not_on_or_after) {
+            Some(bound) => not_on_or_after_is_open(bound, not_on_or_after_ms, now),
             None => false,
         },
-        (Some(nb), Some(na)) => match (parse(nb), parse(na)) {
-            (Some(b), Some(a)) => b + nb_drift <= now && now < a + na_drift,
-            _ => false,
-        },
+        (Some(not_before), Some(not_on_or_after)) => {
+            match (parse(not_before), parse(not_on_or_after)) {
+                (Some(not_before), Some(not_on_or_after)) => {
+                    not_before_has_elapsed(not_before, not_before_ms, now)
+                        && not_on_or_after_is_open(not_on_or_after, not_on_or_after_ms, now)
+                }
+                _ => false,
+            }
+        }
     }
 }
 
@@ -250,6 +275,61 @@ mod tests {
             }
             other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn default_context_accepts_year_9999_not_on_or_after() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::model::{ReplayPolicy, SamlValidationContext};
+        use std::time::SystemTime;
+
+        let validation = SamlValidationContext::new(
+            SystemTime::UNIX_EPOCH,
+            ReplayPolicy::DisabledForCompatibility,
+        );
+        let now = OffsetDateTime::parse("2026-10-10T00:00:00Z", &Rfc3339)?;
+        let drift = validation.clock_skew().as_millis();
+        let never_expires = "9999-12-31T23:59:59Z";
+
+        assert!(verify_time(None, Some(never_expires), drift));
+        assert!(verify_time_at(None, Some(never_expires), drift, now));
+        assert!(verify_time_at(
+            Some("2014-07-17T01:01:18Z"),
+            Some(never_expires),
+            drift,
+            now,
+        ));
+        assert!(!verify_time_at(Some(never_expires), None, drift, now));
+        Ok(())
+    }
+
+    #[test]
+    fn unrepresentable_time_shift_follows_the_window_bounds(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let now = OffsetDateTime::parse("2026-10-10T00:00:00Z", &Rfc3339)?;
+        let maximum = "9999-12-31T23:59:59Z";
+        let five_minutes_ms = 5 * 60 * 1000;
+
+        assert!(!verify_time_at(
+            Some(maximum),
+            None,
+            (five_minutes_ms, 0),
+            now,
+        ));
+        assert!(!verify_time_at(
+            Some(maximum),
+            Some(maximum),
+            (five_minutes_ms, five_minutes_ms),
+            now,
+        ));
+        assert!(!verify_time_at(
+            None,
+            Some("2020-01-01T00:00:00Z"),
+            (0, -1_000_000_000_000_000),
+            now,
+        ));
+        assert!(verify_time_at(None, Some(maximum), (0, 0), now));
         Ok(())
     }
 }
