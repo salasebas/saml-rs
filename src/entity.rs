@@ -417,6 +417,10 @@ pub fn now_iso8601() -> String {
 }
 
 /// UTC time `seconds` from now as ISO-8601 (`YYYY-MM-DDTHH:MM:SSZ`).
+///
+/// # Panics
+///
+/// Panics when the shifted time falls outside the years -9999 through 9999.
 pub fn iso8601_offset(seconds: i64) -> String {
     let t = time::OffsetDateTime::now_utc() + time::Duration::seconds(seconds);
     format_saml_utc_date_time(t)
