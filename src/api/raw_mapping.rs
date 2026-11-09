@@ -217,6 +217,7 @@ pub(super) fn input_binding<Message>(input: &BrowserInput<Message>) -> Binding {
         BrowserInput::Redirect { .. } => Binding::Redirect,
         BrowserInput::Post { .. } => Binding::Post,
         BrowserInput::SimpleSignPost { .. } => Binding::SimpleSign,
+        BrowserInput::Artifact { .. } => Binding::Artifact,
     }
 }
 
@@ -237,6 +238,7 @@ pub(super) fn relay_state_from_input<Message>(
                 .map(|field| field.value().to_string());
             RelayStateParam::try_from_option(value)
         }
+        BrowserInput::Artifact { delivered, .. } => Ok(delivered.relay_state().clone()),
     }
 }
 

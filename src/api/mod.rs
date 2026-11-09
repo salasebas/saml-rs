@@ -29,6 +29,38 @@
 //! let _ = idp.start_sso(&peer, StartSso::post());
 //! ```
 //!
+//! An HTTP-Artifact response is issued with `respond_sso_artifact`, which
+//! stores it. `respond_sso` does not take those options, and
+//! `respond_sso_artifact` does not take HTTP-POST options.
+//!
+//! ```compile_fail
+//! use saml_rs::{
+//!     ArtifactDelivery, AuthnRequest, Idp, Received, RespondSso, Saml, SpDescriptor, Subject,
+//! };
+//!
+//! let idp: Saml<Idp> = unreachable!();
+//! let peer: SpDescriptor = unreachable!();
+//! let request: Received<AuthnRequest> = unreachable!();
+//! let subject: Subject = unreachable!();
+//!
+//! let options = RespondSso::artifact(ArtifactDelivery::redirect(0));
+//! let _ = idp.respond_sso(&peer, &request, subject, options);
+//! ```
+//!
+//! ```compile_fail
+//! use saml_rs::{
+//!     AuthnRequest, Idp, IssuedArtifacts, Received, RespondSso, Saml, SpDescriptor, Subject,
+//! };
+//!
+//! let idp: Saml<Idp> = unreachable!();
+//! let peer: SpDescriptor = unreachable!();
+//! let request: Received<AuthnRequest> = unreachable!();
+//! let subject: Subject = unreachable!();
+//! let mut issued = IssuedArtifacts::new();
+//!
+//! let _ = idp.respond_sso_artifact(&peer, &request, subject, RespondSso::post(), &mut issued);
+//! ```
+//!
 //! ```compile_fail
 //! use saml_rs::{CommonDomainCookieLifetime, RememberIdentityProvider, Saml, Sp};
 //!
@@ -56,7 +88,8 @@ use crate::sp::ServiceProvider;
 use raw_mapping::{raw_idp_metadata_config, raw_sp_metadata_config};
 
 pub use options::{
-    ForceAuthn, IsPassive, LogoutSigning, RespondSlo, RespondSso, StartSlo, StartSso,
+    ForceAuthn, IsPassive, LogoutSigning, MessageDelivery, RespondSlo, RespondSso, StartSlo,
+    StartSso,
 };
 pub use paos::{
     HttpHeader, PaosAuthnRequest, PaosClientRequest, PaosHttpResponse, PaosSsoResponse,

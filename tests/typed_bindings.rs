@@ -34,7 +34,7 @@ fn typed_bindings_sso_request_binding_uses_undefined_binding_until_artifact_is_s
 }
 
 #[test]
-fn typed_bindings_sso_response_binding_accepts_post_and_simplesign(
+fn typed_bindings_sso_response_binding_accepts_post_simplesign_and_artifact(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
         SsoResponseBinding::try_from(Binding::Post)?,
@@ -44,17 +44,18 @@ fn typed_bindings_sso_response_binding_accepts_post_and_simplesign(
         SsoResponseBinding::try_from(Binding::SimpleSign)?,
         SsoResponseBinding::SimpleSign
     );
+    assert_eq!(
+        SsoResponseBinding::try_from(Binding::Artifact)?,
+        SsoResponseBinding::Artifact
+    );
+    assert_eq!(SsoResponseBinding::Artifact.as_binding(), Binding::Artifact);
     Ok(())
 }
 
 #[test]
-fn typed_bindings_sso_response_binding_uses_undefined_binding_for_redirect_and_artifact() {
+fn typed_bindings_sso_response_binding_uses_undefined_binding_for_redirect() {
     assert!(matches!(
         SsoResponseBinding::try_from(Binding::Redirect),
-        Err(SamlError::UndefinedBinding)
-    ));
-    assert!(matches!(
-        SsoResponseBinding::try_from(Binding::Artifact),
         Err(SamlError::UndefinedBinding)
     ));
 }
@@ -122,13 +123,18 @@ fn typed_bindings_redirect_acs_endpoint_narrowing_fails() {
 }
 
 #[test]
-fn typed_bindings_artifact_acs_endpoint_narrowing_fails_until_artifact_is_supported() {
+fn typed_bindings_artifact_acs_endpoint_narrows_successfully(
+) -> Result<(), Box<dyn std::error::Error>> {
     let raw = Endpoint::new(Binding::Artifact, "https://sp.example.com/acs");
 
-    assert!(matches!(
-        AcsEndpoint::try_from_raw(raw),
-        Err(SamlError::UndefinedBinding)
-    ));
+    let endpoint = AcsEndpoint::try_from_raw(raw)?;
+    assert_eq!(endpoint.binding(), SsoResponseBinding::Artifact);
+    assert_eq!(
+        endpoint,
+        AcsEndpoint::artifact("https://sp.example.com/acs")?
+    );
+    assert_eq!(endpoint.to_raw().binding, Binding::Artifact);
+    Ok(())
 }
 
 #[test]

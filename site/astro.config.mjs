@@ -102,6 +102,10 @@ export default defineConfig({
 								},
 								{ label: 'Metadata and replay', slug: 'reference/conformance/metadata-and-replay' },
 								{
+									label: 'HTTP-Artifact response',
+									slug: 'reference/conformance/web-browser-sso-artifact',
+								},
+								{
 									label: 'Artifact resolution',
 									slug: 'reference/conformance/artifact-resolution',
 								},

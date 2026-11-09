@@ -658,6 +658,33 @@ fn protocol_binding_naming_paos_is_received() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
+fn protocol_binding_naming_http_artifact_is_not_received() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let with_binding = idp_request.replacen(
+        " AssertionConsumerServiceURL=",
+        " ProtocolBinding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact\" AssertionConsumerServiceURL=",
+        1,
+    );
+    assert_ne!(with_binding, idp_request);
+    assert!(matches!(
+        idp.receive_paos_sso(
+            &sp_descriptor,
+            &PaosAuthnRequest::from_envelope(with_binding, IDP_SOAP)?,
+            validation(),
+        ),
+        Err(SamlError::UndefinedBinding)
+    ));
+    Ok(())
+}
+
+#[test]
 fn assertion_consumer_of_a_binding_that_cannot_carry_the_response_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;

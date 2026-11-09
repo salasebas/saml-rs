@@ -3,7 +3,7 @@ use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::flow::{
     flow, flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
-    FlowOptions, FlowResult, HttpRequest, ResponseSignatureRequirement,
+    FlowOptions, FlowResult, HttpRequest, ResponseSignatureRequirement, SignedMessageDestination,
 };
 use crate::metadata::Metadata;
 use std::time::SystemTime;
@@ -273,6 +273,7 @@ fn run_logout_flow(
             expected_recipient,
             AssertionSignatureRequirement::Compatible,
             ResponseSignatureRequirement::Optional,
+            SignedMessageDestination::Required,
         )?
         .into_parts()
         .0),

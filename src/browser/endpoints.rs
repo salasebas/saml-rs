@@ -139,6 +139,22 @@ impl AcsEndpoint {
         ))
     }
 
+    /// Create an HTTP-Artifact ACS endpoint.
+    ///
+    /// The endpoint receives the artifact in a `SAMLart` query parameter on
+    /// GET and in a `SAMLart` form field on POST.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] if `url` fails [`EndpointUrl::try_new`]
+    /// validation.
+    pub fn artifact(url: impl Into<String>) -> Result<Self, SamlError> {
+        Ok(Self::new(
+            SsoResponseBinding::Artifact,
+            EndpointUrl::try_new(url)?,
+        ))
+    }
+
     /// Set the ACS index advertised in metadata.
     pub fn with_index(mut self, index: u16) -> Self {
         self.index = Some(index);

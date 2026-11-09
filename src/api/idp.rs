@@ -1,5 +1,7 @@
-use crate::browser::{BrowserInput, Outbound, SsoRequestBinding};
+use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
+use crate::browser::{ArtifactDelivery, BrowserInput, Outbound, SsoRequestBinding};
 use crate::config::SpDescriptor;
+use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
@@ -13,6 +15,14 @@ use super::raw_mapping::{
     relay_state_from_input, response_target,
 };
 use super::{Idp, RespondSso, Saml, SamlError};
+
+/// Where an issued response goes.
+pub(super) enum ResponseTransport<'a> {
+    /// The browser action carries the response.
+    Browser,
+    /// The response is stored, and the browser action carries its artifact.
+    Artifact(ArtifactDelivery, &'a mut IssuedArtifacts),
+}
 
 impl Saml<Idp> {
     /// Local IdP metadata XML.
@@ -136,7 +146,12 @@ impl Saml<Idp> {
         options: RespondSso,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
-        self.issue_sso(sp, Some(request), subject, options)
+        self.issue_sso(
+            sp,
+            Some(request),
+            subject,
+            options.delivered(ResponseTransport::Browser),
+        )
     }
 
     /// Initiate IdP-initiated SSO.
@@ -194,14 +209,20 @@ impl Saml<Idp> {
         subject: Subject,
         options: RespondSso,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
-        self.issue_sso(sp, None, subject, options)
+        self.issue_sso(
+            sp,
+            None,
+            subject,
+            options.delivered(ResponseTransport::Browser),
+        )
     }
-    fn issue_sso(
+
+    pub(super) fn issue_sso(
         &self,
         sp: &SpDescriptor,
         request: Option<&Received<AuthnRequest>>,
         subject: Subject,
-        options: RespondSso,
+        options: RespondSso<ResponseTransport<'_>>,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
         let idp_setting = &self.raw_identity_provider().setting;
         let sign_response = options.should_sign_response(
@@ -225,29 +246,65 @@ impl Saml<Idp> {
             .format()
             .map(|format| format.as_uri().to_string());
         let user = user_from_subject(subject);
-        let raw_options = LoginResponseOptions {
-            in_response_to: request.map(|request| request.message().id().as_str()),
-            relay_state: relay_state.as_deref(),
-            encrypt_then_sign: false,
-            custom: None,
+        let in_response_to = request.map(|request| request.message().id().as_str());
+        let overrides = |acs| LoginResponseOverrides {
+            acs,
+            name_id_format: name_id_format.as_deref(),
+            issuance_lifetime: Some(self.0.issuance_lifetime),
+            web_browser_sso_producer: options.web_browser_sso_producer,
+            status: options.status.as_ref(),
+            typed_attributes: options.attributes.as_slice(),
         };
-        let context = self
-            .raw_identity_provider()
-            .create_login_response_with_overrides(
-                &raw_sp,
-                binding.as_binding(),
-                &user,
-                &raw_options,
-                LoginResponseOverrides {
-                    acs: explicit_acs.as_deref(),
-                    name_id_format: name_id_format.as_deref(),
-                    issuance_lifetime: Some(self.0.issuance_lifetime),
-                    web_browser_sso_producer: options.web_browser_sso_producer,
-                    status: options.status.as_ref(),
-                    typed_attributes: options.attributes.as_slice(),
-                },
-            )?;
-        Outbound::<SsoResponse>::try_from(context)
+        let (delivery, issued) = match options.delivery {
+            ResponseTransport::Browser => {
+                let context = self
+                    .raw_identity_provider()
+                    .create_login_response_with_overrides(
+                        &raw_sp,
+                        binding.as_binding(),
+                        &user,
+                        &LoginResponseOptions {
+                            in_response_to,
+                            relay_state: relay_state.as_deref(),
+                            encrypt_then_sign: false,
+                            custom: None,
+                        },
+                        overrides(explicit_acs.as_deref()),
+                    )?;
+                return Outbound::<SsoResponse>::try_from(context);
+            }
+            ResponseTransport::Artifact(delivery, issued) => (delivery, issued),
+        };
+        let acs = match explicit_acs {
+            Some(acs) => acs,
+            None => raw_sp
+                .metadata
+                .get_assertion_consumer_service(Binding::Artifact)
+                .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?,
+        };
+        let (response_id, xml) = self.raw_identity_provider().render_artifact_sso_response(
+            &raw_sp,
+            &user,
+            in_response_to,
+            overrides(Some(acs.as_str())),
+        )?;
+        let artifact = artifact::issue(
+            &self.raw_identity_provider().metadata,
+            sp,
+            IssuedMessage::web_browser_sso_response(xml)?,
+            delivery.endpoint_index(),
+            issued,
+        )?;
+        Outbound::<SsoResponse>::artifact(
+            response_id,
+            relay_state.as_deref().map(str::to_string),
+            &acs,
+            &artifact,
+            delivery.encoding(),
+        )
+        .inspect_err(|_| {
+            issued.remove(&artifact);
+        })
     }
 
     /// Build the `_saml_idp` cookie that remembers this identity provider.

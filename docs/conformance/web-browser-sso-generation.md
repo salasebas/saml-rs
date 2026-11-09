@@ -19,6 +19,9 @@ The constructors `redirect`, `post`, and `simple_sign` leave that selection
 off, which is the samlify-port generation kept for callers leaving the raw
 API.
 
+A response delivered as an HTTP-Artifact is built by these same rules. Its
+delivery is in [HTTP-Artifact response](web-browser-sso-artifact.md).
+
 ## Service provider AuthnRequest
 
 | Rule | Actor | Direction | Level |
@@ -54,10 +57,10 @@ API.
 | Unsolicited response omits `InResponseTo` | Identity provider | Generate Response | Mandatory prohibition. Core §3.2.2 and Profiles §4.1.5. Bearer subject confirmation data omits it as well: Profiles §4.1.5 says it should not be present, and E26 requires the service provider to verify that it is absent. Samlify-port generation still emits an empty attribute |
 | A request without an ACS URL, ACS index, or `ProtocolBinding` uses the metadata default `AssertionConsumerService` | Identity provider | Generate solicited Response | Mandatory. Core §3.4.1; Profiles §4.1.4.1 and §4.1.6. Metadata §§2.2.3, 2.4.1 and E37 scope the default to the SP role advertising SAML 2.0 in `protocolSupportEnumeration`, before binding filtering. An unsupported default or incompatible response binding returns `Invalid` |
 | Apply the indexed-default algorithm to ACS candidates | Metadata consumer | Endpoint selection | Metadata §2.2.3. The default is the first `isDefault` true, otherwise the first not explicitly false, otherwise the first. The unqualified XML Schema boolean accepts `true`, `1`, `false`, and `0` with surrounding XML whitespace. Foreign attributes do not set the flag |
-| Deliver an unsolicited response to the metadata default `AssertionConsumerService` | Identity provider | Generate unsolicited Response | Recommendation. Profiles §4.1.5. Typed `initiate_sso` uses the global default above. An unsupported default or incompatible response binding returns `Invalid`. There is no recommendation relaxation in this API |
+| Deliver an unsolicited response to the metadata default `AssertionConsumerService` | Identity provider | Generate unsolicited Response | Recommendation. Profiles §4.1.5. Typed `initiate_sso` and `initiate_sso_artifact` use the global default above. An unsupported default or incompatible response binding returns `Invalid`. There is no recommendation relaxation in this API |
 | Select an ACS when generating an explicit ACS URL, or when the request specifies a response binding | Service provider or identity provider | Generate AuthnRequest or Response | Library selection policy. The binding-specific helper applies the indexed-default algorithm to that binding's candidates. `start_sso` emits the chosen URL and `ProtocolBinding`, so the request explicitly identifies its endpoint. Raw binding-specific metadata access remains a lower-level lookup |
 | HTTP-POST protects each assertion by a signature on the assertion or on the response | Identity provider | Generate Response | Mandatory for HTTP-POST. Profiles §4.1.4.5 as replaced by E26, and §4.1.3.5 as replaced by E93. Existing typed POST signing already does this |
-| Sign a response that contains a CBC `EncryptedAssertion` | Identity provider | Generate Response | Recommendation. Errata 05 E93. Starts enabled on `RespondSso::post` and `RespondSso::simple_sign`. `RespondSso::allow_unsigned_encrypted_cbc` relaxes that recommendation alone. It is not the Compatibility preset. It does not add a receiver rejection; a relying party that already requires the signature still rejects the relaxed response |
+| Sign a response that contains a CBC `EncryptedAssertion` | Identity provider | Generate Response | Recommendation. Errata 05 E93. Starts enabled on `RespondSso::post`, `RespondSso::simple_sign`, and `RespondSso::artifact`. `RespondSso::allow_unsigned_encrypted_cbc` relaxes that recommendation alone. It is not the Compatibility preset. It does not add a receiver rejection; a relying party that already requires the signature still rejects the relaxed response |
 | Assertion encryption | Identity provider | Generate Response | Optional. Stays off unless `XmlEncryptionPolicy::encrypt_assertions` |
 | Do not generate a leap-second time | Identity provider | Generate any instant | Mandatory. Core §1.3.3 |
 | `RelayState` does not exceed 80 bytes | Identity provider | Generate Response | Mandatory prohibition. Bindings §3.5.3 and HTTP-POST-SimpleSign CD-04 §2.3 |

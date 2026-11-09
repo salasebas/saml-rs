@@ -185,6 +185,18 @@ pub(crate) enum ResponseSignatureRequirement {
     Required,
 }
 
+/// Whether a signed message must carry `Destination`.
+///
+/// A `Destination` that is present is compared with the recipient either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SignedMessageDestination {
+    /// The message arrived through a browser binding that requires it.
+    Required,
+    /// The message was resolved from an artifact. Its XML is passed as an
+    /// HTTP-POST message.
+    Optional,
+}
+
 #[derive(Debug)]
 struct PreparedMessage {
     saml_content: String,
@@ -843,6 +855,7 @@ fn validate_message_destination(
     extracted: &Value,
     expected_recipient: Option<&str>,
     message_authenticated: bool,
+    signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
     let Some(expected) = expected_recipient else {
         return Ok(());
@@ -856,7 +869,10 @@ fn validate_message_destination(
     };
     // SAML Bindings 2.0 §§3.4.5.2 and 3.5.5.2, and SimpleSign §2.4,
     // require Destination on a signed message received through these bindings.
-    if message_authenticated && destination.is_none() {
+    if message_authenticated
+        && signed_destination == SignedMessageDestination::Required
+        && destination.is_none()
+    {
         return Err(SamlError::destination_mismatch(expected, None));
     }
     // SAML Core 2.0 §§3.2.1 and 3.2.2 require the actual recipient to discard
@@ -874,6 +890,7 @@ fn validate_context(
     opts: &FlowOptions<'_>,
     expected_recipient: Option<&str>,
     message_authenticated: bool,
+    signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
     let should_validate_issuer = matches!(
         parser_type,
@@ -907,6 +924,7 @@ fn validate_context(
         extracted,
         expected_recipient,
         message_authenticated,
+        signed_destination,
     )?;
     if parser_type == ParserType::SamlResponse {
         crate::assertion_acceptance::accept_response_assertions(
@@ -964,6 +982,7 @@ fn flow_inner(
     expected_recipient: Option<&str>,
     assertion_signature: AssertionSignatureRequirement,
     response_signature: ResponseSignatureRequirement,
+    signed_destination: SignedMessageDestination,
 ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
     let binding = opts
         .binding
@@ -1057,6 +1076,7 @@ fn flow_inner(
         opts,
         expected_recipient,
         message_authenticated,
+        signed_destination,
     )?;
 
     Ok(FlowResultWithSignatureEvidence {
@@ -1081,6 +1101,7 @@ pub(crate) fn flow_with_authentication(
         None,
         AssertionSignatureRequirement::Compatible,
         ResponseSignatureRequirement::Optional,
+        SignedMessageDestination::Required,
     )?;
     let message_authenticated = result.message_authenticated();
     Ok((result.into_flow_result(), message_authenticated))
@@ -1093,6 +1114,7 @@ pub fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult,
         None,
         AssertionSignatureRequirement::Compatible,
         ResponseSignatureRequirement::Optional,
+        SignedMessageDestination::Required,
     )?
     .into_flow_result())
 }
@@ -1103,6 +1125,7 @@ pub(crate) fn flow_with_expected_recipient_and_signature_evidence(
     expected_recipient: &str,
     assertion_signature: AssertionSignatureRequirement,
     response_signature: ResponseSignatureRequirement,
+    signed_destination: SignedMessageDestination,
 ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
     flow_inner(
         opts,
@@ -1110,6 +1133,7 @@ pub(crate) fn flow_with_expected_recipient_and_signature_evidence(
         Some(expected_recipient),
         assertion_signature,
         response_signature,
+        signed_destination,
     )
 }
 

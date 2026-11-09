@@ -466,6 +466,7 @@ pub struct BindingContext {
     /// Generated message ID.
     pub id: String,
     /// Redirect: the full URL. POST/SimpleSign: the base64 message.
+    /// Artifact: the artifact.
     pub context: String,
     /// RelayState, if any.
     pub relay_state: Option<String>,
@@ -473,7 +474,7 @@ pub struct BindingContext {
     pub entity_endpoint: String,
     /// Binding used.
     pub binding: crate::constants::Binding,
-    /// `SAMLRequest` or `SAMLResponse`.
+    /// `SAMLRequest`, `SAMLResponse`, or `SAMLart`.
     pub request_type: &'static str,
     /// Detached signature (redirect/SimpleSign signed messages), if computed.
     pub signature: Option<String>,

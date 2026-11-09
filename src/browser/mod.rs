@@ -2,6 +2,7 @@
 //!
 //! References: SAML Bindings 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf> and SAML Profiles 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf>.
 
+mod artifact;
 mod bindings;
 mod endpoints;
 mod forms;
@@ -10,6 +11,7 @@ mod outbound;
 mod pending;
 
 pub use crate::model::EndpointUrl;
+pub use artifact::{ArtifactDelivery, DeliveredArtifact};
 pub use bindings::{LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 pub use endpoints::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 pub use forms::{FormField, PostForm};

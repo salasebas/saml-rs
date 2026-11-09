@@ -53,6 +53,8 @@ pub enum SsoResponseBinding {
     Post,
     /// HTTP-POST-SimpleSign binding.
     SimpleSign,
+    /// HTTP-Artifact binding. The response is resolved over SOAP.
+    Artifact,
 }
 
 impl SsoResponseBinding {
@@ -61,6 +63,7 @@ impl SsoResponseBinding {
         match self {
             Self::Post => Binding::Post,
             Self::SimpleSign => Binding::SimpleSign,
+            Self::Artifact => Binding::Artifact,
         }
     }
 }
@@ -78,7 +81,8 @@ impl TryFrom<Binding> for SsoResponseBinding {
         match value {
             Binding::Post => Ok(Self::Post),
             Binding::SimpleSign => Ok(Self::SimpleSign),
-            Binding::Redirect | Binding::Artifact => Err(SamlError::UndefinedBinding),
+            Binding::Artifact => Ok(Self::Artifact),
+            Binding::Redirect => Err(SamlError::UndefinedBinding),
         }
     }
 }

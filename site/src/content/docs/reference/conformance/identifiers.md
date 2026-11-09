@@ -4,7 +4,8 @@ description: "Attribute name formats and name identifier formats in typed Web Br
 ---
 
 Attribute name formats and name identifier formats in typed Web Browser SSO.
-The identity provider writes them with `respond_sso` and `initiate_sso`. The
+The identity provider writes them with `respond_sso`, `initiate_sso`,
+`respond_sso_artifact`, and `initiate_sso_artifact`. The
 service provider reads them with `finish_sso` and `accept_unsolicited_sso`.
 The identity provider reads a requested `<NameID>` with `receive_sso`. This
 page does not claim the IdP operational mode or the SP operational mode.

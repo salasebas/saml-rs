@@ -9,7 +9,7 @@ use crate::error::SamlError;
 use crate::flow::{
     flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
     FlowOptions, FlowResult, FlowResultWithSignatureEvidence, HttpRequest,
-    ResponseSignatureRequirement,
+    ResponseSignatureRequirement, SignedMessageDestination,
 };
 use crate::idp::IdentityProvider;
 use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataConfig};
@@ -95,6 +95,7 @@ pub(crate) struct LoginResponseParseOptions<'a> {
     expected_recipient: Option<&'a str>,
     now: Option<SystemTime>,
     clock_drifts: (i64, i64),
+    signed_destination: SignedMessageDestination,
 }
 
 impl<'a> LoginResponseParseOptions<'a> {
@@ -103,6 +104,7 @@ impl<'a> LoginResponseParseOptions<'a> {
             expected_recipient: None,
             now: None,
             clock_drifts,
+            signed_destination: SignedMessageDestination::Required,
         }
     }
 
@@ -111,7 +113,17 @@ impl<'a> LoginResponseParseOptions<'a> {
             expected_recipient: None,
             now: Some(now),
             clock_drifts,
+            signed_destination: SignedMessageDestination::Required,
         }
+    }
+
+    /// Whether a signed response must carry `Destination`.
+    pub(crate) fn with_signed_destination(
+        mut self,
+        signed_destination: SignedMessageDestination,
+    ) -> Self {
+        self.signed_destination = signed_destination;
+        self
     }
 
     pub(crate) fn with_expected_recipient(mut self, expected_recipient: &'a str) -> Self {
@@ -593,15 +605,14 @@ impl ServiceProvider {
         idp: &IdentityProvider,
         binding: Binding,
         request: &HttpRequest,
-        now: SystemTime,
-        clock_drifts: (i64, i64),
+        options: LoginResponseParseOptions<'_>,
     ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
         self.parse_login_response_inner_with_signature_evidence(
             idp,
             binding,
             request,
             LoginResponseCorrelation::Unsolicited,
-            LoginResponseParseOptions::at(now, clock_drifts),
+            options,
         )
     }
 
@@ -740,6 +751,7 @@ impl ServiceProvider {
             } else {
                 ResponseSignatureRequirement::Optional
             },
+            options.signed_destination,
         )?;
         if matches!(correlation, LoginResponseCorrelation::Unsolicited)
             && result

@@ -331,6 +331,7 @@ pub struct ArtifactResolution {
     request: SoapRequest,
     request_id: String,
     identity_provider: String,
+    artifact: String,
     web_browser_sso: bool,
 }
 
@@ -415,6 +416,8 @@ impl ArtifactResolution {
         Ok(ResolvedProtocolMessage {
             local_name: message.local_name.clone(),
             xml: standalone_element(&body.xml, message.span.start, message.span.end)?,
+            identity_provider: self.identity_provider.clone(),
+            artifact: self.artifact.clone(),
         })
     }
 }
@@ -426,6 +429,8 @@ impl ArtifactResolution {
 pub struct ResolvedProtocolMessage {
     local_name: String,
     xml: String,
+    identity_provider: String,
+    artifact: String,
 }
 
 impl ResolvedProtocolMessage {
@@ -437,6 +442,16 @@ impl ResolvedProtocolMessage {
     /// XML of the protocol element.
     pub fn xml(&self) -> &str {
         &self.xml
+    }
+
+    /// Entity ID of the identity provider that returned the message.
+    pub(crate) fn identity_provider(&self) -> &str {
+        &self.identity_provider
+    }
+
+    /// Artifact value the message was resolved from.
+    pub(crate) fn artifact(&self) -> &str {
+        &self.artifact
     }
 }
 
@@ -507,6 +522,7 @@ pub(crate) fn resolve(
         request,
         request_id,
         identity_provider: idp_entity_id.to_string(),
+        artifact: artifact.as_str().to_string(),
         web_browser_sso: dereference.web_browser_sso,
     })
 }

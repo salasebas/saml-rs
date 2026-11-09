@@ -143,6 +143,7 @@ fn sp_config_with_default_response_binding(
     let (post, simple_sign) = match binding {
         SsoResponseBinding::Post => (post.mark_default(), simple_sign),
         SsoResponseBinding::SimpleSign => (post, simple_sign.mark_default()),
+        SsoResponseBinding::Artifact => return Err(SamlError::UndefinedBinding),
     };
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(post)
@@ -1980,6 +1981,7 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
         let options = match binding {
             SsoResponseBinding::Post => RespondSso::post(),
             SsoResponseBinding::SimpleSign => RespondSso::simple_sign(),
+            SsoResponseBinding::Artifact => return Err("not a posted response binding".into()),
         };
         let response = idp.initiate_sso(&sp_descriptor, subject(), options)?;
         let fields = post_fields(&response)?;
@@ -2025,6 +2027,7 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
         let input = match binding {
             SsoResponseBinding::Post => BrowserInput::<SsoResponse>::post(fields),
             SsoResponseBinding::SimpleSign => BrowserInput::<SsoResponse>::simple_sign(fields),
+            SsoResponseBinding::Artifact => return Err("not a posted response binding".into()),
         };
         let session = sp.accept_unsolicited_sso(&idp_descriptor, input, validation())?;
         assert_eq!(

@@ -36,11 +36,13 @@ under discussion.
   in function signatures.
 - XML security stays in `bergshamra`. This tree does not implement XML-DSig,
   canonicalisation, or XML-Enc.
-- HTTP-Artifact browser delivery, SOAP profiles other than artifact resolution
-  and the identity-provider leg of Enhanced Client/Proxy SSO, the
-  enhanced-client role, SAML queries, NameID management, and metadata
-  federation stay outside the high-level typed API. SOAP artifact resolution
-  is `issue_artifact`, `answer_artifact_resolve`, and `resolve_artifact`.
+- HTTP-Artifact delivery of an `AuthnRequest` or a logout message, SOAP
+  profiles other than artifact resolution and the identity-provider leg of
+  Enhanced Client/Proxy SSO, the enhanced-client role, SAML queries, NameID
+  management, and metadata federation stay outside the high-level typed API.
+  SOAP artifact resolution is `issue_artifact`, `answer_artifact_resolve`, and
+  `resolve_artifact`. A Web SSO response delivered as an HTTP-Artifact is
+  `respond_sso_artifact` and `initiate_sso_artifact`.
 
 ## Shape of an SP round trip
 

@@ -4,7 +4,9 @@
 
 use core::marker::PhantomData;
 
+use super::artifact::DeliveredArtifact;
 use super::forms::FormField;
+use crate::artifact::ResolvedProtocolMessage;
 use crate::binding::{base64_decode_with_limit, build_simplesign_octet};
 use crate::constants::url_params;
 use crate::error::SamlError;
@@ -49,7 +51,8 @@ impl MessageField {
 /// # let _ = (redirect, post);
 /// ```
 ///
-/// SSO responses are received through POST-family bindings, not Redirect:
+/// SSO responses are received through POST-family bindings or as a resolved
+/// artifact, not Redirect:
 ///
 /// ```compile_fail
 /// use saml_rs::{BrowserInput, SsoResponse};
@@ -81,6 +84,15 @@ pub enum BrowserInput<Message> {
         /// Message marker.
         _message: PhantomData<Message>,
     },
+    /// HTTP-Artifact input, after the artifact was resolved.
+    Artifact {
+        /// Artifact and RelayState the browser delivered.
+        delivered: DeliveredArtifact,
+        /// Message the artifact issuer returned for that artifact.
+        resolved: ResolvedProtocolMessage,
+        /// Message marker.
+        _message: PhantomData<Message>,
+    },
 }
 
 impl BrowserInput<AuthnRequest> {
@@ -109,6 +121,21 @@ impl BrowserInput<SsoResponse> {
     /// Create POST input from parsed fields.
     pub fn post(fields: Vec<FormField>) -> Self {
         post_input(fields)
+    }
+
+    /// Create HTTP-Artifact input from the delivered artifact and the
+    /// message it resolved to.
+    ///
+    /// `resolved` comes from
+    /// [`ArtifactResolution::finish`](crate::ArtifactResolution::finish) on a
+    /// [`ArtifactDereference::web_browser_sso`](crate::ArtifactDereference::web_browser_sso)
+    /// resolution of [`DeliveredArtifact::artifact`].
+    pub fn artifact(delivered: DeliveredArtifact, resolved: ResolvedProtocolMessage) -> Self {
+        Self::Artifact {
+            delivered,
+            resolved,
+            _message: PhantomData,
+        }
     }
 
     /// Create SimpleSign input from parsed fields.
@@ -266,6 +293,7 @@ fn http_request_from_input<Message>(
             request.octet_string = Some(octet_string);
             Ok(request)
         }
+        BrowserInput::Artifact { .. } => Err(SamlError::UndefinedBinding),
     }
 }
 
