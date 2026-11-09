@@ -28,8 +28,9 @@ set, listed in each row.
 The signer's algorithm applies to every message it signs: the `AuthnRequest`,
 the `Response`, and logout messages. It is the XML-DSig `SignatureMethod` on
 HTTP-POST and SOAP, and the `SigAlg` on HTTP-Redirect and HTTP-POST-SimpleSign. The
-encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`, and
-`EncryptedAttribute`. The rows below name `EncryptedAssertion` for all three.
+encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`,
+`EncryptedAttribute`, and `NewEncryptedID`. The rows below name
+`EncryptedAssertion` for all four.
 
 ## XML Signature
 

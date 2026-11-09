@@ -5,6 +5,7 @@ use std::time::SystemTime;
 use crate::browser::NameIdManagementBinding;
 use crate::config::EntityId;
 use crate::config::HmacSecret;
+use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{CertUse, ParserType};
 use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
@@ -20,7 +21,8 @@ use crate::xml::XmlLimits;
 
 use super::xml::{render_request, render_response, Prefixes, RequestXml, ResponseXml};
 use super::{
-    identifier_and_change, require_one_status_code, Change, Identifier, ManageNameIdRequest,
+    identifier_and_change, plaintext_content, protect_request, require_one_status_code,
+    ManageNameIdRequest, NameIdManagementRefusal,
 };
 
 /// The receiving endpoint and clock for an inbound message.
@@ -33,10 +35,17 @@ pub(crate) struct InboundValidation<'a> {
 
 pub(crate) fn create_request(
     setting: &EntitySetting,
+    peer_meta: &Metadata,
     request: &RequestXml<'_>,
+    identifier_encryption: IdentifierEncryptionPolicy,
     relay_state: Option<&str>,
 ) -> Result<BindingContext, SamlError> {
-    let xml = render_request(&Prefixes::of(setting)?, request)?;
+    let xml = protect_request(
+        render_request(&Prefixes::of(setting)?, request)?,
+        identifier_encryption,
+        setting,
+        peer_meta,
+    )?;
     bind_signed(
         setting,
         request.id.to_string(),
@@ -104,34 +113,44 @@ pub(crate) fn parse_response(
 /// What a parsed request names, before the caller decides how to answer.
 pub(crate) enum ParsedRequest {
     Plain(ManageNameIdRequest),
-    Encrypted { id: MessageId, issuer: EntityId },
-    VersionMismatch { id: MessageId, issuer: EntityId },
+    Refused {
+        id: MessageId,
+        issuer: EntityId,
+        reason: NameIdManagementRefusal,
+    },
 }
 
+/// The request in `flow`, with `EncryptedID` and `NewEncryptedID` decrypted
+/// by the key in `setting`.
 pub(crate) fn request_from_flow(
     flow: &FlowResult,
-    limits: XmlLimits,
+    setting: &EntitySetting,
 ) -> Result<ParsedRequest, SamlError> {
-    let request = parse_saml_with_limits(&flow.saml_content, limits)?;
+    let request = parse_saml_with_limits(&flow.saml_content, setting.xml_limits)?;
     let id = MessageId::try_new(request.required_attr("ID")?)?;
     let issuer = issuer(&request).ok_or_else(|| {
         SamlError::ProtocolProfile("ManageNameIDRequest is missing Issuer".into())
     })?;
     let issuer = EntityId::try_new(issuer.value)?;
     if request.required_attr("Version")? != "2.0" {
-        return Ok(ParsedRequest::VersionMismatch { id, issuer });
+        return Ok(ParsedRequest::Refused {
+            id,
+            issuer,
+            reason: NameIdManagementRefusal::VersionMismatch,
+        });
     }
-    match identifier_and_change(&request)? {
-        (Identifier::Plain(name_id), Change::Plain(change)) => {
-            Ok(ParsedRequest::Plain(ManageNameIdRequest {
+    let (identifier, change) = identifier_and_change(&request)?;
+    Ok(
+        match plaintext_content(&flow.saml_content, identifier, change, setting) {
+            Ok((name_id, change)) => ParsedRequest::Plain(ManageNameIdRequest {
                 id,
                 issuer,
                 name_id,
                 change,
-            }))
-        }
-        _ => Ok(ParsedRequest::Encrypted { id, issuer }),
-    }
+            }),
+            Err(reason) => ParsedRequest::Refused { id, issuer, reason },
+        },
+    )
 }
 
 pub(crate) fn response_id_from_flow(

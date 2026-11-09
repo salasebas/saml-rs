@@ -22,9 +22,9 @@ use saml_rs::{
     IdpDescriptor, IdpValidationPolicy, ManageNameIdRequest, ManageNameIdResponse,
     ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementRefusal, Outbound, Pending, PendingManageNameIdRequest, PrivateKeyPem,
-    Received, ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayStateParam,
-    ReplayCache, ReplayKey, ReplayPolicy, RespondNameIdManagement, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    ReceiveNameIdManagement, Received, ReceivedNameIdManagement, ReceivedNameIdManagementRedirect,
+    RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy, RespondNameIdManagement, Saml,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
@@ -277,6 +277,7 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
         let request = request(sp.receive_name_id_management_redirect(
             &idp_peer,
             request_input(&started.outbound)?,
+            ReceiveNameIdManagement::redirect(),
             validation(),
         )?)?;
         assert_eq!(request.message().issuer().as_str(), IDP_ENTITY_ID);
@@ -326,6 +327,7 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
         let request = request(idp.receive_name_id_management_redirect(
             &sp_peer,
             request_input(&started.outbound)?,
+            ReceiveNameIdManagement::redirect(),
             validation(),
         )?)?;
         assert_eq!(request.message().issuer().as_str(), SP_ENTITY_ID);
@@ -364,6 +366,7 @@ fn requester_receives_an_error_status_for_an_unknown_principal() -> TestResult {
     let request = request(sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     let response = sp.respond_name_id_management_redirect(
@@ -412,6 +415,7 @@ fn persistent_identifier_carries_the_qualifiers_core_names() -> TestResult {
     let received = request(sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&from_idp.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     assert_eq!(received.message().name_id(), &expected.clone());
@@ -425,6 +429,7 @@ fn persistent_identifier_carries_the_qualifiers_core_names() -> TestResult {
     let received = request(idp.receive_name_id_management_redirect(
         &sp_peer,
         request_input(&from_sp.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     assert_eq!(received.message().name_id(), &expected.clone());
@@ -445,6 +450,7 @@ fn persistent_identifier_carries_the_qualifiers_core_names() -> TestResult {
     let received = request(idp.receive_name_id_management_redirect(
         &sp_peer,
         request_input(&as_given.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     assert_eq!(received.message().name_id(), &qualified.clone());
@@ -466,6 +472,7 @@ fn identity_provider_sends_an_unformatted_identifier_with_its_first_configured_f
     let received = request(sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     assert_eq!(received.message().name_id(), &alice());
@@ -549,6 +556,7 @@ fn unsigned_request_is_rejected() -> TestResult {
     match sp.receive_name_id_management_redirect(
         &idp_peer,
         BrowserInput::<ManageNameIdRequest>::redirect(unsigned.join("&")),
+        ReceiveNameIdManagement::redirect(),
         validation(),
     ) {
         Err(SamlError::SignatureMissing) => Ok(()),
@@ -571,6 +579,7 @@ fn request_for_another_name_identifier_management_endpoint_is_rejected() -> Test
     match sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         other,
     ) {
         Err(SamlError::DestinationMismatch { expected, actual }) => {
@@ -597,11 +606,13 @@ fn replayed_request_is_rejected() -> TestResult {
     sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation_with_cache(&mut cache),
     )?;
     match sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
@@ -613,35 +624,46 @@ fn replayed_request_is_rejected() -> TestResult {
 }
 
 #[test]
-fn encrypted_identifiers_are_answered_with_request_unsupported() -> TestResult {
+fn identifiers_that_do_not_decrypt_are_answered_with_an_error_status() -> TestResult {
     let sp = sp()?;
     let idp = idp()?;
     let idp_peer = idp_descriptor(&idp)?;
     let name_id = r#"<saml:NameID>alice@example.com</saml:NameID>"#;
     let encrypted_id = r#"<saml:EncryptedID><xenc:EncryptedData xmlns:xenc="http://www.w3.org/2001/04/xmlenc#"/></saml:EncryptedID>"#;
     let new_encrypted_id = r#"<samlp:NewEncryptedID><xenc:EncryptedData xmlns:xenc="http://www.w3.org/2001/04/xmlenc#"/></samlp:NewEncryptedID>"#;
-    for (identifier, change) in [
-        (encrypted_id, "<samlp:Terminate/>"),
-        (name_id, new_encrypted_id),
+    for (identifier, change, reason, status) in [
+        (
+            encrypted_id,
+            "<samlp:Terminate/>",
+            NameIdManagementRefusal::UndecryptableIdentifier,
+            format!(
+                r#"<samlp:StatusCode Value="{}"><samlp:StatusCode Value="{}"/></samlp:StatusCode>"#,
+                status_code::REQUESTER,
+                status_code::UNKNOWN_PRINCIPAL
+            ),
+        ),
+        (
+            name_id,
+            new_encrypted_id,
+            NameIdManagementRefusal::UndecryptableNewIdentifier,
+            format!(r#"<samlp:StatusCode Value="{}"/>"#, status_code::REQUESTER),
+        ),
     ] {
         let input = signed_request_input(&idp_request_xml(identifier, change))?;
-        let ReceivedNameIdManagement::Refused(refused) =
-            sp.receive_name_id_management_redirect(&idp_peer, input, validation())?
+        let ReceivedNameIdManagement::Refused(refused) = sp.receive_name_id_management_redirect(
+            &idp_peer,
+            input,
+            ReceiveNameIdManagement::redirect(),
+            validation(),
+        )?
         else {
-            return Err("an encrypted identifier was not refused".into());
+            return Err("an undecryptable identifier was not refused".into());
         };
-        assert_eq!(
-            refused.reason(),
-            NameIdManagementRefusal::EncryptedIdentifier
-        );
+        assert_eq!(refused.reason(), reason);
         assert!(refused.response().redirect_url()?.starts_with(IDP_MANAGE));
         let xml = redirect_message_xml(refused.response())?;
         assert!(xml.contains(r#"InResponseTo="_manage1""#));
-        assert!(xml.contains(&format!(
-            r#"<samlp:StatusCode Value="{}"><samlp:StatusCode Value="{}"/></samlp:StatusCode>"#,
-            status_code::RESPONDER,
-            status_code::REQUEST_UNSUPPORTED
-        )));
+        assert!(xml.contains(&format!("<samlp:Status>{status}</samlp:Status>")));
     }
     Ok(())
 }
@@ -658,7 +680,12 @@ fn request_must_name_one_identifier_and_one_change() -> TestResult {
         (name_id, "<samlp:NewID>a</samlp:NewID><samlp:Terminate/>"),
     ] {
         let input = signed_request_input(&idp_request_xml(identifier, change))?;
-        match sp.receive_name_id_management_redirect(&idp_peer, input, validation()) {
+        match sp.receive_name_id_management_redirect(
+            &idp_peer,
+            input,
+            ReceiveNameIdManagement::redirect(),
+            validation(),
+        ) {
             Err(SamlError::ProtocolProfile(message)) if message.contains("requires one NameID") => {
             }
             other => return Err(format!("expected a choice error, got {other:?}").into()),
@@ -676,7 +703,12 @@ fn request_must_name_one_identifier_and_one_change() -> TestResult {
         ),
     ] {
         let input = signed_request_input(&idp_request_xml(identifier, change))?;
-        let received = sp.receive_name_id_management_redirect(&idp_peer, input, validation());
+        let received = sp.receive_name_id_management_redirect(
+            &idp_peer,
+            input,
+            ReceiveNameIdManagement::redirect(),
+            validation(),
+        );
         assert!(
             matches!(
                 received,
@@ -689,8 +721,12 @@ fn request_must_name_one_identifier_and_one_change() -> TestResult {
         name_id,
         "<samlp:NewID>alice-2</samlp:NewID>",
     ))?;
-    let request =
-        request(sp.receive_name_id_management_redirect(&idp_peer, input, validation())?)?;
+    let request = request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        input,
+        ReceiveNameIdManagement::redirect(),
+        validation(),
+    )?)?;
     assert_eq!(
         request.message().change(),
         &NameIdChange::NewId("alice-2".into())
@@ -877,6 +913,7 @@ fn a_provider_without_its_own_endpoint_neither_sends_nor_accepts() -> TestResult
     let received = lite_sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&from_idp.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     );
     assert!(
@@ -946,6 +983,7 @@ fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
     let request = request(sp.receive_name_id_management_redirect(
         &idp_descriptor(&both)?,
         request_input(&started.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     let response = sp.respond_name_id_management_redirect(
@@ -1012,6 +1050,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
     let request = request(sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     let response = sp.respond_name_id_management_redirect(
@@ -1087,6 +1126,7 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
     let ReceivedNameIdManagement::Refused(refused) = sp.receive_name_id_management_redirect(
         &idp_peer,
         signed_request_input(&xml)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?
     else {
@@ -1111,6 +1151,7 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
     let request = request(sp.receive_name_id_management_redirect(
         &idp_peer,
         signed_request_input(&declared)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
     assert_eq!(request.message().change(), &NameIdChange::Terminate);
@@ -1150,6 +1191,7 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
     let request = request(sp.receive_name_id_management_redirect(
         &idp_descriptor(&idp)?,
         signed_request_input(&xml)?,
+        ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
 
@@ -1171,7 +1213,12 @@ fn a_request_out_of_schema_order_or_with_an_extra_element_is_rejected() -> TestR
         ),
     ] {
         let input = signed_request_input(&idp_request_xml(identifier, change))?;
-        let received = sp.receive_name_id_management_redirect(&idp_peer, input, validation());
+        let received = sp.receive_name_id_management_redirect(
+            &idp_peer,
+            input,
+            ReceiveNameIdManagement::redirect(),
+            validation(),
+        );
         assert!(
             matches!(
                 received,

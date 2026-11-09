@@ -1,5 +1,6 @@
-//! Assertion, `<EncryptedID>`, and `<EncryptedAttribute>` encryption and
-//! decryption, delegating XML-Enc to the selected `bergshamra` provider.
+//! Assertion, `<EncryptedID>`, `<EncryptedAttribute>`, and `<NewEncryptedID>`
+//! encryption and decryption, delegating XML-Enc to the selected `bergshamra`
+//! provider.
 
 use std::ops::Range;
 
@@ -172,7 +173,9 @@ pub fn decrypt_assertion_with_limits(
 
 /// Plaintext element, its encrypted wrapper, and the parent that holds it.
 #[derive(Debug, Clone, Copy)]
-struct EncryptedElementKind {
+pub(crate) struct EncryptedElementKind {
+    /// Namespace of the plaintext element and of its wrapper.
+    namespace: &'static str,
     parent: &'static str,
     plaintext: &'static str,
     encrypted: &'static str,
@@ -183,6 +186,7 @@ struct EncryptedElementKind {
 
 /// SAML Core §2.2.4.
 const ENCRYPTED_ID: EncryptedElementKind = EncryptedElementKind {
+    namespace: namespace::ASSERTION,
     parent: "Subject",
     plaintext: "NameID",
     encrypted: "EncryptedID",
@@ -191,6 +195,7 @@ const ENCRYPTED_ID: EncryptedElementKind = EncryptedElementKind {
 
 /// SAML Core §2.7.3.2.
 const ENCRYPTED_ATTRIBUTE: EncryptedElementKind = EncryptedElementKind {
+    namespace: namespace::ASSERTION,
     parent: "AttributeStatement",
     plaintext: "Attribute",
     encrypted: "EncryptedAttribute",
@@ -199,10 +204,30 @@ const ENCRYPTED_ATTRIBUTE: EncryptedElementKind = EncryptedElementKind {
 
 /// SAML Core §3.7.1: the principal of a `<LogoutRequest>`.
 const LOGOUT_REQUEST_ENCRYPTED_ID: EncryptedElementKind = EncryptedElementKind {
+    namespace: namespace::ASSERTION,
     parent: "LogoutRequest",
     plaintext: "NameID",
     encrypted: "EncryptedID",
     unsupported_plaintext: &["BaseID"],
+};
+
+/// SAML Core §3.6.1: the identifier a `<ManageNameIDRequest>` names.
+pub(crate) const MANAGED_NAME_ID: EncryptedElementKind = EncryptedElementKind {
+    namespace: namespace::ASSERTION,
+    parent: "ManageNameIDRequest",
+    plaintext: "NameID",
+    encrypted: "EncryptedID",
+    unsupported_plaintext: &[],
+};
+
+/// SAML Core §3.6.1, as amended by Errata 05 E12: the new value a
+/// `<ManageNameIDRequest>` carries.
+pub(crate) const NEW_ID: EncryptedElementKind = EncryptedElementKind {
+    namespace: namespace::PROTOCOL,
+    parent: "ManageNameIDRequest",
+    plaintext: "NewID",
+    encrypted: "NewEncryptedID",
+    unsupported_plaintext: &[],
 };
 
 fn selected_kinds(selection: AssertionElementEncryption) -> Vec<EncryptedElementKind> {
@@ -234,15 +259,23 @@ fn assertion_children<'d>(
     })
 }
 
-/// Each `<saml:{local_name}>` child of the document element.
+/// Each `local_name` child, in `namespace`, of the document element.
 fn root_children(
     document: &XmlDocument<'_>,
+    namespace: &'static str,
     local_name: &'static str,
 ) -> Result<Vec<NodeId>, SamlError> {
     let root = document
         .document_element()
         .ok_or_else(|| SamlError::Xml("no document element".into()))?;
-    Ok(assertion_children(document, root, local_name).collect())
+    Ok(document
+        .children_iter(root)
+        .filter(|child| {
+            document
+                .element(*child)
+                .is_some_and(|element| element.matches_name_ns(namespace, local_name))
+        })
+        .collect())
 }
 
 /// Each `<Assertion>` of `xml`: the document element itself, or each
@@ -363,7 +396,7 @@ pub(crate) fn encrypt_logout_request_name_id(
 ) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     let document = parse_xml_document(xml)?;
-    let [name_id] = root_children(&document, "NameID")?[..] else {
+    let [name_id] = root_children(&document, namespace::ASSERTION, "NameID")?[..] else {
         return Err(SamlError::ProtocolProfile(
             "LogoutRequest must carry one NameID to encrypt".into(),
         ));
@@ -395,8 +428,8 @@ fn encrypted_element(
     let encrypted_data = encrypted_data_xml(&plaintext, encrypt_cert, data_alg, key_alg)?;
     let wrapper = qualified_name(document, element, kind.encrypted);
     let declaration = match own_prefix_declaration(document, element) {
-        Some("") => format!(" xmlns=\"{}\"", namespace::ASSERTION),
-        Some(prefix) => format!(" xmlns:{prefix}=\"{}\"", namespace::ASSERTION),
+        Some("") => format!(" xmlns=\"{}\"", kind.namespace),
+        Some(prefix) => format!(" xmlns:{prefix}=\"{}\"", kind.namespace),
         None => String::new(),
     };
     Ok((
@@ -405,8 +438,7 @@ fn encrypted_element(
     ))
 }
 
-/// The prefix of the assertion-namespace `element` when `element` itself
-/// declares it. The empty prefix is the default namespace.
+/// The prefix of `element` when `element` itself declares it. The empty prefix is the default namespace.
 fn own_prefix_declaration<'d>(document: &'d XmlDocument<'_>, element: NodeId) -> Option<&'d str> {
     let element = document.element(element)?;
     let prefix = element.name.prefix.as_deref().unwrap_or("");
@@ -415,6 +447,65 @@ fn own_prefix_declaration<'d>(document: &'d XmlDocument<'_>, element: NodeId) ->
         .iter()
         .any(|(declared, _)| declared == prefix)
         .then_some(prefix)
+}
+
+/// Replace each `kind.plaintext` child of the document element of `xml`, for
+/// each of `kinds`, with its `kind.encrypted` form for the holder of
+/// `encrypt_cert`.
+pub(crate) fn encrypt_root_children(
+    xml: &str,
+    kinds: &[EncryptedElementKind],
+    encrypt_cert: &str,
+    data_alg: &str,
+    key_alg: &str,
+) -> Result<String, SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    let document = parse_xml_document(xml)?;
+    let mut replacements = Vec::new();
+    for kind in kinds {
+        for element in root_children(&document, kind.namespace, kind.plaintext)? {
+            replacements.push(encrypted_element(
+                &document,
+                element,
+                *kind,
+                encrypt_cert,
+                data_alg,
+                key_alg,
+            )?);
+        }
+    }
+    Ok(splice(xml, replacements))
+}
+
+/// Replace the one `kind.encrypted` child of the document element of `xml`
+/// with the plaintext it carries, decrypted with `enc_key`.
+///
+/// # Errors
+///
+/// Returns [`SamlError::ProtocolProfile`] when the document element has no
+/// such child or several, or when the plaintext is not one element of the
+/// expected name. Returns another [`SamlError`] when decryption fails.
+pub(crate) fn decrypt_root_child(
+    xml: &str,
+    kind: EncryptedElementKind,
+    enc_key: &Key,
+    options: AssertionDecryptionOptions,
+    limits: XmlLimits,
+) -> Result<String, SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    require_software_rsa_opt_in(options)?;
+    dom::parse_with_limits(xml, limits)?;
+    let document = parse_xml_document(xml)?;
+    let [element] = root_children(&document, kind.namespace, kind.encrypted)?[..] else {
+        return Err(SamlError::ProtocolProfile(format!(
+            "{} requires one {}",
+            kind.parent, kind.encrypted
+        )));
+    };
+    let replacement = decrypted_element(&document, element, kind, enc_key, limits)?;
+    let decrypted = splice(xml, vec![replacement]);
+    limits.check_input_bytes(decrypted.len())?;
+    Ok(decrypted)
 }
 
 /// Decrypt the selected children of each assertion in `xml` with `enc_key`.
@@ -480,9 +571,9 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
     let document = parse_xml_document(xml)?;
     let mut identifiers = Vec::new();
     for name in ["BaseID", "NameID", "EncryptedID"] {
-        identifiers.extend(root_children(&document, name)?);
+        identifiers.extend(root_children(&document, namespace::ASSERTION, name)?);
     }
-    let encrypted_ids = root_children(&document, "EncryptedID")?;
+    let encrypted_ids = root_children(&document, namespace::ASSERTION, "EncryptedID")?;
     let ([_], [encrypted_id]) = (&identifiers[..], &encrypted_ids[..]) else {
         return Err(SamlError::ProtocolProfile(
             "LogoutRequest requires one BaseID, NameID, or EncryptedID".into(),
@@ -862,7 +953,7 @@ mod tests {
         );
         let encrypted = encrypt_logout_request_name_id(request, SP_CERT, AES_256, RSA_OAEP_MGF1P)?;
         let document = uppsala::parse(&encrypted)?;
-        if root_children(&document, "EncryptedID")?.len() != 1 {
+        if root_children(&document, namespace::ASSERTION, "EncryptedID")?.len() != 1 {
             return Err(format!("no assertion-namespace EncryptedID: {encrypted}").into());
         }
         let key = load_private_key(SP_PRIVKEY, None)?;

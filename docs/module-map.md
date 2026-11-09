@@ -46,6 +46,7 @@ stay unclaimed.
 | `ManageNameIdRequest`, `NameIdChange`, and SOAP messages | `src/name_id_management.rs` |
 | Request and response XML for both bindings, including the E14 transient rule | `src/name_id_management/xml.rs` |
 | HTTP-Redirect signing and parsing | `src/name_id_management/redirect.rs` |
+| `EncryptedID` and `NewEncryptedID` for both bindings | `src/name_id_management/encryption.rs` |
 | `PendingManageNameIdRequest` | `src/browser/pending.rs` |
 | `ManageNameIDService` in metadata | `src/metadata/mod.rs`, `src/metadata/generate.rs` |
 | Protocol elements read with their namespaces | `src/xml/protocol_element.rs` |
@@ -86,7 +87,7 @@ mapping is not implemented.
 | Protocol response roots that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | XML signature generation | `src/crypto/sign.rs` |
 | Algorithm variants and `AlgorithmPolicy` | `src/config/algorithms.rs`, `src/config/policies.rs` |
-| `EncryptedAssertion`, `EncryptedID`, and `EncryptedAttribute` | `src/crypto/enc.rs` |
+| `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`, and `NewEncryptedID` | `src/crypto/enc.rs` |
 | Decryption of a verified response's encrypted children | `src/flow.rs` |
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |

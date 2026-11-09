@@ -3,9 +3,9 @@
 //! The identity provider sends `ManageNameIDRequest` to a service provider and
 //! reads its `ManageNameIDResponse`, or answers a service provider's request.
 
-use crate::config::{EntityId, SpDescriptor};
+use crate::config::{EntityId, IdentifierEncryptionPolicy, SpDescriptor};
 use crate::constants::{namespace, status_code};
-use crate::entity::generate_id;
+use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::{
@@ -18,9 +18,12 @@ use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml, status_codes, SamlElement,
 };
 
+mod encryption;
 pub(crate) mod redirect;
 pub(crate) mod xml;
 
+pub(crate) use encryption::protect_request;
+use encryption::{decrypt_name_id, decrypt_new_id};
 use xml::{render_request, render_response, Prefixes, RequestXml, Requester, ResponseXml};
 
 /// The change a `ManageNameIDRequest` makes to an established identifier.
@@ -93,10 +96,25 @@ pub enum ReceivedNameIdManagement<Response = SoapResponse> {
 pub enum NameIdManagementRefusal {
     /// The request `Version` is not `2.0`. The status is `VersionMismatch`.
     VersionMismatch,
-    /// The request carries `EncryptedID` or `NewEncryptedID`, which this
-    /// provider does not decrypt. The status is `Responder` with
-    /// `RequestUnsupported`.
-    EncryptedIdentifier,
+    /// The request's `EncryptedID` does not decrypt, with this provider's
+    /// decryption key, to one `NameID`. The status is `Requester` with
+    /// `UnknownPrincipal`.
+    UndecryptableIdentifier,
+    /// The request's `NewEncryptedID` does not decrypt, with this provider's
+    /// decryption key, to one `NewID`. The status is `Requester`.
+    UndecryptableNewIdentifier,
+}
+
+impl NameIdManagementRefusal {
+    pub(crate) fn status(self) -> Status {
+        match self {
+            Self::VersionMismatch => Status::version_mismatch(),
+            Self::UndecryptableIdentifier => {
+                Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal())
+            }
+            Self::UndecryptableNewIdentifier => Status::requester(),
+        }
+    }
 }
 
 /// `ManageNameIDResponse` returned for a request that was not processed.
@@ -187,7 +205,7 @@ impl StartedNameIdManagement {
 pub(crate) struct LocalIdentityProvider<'a> {
     pub(crate) entity_id: &'a str,
     pub(crate) metadata: &'a Metadata,
-    pub(crate) default_name_id_format: Option<&'a str>,
+    pub(crate) setting: &'a EntitySetting,
 }
 
 pub(crate) fn start(
@@ -195,6 +213,7 @@ pub(crate) fn start(
     service_provider: &SpDescriptor,
     name_id: &NameId,
     change: &NameIdChange,
+    identifier_encryption: IdentifierEncryptionPolicy,
     channel: SoapChannel,
 ) -> Result<StartedNameIdManagement, SamlError> {
     local_services(idp.metadata)?;
@@ -216,10 +235,16 @@ pub(crate) fn start(
             name_id,
             change,
             requester: Requester::IdentityProvider,
-            default_format: idp.default_name_id_format,
+            default_format: idp.setting.default_name_id_format(),
             idp_entity_id: idp.entity_id,
             sp_entity_id,
         },
+    )?;
+    let xml = protect_request(
+        xml,
+        identifier_encryption,
+        idp.setting,
+        service_provider.metadata(),
     )?;
     let request = SoapProtocolMessage::request(EndpointUrl::try_new(destination)?, &xml)?;
     Ok(StartedNameIdManagement {
@@ -249,12 +274,7 @@ pub(crate) fn receive(
     let version = request.required_attr("Version")?;
     require_utc_instant(&request)?;
     if version != "2.0" {
-        return refused(
-            idp.entity_id,
-            &id,
-            Status::version_mismatch(),
-            NameIdManagementRefusal::VersionMismatch,
-        );
+        return refused(idp.entity_id, &id, NameIdManagementRefusal::VersionMismatch);
     }
     let sp_entity_id = service_provider.entity_id();
     if request
@@ -280,22 +300,17 @@ pub(crate) fn receive(
     }
     let (identifier, change) = identifier_and_change(&request)?;
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequestId(id.clone()))?;
-    let (Identifier::Plain(name_id), Change::Plain(change)) = (identifier, change) else {
-        return refused(
-            idp.entity_id,
-            &id,
-            Status::responder().with_subordinate(SubordinateStatusCode::request_unsupported()),
-            NameIdManagementRefusal::EncryptedIdentifier,
-        );
-    };
-    Ok(ReceivedNameIdManagement::Request(Box::new(Received::new(
-        ManageNameIdRequest {
-            id,
-            issuer: sp_entity_id.clone(),
-            name_id,
-            change,
-        },
-    ))))
+    match plaintext_content(&body.xml, identifier, change, idp.setting) {
+        Ok((name_id, change)) => Ok(ReceivedNameIdManagement::Request(Box::new(Received::new(
+            ManageNameIdRequest {
+                id,
+                issuer: sp_entity_id.clone(),
+                name_id,
+                change,
+            },
+        )))),
+        Err(reason) => refused(idp.entity_id, &id, reason),
+    }
 }
 
 pub(crate) fn respond(
@@ -318,11 +333,13 @@ pub(crate) fn respond(
 fn refused(
     idp_entity_id: &str,
     in_response_to: &MessageId,
-    status: Status,
     reason: NameIdManagementRefusal,
 ) -> Result<ReceivedNameIdManagement, SamlError> {
     Ok(ReceivedNameIdManagement::Refused(
-        RefusedNameIdManagement::new(response(idp_entity_id, in_response_to, &status)?, reason),
+        RefusedNameIdManagement::new(
+            response(idp_entity_id, in_response_to, &reason.status())?,
+            reason,
+        ),
     ))
 }
 
@@ -393,6 +410,30 @@ pub(crate) fn identifier_and_change(
         return Err(malformed());
     };
     Ok((identifier, change))
+}
+
+/// The identifier and change of the request `xml`, with `EncryptedID` and
+/// `NewEncryptedID` decrypted by the receiver's decryption key, or the
+/// refusal for an element that does not decrypt.
+pub(crate) fn plaintext_content(
+    xml: &str,
+    identifier: Identifier,
+    change: Change,
+    setting: &EntitySetting,
+) -> Result<(NameId, NameIdChange), NameIdManagementRefusal> {
+    let name_id = match identifier {
+        Identifier::Plain(name_id) => name_id,
+        Identifier::Encrypted => decrypt_name_id(xml, setting)
+            .map_err(|_| NameIdManagementRefusal::UndecryptableIdentifier)?,
+    };
+    let change = match change {
+        Change::Plain(change) => change,
+        Change::Encrypted => NameIdChange::NewId(
+            decrypt_new_id(xml, setting)
+                .map_err(|_| NameIdManagementRefusal::UndecryptableNewIdentifier)?,
+        ),
+    };
+    Ok((name_id, change))
 }
 
 pub(crate) fn require_one_status_code(response: &SamlElement) -> Result<(), SamlError> {

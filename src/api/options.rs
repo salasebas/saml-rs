@@ -551,6 +551,7 @@ enum NameIdManagementTransport {
 #[derive(Debug, Clone)]
 pub struct StartNameIdManagement {
     pub(super) relay_state: RelayStateParam,
+    pub(super) identifier_encryption: IdentifierEncryptionPolicy,
     transport: NameIdManagementTransport,
 }
 
@@ -559,6 +560,7 @@ impl StartNameIdManagement {
     pub fn redirect() -> Self {
         Self {
             relay_state: RelayStateParam::absent(),
+            identifier_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
             transport: NameIdManagementTransport::default(),
         }
     }
@@ -569,10 +571,58 @@ impl StartNameIdManagement {
         self
     }
 
+    /// Set whether the `<NameID>` and `<NewID>` are sent as `<EncryptedID>`
+    /// and `<NewEncryptedID>`.
+    ///
+    /// The default is [`IdentifierEncryptionPolicy::PlaintextIdentifiers`].
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`] encrypts both for
+    /// the first encryption certificate in the peer's metadata, with the
+    /// configured data and key encryption algorithms, before the request is
+    /// signed. A peer without that certificate returns
+    /// [`crate::SamlError::MissingMetadata`].
+    pub fn identifier_encryption(mut self, policy: IdentifierEncryptionPolicy) -> Self {
+        self.identifier_encryption = policy;
+        self
+    }
+
     /// Allow delivery to an `http` `ManageNameIDService`.
     ///
     /// This relaxes the Profiles §4.5.3.1 recommendation to protect the HTTP
     /// exchange with TLS. The request stays signed.
+    pub fn allow_http_name_id_management(mut self) -> Self {
+        self.transport = NameIdManagementTransport::AllowHttp;
+        self
+    }
+
+    pub(super) fn allows_http(&self) -> bool {
+        matches!(self.transport, NameIdManagementTransport::AllowHttp)
+    }
+}
+
+/// Options for reading a `<ManageNameIDRequest>` over HTTP-Redirect.
+///
+/// A request that the provider answers without processing it, see
+/// [`crate::NameIdManagementRefusal`], gets a signed response to an `https`
+/// peer `ManageNameIDService` unless [`Self::allow_http_name_id_management`]
+/// is selected.
+#[derive(Debug, Clone)]
+pub struct ReceiveNameIdManagement {
+    transport: NameIdManagementTransport,
+}
+
+impl ReceiveNameIdManagement {
+    /// Read the request from HTTP-Redirect.
+    pub fn redirect() -> Self {
+        Self {
+            transport: NameIdManagementTransport::default(),
+        }
+    }
+
+    /// Allow the response to a refused request to go to an `http`
+    /// `ManageNameIDService`.
+    ///
+    /// This relaxes the Profiles §4.5.3.2 recommendation to protect the HTTP
+    /// exchange with TLS. The response stays signed.
     pub fn allow_http_name_id_management(mut self) -> Self {
         self.transport = NameIdManagementTransport::AllowHttp;
         self

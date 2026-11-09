@@ -12,12 +12,12 @@ use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::{
-    AcsEndpoint, EndpointUrl, EntityId, Idp, IdpConfig, ManageNameIdService,
-    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
-    NameIdFormat, NameIdManagementRefusal, PartyAuthentication, ReceivedNameIdManagement,
-    ReplayCache, ReplayKey, ReplayPolicy, Saml, SamlError, SamlValidationContext, SoapChannel,
-    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, Status,
-    SubordinateStatusCode,
+    AcsEndpoint, EndpointUrl, EntityId, IdentifierEncryptionPolicy, Idp, IdpConfig,
+    ManageNameIdService, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
+    NameIdChange, NameIdFormat, NameIdManagementRefusal, PartyAuthentication,
+    ReceivedNameIdManagement, ReplayCache, ReplayKey, ReplayPolicy, Saml, SamlError,
+    SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, Status, SubordinateStatusCode,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -31,10 +31,8 @@ const SOAP_BINDING: &str = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
 const PERSISTENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
 const SUCCESS: &str = "urn:oasis:names:tc:SAML:2.0:status:Success";
 const REQUESTER: &str = "urn:oasis:names:tc:SAML:2.0:status:Requester";
-const RESPONDER: &str = "urn:oasis:names:tc:SAML:2.0:status:Responder";
 const VERSION_MISMATCH: &str = "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch";
 const UNKNOWN_PRINCIPAL: &str = "urn:oasis:names:tc:SAML:2.0:status:UnknownPrincipal";
-const REQUEST_UNSUPPORTED: &str = "urn:oasis:names:tc:SAML:2.0:status:RequestUnsupported";
 const SP_REQUEST_ID: &str = "_sp_manage_request";
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -197,6 +195,7 @@ fn idp_initiated_new_id_reaches_the_service_provider_and_completes() -> TestResu
         &sp,
         &current,
         &NameIdChange::NewId("new-value".into()),
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),
     )?;
 
@@ -223,8 +222,13 @@ fn idp_initiated_termination_reaches_the_service_provider_and_completes() -> Tes
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     let current = NameId::persistent("current-value")?;
-    let started =
-        idp.start_name_id_management(&sp, &current, &NameIdChange::Terminate, authenticated())?;
+    let started = idp.start_name_id_management(
+        &sp,
+        &current,
+        &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        authenticated(),
+    )?;
 
     let xml = body(started.request().envelope())?;
     assert!(xml.contains(&format!(
@@ -249,8 +253,13 @@ fn idp_initiated_request_keeps_the_established_qualifiers() -> TestResult {
         Some("https://affiliation.example.com".into()),
         Some("sp-alias".into()),
     );
-    let started =
-        idp.start_name_id_management(&sp, &current, &NameIdChange::Terminate, authenticated())?;
+    let started = idp.start_name_id_management(
+        &sp,
+        &current,
+        &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        authenticated(),
+    )?;
 
     let xml = body(started.request().envelope())?;
     assert!(xml.contains(&format!(
@@ -267,6 +276,7 @@ fn a_service_provider_error_status_is_returned_to_the_caller() -> TestResult {
         &sp,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),
     )?;
     let request_id = attribute(&body(started.request().envelope())?, "ID")
@@ -294,6 +304,7 @@ fn a_response_for_another_request_or_from_another_issuer_is_rejected() -> TestRe
         &sp,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),
     )?;
     let request_id = attribute(&body(started.request().envelope())?, "ID")
@@ -336,8 +347,13 @@ fn a_transient_identifier_is_not_managed() -> TestResult {
         ),
         (transient_default, NameId::new("current-value", None)),
     ] {
-        let started =
-            idp.start_name_id_management(&sp, &current, &NameIdChange::Terminate, authenticated());
+        let started = idp.start_name_id_management(
+            &sp,
+            &current,
+            &NameIdChange::Terminate,
+            IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            authenticated(),
+        );
         assert!(matches!(started, Err(SamlError::ProtocolProfile(_))));
     }
     Ok(())
@@ -359,7 +375,13 @@ fn a_persistent_value_longer_than_256_characters_is_not_sent() -> TestResult {
             NameIdChange::Terminate,
         ),
     ] {
-        let result = idp.start_name_id_management(&sp, &current, &change, authenticated());
+        let result = idp.start_name_id_management(
+            &sp,
+            &current,
+            &change,
+            IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            authenticated(),
+        );
         assert!(matches!(result, Err(SamlError::Invalid(_))));
     }
     Ok(())
@@ -439,15 +461,25 @@ fn sp_initiated_termination_is_received_and_answered() -> TestResult {
 }
 
 #[test]
-fn an_encrypted_identifier_is_answered_with_request_unsupported() -> TestResult {
+fn an_identifier_that_does_not_decrypt_is_answered_with_an_error_status() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     let encrypted_id = "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"/></saml:EncryptedID>";
     let new_encrypted_id = "<samlp:NewEncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"/></samlp:NewEncryptedID>";
 
-    for content in [
-        format!("{encrypted_id}<samlp:Terminate/>"),
-        format!("{}{new_encrypted_id}", current_name_id_xml()),
+    for (content, reason, status) in [
+        (
+            format!("{encrypted_id}<samlp:Terminate/>"),
+            NameIdManagementRefusal::UndecryptableIdentifier,
+            format!(
+                r#"<samlp:StatusCode Value="{REQUESTER}"><samlp:StatusCode Value="{UNKNOWN_PRINCIPAL}"/></samlp:StatusCode>"#
+            ),
+        ),
+        (
+            format!("{}{new_encrypted_id}", current_name_id_xml()),
+            NameIdManagementRefusal::UndecryptableNewIdentifier,
+            format!(r#"<samlp:StatusCode Value="{REQUESTER}"/>"#),
+        ),
     ] {
         let received = idp.receive_name_id_management(
             &sp,
@@ -456,17 +488,12 @@ fn an_encrypted_identifier_is_answered_with_request_unsupported() -> TestResult 
             validation(),
         )?;
         let ReceivedNameIdManagement::Refused(refused) = received else {
-            return Err("an encrypted identifier was not refused".into());
+            return Err("an undecryptable identifier was not refused".into());
         };
-        assert_eq!(
-            refused.reason(),
-            NameIdManagementRefusal::EncryptedIdentifier
-        );
+        assert_eq!(refused.reason(), reason);
         let xml = body(refused.response().envelope())?;
         assert_eq!(attribute(&xml, "InResponseTo"), Some(SP_REQUEST_ID));
-        assert!(xml.contains(&format!(
-            r#"<samlp:StatusCode Value="{RESPONDER}"><samlp:StatusCode Value="{REQUEST_UNSUPPORTED}"/></samlp:StatusCode>"#
-        )));
+        assert!(xml.contains(&format!("<samlp:Status>{status}</samlp:Status>")));
     }
     Ok(())
 }
@@ -503,6 +530,7 @@ fn an_identity_provider_without_the_service_neither_sends_nor_accepts() -> TestR
         &sp,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),
     );
     assert!(
@@ -532,6 +560,7 @@ fn a_service_provider_without_a_soap_service_is_not_sent_a_request() -> TestResu
         &redirect_only,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),
     );
     assert!(
@@ -552,6 +581,7 @@ fn a_service_provider_without_a_soap_service_is_not_sent_a_request() -> TestResu
         &dual_role,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),
     );
     assert!(
@@ -583,6 +613,7 @@ fn an_unauthenticated_channel_is_refused_in_both_directions() -> TestResult {
             &sp,
             &NameId::persistent("current-value")?,
             &NameIdChange::Terminate,
+            IdentifierEncryptionPolicy::PlaintextIdentifiers,
             channel,
         );
         assert!(matches!(started, Err(SamlError::SoapChannelProtection)));

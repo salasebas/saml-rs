@@ -330,6 +330,10 @@ pub enum AssertionEncryptionPolicy {
 ///
 /// [`crate::StartSlo::identifier_encryption`] selects it for one
 /// `LogoutRequest`, on either role.
+/// [`crate::StartNameIdManagement::identifier_encryption`] and the
+/// `identifier_encryption` argument of
+/// [`crate::Saml::start_name_id_management`] select it, for the `<NameID>`
+/// and `<NewID>`, for one `ManageNameIDRequest`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum IdentifierEncryptionPolicy {
     /// Do not encrypt identifiers.

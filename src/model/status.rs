@@ -56,12 +56,6 @@ impl SubordinateStatusCode {
         }
     }
 
-    pub(crate) fn request_unsupported() -> Self {
-        Self {
-            uri: status_code::REQUEST_UNSUPPORTED.to_string(),
-        }
-    }
-
     /// Wrap an absolute status-code URI.
     ///
     /// # Errors

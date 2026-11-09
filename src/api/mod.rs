@@ -115,8 +115,8 @@ use raw_mapping::{raw_idp_metadata_config, raw_sp_metadata_config};
 
 pub use name_id_management::ReceivedNameIdManagementRedirect;
 pub use options::{
-    ForceAuthn, IsPassive, LogoutSigning, MessageDelivery, RespondNameIdManagement, RespondSlo,
-    RespondSso, StartNameIdManagement, StartSlo, StartSso,
+    ForceAuthn, IsPassive, LogoutSigning, MessageDelivery, ReceiveNameIdManagement,
+    RespondNameIdManagement, RespondSlo, RespondSso, StartNameIdManagement, StartSlo, StartSso,
 };
 pub use paos::{
     HttpHeader, PaosAuthnRequest, PaosClientRequest, PaosHttpResponse, PaosSsoResponse,
