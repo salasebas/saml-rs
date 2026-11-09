@@ -1,7 +1,7 @@
 use crate::browser::{AcsEndpoint, BrowserInput, SsoResponseBinding};
 use crate::config::{
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, EntityId, IdpConfig,
-    IdpDescriptor, NameIdFormat, SpConfig, SpDescriptor,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, EntityId, HmacSecret,
+    IdpConfig, IdpDescriptor, NameIdFormat, SpConfig, SpDescriptor,
 };
 use crate::constants::Binding;
 use crate::entity::EntitySetting;
@@ -95,12 +95,28 @@ fn name_id_format_uris(formats: &[NameIdFormat]) -> Vec<String> {
         .collect()
 }
 
+fn peer_setting(hmac_secret: Option<&HmacSecret>) -> EntitySetting {
+    EntitySetting {
+        hmac_secret: hmac_secret.cloned(),
+        ..EntitySetting::default()
+    }
+}
+
 pub(super) fn raw_idp_descriptor(idp: &IdpDescriptor) -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_metadata(idp.metadata_xml(), EntitySetting::default())
+    IdentityProvider::from_metadata(idp.metadata_xml(), peer_setting(idp.hmac_secret()))
 }
 
 pub(super) fn raw_sp_descriptor(sp: &SpDescriptor) -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())
+    ServiceProvider::from_metadata(sp.metadata_xml(), peer_setting(sp.hmac_secret()))
+}
+
+pub(super) fn raw_sp_for_browser_response(
+    sp: &SpDescriptor,
+    idp_setting: &EntitySetting,
+) -> Result<ServiceProvider, SamlError> {
+    let mut raw_sp = raw_sp_descriptor(sp)?;
+    raw_sp.setting.transformation_algorithms = idp_setting.transformation_algorithms.clone();
+    Ok(raw_sp)
 }
 
 pub(super) fn selected_acs(

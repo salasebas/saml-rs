@@ -1,5 +1,7 @@
 use core::fmt;
 
+use crate::error::SamlError;
+
 /// PEM-encoded private key material.
 ///
 /// `Debug` is intentionally redacted so key material is not dumped through
@@ -82,6 +84,46 @@ impl fmt::Debug for Passphrase {
         f.write_str("Passphrase(<redacted>)")
     }
 }
+/// Shared secret for an HMAC XML signature or detached signature.
+///
+/// The signer puts it in [`Credentials::hmac_secret`], and the verifier puts
+/// the same secret on the signer's peer descriptor. `Debug` is redacted.
+#[derive(Clone, PartialEq, Eq)]
+pub struct HmacSecret(Vec<u8>);
+
+impl HmacSecret {
+    /// Smallest accepted secret, in bytes: the SHA-1 output length.
+    pub const MIN_LEN: usize = 20;
+
+    /// Wrap secret bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the secret is shorter than
+    /// [`Self::MIN_LEN`] bytes.
+    pub fn try_new(value: impl Into<Vec<u8>>) -> Result<Self, SamlError> {
+        let value = value.into();
+        if value.len() < Self::MIN_LEN {
+            return Err(SamlError::Invalid(format!(
+                "HMAC secret must be at least {} bytes",
+                Self::MIN_LEN
+            )));
+        }
+        Ok(Self(value))
+    }
+
+    /// Borrow the secret bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for HmacSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("HmacSecret(<redacted>)")
+    }
+}
+
 /// Secret-bearing and certificate material for local SAML operations.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Credentials {
@@ -91,6 +133,11 @@ pub struct Credentials {
     pub signing_key_passphrase: Option<Passphrase>,
     /// Signing certificate.
     pub signing_certificate: Option<CertificatePem>,
+    /// Secret for [`crate::SignatureAlgorithm::HmacSha1`].
+    ///
+    /// Messages are signed with it instead of [`Self::signing_key`] when that
+    /// algorithm is selected.
+    pub hmac_secret: Option<HmacSecret>,
     /// Encryption certificate advertised for peers.
     pub encryption_certificate: Option<CertificatePem>,
     /// Decryption private key for encrypted assertions.

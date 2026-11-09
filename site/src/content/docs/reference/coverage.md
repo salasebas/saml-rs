@@ -16,7 +16,7 @@ description: "`Saml<Sp>` and `Saml<Idp>` implement this surface."
 | HTTP-Artifact response | A Web SSO `Response` delivered as an artifact through `respond_sso_artifact`, and accepted by `finish_sso` after `resolve_artifact`. `AuthnRequest` and logout messages are not delivered this way |
 | Artifact resolution | SOAP `ArtifactResolve` and `ArtifactResponse` through `resolve_artifact` and `answer_artifact_resolve`. The deployment sends the HTTP request |
 | Validation | Issuer, audience, destination, recipient, bearer confirmation, status, time windows, and request correlation |
-| Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through bergshamra |
+| Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through bergshamra. The Conformance §4 algorithms, with SHA-1, Triple DES, and RSA-v1.5 used only when selected |
 | Parsing | `quick-xml` DOM with local-name extraction, bounded before authentication |
 
 HTTP-Artifact delivery of an `AuthnRequest` or a logout message, SOAP profiles other than artifact resolution, Single Logout, and the identity-provider leg of Enhanced Client/Proxy SSO, the enhanced-client role, SAML query protocols, NameID management, and metadata federation are outside the typed `Saml` API. The HTTP-Artifact response, artifact resolution over SOAP, and Single Logout over SOAP do not claim the IdP or SP operational mode.

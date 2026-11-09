@@ -14,16 +14,18 @@
 use std::time::SystemTime;
 
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
+use saml_rs::constants::transform_algorithm;
 use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
-    AcsEndpoint, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService, ArtifactUses,
-    AuthnRequest, BrowserInput, CertificatePem, Credentials, DeliveredArtifact, EndpointUrl,
-    EntityId, FormField, Idp, IdpConfig, IdpDescriptor, IssuedArtifacts, IssuedMessage,
-    MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, PrivateKeyPem, Received,
-    RelayStateParam, ReplayPolicy, ResolvedProtocolMessage, RespondSso, Saml, SamlError,
+    AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService,
+    ArtifactUses, AuthnRequest, BrowserInput, CertificatePem, Credentials, DeliveredArtifact,
+    EndpointUrl, EntityId, FormField, Idp, IdpConfig, IdpDescriptor, IssuedArtifacts,
+    IssuedMessage, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, PrivateKeyPem,
+    Received, RelayStateParam, ReplayPolicy, ResolvedProtocolMessage, RespondSso, Saml, SamlError,
     SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint, SsoResponse,
     SsoResponseBinding, SsoSession, StartSso, Status, Subject, SubordinateStatusCode,
+    TransformAlgorithm,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{XmlEncryptionPolicy, XmlPolicy};
@@ -57,9 +59,14 @@ fn credentials() -> Credentials {
 }
 
 fn parties() -> Result<Parties, SamlError> {
+    parties_with_idp_algorithms(AlgorithmPolicy::default())
+}
+
+fn parties_with_idp_algorithms(algorithms: AlgorithmPolicy) -> Result<Parties, SamlError> {
     parties_with_consumers(
         AcsEndpoint::post(SP_ACS_POST)?.mark_default(),
         AcsEndpoint::artifact(SP_ACS_ARTIFACT)?,
+        algorithms,
     )
 }
 
@@ -69,10 +76,15 @@ fn unsolicited_parties() -> Result<Parties, SamlError> {
     parties_with_consumers(
         AcsEndpoint::post(SP_ACS_POST)?,
         AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.mark_default(),
+        AlgorithmPolicy::default(),
     )
 }
 
-fn parties_with_consumers(post: AcsEndpoint, artifact: AcsEndpoint) -> Result<Parties, SamlError> {
+fn parties_with_consumers(
+    post: AcsEndpoint,
+    artifact: AcsEndpoint,
+    algorithms: AlgorithmPolicy,
+) -> Result<Parties, SamlError> {
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
@@ -81,6 +93,7 @@ fn parties_with_consumers(post: AcsEndpoint, artifact: AcsEndpoint) -> Result<Pa
                 EndpointUrl::try_new(RESOLUTION_URL)?,
             ))
             .credentials(credentials())
+            .algorithms(algorithms)
             .build()?,
     )?;
     let sp = Saml::sp(
@@ -196,6 +209,53 @@ fn a_response_delivered_as_an_artifact_establishes_the_session(
     let session = follow_redirect_and_finish(&parties, &pending, &response, &mut issued)?;
     assert_eq!(session.name_id().value(), USER);
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
+    Ok(())
+}
+
+#[test]
+fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties_with_idp_algorithms(AlgorithmPolicy {
+        signed_reference_transforms: vec![
+            TransformAlgorithm::EnvelopedSignature,
+            TransformAlgorithm::CanonicalXml,
+        ],
+        ..AlgorithmPolicy::default()
+    })?;
+    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let mut issued = IssuedArtifacts::new();
+    let response = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        subject(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    )?;
+    let delivered = delivered_by(&response)?;
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        delivered.artifact(),
+        ArtifactDereference::web_browser_sso(confidential())?,
+        &mut ArtifactUses::enforce_single_use(),
+    )?;
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &mut issued,
+        confidential(),
+    )?;
+
+    let envelope = answer.envelope();
+    assert!(envelope.contains(transform_algorithm::EXC_C14N));
+    assert!(!envelope.contains(transform_algorithm::C14N));
+    let resolved = resolution.finish(envelope)?;
+    let session = parties.sp.finish_sso(
+        &parties.idp_metadata,
+        &pending,
+        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        validation(),
+    )?;
+    assert_eq!(session.name_id().value(), USER);
     Ok(())
 }
 

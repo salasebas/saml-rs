@@ -82,6 +82,12 @@ pub use provider::{
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
+pub(crate) use sign::SigningCredential;
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 pub use sign::{construct_message_signature, construct_saml_signature, verify_message_signature};
 #[cfg(any(
     feature = "crypto-rustcrypto",

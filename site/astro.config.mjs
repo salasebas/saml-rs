@@ -109,6 +109,10 @@ export default defineConfig({
 									label: 'Artifact resolution',
 									slug: 'reference/conformance/artifact-resolution',
 								},
+								{
+									label: 'Algorithms',
+									slug: 'reference/conformance/xml-security-algorithms',
+								},
 							],
 						},
 					],

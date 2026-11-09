@@ -418,34 +418,28 @@ impl IdentityProvider {
         relay_state: Option<&str>,
     ) -> Result<(String, Option<String>, Option<String>), SamlError> {
         use crate::binding::{append_signature, base64_encode, build_redirect_octet};
-        use crate::crypto::{construct_message_signature, keys::load_private_key};
+        use crate::crypto::SigningCredential;
 
         match binding {
             Binding::Post => Ok((base64_encode(xml.as_bytes()), None, None)),
             Binding::Redirect => {
                 let sig_alg = &self.setting.request_signature_algorithm;
-                let key = load_private_key(
-                    self.setting.private_key.as_deref().unwrap_or_default(),
-                    self.setting.private_key_pass.as_deref(),
-                )?;
+                let credential = SigningCredential::from_setting(&self.setting)?;
                 let octet =
                     build_redirect_octet(ParserType::SamlResponse, xml, relay_state, sig_alg)?;
-                let sig = construct_message_signature(&octet, &key, sig_alg)?;
+                let sig = credential.sign_detached(&octet, sig_alg)?;
                 Ok((append_signature(acs, &octet, &sig), None, None))
             }
             Binding::SimpleSign => {
                 let sig_alg = &self.setting.request_signature_algorithm;
-                let key = load_private_key(
-                    self.setting.private_key.as_deref().unwrap_or_default(),
-                    self.setting.private_key_pass.as_deref(),
-                )?;
+                let credential = SigningCredential::from_setting(&self.setting)?;
                 let octet = crate::binding::build_simplesign_octet(
                     ParserType::SamlResponse.query_param(),
                     xml,
                     relay_state,
                     sig_alg,
                 );
-                let sig = construct_message_signature(&octet, &key, sig_alg)?;
+                let sig = credential.sign_detached(&octet, sig_alg)?;
                 Ok((
                     base64_encode(xml.as_bytes()),
                     Some(sig),
@@ -486,30 +480,19 @@ impl IdentityProvider {
         _encrypt_then_sign: bool,
         error_response: bool,
     ) -> Result<String, SamlError> {
-        use crate::crypto::{construct_saml_signature, encrypt_assertion, keys::load_private_key};
+        use crate::crypto::{encrypt_assertion, SigningCredential};
 
-        let key_pem = self
-            .setting
-            .private_key
-            .as_deref()
-            .ok_or_else(|| SamlError::MissingKey("private_key".into()))?;
-        let cert = self
-            .setting
-            .signing_cert
-            .as_deref()
-            .ok_or_else(|| SamlError::MissingKey("signing_cert".into()))?;
+        let credential = SigningCredential::from_setting(&self.setting)?;
+        credential.require_certificate()?;
         let sig_alg = &self.setting.request_signature_algorithm;
-        let key = load_private_key(key_pem, self.setting.private_key_pass.as_deref())?;
 
         let mut xml = raw.to_string();
         if error_response {
             // HTTP-POST signs the Response. There is no assertion to sign.
             if binding == Binding::Post {
-                xml = construct_saml_signature(
+                xml = credential.sign_xml(
                     &xml,
                     true,
-                    &key,
-                    cert,
                     sig_alg,
                     &sp.setting.transformation_algorithms,
                     self.setting.signature_config.as_ref(),
@@ -526,11 +509,9 @@ impl IdentityProvider {
 
         // step: sign assertion -> (encrypt) -> sign message
         if want_assertions_signed {
-            xml = construct_saml_signature(
+            xml = credential.sign_xml(
                 &xml,
                 false,
-                &key,
-                cert,
                 sig_alg,
                 &sp.setting.transformation_algorithms,
                 None,
@@ -540,11 +521,9 @@ impl IdentityProvider {
         // signature, so when encrypting we always sign the message *after*
         // encryption (sound encrypt-then-sign). Without encryption, sign here.
         if sign_message && !self.setting.is_assertion_encrypted {
-            xml = construct_saml_signature(
+            xml = credential.sign_xml(
                 &xml,
                 true,
-                &key,
-                cert,
                 sig_alg,
                 &sp.setting.transformation_algorithms,
                 self.setting.signature_config.as_ref(),
@@ -564,11 +543,9 @@ impl IdentityProvider {
             )?;
         }
         if sign_message && self.setting.is_assertion_encrypted {
-            xml = construct_saml_signature(
+            xml = credential.sign_xml(
                 &xml,
                 true,
-                &key,
-                cert,
                 sig_alg,
                 &sp.setting.transformation_algorithms,
                 self.setting.signature_config.as_ref(),
@@ -650,6 +627,7 @@ impl IdentityProvider {
                 strict_xml_signature_profile: false,
                 from_issuer: sp.metadata.get_entity_id(),
                 signing_certs: &signing_certs,
+                hmac_secret: sp.setting.hmac_secret.as_ref(),
                 decrypt_key: None,
                 decrypt_key_pass: None,
                 allow_insecure_software_rsa_key_transport_decryption: false,

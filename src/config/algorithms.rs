@@ -5,6 +5,9 @@ use crate::constants::{
 
 /// XML signature algorithm used for outgoing signed messages.
 ///
+/// [`Self::RsaSha256`] is the default. [`Self::RsaSha1`], [`Self::DsaSha1`],
+/// and [`Self::HmacSha1`] use a SHA-1 digest and are used only when selected.
+///
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -16,6 +19,19 @@ pub enum SignatureAlgorithm {
     RsaSha384,
     /// RSA with SHA-512.
     RsaSha512,
+    /// RSA with SHA-1, signed with an RSA signing key.
+    ///
+    /// AWS-LC and FIPS do not sign with it.
+    RsaSha1,
+    /// DSA with SHA-1, signed with a DSA signing key.
+    ///
+    /// Needs the RustCrypto provider and `crypto-legacy-algorithms`.
+    DsaSha1,
+    /// HMAC-SHA1, signed with [`crate::Credentials::hmac_secret`].
+    ///
+    /// The verifier sets the same secret with `IdpDescriptor::with_hmac_secret`
+    /// or `SpDescriptor::with_hmac_secret`.
+    HmacSha1,
     /// Backend-specific signature algorithm URI.
     Custom(String),
 }
@@ -27,6 +43,9 @@ impl SignatureAlgorithm {
             Self::RsaSha256 => signature_algorithm::RSA_SHA256,
             Self::RsaSha384 => signature_algorithm::RSA_SHA384,
             Self::RsaSha512 => signature_algorithm::RSA_SHA512,
+            Self::RsaSha1 => signature_algorithm::RSA_SHA1,
+            Self::DsaSha1 => signature_algorithm::DSA_SHA1,
+            Self::HmacSha1 => signature_algorithm::HMAC_SHA1,
             Self::Custom(uri) => uri.as_str(),
         }
     }
@@ -154,6 +173,8 @@ pub enum TransformAlgorithm {
     EnvelopedSignature,
     /// Exclusive XML canonicalization.
     ExclusiveCanonicalization,
+    /// Canonical XML 1.0 without comments.
+    CanonicalXml,
     /// Backend-specific transform algorithm URI.
     Custom(String),
 }
@@ -164,6 +185,7 @@ impl TransformAlgorithm {
         match self {
             Self::EnvelopedSignature => transform_algorithm::ENVELOPED_SIGNATURE,
             Self::ExclusiveCanonicalization => transform_algorithm::EXC_C14N,
+            Self::CanonicalXml => transform_algorithm::C14N,
             Self::Custom(uri) => uri.as_str(),
         }
     }

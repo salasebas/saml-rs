@@ -10,8 +10,9 @@
 //!   `SubjectConfirmationData`.
 //! - Only content covered by a verified reference is returned for extraction.
 
-use super::keys::load_certificate;
+use super::keys::{load_certificate, load_hmac_secret};
 use super::response_root::root_uses_protocol_response_rules;
+use crate::config::HmacSecret;
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
 use crate::util::normalize_cert_string;
@@ -715,11 +716,24 @@ fn metadata_verification_context(certificate: &str) -> Result<DsigContext, SamlE
         .with_insecure(true))
 }
 
-/// Load one context per metadata certificate (rolling-cert support): the
-/// signature verifies if any one of the declared keys matches. An unloadable
-/// certificate is skipped while another one loads.
+fn hmac_verification_context(secret: &HmacSecret) -> Result<DsigContext, SamlError> {
+    let mut manager = KeysManager::new();
+    manager.add_key(load_hmac_secret(secret)?);
+    Ok(DsigContext::new(manager)
+        .with_trusted_keys_only(true)
+        .with_strict_verification(true)
+        .with_require_reference_digests(true)
+        .with_hmac_min_out_len(160)
+        .with_insecure(true))
+}
+
+/// Load one context per metadata certificate (rolling-cert support), and one
+/// for the peer's HMAC secret when it has one: the signature verifies if any
+/// one of those keys matches. An unloadable certificate is skipped while
+/// another key loads.
 fn metadata_verification_contexts(
     metadata_certs: &[String],
+    hmac_secret: Option<&HmacSecret>,
 ) -> Result<Vec<DsigContext>, SamlError> {
     let mut contexts = Vec::new();
     let mut key_load_error = None;
@@ -730,6 +744,9 @@ fn metadata_verification_contexts(
                 key_load_error.get_or_insert(error);
             }
         }
+    }
+    if let Some(secret) = hmac_secret {
+        contexts.push(hmac_verification_context(secret)?);
     }
     if contexts.is_empty() {
         return Err(key_load_error.unwrap_or(SamlError::NoTrustedCertificate));
@@ -767,6 +784,7 @@ fn reject_unpinned_inline_certificate(
 fn prepare_signature_verification(
     xml: &str,
     metadata_certs: &[String],
+    hmac_secret: Option<&HmacSecret>,
     limits: XmlLimits,
 ) -> Result<Option<PreparedSignatureVerification>, SamlError> {
     let dom = dom::parse_with_limits(xml, limits)?;
@@ -787,7 +805,7 @@ fn prepare_signature_verification(
     preflight_saml_reference_uris(&signature_candidates)?;
     reject_unpinned_inline_certificate(&signature_candidates, metadata_certs)?;
     super::provider::ensure_crypto_provider_initialized()?;
-    let contexts = metadata_verification_contexts(metadata_certs)?;
+    let contexts = metadata_verification_contexts(metadata_certs, hmac_secret)?;
     Ok(Some(PreparedSignatureVerification {
         dom,
         protocol_response,
@@ -819,7 +837,7 @@ pub fn verify_signature_with_limits(
     metadata_certs: &[String],
     limits: XmlLimits,
 ) -> Result<(bool, Option<String>), SamlError> {
-    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, limits)? else {
+    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, None, limits)? else {
         return Ok((false, None));
     };
     let root = &prepared.dom.root;
@@ -884,10 +902,12 @@ impl SignatureVerification {
 pub(crate) fn verify_signatures_detailed_with_profile(
     xml: &str,
     metadata_certs: &[String],
+    hmac_secret: Option<&HmacSecret>,
     limits: XmlLimits,
     strict_xml_signature_profile: bool,
 ) -> Result<SignatureVerification, SamlError> {
-    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, limits)? else {
+    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, hmac_secret, limits)?
+    else {
         return Ok(SignatureVerification::unverified());
     };
     let root = &prepared.dom.root;
@@ -1666,6 +1686,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             false,
         )?;
@@ -1699,6 +1720,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &response_with_first_invalid_signature()?,
             &[IDP_CERT.to_string()],
+            None,
             XmlLimits::default(),
             false,
         )?;
@@ -1720,6 +1742,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             false,
         )?;
@@ -1745,6 +1768,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             false,
         )?;
@@ -1769,6 +1793,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             true,
         )?;
@@ -1789,6 +1814,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             true,
         );
@@ -1804,6 +1830,7 @@ mod tests {
         let compatible = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             false,
         )?;
@@ -1816,6 +1843,7 @@ mod tests {
         let strict = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             true,
         );
@@ -1830,6 +1858,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             true,
         );
@@ -1844,6 +1873,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed,
             &[SP_SIGNING_CERT.to_string()],
+            None,
             XmlLimits::default(),
             false,
         )?;
@@ -1874,6 +1904,7 @@ mod tests {
         let result = verify_signatures_detailed_with_profile(
             &signed_response_and_assertion,
             &[SP_SIGNING_CERT.to_string(), IDP_CERT.to_string()],
+            None,
             XmlLimits::default(),
             false,
         )?;
@@ -1945,6 +1976,7 @@ mod tests {
             let result = verify_signatures_detailed_with_profile(
                 FALSE_SIGNED,
                 &certs,
+                None,
                 XmlLimits::default(),
                 false,
             )?;
@@ -2031,8 +2063,14 @@ mod tests {
             );
             for result in [
                 verify_signature(&xml, &[]).map(|_| ()),
-                verify_signatures_detailed_with_profile(&xml, &[], XmlLimits::default(), false)
-                    .map(|_| ()),
+                verify_signatures_detailed_with_profile(
+                    &xml,
+                    &[],
+                    None,
+                    XmlLimits::default(),
+                    false,
+                )
+                .map(|_| ()),
             ] {
                 match result {
                     Err(SamlError::PotentialWrappingAttack) => {}
@@ -2073,8 +2111,13 @@ mod tests {
         for xml in cases {
             let (verified, content) = verify_signature(&xml, &[])?;
             assert!(!verified && content.is_none(), "{xml}");
-            let detailed =
-                verify_signatures_detailed_with_profile(&xml, &[], XmlLimits::default(), false)?;
+            let detailed = verify_signatures_detailed_with_profile(
+                &xml,
+                &[],
+                None,
+                XmlLimits::default(),
+                false,
+            )?;
             assert!(
                 !detailed.verified() && !detailed.response_covered(),
                 "{xml}"
@@ -2118,6 +2161,7 @@ mod tests {
         let detailed = verify_signatures_detailed_with_profile(
             signed,
             &certificates,
+            None,
             XmlLimits::default(),
             false,
         )?;

@@ -4,6 +4,7 @@
 use crate::binding::{
     base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
+use crate::config::HmacSecret;
 use crate::constants::{Binding, ParserType};
 use crate::context::is_valid_xml_with_limits;
 use crate::error::SamlError;
@@ -117,6 +118,8 @@ pub struct FlowOptions<'a> {
     pub from_issuer: Option<&'a str>,
     /// Peer signing certificate(s) for verification.
     pub signing_certs: &'a [String],
+    /// Peer HMAC secret for verifying an HMAC signature.
+    pub hmac_secret: Option<&'a HmacSecret>,
     /// Our decryption private key PEM (when assertions are encrypted).
     pub decrypt_key: Option<&'a str>,
     /// Passphrase for `decrypt_key`.
@@ -152,6 +155,7 @@ impl<'a> Default for FlowOptions<'a> {
             strict_xml_signature_profile: false,
             from_issuer: None,
             signing_certs: &[],
+            hmac_secret: None,
             decrypt_key: None,
             decrypt_key_pass: None,
             allow_insecure_software_rsa_key_transport_decryption: false,
@@ -524,6 +528,7 @@ fn verify_embedded_signature(
     let verification = crate::crypto::verify::verify_signatures_detailed_with_profile(
         xml,
         opts.signing_certs,
+        opts.hmac_secret,
         opts.xml_limits,
         opts.strict_xml_signature_profile,
     )?;
@@ -812,6 +817,16 @@ fn verify_detached(
         octet,
     )?;
     crate::crypto::initialize_crypto_provider()?;
+
+    if let Some(secret) = opts
+        .hmac_secret
+        .filter(|_| bergshamra::crypto::sign::is_hmac_algorithm(sig_alg))
+    {
+        if crate::crypto::sign::verify_hmac_message_signature(octet, signature, secret, sig_alg)? {
+            return Ok(sig_alg.to_string());
+        }
+        return Err(detached_signature_verification());
+    }
 
     let mut provider_error = None;
     let mut tried_invalid = false;

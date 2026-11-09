@@ -2,14 +2,15 @@ use saml_rs::constants::{
     data_encryption_algorithm, digest_algorithm, key_encryption_algorithm, name_id_format,
     signature_algorithm, transform_algorithm,
 };
+use saml_rs::flow::FlowOptions;
 use saml_rs::xml::XmlLimits;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
     CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting,
-    IdpConfig, IdpDescriptor, IdpMetadataConfig, KeyEncryptionAlgorithm, MetadataTrustPolicy,
-    NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy, SamlError,
-    SignatureAlgorithm, SpConfig, SpDescriptor, SpMetadataConfig, SsoEndpoint, TransformAlgorithm,
-    XmlEncryptionPolicy,
+    HmacSecret, IdpConfig, IdpDescriptor, IdpMetadataConfig, KeyEncryptionAlgorithm,
+    MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy,
+    SamlError, SignatureAlgorithm, SpConfig, SpDescriptor, SpMetadataConfig, SsoEndpoint,
+    TransformAlgorithm, XmlEncryptionPolicy,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/idpmeta.xml");
@@ -33,6 +34,36 @@ fn typed_config_passphrase_debug_is_redacted() {
 
     assert!(!debug.contains("dummy-passphrase-for-redaction-test"));
     assert!(debug.contains("redacted"));
+}
+
+#[test]
+fn hmac_secret_debug_is_redacted_where_it_is_carried() -> Result<(), SamlError> {
+    const SECRET: &[u8] = b"dummy-hmac-secret-for-debug-test";
+    let secret = HmacSecret::try_new(SECRET)?;
+    let mut setting = EntitySetting::default();
+    setting.hmac_secret = Some(secret.clone());
+    let mut flow = FlowOptions::default();
+    flow.hmac_secret = Some(&secret);
+
+    for debug in [
+        format!("{secret:?}"),
+        format!("{setting:?}"),
+        format!("{flow:?}"),
+    ] {
+        assert!(debug.contains("redacted"), "{debug}");
+        assert!(!debug.contains("dummy-hmac-secret"), "{debug}");
+        assert!(!debug.contains(&format!("{SECRET:?}")), "{debug}");
+    }
+    Ok(())
+}
+
+#[test]
+fn hmac_secret_is_at_least_the_sha1_output_length() {
+    assert!(matches!(
+        HmacSecret::try_new([0_u8; HmacSecret::MIN_LEN - 1]),
+        Err(SamlError::Invalid(_))
+    ));
+    assert!(HmacSecret::try_new([0_u8; HmacSecret::MIN_LEN]).is_ok());
 }
 
 #[test]

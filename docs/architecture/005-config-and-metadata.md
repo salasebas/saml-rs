@@ -103,6 +103,7 @@ pub struct Credentials {
     signing_key: Option<PrivateKeyPem>,
     signing_key_passphrase: Option<Passphrase>,
     signing_certificate: Option<CertificatePem>,
+    hmac_secret: Option<HmacSecret>,
     encryption_certificate: Option<CertificatePem>,
     decryption_key: Option<PrivateKeyPem>,
     decryption_key_passphrase: Option<Passphrase>,
@@ -111,6 +112,7 @@ pub struct Credentials {
 pub struct PrivateKeyPem(String);
 pub struct CertificatePem(String);
 pub struct Passphrase(String);
+pub struct HmacSecret(Vec<u8>);
 ```
 
 Rules:
@@ -128,6 +130,9 @@ pub enum SignatureAlgorithm {
     RsaSha256,
     RsaSha384,
     RsaSha512,
+    RsaSha1,
+    DsaSha1,
+    HmacSha1,
     Custom(String),
 }
 

@@ -1,11 +1,12 @@
 //! XML-DSig signing and detached message signatures, delegating crypto to the
 //! selected `bergshamra` provider.
 
-use super::keys::load_certificate;
+use super::keys::{load_certificate, load_hmac_secret, load_private_key};
 use super::xml_syntax::validate_crypto_xml_prefix;
 use crate::binding::{base64_decode, base64_encode, xml_escape};
+use crate::config::HmacSecret;
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
-use crate::entity::{SignatureAction, SignatureConfig};
+use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
 use crate::error::SamlError;
 use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node};
@@ -95,6 +96,26 @@ pub fn construct_saml_signature(
     transforms: &[String],
     config: Option<&SignatureConfig>,
 ) -> Result<String, SamlError> {
+    embed_signature(
+        xml,
+        sign_message,
+        key,
+        Some(cert),
+        sig_alg,
+        transforms,
+        config,
+    )
+}
+
+fn embed_signature(
+    xml: &str,
+    sign_message: bool,
+    key: &Key,
+    cert: Option<&str>,
+    sig_alg: &str,
+    transforms: &[String],
+    config: Option<&SignatureConfig>,
+) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     let doc = dom::parse(xml)?;
     let target = if sign_message {
@@ -112,7 +133,12 @@ pub fn construct_saml_signature(
 
     let prefix = config.map(|c| c.prefix.as_str()).unwrap_or("ds");
     validate_crypto_xml_prefix("SignatureConfig.prefix", prefix)?;
-    let cert_b64 = xml_escape(&normalize_cert_string(cert));
+    let key_info = cert
+        .map(|cert| {
+            let cert_b64 = xml_escape(&normalize_cert_string(cert));
+            format!("<{prefix}:KeyInfo><{prefix}:X509Data><{prefix}:X509Certificate>{cert_b64}</{prefix}:X509Certificate></{prefix}:X509Data></{prefix}:KeyInfo>")
+        })
+        .unwrap_or_default();
     let id = xml_escape(id);
     let sig_alg = xml_escape(sig_alg);
     let default_transforms = [
@@ -132,7 +158,7 @@ pub fn construct_saml_signature(
         })
         .collect();
     let signature = format!(
-        "<{p}:Signature xmlns:{p}=\"{dsig}\"><{p}:SignedInfo><{p}:CanonicalizationMethod Algorithm=\"{exc}\"/><{p}:SignatureMethod Algorithm=\"{sig_alg}\"/><{p}:Reference URI=\"#{id}\"><{p}:Transforms>{transforms_xml}</{p}:Transforms><{p}:DigestMethod Algorithm=\"{digest}\"/><{p}:DigestValue></{p}:DigestValue></{p}:Reference></{p}:SignedInfo><{p}:SignatureValue></{p}:SignatureValue><{p}:KeyInfo><{p}:X509Data><{p}:X509Certificate>{cert_b64}</{p}:X509Certificate></{p}:X509Data></{p}:KeyInfo></{p}:Signature>",
+        "<{p}:Signature xmlns:{p}=\"{dsig}\"><{p}:SignedInfo><{p}:CanonicalizationMethod Algorithm=\"{exc}\"/><{p}:SignatureMethod Algorithm=\"{sig_alg}\"/><{p}:Reference URI=\"#{id}\"><{p}:Transforms>{transforms_xml}</{p}:Transforms><{p}:DigestMethod Algorithm=\"{digest}\"/><{p}:DigestValue></{p}:DigestValue></{p}:Reference></{p}:SignedInfo><{p}:SignatureValue></{p}:SignatureValue>{key_info}</{p}:Signature>",
         p = prefix,
         dsig = namespace::DSIG,
         exc = transform_algorithm::EXC_C14N,
@@ -162,6 +188,86 @@ pub fn construct_saml_signature(
     sign(&ctx, &templated).map_err(crypto_err)
 }
 
+pub(crate) enum SigningCredential<'a> {
+    PrivateKey {
+        key: Key,
+        certificate: Option<&'a str>,
+    },
+    HmacSecret(Key),
+}
+
+impl<'a> SigningCredential<'a> {
+    pub(crate) fn from_setting(setting: &'a EntitySetting) -> Result<Self, SamlError> {
+        if bergshamra::crypto::sign::is_hmac_algorithm(&setting.request_signature_algorithm) {
+            let secret = setting
+                .hmac_secret
+                .as_ref()
+                .ok_or_else(|| SamlError::MissingKey("hmac_secret".into()))?;
+            return Ok(Self::HmacSecret(load_hmac_secret(secret)?));
+        }
+        let pem = setting
+            .private_key
+            .as_deref()
+            .ok_or_else(|| SamlError::MissingKey("private_key".into()))?;
+        Ok(Self::PrivateKey {
+            key: load_private_key(pem, setting.private_key_pass.as_deref())?,
+            certificate: setting.signing_cert.as_deref(),
+        })
+    }
+
+    pub(crate) fn require_certificate(&self) -> Result<(), SamlError> {
+        match self {
+            Self::PrivateKey {
+                certificate: None, ..
+            } => Err(SamlError::MissingKey("signing_cert".into())),
+            Self::PrivateKey {
+                certificate: Some(_),
+                ..
+            }
+            | Self::HmacSecret(_) => Ok(()),
+        }
+    }
+
+    pub(crate) fn sign_detached(
+        &self,
+        octet_string: &str,
+        sig_alg: &str,
+    ) -> Result<String, SamlError> {
+        let key = match self {
+            Self::PrivateKey { key, .. } | Self::HmacSecret(key) => key,
+        };
+        construct_message_signature(octet_string, key, sig_alg)
+    }
+
+    pub(crate) fn sign_xml(
+        &self,
+        xml: &str,
+        sign_message: bool,
+        sig_alg: &str,
+        transforms: &[String],
+        config: Option<&SignatureConfig>,
+    ) -> Result<String, SamlError> {
+        match self {
+            Self::PrivateKey { key, certificate } => {
+                let certificate =
+                    certificate.ok_or_else(|| SamlError::MissingKey("signing_cert".into()))?;
+                embed_signature(
+                    xml,
+                    sign_message,
+                    key,
+                    Some(certificate),
+                    sig_alg,
+                    transforms,
+                    config,
+                )
+            }
+            Self::HmacSecret(key) => {
+                embed_signature(xml, sign_message, key, None, sig_alg, transforms, config)
+            }
+        }
+    }
+}
+
 /// Sign a detached octet string (redirect/SimpleSign binding).
 ///
 /// Returns the base64-encoded signature.
@@ -186,7 +292,34 @@ pub fn verify_message_signature(
     cert: &str,
     sig_alg: &str,
 ) -> Result<bool, SamlError> {
-    let key = load_certificate(cert)?;
+    verify_detached_with_key(
+        octet_string,
+        signature_b64,
+        &load_certificate(cert)?,
+        sig_alg,
+    )
+}
+
+pub(crate) fn verify_hmac_message_signature(
+    octet_string: &str,
+    signature_b64: &str,
+    secret: &HmacSecret,
+    sig_alg: &str,
+) -> Result<bool, SamlError> {
+    verify_detached_with_key(
+        octet_string,
+        signature_b64,
+        &load_hmac_secret(secret)?,
+        sig_alg,
+    )
+}
+
+fn verify_detached_with_key(
+    octet_string: &str,
+    signature_b64: &str,
+    key: &Key,
+    sig_alg: &str,
+) -> Result<bool, SamlError> {
     let verifying = require_operation_key(key.to_signing_key(), "no verification key")?;
     let alg = bergshamra::crypto::sign::from_uri(sig_alg).map_err(crypto_err)?;
     let signature = base64_decode(signature_b64)?;
