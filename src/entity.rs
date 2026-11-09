@@ -351,9 +351,20 @@ impl Default for EntitySetting {
     }
 }
 
-/// Generate a SAML message ID (`_` + UUIDv4).
+/// Generate a SAML identifier: `_` and 160 random bits as 40 lowercase
+/// hexadecimal digits.
+///
+/// The result is an `xs:ID` of 41 characters. Each call returns a different
+/// value.
 pub fn generate_id() -> String {
-    format!("_{}", uuid::Uuid::new_v4())
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+
+    let mut identifier = String::from("_");
+    for byte in random_20_bytes() {
+        identifier.push(char::from(HEX[usize::from(byte >> 4)]));
+        identifier.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    identifier
 }
 
 /// 20 random bytes from two version 4 UUIDs, skipping the bytes that carry
@@ -367,20 +378,6 @@ pub(crate) fn random_20_bytes() -> [u8; 20] {
     random[13..19].copy_from_slice(&second[..6]);
     random[19] = second[9];
     random
-}
-
-/// Generate an opaque identifier: `_` and 160 random bits in hexadecimal.
-///
-/// The result is an `xs:ID` of 41 characters.
-pub(crate) fn generate_opaque_identifier() -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-
-    let mut identifier = String::from("_");
-    for byte in random_20_bytes() {
-        identifier.push(char::from(HEX[usize::from(byte >> 4)]));
-        identifier.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    identifier
 }
 
 /// The authenticated subject an IdP issues a response for.
