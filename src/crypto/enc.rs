@@ -168,7 +168,20 @@ pub fn encrypt_assertion(
 /// Decrypt the `<EncryptedAssertion>` in `xml` using `enc_key`, replacing it
 /// with the plaintext `<Assertion>`.
 ///
+/// The `<xenc:EncryptedKey>` is the one in the `ds:KeyInfo` of
+/// `<xenc:EncryptedData>`, or one after `<xenc:EncryptedData>` that a
+/// `ds:RetrievalMethod` of type `http://www.w3.org/2001/04/xmlenc#EncryptedKey`
+/// names.
+///
 /// Returns `(response_with_decrypted_assertion, decrypted_assertion)`.
+///
+/// # Errors
+///
+/// Returns [`SamlError::ProtocolProfile`] when the `<EncryptedAssertion>`
+/// holds anything other than one `<xenc:EncryptedData>` followed only by
+/// `<xenc:EncryptedKey>` elements, or when its plaintext is not one
+/// `<Assertion>`. Returns [`SamlError::Unsupported`] for a refused key
+/// transport, and another [`SamlError`] when decryption fails.
 pub fn decrypt_assertion(
     xml: &str,
     enc_key: &Key,
@@ -178,6 +191,10 @@ pub fn decrypt_assertion(
 }
 
 /// Decrypt the `<EncryptedAssertion>` with explicit XML parser resource limits.
+///
+/// # Errors
+///
+/// As [`decrypt_assertion`], and [`SamlError::Invalid`] when a limit is exceeded.
 pub fn decrypt_assertion_with_limits(
     xml: &str,
     enc_key: &Key,
@@ -186,28 +203,20 @@ pub fn decrypt_assertion_with_limits(
 ) -> Result<(String, String), SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     require_software_rsa_opt_in(options)?;
-
-    let doc = dom::parse_with_limits(xml, limits)?;
-    let encrypted = child(&doc.root, "EncryptedAssertion")
+    dom::parse_with_limits(xml, limits)?;
+    let document = parse_xml_document(xml)?;
+    let encrypted = *root_children(&document, namespace::ASSERTION, "EncryptedAssertion")?
+        .first()
         .ok_or_else(|| SamlError::Crypto("ERR_UNDEFINED_ENCRYPTED_ASSERTION".into()))?;
-    // bergshamra::decrypt returns the input doc with <EncryptedData> replaced by
-    // the plaintext element, so pass only the inner EncryptedData to recover the
-    // bare <Assertion>, then drop the EncryptedAssertion wrapper.
-    let encrypted_data = child(encrypted, "EncryptedData")
-        .ok_or_else(|| SamlError::Crypto("ERR_UNDEFINED_ENCRYPTED_ASSERTION".into()))?;
-    let encrypted_data_xml = &xml[encrypted_data.start..encrypted_data.end];
-
-    let decrypted = decrypt_with_key(encrypted_data_xml, enc_key, options)?;
-    // The decrypted element may carry an XML declaration; strip it so the
-    // assertion can be spliced back into the middle of the Response document.
-    let assertion = strip_xml_declaration(&decrypted).to_string();
-
-    let response = format!(
-        "{}{}{}",
-        &xml[..encrypted.start],
-        assertion,
-        &xml[encrypted.end..]
-    );
+    let (range, assertion) = decrypted_element(
+        &document,
+        encrypted,
+        ENCRYPTED_ASSERTION,
+        enc_key,
+        options,
+        limits,
+    )?;
+    let response = splice(xml, vec![(range, assertion.clone())]);
     limits.check_input_bytes(response.len())?;
     limits.check_input_bytes(assertion.len())?;
     Ok((response, assertion))
@@ -225,6 +234,15 @@ pub(crate) struct EncryptedElementKind {
     /// process.
     unsupported_plaintext: &'static [&'static str],
 }
+
+/// SAML Core §2.3.4.
+const ENCRYPTED_ASSERTION: EncryptedElementKind = EncryptedElementKind {
+    namespace: namespace::ASSERTION,
+    parent: "Response",
+    plaintext: "Assertion",
+    encrypted: "EncryptedAssertion",
+    unsupported_plaintext: &[],
+};
 
 /// SAML Core §2.2.4.
 const ENCRYPTED_ID: EncryptedElementKind = EncryptedElementKind {
@@ -674,8 +692,8 @@ fn require_encrypted_element_children(
             {
                 peer_keys += 1;
             }
-            Some(NodeKind::Text(text)) if is_xml_whitespace(text) => {}
-            Some(NodeKind::Comment(_)) => {}
+            Some(NodeKind::Text(text) | NodeKind::CData(text)) if is_xml_whitespace(text) => {}
+            Some(NodeKind::Comment(_) | NodeKind::ProcessingInstruction(_)) => {}
             _ => return Err(encrypted_element_children_error(kind)),
         }
     }
@@ -738,18 +756,6 @@ fn must_carry(kind: EncryptedElementKind) -> SamlError {
     ))
 }
 
-/// Drop a leading `<?xml ... ?>` declaration (and surrounding whitespace).
-fn strip_xml_declaration(xml: &str) -> &str {
-    let trimmed = xml.trim_start();
-    match trimmed.strip_prefix("<?xml") {
-        Some(rest) => match rest.find("?>") {
-            Some(end) => rest[end + 2..].trim_start(),
-            None => trimmed,
-        },
-        None => trimmed,
-    }
-}
-
 #[cfg(all(test, not(feature = "crypto-fips")))]
 mod tests {
     use super::*;
@@ -809,7 +815,7 @@ mod tests {
         let mut manager = KeysManager::new();
         manager.add_key(load_private_key(SP_PRIVKEY, None)?);
         let plaintext = decrypt(&EncContext::new(manager), only_encrypted_data(&encrypted)?)?;
-        let document = uppsala::parse(strip_xml_declaration(&plaintext))?;
+        let document = uppsala::parse(&plaintext)?;
         let root = document.document_element().ok_or("no plaintext element")?;
         let name_id = document
             .element(root)
@@ -974,6 +980,35 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn encrypted_assertion_resolves_a_peer_key_named_by_retrieval_method(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let encrypted = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
+        let encrypted_data = only_encrypted_data(&encrypted)?;
+        let peer = encrypted.replacen(
+            encrypted_data,
+            &with_peer_key(encrypted_data)?.replacen(
+                "<xenc:EncryptedKey",
+                "<?pi?><xenc:EncryptedKey",
+                1,
+            ),
+            1,
+        );
+        assert!(peer.contains("</xenc:EncryptedData><?pi?><xenc:EncryptedKey"));
+
+        let (response, assertion) = decrypt_assertion(
+            &peer,
+            &load_private_key(SP_PRIVKEY, None)?,
+            software_rsa_test_options(),
+        )?;
+        assert!(assertion.starts_with("<saml:Assertion"));
+        assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
+        assert!(response.contains(&assertion));
+        assert!(!response.contains("EncryptedAssertion"));
+        assert!(!response.contains("EncryptedKey"));
+        Ok(())
+    }
+
     fn software_rsa_test_options() -> AssertionDecryptionOptions {
         AssertionDecryptionOptions {
             allow_insecure_software_rsa_key_transport_decryption: cfg!(
@@ -1028,20 +1063,24 @@ mod tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         use crate::constants::key_encryption_algorithm::RSA_1_5;
 
-        let encrypted = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_1_5, "saml")?;
+        let embedded = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_1_5, "saml")?;
+        let encrypted_data = only_encrypted_data(&embedded)?;
+        let peer = embedded.replacen(encrypted_data, &with_peer_key(encrypted_data)?, 1);
         let key = load_private_key(SP_PRIVKEY, None)?;
-        let refused = decrypt_assertion(&encrypted, &key, software_rsa_test_options());
-        assert!(
-            matches!(&refused, Err(SamlError::Unsupported(message)) if message.contains("rsa-1_5")),
-            "{refused:?}"
-        );
+        for encrypted in [embedded.as_str(), peer.as_str()] {
+            let refused = decrypt_assertion(encrypted, &key, software_rsa_test_options());
+            assert!(
+                matches!(&refused, Err(SamlError::Unsupported(message)) if message.contains("rsa-1_5")),
+                "{refused:?}"
+            );
 
-        let selected = AssertionDecryptionOptions {
-            allow_rsa15_key_transport_decryption: true,
-            ..software_rsa_test_options()
-        };
-        let (_, assertion) = decrypt_assertion(&encrypted, &key, selected)?;
-        assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
+            let selected = AssertionDecryptionOptions {
+                allow_rsa15_key_transport_decryption: true,
+                ..software_rsa_test_options()
+            };
+            let (_, assertion) = decrypt_assertion(encrypted, &key, selected)?;
+            assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
+        }
         Ok(())
     }
 
