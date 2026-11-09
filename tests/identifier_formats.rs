@@ -14,8 +14,9 @@
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
+use saml_rs::entity::iso8601_offset;
 use saml_rs::raw::{Binding, LoginResponseOptions, User};
-use saml_rs::template::{LoginResponseAttribute, LoginResponseTemplate};
+use saml_rs::template::{replace_tags_by_value, LoginResponseAttribute, LoginResponseTemplate};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
     Attributes, AudienceValidationPolicy, AuthnRequest, BrowserInput, CertificatePem, Credentials,
@@ -635,10 +636,117 @@ fn stored_persistent_identifier_is_at_most_256_characters() -> Result<(), Box<dy
     let longest = "é".repeat(256);
     assert_eq!(NameId::persistent(longest.clone())?.value(), longest);
 
-    match NameId::persistent("é".repeat(257)) {
+    expect_name_id_length_error(NameId::persistent("é".repeat(257)))
+}
+
+fn expect_name_id_length_error<T: std::fmt::Debug>(
+    result: Result<T, SamlError>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match result {
         Err(SamlError::Invalid(message)) if message.contains("256 characters") => Ok(()),
-        other => Err(format!("expected length error, got {other:?}").into()),
+        other => Err(format!("expected NameID length error, got {other:?}").into()),
     }
+}
+
+#[test]
+fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_256_characters(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // The limit counts characters, not bytes.
+    for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
+        let longest = NameId::new("é".repeat(256), Some(format.clone()));
+        let exchange = exchange(subject(longest.clone()), RespondSso::post())?;
+        assert_eq!(exchange.session.name_id(), &longest);
+
+        let too_long = NameId::new("é".repeat(257), Some(format));
+        expect_name_id_length_error(respond(subject(too_long), RespondSso::post()))?;
+    }
+
+    // A NameID without a format is issued in the first configured format.
+    let sp = sp()?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .credentials(credentials())
+            .validation(IdpValidationPolicy::recommended())
+            .name_id_format(NameIdFormat::Persistent)
+            .build()?,
+    )?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let unformatted = NameId::new("x".repeat(257), None);
+    expect_name_id_length_error(idp.initiate_sso(
+        &sp_descriptor,
+        subject(unformatted),
+        RespondSso::post(),
+    ))?;
+
+    // The rule applies to these two formats only.
+    let email = NameId::new(
+        format!("{}@example.com", "x".repeat(300)),
+        Some(NameIdFormat::EmailAddress),
+    );
+    let exchange = exchange(subject(email.clone()), RespondSso::post())?;
+    assert_eq!(exchange.session.name_id(), &email);
+    Ok(())
+}
+
+/// A peer identity provider that ignores the producer rules: the raw renderer
+/// callback writes the `<NameID>` as given.
+fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::error::Error>> {
+    let sp = sp()?;
+    let idp = idp()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let request_id = started.pending.request_id().as_str().to_string();
+    let format = name_id
+        .format()
+        .map(NameIdFormat::as_uri)
+        .ok_or("peer NameID needs a format")?
+        .to_string();
+    let fill = |template: &str| {
+        let id = "_peer-response".to_string();
+        let now = iso8601_offset(-60);
+        let later = iso8601_offset(300);
+        let xml = replace_tags_by_value(
+            template,
+            &[
+                ("ID", id.clone()),
+                ("AssertionID", "_peer-assertion".into()),
+                ("Destination", SP_ACS.into()),
+                ("SubjectRecipient", SP_ACS.into()),
+                ("Audience", SP_ENTITY_ID.into()),
+                ("Issuer", IDP_ENTITY_ID.into()),
+                ("IssueInstant", now.clone()),
+                (
+                    "StatusCode",
+                    "urn:oasis:names:tc:SAML:2.0:status:Success".into(),
+                ),
+                ("ConditionsNotBefore", now),
+                ("ConditionsNotOnOrAfter", later.clone()),
+                ("SubjectConfirmationDataNotOnOrAfter", later),
+                ("NameIDFormat", format.clone()),
+                ("NameID", name_id.value().to_string()),
+                ("InResponseTo", request_id.clone()),
+                ("AuthnStatement", String::new()),
+            ],
+        );
+        (id, xml)
+    };
+    let context = idp.raw_identity_provider().create_login_response(
+        sp.raw_service_provider(),
+        Binding::Post,
+        &User::new(name_id.value()),
+        &LoginResponseOptions {
+            in_response_to: Some(&request_id),
+            custom: Some(&fill as &dyn Fn(&str) -> (String, String)),
+            ..LoginResponseOptions::default()
+        },
+    )?;
+    Ok(sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(vec![FormField::new("SAMLResponse", context.context)]),
+        validation(),
+    )?)
 }
 
 #[test]
@@ -648,8 +756,8 @@ fn service_provider_accepts_persistent_and_transient_identifiers_that_miss_the_p
     let value = format!("alice@example.com/{}", "x".repeat(300));
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let name_id = NameId::new(value.clone(), Some(format));
-        let exchange = exchange(subject(name_id.clone()), RespondSso::post())?;
-        assert_eq!(exchange.session.name_id(), &name_id);
+        let session = accept_peer_name_id(&name_id)?;
+        assert_eq!(session.name_id(), &name_id);
     }
     Ok(())
 }

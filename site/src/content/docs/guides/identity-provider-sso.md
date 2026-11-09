@@ -92,7 +92,7 @@ let response = idp.respond_sso(
 
 A `Basic` name that is not an XML name is rejected. `attributes()` cannot be combined with a login response template.
 
-`NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` still takes any value in any format. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
+`NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` still takes any value in any format, but a persistent or transient value longer than 256 characters is rejected when the response is generated. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
 ## Discovery cookie
 

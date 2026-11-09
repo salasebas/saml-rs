@@ -1,8 +1,28 @@
 use crate::config::NameIdFormat;
+use crate::constants::name_id_format;
 use crate::entity::generate_opaque_identifier;
 use crate::error::SamlError;
 
-const MAX_PERSISTENT_NAME_ID_CHARS: usize = 256;
+const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
+
+/// Reject a persistent or transient `NameID` value longer than 256
+/// characters. Other formats have no length limit.
+pub(crate) fn validate_issued_name_id_length(
+    format_uri: Option<&str>,
+    value: &str,
+) -> Result<(), SamlError> {
+    let format = match format_uri {
+        Some(name_id_format::PERSISTENT) => "persistent",
+        Some(name_id_format::TRANSIENT) => "transient",
+        _ => return Ok(()),
+    };
+    if value.chars().count() > MAX_OPAQUE_NAME_ID_CHARS {
+        return Err(SamlError::Invalid(format!(
+            "a {format} NameID must not exceed {MAX_OPAQUE_NAME_ID_CHARS} characters"
+        )));
+    }
+    Ok(())
+}
 
 /// NameID value, format, and optional qualifier attributes.
 ///
@@ -11,7 +31,9 @@ const MAX_PERSISTENT_NAME_ID_CHARS: usize = 256;
 ///
 /// [`Self::generate_transient`], [`Self::generate_persistent`], and
 /// [`Self::persistent`] create the identifiers an identity provider issues in
-/// those two formats. [`Self::new`] takes any value in any format.
+/// those two formats. [`Self::new`] takes any value in any format. An identity
+/// provider response rejects a persistent or transient value longer than 256
+/// characters, whichever constructor created it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameId {
     value: String,
@@ -74,11 +96,7 @@ impl NameId {
     /// ```
     pub fn persistent(value: impl Into<String>) -> Result<Self, SamlError> {
         let value = value.into();
-        if value.chars().count() > MAX_PERSISTENT_NAME_ID_CHARS {
-            return Err(SamlError::Invalid(format!(
-                "a persistent NameID must not exceed {MAX_PERSISTENT_NAME_ID_CHARS} characters"
-            )));
-        }
+        validate_issued_name_id_length(Some(name_id_format::PERSISTENT), &value)?;
         Ok(Self::new(value, Some(NameIdFormat::Persistent)))
     }
 

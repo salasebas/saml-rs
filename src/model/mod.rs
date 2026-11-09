@@ -19,6 +19,7 @@ mod validation;
 
 pub(crate) use extract::authn_statement_not_on_or_after_values;
 pub(crate) use session::earliest_authn_session_expiration;
+pub(crate) use subject::validate_issued_name_id_length;
 
 pub use attributes::{Attribute, AttributeNameFormat, AttributeValue, Attributes};
 pub use authn::{AuthnRequest, ForceAuthn, IsPassive};

@@ -126,7 +126,8 @@ impl Saml<Idp> {
     /// login response template, an error status is combined with a login
     /// response template, [`RespondSso::attributes`] is combined with a login
     /// response template or names a basic attribute that is not an XML name,
-    /// or response creation fails.
+    /// the persistent or transient `NameID` of `subject` is longer than 256
+    /// characters, or response creation fails.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
@@ -150,7 +151,8 @@ impl Saml<Idp> {
     /// with a custom login response template, an error status is combined with
     /// a login response template, [`RespondSso::attributes`] is combined with a
     /// login response template or names a basic attribute that is not an XML
-    /// name, or response creation fails.
+    /// name, the persistent or transient `NameID` of `subject` is longer than
+    /// 256 characters, or response creation fails.
     ///
     /// # Examples
     ///
