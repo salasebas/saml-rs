@@ -14,7 +14,7 @@ use crate::error::SamlError;
 use crate::xml::dom::{self, Node, XmlLimits};
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::keys::Key;
-use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeSet};
+use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeKind, NodeSet};
 use bergshamra::{decrypt, encrypt, EncContext, KeysManager};
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
@@ -365,17 +365,7 @@ pub(crate) fn decrypt_assertion_elements(
             });
         }
         for element in assertion_elements(&document, kind.parent, kind.encrypted)? {
-            let has_encrypted_data = document.children_iter(element).any(|child| {
-                document
-                    .element(child)
-                    .is_some_and(|data| data.matches_name_ns(ENC, "EncryptedData"))
-            });
-            if !has_encrypted_data {
-                return Err(SamlError::ProtocolProfile(format!(
-                    "{} has no EncryptedData",
-                    kind.encrypted
-                )));
-            }
+            let peer_keys = require_encrypted_element_children(&document, element, kind)?;
             // The whole wrapper is decrypted so that an `EncryptedKey` beside
             // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
             let wrapper = String::from_utf8(namespace_complete(&document, element)?)
@@ -384,7 +374,7 @@ pub(crate) fn decrypt_assertion_elements(
             manager.add_key(enc_key.clone());
             let ctx = EncContext::new(manager);
             let decrypted = decrypt(&ctx, &wrapper).map_err(crypto_err)?;
-            let plaintext = decrypted_plaintext(&decrypted, kind, limits)?;
+            let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
             replacements.push((node_range(&document, element)?, plaintext.to_string()));
         }
     }
@@ -393,39 +383,79 @@ pub(crate) fn decrypt_assertion_elements(
     Ok(decrypted)
 }
 
-/// The one element that took the place of `EncryptedData` in the decrypted
-/// `wrapper`, beside any `EncryptedKey`.
+/// `EncryptedElementType`: one `EncryptedData`, then any `EncryptedKey`.
+/// Returns the number of `EncryptedKey` elements.
+fn require_encrypted_element_children(
+    document: &XmlDocument<'_>,
+    element: NodeId,
+    kind: EncryptedElementKind,
+) -> Result<usize, SamlError> {
+    let mut encrypted_data = 0;
+    let mut peer_keys = 0;
+    for child in document.children_iter(element) {
+        match document.node_kind(child) {
+            Some(NodeKind::Element(child))
+                if child.matches_name_ns(ENC, "EncryptedData") && peer_keys == 0 =>
+            {
+                encrypted_data += 1;
+            }
+            Some(NodeKind::Element(child))
+                if child.matches_name_ns(ENC, "EncryptedKey") && encrypted_data == 1 =>
+            {
+                peer_keys += 1;
+            }
+            Some(NodeKind::Text(text)) if is_xml_whitespace(text) => {}
+            Some(NodeKind::Comment(_)) => {}
+            _ => return Err(encrypted_element_children_error(kind)),
+        }
+    }
+    if encrypted_data != 1 {
+        return Err(encrypted_element_children_error(kind));
+    }
+    Ok(peer_keys)
+}
+
+fn encrypted_element_children_error(kind: EncryptedElementKind) -> SamlError {
+    SamlError::ProtocolProfile(format!(
+        "{} must contain one EncryptedData and only EncryptedKey after it",
+        kind.encrypted
+    ))
+}
+
+fn is_xml_whitespace(text: &str) -> bool {
+    text.bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+}
+
+/// The element that took the place of `EncryptedData` in the decrypted
+/// `wrapper`: its first child, followed by the `peer_keys` `EncryptedKey`
+/// elements that were already there.
 fn decrypted_plaintext(
     wrapper: &str,
+    peer_keys: usize,
     kind: EncryptedElementKind,
     limits: XmlLimits,
 ) -> Result<&str, SamlError> {
     let root = dom::parse_with_limits(wrapper, limits)?.root;
-    let carried: Vec<&Node> = root
-        .children
-        .iter()
-        .filter(|child| child.local_name != "EncryptedKey")
-        .collect();
-    let only_whitespace = root
-        .text
-        .bytes()
-        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'));
-    let [element] = carried.as_slice() else {
+    let Some((plaintext, keys)) = root.children.split_first() else {
         return Err(must_carry(kind));
     };
-    if !only_whitespace {
+    if keys.len() != peer_keys
+        || keys.iter().any(|key| key.local_name != "EncryptedKey")
+        || !is_xml_whitespace(&root.text)
+    {
         return Err(must_carry(kind));
     }
-    if element.local_name == kind.plaintext {
-        return Ok(&wrapper[element.start..element.end]);
+    if plaintext.local_name == kind.plaintext {
+        return Ok(&wrapper[plaintext.start..plaintext.end]);
     }
     if kind
         .unsupported_plaintext
-        .contains(&element.local_name.as_str())
+        .contains(&plaintext.local_name.as_str())
     {
         return Err(SamlError::Unsupported(format!(
             "{} carrying {} is not supported",
-            kind.encrypted, element.local_name
+            kind.encrypted, plaintext.local_name
         )));
     }
     Err(must_carry(kind))
@@ -525,13 +555,22 @@ mod tests {
     fn response_with_encrypted_id_carrying(
         plaintext: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
+        response_with_encrypted_id_beside(plaintext, "")
+    }
+
+    /// An `EncryptedID` whose `EncryptedData` carries `plaintext`, followed by
+    /// the unencrypted `beside`.
+    fn response_with_encrypted_id_beside(
+        plaintext: &str,
+        beside: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         let encrypted_data =
             encrypted_data_xml(plaintext.as_bytes(), SP_CERT, AES_256, RSA_OAEP_MGF1P)?;
         let start = RESPONSE.find("<saml:NameID").ok_or("missing NameID")?;
         let end_tag = "</saml:NameID>";
         let end = RESPONSE.find(end_tag).ok_or("missing NameID end")? + end_tag.len();
         Ok(format!(
-            "{}<saml:EncryptedID>{encrypted_data}</saml:EncryptedID>{}",
+            "{}<saml:EncryptedID>{encrypted_data}{beside}</saml:EncryptedID>{}",
             &RESPONSE[..start],
             &RESPONSE[end..]
         ))
@@ -570,6 +609,47 @@ mod tests {
             decrypt(&two_elements),
             Err(SamlError::ProtocolProfile(message)) if message == "EncryptedID must carry one NameID"
         ));
+
+        let name_id_and_key = response_with_encrypted_id_carrying(&format!(
+            "<saml:NameID>a</saml:NameID><xenc:EncryptedKey xmlns:xenc=\"{ENC}\"/>"
+        ))?;
+        assert!(matches!(
+            decrypt(&name_id_and_key),
+            Err(SamlError::ProtocolProfile(message)) if message == "EncryptedID must carry one NameID"
+        ));
+
+        let key_only = response_with_encrypted_id_carrying(&format!(
+            "<xenc:EncryptedKey xmlns:xenc=\"{ENC}\"/>"
+        ))?;
+        assert!(matches!(
+            decrypt(&key_only),
+            Err(SamlError::ProtocolProfile(message)) if message == "EncryptedID must carry one NameID"
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn encrypted_id_holds_only_encrypted_data_and_encrypted_keys(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let plaintext_beside = response_with_encrypted_id_beside(
+            &format!("<xenc:EncryptedKey xmlns:xenc=\"{ENC}\"/>"),
+            "<saml:NameID>alice</saml:NameID>",
+        )?;
+        let result = decrypt_assertion_elements(
+            &plaintext_beside,
+            &load_private_key(SP_PRIVKEY, None)?,
+            software_rsa_test_options(),
+            XmlLimits::default(),
+            encrypted_ids(),
+        );
+        assert!(
+            matches!(
+                &result,
+                Err(SamlError::ProtocolProfile(message))
+                    if message == "EncryptedID must contain one EncryptedData and only EncryptedKey after it"
+            ),
+            "{result:?}"
+        );
         Ok(())
     }
 
