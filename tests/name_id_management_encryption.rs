@@ -407,6 +407,11 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
         NameIdManagementRefusal::UndecryptableIdentifier
     );
     assert!(refused.response().redirect_url()?.starts_with(IDP_MANAGE));
+    assert!(
+        matches!(refused.decryption_error(), Some(SamlError::Crypto(_))),
+        "{:?}",
+        refused.decryption_error()
+    );
 
     let error = idp.finish_name_id_management_redirect(
         &sp_peer,

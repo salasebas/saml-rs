@@ -513,12 +513,17 @@ fn receive(
         ParsedRequest::Plain(message) => Ok(ReceivedNameIdManagement::Request(Box::new(
             Received::new(message).with_relay_state(relay_state),
         ))),
-        ParsedRequest::Refused { reason, .. } => refuse(
+        ParsedRequest::Refused {
+            reason,
+            decryption_error,
+            ..
+        } => refuse(
             local,
             &peer,
             &id,
             relay_state.as_deref(),
             reason,
+            decryption_error,
             options.allows_http(),
         ),
     }
@@ -530,6 +535,7 @@ fn refuse(
     in_response_to: &MessageId,
     relay_state: Option<&str>,
     reason: NameIdManagementRefusal,
+    decryption_error: Option<SamlError>,
     allows_http: bool,
 ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
     let response = response_outbound(
@@ -541,7 +547,7 @@ fn refuse(
         allows_http,
     )?;
     Ok(ReceivedNameIdManagement::Refused(
-        RefusedNameIdManagement::new(response, reason),
+        RefusedNameIdManagement::new(response, reason, decryption_error),
     ))
 }
 

@@ -3,6 +3,8 @@
 //! The identity provider sends `ManageNameIDRequest` to a service provider and
 //! reads its `ManageNameIDResponse`, or answers a service provider's request.
 
+use std::sync::Arc;
+
 use crate::config::{EntityId, IdentifierEncryptionPolicy, SpDescriptor};
 use crate::constants::{namespace, status_code};
 use crate::entity::{generate_id, EntitySetting};
@@ -118,15 +120,24 @@ impl NameIdManagementRefusal {
 }
 
 /// `ManageNameIDResponse` returned for a request that was not processed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct RefusedNameIdManagement<Response = SoapResponse> {
     response: Response,
     reason: NameIdManagementRefusal,
+    decryption_error: Option<Arc<SamlError>>,
 }
 
 impl<Response> RefusedNameIdManagement<Response> {
-    pub(crate) fn new(response: Response, reason: NameIdManagementRefusal) -> Self {
-        Self { response, reason }
+    pub(crate) fn new(
+        response: Response,
+        reason: NameIdManagementRefusal,
+        decryption_error: Option<SamlError>,
+    ) -> Self {
+        Self {
+            response,
+            reason,
+            decryption_error: decryption_error.map(Arc::new),
+        }
     }
 
     /// Response to return to the requester.
@@ -137,6 +148,16 @@ impl<Response> RefusedNameIdManagement<Response> {
     /// Why the request was not processed.
     pub fn reason(&self) -> NameIdManagementRefusal {
         self.reason
+    }
+
+    /// Why an `EncryptedID` or `NewEncryptedID` did not decrypt, for
+    /// [`NameIdManagementRefusal::UndecryptableIdentifier`] and
+    /// [`NameIdManagementRefusal::UndecryptableNewIdentifier`].
+    ///
+    /// The error stays local: the response carries only the SAML status. A
+    /// missing decryption key or an unreadable key is reported here.
+    pub fn decryption_error(&self) -> Option<&SamlError> {
+        self.decryption_error.as_deref()
     }
 }
 
@@ -274,7 +295,12 @@ pub(crate) fn receive(
     let version = request.required_attr("Version")?;
     require_utc_instant(&request)?;
     if version != "2.0" {
-        return refused(idp.entity_id, &id, NameIdManagementRefusal::VersionMismatch);
+        return refused(
+            idp.entity_id,
+            &id,
+            NameIdManagementRefusal::VersionMismatch,
+            None,
+        );
     }
     let sp_entity_id = service_provider.entity_id();
     if request
@@ -309,7 +335,12 @@ pub(crate) fn receive(
                 change,
             },
         )))),
-        Err(reason) => refused(idp.entity_id, &id, reason),
+        Err(undecryptable) => refused(
+            idp.entity_id,
+            &id,
+            undecryptable.reason,
+            Some(undecryptable.error),
+        ),
     }
 }
 
@@ -334,11 +365,13 @@ fn refused(
     idp_entity_id: &str,
     in_response_to: &MessageId,
     reason: NameIdManagementRefusal,
+    decryption_error: Option<SamlError>,
 ) -> Result<ReceivedNameIdManagement, SamlError> {
     Ok(ReceivedNameIdManagement::Refused(
         RefusedNameIdManagement::new(
             response(idp_entity_id, in_response_to, &reason.status())?,
             reason,
+            decryption_error,
         ),
     ))
 }
@@ -412,26 +445,35 @@ pub(crate) fn identifier_and_change(
     Ok((identifier, change))
 }
 
+/// An `EncryptedID` or `NewEncryptedID` that did not decrypt.
+pub(crate) struct Undecryptable {
+    pub(crate) reason: NameIdManagementRefusal,
+    pub(crate) error: SamlError,
+}
+
 /// The identifier and change of the request `xml`, with `EncryptedID` and
-/// `NewEncryptedID` decrypted by the receiver's decryption key, or the
-/// refusal for an element that does not decrypt.
+/// `NewEncryptedID` decrypted by the receiver's decryption key.
 pub(crate) fn plaintext_content(
     xml: &str,
     identifier: Identifier,
     change: Change,
     setting: &EntitySetting,
-) -> Result<(NameId, NameIdChange), NameIdManagementRefusal> {
+) -> Result<(NameId, NameIdChange), Undecryptable> {
     let name_id = match identifier {
         Identifier::Plain(name_id) => name_id,
-        Identifier::Encrypted => decrypt_name_id(xml, setting)
-            .map_err(|_| NameIdManagementRefusal::UndecryptableIdentifier)?,
+        Identifier::Encrypted => decrypt_name_id(xml, setting).map_err(|error| Undecryptable {
+            reason: NameIdManagementRefusal::UndecryptableIdentifier,
+            error,
+        })?,
     };
     let change = match change {
         Change::Plain(change) => change,
-        Change::Encrypted => NameIdChange::NewId(
-            decrypt_new_id(xml, setting)
-                .map_err(|_| NameIdManagementRefusal::UndecryptableNewIdentifier)?,
-        ),
+        Change::Encrypted => {
+            NameIdChange::NewId(decrypt_new_id(xml, setting).map_err(|error| Undecryptable {
+                reason: NameIdManagementRefusal::UndecryptableNewIdentifier,
+                error,
+            })?)
+        }
     };
     Ok((name_id, change))
 }

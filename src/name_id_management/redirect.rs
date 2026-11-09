@@ -117,6 +117,7 @@ pub(crate) enum ParsedRequest {
         id: MessageId,
         issuer: EntityId,
         reason: NameIdManagementRefusal,
+        decryption_error: Option<SamlError>,
     },
 }
 
@@ -137,6 +138,7 @@ pub(crate) fn request_from_flow(
             id,
             issuer,
             reason: NameIdManagementRefusal::VersionMismatch,
+            decryption_error: None,
         });
     }
     let (identifier, change) = identifier_and_change(&request)?;
@@ -148,7 +150,12 @@ pub(crate) fn request_from_flow(
                 name_id,
                 change,
             }),
-            Err(reason) => ParsedRequest::Refused { id, issuer, reason },
+            Err(undecryptable) => ParsedRequest::Refused {
+                id,
+                issuer,
+                reason: undecryptable.reason,
+                decryption_error: Some(undecryptable.error),
+            },
         },
     )
 }
