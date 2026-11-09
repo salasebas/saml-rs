@@ -423,10 +423,8 @@ impl ServiceProvider {
                 relay_state.as_deref(),
             )?,
             Binding::Post | Binding::SimpleSign => base64_encode(xml.as_bytes()),
-            Binding::Artifact => {
-                return Err(SamlError::UnsupportedBinding {
-                    binding: Binding::Artifact,
-                });
+            Binding::Artifact | Binding::Soap => {
+                return Err(SamlError::UnsupportedBinding { binding });
             }
         };
         Ok(BindingContext {
@@ -509,10 +507,8 @@ impl ServiceProvider {
                     Some(sig_alg.clone()),
                 )
             }
-            Binding::Artifact => {
-                return Err(SamlError::UnsupportedBinding {
-                    binding: Binding::Artifact,
-                });
+            Binding::Artifact | Binding::Soap => {
+                return Err(SamlError::UnsupportedBinding { binding });
             }
         };
         Ok(BindingContext {

@@ -58,7 +58,7 @@ fn request_xml(ctx: &BindingContext) -> Result<String, Box<dyn std::error::Error
             )?)?)?)
         }
         Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(&ctx.context)?)?),
-        Binding::Artifact => Err("artifact binding is unsupported".into()),
+        Binding::Artifact | Binding::Soap => Err("binding is unsupported".into()),
     }
 }
 
@@ -135,7 +135,7 @@ fn login_request_http_request(
             "SAMLRequest".into(),
             ctx.context.clone(),
         )])),
-        Binding::Artifact => Err("artifact binding is unsupported".into()),
+        Binding::Artifact | Binding::Soap => Err("binding is unsupported".into()),
     }
 }
 
@@ -528,7 +528,9 @@ mod signed {
             let request = match binding {
                 Binding::Redirect => redirect_request(&ctx.context)?,
                 Binding::SimpleSign => simplesign_request(&ctx)?,
-                Binding::Post | Binding::Artifact => return Err("unexpected binding".into()),
+                Binding::Post | Binding::Artifact | Binding::Soap => {
+                    return Err("unexpected binding".into())
+                }
             };
             let parsed = idp.parse_login_request(&sp, binding, &request)?;
 

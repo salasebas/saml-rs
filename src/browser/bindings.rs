@@ -41,7 +41,7 @@ impl TryFrom<Binding> for SsoRequestBinding {
             Binding::Redirect => Ok(Self::Redirect),
             Binding::Post => Ok(Self::Post),
             Binding::SimpleSign => Ok(Self::SimpleSign),
-            Binding::Artifact => Err(SamlError::UndefinedBinding),
+            Binding::Artifact | Binding::Soap => Err(SamlError::UndefinedBinding),
         }
     }
 }
@@ -82,7 +82,7 @@ impl TryFrom<Binding> for SsoResponseBinding {
             Binding::Post => Ok(Self::Post),
             Binding::SimpleSign => Ok(Self::SimpleSign),
             Binding::Artifact => Ok(Self::Artifact),
-            Binding::Redirect => Err(SamlError::UndefinedBinding),
+            Binding::Redirect | Binding::Soap => Err(SamlError::UndefinedBinding),
         }
     }
 }
@@ -96,6 +96,10 @@ pub enum LogoutBinding {
     Post,
     /// HTTP-POST-SimpleSign binding.
     SimpleSign,
+    /// SOAP binding. The request and its response are one synchronous SOAP
+    /// exchange that the deployment sends. Each message carries an XML
+    /// signature and no RelayState.
+    Soap,
 }
 
 impl LogoutBinding {
@@ -105,6 +109,7 @@ impl LogoutBinding {
             Self::Redirect => Binding::Redirect,
             Self::Post => Binding::Post,
             Self::SimpleSign => Binding::SimpleSign,
+            Self::Soap => Binding::Soap,
         }
     }
 }
@@ -123,6 +128,7 @@ impl TryFrom<Binding> for LogoutBinding {
             Binding::Redirect => Ok(Self::Redirect),
             Binding::Post => Ok(Self::Post),
             Binding::SimpleSign => Ok(Self::SimpleSign),
+            Binding::Soap => Ok(Self::Soap),
             Binding::Artifact => Err(SamlError::UndefinedBinding),
         }
     }

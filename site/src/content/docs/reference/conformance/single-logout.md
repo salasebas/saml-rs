@@ -21,7 +21,8 @@ used when it narrows Core for this flow.
 `RespondSlo::apply_single_logout_generation_rules` select the producer rules
 below. The constructors `redirect`, `post`, and `simple_sign` leave that
 selection off, which is the samlify-port generation kept for callers leaving
-the raw API.
+the raw API. `soap` always selects it. The SOAP rules are in
+[SOAP binding](#soap-binding).
 
 `finish_slo` reads `LogoutPolicy::responses`. The accept combination is
 `LogoutSignaturePolicy::RequireSigned` for both `requests` and `responses`.
@@ -81,7 +82,7 @@ Propagating logout to every other participant is outside one `start_slo` or
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| Authenticate a `LogoutRequest` by requiring its signature | Session participant or session authority receiving the request | Inbound `receive_slo` | Mandatory for HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. Core §3.7.3.1 and §3.7.3.2 require the recipient to authenticate the sender. Profiles §4.4.3.1 and §4.4.4.1 require the signature for these bindings. Accept combination: `LogoutPolicy.requests = RequireSigned`. `AllowUnsignedForCompatibility` is the samlify-port hatch |
+| Authenticate a `LogoutRequest` by requiring its signature | Session participant or session authority receiving the request | Inbound `receive_slo` | Mandatory for HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. Core §3.7.3.1 and §3.7.3.2 require the recipient to authenticate the sender. Profiles §4.4.3.1 and §4.4.4.1 require the signature for these bindings. Accept combination: `LogoutPolicy.requests = RequireSigned`. `AllowUnsignedForCompatibility` is the samlify-port hatch. It does not apply to SOAP |
 | Authenticate a `LogoutResponse` by requiring its signature | Original requester finishing logout | Inbound `finish_slo` | Mandatory for those bindings. Profiles §4.4.3.4 and §4.4.4.2. Accept combination: `LogoutPolicy.responses = RequireSigned`. The unsigned variant is the samlify-port hatch, not a recommendation relaxation |
 | UTC `IssueInstant` | Logout recipient | Inbound | Mandatory. No off switch. Inbound leap-second values stay accepted |
 | A present `Destination` matches the recipient endpoint, and a signed message carries `Destination` | Logout recipient | Inbound | Mandatory. Core §3.2.1 and §3.2.2; Bindings §3.4.5.2 and §3.5.5.2; SimpleSign §2.4 when the message is signed |
@@ -105,3 +106,41 @@ HTTP-POST-SimpleSign for `LogoutRequest` and `LogoutResponse`.
 | HTTP-Redirect removes a protocol `ds:Signature` before raw DEFLATE and signs or verifies `SAMLRequest` or `SAMLResponse`, `RelayState` when present, then `SigAlg` | Either role | Generate and inbound | Mandatory. Bindings §3.4.4.1. Generation rejects an unsigned redirect that still has a protocol signature. Inbound verification uses the original URL-encoded values. An absent `RelayState` is omitted |
 | HTTP-POST-SimpleSign signs or verifies the raw XML octets, then `RelayState` when present, then `SigAlg` | Either role | Generate and inbound | Mandatory when that binding is used. CD-04 §2.5 and §2.6. An XML signature inside the message stays |
 | Base64 message content ignores ASCII whitespace and rejects any other character outside the alphabet | Either role | Inbound | Library policy. Bindings §3.4.4.1 and §3.5.4 encode the message with RFC 2045 base64, and RFC 2045 §6.8 says a decoder ignores characters outside the base64 alphabet. Space, tab, line feed, form feed, and carriage return are ignored. Any other character, including vertical tab and Unicode spaces, is rejected. The looser rule is not applied because Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered, and ignoring it would hide that. HTTP-POST-SimpleSign uses the same decoder |
+
+## SOAP binding
+
+`StartSlo::soap` and `RespondSlo::soap` run the four calls over the SAML SOAP
+binding, the synchronous exchange that [artifact resolution](artifact-resolution.md)
+uses. `Outbound::soap_request` is the envelope the deployment POSTs to the
+peer. `BrowserInput::soap` reads a received envelope. `Outbound::soap_response`
+is the envelope the deployment returns as the HTTP 200 body. TLS and HTTP
+authentication stay with the deployment, as in artifact resolution. saml-rs
+does not open the connection.
+
+This claims the IdP and SP cells of Single Logout (IdP-initiated) – SOAP and
+Single Logout (SP-initiated) – SOAP in Conformance Requirements Table 2. Those
+cells are `OPTIONAL` for IdP Lite and SP Lite, and this flow does not claim
+them. It does not claim the IdP or SP operational mode.
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| Send the request on a synchronous binding, and return the response on the same exchange | Requester and responder | SOAP exchange | Optional binding. Profiles §4.4.3.1 lets the session participant use SOAP, and §4.4.3.3 lets the session authority use it. §4.4.3.4 returns the response directly. `respond_slo` does not record the binding a request arrived on, so the caller answers `BrowserInput::soap` with `RespondSlo::soap` |
+| Exactly one SAML request or response in the SOAP body | Requester and responder | SOAP envelope | Mandatory. Bindings §3.2.2.1, as left by Errata 05 E19. The envelope is `SoapProtocolMessage`. A header with SOAP `mustUnderstand` is refused, as in artifact resolution |
+| The requester authenticates itself and protects integrity by signing the `LogoutRequest` | Session participant or session authority | Generate LogoutRequest | Mandatory. Profiles §4.4.3.1 and §4.4.4.1 require signing or a binding-supported mechanism. Typed SOAP generation always signs. `LogoutSigning::DoNotSignForCompatibility` is rejected |
+| The responder authenticates itself and protects integrity by signing the `LogoutResponse` | Responder | Generate LogoutResponse | Mandatory. Profiles §4.4.3.4 and §4.4.4.2. Typed `respond_slo` always signs |
+| Authenticate a received SOAP `LogoutRequest` or `LogoutResponse` by its XML signature | Logout recipient | Inbound `receive_slo` and `finish_slo` | Mandatory. Core §3.7.3.1 requires the recipient to authenticate the message, and the profile rows above name the mechanisms. A SOAP message must be signed under every `LogoutPolicy`, including `compatibility`. Rejecting a message that the peer authenticated only through TLS client authentication is library policy: Profiles §4.4.4.1 and §4.4.4.2 allow that binding mechanism. The looser rule cannot be applied because saml-rs does not see the TLS session, so an unsigned message would be accepted without authentication |
+| Single Logout generation rules always apply | Session participant or session authority | Generate LogoutRequest | `StartSlo::soap` selects them. A session participant includes at least one `SessionIndex`, Profiles §4.4.4.1 as replaced by Errata 05 E38. A session authority sets `NotOnOrAfter`, Core §3.7.3.2. There is no samlify-port SOAP generation to keep |
+| No RelayState | Requester and responder | Generate | Library policy. RelayState is defined by the HTTP bindings, Bindings §3.4.3 and §3.5.3. The SOAP binding, Bindings §3.2, has no place to carry it, so a present `relay_state` is rejected rather than dropped |
+| `LogoutRequest` `Destination` is the peer SOAP `SingleLogoutService` `Location` | Requester | Generate LogoutRequest | Core §3.2.1 makes `Destination` optional. Typed generation sets it |
+| A present `LogoutRequest` `Destination` matches the local SOAP `SingleLogoutService` | Logout recipient | Inbound `receive_slo` | Mandatory. Core §3.2.1. A signed SOAP request without `Destination` is accepted. Bindings §3.4.5.2 and §3.5.5.2 require it only for HTTP-Redirect and HTTP-POST |
+| `LogoutResponse` omits `Destination` | Responder | Generate LogoutResponse | Core §3.2.2 makes `Destination` optional. The response returns on the requester's own HTTP exchange, which has no URL to name. A logout-response template that writes one is rejected |
+| A present `LogoutResponse` `Destination` is not compared | Original requester | Inbound `finish_slo` | Core §3.2.2 compares `Destination` with the location where the recipient received the message. A SOAP response arrives on the HTTP exchange the requester opened, not at a requester endpoint, so there is no location to compare. `ArtifactResolution::finish` treats `ArtifactResponse` the same way |
+| Send the exchange over TLS | Session participant | SOAP exchange | Not applied. Profiles §4.4.3.1 and §4.4.3.4 recommend TLS for the asynchronous bindings only. Conformance Requirements §3.5 leaves SOAP transport security to the deployment. `allow_http_single_logout` has no effect on SOAP |
+| Publish a SOAP `SingleLogoutService` | Either role | Metadata | Recommendation. Bindings §3.2.3.4 and Profiles §4.4.5. `SloEndpoint::soap` publishes it. A SOAP endpoint's `ResponseLocation` is not used |
+| `SOAPAction`, `Cache-Control`, `Pragma`, and `Content-Type` | Requester and responder | HTTP | Bindings §3.2.3 and §3.2.3.2. `SoapRequest` and `SoapResponse` report the values. saml-rs does not send them |
+| A SAML error is a `LogoutResponse` status, not a SOAP fault | Responder | SOAP exchange | Errata 05 E19. Pass the status to `RespondSlo::status`. A request `receive_slo` cannot read returns `SamlError`, and the deployment can answer HTTP 500 with a SOAP fault, Bindings §3.2.3.3 |
+
+Propagating logout to other participants over SOAP, which Profiles §4.4.3.1
+recommends after a SOAP request, is outside one call. TLS client
+authentication as the only sender authentication, HTTP-Artifact logout, and
+the IdP Lite and SP Lite SOAP cells are outside this flow.

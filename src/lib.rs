@@ -178,6 +178,11 @@
 //! deadline. [`ClockSkew::strict`] keeps the tolerance at zero, and replay
 //! storage uses the same effective deadline when it is present.
 //!
+//! [`StartSlo::soap`] and [`RespondSlo::soap`] run the same four calls over
+//! SOAP. [`Outbound::soap_request`] is the envelope the deployment POSTs, and
+//! [`BrowserInput::soap`] reads the envelope that comes back. Each SOAP
+//! logout message carries an XML signature and no RelayState.
+//!
 //! ```no_run
 //! use saml_rs::{
 //!     BrowserInput, FormField, IdpDescriptor, LogoutResponse, ReplayPolicy,
@@ -302,7 +307,7 @@
 //! Single Logout, and artifact resolution over SOAP. The enhanced-client role
 //! is not a facade. It does not implement HTTP-Artifact delivery of an
 //! `<AuthnRequest>` or a logout message, SOAP profiles other than artifact
-//! resolution and the identity-provider leg of
+//! resolution, Single Logout, and the identity-provider leg of
 //! Enhanced Client/Proxy SSO, SAML query protocols, NameID management, or
 //! metadata federation. If you need one of those profiles for a real
 //! interoperability target, please open an issue with the profile, binding,
@@ -440,7 +445,7 @@ pub use model::{
 };
 pub use soap::{
     MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
-    SoapProtocolMessage, SoapRequest,
+    SoapProtocolMessage, SoapRequest, SoapResponse,
 };
 #[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::ServiceProvider`."]
 pub use sp::ServiceProvider;

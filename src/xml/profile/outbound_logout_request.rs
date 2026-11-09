@@ -12,7 +12,7 @@ use quick_xml::NsReader;
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutboundLogoutRequestValidation {
     BeforeSigning,
-    AfterPostSigning,
+    AfterEmbeddedSigning,
 }
 
 /// How outbound `LogoutRequest` checks treat `NotOnOrAfter`.
@@ -309,7 +309,7 @@ fn validate_start(
             Ok(Element::Issuer)
         }
         (b"Signature", NamespaceKind::Dsig, RootStage::AfterIssuer) => {
-            if !matches!(validation, OutboundLogoutRequestValidation::AfterPostSigning) {
+            if !matches!(validation, OutboundLogoutRequestValidation::AfterEmbeddedSigning) {
                 return Err(profile_error(
                     "outbound LogoutRequest templates must not contain a root ds:Signature before library signing",
                 ));
@@ -480,11 +480,11 @@ pub(crate) fn validate_logout_request_outbound(
     }
     if matches!(
         validation,
-        OutboundLogoutRequestValidation::AfterPostSigning
+        OutboundLogoutRequestValidation::AfterEmbeddedSigning
     ) && !state.saw_signature
     {
         return Err(profile_error(
-            "signed POST LogoutRequest must contain a root ds:Signature in schema order",
+            "signed POST or SOAP LogoutRequest must contain a root ds:Signature in schema order",
         ));
     }
 

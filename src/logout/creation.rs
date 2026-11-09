@@ -191,6 +191,7 @@ fn create_logout_request_for_subject_inner(
         validation,
     } = input;
 
+    reject_soap_relay_state(binding, relay_state)?;
     if matches!(validation, LogoutRequestValidation::SessionParticipant)
         && subject.session_indexes.is_empty()
     {
@@ -319,17 +320,14 @@ fn create_logout_request_for_subject_inner(
             None,
         )
     };
-    if let Some(expectation) = expectation
-        .as_ref()
-        .filter(|_| want_signed && matches!(binding, Binding::Post))
-    {
-        let signed_xml = String::from_utf8(crate::binding::base64_decode(&context)?)
-            .map_err(|error| SamlError::Xml(error.to_string()))?;
-        validate_logout_request_outbound(
-            &signed_xml,
-            expectation,
-            OutboundLogoutRequestValidation::AfterPostSigning,
-        )?;
+    if let Some(expectation) = expectation.as_ref().filter(|_| want_signed) {
+        if let Some(signed_xml) = embedded_signed_xml(binding, &context)? {
+            validate_logout_request_outbound(
+                &signed_xml,
+                expectation,
+                OutboundLogoutRequestValidation::AfterEmbeddedSigning,
+            )?;
+        }
     }
     Ok(CreatedLogoutRequest {
         context: BindingContext {
@@ -478,9 +476,17 @@ fn create_logout_response_inner(
             binding: Binding::Artifact,
         });
     }
-    let destination = target_meta
-        .get_single_logout_response_service(binding)
-        .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?;
+    reject_soap_relay_state(binding, relay_state)?;
+    // A SOAP response returns on the requester's own HTTP exchange, so it has
+    // no Destination.
+    let destination = match binding {
+        Binding::Soap => None,
+        Binding::Redirect | Binding::Post | Binding::SimpleSign | Binding::Artifact => Some(
+            target_meta
+                .get_single_logout_response_service(binding)
+                .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?,
+        ),
+    };
     let id = message_id
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
@@ -506,7 +512,7 @@ fn create_logout_response_inner(
             &[
                 ("ID", Some(id.clone())),
                 ("IssueInstant", Some(issue_instant)),
-                ("Destination", Some(destination.clone())),
+                ("Destination", destination.clone()),
                 ("Issuer", Some(issuer.clone())),
                 ("StatusCode", Some(status.top_level().as_uri().to_string())),
                 ("InResponseTo", in_response_to.map(str::to_string)),
@@ -528,7 +534,7 @@ fn create_logout_response_inner(
             init_setting,
             &id,
             &issue_instant,
-            &destination,
+            destination.as_deref(),
             in_response_to,
             &issuer,
             status,
@@ -537,19 +543,20 @@ fn create_logout_response_inner(
     validate_logout_response_outbound(
         &xml,
         &id,
-        &destination,
+        destination.as_deref(),
         &issuer,
         in_response_to,
         OutboundLogoutValidation::BeforeSigning {
             destination_required: want_signed,
         },
     )?;
+    let entity_endpoint = destination.clone().unwrap_or_default();
     let (context, signature, sig_alg) = if want_signed {
         sign_logout(
             init_setting,
             binding,
             &xml,
-            &destination,
+            &entity_endpoint,
             relay_state,
             ParserType::LogoutResponse,
         )?
@@ -558,7 +565,7 @@ fn create_logout_response_inner(
             unsigned_context(
                 binding,
                 &xml,
-                &destination,
+                &entity_endpoint,
                 ParserType::LogoutResponse,
                 relay_state,
             )?,
@@ -566,26 +573,46 @@ fn create_logout_response_inner(
             None,
         )
     };
-    if want_signed && matches!(binding, Binding::Post) {
-        let signed_xml = String::from_utf8(crate::binding::base64_decode(&context)?)
-            .map_err(|error| SamlError::Xml(error.to_string()))?;
-        validate_logout_response_outbound(
-            &signed_xml,
-            &id,
-            &destination,
-            &issuer,
-            in_response_to,
-            OutboundLogoutValidation::AfterPostSigning,
-        )?;
+    if want_signed {
+        if let Some(signed_xml) = embedded_signed_xml(binding, &context)? {
+            validate_logout_response_outbound(
+                &signed_xml,
+                &id,
+                destination.as_deref(),
+                &issuer,
+                in_response_to,
+                OutboundLogoutValidation::AfterEmbeddedSigning,
+            )?;
+        }
     }
     Ok(BindingContext {
         id,
         context,
         relay_state: relay_state.map(str::to_string),
-        entity_endpoint: destination,
+        entity_endpoint,
         binding,
         request_type: "SAMLResponse",
         signature,
         sig_alg,
     })
+}
+
+/// The signed XML an embedded-signature binding carries.
+fn embedded_signed_xml(binding: Binding, context: &str) -> Result<Option<String>, SamlError> {
+    match binding {
+        Binding::Post => String::from_utf8(crate::binding::base64_decode(context)?)
+            .map(Some)
+            .map_err(|error| SamlError::Xml(error.to_string())),
+        Binding::Soap => Ok(Some(context.to_string())),
+        Binding::Redirect | Binding::SimpleSign | Binding::Artifact => Ok(None),
+    }
+}
+
+fn reject_soap_relay_state(binding: Binding, relay_state: Option<&str>) -> Result<(), SamlError> {
+    if binding == Binding::Soap && relay_state.is_some() {
+        return Err(SamlError::ProtocolProfile(
+            "the SOAP binding does not carry RelayState".into(),
+        ));
+    }
+    Ok(())
 }

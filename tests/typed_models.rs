@@ -72,6 +72,7 @@ fn binding_context(binding: Binding) -> BindingContext {
             Binding::Redirect => "https://idp.example.com/sso?SAMLRequest=abc".to_string(),
             Binding::Post | Binding::SimpleSign => "PHNhbWxwOkF1dGhuUmVxdWVzdC8+".to_string(),
             Binding::Artifact => "artifact".to_string(),
+            Binding::Soap => "<samlp:LogoutRequest/>".to_string(),
         },
         relay_state: Some("relay".to_string()),
         entity_endpoint: "https://idp.example.com/sso".to_string(),
@@ -89,6 +90,7 @@ fn response_binding_context(binding: Binding) -> BindingContext {
             Binding::Redirect => "https://sp.example.com/acs?SAMLResponse=abc".to_string(),
             Binding::Post | Binding::SimpleSign => "PHNhbWxwOlJlc3BvbnNlLz4=".to_string(),
             Binding::Artifact => "artifact".to_string(),
+            Binding::Soap => "<samlp:LogoutRequest/>".to_string(),
         },
         relay_state: Some("relay".to_string()),
         entity_endpoint: "https://sp.example.com/acs".to_string(),
@@ -307,11 +309,13 @@ fn typed_models_slo_outbound_accepts_logout_bindings() -> Result<(), Box<dyn std
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
         let request_context = match binding {
             Binding::SimpleSign => signed_binding_context(binding),
-            Binding::Redirect | Binding::Post | Binding::Artifact => binding_context(binding),
+            Binding::Redirect | Binding::Post | Binding::Artifact | Binding::Soap => {
+                binding_context(binding)
+            }
         };
         let response_context = match binding {
             Binding::SimpleSign => signed_response_binding_context(binding),
-            Binding::Redirect | Binding::Post | Binding::Artifact => {
+            Binding::Redirect | Binding::Post | Binding::Artifact | Binding::Soap => {
                 response_binding_context(binding)
             }
         };

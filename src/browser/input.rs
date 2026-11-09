@@ -7,11 +7,12 @@ use core::marker::PhantomData;
 use super::artifact::DeliveredArtifact;
 use super::forms::FormField;
 use crate::artifact::ResolvedProtocolMessage;
-use crate::binding::{base64_decode_with_limit, build_simplesign_octet};
+use crate::binding::{base64_decode_with_limit, base64_encode, build_simplesign_octet};
 use crate::constants::url_params;
 use crate::error::SamlError;
 use crate::model::{AuthnRequest, LogoutRequest, LogoutResponse, SsoResponse};
 use crate::raw::HttpRequest;
+use crate::soap::read_soap_body;
 use crate::xml::XmlLimits;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +37,8 @@ impl MessageField {
     }
 }
 
-/// Typed browser input for inbound SAML messages.
+/// Typed browser input for inbound SAML messages, or the SOAP message of a
+/// back-channel exchange.
 ///
 /// # Examples
 ///
@@ -90,6 +92,13 @@ pub enum BrowserInput<Message> {
         delivered: DeliveredArtifact,
         /// Message the artifact issuer returned for that artifact.
         resolved: ResolvedProtocolMessage,
+        /// Message marker.
+        _message: PhantomData<Message>,
+    },
+    /// SOAP 1.1 envelope of a synchronous exchange.
+    Soap {
+        /// SOAP envelope received as an HTTP body.
+        envelope: String,
         /// Message marker.
         _message: PhantomData<Message>,
     },
@@ -155,6 +164,12 @@ impl BrowserInput<LogoutRequest> {
         redirect_input(raw_query)
     }
 
+    /// Create SOAP input from the envelope POSTed to a SOAP
+    /// `SingleLogoutService`.
+    pub fn soap(envelope: impl Into<String>) -> Self {
+        soap_input(envelope)
+    }
+
     /// Create POST input from parsed fields.
     pub fn post(fields: Vec<FormField>) -> Self {
         post_input(fields)
@@ -175,6 +190,11 @@ impl BrowserInput<LogoutResponse> {
     /// Create Redirect input from a raw query string.
     pub fn redirect(raw_query: impl Into<String>) -> Self {
         redirect_input(raw_query)
+    }
+
+    /// Create SOAP input from the response body of a SOAP logout request.
+    pub fn soap(envelope: impl Into<String>) -> Self {
+        soap_input(envelope)
     }
 
     /// Create POST input from parsed fields.
@@ -213,7 +233,10 @@ impl TryFrom<BrowserInput<LogoutRequest>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<LogoutRequest>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, true, MessageField::Request)
+        match value {
+            BrowserInput::Soap { envelope, .. } => soap_request(&envelope, MessageField::Request),
+            other => http_request_from_input(other, true, MessageField::Request),
+        }
     }
 }
 
@@ -221,7 +244,10 @@ impl TryFrom<BrowserInput<LogoutResponse>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<LogoutResponse>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, true, MessageField::Response)
+        match value {
+            BrowserInput::Soap { envelope, .. } => soap_request(&envelope, MessageField::Response),
+            other => http_request_from_input(other, true, MessageField::Response),
+        }
     }
 }
 
@@ -245,6 +271,22 @@ fn simple_sign_input<Message>(fields: Vec<FormField>) -> BrowserInput<Message> {
         fields,
         _message: PhantomData,
     }
+}
+
+fn soap_input<Message>(envelope: impl Into<String>) -> BrowserInput<Message> {
+    BrowserInput::Soap {
+        envelope: envelope.into(),
+        _message: PhantomData,
+    }
+}
+
+/// The protocol element of a SOAP body, carried as an HTTP-POST message.
+fn soap_request(envelope: &str, expected_message: MessageField) -> Result<HttpRequest, SamlError> {
+    let body = read_soap_body(envelope)?;
+    Ok(HttpRequest::post(vec![(
+        expected_message.param_name().to_string(),
+        base64_encode(body.xml.as_bytes()),
+    )]))
 }
 
 fn simple_sign_body_input<Message>(raw_body: impl Into<String>) -> BrowserInput<Message> {
@@ -293,7 +335,9 @@ fn http_request_from_input<Message>(
             request.octet_string = Some(octet_string);
             Ok(request)
         }
-        BrowserInput::Artifact { .. } => Err(SamlError::UndefinedBinding),
+        BrowserInput::Artifact { .. } | BrowserInput::Soap { .. } => {
+            Err(SamlError::UndefinedBinding)
+        }
     }
 }
 

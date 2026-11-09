@@ -40,7 +40,7 @@ pub(super) fn render_default_logout_response(
     setting: &EntitySetting,
     id: &str,
     issue_instant: &str,
-    destination: &str,
+    destination: Option<&str>,
     in_response_to: Option<&str>,
     issuer: &str,
     status: &Status,
@@ -60,8 +60,10 @@ pub(super) fn render_default_logout_response(
         ("ID", id),
         ("Version", "2.0"),
         ("IssueInstant", issue_instant),
-        ("Destination", destination),
     ];
+    if let Some(value) = destination {
+        attrs.push(("Destination", value));
+    }
     if let Some(value) = in_response_to {
         attrs.push(("InResponseTo", value));
     }

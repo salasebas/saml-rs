@@ -20,6 +20,7 @@ compatible additions.
 - [Attribute name formats and persistent and transient NameID length](unreleased-attribute-name-format.md)
 - [Limited base64 decoding ignores only space, tab, CR, LF, and form feed](unreleased-base64-whitespace.md)
 - [Web SSO response over HTTP-Artifact](unreleased-http-artifact-response.md)
+- [Single Logout over SOAP](unreleased-soap-logout.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).

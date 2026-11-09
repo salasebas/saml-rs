@@ -32,8 +32,8 @@ use saml_rs::{
     LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PendingLogoutRequest,
     PendingSnapshot, PrivateKeyPem, Received, RelayStateParam, ReplayCache, ReplayKey,
     ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
-    SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession, StartSlo,
-    Status, Subject, SubordinateStatusCode, TemplatePolicy,
+    SloEndpoint, SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoSession, StartSlo, Status, Subject, SubordinateStatusCode, TemplatePolicy,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -49,11 +49,19 @@ const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SLO_POST: &str = "https://idp.example.com/slo/post";
 const IDP_SLO_REDIRECT: &str = "https://idp.example.com/slo/redirect";
 const IDP_SLO_SIMPLESIGN: &str = "https://idp.example.com/slo/simple-sign";
+const SP_SLO_SOAP: &str = "https://sp.example.com/slo/soap";
+const IDP_SLO_SOAP: &str = "https://idp.example.com/slo/soap";
 
 const ALL_LOGOUT_BINDINGS: [LogoutBinding; 3] = [
     LogoutBinding::Post,
     LogoutBinding::Redirect,
     LogoutBinding::SimpleSign,
+];
+const LOGOUT_BINDINGS_WITH_SOAP: [LogoutBinding; 4] = [
+    LogoutBinding::Post,
+    LogoutBinding::Redirect,
+    LogoutBinding::SimpleSign,
+    LogoutBinding::Soap,
 ];
 const UNSIGNED_COMPATIBILITY_BINDINGS: [LogoutBinding; 2] =
     [LogoutBinding::Post, LogoutBinding::Redirect];
@@ -73,6 +81,7 @@ struct SloEndpointSet {
     post: &'static str,
     redirect: &'static str,
     simple_sign: &'static str,
+    soap: &'static str,
 }
 
 impl SloEndpointSet {
@@ -81,6 +90,7 @@ impl SloEndpointSet {
             LogoutBinding::Post => self.post,
             LogoutBinding::Redirect => self.redirect,
             LogoutBinding::SimpleSign => self.simple_sign,
+            LogoutBinding::Soap => self.soap,
         }
     }
 }
@@ -92,11 +102,13 @@ impl LocalSloRole {
                 post: SP_SLO_POST,
                 redirect: SP_SLO_REDIRECT,
                 simple_sign: SP_SLO_SIMPLESIGN,
+                soap: SP_SLO_SOAP,
             },
             Self::Idp => SloEndpointSet {
                 post: IDP_SLO_POST,
                 redirect: IDP_SLO_REDIRECT,
                 simple_sign: IDP_SLO_SIMPLESIGN,
+                soap: IDP_SLO_SOAP,
             },
         };
         endpoints.for_binding(binding)
@@ -229,6 +241,7 @@ fn sp_config_with_validation_and_logout_request_template(
         .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
         .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
         .slo_endpoint(SloEndpoint::simple_sign(SP_SLO_SIMPLESIGN)?)
+        .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
         .credentials(credentials())
         .validation(validation)
         .templates(TemplatePolicy {
@@ -259,6 +272,7 @@ fn idp_config_with_validation_and_logout_request_template(
         .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
         .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
         .slo_endpoint(SloEndpoint::simple_sign(IDP_SLO_SIMPLESIGN)?)
+        .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
         .credentials(credentials())
         .validation(validation)
         .templates(TemplatePolicy {
@@ -279,6 +293,7 @@ fn idp_config_with_issuance(
         .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
         .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
         .slo_endpoint(SloEndpoint::simple_sign(IDP_SLO_SIMPLESIGN)?)
+        .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
         .credentials(credentials)
         .issuance_lifetime(lifetime)
         .validation(validation)
@@ -375,6 +390,9 @@ fn logout_request_input(
         LogoutBinding::SimpleSign => Ok(BrowserInput::<LogoutRequest>::simple_sign(post_fields(
             outbound,
         )?)),
+        LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
+            outbound.soap_request()?.envelope(),
+        )),
     }
 }
 
@@ -443,9 +461,12 @@ fn tampered_logout_request_expiration_input(
             match binding {
                 LogoutBinding::Post => Ok(BrowserInput::<LogoutRequest>::post(fields)),
                 LogoutBinding::SimpleSign => Ok(BrowserInput::<LogoutRequest>::simple_sign(fields)),
-                LogoutBinding::Redirect => Err("unreachable binding".into()),
+                LogoutBinding::Redirect | LogoutBinding::Soap => Err("unreachable binding".into()),
             }
         }
+        LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
+            SoapProtocolMessage::response_envelope(&tampered)?,
+        )),
     }
 }
 
@@ -454,6 +475,7 @@ fn start_slo_for_binding(binding: LogoutBinding) -> StartSlo {
         LogoutBinding::Redirect => StartSlo::redirect(),
         LogoutBinding::Post => StartSlo::post(),
         LogoutBinding::SimpleSign => StartSlo::simple_sign(),
+        LogoutBinding::Soap => StartSlo::soap(),
     }
 }
 
@@ -570,6 +592,12 @@ fn signed_logout_request_input(
                 FormField::new("Signature", signature),
             ]))
         }
+        LogoutBinding::Soap => {
+            let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+            Ok(BrowserInput::<LogoutRequest>::soap(
+                SoapProtocolMessage::response_envelope(&signed)?,
+            ))
+        }
     }
 }
 
@@ -596,6 +624,9 @@ fn unsigned_logout_request_input(
         }
         LogoutBinding::SimpleSign => Err(SamlError::Invalid(
             "SimpleSign input requires its binding-level signature".into(),
+        )),
+        LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
+            SoapProtocolMessage::response_envelope(xml)?,
         )),
     }
 }
@@ -683,6 +714,12 @@ fn signed_logout_response_input(
                 FormField::new("Signature", signature),
             ]))
         }
+        LogoutBinding::Soap => {
+            let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+            Ok(BrowserInput::<LogoutResponse>::soap(
+                SoapProtocolMessage::response_envelope(&signed)?,
+            ))
+        }
     }
 }
 
@@ -709,6 +746,9 @@ fn unsigned_logout_response_input(
         }
         LogoutBinding::SimpleSign => Err(SamlError::Invalid(
             "SimpleSign input requires its binding-level signature".into(),
+        )),
+        LogoutBinding::Soap => Ok(BrowserInput::<LogoutResponse>::soap(
+            SoapProtocolMessage::response_envelope(xml)?,
         )),
     }
 }
@@ -830,6 +870,7 @@ fn outbound_xml<Message>(
         Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(
             &outbound.raw_context().context,
         )?)?),
+        Binding::Soap => Ok(outbound.raw_context().context.clone()),
         Binding::Artifact => Err("artifact binding is unsupported".into()),
     }
 }
@@ -1213,11 +1254,7 @@ fn typed_facade_receive_slo_checks_logout_request_replay() -> Result<(), Box<dyn
 fn typed_facade_rejects_expired_signed_logout_request_before_replay_for_all_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let template = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T12:00:00Z"));
-    for binding in [
-        LogoutBinding::Post,
-        LogoutBinding::Redirect,
-        LogoutBinding::SimpleSign,
-    ] {
+    for binding in ALL_LOGOUT_BINDINGS {
         let mut cache = MemoryReplayCache::default();
         let validation = SamlValidationContext::new(
             system_time("2026-07-15T12:00:00Z")?,
@@ -1378,7 +1415,7 @@ fn typed_facades_use_binding_specific_destination_for_both_roles(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    for binding in ALL_LOGOUT_BINDINGS {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         for receiver_role in LOCAL_SLO_ROLES {
             let received = match receiver_role {
                 LocalSloRole::Idp => {
@@ -1412,7 +1449,7 @@ fn typed_facades_use_binding_specific_destination_for_both_roles(
 #[test]
 fn typed_facades_reject_mismatched_logout_request_destination_before_replay(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in ALL_LOGOUT_BINDINGS {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         for receiver_role in LOCAL_SLO_ROLES {
             let xml = logout_request_xml(
                 &format!("_mismatch_{receiver_role:?}_{binding:?}"),
@@ -1935,11 +1972,7 @@ fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error
 fn typed_session_authority_slo_uses_configured_expiration_for_every_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let lifetime = Duration::from_secs(13 * 60);
-    for binding in [
-        LogoutBinding::Redirect,
-        LogoutBinding::Post,
-        LogoutBinding::SimpleSign,
-    ] {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         let sp = Saml::sp(sp_config()?)?;
         let idp = Saml::idp(idp_config_with_issuance(
             lifetime,
@@ -1990,11 +2023,7 @@ fn typed_session_authority_slo_uses_configured_expiration_for_every_binding(
 #[test]
 fn typed_session_authority_slo_signatures_cover_expiration_for_every_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in [
-        LogoutBinding::Redirect,
-        LogoutBinding::Post,
-        LogoutBinding::SimpleSign,
-    ] {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         let sp = Saml::sp(sp_config()?)?;
         let idp = Saml::idp(idp_config_with_issuance(
             Duration::from_secs(13 * 60),
@@ -2009,7 +2038,7 @@ fn typed_session_authority_slo_signatures_cover_expiration_for_every_binding(
             start_slo_for_binding(binding).signing(LogoutSigning::Sign),
         )?;
         let expected_reason = match binding {
-            LogoutBinding::Post => SignatureVerificationReason::XmlSignature,
+            LogoutBinding::Post | LogoutBinding::Soap => SignatureVerificationReason::XmlSignature,
             LogoutBinding::Redirect | LogoutBinding::SimpleSign => {
                 SignatureVerificationReason::DetachedMessageSignature
             }
@@ -2211,11 +2240,7 @@ fn typed_session_participant_slo_keeps_generated_expiration_unset_for_every_bind
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    for binding in [
-        LogoutBinding::Redirect,
-        LogoutBinding::Post,
-        LogoutBinding::SimpleSign,
-    ] {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         let started = sp.start_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding))?;
         let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
         assert!(!xml.contains("NotOnOrAfter="));
@@ -3224,7 +3249,7 @@ fn typed_slo_logout_request_keeps_name_id_format_and_qualifiers(
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
-    for binding in ALL_LOGOUT_BINDINGS {
+    for binding in LOGOUT_BINDINGS_WITH_SOAP {
         let started = sp.start_slo(
             &idp_descriptor,
             qualified_subject()?,
@@ -3472,4 +3497,227 @@ fn typed_slo_subject_from_sso_session_keeps_name_id_qualifiers(
 
     assert_eq!(subject.name_id(), qualified_subject()?.name_id());
     Ok(())
+}
+
+fn soap_body_xml(envelope: &str) -> Result<String, SamlError> {
+    Ok(SoapProtocolMessage::from_envelope(envelope)?
+        .xml()
+        .to_string())
+}
+
+fn root_has_signature(xml: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(parse(xml)?
+        .root
+        .children
+        .iter()
+        .any(|child| child.local_name == "Signature"))
+}
+
+#[test]
+fn soap_slo_round_trips_when_the_service_provider_starts_it(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+
+    let request = started.outbound.soap_request()?;
+    assert_eq!(request.endpoint().as_str(), IDP_SLO_SOAP);
+    assert_eq!(started.outbound.relay_state(), None);
+    assert!(matches!(
+        started.outbound.redirect_url(),
+        Err(SamlError::UndefinedBinding)
+    ));
+    let request_xml = soap_body_xml(request.envelope())?;
+    assert!(root_has_signature(&request_xml)?);
+    assert_eq!(
+        parse(&request_xml)?.root.attr("Destination"),
+        Some(IDP_SLO_SOAP)
+    );
+
+    let snapshot = started.pending.snapshot();
+    let pending = PendingLogoutRequest::from_snapshot(snapshot)?;
+    assert_eq!(pending.response_binding(), LogoutBinding::Soap);
+
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(request.envelope()),
+        validation(),
+    )?;
+    assert_eq!(received.relay_state(), &RelayStateParam::absent());
+    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
+    let response_envelope = response.soap_response()?.envelope();
+    let response_xml = soap_body_xml(response_envelope)?;
+    assert!(root_has_signature(&response_xml)?);
+    assert_eq!(parse(&response_xml)?.root.attr("Destination"), None);
+
+    let completed = sp.finish_slo(
+        &idp_descriptor,
+        &pending,
+        BrowserInput::<LogoutResponse>::soap(response_envelope),
+        validation(),
+    )?;
+    assert_eq!(
+        completed.status(),
+        Some(saml_rs::constants::status_code::SUCCESS)
+    );
+    let response = completed.response().ok_or("missing logout response")?;
+    assert_eq!(response.in_response_to(), Some(pending.id()));
+    Ok(())
+}
+
+#[test]
+fn soap_slo_round_trips_when_the_session_authority_starts_it(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::soap())?;
+
+    let request = started.outbound.soap_request()?;
+    assert_eq!(request.endpoint().as_str(), SP_SLO_SOAP);
+    let request_xml = soap_body_xml(request.envelope())?;
+    assert!(root_has_signature(&request_xml)?);
+    assert!(parse(&request_xml)?.root.attr("NotOnOrAfter").is_some());
+
+    let received = sp.receive_slo(
+        &idp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(request.envelope()),
+        validation(),
+    )?;
+    assert_eq!(received.message().issuer().as_str(), IDP_ENTITY_ID);
+    let response = sp.respond_slo(
+        &idp_descriptor,
+        &received,
+        RespondSlo::soap().apply_single_logout_generation_rules(),
+    )?;
+    let response_xml = soap_body_xml(response.soap_response()?.envelope())?;
+    assert!(root_has_signature(&response_xml)?);
+    assert_eq!(parse(&response_xml)?.root.attr("Destination"), None);
+
+    let completed = idp.finish_slo(
+        &sp_descriptor,
+        &started.pending,
+        BrowserInput::<LogoutResponse>::soap(response.soap_response()?.envelope()),
+        validation(),
+    )?;
+    assert_eq!(completed.peer_entity_id().as_str(), SP_ENTITY_ID);
+    assert_eq!(
+        completed.status(),
+        Some(saml_rs::constants::status_code::SUCCESS)
+    );
+    Ok(())
+}
+
+#[test]
+fn soap_logout_requires_signatures_under_the_compatibility_policy(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for receiver_role in LOCAL_SLO_ROLES {
+        let xml = logout_request_xml(
+            &format!("_soap_unsigned_{receiver_role:?}"),
+            sender_entity_id(receiver_role),
+            Some(receiver_role.endpoint(LogoutBinding::Soap)),
+        );
+        match receive_crafted_logout_request(
+            &xml,
+            LogoutBinding::Soap,
+            receiver_role,
+            RequestProtection::UnsignedCompatibility,
+            validation(),
+        ) {
+            Err(SamlError::SignatureMissing) => {}
+            other => {
+                return Err(format!(
+                    "expected SignatureMissing for an unsigned SOAP LogoutRequest to {receiver_role:?}, got {other:?}"
+                )
+                .into())
+            }
+        }
+        match finish_custom_logout_response(
+            receiver_role,
+            LogoutBinding::Soap,
+            None,
+            ResponseProtection::UnsignedCompatibility,
+            validation(),
+        ) {
+            Err(SamlError::SignatureMissing) => {}
+            other => {
+                return Err(format!(
+                    "expected SignatureMissing for an unsigned SOAP LogoutResponse to {receiver_role:?}, got {other:?}"
+                )
+                .into())
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn soap_logout_accepts_signed_messages_without_destination(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for receiver_role in LOCAL_SLO_ROLES {
+        let xml = logout_request_xml(
+            &format!("_soap_no_destination_{receiver_role:?}"),
+            sender_entity_id(receiver_role),
+            None,
+        );
+        let received = receive_crafted_logout_request(
+            &xml,
+            LogoutBinding::Soap,
+            receiver_role,
+            RequestProtection::Signed,
+            validation(),
+        )?;
+        assert_eq!(received.message().destination(), None);
+        finish_custom_logout_response(
+            receiver_role,
+            LogoutBinding::Soap,
+            None,
+            ResponseProtection::Signed,
+            validation(),
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+    let without_session_index = LogoutSubject::new(NameId::new("alice@example.com", None), vec![]);
+    let cases = [
+        (subject()?, StartSlo::soap().relay_state(relay_state)),
+        (
+            subject()?,
+            StartSlo::soap().signing(LogoutSigning::DoNotSignForCompatibility),
+        ),
+        (without_session_index, StartSlo::soap()),
+    ];
+    for (subject, options) in cases {
+        match sp.start_slo(&idp_descriptor, subject, options) {
+            Err(SamlError::ProtocolProfile(_)) => {}
+            other => return Err(format!("expected ProtocolProfile, got {other:?}").into()),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn soap_respond_slo_rejects_relay_state() -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(started.outbound.soap_request()?.envelope()),
+        validation(),
+    )?;
+    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+    match idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        RespondSlo::soap().relay_state(relay_state),
+    ) {
+        Err(SamlError::ProtocolProfile(_)) => Ok(()),
+        other => Err(format!("expected ProtocolProfile, got {other:?}").into()),
+    }
 }

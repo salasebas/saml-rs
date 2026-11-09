@@ -48,6 +48,7 @@ impl ResponseParseInput {
                 resolved,
                 ..
             } => (delivered, resolved),
+            BrowserInput::Soap { .. } => return Err(SamlError::UndefinedBinding),
             BrowserInput::Redirect { .. }
             | BrowserInput::Post { .. }
             | BrowserInput::SimpleSignPost { .. } => {

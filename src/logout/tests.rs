@@ -1,5 +1,6 @@
 use super::*;
 use crate::binding::{base64_decode, base64_encode, deflate_raw_decode};
+use crate::browser::LogoutBinding;
 use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting, User};
 use crate::error::SamlError;
@@ -107,6 +108,7 @@ fn decode_logout_response_context(
         Binding::Post | Binding::SimpleSign => {
             Ok(String::from_utf8(base64_decode(&context.context)?)?)
         }
+        Binding::Soap => Ok(context.context.clone()),
         Binding::Redirect => {
             let url = Url::parse(&context.context)?;
             let encoded = url
@@ -181,9 +183,9 @@ fn parse_unsigned_logout_request_at(
     parse_logout_request_at(
         &receiver.setting,
         &sender.metadata,
-        Binding::Post,
+        LogoutBinding::Post,
         &logout_request_request(issue_instant, not_on_or_after),
-        LogoutFlowValidation::typed("https://idp/slo", now, clock_drifts),
+        LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_drifts),
     )
 }
 
@@ -499,7 +501,7 @@ mod signed_tests {
 
         assert_protocol_profile_error(
             result,
-            "signed POST LogoutResponse must contain a root ds:Signature in schema order",
+            "signed POST or SOAP LogoutResponse must contain a root ds:Signature in schema order",
         )
     }
 

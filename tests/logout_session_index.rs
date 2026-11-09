@@ -111,6 +111,7 @@ fn decode_binding_context(
                 &value,
             )?)?)?)
         }
+        Binding::Soap => Ok(context.to_string()),
         Binding::Artifact => Err("artifact binding does not render logout messages here".into()),
     }
 }

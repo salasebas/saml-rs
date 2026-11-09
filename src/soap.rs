@@ -135,6 +135,43 @@ impl SoapRequest {
     }
 }
 
+/// SOAP 1.1 response carrying one SAML protocol element.
+///
+/// The deployment returns [`Self::envelope`] as the HTTP 200 body of the SOAP
+/// request it answers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoapResponse {
+    envelope: String,
+}
+
+impl SoapResponse {
+    pub(crate) fn new(protocol_xml: &str) -> Result<Self, SamlError> {
+        Ok(Self {
+            envelope: SoapProtocolMessage::response_envelope(protocol_xml)?,
+        })
+    }
+
+    /// SOAP 1.1 envelope.
+    pub fn envelope(&self) -> &str {
+        &self.envelope
+    }
+
+    /// `Cache-Control` value a responder should send.
+    pub fn cache_control(&self) -> &'static str {
+        RESPONSE_CACHE_CONTROL
+    }
+
+    /// `Pragma` value a responder should send.
+    pub fn pragma(&self) -> &'static str {
+        PRAGMA
+    }
+
+    /// `Content-Type` for SOAP 1.1.
+    pub fn content_type(&self) -> &'static str {
+        CONTENT_TYPE
+    }
+}
+
 /// One SAML protocol element read from, or placed in, a SOAP 1.1 body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoapProtocolMessage {

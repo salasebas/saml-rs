@@ -218,6 +218,7 @@ pub(super) fn input_binding<Message>(input: &BrowserInput<Message>) -> Binding {
         BrowserInput::Post { .. } => Binding::Post,
         BrowserInput::SimpleSignPost { .. } => Binding::SimpleSign,
         BrowserInput::Artifact { .. } => Binding::Artifact,
+        BrowserInput::Soap { .. } => Binding::Soap,
     }
 }
 
@@ -239,6 +240,7 @@ pub(super) fn relay_state_from_input<Message>(
             RelayStateParam::try_from_option(value)
         }
         BrowserInput::Artifact { delivered, .. } => Ok(delivered.relay_state().clone()),
+        BrowserInput::Soap { .. } => Ok(RelayStateParam::absent()),
     }
 }
 

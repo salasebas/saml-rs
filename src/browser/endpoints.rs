@@ -267,6 +267,16 @@ impl SloEndpoint {
         ))
     }
 
+    /// Create a SOAP SLO endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] if `url` fails [`EndpointUrl::try_new`]
+    /// validation.
+    pub fn soap(url: impl Into<String>) -> Result<Self, SamlError> {
+        Ok(Self::new(LogoutBinding::Soap, EndpointUrl::try_new(url)?))
+    }
+
     /// Narrow a raw metadata endpoint into an SLO endpoint.
     ///
     /// # Errors

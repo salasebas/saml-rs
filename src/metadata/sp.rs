@@ -27,7 +27,7 @@ impl AcsMetadataEndpoint {
     pub(crate) fn accepts_posted_response(&self) -> bool {
         match self.binding {
             Binding::Post | Binding::SimpleSign => true,
-            Binding::Redirect | Binding::Artifact => false,
+            Binding::Redirect | Binding::Artifact | Binding::Soap => false,
         }
     }
 }

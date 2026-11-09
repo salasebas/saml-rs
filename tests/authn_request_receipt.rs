@@ -109,7 +109,7 @@ fn authn_request_xml(
         Binding::Post => Ok(String::from_utf8(base64_decode(
             &outbound.raw_context().context,
         )?)?),
-        Binding::Redirect | Binding::SimpleSign | Binding::Artifact => {
+        Binding::Redirect | Binding::SimpleSign | Binding::Artifact | Binding::Soap => {
             Err("expected an HTTP-POST AuthnRequest".into())
         }
     }

@@ -53,7 +53,7 @@ struct OutboundLogoutState {
 
 struct OutboundLogoutExpectation<'a> {
     id: &'a str,
-    destination: &'a str,
+    destination: Option<&'a str>,
     issuer: &'a str,
     in_response_to: Option<&'a str>,
     validation: OutboundLogoutValidation,
@@ -62,7 +62,7 @@ struct OutboundLogoutExpectation<'a> {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutboundLogoutValidation {
     BeforeSigning { destination_required: bool },
-    AfterPostSigning,
+    AfterEmbeddedSigning,
 }
 
 impl OutboundLogoutValidation {
@@ -71,16 +71,16 @@ impl OutboundLogoutValidation {
             Self::BeforeSigning {
                 destination_required,
             } => destination_required,
-            Self::AfterPostSigning => true,
+            Self::AfterEmbeddedSigning => true,
         }
     }
 
     fn root_signature_required(self) -> bool {
-        matches!(self, Self::AfterPostSigning)
+        matches!(self, Self::AfterEmbeddedSigning)
     }
 
     fn root_signature_allowed(self) -> bool {
-        matches!(self, Self::AfterPostSigning)
+        matches!(self, Self::AfterEmbeddedSigning)
     }
 }
 
@@ -163,11 +163,16 @@ fn validate_outbound_logout_root(
                 "LogoutResponse Destination must be a non-empty absolute URI without whitespace",
             ));
         }
-        if actual != expectation.destination {
-            return Err(SamlError::destination_mismatch(
-                expectation.destination,
-                Some(actual),
-            ));
+        match expectation.destination {
+            Some(expected) if expected == actual => {}
+            Some(expected) => {
+                return Err(SamlError::destination_mismatch(expected, Some(actual)));
+            }
+            None => {
+                return Err(SamlError::Invalid(
+                    "a LogoutResponse returned over SOAP carries no Destination".into(),
+                ));
+            }
         }
     }
 
@@ -565,7 +570,7 @@ fn validate_outbound_logout_stream(
 pub(crate) fn validate_logout_response_outbound(
     xml: &str,
     expected_id: &str,
-    expected_destination: &str,
+    expected_destination: Option<&str>,
     expected_issuer: &str,
     expected_in_response_to: Option<&str>,
     validation: OutboundLogoutValidation,
@@ -599,17 +604,16 @@ pub(crate) fn validate_logout_response_outbound(
             Some(&issuer.text),
         ));
     }
-    if (expectation.validation.destination_required() || state.saw_signature)
-        && state.destination.is_none()
-    {
-        return Err(SamlError::destination_mismatch(
-            expectation.destination,
-            None,
-        ));
+    if let Some(expected) = expectation.destination {
+        if (expectation.validation.destination_required() || state.saw_signature)
+            && state.destination.is_none()
+        {
+            return Err(SamlError::destination_mismatch(expected, None));
+        }
     }
     if expectation.validation.root_signature_required() && !state.saw_signature {
         return Err(profile_error(
-            "signed POST LogoutResponse must contain a root ds:Signature in schema order",
+            "signed POST or SOAP LogoutResponse must contain a root ds:Signature in schema order",
         ));
     }
     Ok(document)
