@@ -128,6 +128,25 @@ fn order_base_config() -> SpMetadataConfig {
 fn sp_metadata_with_default_elements_order() {
     let xml = generate_sp_metadata(&order_base_config());
     let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
+    let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
+    let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
+    let acs = xml.find("AssertionConsumerService").unwrap_or(0);
+    assert!(key < slo && slo < nid && nid < acs);
+}
+
+#[test]
+fn sp_metadata_with_onelogin_elements_order() {
+    let cfg = SpMetadataConfig {
+        elements_order: Some(
+            elements_order::ONELOGIN
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        ),
+        ..order_base_config()
+    };
+    let xml = generate_sp_metadata(&cfg);
+    let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
     let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
     let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
     let acs = xml.find("AssertionConsumerService").unwrap_or(0);

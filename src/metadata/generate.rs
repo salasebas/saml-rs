@@ -607,28 +607,6 @@ mod tests {
     }
 
     #[test]
-    fn idp_default_elements_order_matches_historical_output() {
-        let cfg = IdpMetadataConfig {
-            entity_id: "https://idp.example.com/metadata".into(),
-            signing_certs: vec!["MIIBsigning".into()],
-            name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-            single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-            ..Default::default()
-        };
-
-        let xml = generate_idp_metadata(&cfg);
-        let key = xml.find("<KeyDescriptor").unwrap_or(usize::MAX);
-        let name_id = xml.find("<NameIDFormat").unwrap_or(usize::MAX);
-        let sso = xml.find("<SingleSignOnService").unwrap_or(usize::MAX);
-        let slo = xml.find("<SingleLogoutService").unwrap_or(usize::MAX);
-
-        assert!(key < name_id);
-        assert!(name_id < sso);
-        assert!(sso < slo);
-    }
-
-    #[test]
     fn idp_custom_elements_order_can_place_sso_before_key_descriptor() {
         let cfg = IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
@@ -788,18 +766,63 @@ mod tests {
     }
 
     #[test]
+    fn default_orders_follow_the_metadata_schema_sequence() {
+        let idp = generate_idp_metadata(&IdpMetadataConfig {
+            entity_id: "https://idp.example.com/metadata".into(),
+            signing_certs: vec!["MIIBsigning".into()],
+            name_id_format: vec![name_id_format::PERSISTENT.to_string()],
+            single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+            single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
+            artifact_resolution_service: vec![ArtifactResolutionEndpoint {
+                index: 0,
+                location: "https://idp/artifact".into(),
+            }],
+            manage_name_id_service: vec!["https://idp/nameid".into()],
+            ..Default::default()
+        });
+        let sp = generate_sp_metadata(&SpMetadataConfig {
+            entity_id: "https://sp.example.com/metadata".into(),
+            signing_certs: vec!["MIIBsigning".into()],
+            name_id_format: vec![name_id_format::PERSISTENT.to_string()],
+            single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
+            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            ..Default::default()
+        });
+
+        let idp_positions = [
+            "<KeyDescriptor",
+            "<ArtifactResolutionService",
+            "<SingleLogoutService",
+            "<ManageNameIDService",
+            "<NameIDFormat",
+            "<SingleSignOnService",
+        ]
+        .map(|element| idp.find(element));
+        let sp_positions = [
+            "<KeyDescriptor",
+            "<SingleLogoutService",
+            "<NameIDFormat",
+            "<AssertionConsumerService",
+        ]
+        .map(|element| sp.find(element));
+
+        for positions in [&idp_positions[..], &sp_positions[..]] {
+            assert!(positions.iter().all(Option::is_some));
+            assert!(positions.is_sorted());
+        }
+    }
+
+    #[test]
     fn idp_elements_order_profiles_match_upstream() {
-        // The default profile includes ArtifactResolutionService. OneLogin and
-        // Shibboleth stay the upstream lists; generation writes the service
-        // after KeyDescriptor when a custom list omits it.
         assert_eq!(
             elements_order::idp::DEFAULT,
             [
                 "KeyDescriptor",
-                "NameIDFormat",
                 "ArtifactResolutionService",
-                "SingleSignOnService",
                 "SingleLogoutService",
+                "ManageNameIDService",
+                "NameIDFormat",
+                "SingleSignOnService",
             ]
         );
         assert_eq!(
