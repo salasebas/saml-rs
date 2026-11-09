@@ -3,14 +3,20 @@ use saml_rs::constants::{
     signature_algorithm, transform_algorithm,
 };
 use saml_rs::flow::FlowOptions;
-use saml_rs::xml::XmlLimits;
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting,
-    HmacSecret, IdpConfig, IdpDescriptor, IdpMetadataConfig, KeyEncryptionAlgorithm,
-    MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy,
-    SamlError, SignatureAlgorithm, SpConfig, SpDescriptor, SpMetadataConfig, SsoEndpoint,
-    TransformAlgorithm, XmlEncryptionPolicy,
+    xml::XmlLimits, AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
+    AuthnRequestValidationPolicy, Credentials, IdpConfig, IdpMetadataConfig,
+    ResponseSignaturePolicy, SpConfig, SpMetadataConfig, SsoEndpoint, XmlEncryptionPolicy,
+};
+use saml_rs::{
+    CertificatePem, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting, HmacSecret,
+    IdpDescriptor, KeyEncryptionAlgorithm, MetadataTrustPolicy, NameIdFormat, Passphrase,
+    PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor, TransformAlgorithm,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/idpmeta.xml");
@@ -194,6 +200,11 @@ fn typed_config_name_id_formats_return_existing_uri_constants() {
     );
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn typed_config_sp_config_converts_selected_settings() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = SpConfig::new(
@@ -267,6 +278,11 @@ fn typed_config_sp_config_converts_selected_settings() -> Result<(), Box<dyn std
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn typed_config_idp_config_converts_authn_request_policy() -> Result<(), Box<dyn std::error::Error>>
 {
@@ -302,6 +318,11 @@ fn typed_config_idp_descriptor_rejects_empty_expected_entity_id() {
     assert!(matches!(result, Err(SamlError::Invalid(_))));
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 #[test]
 fn typed_config_insecure_rsa_key_transport_requires_explicit_policy(
 ) -> Result<(), Box<dyn std::error::Error>> {
