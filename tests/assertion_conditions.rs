@@ -370,8 +370,8 @@ fn simple_sign_fields(
 fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
-            .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
+            .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default())
             .credentials(credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,

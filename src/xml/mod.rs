@@ -14,5 +14,5 @@ pub use extract::{extract, extract_with_limits, ExtractorField, LocalPath};
 pub(crate) use profile::{
     validate_logout_request_outbound, validate_logout_response_outbound, validate_protocol_profile,
     OutboundLogoutExpiration, OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation,
-    OutboundLogoutValidation,
+    OutboundLogoutValidation, OutboundNameIdQualifiers,
 };

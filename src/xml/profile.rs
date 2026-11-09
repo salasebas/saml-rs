@@ -12,7 +12,7 @@ mod outbound_logout_request;
 pub(crate) use outbound_logout::{validate_logout_response_outbound, OutboundLogoutValidation};
 pub(crate) use outbound_logout_request::{
     validate_logout_request_outbound, OutboundLogoutExpiration, OutboundLogoutRequestExpectation,
-    OutboundLogoutRequestValidation,
+    OutboundLogoutRequestValidation, OutboundNameIdQualifiers,
 };
 
 const XML_ENCRYPTION_NS: &str = "http://www.w3.org/2001/04/xmlenc#";
