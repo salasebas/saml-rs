@@ -98,7 +98,7 @@ impl IdpMetadata {
         Ok(Self {
             inner: Metadata::parse_role_with_limits(
                 xml,
-                super::SingleLogoutRole::IdentityProvider,
+                super::SsoDescriptorRole::IdentityProvider,
                 extra,
                 limits,
             )?,

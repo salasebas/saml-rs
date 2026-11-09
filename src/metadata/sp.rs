@@ -79,7 +79,7 @@ impl SpMetadata {
         ];
         let mut inner = Metadata::parse_role_with_limits(
             xml,
-            super::SingleLogoutRole::ServiceProvider,
+            super::SsoDescriptorRole::ServiceProvider,
             extra,
             limits,
         )?;
