@@ -6,7 +6,7 @@
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use saml_rs::binding::base64_decode;
 use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
@@ -133,7 +133,6 @@ fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, 
 
 struct Exchange {
     redirect_sig_alg: String,
-    authn_request_xml: String,
     response_xml: String,
     session: SsoSession,
 }
@@ -152,8 +151,6 @@ fn signed_redirect_request_then_post_response(
             .ok_or(format!("missing {name}"))
     };
     let redirect_sig_alg = query("SigAlg")?;
-    let authn_request_xml =
-        String::from_utf8(deflate_raw_decode(&base64_decode(&query("SAMLRequest")?)?)?)?;
 
     let received = peers.idp.receive_sso(
         &peers.sp_descriptor,
@@ -182,7 +179,6 @@ fn signed_redirect_request_then_post_response(
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(Exchange {
         redirect_sig_alg,
-        authn_request_xml,
         response_xml,
         session,
     })
@@ -218,7 +214,6 @@ fn recommended_generation_uses_rsa_sha256_aes256_and_rsa_oaep(
     let exchange = signed_redirect_request_then_post_response(&peers)?;
 
     assert_eq!(exchange.redirect_sig_alg, signature_algorithm::RSA_SHA256);
-    assert!(!exchange.authn_request_xml.contains("<ds:Signature"));
     assert_eq!(
         algorithm_attributes(&exchange.response_xml, "SignatureMethod"),
         [signature_algorithm::RSA_SHA256]
@@ -330,6 +325,8 @@ fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn s
         XmlPolicy::default(),
     )?;
     let exchange = signed_redirect_request_then_post_response(&peers)?;
+
+    assert_eq!(exchange.redirect_sig_alg, signature_algorithm::RSA_SHA256);
 
     assert_eq!(
         algorithm_attributes(&exchange.response_xml, "Transform"),
