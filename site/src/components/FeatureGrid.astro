@@ -1,0 +1,19 @@
+---
+interface Props {
+	items: { title: string; text: string; href: string }[];
+}
+
+const { items } = Astro.props;
+---
+
+<div class="saml-grid not-content">
+	{
+		items.map(({ title, text, href }, index) => (
+			<a class="saml-cell" {href}>
+				<span class="number">{String(index + 1).padStart(2, '0')}</span>
+				<span class="title">{title}</span>
+				<span class="text">{text}</span>
+			</a>
+		))
+	}
+</div>

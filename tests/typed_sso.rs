@@ -132,9 +132,21 @@ fn encrypted_xml_policy() -> XmlPolicy {
 }
 
 fn sp_config() -> Result<SpConfig, SamlError> {
+    sp_config_with_default_response_binding(SsoResponseBinding::Post)
+}
+
+fn sp_config_with_default_response_binding(
+    binding: SsoResponseBinding,
+) -> Result<SpConfig, SamlError> {
+    let post = AcsEndpoint::post(SP_ACS_POST)?;
+    let simple_sign = AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?;
+    let (post, simple_sign) = match binding {
+        SsoResponseBinding::Post => (post.mark_default(), simple_sign),
+        SsoResponseBinding::SimpleSign => (post, simple_sign.mark_default()),
+    };
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
-        .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
+        .acs_endpoint(post)
+        .acs_endpoint(simple_sign)
         .credentials(credentials())
         .validation(signing_sp_validation())
         .build()
@@ -1903,7 +1915,10 @@ fn typed_facade_accept_unsolicited_sso_post_rejects_missing_assertion_issue_inst
 #[test]
 fn typed_facade_accept_unsolicited_sso_simplesign_rejects_non_utc_response_issue_instant(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp) = facades()?;
+    let (_, idp) = facades()?;
+    let sp = Saml::sp(sp_config_with_default_response_binding(
+        SsoResponseBinding::SimpleSign,
+    )?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::simple_sign())?;
     let fields = post_fields(&response)?;
@@ -1947,7 +1962,7 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
             SsoResponseBinding::SimpleSign,
         ),
     ] {
-        let sp = Saml::sp(sp_config()?)?;
+        let sp = Saml::sp(sp_config_with_default_response_binding(binding)?)?;
         let idp = Saml::idp(
             IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
                 .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)

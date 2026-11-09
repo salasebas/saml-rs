@@ -30,12 +30,12 @@
 //! ```
 //!
 //! ```compile_fail
-//! use saml_rs::{CommonDomainCookieRequest, DiscoveryCookieLifetime, Saml, Sp};
+//! use saml_rs::{CommonDomainCookieLifetime, RememberIdentityProvider, Saml, Sp};
 //!
 //! let sp: Saml<Sp> = unreachable!();
-//! let _ = sp.remember_identity_provider(CommonDomainCookieRequest::new(
+//! let _ = sp.remember_identity_provider(RememberIdentityProvider::new(
 //!     "example.org",
-//!     DiscoveryCookieLifetime::Session,
+//!     CommonDomainCookieLifetime::Session,
 //! ));
 //! ```
 
@@ -59,7 +59,7 @@ pub use options::{
     ForceAuthn, IsPassive, LogoutSigning, RespondSlo, RespondSso, StartSlo, StartSso,
 };
 pub use paos::{
-    PaosAuthnRequest, PaosClientRequest, PaosHeader, PaosHttpResponse, PaosSsoResponse,
+    HttpHeader, PaosAuthnRequest, PaosClientRequest, PaosHttpResponse, PaosSsoResponse,
     PendingPaosSso, PendingPaosSsoSnapshot, SoapFault, StartPaosSso, StartedPaosSso,
 };
 

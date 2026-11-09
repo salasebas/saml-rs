@@ -19,7 +19,7 @@ const MAX_PERSISTENT_LIFETIME_SECONDS: u64 = 2_147_483_647;
 /// `max_age`. Neither value means the principal still has a session with this
 /// identity provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiscoveryCookieLifetime {
+pub enum CommonDomainCookieLifetime {
     /// The browser drops the cookie when the session ends.
     Session,
     /// The browser keeps the cookie for `max_age`.
@@ -34,13 +34,13 @@ pub enum DiscoveryCookieLifetime {
 
 /// What the caller passes to remember this identity provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CommonDomainCookieRequest<'a> {
+pub struct RememberIdentityProvider<'a> {
     common_domain: &'a str,
-    lifetime: DiscoveryCookieLifetime,
+    lifetime: CommonDomainCookieLifetime,
     existing_cookie: Option<&'a str>,
 }
 
-impl<'a> CommonDomainCookieRequest<'a> {
+impl<'a> RememberIdentityProvider<'a> {
     /// Start a cookie list that contains only this identity provider.
     ///
     /// `common_domain` is the deployment common domain, without a leading
@@ -48,7 +48,7 @@ impl<'a> CommonDomainCookieRequest<'a> {
     /// `lifetime` is the browser session, or a persistent `Max-Age`. Call
     /// [`Self::with_existing_cookie`] when the browser already sent
     /// `_saml_idp`.
-    pub fn new(common_domain: &'a str, lifetime: DiscoveryCookieLifetime) -> Self {
+    pub fn new(common_domain: &'a str, lifetime: CommonDomainCookieLifetime) -> Self {
         Self {
             common_domain,
             lifetime,
@@ -73,7 +73,7 @@ impl<'a> CommonDomainCookieRequest<'a> {
 pub struct CommonDomainCookie {
     value: String,
     domain: String,
-    lifetime: DiscoveryCookieLifetime,
+    lifetime: CommonDomainCookieLifetime,
 }
 
 impl CommonDomainCookie {
@@ -110,7 +110,7 @@ impl CommonDomainCookie {
     }
 
     /// Session or persistent lifetime the caller asked for.
-    pub fn lifetime(&self) -> DiscoveryCookieLifetime {
+    pub fn lifetime(&self) -> CommonDomainCookieLifetime {
         self.lifetime
     }
 
@@ -126,7 +126,7 @@ impl CommonDomainCookie {
             path = Self::PATH,
             domain = self.domain,
         );
-        if let DiscoveryCookieLifetime::Persistent { max_age } = self.lifetime {
+        if let CommonDomainCookieLifetime::Persistent { max_age } = self.lifetime {
             let seconds = max_age.as_secs();
             header.push_str(&format!("; Max-Age={seconds}"));
         }
@@ -136,12 +136,12 @@ impl CommonDomainCookie {
 
 pub(crate) fn remember_identity_provider(
     entity_id: &str,
-    request: CommonDomainCookieRequest<'_>,
+    options: RememberIdentityProvider<'_>,
 ) -> Result<CommonDomainCookie, SamlError> {
     validate_entity_identifier(entity_id)?;
-    let domain = common_domain_attribute(request.common_domain)?;
-    let lifetime = validated_lifetime(request.lifetime)?;
-    let mut entity_ids = entity_ids_from_existing(request.existing_cookie)?;
+    let domain = common_domain_attribute(options.common_domain)?;
+    let lifetime = validated_lifetime(options.lifetime)?;
+    let mut entity_ids = entity_ids_from_existing(options.existing_cookie)?;
     entity_ids.retain(|existing| existing != entity_id);
     entity_ids.push(entity_id.to_string());
     let mut value = encode_cookie_value(&entity_ids);
@@ -219,9 +219,9 @@ fn is_ascii_hostname(domain: &str) -> bool {
 }
 
 fn validated_lifetime(
-    lifetime: DiscoveryCookieLifetime,
-) -> Result<DiscoveryCookieLifetime, SamlError> {
-    if let DiscoveryCookieLifetime::Persistent { max_age } = lifetime {
+    lifetime: CommonDomainCookieLifetime,
+) -> Result<CommonDomainCookieLifetime, SamlError> {
+    if let CommonDomainCookieLifetime::Persistent { max_age } = lifetime {
         if max_age.subsec_nanos() != 0 {
             return Err(invalid(
                 "persistent discovery cookie lifetime must be a whole number of seconds",

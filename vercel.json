@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "installCommand": "npx --yes pnpm@11.6.0 --dir site install --frozen-lockfile",
+  "buildCommand": "npx --yes pnpm@11.6.0 --dir site build",
+  "outputDirectory": "site/dist"
+}

@@ -37,11 +37,11 @@ impl PaosClientRequest {
     /// `PAOS` header value. The version and the ECP service use double quotes.
     pub const PAOS_HEADER: &'static str = E54_PAOS_HEADER;
 
-    /// Headers for an enhanced client that supports this profile.
+    /// Enhanced client whose `Accept` and `PAOS` headers the caller already
+    /// checked.
     ///
-    /// The caller has already accepted the client's PAOS headers.
-    /// [`Self::from_headers`] checks them.
-    pub fn enhanced_client() -> Self {
+    /// Nothing is checked here. [`Self::from_headers`] checks them.
+    pub fn headers_checked_by_caller() -> Self {
         Self { _private: () }
     }
 
@@ -69,7 +69,7 @@ pub struct StartPaosSso {
     force_authn: Option<ForceAuthn>,
     is_passive: Option<IsPassive>,
     provider_name: Option<String>,
-    assertion_consumer: Option<EndpointUrl>,
+    acs_url: Option<EndpointUrl>,
     sign_authn_request: bool,
 }
 
@@ -86,7 +86,7 @@ impl StartPaosSso {
             force_authn: None,
             is_passive: None,
             provider_name: None,
-            assertion_consumer: None,
+            acs_url: None,
             sign_authn_request: true,
         })
     }
@@ -142,8 +142,8 @@ impl StartPaosSso {
     /// Returns [`SamlError`] when `url` is not an absolute HTTP(S) URL.
     /// [`Saml<Sp>::start_paos_sso`] also rejects a URL the service provider
     /// metadata does not publish for HTTP-POST or HTTP-POST-SimpleSign.
-    pub fn assertion_consumer(mut self, url: impl Into<String>) -> Result<Self, SamlError> {
-        self.assertion_consumer = Some(EndpointUrl::try_new(url)?);
+    pub fn acs_url(mut self, url: impl Into<String>) -> Result<Self, SamlError> {
+        self.acs_url = Some(EndpointUrl::try_new(url)?);
         Ok(self)
     }
 
@@ -163,7 +163,7 @@ pub struct PendingPaosSso {
     request_id: MessageId,
     relay_state: RelayStateParam,
     idp_entity_id: EntityId,
-    assertion_consumer_url: EndpointUrl,
+    acs_url: EndpointUrl,
 }
 
 impl PendingPaosSso {
@@ -183,8 +183,8 @@ impl PendingPaosSso {
     }
 
     /// Assertion consumer the response must target.
-    pub fn assertion_consumer_url(&self) -> &EndpointUrl {
-        &self.assertion_consumer_url
+    pub fn acs_url(&self) -> &EndpointUrl {
+        &self.acs_url
     }
 
     /// Correlation fields for the caller to store.
@@ -193,7 +193,7 @@ impl PendingPaosSso {
             request_id: self.request_id.as_str().to_string(),
             relay_state: self.relay_state.clone(),
             idp_entity_id: self.idp_entity_id.as_str().to_string(),
-            assertion_consumer_url: self.assertion_consumer_url.as_str().to_string(),
+            acs_url: self.acs_url.as_str().to_string(),
         }
     }
 
@@ -209,7 +209,7 @@ impl PendingPaosSso {
             request_id: MessageId::try_new(snapshot.request_id)?,
             relay_state: snapshot.relay_state,
             idp_entity_id: EntityId::try_new(snapshot.idp_entity_id)?,
-            assertion_consumer_url: EndpointUrl::try_new(snapshot.assertion_consumer_url)?,
+            acs_url: EndpointUrl::try_new(snapshot.acs_url)?,
         })
     }
 }
@@ -224,7 +224,7 @@ pub struct PendingPaosSsoSnapshot {
     /// Identity provider entity ID.
     pub idp_entity_id: String,
     /// Assertion consumer URL placed on the AuthnRequest.
-    pub assertion_consumer_url: String,
+    pub acs_url: String,
 }
 
 /// PAOS login the service provider has handed to the enhanced client.
@@ -233,17 +233,17 @@ pub struct StartedPaosSso {
     /// State to store until the enhanced client returns the response.
     pub pending: PendingPaosSso,
     /// HTTP 200 response whose body is the SOAP AuthnRequest.
-    pub response: PaosHttpResponse<AuthnRequest>,
+    pub http_response: PaosHttpResponse<AuthnRequest>,
 }
 
 /// One HTTP header on a PAOS or SOAP response.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PaosHeader {
+pub struct HttpHeader {
     name: String,
     value: String,
 }
 
-impl PaosHeader {
+impl HttpHeader {
     /// Header field name.
     pub fn name(&self) -> &str {
         &self.name
@@ -259,7 +259,7 @@ impl PaosHeader {
 #[derive(Debug, Clone)]
 pub struct PaosHttpResponse<Message> {
     status: u16,
-    headers: Vec<PaosHeader>,
+    headers: Vec<HttpHeader>,
     soap_envelope: String,
     _message: PhantomData<Message>,
 }
@@ -272,12 +272,12 @@ impl<Message> PaosHttpResponse<Message> {
     }
 
     /// HTTP headers to send with the envelope.
-    pub fn headers(&self) -> &[PaosHeader] {
+    pub fn headers(&self) -> &[HttpHeader] {
         &self.headers
     }
 
     /// SOAP envelope body.
-    pub fn soap_envelope(&self) -> &str {
+    pub fn envelope(&self) -> &str {
         &self.soap_envelope
     }
 
@@ -285,15 +285,15 @@ impl<Message> PaosHttpResponse<Message> {
         Self {
             status: 200,
             headers: vec![
-                PaosHeader {
+                HttpHeader {
                     name: "Content-Type".into(),
                     value: content_type.into(),
                 },
-                PaosHeader {
+                HttpHeader {
                     name: "Cache-Control".into(),
                     value: "no-cache, no-store, must-revalidate, private".into(),
                 },
-                PaosHeader {
+                HttpHeader {
                     name: "Pragma".into(),
                     value: "no-cache".into(),
                 },
@@ -331,7 +331,7 @@ impl PaosAuthnRequest {
     ///
     /// Returns [`SamlError`] when the envelope is empty or `soap_endpoint` is
     /// not an absolute HTTP(S) URL.
-    pub fn received_at(
+    pub fn from_envelope(
         soap_envelope: impl Into<String>,
         soap_endpoint: impl Into<String>,
     ) -> Result<Self, SamlError> {
@@ -358,7 +358,7 @@ impl PaosSsoResponse {
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when the envelope is empty.
-    pub fn from_soap(soap_envelope: impl Into<String>) -> Result<Self, SamlError> {
+    pub fn from_envelope(soap_envelope: impl Into<String>) -> Result<Self, SamlError> {
         let envelope = soap_envelope.into();
         if envelope.trim().is_empty() {
             return Err(SamlError::Invalid("SOAP envelope must not be empty".into()));
@@ -370,7 +370,7 @@ impl PaosSsoResponse {
 impl Saml<Sp> {
     /// Start Enhanced Client/Proxy login for an enhanced client.
     ///
-    /// Return [`StartedPaosSso::response`] as HTTP 200. Store
+    /// Return [`StartedPaosSso::http_response`] as HTTP 200. Store
     /// [`StartedPaosSso::pending`] until that client posts the response.
     ///
     /// # Errors
@@ -413,12 +413,12 @@ impl Saml<Sp> {
     /// )?;
     /// let started = sp.start_paos_sso(
     ///     &idp,
-    ///     PaosClientRequest::enhanced_client(),
+    ///     PaosClientRequest::headers_checked_by_caller(),
     ///     StartPaosSso::to_soap_endpoint("https://idp.example.com/soap")?
     ///         .allow_unsigned_authn_request(),
     /// )?;
-    /// assert_eq!(started.response.http_status(), 200);
-    /// # let _ = started.response.soap_envelope();
+    /// assert_eq!(started.http_response.http_status(), 200);
+    /// # let _ = started.http_response.envelope();
     /// # Ok(()) }
     /// ```
     pub fn start_paos_sso(
@@ -435,7 +435,7 @@ impl Saml<Sp> {
                 ));
             }
         }
-        let assertion_consumer = assertion_consumer_url(self, options.assertion_consumer)?;
+        let assertion_consumer = assertion_consumer_url(self, options.acs_url)?;
         let issuer = self
             .raw_service_provider()
             .metadata
@@ -466,9 +466,9 @@ impl Saml<Sp> {
                 request_id: MessageId::try_new(request_id)?,
                 relay_state: options.relay_state,
                 idp_entity_id: idp.entity_id().clone(),
-                assertion_consumer_url: assertion_consumer,
+                acs_url: assertion_consumer,
             },
-            response: PaosHttpResponse::from_parts(PAOS_MEDIA_TYPE, envelope),
+            http_response: PaosHttpResponse::from_parts(PAOS_MEDIA_TYPE, envelope),
         })
     }
 
@@ -543,7 +543,7 @@ impl Saml<Sp> {
                     validation.now(),
                     validation.clock_skew().as_millis(),
                 )
-                .with_expected_recipient(pending.assertion_consumer_url().as_str()),
+                .with_expected_recipient(pending.acs_url().as_str()),
             )?;
         // The expected value is compared after the response signature verifies.
         if pending.relay_state() != &RelayStateParam::absent() {

@@ -3,8 +3,8 @@
 use std::time::Duration;
 
 use saml_rs::{
-    CommonDomainCookie, CommonDomainCookieRequest, DiscoveryCookieLifetime, EntityId, IdpConfig,
-    IdpValidationPolicy, Saml, SamlError, SsoEndpoint,
+    CommonDomainCookie, CommonDomainCookieLifetime, EntityId, IdpConfig, IdpValidationPolicy,
+    RememberIdentityProvider, Saml, SamlError, SsoEndpoint,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -22,10 +22,10 @@ fn identity_provider(entity_id: &str) -> Result<Saml<saml_rs::Idp>, SamlError> {
 fn remember(
     entity_id: &str,
     common_domain: &str,
-    lifetime: DiscoveryCookieLifetime,
+    lifetime: CommonDomainCookieLifetime,
     existing_cookie: Option<&str>,
 ) -> Result<CommonDomainCookie, SamlError> {
-    let mut request = CommonDomainCookieRequest::new(common_domain, lifetime);
+    let mut request = RememberIdentityProvider::new(common_domain, lifetime);
     if let Some(value) = existing_cookie {
         request = request.with_existing_cookie(value);
     }
@@ -38,7 +38,7 @@ fn identity_provider_writes_a_session_common_domain_cookie(
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         None,
     )?;
 
@@ -47,7 +47,7 @@ fn identity_provider_writes_a_session_common_domain_cookie(
     assert_eq!(cookie.path(), "/");
     assert_eq!(cookie.domain(), ".example.org");
     assert!(cookie.secure());
-    assert_eq!(cookie.lifetime(), DiscoveryCookieLifetime::Session);
+    assert_eq!(cookie.lifetime(), CommonDomainCookieLifetime::Session);
     assert_eq!(
         cookie.set_cookie_header(),
         "_saml_idp=aHR0cHM6Ly9pZHAuZXhhbXBsZS5jb20vbWV0YWRhdGE%3D; Path=/; Domain=.example.org; Secure"
@@ -60,7 +60,7 @@ fn persistent_cookie_records_max_age_in_whole_seconds() -> Result<(), Box<dyn st
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Persistent {
+        CommonDomainCookieLifetime::Persistent {
             max_age: Duration::from_secs(86_400),
         },
         None,
@@ -68,7 +68,7 @@ fn persistent_cookie_records_max_age_in_whole_seconds() -> Result<(), Box<dyn st
 
     assert_eq!(
         cookie.lifetime(),
-        DiscoveryCookieLifetime::Persistent {
+        CommonDomainCookieLifetime::Persistent {
             max_age: Duration::from_secs(86_400),
         }
     );
@@ -84,7 +84,7 @@ fn empty_existing_cookie_starts_a_new_list() -> Result<(), Box<dyn std::error::E
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(""),
     )?;
     assert_eq!(cookie.value(), IDP_ENTITY_COOKIE_VALUE);
@@ -100,7 +100,7 @@ fn writer_appends_this_identity_provider_and_moves_it_to_the_end(
     let appended = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(OTHER),
     )?;
     assert_eq!(appended.value(), MOVED);
@@ -108,7 +108,7 @@ fn writer_appends_this_identity_provider_and_moves_it_to_the_end(
     let moved = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(&format!("{IDP_ENTITY_COOKIE_VALUE}%20{OTHER}")),
     )?;
     assert_eq!(moved.value(), MOVED);
@@ -116,7 +116,7 @@ fn writer_appends_this_identity_provider_and_moves_it_to_the_end(
     let collapsed = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(&format!(
             "{IDP_ENTITY_COOKIE_VALUE}%20{OTHER}%20{IDP_ENTITY_COOKIE_VALUE}"
         )),
@@ -126,7 +126,7 @@ fn writer_appends_this_identity_provider_and_moves_it_to_the_end(
     let form_encoded = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(&format!("{IDP_ENTITY_COOKIE_VALUE}+{OTHER}")),
     )?;
     assert_eq!(form_encoded.value(), MOVED);
@@ -134,7 +134,7 @@ fn writer_appends_this_identity_provider_and_moves_it_to_the_end(
     let already_decoded = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(
             "aHR0cHM6Ly9pZHAuZXhhbXBsZS5jb20vbWV0YWRhdGE= aHR0cHM6Ly9vdGhlci5leGFtcGxlLm5ldC9tZXRhZGF0YQ==",
         ),
@@ -150,7 +150,7 @@ fn common_domain_must_be_a_hostname_not_an_ip_address() -> Result<(), Box<dyn st
             remember(
                 IDP_ENTITY_ID,
                 domain,
-                DiscoveryCookieLifetime::Session,
+                CommonDomainCookieLifetime::Session,
                 None,
             ),
             "ASCII hostname",
@@ -161,7 +161,7 @@ fn common_domain_must_be_a_hostname_not_an_ip_address() -> Result<(), Box<dyn st
     let local = remember(
         IDP_ENTITY_ID,
         "localhost",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         None,
     )?;
     assert_eq!(local.domain(), ".localhost");
@@ -170,7 +170,7 @@ fn common_domain_must_be_a_hostname_not_an_ip_address() -> Result<(), Box<dyn st
     let numeric_label = remember(
         IDP_ENTITY_ID,
         "example.123",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         None,
     )?;
     assert_eq!(numeric_label.domain(), ".example.123");
@@ -182,7 +182,7 @@ fn remembered_cookie_value_stays_within_browser_cookie_limits(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let entity = format!("https://idp.example.net/{}", "a".repeat(400));
     let single = identity_provider(&entity)?.remember_identity_provider(
-        CommonDomainCookieRequest::new("example.org", DiscoveryCookieLifetime::Session),
+        RememberIdentityProvider::new("example.org", CommonDomainCookieLifetime::Session),
     )?;
     let copies = 4096 / (single.value().len() + 3) + 2;
     let bloated = vec![single.value(); copies].join("%20");
@@ -191,7 +191,7 @@ fn remembered_cookie_value_stays_within_browser_cookie_limits(
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(&bloated),
     )?;
     assert!(CommonDomainCookie::NAME.len() + cookie.value().len() <= 4096);
@@ -207,7 +207,7 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
     fn listed(tail: usize) -> Result<String, Box<dyn std::error::Error>> {
         let entity = format!("https://idp.example.net/{}", "a".repeat(tail));
         let cookie = identity_provider(&entity)?.remember_identity_provider(
-            CommonDomainCookieRequest::new("example.org", DiscoveryCookieLifetime::Session),
+            RememberIdentityProvider::new("example.org", CommonDomainCookieLifetime::Session),
         )?;
         Ok(cookie.value().to_string())
     }
@@ -219,7 +219,7 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(&fits),
     )?;
     assert_eq!(name + cookie.value().len(), 4096);
@@ -231,7 +231,7 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
     let evicted = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(&over),
     )?;
     assert_eq!(
@@ -252,7 +252,7 @@ fn existing_entry_that_is_not_a_uri_is_kept() -> Result<(), Box<dyn std::error::
     let cookie = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some("bGVnYWN5LWlkcA%3D%3D"),
     )?;
     assert_eq!(
@@ -267,7 +267,7 @@ fn cookie_value_percent_encodes_base64_plus_and_slash() -> Result<(), Box<dyn st
     let plus = remember(
         "https://idp.example/~",
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         None,
     )?;
     assert_eq!(plus.value(), "aHR0cHM6Ly9pZHAuZXhhbXBsZS9%2B");
@@ -275,7 +275,7 @@ fn cookie_value_percent_encodes_base64_plus_and_slash() -> Result<(), Box<dyn st
     let slash = remember(
         "https://idp.example.com/metadata?x=1",
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         None,
     )?;
     assert_eq!(
@@ -286,7 +286,7 @@ fn cookie_value_percent_encodes_base64_plus_and_slash() -> Result<(), Box<dyn st
     let again = remember(
         "https://idp.example/~",
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some(plus.value()),
     )?;
     assert_eq!(again.value(), plus.value());
@@ -294,7 +294,7 @@ fn cookie_value_percent_encodes_base64_plus_and_slash() -> Result<(), Box<dyn st
     let decoded_plus = remember(
         "https://idp.example/~",
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         Some("aHR0cHM6Ly9vdGhlci5leGFtcGxlLm5ldC9tZXRhZGF0YQ== aHR0cHM6Ly9pZHAuZXhhbXBsZS9+"),
     )?;
     assert_eq!(
@@ -311,20 +311,20 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             ".example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             None,
         ),
         "without a leading period",
     )?;
     assert_invalid(
-        remember(IDP_ENTITY_ID, "", DiscoveryCookieLifetime::Session, None),
+        remember(IDP_ENTITY_ID, "", CommonDomainCookieLifetime::Session, None),
         "must not be empty",
     )?;
     assert_invalid(
         remember(
             IDP_ENTITY_ID,
             "example.org/idp",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             None,
         ),
         "ASCII hostname",
@@ -333,7 +333,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "ex ample.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             None,
         ),
         "ASCII hostname",
@@ -342,7 +342,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Persistent {
+            CommonDomainCookieLifetime::Persistent {
                 max_age: Duration::ZERO,
             },
             None,
@@ -353,7 +353,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Persistent {
+            CommonDomainCookieLifetime::Persistent {
                 max_age: Duration::from_millis(1_500),
             },
             None,
@@ -364,7 +364,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Persistent {
+            CommonDomainCookieLifetime::Persistent {
                 max_age: Duration::from_secs(2_147_483_648),
             },
             None,
@@ -374,7 +374,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
     let longest = remember(
         IDP_ENTITY_ID,
         "example.org",
-        DiscoveryCookieLifetime::Persistent {
+        CommonDomainCookieLifetime::Persistent {
             max_age: Duration::from_secs(2_147_483_647),
         },
         None,
@@ -386,7 +386,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             Some("%"),
         ),
         "truncated percent escape",
@@ -395,7 +395,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             Some("%ZZ"),
         ),
         "not hexadecimal",
@@ -404,7 +404,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             Some("%20"),
         ),
         "empty entry",
@@ -413,7 +413,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             Some("not-valid"),
         ),
         "not base64",
@@ -422,7 +422,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             Some("%2Fw%3D%3D"),
         ),
         "not an entity identifier",
@@ -431,7 +431,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             IDP_ENTITY_ID,
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             Some(&"a".repeat(8_193)),
         ),
         "larger than 8192 bytes",
@@ -443,7 +443,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
     let accepted = remember(
         &within,
         "example.org",
-        DiscoveryCookieLifetime::Session,
+        CommonDomainCookieLifetime::Session,
         None,
     )?;
     assert_eq!(accepted.name(), "_saml_idp");
@@ -452,7 +452,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             &too_long,
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             None,
         ),
         "1024 characters",
@@ -461,7 +461,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             "not-a-uri",
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             None,
         ),
         "URI",
@@ -470,7 +470,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         remember(
             "https://例え.jp/metadata",
             "example.org",
-            DiscoveryCookieLifetime::Session,
+            CommonDomainCookieLifetime::Session,
             None,
         ),
         "URI",

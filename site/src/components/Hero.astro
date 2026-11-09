@@ -1,0 +1,33 @@
+---
+import { LinkButton } from '@astrojs/starlight/components';
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero || {};
+
+const links = [
+	{ label: 'docs.rs', href: 'https://docs.rs/saml-rs' },
+	{ label: 'crates.io', href: 'https://crates.io/crates/saml-rs' },
+	{ label: 'GitHub', href: 'https://github.com/salasebas/saml-rs' },
+	{ label: 'llms.txt', href: '/llms.txt' },
+];
+---
+
+<div class="saml-hero not-content">
+	<a class="saml-badge" href="/reference/conformance/">OASIS SAML 2.0, rule by rule</a>
+	<h1 id="_top" data-page-title set:html={title} />
+	{tagline && <div class="tagline" set:html={tagline} />}
+	{
+		actions.length > 0 && (
+			<div class="actions">
+				{actions.map(({ attrs = {}, icon, link: href, text, variant }) => (
+					<LinkButton {href} {variant} icon={icon?.name} {...attrs}>
+						{text}
+					</LinkButton>
+				))}
+			</div>
+		)
+	}
+	<div class="saml-hero-links">
+		{links.map(({ label, href }) => <a class="saml-link" {href}>{label}</a>)}
+	</div>
+</div>

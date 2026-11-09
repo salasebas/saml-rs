@@ -374,7 +374,7 @@ pub mod validator;
 pub mod xml;
 
 pub use api::{
-    ForceAuthn, Idp, IsPassive, LogoutSigning, PaosAuthnRequest, PaosClientRequest, PaosHeader,
+    ForceAuthn, HttpHeader, Idp, IsPassive, LogoutSigning, PaosAuthnRequest, PaosClientRequest,
     PaosHttpResponse, PaosSsoResponse, PendingPaosSso, PendingPaosSsoSnapshot, RespondSlo,
     RespondSso, Saml, SamlError, SoapFault, Sp, StartPaosSso, StartSlo, StartSso, StartedPaosSso,
     Unknown,
@@ -408,7 +408,7 @@ pub use crypto::{
     crypto_provider_info, initialize_crypto_provider, CryptoFipsStatus, CryptoProvider,
     CryptoProviderInfo,
 };
-pub use discovery::{CommonDomainCookie, CommonDomainCookieRequest, DiscoveryCookieLifetime};
+pub use discovery::{CommonDomainCookie, CommonDomainCookieLifetime, RememberIdentityProvider};
 #[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::EntitySetting`."]
 pub use entity::EntitySetting;
 #[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::IdentityProvider`."]

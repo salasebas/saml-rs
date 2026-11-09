@@ -111,6 +111,17 @@ pub struct EntitySetting {
     /// Typed Session Authority generation requires a complete unqualified
     /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Raw compatibility
     /// generation keeps that optional placeholder omitted.
+    ///
+    /// Typed generation fills `{NameQualifier}`, `{SPNameQualifier}`, and
+    /// `{SPProvidedID}` from the logout subject's `NameID`, and
+    /// `{NameIDFormat}` with the `Format` sent for it. An attribute whose
+    /// complete value is one of these placeholders is omitted when there is
+    /// no value for it. Raw compatibility generation fills `{NameIDFormat}`
+    /// from `name_id_format` and omits the qualifier attributes.
+    ///
+    /// Typed Session Authority generation, and typed SP generation with
+    /// Single Logout generation rules, reject a template whose `NameID`
+    /// attributes differ from the ones sent for the subject.
     pub logout_request_template: Option<String>,
     /// Custom `<LogoutResponse>` template (`None` uses the default).
     ///
@@ -251,6 +262,16 @@ impl Default for SignatureConfig {
             reference: None,
             action: SignatureAction::After,
         }
+    }
+}
+
+impl EntitySetting {
+    /// The first configured NameID format, when it is not empty.
+    pub(crate) fn default_name_id_format(&self) -> Option<&str> {
+        self.name_id_format
+            .first()
+            .map(String::as_str)
+            .filter(|format| !format.trim().is_empty())
     }
 }
 

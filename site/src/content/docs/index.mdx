@@ -1,0 +1,113 @@
+---
+title: saml-rs
+description: SAML 2.0 browser sign-in, metadata, and Single Logout for Rust.
+template: splash
+hero:
+  title: SAML 2.0 sign-in for Rust, at both ends
+  tagline: Accept a browser login, or issue one from your own identity provider. The same crate reads metadata and runs Single Logout.
+  actions:
+    - text: Run the example
+      link: /tutorial/run-the-sso-example/
+    - text: Install
+      link: /start/install/
+      variant: secondary
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import FeatureGrid from '../../components/FeatureGrid.astro';
+
+<div class="saml-label">Readme</div>
+
+<p class="saml-lead">
+	Sign a person in with SAML 2.0, or issue that login from your own identity provider. **Signatures and
+	encryption go through [bergshamra](https://crates.io/crates/bergshamra)**, so the build does not need
+	`libxml2`, `xmlsec1`, or OpenSSL.
+</p>
+
+```toml title="Cargo.toml"
+[dependencies]
+saml-rs = "0.6"
+```
+
+The package name is `saml-rs`. Rust imports `saml_rs`. Method signatures live on [docs.rs](https://docs.rs/saml-rs).
+
+<div class="saml-label">Start here</div>
+
+<FeatureGrid
+	items={[
+		{
+			title: 'Run the example',
+			text: 'One program plays both sides and prints alice@example.com.',
+			href: '/tutorial/run-the-sso-example/',
+		},
+		{
+			title: 'Accept a login',
+			text: 'You already have an identity provider and an assertion consumer URL.',
+			href: '/guides/service-provider-sso/',
+		},
+		{
+			title: 'Issue a login',
+			text: 'You authenticate the person and return a response.',
+			href: '/guides/identity-provider-sso/',
+		},
+		{
+			title: 'End a session',
+			text: 'Single Logout from either role, one peer per call.',
+			href: '/guides/single-logout/',
+		},
+		{
+			title: 'Pick a crypto provider',
+			text: 'RustCrypto by default. AWS-LC and FIPS behind features.',
+			href: '/guides/crypto-provider/',
+		},
+		{
+			title: 'Trust the signature',
+			text: 'What the signature adapter already turns on, and what you still choose.',
+			href: '/explanation/xml-signature-recommendations/',
+		},
+	]}
+/>
+
+<div class="saml-label">Service provider</div>
+
+```rust title="sp.rs"
+let sp = Saml::sp(
+    SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+        .credentials(credentials)
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
+)?;
+
+let started = sp.start_sso(&idp, StartSso::redirect())?;
+```
+
+Store `started.pending`, send `started.outbound` to the browser, and call `finish_sso` when it posts back. The full flow is in [Service provider](/guides/service-provider-sso/).
+
+<div class="saml-label">Before production</div>
+
+<Aside type="caution" title="Pre-1.0">
+	A minor release can change the API. There has been no external security audit. Pin the peer's metadata signing key, and read [XML signatures](/explanation/xml-signature-recommendations/) before production.
+</Aside>
+
+<div class="saml-label">Reference</div>
+
+<FeatureGrid
+	items={[
+		{
+			title: 'Coverage',
+			text: 'Which profiles, bindings, and roles the crate implements.',
+			href: '/reference/coverage/',
+		},
+		{
+			title: 'Conformance',
+			text: 'Each rule with its OASIS section, actor, direction, and level.',
+			href: '/reference/conformance/',
+		},
+		{
+			title: 'Security',
+			text: 'Defaults, limits, and what stays off until you opt in.',
+			href: '/reference/security/',
+		},
+	]}
+/>
