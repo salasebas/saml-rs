@@ -9,7 +9,9 @@ use crate::entity::{
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
-use crate::model::{validate_issued_name_id_length, Attribute, Status, TopLevelStatusCode};
+use crate::model::{
+    validate_issued_name_id_length, validate_name_id_format, Attribute, Status, TopLevelStatusCode,
+};
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
     apply_tag_prefixes, attr_tag, attribute_statement_builder, replace_tags_by_optional_value,
@@ -100,7 +102,8 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns an error if `config` cannot produce valid IdP metadata, such as
-    /// when required IdP SSO metadata is missing, or if the generated metadata
+    /// when required IdP SSO metadata is missing or a configured
+    /// `<NameIDFormat>` is not an absolute URI reference, or if the generated metadata
     /// cannot be parsed back into IdP metadata.
     pub fn from_config(
         config: &IdpMetadataConfig,
@@ -201,6 +204,7 @@ impl IdentityProvider {
             .name_id_format
             .or_else(|| self.setting.default_name_id_format());
         if rendering.custom.is_none() {
+            validate_name_id_format(name_id_format)?;
             validate_issued_name_id_length(name_id_format, &user.name_id)?;
         }
         if rendering.custom.is_none() && !has_custom_context {
@@ -320,7 +324,8 @@ impl IdentityProvider {
     ///
     /// Returns an error if `binding` is unsupported, the SP metadata has no ACS
     /// endpoint for `binding`, the persistent or transient `user.name_id` is
-    /// longer than 256 characters and `options.custom` is not set, response
+    /// longer than 256 characters or the first configured NameID format is not
+    /// an absolute URI reference and `options.custom` is not set, response
     /// template rendering fails, the IdP
     /// signing key or certificate configuration is missing or invalid, the
     /// no crypto provider feature is enabled, XML signature construction

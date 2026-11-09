@@ -2,8 +2,21 @@ use crate::config::NameIdFormat;
 use crate::constants::name_id_format;
 use crate::entity::generate_id;
 use crate::error::SamlError;
+use crate::xml::any_uri::is_absolute_uri_reference;
 
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
+
+/// Reject a NameID format that is written but is not an absolute URI
+/// reference. `None` is an omitted format and passes.
+pub(crate) fn validate_name_id_format(format_uri: Option<&str>) -> Result<(), SamlError> {
+    match format_uri {
+        Some(format) if !is_absolute_uri_reference(format) => Err(SamlError::Invalid(
+            "a NameID format must be an absolute URI reference with at least one non-whitespace character"
+                .into(),
+        )),
+        Some(_) | None => Ok(()),
+    }
+}
 
 /// Reject a persistent or transient `NameID` value longer than 256
 /// characters. Other formats have no length limit.
@@ -34,7 +47,8 @@ pub(crate) fn validate_issued_name_id_length(
 /// [`Self::persistent`] create the identifiers an identity provider issues in
 /// those two formats. [`Self::new`] takes any value in any format. An identity
 /// provider response rejects a persistent or transient value longer than 256
-/// characters, whichever constructor created it.
+/// characters, whichever constructor created it. A message that writes the
+/// `NameId` rejects a format that is not an absolute URI reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameId {
     value: String,

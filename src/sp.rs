@@ -13,6 +13,7 @@ use crate::flow::{
 };
 use crate::idp::IdentityProvider;
 use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataConfig};
+use crate::model::validate_name_id_format;
 use crate::template::{replace_tags_by_optional_value, LOGIN_REQUEST_TEMPLATE};
 use crate::xml::write::XmlWriter;
 use std::time::SystemTime;
@@ -216,13 +217,14 @@ impl ServiceProvider {
     ///
     /// # Errors
     ///
-    /// Returns an error if the generated metadata cannot be parsed back into SP
+    /// Returns an error if a configured `<NameIDFormat>` is not an absolute URI
+    /// reference, or if the generated metadata cannot be parsed back into SP
     /// metadata, including invalid endpoint or certificate declarations.
     pub fn from_config(
         config: &SpMetadataConfig,
         setting: EntitySetting,
     ) -> Result<Self, SamlError> {
-        Self::from_metadata(&generate_sp_metadata(config), setting)
+        Self::from_metadata(&generate_sp_metadata(config)?, setting)
     }
 
     /// The SP metadata XML.
@@ -249,8 +251,9 @@ impl ServiceProvider {
     ///
     /// Returns an error if SP and IdP signing requirements conflict, the IdP
     /// metadata has no SSO endpoint for `binding`, the SP metadata has no ACS
-    /// endpoint for the requested response binding, or `binding` is unsupported
-    /// for AuthnRequest generation. When signing is required, key loading,
+    /// endpoint for the requested response binding, `binding` is unsupported
+    /// for AuthnRequest generation, or the first configured NameID format is
+    /// not an absolute URI reference and `custom` is not set. When signing is required, key loading,
     /// missing `private_key`/`signing_cert`, unsupported crypto features, XML
     /// signature construction, and detached-signature construction errors are
     /// propagated.
@@ -274,7 +277,8 @@ impl ServiceProvider {
     /// Returns an error if SP and IdP signing requirements conflict, the IdP
     /// metadata has no SSO endpoint for `binding`, the SP metadata has no ACS
     /// endpoint for `options.response_binding` when ACS index mode is not used,
-    /// or `binding` is unsupported. When signing is required, key loading,
+    /// `binding` is unsupported, or the first configured NameID format is not
+    /// an absolute URI reference and `options.custom` is not set. When signing is required, key loading,
     /// missing `private_key`/`signing_cert`, unsupported crypto features, XML
     /// signature construction, and detached-signature construction errors are
     /// propagated.
@@ -344,19 +348,10 @@ impl ServiceProvider {
                 let acs_index = options
                     .assertion_consumer_service_index
                     .map(|index| index.to_string());
-                let name_id_format = self
-                    .setting
-                    .name_id_format
-                    .first()
-                    .cloned()
-                    .unwrap_or_default();
-                let name_id_format_attr = if producer.follows() && name_id_format.is_empty() {
-                    None
-                } else {
-                    Some(name_id_format.as_str())
-                };
+                let name_id_format = self.setting.default_name_id_format();
+                validate_name_id_format(name_id_format)?;
                 let allow_create = if producer.follows()
-                    && name_id_format == crate::constants::name_id_format::TRANSIENT
+                    && name_id_format == Some(crate::constants::name_id_format::TRANSIENT)
                 {
                     AllowCreateAttribute::Omit
                 } else {
@@ -376,7 +371,7 @@ impl ServiceProvider {
                         assertion_consumer_service_index: options.assertion_consumer_service_index,
                         is_passive: None,
                         issuer: &issuer,
-                        name_id_format: name_id_format_attr,
+                        name_id_format,
                         allow_create,
                     })
                 } else {
@@ -396,7 +391,7 @@ impl ServiceProvider {
                             ("AssertionConsumerServiceURL", acs_url),
                             ("AssertionConsumerServiceIndex", acs_index),
                             ("Issuer", Some(self.entity_id())),
-                            ("NameIDFormat", Some(name_id_format)),
+                            ("NameIDFormat", name_id_format.map(str::to_string)),
                             ("AllowCreate", Some(self.setting.allow_create.to_string())),
                         ],
                     )

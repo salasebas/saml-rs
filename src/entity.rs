@@ -83,7 +83,11 @@ pub struct EntitySetting {
     pub want_logout_request_signed: bool,
     /// Requires signed LogoutResponse.
     pub want_logout_response_signed: bool,
-    /// Supported NameID formats.
+    /// Supported NameID formats. The first is the default format of
+    /// generated messages.
+    ///
+    /// A message or metadata that writes a format rejects one that is not a
+    /// non-blank absolute URI reference. An empty list writes no format.
     pub name_id_format: Vec<String>,
     /// Signing private key (PEM).
     pub private_key: Option<String>,
@@ -290,12 +294,10 @@ impl Default for SignatureConfig {
 }
 
 impl EntitySetting {
-    /// The first configured NameID format, when it is not empty.
+    /// The first configured NameID format. `None` when no format is
+    /// configured.
     pub(crate) fn default_name_id_format(&self) -> Option<&str> {
-        self.name_id_format
-            .first()
-            .map(String::as_str)
-            .filter(|format| !format.trim().is_empty())
+        self.name_id_format.first().map(String::as_str)
     }
 }
 

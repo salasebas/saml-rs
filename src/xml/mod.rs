@@ -1,5 +1,6 @@
 //! XML parsing and field extraction over quick-xml.
 
+pub(crate) mod any_uri;
 mod date_time;
 pub mod dom;
 pub mod extract;

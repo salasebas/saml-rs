@@ -3407,6 +3407,107 @@ fn typed_session_authority_logout_request_without_subject_format_sends_configure
     Ok(())
 }
 
+fn custom_format_subject(format: &str) -> Result<LogoutSubject, SamlError> {
+    Ok(LogoutSubject::with_session_index(
+        NameId::new(
+            "alice@example.com",
+            Some(NameIdFormat::Custom(format.to_string())),
+        ),
+        SessionIndex::try_new("_session123")?,
+    ))
+}
+
+#[test]
+fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // SAML Core §1.3.2 binds the writer of the LogoutRequest, in either role.
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    for format in ["", "   ", "local-format", "urn:", "urn:%zz"] {
+        for options in [StartSlo::post as fn() -> StartSlo, || {
+            StartSlo::post().apply_single_logout_generation_rules()
+        }] {
+            for result in [
+                idp.start_slo(&sp_descriptor, custom_format_subject(format)?, options()),
+                sp.start_slo(&idp_descriptor, custom_format_subject(format)?, options()),
+            ] {
+                match result {
+                    Err(SamlError::Invalid(message))
+                        if message.contains("absolute URI reference") => {}
+                    other => return Err(format!("{format:?}: unexpected {other:?}").into()),
+                }
+            }
+        }
+    }
+
+    // A NameID without a format is sent in the first configured format.
+    let mut raw_idp = idp.raw_identity_provider().clone();
+    raw_idp.setting.name_id_format = vec!["local-format".into()];
+    let raw_sp = sp.raw_service_provider();
+    let result = saml_rs::raw::logout::create_logout_request(
+        &raw_idp.setting,
+        &raw_idp.metadata,
+        &raw_sp.metadata,
+        Binding::Post,
+        &saml_rs::raw::User::new("alice@example.com"),
+        None,
+        false,
+    );
+    match result {
+        Err(SamlError::Invalid(message)) if message.contains("absolute URI reference") => Ok(()),
+        other => Err(format!("unexpected {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_logout_request_keeps_whitespace_in_a_name_id_format_under_generation_rules(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // `xs:anyURI` collapses XML whitespace, and XLink escaping maps an inner
+    // space to %20, so these are absolute URI references.
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let template_idp = Saml::idp(idp_config_with_issuance(
+        Duration::from_secs(300),
+        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
+        credentials(),
+        IdpValidationPolicy::compatibility(),
+    )?)?;
+    for format in [
+        "urn:example:a\tb",
+        "urn:example:a\nb",
+        "urn:example:a\r\nb",
+        " urn:example:c ",
+    ] {
+        for started in [
+            template_idp.start_slo(
+                &sp_descriptor,
+                custom_format_subject(format)?,
+                StartSlo::post().apply_single_logout_generation_rules(),
+            )?,
+            idp.start_slo(
+                &sp_descriptor,
+                custom_format_subject(format)?,
+                StartSlo::post().apply_single_logout_generation_rules(),
+            )?,
+            sp.start_slo(
+                &idp_descriptor,
+                custom_format_subject(format)?,
+                StartSlo::post().apply_single_logout_generation_rules(),
+            )?,
+        ] {
+            let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
+            let (_, attrs) = logout_request_name_id(&xml)?;
+            let written = attrs
+                .iter()
+                .find(|(name, _)| name == "Format")
+                .map(|(_, value)| value.split_whitespace().collect::<Vec<_>>())
+                .ok_or("missing Format")?;
+            assert_eq!(written, format.split_whitespace().collect::<Vec<_>>());
+        }
+    }
+    Ok(())
+}
+
 fn assertion_name_id(xml: &str) -> Result<NameIdView, Box<dyn std::error::Error>> {
     let document = parse(xml)?;
     let name_id = document

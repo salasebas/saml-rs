@@ -6,6 +6,7 @@ use super::{
 use crate::constants::Binding;
 use crate::entity::{generate_id, now_iso8601};
 use crate::error::SamlError;
+use crate::model::validate_name_id_format;
 
 pub(crate) struct PaosAuthnRequestInput<'a> {
     pub(crate) destination: &'a str,
@@ -25,14 +26,9 @@ impl ServiceProvider {
         &self,
         input: &PaosAuthnRequestInput<'_>,
     ) -> Result<(String, String), SamlError> {
-        let name_id_format = self
-            .setting
-            .name_id_format
-            .first()
-            .cloned()
-            .unwrap_or_default();
-        let name_id_format_attr = (!name_id_format.is_empty()).then_some(name_id_format.as_str());
-        let allow_create = if name_id_format == crate::constants::name_id_format::TRANSIENT {
+        let name_id_format = self.setting.default_name_id_format();
+        validate_name_id_format(name_id_format)?;
+        let allow_create = if name_id_format == Some(crate::constants::name_id_format::TRANSIENT) {
             AllowCreateAttribute::Omit
         } else {
             AllowCreateAttribute::Include(self.setting.allow_create)
@@ -50,7 +46,7 @@ impl ServiceProvider {
             assertion_consumer_service_index: None,
             is_passive: input.is_passive,
             issuer: &issuer,
-            name_id_format: name_id_format_attr,
+            name_id_format,
             allow_create,
         });
         if !input.sign {

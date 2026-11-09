@@ -3,7 +3,7 @@
 use crate::constants::{name_id_format, namespace};
 use crate::entity::{now_iso8601, EntitySetting};
 use crate::error::SamlError;
-use crate::model::{validate_issued_name_id_length, NameId, Status};
+use crate::model::{validate_issued_name_id_length, validate_name_id_format, NameId, Status};
 use crate::template::validate_tag_prefix;
 use crate::xml::write::XmlWriter;
 
@@ -87,6 +87,7 @@ pub(crate) fn render_request(
             "name identifier management is not used with a transient NameID".into(),
         ));
     }
+    validate_name_id_format(format)?;
     validate_issued_name_id_length(format, name_id.value())?;
     if let (Requester::IdentityProvider, NameIdChange::NewId(value)) =
         (request.requester, request.change)

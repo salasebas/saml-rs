@@ -388,6 +388,27 @@ fn a_persistent_value_longer_than_256_characters_is_not_sent() -> TestResult {
 }
 
 #[test]
+fn a_name_id_format_that_is_not_an_absolute_uri_is_not_sent() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    for format in ["", "local-format", "urn:"] {
+        let current = NameId::new("current-value", Some(NameIdFormat::Custom(format.into())));
+        let result = idp.start_name_id_management(
+            &sp,
+            &current,
+            &NameIdChange::Terminate,
+            IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            authenticated(),
+        );
+        assert!(
+            matches!(&result, Err(SamlError::Invalid(message)) if message.contains("absolute URI reference")),
+            "{format:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn sp_initiated_new_id_is_received_and_answered() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;

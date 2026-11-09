@@ -54,8 +54,10 @@ impl Saml<Sp> {
     /// Returns [`SamlError::ProtocolProfile`] for a transient identifier, and
     /// for an `http` identity-provider endpoint unless
     /// [`StartNameIdManagement::allow_http_name_id_management`] is selected.
-    /// Returns another [`SamlError`] when relay state is invalid, the signing
-    /// key is missing, or no crypto provider is enabled.
+    /// Returns [`SamlError::Invalid`] when the NameID format is not an
+    /// absolute URI reference. Returns another [`SamlError`] when relay state
+    /// is invalid, the signing key is missing, or no crypto provider is
+    /// enabled.
     ///
     /// # Examples
     ///
@@ -231,7 +233,8 @@ impl Saml<Idp> {
     /// for an `http` service-provider endpoint unless
     /// [`StartNameIdManagement::allow_http_name_id_management`] is selected.
     /// Returns [`SamlError::Invalid`] when a persistent value is longer than
-    /// 256 characters. Returns another [`SamlError`] when relay state is
+    /// 256 characters or the NameID format is not an absolute URI reference.
+    /// Returns another [`SamlError`] when relay state is
     /// invalid, the signing key is missing, or no crypto provider is
     /// enabled.
     ///

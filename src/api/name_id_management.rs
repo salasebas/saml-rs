@@ -43,7 +43,8 @@ impl Saml<Idp> {
     /// metadata has none. Returns [`SamlError::SoapChannelProtection`] when
     /// `channel` does not authenticate both parties and protect integrity.
     /// Returns [`SamlError::Invalid`] when a persistent or transient new value
-    /// is longer than 256 characters. With
+    /// is longer than 256 characters, or when the NameID format is not an
+    /// absolute URI reference. With
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`], returns
     /// [`SamlError::MissingMetadata`] when the service provider publishes no
     /// encryption certificate.

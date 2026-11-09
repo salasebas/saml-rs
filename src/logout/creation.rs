@@ -3,7 +3,7 @@ use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, User};
 use crate::error::SamlError;
 use crate::metadata::Metadata;
-use crate::model::Status;
+use crate::model::{validate_name_id_format, Status};
 use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefix};
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
@@ -26,12 +26,13 @@ use super::signing::sign_browser_message;
 /// # Errors
 ///
 /// Returns an error if `target_meta` has no SLO endpoint for `binding`,
-/// `binding` is unsupported, the configured logout template cannot represent
-/// the supplied subject, configured XML tag prefixes are invalid, default XML
-/// rendering fails, or Redirect DEFLATE encoding fails. When `want_signed` is
-/// true, missing or invalid signing keys/certificates, unavailable crypto
-/// support, XML signature construction, and detached-signature construction
-/// errors are propagated.
+/// `binding` is unsupported, the first NameID format configured in
+/// `init_setting` is not an absolute URI reference, the configured logout
+/// template cannot represent the supplied subject, configured XML tag prefixes
+/// are invalid, default XML rendering fails, or Redirect DEFLATE encoding
+/// fails. When `want_signed` is true, missing or invalid signing
+/// keys/certificates, unavailable crypto support, XML signature construction,
+/// and detached-signature construction errors are propagated.
 pub fn create_logout_request(
     init_setting: &EntitySetting,
     init_meta: &Metadata,
@@ -203,6 +204,7 @@ fn create_logout_request_for_subject_inner(
     } = input;
 
     reject_soap_relay_state(binding, relay_state)?;
+    validate_name_id_format(name_id_format)?;
     if matches!(validation, LogoutRequestValidation::SessionParticipant)
         && subject.session_indexes.is_empty()
     {
