@@ -34,6 +34,9 @@ impl Saml<Sp> {
     /// missing `SessionIndex`, an `http` peer endpoint unless
     /// [`StartSlo::allow_http_single_logout`] is selected, and rejects the
     /// samlify-port [`LogoutSigning::DoNotSignForCompatibility`].
+    /// [`StartSlo::identifier_encryption`] returns
+    /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
+    /// certificate.
     ///
     /// # Examples
     ///
@@ -82,6 +85,11 @@ impl Saml<Sp> {
     /// the receiving URL is unpublished, multiple local endpoints have no
     /// explicit receiving URL, or replay
     /// validation detects a duplicate or unusable expiration.
+    ///
+    /// An `<EncryptedID>` is decrypted with the configured decryption key and
+    /// returned as the request `NameID`. It stays unread, and the request has
+    /// no `NameID`, when no decryption key is configured or when neither a
+    /// verified signature nor an authenticated SOAP channel covers it.
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
@@ -222,6 +230,9 @@ impl Saml<Idp> {
     /// configured issuance lifetime cannot be added to the current issue
     /// instant. [`StartSlo::apply_single_logout_generation_rules`] also
     /// rejects [`LogoutSigning::DoNotSignForCompatibility`].
+    /// [`StartSlo::identifier_encryption`] returns
+    /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
+    /// certificate.
     ///
     /// # Examples
     ///
@@ -271,7 +282,8 @@ impl Saml<Idp> {
     /// receiving `SingleLogoutService` location, the receiving URL is
     /// unpublished, multiple local endpoints have
     /// no explicit receiving URL, or replay validation detects
-    /// a duplicate or unusable expiration.
+    /// a duplicate or unusable expiration. An `<EncryptedID>` is processed as
+    /// on the service provider `receive_slo`.
     ///
     /// # Examples
     ///
@@ -517,6 +529,7 @@ fn start_slo_impl(
         issue_instant: &issue_instant,
         not_on_or_after: not_on_or_after.as_deref(),
         validation: request_validation,
+        name_id_encryption: options.identifier_encryption,
     })?;
     let outbound = Outbound::<LogoutRequest>::try_from(created.context)?;
     let mut pending = PendingLogoutRequest::try_new(

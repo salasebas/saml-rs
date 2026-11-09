@@ -1,4 +1,5 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
+use crate::config::IdentifierEncryptionPolicy;
 use crate::model::{Attributes, RelayStateParam, Status};
 use crate::sp::WebBrowserSsoProducer;
 
@@ -327,6 +328,7 @@ pub struct StartSlo {
     pub(super) binding: LogoutBinding,
     pub(super) relay_state: RelayStateParam,
     pub(super) signing: LogoutSigning,
+    pub(super) identifier_encryption: IdentifierEncryptionPolicy,
     rules: SingleLogoutRules,
 }
 
@@ -369,6 +371,7 @@ impl StartSlo {
             binding,
             relay_state: RelayStateParam::absent(),
             signing: LogoutSigning::FollowLocalPolicy,
+            identifier_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
             rules: SingleLogoutRules::default(),
         }
     }
@@ -382,6 +385,19 @@ impl StartSlo {
     /// Set logout request signing behavior.
     pub fn signing(mut self, signing: LogoutSigning) -> Self {
         self.signing = signing;
+        self
+    }
+
+    /// Set whether the subject `<NameID>` is sent as an `<EncryptedID>`.
+    ///
+    /// The default is [`IdentifierEncryptionPolicy::PlaintextIdentifiers`].
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`] encrypts the
+    /// `<NameID>` for the first peer metadata `KeyDescriptor` with
+    /// `use="encryption"`, with the configured data and key encryption
+    /// algorithms, before the request is signed. A peer without that key
+    /// returns [`crate::SamlError::MissingMetadata`].
+    pub fn identifier_encryption(mut self, policy: IdentifierEncryptionPolicy) -> Self {
+        self.identifier_encryption = policy;
         self
     }
 

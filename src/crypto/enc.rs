@@ -197,6 +197,14 @@ const ENCRYPTED_ATTRIBUTE: EncryptedElementKind = EncryptedElementKind {
     unsupported_plaintext: &[],
 };
 
+/// SAML Core §3.7.1: the principal of a `<LogoutRequest>`.
+const LOGOUT_REQUEST_ENCRYPTED_ID: EncryptedElementKind = EncryptedElementKind {
+    parent: "LogoutRequest",
+    plaintext: "NameID",
+    encrypted: "EncryptedID",
+    unsupported_plaintext: &["BaseID"],
+};
+
 fn selected_kinds(selection: AssertionElementEncryption) -> Vec<EncryptedElementKind> {
     let mut kinds = Vec::new();
     match selection.identifiers {
@@ -224,6 +232,17 @@ fn assertion_children<'d>(
             .element(*child)
             .is_some_and(|element| element.matches_name_ns(namespace::ASSERTION, local_name))
     })
+}
+
+/// Each `<saml:{local_name}>` child of the document element.
+fn root_children(
+    document: &XmlDocument<'_>,
+    local_name: &'static str,
+) -> Result<Vec<NodeId>, SamlError> {
+    let root = document
+        .document_element()
+        .ok_or_else(|| SamlError::Xml("no document element".into()))?;
+    Ok(assertion_children(document, root, local_name).collect())
 }
 
 /// Each `<Assertion>` of `xml`: the document element itself, or each
@@ -320,16 +339,82 @@ pub(crate) fn encrypt_assertion_elements(
     let mut replacements = Vec::new();
     for kind in selected_kinds(selection) {
         for element in assertion_elements(&document, kind.parent, kind.plaintext)? {
-            let plaintext = namespace_complete(&document, element)?;
-            let encrypted_data = encrypted_data_xml(&plaintext, encrypt_cert, data_alg, key_alg)?;
-            let wrapper = qualified_name(&document, element, kind.encrypted);
-            replacements.push((
-                node_range(&document, element)?,
-                format!("<{wrapper}>{encrypted_data}</{wrapper}>"),
-            ));
+            replacements.push(encrypted_element(
+                &document,
+                element,
+                kind,
+                encrypt_cert,
+                data_alg,
+                key_alg,
+            )?);
         }
     }
     Ok(splice(xml, replacements))
+}
+
+/// Replace the `<NameID>` of the `<LogoutRequest>` in `xml` with an
+/// `<EncryptedID>` for the holder of `encrypt_cert`, as
+/// [`encrypt_assertion_elements`] does for an assertion `<Subject>`.
+pub(crate) fn encrypt_logout_request_name_id(
+    xml: &str,
+    encrypt_cert: &str,
+    data_alg: &str,
+    key_alg: &str,
+) -> Result<String, SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    let document = parse_xml_document(xml)?;
+    let [name_id] = root_children(&document, "NameID")?[..] else {
+        return Err(SamlError::ProtocolProfile(
+            "LogoutRequest must carry one NameID to encrypt".into(),
+        ));
+    };
+    let replacement = encrypted_element(
+        &document,
+        name_id,
+        LOGOUT_REQUEST_ENCRYPTED_ID,
+        encrypt_cert,
+        data_alg,
+        key_alg,
+    )?;
+    Ok(splice(xml, vec![replacement]))
+}
+
+/// The source range of `element` and the `kind.encrypted` wrapper that
+/// replaces it. The wrapper takes the prefix of `element`, and keeps the
+/// declaration of that prefix when `element` itself declares it. The encrypted
+/// element is its inclusive canonical form.
+fn encrypted_element(
+    document: &XmlDocument<'_>,
+    element: NodeId,
+    kind: EncryptedElementKind,
+    encrypt_cert: &str,
+    data_alg: &str,
+    key_alg: &str,
+) -> Result<(Range<usize>, String), SamlError> {
+    let plaintext = namespace_complete(document, element)?;
+    let encrypted_data = encrypted_data_xml(&plaintext, encrypt_cert, data_alg, key_alg)?;
+    let wrapper = qualified_name(document, element, kind.encrypted);
+    let declaration = match own_prefix_declaration(document, element) {
+        Some("") => format!(" xmlns=\"{}\"", namespace::ASSERTION),
+        Some(prefix) => format!(" xmlns:{prefix}=\"{}\"", namespace::ASSERTION),
+        None => String::new(),
+    };
+    Ok((
+        node_range(document, element)?,
+        format!("<{wrapper}{declaration}>{encrypted_data}</{wrapper}>"),
+    ))
+}
+
+/// The prefix of the assertion-namespace `element` when `element` itself
+/// declares it. The empty prefix is the default namespace.
+fn own_prefix_declaration<'d>(document: &'d XmlDocument<'_>, element: NodeId) -> Option<&'d str> {
+    let element = document.element(element)?;
+    let prefix = element.name.prefix.as_deref().unwrap_or("");
+    element
+        .namespace_declarations
+        .iter()
+        .any(|(declared, _)| declared == prefix)
+        .then_some(prefix)
 }
 
 /// Decrypt the selected children of each assertion in `xml` with `enc_key`.
@@ -365,22 +450,75 @@ pub(crate) fn decrypt_assertion_elements(
             });
         }
         for element in assertion_elements(&document, kind.parent, kind.encrypted)? {
-            let peer_keys = require_encrypted_element_children(&document, element, kind)?;
-            // The whole wrapper is decrypted so that an `EncryptedKey` beside
-            // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
-            let wrapper = String::from_utf8(namespace_complete(&document, element)?)
-                .map_err(|error| SamlError::Xml(error.to_string()))?;
-            let mut manager = KeysManager::new();
-            manager.add_key(enc_key.clone());
-            let ctx = EncContext::new(manager);
-            let decrypted = decrypt(&ctx, &wrapper).map_err(crypto_err)?;
-            let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
-            replacements.push((node_range(&document, element)?, plaintext.to_string()));
+            replacements.push(decrypted_element(
+                &document, element, kind, enc_key, limits,
+            )?);
         }
     }
     let decrypted = splice(xml, replacements);
     limits.check_input_bytes(decrypted.len())?;
     Ok(decrypted)
+}
+
+/// Replace the `<EncryptedID>` of the `<LogoutRequest>` in `xml` with the
+/// `<NameID>` it carries, decrypted with `enc_key`.
+///
+/// # Errors
+///
+/// Returns [`SamlError::ProtocolProfile`] unless the request carries exactly
+/// one `<BaseID>`, `<NameID>`, or `<EncryptedID>`, and that one is an
+/// `<EncryptedID>`. Its plaintext follows [`decrypt_assertion_elements`].
+pub(crate) fn decrypt_logout_request_encrypted_id(
+    xml: &str,
+    enc_key: &Key,
+    options: AssertionDecryptionOptions,
+    limits: XmlLimits,
+) -> Result<String, SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    require_software_rsa_opt_in(options)?;
+    dom::parse_with_limits(xml, limits)?;
+    let document = parse_xml_document(xml)?;
+    let mut identifiers = Vec::new();
+    for name in ["BaseID", "NameID", "EncryptedID"] {
+        identifiers.extend(root_children(&document, name)?);
+    }
+    let encrypted_ids = root_children(&document, "EncryptedID")?;
+    let ([_], [encrypted_id]) = (&identifiers[..], &encrypted_ids[..]) else {
+        return Err(SamlError::ProtocolProfile(
+            "LogoutRequest requires one BaseID, NameID, or EncryptedID".into(),
+        ));
+    };
+    let replacement = decrypted_element(
+        &document,
+        *encrypted_id,
+        LOGOUT_REQUEST_ENCRYPTED_ID,
+        enc_key,
+        limits,
+    )?;
+    let decrypted = splice(xml, vec![replacement]);
+    limits.check_input_bytes(decrypted.len())?;
+    Ok(decrypted)
+}
+
+/// The source range of the encrypted `element` and the plaintext it carries.
+fn decrypted_element(
+    document: &XmlDocument<'_>,
+    element: NodeId,
+    kind: EncryptedElementKind,
+    enc_key: &Key,
+    limits: XmlLimits,
+) -> Result<(Range<usize>, String), SamlError> {
+    let peer_keys = require_encrypted_element_children(document, element, kind)?;
+    // The whole wrapper is decrypted so that an `EncryptedKey` beside
+    // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
+    let wrapper = String::from_utf8(namespace_complete(document, element)?)
+        .map_err(|error| SamlError::Xml(error.to_string()))?;
+    let mut manager = KeysManager::new();
+    manager.add_key(enc_key.clone());
+    let ctx = EncContext::new(manager);
+    let decrypted = decrypt(&ctx, &wrapper).map_err(crypto_err)?;
+    let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
+    Ok((node_range(document, element)?, plaintext.to_string()))
 }
 
 /// `EncryptedElementType`: one `EncryptedData`, then any `EncryptedKey`.
@@ -710,6 +848,32 @@ mod tests {
                 feature = "crypto-rustcrypto"
             ),
         }
+    }
+
+    #[test]
+    fn encrypted_id_declares_the_namespace_of_its_prefix() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let request = concat!(
+            r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" "#,
+            r#"ID="_r" Version="2.0" IssueInstant="2026-01-01T00:00:00Z">"#,
+            r#"<n:Issuer xmlns:n="urn:oasis:names:tc:SAML:2.0:assertion">idp</n:Issuer>"#,
+            r#"<n:NameID xmlns:n="urn:oasis:names:tc:SAML:2.0:assertion">alice</n:NameID>"#,
+            r#"</samlp:LogoutRequest>"#,
+        );
+        let encrypted = encrypt_logout_request_name_id(request, SP_CERT, AES_256, RSA_OAEP_MGF1P)?;
+        let document = uppsala::parse(&encrypted)?;
+        if root_children(&document, "EncryptedID")?.len() != 1 {
+            return Err(format!("no assertion-namespace EncryptedID: {encrypted}").into());
+        }
+        let key = load_private_key(SP_PRIVKEY, None)?;
+        let decrypted = decrypt_logout_request_encrypted_id(
+            &encrypted,
+            &key,
+            software_rsa_test_options(),
+            XmlLimits::default(),
+        )?;
+        assert!(decrypted.contains(">alice</n:NameID>"), "{decrypted}");
+        Ok(())
     }
 
     #[cfg(feature = "crypto-rustcrypto")]

@@ -320,12 +320,16 @@ pub enum AssertionEncryptionPolicy {
     EncryptAssertions,
 }
 
-/// Whether the assertion `<NameID>` is carried as an `<EncryptedID>`.
+/// Whether a `<NameID>` is carried as an `<EncryptedID>`.
 ///
-/// An identity provider encrypts the `<NameID>` of each assertion `<Subject>`
-/// in a generated response. A service provider decrypts each `<EncryptedID>`
-/// after the signature that covers it verifies, and rejects a response whose
-/// assertion `<Subject>` carries a plaintext `<NameID>`.
+/// In [`XmlEncryptionPolicy::identifiers`], an identity provider encrypts the
+/// `<NameID>` of each assertion `<Subject>` in a generated response. A service
+/// provider decrypts each `<EncryptedID>` after the signature that covers it
+/// verifies, and rejects a response whose assertion `<Subject>` carries a
+/// plaintext `<NameID>`.
+///
+/// [`crate::StartSlo::identifier_encryption`] selects it for one
+/// `LogoutRequest`, on either role.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum IdentifierEncryptionPolicy {
     /// Do not encrypt identifiers.

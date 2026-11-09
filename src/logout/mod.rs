@@ -2,6 +2,7 @@
 
 mod bindings;
 mod creation;
+mod encrypted_id;
 mod parsing;
 mod rendering;
 mod signing;
