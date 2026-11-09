@@ -28,48 +28,51 @@ fn base_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new("entityID", &["EntityDescriptor"]).attrs(&["entityID"]),
         ExtractorField::new(
-            "sharedCertificate",
-            &[
-                "EntityDescriptor",
-                "~SSODescriptor",
-                "KeyDescriptor",
-                "KeyInfo",
-                "X509Data",
-                "X509Certificate",
-            ],
-        ),
-        ExtractorField::new(
-            "certificate",
-            &["EntityDescriptor", "~SSODescriptor", "KeyDescriptor"],
-        )
-        .aggregate(&["use"], &["KeyInfo", "X509Data", "X509Certificate"]),
-        ExtractorField::new(
             "nameIDFormat",
             &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
         ),
     ]
 }
 
-/// The role descriptor whose `SingleLogoutService` endpoints are read.
+/// The SSO role descriptor whose `KeyDescriptor` and `SingleLogoutService`
+/// elements are read.
 #[derive(Clone, Copy)]
-enum SingleLogoutRole {
-    AnySsoDescriptor,
+enum SsoDescriptorRole {
+    Any,
     ServiceProvider,
     IdentityProvider,
 }
 
-impl SingleLogoutRole {
-    fn field(self) -> ExtractorField {
+impl SsoDescriptorRole {
+    fn fields(self) -> Vec<ExtractorField> {
         let descriptor = match self {
-            Self::AnySsoDescriptor => "~SSODescriptor",
+            Self::Any => "~SSODescriptor",
             Self::ServiceProvider => "SPSSODescriptor",
             Self::IdentityProvider => "IDPSSODescriptor",
         };
-        ExtractorField::new(
-            "singleLogoutService",
-            &["EntityDescriptor", descriptor, "SingleLogoutService"],
-        )
-        .with_context()
+        vec![
+            ExtractorField::new(
+                "sharedCertificate",
+                &[
+                    "EntityDescriptor",
+                    descriptor,
+                    "KeyDescriptor",
+                    "KeyInfo",
+                    "X509Data",
+                    "X509Certificate",
+                ],
+            ),
+            ExtractorField::new(
+                "certificate",
+                &["EntityDescriptor", descriptor, "KeyDescriptor"],
+            )
+            .aggregate(&["use"], &["KeyInfo", "X509Data", "X509Certificate"]),
+            ExtractorField::new(
+                "singleLogoutService",
+                &["EntityDescriptor", descriptor, "SingleLogoutService"],
+            )
+            .with_context(),
+        ]
     }
 }
 
@@ -217,9 +220,9 @@ impl Metadata {
 
     /// Parse `xml` with explicit XML parser resource limits.
     ///
-    /// `SingleLogoutService` endpoints are read from every SSO role descriptor
-    /// of the entity. [`SpMetadata`] and [`IdpMetadata`] read only their own
-    /// role's endpoints.
+    /// `KeyDescriptor` certificates and `SingleLogoutService` endpoints are
+    /// read from every SSO role descriptor of the entity. [`SpMetadata`] and
+    /// [`IdpMetadata`] read only their own role's.
     ///
     /// # Errors
     ///
@@ -230,12 +233,12 @@ impl Metadata {
         extra: Vec<ExtractorField>,
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
-        Self::parse_role_with_limits(xml, SingleLogoutRole::AnySsoDescriptor, extra, limits)
+        Self::parse_role_with_limits(xml, SsoDescriptorRole::Any, extra, limits)
     }
 
     fn parse_role_with_limits(
         xml: &str,
-        single_logout_role: SingleLogoutRole,
+        role: SsoDescriptorRole,
         extra: Vec<ExtractorField>,
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
@@ -252,7 +255,7 @@ impl Metadata {
         }
 
         let mut fields = base_fields();
-        fields.push(single_logout_role.field());
+        fields.extend(role.fields());
         fields.extend(extra);
         let extraction_xml = entity_descriptor_xml(xml, &roots)?;
         let mut meta = extract_with_limits(extraction_xml, &fields, limits)?;
@@ -680,6 +683,33 @@ mod tests {
                 "https://dual.example.com/sp/slo".to_string(),
             ]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn key_descriptors_come_from_the_parsed_role() -> Result<(), Box<dyn std::error::Error>> {
+        let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="https://dual.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <KeyDescriptor use="signing"><ds:KeyInfo><ds:X509Data><ds:X509Certificate>IDP-SIGNING</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>
+    <KeyDescriptor use="encryption"><ds:KeyInfo><ds:X509Data><ds:X509Certificate>IDP-ENCRYPTION</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/idp/sso"/>
+  </IDPSSODescriptor>
+  <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <KeyDescriptor><ds:KeyInfo><ds:X509Data><ds:X509Certificate>SP-SHARED</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>
+    <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/sp/acs" index="0"/>
+  </SPSSODescriptor>
+</EntityDescriptor>"#;
+        let idp = IdpMetadata::from_xml(xml)?;
+        assert_eq!(idp.x509_certificates(CertUse::Signing), vec!["IDP-SIGNING"]);
+        assert_eq!(
+            idp.x509_certificates(CertUse::Encryption),
+            vec!["IDP-ENCRYPTION"]
+        );
+
+        let sp = SpMetadata::from_xml(xml)?;
+        assert_eq!(sp.x509_certificates(CertUse::Signing), vec!["SP-SHARED"]);
+        assert_eq!(sp.x509_certificates(CertUse::Encryption), vec!["SP-SHARED"]);
+
         Ok(())
     }
 
