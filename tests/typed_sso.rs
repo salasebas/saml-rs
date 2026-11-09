@@ -143,6 +143,7 @@ fn sp_config_with_default_response_binding(
     let (post, simple_sign) = match binding {
         SsoResponseBinding::Post => (post.mark_default(), simple_sign),
         SsoResponseBinding::SimpleSign => (post, simple_sign.mark_default()),
+        SsoResponseBinding::Artifact => return Err(SamlError::UndefinedBinding),
     };
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(post)

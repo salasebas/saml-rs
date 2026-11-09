@@ -98,8 +98,8 @@ impl Saml<Idp> {
 
     /// Initiate IdP-initiated SSO with an HTTP-Artifact.
     ///
-    /// The artifact goes to the service provider's default HTTP-Artifact
-    /// assertion consumer, or to its first one when none is default.
+    /// The artifact goes to the service provider's default assertion
+    /// consumer, which must use HTTP-Artifact.
     ///
     /// # Errors
     ///

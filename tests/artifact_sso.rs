@@ -57,6 +57,22 @@ fn credentials() -> Credentials {
 }
 
 fn parties() -> Result<Parties, SamlError> {
+    parties_with_consumers(
+        AcsEndpoint::post(SP_ACS_POST)?.mark_default(),
+        AcsEndpoint::artifact(SP_ACS_ARTIFACT)?,
+    )
+}
+
+/// Parties whose service provider marks the HTTP-Artifact consumer default,
+/// so an unsolicited artifact response can be sent to it.
+fn unsolicited_parties() -> Result<Parties, SamlError> {
+    parties_with_consumers(
+        AcsEndpoint::post(SP_ACS_POST)?,
+        AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.mark_default(),
+    )
+}
+
+fn parties_with_consumers(post: AcsEndpoint, artifact: AcsEndpoint) -> Result<Parties, SamlError> {
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
@@ -69,8 +85,8 @@ fn parties() -> Result<Parties, SamlError> {
     )?;
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
-            .acs_endpoint(AcsEndpoint::artifact(SP_ACS_ARTIFACT)?)
+            .acs_endpoint(post)
+            .acs_endpoint(artifact)
             .credentials(credentials())
             .build()?,
     )?;
@@ -369,7 +385,7 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
 #[test]
 fn an_unsolicited_artifact_response_establishes_the_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties()?;
+    let parties = unsolicited_parties()?;
     let relay_state = RelayStateParam::try_from_option(Some("https://sp.example.com/app"))?;
 
     let mut issued = IssuedArtifacts::new();
@@ -466,10 +482,11 @@ fn a_message_resolved_from_another_artifact_is_rejected() -> Result<(), Box<dyn 
 #[test]
 fn a_resolved_response_is_not_accepted_at_a_post_consumer() -> Result<(), Box<dyn std::error::Error>>
 {
-    let parties = parties()?;
-    let started = parties
-        .sp
-        .start_sso(&parties.idp_metadata, StartSso::redirect())?;
+    let parties = unsolicited_parties()?;
+    let started = parties.sp.start_sso(
+        &parties.idp_metadata,
+        StartSso::redirect().response_binding(SsoResponseBinding::Post),
+    )?;
     assert_eq!(started.pending.response_binding(), SsoResponseBinding::Post);
 
     let mut issued = IssuedArtifacts::new();
@@ -618,7 +635,7 @@ fn an_unsigned_artifact_response_is_rejected() -> Result<(), Box<dyn std::error:
 #[test]
 fn a_response_resolved_from_another_identity_provider_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties()?;
+    let parties = unsolicited_parties()?;
     let other = Saml::idp(
         IdpConfig::builder(EntityId::try_new("https://other-idp.example.com/metadata")?)
             .sso_endpoint(SsoEndpoint::redirect("https://other-idp.example.com/sso")?)
@@ -720,6 +737,22 @@ fn a_pending_artifact_login_survives_a_snapshot() -> Result<(), Box<dyn std::err
     )?;
     let session = follow_redirect_and_finish(&parties, &restored, &response, &mut issued)?;
     assert_eq!(session.name_id().value(), USER);
+    Ok(())
+}
+
+#[test]
+fn an_unsolicited_artifact_is_not_sent_when_the_default_consumer_has_another_binding(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    assert!(matches!(
+        parties.idp.initiate_sso_artifact(
+            &parties.sp_metadata,
+            subject(),
+            RespondSso::artifact(ArtifactDelivery::redirect(0)),
+            &mut IssuedArtifacts::new(),
+        ),
+        Err(SamlError::Invalid(_))
+    ));
     Ok(())
 }
 

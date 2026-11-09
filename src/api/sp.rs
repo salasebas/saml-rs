@@ -293,8 +293,7 @@ impl Saml<Sp> {
     /// later assertion that matches one.
     ///
     /// A [`BrowserInput::artifact`] response must name this service
-    /// provider's default HTTP-Artifact assertion consumer as its recipient,
-    /// or the first one when none is default.
+    /// provider's default HTTP-Artifact assertion consumer as its recipient.
     ///
     /// # Errors
     ///
@@ -368,7 +367,7 @@ impl Saml<Sp> {
             SsoResponseBinding::Artifact => Some(
                 self.raw_service_provider()
                     .metadata
-                    .artifact_assertion_consumer_location()
+                    .get_assertion_consumer_service(Binding::Artifact)
                     .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
             ),
             SsoResponseBinding::Post | SsoResponseBinding::SimpleSign => None,

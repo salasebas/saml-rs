@@ -1,6 +1,7 @@
 use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
 use crate::browser::{ArtifactDelivery, BrowserInput, Outbound, SsoRequestBinding};
 use crate::config::SpDescriptor;
+use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
@@ -278,7 +279,7 @@ impl Saml<Idp> {
             Some(acs) => acs,
             None => raw_sp
                 .metadata
-                .artifact_assertion_consumer_location()
+                .get_assertion_consumer_service(Binding::Artifact)
                 .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let (response_id, xml) = self.raw_identity_provider().render_artifact_sso_response(
