@@ -1,5 +1,5 @@
 use crate::browser::{BrowserInput, LogoutBinding, Outbound, PendingLogoutRequest, Started};
-use crate::config::{EntityId, IdpDescriptor, SpDescriptor};
+use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::error::SamlError as Error;
@@ -533,14 +533,14 @@ fn start_slo_impl(
 #[derive(Clone, Copy)]
 struct SloPeer<'a> {
     metadata: &'a Metadata,
-    hmac_secret: Option<&'a [u8]>,
+    hmac_secret: Option<&'a HmacSecret>,
 }
 
 impl<'a> SloPeer<'a> {
     fn from_metadata_and_setting(metadata: &'a Metadata, setting: &'a EntitySetting) -> Self {
         Self {
             metadata,
-            hmac_secret: setting.hmac_secret.as_deref(),
+            hmac_secret: setting.hmac_secret.as_ref(),
         }
     }
 }

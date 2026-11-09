@@ -64,11 +64,12 @@ Who must change: an identity provider that sets
 `IdpConfig::algorithms.signed_reference_transforms` to something other than
 the default, and expects its responses to keep the default transforms.
 
-`respond_sso`, `initiate_sso`, `respond_sso_artifact`, `initiate_sso_artifact`,
-and `respond_paos_sso` used to sign the response with the default
+`respond_sso` and `initiate_sso` used to sign the response with the default
 enveloped-signature and exclusive canonicalization transforms, whatever the
 identity provider configured. They now use `signed_reference_transforms`, as
-the service provider and logout messages already did. The raw
+the service provider and logout messages already did. `respond_sso_artifact`,
+`initiate_sso_artifact`, and `respond_paos_sso` still use the default
+transforms. The raw
 `IdentityProvider` still signs with the transforms on the raw service
 provider's `EntitySetting`.
 

@@ -12,6 +12,7 @@
 
 use super::keys::{load_certificate, load_hmac_secret};
 use super::response_root::root_uses_protocol_response_rules;
+use crate::config::HmacSecret;
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
 use crate::util::normalize_cert_string;
@@ -715,7 +716,7 @@ fn metadata_verification_context(certificate: &str) -> Result<DsigContext, SamlE
         .with_insecure(true))
 }
 
-fn hmac_verification_context(secret: &[u8]) -> Result<DsigContext, SamlError> {
+fn hmac_verification_context(secret: &HmacSecret) -> Result<DsigContext, SamlError> {
     let mut manager = KeysManager::new();
     manager.add_key(load_hmac_secret(secret)?);
     Ok(DsigContext::new(manager)
@@ -732,7 +733,7 @@ fn hmac_verification_context(secret: &[u8]) -> Result<DsigContext, SamlError> {
 /// another key loads.
 fn metadata_verification_contexts(
     metadata_certs: &[String],
-    hmac_secret: Option<&[u8]>,
+    hmac_secret: Option<&HmacSecret>,
 ) -> Result<Vec<DsigContext>, SamlError> {
     let mut contexts = Vec::new();
     let mut key_load_error = None;
@@ -783,7 +784,7 @@ fn reject_unpinned_inline_certificate(
 fn prepare_signature_verification(
     xml: &str,
     metadata_certs: &[String],
-    hmac_secret: Option<&[u8]>,
+    hmac_secret: Option<&HmacSecret>,
     limits: XmlLimits,
 ) -> Result<Option<PreparedSignatureVerification>, SamlError> {
     let dom = dom::parse_with_limits(xml, limits)?;
@@ -901,7 +902,7 @@ impl SignatureVerification {
 pub(crate) fn verify_signatures_detailed_with_profile(
     xml: &str,
     metadata_certs: &[String],
-    hmac_secret: Option<&[u8]>,
+    hmac_secret: Option<&HmacSecret>,
     limits: XmlLimits,
     strict_xml_signature_profile: bool,
 ) -> Result<SignatureVerification, SamlError> {

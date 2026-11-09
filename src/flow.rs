@@ -4,6 +4,7 @@
 use crate::binding::{
     base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
+use crate::config::HmacSecret;
 use crate::constants::{Binding, ParserType};
 use crate::context::is_valid_xml_with_limits;
 use crate::error::SamlError;
@@ -118,7 +119,7 @@ pub struct FlowOptions<'a> {
     /// Peer signing certificate(s) for verification.
     pub signing_certs: &'a [String],
     /// Peer HMAC secret for verifying an HMAC signature.
-    pub hmac_secret: Option<&'a [u8]>,
+    pub hmac_secret: Option<&'a HmacSecret>,
     /// Our decryption private key PEM (when assertions are encrypted).
     pub decrypt_key: Option<&'a str>,
     /// Passphrase for `decrypt_key`.

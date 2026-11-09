@@ -4,6 +4,7 @@
 use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
+use crate::config::HmacSecret;
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
     MessageSignatureOrder,
@@ -83,7 +84,7 @@ pub struct EntitySetting {
     /// Shared secret this entity signs with when `request_signature_algorithm`
     /// is an HMAC algorithm, and that verifies this entity's HMAC signatures
     /// when the setting describes a peer.
-    pub hmac_secret: Option<Vec<u8>>,
+    pub hmac_secret: Option<HmacSecret>,
     /// Encryption certificate (PEM/base64).
     pub encrypt_cert: Option<String>,
     /// Decryption private key (PEM).

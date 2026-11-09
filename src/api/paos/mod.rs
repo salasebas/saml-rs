@@ -17,9 +17,7 @@ use crate::model::{
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
 
-use super::raw_mapping::{
-    ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor, raw_sp_for_issued_response,
-};
+use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
 use super::{Idp, Saml, SamlError, Sp};
 use protocol::{
     idp_to_ecp_envelope, parse_client_headers, read_soap_body, soap_fault_envelope,
@@ -668,12 +666,14 @@ impl Saml<Idp> {
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = assertion_consumer_for_request(sp, request.message())?;
-        let setting = &self.raw_identity_provider().setting;
-        let mut raw_sp = raw_sp_for_issued_response(sp, setting)?;
-        let sign_encrypted_cbc = super::options::RespondSso::post().should_sign_response(
-            setting.is_assertion_encrypted,
-            &setting.data_encryption_algorithm,
-        );
+        let mut raw_sp = raw_sp_descriptor(sp)?;
+        let sign_encrypted_cbc = {
+            let setting = &self.raw_identity_provider().setting;
+            super::options::RespondSso::post().should_sign_response(
+                setting.is_assertion_encrypted,
+                &setting.data_encryption_algorithm,
+            )
+        };
         raw_sp.setting.want_message_signed = sign_encrypted_cbc;
         let name_id_format = subject.as_ref().and_then(|subject| {
             subject

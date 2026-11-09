@@ -647,10 +647,7 @@ fn apply_common_settings(
         .signing_certificate
         .as_ref()
         .map(|certificate| certificate.as_str().to_string());
-    setting.hmac_secret = credentials
-        .hmac_secret
-        .as_ref()
-        .map(|secret| secret.as_bytes().to_vec());
+    setting.hmac_secret = credentials.hmac_secret.clone();
     setting.encrypt_cert = credentials
         .encryption_certificate
         .as_ref()

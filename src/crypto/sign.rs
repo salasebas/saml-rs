@@ -4,6 +4,7 @@
 use super::keys::{load_certificate, load_hmac_secret, load_private_key};
 use super::xml_syntax::validate_crypto_xml_prefix;
 use crate::binding::{base64_decode, base64_encode, xml_escape};
+use crate::config::HmacSecret;
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
 use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
 use crate::error::SamlError;
@@ -200,7 +201,7 @@ impl<'a> SigningCredential<'a> {
         if bergshamra::crypto::sign::is_hmac_algorithm(&setting.request_signature_algorithm) {
             let secret = setting
                 .hmac_secret
-                .as_deref()
+                .as_ref()
                 .ok_or_else(|| SamlError::MissingKey("hmac_secret".into()))?;
             return Ok(Self::HmacSecret(load_hmac_secret(secret)?));
         }
@@ -302,7 +303,7 @@ pub fn verify_message_signature(
 pub(crate) fn verify_hmac_message_signature(
     octet_string: &str,
     signature_b64: &str,
-    secret: &[u8],
+    secret: &HmacSecret,
     sig_alg: &str,
 ) -> Result<bool, SamlError> {
     verify_detached_with_key(

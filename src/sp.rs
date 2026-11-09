@@ -708,7 +708,7 @@ impl ServiceProvider {
                 strict_xml_signature_profile: self.setting.strict_xml_signature_profile,
                 from_issuer: idp.metadata.get_entity_id(),
                 signing_certs: &signing_certs,
-                hmac_secret: idp.setting.hmac_secret.as_deref(),
+                hmac_secret: idp.setting.hmac_secret.as_ref(),
                 decrypt_key,
                 decrypt_key_pass: self.setting.enc_private_key_pass.as_deref(),
                 allow_insecure_software_rsa_key_transport_decryption: self

@@ -1,4 +1,5 @@
 use crate::browser::BrowserInput;
+use crate::config::HmacSecret;
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
@@ -14,7 +15,7 @@ pub(crate) struct LogoutFlowValidation<'a> {
     expected_recipient: Option<&'a str>,
     now: Option<SystemTime>,
     clock_drifts: (i64, i64),
-    peer_hmac_secret: Option<&'a [u8]>,
+    peer_hmac_secret: Option<&'a HmacSecret>,
 }
 
 impl<'a> LogoutFlowValidation<'a> {
@@ -24,7 +25,7 @@ impl<'a> LogoutFlowValidation<'a> {
         expected_recipient: Option<&'a str>,
         now: SystemTime,
         clock_drifts: (i64, i64),
-        peer_hmac_secret: Option<&'a [u8]>,
+        peer_hmac_secret: Option<&'a HmacSecret>,
     ) -> Self {
         Self {
             expected_recipient,

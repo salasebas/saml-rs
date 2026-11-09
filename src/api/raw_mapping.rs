@@ -97,7 +97,7 @@ fn name_id_format_uris(formats: &[NameIdFormat]) -> Vec<String> {
 
 fn peer_setting(hmac_secret: Option<&HmacSecret>) -> EntitySetting {
     EntitySetting {
-        hmac_secret: hmac_secret.map(|secret| secret.as_bytes().to_vec()),
+        hmac_secret: hmac_secret.cloned(),
         ..EntitySetting::default()
     }
 }
@@ -110,7 +110,7 @@ pub(super) fn raw_sp_descriptor(sp: &SpDescriptor) -> Result<ServiceProvider, Sa
     ServiceProvider::from_metadata(sp.metadata_xml(), peer_setting(sp.hmac_secret()))
 }
 
-pub(super) fn raw_sp_for_issued_response(
+pub(super) fn raw_sp_for_browser_response(
     sp: &SpDescriptor,
     idp_setting: &EntitySetting,
 ) -> Result<ServiceProvider, SamlError> {

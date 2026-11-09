@@ -627,7 +627,7 @@ impl IdentityProvider {
                 strict_xml_signature_profile: false,
                 from_issuer: sp.metadata.get_entity_id(),
                 signing_certs: &signing_certs,
-                hmac_secret: sp.setting.hmac_secret.as_deref(),
+                hmac_secret: sp.setting.hmac_secret.as_ref(),
                 decrypt_key: None,
                 decrypt_key_pass: None,
                 allow_insecure_software_rsa_key_transport_decryption: false,
