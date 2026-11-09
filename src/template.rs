@@ -3,7 +3,8 @@
 //! `{Tag}` placeholders are filled by [`replace_tags_by_value`] or
 //! [`replace_tags_by_optional_value`]. Replacement values are XML-escaped in
 //! both attribute and element-text positions so caller-provided data cannot
-//! become signed SAML markup.
+//! become signed SAML markup. Text inserted for a value is not scanned for
+//! further placeholders.
 
 use crate::binding::xml_escape;
 use crate::error::SamlError;
@@ -65,50 +66,61 @@ pub(crate) fn validate_tag_prefix(name: &str, prefix: &str) -> Result<(), SamlEr
 
 /// Replace `{key}` placeholders in `raw_xml`.
 ///
-/// Placeholder replacement text is XML-escaped before insertion. XML fragments
-/// such as generated attribute statements must be spliced into templates before
-/// calling this helper.
+/// Placeholder replacement text is XML-escaped before insertion and is not
+/// scanned for `{key}` tokens. XML fragments such as generated attribute
+/// statements must be spliced into templates before calling this helper.
 pub fn replace_tags_by_value(raw_xml: &str, tags: &[(&str, String)]) -> String {
-    let mut xml = raw_xml.to_string();
-    for (key, value) in tags {
-        xml = replace_tag(&xml, key, Some(value));
-    }
-    xml
+    substitute_placeholders(raw_xml, |key| {
+        tags.iter()
+            .find(|(tag, _)| *tag == key)
+            .map(|(_, value)| value.as_str())
+    })
 }
 
 /// Replace `{key}` placeholders in `raw_xml`, omitting optional placeholders.
 ///
 /// `Some(value)` is XML-escaped and inserted, including `Some(String::new())`.
-/// `None` removes attributes whose complete value is the placeholder, removes
-/// elements whose complete body is the placeholder, and renders any remaining
-/// occurrences as an empty string.
+/// Inserted text is not scanned for `{key}` tokens. `None` removes attributes
+/// whose complete value is the placeholder, removes elements whose complete
+/// body is the placeholder, and renders any remaining occurrences as an empty
+/// string. Those removals read `raw_xml` as written, before any value is
+/// inserted.
 pub fn replace_tags_by_optional_value(raw_xml: &str, tags: &[(&str, Option<String>)]) -> String {
     let mut xml = raw_xml.to_string();
-    for (key, value) in tags {
-        xml = replace_tag(&xml, key, value.as_deref());
-    }
-    xml
-}
-
-fn replace_tag(raw_xml: &str, key: &str, value: Option<&str>) -> String {
-    let needle = format!("{{{key}}}");
-    match value {
-        Some(value) => replace_all(raw_xml, &needle, &xml_escape(value)),
-        None => {
-            let xml = remove_optional_attributes(raw_xml, &needle);
-            let xml = remove_optional_elements(&xml, &needle);
-            replace_all(&xml, &needle, "")
+    for (index, (key, value)) in tags.iter().enumerate() {
+        let first_for_key = !tags[..index].iter().any(|(earlier, _)| earlier == key);
+        if value.is_none() && first_for_key {
+            let needle = format!("{{{key}}}");
+            xml = remove_optional_attributes(&xml, &needle);
+            xml = remove_optional_elements(&xml, &needle);
         }
     }
+    substitute_placeholders(&xml, |key| {
+        tags.iter()
+            .find(|(tag, _)| *tag == key)
+            .map(|(_, value)| value.as_deref().unwrap_or_default())
+    })
 }
 
-fn replace_all(raw_xml: &str, needle: &str, replacement: &str) -> String {
+fn substitute_placeholders<'v>(raw_xml: &str, lookup: impl Fn(&str) -> Option<&'v str>) -> String {
     let mut result = String::with_capacity(raw_xml.len());
     let mut rest = raw_xml;
-    while let Some(pos) = rest.find(needle) {
-        result.push_str(&rest[..pos]);
-        result.push_str(replacement);
-        rest = &rest[pos + needle.len()..];
+    while let Some(open) = rest.find('{') {
+        result.push_str(&rest[..open]);
+        let after_open = &rest[open + 1..];
+        let value = after_open
+            .find('}')
+            .and_then(|close| Some((close, lookup(&after_open[..close])?)));
+        match value {
+            Some((close, value)) => {
+                result.push_str(&xml_escape(value));
+                rest = &after_open[close + 1..];
+            }
+            None => {
+                result.push('{');
+                rest = after_open;
+            }
+        }
     }
     result.push_str(rest);
     result
@@ -485,5 +497,98 @@ mod tests {
         assert!(built.contains("xsi:type=\"xs:string\""));
         // value_tag -> {attrUserEmail}
         assert!(built.contains("{attrUserEmail}"));
+    }
+
+    #[test]
+    fn inserted_values_are_not_scanned_for_later_placeholders() {
+        let rendered = replace_tags_by_value(
+            "<n>{NameID}</n><a>{attrRole}</a><m>{attrMail}</m><r>{InResponseTo}</r>",
+            &[
+                ("NameID", "a<b>{InResponseTo}".to_string()),
+                ("attrRole", "admin-{attrMail}".to_string()),
+                ("attrMail", "user".to_string()),
+                ("InResponseTo", "_req".to_string()),
+            ],
+        );
+        assert_eq!(
+            rendered,
+            "<n>a&lt;b&gt;{InResponseTo}</n><a>admin-{attrMail}</a><m>user</m><r>_req</r>"
+        );
+    }
+
+    #[test]
+    fn optional_inserted_values_are_not_scanned_for_later_placeholders() {
+        let rendered = replace_tags_by_optional_value(
+            "<root><n>{NameID}</n><s>{SessionIndex}</s></root>",
+            &[
+                ("NameID", Some("{SessionIndex}".to_string())),
+                ("SessionIndex", Some("abc".to_string())),
+            ],
+        );
+        assert_eq!(rendered, "<root><n>{SessionIndex}</n><s>abc</s></root>");
+    }
+
+    #[test]
+    fn logout_request_name_id_values_are_not_scanned_for_later_qualifiers() {
+        let rendered = replace_tags_by_optional_value(
+            concat!(
+                r#"<LogoutRequest NotOnOrAfter="{NotOnOrAfter}">"#,
+                r#"<NameID Format="{NameIDFormat}" NameQualifier="{NameQualifier}" "#,
+                r#"SPNameQualifier="{SPNameQualifier}" SPProvidedID="{SPProvidedID}">"#,
+                "{NameID}</NameID><SessionIndex>{SessionIndex}</SessionIndex>",
+                "</LogoutRequest>",
+            ),
+            &[
+                ("NameIDFormat", None),
+                (
+                    "NameID",
+                    Some(
+                        "{NameQualifier} & {SPNameQualifier} {SPProvidedID} {SessionIndex} {NotOnOrAfter}"
+                            .to_string(),
+                    ),
+                ),
+                ("NameQualifier", Some("https://idp.example.com".to_string())),
+                ("SPNameQualifier", None),
+                ("SPProvidedID", Some("{SessionIndex}".to_string())),
+                ("SessionIndex", Some("idx-1".to_string())),
+                ("NotOnOrAfter", Some("2020-01-01T00:00:00Z".to_string())),
+            ],
+        );
+        assert_eq!(
+            rendered,
+            concat!(
+                r#"<LogoutRequest NotOnOrAfter="2020-01-01T00:00:00Z">"#,
+                r#"<NameID NameQualifier="https://idp.example.com" SPProvidedID="{SessionIndex}">"#,
+                "{NameQualifier} &amp; {SPNameQualifier} {SPProvidedID} {SessionIndex} {NotOnOrAfter}",
+                "</NameID><SessionIndex>idx-1</SessionIndex>",
+                "</LogoutRequest>",
+            )
+        );
+    }
+
+    #[test]
+    fn optional_none_still_drops_an_element_after_a_value_containing_its_placeholder() {
+        let rendered = replace_tags_by_optional_value(
+            "<root><n>{NameID}</n><s>{SessionIndex}</s></root>",
+            &[
+                ("NameID", Some("{SessionIndex}".to_string())),
+                ("SessionIndex", None),
+            ],
+        );
+        assert_eq!(rendered, "<root><n>{SessionIndex}</n></root>");
+    }
+
+    #[test]
+    fn optional_first_entry_for_a_repeated_key_wins() {
+        let rendered = replace_tags_by_optional_value(
+            "<a x=\"{K}\"/><b y=\"{L}\"/>",
+            &[
+                ("K", Some("v".to_string())),
+                ("K", None),
+                ("L", None),
+                ("L", Some("w".to_string())),
+            ],
+        );
+        assert_eq!(rendered, "<a x=\"v\"/><b/>");
     }
 }

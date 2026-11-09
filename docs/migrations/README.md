@@ -18,6 +18,7 @@ compatible additions.
 - [Artifact resolution service on IdP metadata](unreleased-artifact-resolution.md)
 - [How to update endpoint routing and logout responses](unreleased-slo-and-endpoint-selection.md)
 - [Attribute name formats and persistent and transient NameID length](unreleased-attribute-name-format.md)
+- [Limited base64 decoding ignores only space, tab, CR, LF, and form feed](unreleased-base64-whitespace.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).

@@ -3,9 +3,7 @@ use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, Use
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::Status;
-use crate::template::{
-    apply_tag_prefixes, replace_tags_by_optional_value, replace_tags_by_value, validate_tag_prefix,
-};
+use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefix};
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
@@ -503,19 +501,16 @@ fn create_logout_response_inner(
             &init_setting.tag_prefix_protocol,
             &init_setting.tag_prefix_assertion,
         );
-        let xml = replace_tags_by_value(
+        let xml = replace_tags_by_optional_value(
             &template,
             &[
-                ("ID", id.clone()),
-                ("IssueInstant", issue_instant),
-                ("Destination", destination.clone()),
-                ("Issuer", issuer.clone()),
-                ("StatusCode", status.top_level().as_uri().to_string()),
+                ("ID", Some(id.clone())),
+                ("IssueInstant", Some(issue_instant)),
+                ("Destination", Some(destination.clone())),
+                ("Issuer", Some(issuer.clone())),
+                ("StatusCode", Some(status.top_level().as_uri().to_string())),
+                ("InResponseTo", in_response_to.map(str::to_string)),
             ],
-        );
-        let xml = replace_tags_by_optional_value(
-            &xml,
-            &[("InResponseTo", in_response_to.map(str::to_string))],
         );
         if let Ok(extracted) =
             crate::xml::extract(&xml, &crate::xml::fields::logout_response_status_fields())

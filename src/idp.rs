@@ -12,8 +12,7 @@ use crate::model::{validate_issued_name_id_length, Attribute, Status, TopLevelSt
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
     apply_tag_prefixes, attr_tag, attribute_statement_builder, replace_tags_by_optional_value,
-    replace_tags_by_value, validate_tag_prefix, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
-    LOGIN_RESPONSE_TEMPLATE,
+    validate_tag_prefix, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
 };
 
 mod login_response;
@@ -260,10 +259,6 @@ impl IdentityProvider {
         }
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
         let id = generate_id();
-        let prepared = replace_tags_by_optional_value(
-            &prepared,
-            &[("NameIDFormat", name_id_format.map(str::to_string))],
-        );
         let mut tags: Vec<(&str, String)> = vec![
             ("ID", id.clone()),
             ("AssertionID", generate_id()),
@@ -297,7 +292,11 @@ impl IdentityProvider {
         for (key, value) in &attr_pairs {
             tags.push((key.as_str(), value.clone()));
         }
-        Ok((id, replace_tags_by_value(&prepared, &tags)))
+        let tags: Vec<(&str, Option<String>)> =
+            std::iter::once(("NameIDFormat", name_id_format.map(str::to_string)))
+                .chain(tags.into_iter().map(|(key, value)| (key, Some(value))))
+                .collect();
+        Ok((id, replace_tags_by_optional_value(&prepared, &tags)))
     }
 
     /// Generate a login `<Response>` for `sp` over `binding`.
@@ -852,6 +851,35 @@ mod crypto_tests {
             result.extract.get_str("issuer"),
             Some("https://idp.example.com/metadata")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn custom_login_response_template_keeps_placeholder_text_in_the_name_id_format(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::binding::base64_decode;
+        use crate::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
+
+        let mut setting = signing_setting();
+        setting.name_id_format = vec!["urn:example:{InResponseTo}".into()];
+        setting.login_response_template = Some(LoginResponseTemplate {
+            context: Some(LOGIN_RESPONSE_TEMPLATE.into()),
+            attributes: Vec::new(),
+        });
+        let idp = idp_with_setting(setting)?;
+        let ctx = idp.create_login_response(
+            &sp()?,
+            Binding::Post,
+            &User::new("user@example.com"),
+            &LoginResponseOptions {
+                in_response_to: Some("_req123"),
+                ..Default::default()
+            },
+        )?;
+
+        let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        assert!(xml.contains("Format=\"urn:example:{InResponseTo}\""));
+        assert!(xml.contains("InResponseTo=\"_req123\""));
         Ok(())
     }
 
