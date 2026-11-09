@@ -622,7 +622,9 @@ impl Saml<Idp> {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the request has no usable assertion consumer,
-    /// the issuer does not match, or the response cannot be signed.
+    /// the issuer does not match, the persistent or transient `NameID` of
+    /// `subject` is longer than 256 characters, or the response cannot be
+    /// signed.
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,

@@ -1,7 +1,8 @@
-use crate::constants::namespace;
+use crate::constants::{attribute_name_format, namespace};
 use crate::error::SamlError;
-use crate::model::Status;
+use crate::model::{Attribute, Status};
 use crate::template::{write_login_response_attribute_statement, LoginResponseAttribute};
+use crate::xml::name::is_name;
 use crate::xml::write::XmlWriter;
 
 const VERSION: &str = "2.0";
@@ -36,6 +37,7 @@ pub(super) struct LoginResponseXml<'a> {
     pub(super) authn_statement: Option<AuthnStatementXml<'a>>,
     pub(super) attributes: &'a [LoginResponseAttribute],
     pub(super) user_attributes: &'a [(String, String)],
+    pub(super) typed_attributes: &'a [Attribute],
 }
 
 pub(super) fn render_default_login_response(
@@ -127,6 +129,7 @@ pub(super) fn render_default_login_response(
         input.user_attributes,
         input.assertion_prefix,
     )?;
+    write_attribute_statement(&mut writer, input.assertion_prefix, input.typed_attributes)?;
     writer.end(&assertion_name);
     writer.end(&response_name);
     Ok(writer.finish())
@@ -199,6 +202,60 @@ fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &Authn
     );
     writer.end(&qname(prefix, "AuthnContext"));
     writer.end(&name);
+}
+
+/// Write `attributes` as one `<AttributeStatement>`. No attributes writes
+/// nothing.
+///
+/// # Errors
+///
+/// Returns [`SamlError::Invalid`] when a basic attribute name is not an
+/// `xs:Name`.
+fn write_attribute_statement(
+    writer: &mut XmlWriter,
+    prefix: &str,
+    attributes: &[Attribute],
+) -> Result<(), SamlError> {
+    if attributes.is_empty() {
+        return Ok(());
+    }
+    let statement_name = qname(prefix, "AttributeStatement");
+    let attribute_name = qname(prefix, "Attribute");
+    let value_name = qname(prefix, "AttributeValue");
+    writer.start(&statement_name, &[]);
+    for attribute in attributes {
+        if attribute.name_format() == Some(attribute_name_format::BASIC)
+            && !is_name(attribute.name())
+        {
+            return Err(SamlError::Invalid(format!(
+                "basic attribute name `{}` is not an XML name",
+                attribute.name()
+            )));
+        }
+        let mut attrs = vec![("Name", attribute.name())];
+        if let Some(name_format) = attribute.name_format() {
+            attrs.push(("NameFormat", name_format));
+        }
+        if attribute.values().is_empty() {
+            writer.empty(&attribute_name, &attrs);
+            continue;
+        }
+        writer.start(&attribute_name, &attrs);
+        for value in attribute.values() {
+            writer.text_element(
+                &value_name,
+                &[
+                    ("xmlns:xs", XMLNS_XS),
+                    ("xmlns:xsi", XMLNS_XSI),
+                    ("xsi:type", "xs:string"),
+                ],
+                value.as_str(),
+            );
+        }
+        writer.end(&attribute_name);
+    }
+    writer.end(&statement_name);
+    Ok(())
 }
 
 fn qname(prefix: &str, local_name: &str) -> String {

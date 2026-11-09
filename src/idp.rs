@@ -8,7 +8,7 @@ use crate::entity::{
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
-use crate::model::{Status, TopLevelStatusCode};
+use crate::model::{validate_issued_name_id_length, Attribute, Status, TopLevelStatusCode};
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
     apply_tag_prefixes, attr_tag, attribute_statement_builder, replace_tags_by_optional_value,
@@ -49,6 +49,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) issuance_lifetime: Option<time::Duration>,
     pub(crate) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(crate) status: Option<&'a Status>,
+    pub(crate) typed_attributes: &'a [Attribute],
 }
 
 #[derive(Clone, Copy)]
@@ -58,6 +59,7 @@ struct LoginResponseRendering<'a> {
     issuance_lifetime: time::Duration,
     web_browser_sso_producer: WebBrowserSsoProducer,
     status: Option<&'a Status>,
+    typed_attributes: &'a [Attribute],
 }
 
 /// A SAML 2.0 Identity Provider: runtime [`EntitySetting`] plus parsed [`IdpMetadata`].
@@ -125,7 +127,8 @@ impl IdentityProvider {
     ///
     /// # Errors
     ///
-    /// Returns an error when configured XML tag prefixes are invalid, the
+    /// Returns an error when configured XML tag prefixes are invalid, a
+    /// persistent or transient `NameID` is longer than 256 characters, the
     /// default response renderer cannot produce valid XML, or template
     /// rendering validation fails.
     fn render_login_response(
@@ -163,6 +166,11 @@ impl IdentityProvider {
                     .into(),
             ));
         }
+        if !rendering.typed_attributes.is_empty() && (uses_template || !attributes.is_empty()) {
+            return Err(SamlError::Invalid(
+                "response attributes cannot be combined with a login response template".into(),
+            ));
+        }
         if error_response {
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
             let id = generate_id();
@@ -181,11 +189,14 @@ impl IdentityProvider {
             })?;
             return Ok((id, xml));
         }
+        let name_id_format = rendering
+            .name_id_format
+            .or_else(|| self.setting.default_name_id_format());
+        if rendering.custom.is_none() {
+            validate_issued_name_id_length(name_id_format, &user.name_id)?;
+        }
         if rendering.custom.is_none() && !has_custom_context {
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-            let name_id_format = rendering
-                .name_id_format
-                .or_else(|| self.setting.default_name_id_format());
             let id = generate_id();
             let assertion_id = generate_id();
             let audience = sp.metadata.get_entity_id().unwrap_or_default().to_string();
@@ -221,6 +232,7 @@ impl IdentityProvider {
                 ),
                 attributes,
                 user_attributes: &user.attributes,
+                typed_attributes: rendering.typed_attributes,
             })?;
             return Ok((id, xml));
         }
@@ -247,9 +259,6 @@ impl IdentityProvider {
             return Ok(f(&prepared));
         }
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-        let name_id_format = rendering
-            .name_id_format
-            .or_else(|| self.setting.default_name_id_format());
         let id = generate_id();
         let prepared = replace_tags_by_optional_value(
             &prepared,
@@ -301,7 +310,9 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns an error if `binding` is unsupported, the SP metadata has no ACS
-    /// endpoint for `binding`, response template rendering fails, the IdP
+    /// endpoint for `binding`, the persistent or transient `user.name_id` is
+    /// longer than 256 characters and `options.custom` is not set, response
+    /// template rendering fails, the IdP
     /// signing key or certificate configuration is missing or invalid, the
     /// no crypto provider feature is enabled, XML signature construction
     /// fails, the SP encryption certificate is missing when assertion
@@ -367,6 +378,7 @@ impl IdentityProvider {
                     .unwrap_or(time::Duration::seconds(300)),
                 web_browser_sso_producer: overrides.web_browser_sso_producer,
                 status: overrides.status,
+                typed_attributes: overrides.typed_attributes,
             },
         )?;
         let error_response = overrides

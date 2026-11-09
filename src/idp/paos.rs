@@ -43,6 +43,7 @@ impl IdentityProvider {
                 issuance_lifetime: Some(input.issuance_lifetime),
                 web_browser_sso_producer: WebBrowserSsoProducer::Follow,
                 status: input.status,
+                typed_attributes: &[],
             },
         )?;
         let xml = crate::binding::base64_decode(&context.context)?;

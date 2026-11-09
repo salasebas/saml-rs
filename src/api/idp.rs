@@ -124,7 +124,10 @@ impl Saml<Idp> {
     /// response binding, the configured issuance expiration overflows the
     /// supported timestamp range, producer rules are combined with a custom
     /// login response template, an error status is combined with a login
-    /// response template, or response creation fails.
+    /// response template, [`RespondSso::attributes`] is combined with a login
+    /// response template or names a basic attribute that is not an XML name,
+    /// the persistent or transient `NameID` of `subject` is longer than 256
+    /// characters, or response creation fails.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
@@ -146,7 +149,10 @@ impl Saml<Idp> {
     /// selected binding is unsupported, the configured issuance expiration
     /// overflows the supported timestamp range, producer rules are combined
     /// with a custom login response template, an error status is combined with
-    /// a login response template, or response creation fails.
+    /// a login response template, [`RespondSso::attributes`] is combined with a
+    /// login response template or names a basic attribute that is not an XML
+    /// name, the persistent or transient `NameID` of `subject` is longer than
+    /// 256 characters, or response creation fails.
     ///
     /// # Examples
     ///
@@ -238,6 +244,7 @@ impl Saml<Idp> {
                     issuance_lifetime: Some(self.0.issuance_lifetime),
                     web_browser_sso_producer: options.web_browser_sso_producer,
                     status: options.status.as_ref(),
+                    typed_attributes: options.attributes.as_slice(),
                 },
             )?;
         Outbound::<SsoResponse>::try_from(context)

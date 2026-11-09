@@ -96,6 +96,10 @@ export default defineConfig({
 									label: 'Identity Provider Discovery',
 									slug: 'reference/conformance/identity-provider-discovery',
 								},
+								{
+									label: 'SAML-defined identifiers',
+									slug: 'reference/conformance/identifiers',
+								},
 								{ label: 'Metadata and replay', slug: 'reference/conformance/metadata-and-replay' },
 								{
 									label: 'Artifact resolution',

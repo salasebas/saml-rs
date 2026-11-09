@@ -130,6 +130,12 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
         )
         .aggregate(&["Name"], &["AttributeValue"])
         .with_shortcut(assertion),
+        ExtractorField::new(
+            "attributeNameFormats",
+            &["Assertion", "AttributeStatement", "Attribute"],
+        )
+        .attrs(&["Name", "NameFormat"])
+        .with_shortcut(assertion),
     ]
 }
 

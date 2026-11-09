@@ -1,5 +1,5 @@
 use crate::browser::{LogoutBinding, SsoRequestBinding, SsoResponseBinding};
-use crate::model::{RelayStateParam, Status};
+use crate::model::{Attributes, RelayStateParam, Status};
 use crate::sp::WebBrowserSsoProducer;
 
 pub use crate::model::{ForceAuthn, IsPassive};
@@ -87,6 +87,7 @@ pub struct RespondSso {
     response_signing: ResponseSigning,
     pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(super) status: Option<Status>,
+    pub(super) attributes: Attributes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,7 +115,23 @@ impl RespondSso {
             response_signing: ResponseSigning::FollowEncryptedCbcRecommendation,
             web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
             status: None,
+            attributes: Attributes::default(),
         }
+    }
+
+    /// Set the attributes of the assertion's `AttributeStatement`.
+    ///
+    /// Each attribute is written with its `Name`, its `NameFormat` when it has
+    /// one, and one `xs:string` `AttributeValue` for each value. An attribute
+    /// without values is written without `AttributeValue`. An empty collection
+    /// writes no `AttributeStatement`, and so does an error response.
+    ///
+    /// The response is rejected when an [`crate::AttributeNameFormat::Basic`]
+    /// name is not an XML name, or when a login response template is
+    /// configured.
+    pub fn attributes(mut self, attributes: Attributes) -> Self {
+        self.attributes = attributes;
+        self
     }
 
     /// Set the `Response` status. Omitting it emits top-level `Success` and

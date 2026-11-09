@@ -14,6 +14,7 @@ Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, a
 - [Enhanced Client/Proxy](conformance/enhanced-client-proxy.md) for `start_paos_sso`, `finish_paos_sso`, `receive_paos_sso`, and `respond_paos_sso`.
 - [Logout](conformance/single-logout.md) for `start_slo`, `respond_slo`, `receive_slo`, and `finish_slo`.
 - [Identity Provider Discovery](conformance/identity-provider-discovery.md) for `remember_identity_provider`.
+- [SAML-defined identifiers](conformance/identifiers.md) for `RespondSso::attributes`, `AttributeNameFormat`, and the persistent and transient `NameId` constructors.
 - [Metadata and replay](conformance/metadata-and-replay.md) for `MetadataTrustPolicy` and `ReplayPolicy`.
 - [Artifact resolution](conformance/artifact-resolution.md) for `issue_artifact`, `resolve_artifact`, and `answer_artifact_resolve`.
 

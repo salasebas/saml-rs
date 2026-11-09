@@ -106,6 +106,16 @@ pub mod name_id_format {
     pub const X509_SUBJECT_NAME: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:X509SubjectName";
 }
 
+/// Attribute name formats (`NameFormat` on `<Attribute>`).
+pub mod attribute_name_format {
+    /// Unspecified format.
+    pub const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified";
+    /// URI reference format.
+    pub const URI: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:uri";
+    /// Basic format.
+    pub const BASIC: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:basic";
+}
+
 /// AuthnContext class references (`namespace.authnContextClassRef`).
 pub mod authn_context_class_ref {
     /// Password class.

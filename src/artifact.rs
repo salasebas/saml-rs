@@ -666,17 +666,8 @@ fn soap_service(
     Ok(service)
 }
 
-/// 20 random bytes from two version 4 UUIDs, skipping the bytes that carry
-/// the fixed version and variant bits.
 fn message_handle() -> [u8; SOURCE_ID_LEN] {
-    let first = uuid::Uuid::new_v4().into_bytes();
-    let second = uuid::Uuid::new_v4().into_bytes();
-    let mut handle = [0u8; SOURCE_ID_LEN];
-    handle[..6].copy_from_slice(&first[..6]);
-    handle[6..13].copy_from_slice(&first[9..]);
-    handle[13..19].copy_from_slice(&second[..6]);
-    handle[19] = second[9];
-    handle
+    crate::entity::random_20_bytes()
 }
 
 fn encode_artifact(

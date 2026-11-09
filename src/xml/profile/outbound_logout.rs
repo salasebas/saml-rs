@@ -5,6 +5,7 @@ use super::{
 use crate::constants::{name_id_format, namespace, status_code};
 use crate::error::SamlError;
 use crate::xml::dom::{parse_with_limits, Document, XmlLimits};
+use crate::xml::name::is_ncname;
 use crate::xml::parse_generated_saml_utc_date_time;
 use quick_xml::events::{BytesRef, BytesStart, Event};
 use quick_xml::NsReader;
@@ -81,44 +82,6 @@ impl OutboundLogoutValidation {
     fn root_signature_allowed(self) -> bool {
         matches!(self, Self::AfterPostSigning)
     }
-}
-
-fn is_xml_name_start_char(value: char) -> bool {
-    matches!(
-        value,
-        'A'..='Z'
-            | '_'
-            | 'a'..='z'
-            | '\u{c0}'..='\u{d6}'
-            | '\u{d8}'..='\u{f6}'
-            | '\u{f8}'..='\u{2ff}'
-            | '\u{370}'..='\u{37d}'
-            | '\u{37f}'..='\u{1fff}'
-            | '\u{200c}'..='\u{200d}'
-            | '\u{2070}'..='\u{218f}'
-            | '\u{2c00}'..='\u{2fef}'
-            | '\u{3001}'..='\u{d7ff}'
-            | '\u{f900}'..='\u{fdcf}'
-            | '\u{fdf0}'..='\u{fffd}'
-            | '\u{10000}'..='\u{effff}'
-    )
-}
-
-fn is_xml_name_char(value: char) -> bool {
-    is_xml_name_start_char(value)
-        || matches!(
-            value,
-            '-' | '.'
-                | '0'..='9'
-                | '\u{b7}'
-                | '\u{300}'..='\u{36f}'
-                | '\u{203f}'..='\u{2040}'
-        )
-}
-
-fn is_ncname(value: &str) -> bool {
-    let mut chars = value.chars();
-    chars.next().is_some_and(is_xml_name_start_char) && chars.all(is_xml_name_char)
 }
 
 fn attribute_value<'a>(values: &'a [(Vec<u8>, String)], name: &[u8]) -> Option<&'a str> {

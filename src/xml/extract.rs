@@ -473,6 +473,22 @@ mod tests {
             Some("https://idp.example.com/metadata")
         );
         assert_eq!(result.get_str("attributes.uid"), Some("test"));
+        let name_formats: Vec<_> = result
+            .get("attributeNameFormats")
+            .and_then(Value::as_array)
+            .unwrap_or(&[])
+            .iter()
+            .map(|attribute| (attribute.get_str("name"), attribute.get_str("nameFormat")))
+            .collect();
+        let basic = Some("urn:oasis:names:tc:SAML:2.0:attrname-format:basic");
+        assert_eq!(
+            name_formats,
+            [
+                (Some("uid"), basic),
+                (Some("mail"), basic),
+                (Some("eduPersonAffiliation"), basic),
+            ]
+        );
         assert_eq!(
             result.get_str("response.inResponseTo"),
             Some("_41e758fee373d51639552c4b040b1090e97f6685")

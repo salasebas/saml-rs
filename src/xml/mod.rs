@@ -5,6 +5,7 @@ pub mod dom;
 pub mod extract;
 pub mod fields;
 pub(crate) mod fragment;
+pub(crate) mod name;
 mod profile;
 pub(crate) mod write;
 

@@ -37,6 +37,16 @@ stay unclaimed.
 | --- | --- |
 | IdP `remember_identity_provider` | `src/api/idp.rs`, `src/discovery.rs` |
 
+## SAML-defined identifiers
+
+| Behaviour | File |
+| --- | --- |
+| `AttributeNameFormat`, `Attribute` | `src/model/attributes.rs` |
+| Persistent and transient `NameId` constructors | `src/model/subject.rs` |
+| `RespondSso::attributes` and the `AttributeStatement` it writes | `src/api/options.rs`, `src/idp/login_response.rs` |
+| `NameFormat` of an accepted attribute | `src/xml/fields.rs`, `src/model/extract.rs` |
+| `xs:Name` and `xs:NCName` | `src/xml/name.rs` |
+
 ## Raw login
 
 | Behaviour | File |
@@ -76,6 +86,7 @@ Logout is the directory `src/logout/`.
 | Single Logout | [`single-logout.md`](conformance/single-logout.md) |
 | Enhanced Client/Proxy SSO over PAOS | [`enhanced-client-proxy.md`](conformance/enhanced-client-proxy.md) |
 | Identity Provider Discovery | [`identity-provider-discovery.md`](conformance/identity-provider-discovery.md) |
+| SAML-defined identifiers | [`identifiers.md`](conformance/identifiers.md) |
 | Artifact resolution over SOAP | [`artifact-resolution.md`](conformance/artifact-resolution.md) |
 | Metadata trust and replay | [`metadata-and-replay.md`](conformance/metadata-and-replay.md) |
 
