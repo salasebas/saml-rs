@@ -6,7 +6,8 @@ service-provider `DeliveredArtifact`, `finish_sso`, and
 `accept_unsolicited_sso` with `BrowserInput::artifact`. The dereference
 between the two is [artifact resolution](artifact-resolution.md). The content
 of the `<Response>` is in
-[generation](web-browser-sso-generation.md), and assertion acceptance is in
+[generation](web-browser-sso-generation.md) and
+[identifiers](identifiers.md), and assertion acceptance is in
 [acceptance](web-browser-sso-acceptance.md). This page records what the
 binding adds or changes.
 
