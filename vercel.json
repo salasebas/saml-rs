@@ -3,7 +3,7 @@
   "installCommand": "npx --yes pnpm@11.6.0 --dir site install --frozen-lockfile",
   "buildCommand": "npx --yes pnpm@11.6.0 --dir site build",
   "outputDirectory": "site/dist",
-  "ignoreCommand": "git diff --quiet \"${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}\" HEAD -- site vercel.json || exit 1",
+  "ignoreCommand": "git diff --quiet \"${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}\" HEAD -- site docs/conformance vercel.json || exit 1",
   "git": {
     "deploymentEnabled": {
       "**": false,

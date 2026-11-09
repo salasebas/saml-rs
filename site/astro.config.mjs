@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
+import { conformancePages } from './src/plugins/conformance-pages.js';
 import { rewriteDocLinks } from './src/plugins/doc-links.js';
 
 /** Registers the link rewriter on Astro's default Markdown processor. */
@@ -20,6 +21,7 @@ function docLinks() {
 export default defineConfig({
 	site: 'https://samlrs.vercel.app',
 	integrations: [
+		conformancePages(),
 		starlight({
 			title: 'saml-rs',
 			description: 'SAML 2.0 browser SSO, metadata, and Single Logout for Rust.',

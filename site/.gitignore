@@ -20,3 +20,6 @@ pnpm-debug.log*
 # macOS-specific files
 .DS_Store
 .vercel
+
+# Generated from docs/conformance/ by src/plugins/conformance-pages.js
+src/content/docs/reference/conformance/

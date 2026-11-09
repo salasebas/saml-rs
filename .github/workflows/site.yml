@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "site/**"
+      - "docs/conformance/**"
       - "vercel.json"
       - ".github/workflows/site.yml"
 
