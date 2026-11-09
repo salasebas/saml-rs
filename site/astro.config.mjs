@@ -84,6 +84,10 @@ export default defineConfig({
 									slug: 'reference/conformance/idp-sp-operational-modes',
 								},
 								{
+									label: 'Extended and authority modes',
+									slug: 'reference/conformance/extended-and-authority-modes',
+								},
+								{
 									label: 'SSO acceptance',
 									slug: 'reference/conformance/web-browser-sso-acceptance',
 								},
