@@ -374,6 +374,11 @@ fn authn_request_issue_instant_rejects_invalid_lexical_forms(
         "2024-01-01T00: 00:00Z",
         "2024-01-01T24:00:00.001Z",
         "\u{a0}2024-01-01T00:00:00Z\u{a0}",
+        "2024-~1-01T00:00:00Z",
+        "2024-01-~1T00:00:00Z",
+        "2024-01-01T~0:00:00Z",
+        "2024-01-01T00:~0:00Z",
+        "2024-01-01T00:00:~0Z",
     ] {
         let xml = authn_request_xml(Some(issue_instant));
         expect_profile_rejection_with_context(

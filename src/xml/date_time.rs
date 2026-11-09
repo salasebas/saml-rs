@@ -1,7 +1,7 @@
 fn parse_two_ascii_digits(value: &[u8], offset: usize) -> Option<u8> {
     let tens = value.get(offset)?.checked_sub(b'0')?;
     let ones = value.get(offset + 1)?.checked_sub(b'0')?;
-    (tens <= 9 && ones <= 9).then_some(tens * 10 + ones)
+    (tens <= 9 && ones <= 9).then(|| tens * 10 + ones)
 }
 
 fn year_modulo(year: &[u8], modulus: u16) -> Option<u16> {
