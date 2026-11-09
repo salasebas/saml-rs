@@ -14,4 +14,9 @@ Who must change: identity providers that use `RequireSigned` and accept
 requests from a service provider that signs without `Destination`. That
 service provider must send `Destination` set to the identity provider's
 `SingleSignOnService` URL. `saml-rs` service providers already do.
+An identity provider that publishes several `SingleSignOnService` URLs for
+the binding must select the receiving one with
+`SamlValidationContext::with_recipient_endpoint`, as under
+`AllowUnsignedVerifyIfPresent`. Otherwise the request fails with
+`SamlError::Invalid`.
 `receive_paos_sso` is unchanged.
