@@ -393,7 +393,12 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
                     key_encryption: key_encryption.clone(),
                     ..AlgorithmPolicy::default()
                 }),
-                encrypted_assertions(),
+                XmlPolicy {
+                    encryption: encrypted_assertions()
+                        .encryption
+                        .with_rsa15_key_transport_decryption_allowed(),
+                    ..XmlPolicy::default()
+                },
             )?;
             let exchange = signed_redirect_request_then_post_response(&peers)?;
 
@@ -402,6 +407,53 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
                 expected
             );
         }
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[test]
+fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn std::error::Error>> {
+    let rsa15 = AlgorithmPolicy {
+        key_encryption: KeyEncryptionAlgorithm::Rsa15ForCompatibility,
+        ..AlgorithmPolicy::default()
+    };
+    for encryption in [
+        XmlEncryptionPolicy::encrypt_assertions(),
+        XmlEncryptionPolicy::encrypt_ids(),
+    ] {
+        let encryption = encryption.with_insecure_software_rsa_key_transport_decryption_allowed();
+        let default = peers(
+            rsa(AlgorithmPolicy::default()),
+            rsa(rsa15.clone()),
+            XmlPolicy {
+                encryption,
+                ..XmlPolicy::default()
+            },
+        )?;
+        let refused = signed_redirect_request_then_post_response(&default)
+            .err()
+            .ok_or("RSA-v1.5 accepted without the opt-in")?;
+        assert!(
+            matches!(
+                refused.downcast_ref::<SamlError>(),
+                Some(SamlError::Unsupported(message)) if message.contains("rsa-1_5")
+            ),
+            "{refused:?}"
+        );
+
+        let selected = peers(
+            rsa(AlgorithmPolicy::default()),
+            rsa(rsa15.clone()),
+            XmlPolicy {
+                encryption: encryption.with_rsa15_key_transport_decryption_allowed(),
+                ..XmlPolicy::default()
+            },
+        )?;
+        let exchange = signed_redirect_request_then_post_response(&selected)?;
+        assert!(exchange
+            .response_xml
+            .contains(saml_rs::constants::key_encryption_algorithm::RSA_1_5));
     }
     Ok(())
 }

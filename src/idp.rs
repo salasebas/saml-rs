@@ -651,6 +651,7 @@ impl IdentityProvider {
                 assertion_elements: AssertionElementEncryption::default(),
                 element_decrypt_key: None,
                 allow_insecure_software_rsa_key_transport_decryption: false,
+                allow_rsa15_key_transport_decryption: false,
                 clock_drifts,
                 now,
                 redirect_inflate_max_bytes: self.setting.redirect_inflate_max_bytes,

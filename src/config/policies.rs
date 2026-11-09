@@ -400,6 +400,7 @@ pub struct XmlEncryptionPolicy {
     /// `<EncryptedAttribute>` behavior for assertion attribute statements.
     pub attributes: AttributeEncryptionPolicy,
     allow_insecure_software_rsa_key_transport_decryption: bool,
+    allow_rsa15_key_transport_decryption: bool,
 }
 
 impl XmlEncryptionPolicy {
@@ -442,8 +443,28 @@ impl XmlEncryptionPolicy {
         self
     }
 
+    /// Return a copy whose service provider decrypts an `<EncryptedKey>` that
+    /// uses RSA-v1.5 key transport.
+    ///
+    /// Without it, a response whose encrypted assertion, `<EncryptedID>`, or
+    /// `<EncryptedAttribute>` names RSA-v1.5 is rejected with
+    /// [`SamlError::Unsupported`](crate::SamlError::Unsupported) before any
+    /// key is decrypted. RSA-v1.5 is open to Bleichenbacher's
+    /// chosen-ciphertext attack. Select it only for an identity provider that
+    /// cannot send RSA-OAEP. It needs `crypto-legacy-algorithms`, and on
+    /// RustCrypto also
+    /// [`with_insecure_software_rsa_key_transport_decryption_allowed`](Self::with_insecure_software_rsa_key_transport_decryption_allowed).
+    pub fn with_rsa15_key_transport_decryption_allowed(mut self) -> Self {
+        self.allow_rsa15_key_transport_decryption = true;
+        self
+    }
+
     pub(super) fn allows_insecure_software_rsa_key_transport_decryption(self) -> bool {
         self.allow_insecure_software_rsa_key_transport_decryption
+    }
+
+    pub(super) fn allows_rsa15_key_transport_decryption(self) -> bool {
+        self.allow_rsa15_key_transport_decryption
     }
 
     pub(super) fn selects_any_element(self) -> bool {
