@@ -35,6 +35,22 @@ their public keys range from 2048 to 4096 bits. Historical encrypted keys and
 expired certificates remain test-only inputs for their existing focused
 regressions and are not provider-support or production-security claims.
 
+## DSA signing fixture
+
+`key/dsa/privkey.pkcs8.pem` and `key/dsa/cert.pem` are a test-only DSA key and
+self-signed certificate for the DSAwithSHA1 test in
+`tests/conformance_algorithms.rs`. They were generated with OpenSSL `4.1.0`:
+`genpkey -genparam -algorithm DSA -pkeyopt pbits:2048 -pkeyopt qbits:256`,
+`genpkey -paramfile`, and `req -new -x509 -sha256 -days 36500`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `key/dsa/privkey.pkcs8.pem` | `f068be2b52fe4950a193ec4c1ce6482cc94c1b0a64d4650a05b701d348b189cd` |
+| `key/dsa/cert.pem` | `05057e2fe258d70aebff0b3540a408cbc58967fae46db4aa51fabeb48ac94d5e` |
+
+The certificate SHA-256 fingerprint is
+`2E:82:88:A6:72:6E:56:11:FA:97:56:58:AD:70:78:91:89:44:20:9B:E6:63:4C:9C:03:BD:20:2E:9D:57:02:2C`.
+
 ## External SLO HTTP-Redirect fixtures
 
 The fixtures under `tests/fixtures/interop/` are immutable interoperability

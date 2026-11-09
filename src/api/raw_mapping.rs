@@ -103,6 +103,15 @@ pub(super) fn raw_sp_descriptor(sp: &SpDescriptor) -> Result<ServiceProvider, Sa
     ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())
 }
 
+pub(super) fn raw_sp_for_issued_response(
+    sp: &SpDescriptor,
+    idp_setting: &EntitySetting,
+) -> Result<ServiceProvider, SamlError> {
+    let mut raw_sp = raw_sp_descriptor(sp)?;
+    raw_sp.setting.transformation_algorithms = idp_setting.transformation_algorithms.clone();
+    Ok(raw_sp)
+}
+
 pub(super) fn selected_acs(
     sp: &ServiceProvider,
     requested_binding: Option<SsoResponseBinding>,

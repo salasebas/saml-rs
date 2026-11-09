@@ -12,7 +12,7 @@ use crate::model::{
 
 use super::raw_mapping::{
     default_response_target, ensure_entity_id, input_binding, raw_sp_descriptor,
-    relay_state_from_input, response_target,
+    raw_sp_for_issued_response, relay_state_from_input, response_target,
 };
 use super::{Idp, RespondSso, Saml, SamlError};
 
@@ -235,7 +235,7 @@ impl Saml<Idp> {
             })
         });
         relay_state.validate()?;
-        let mut raw_sp = raw_sp_descriptor(sp)?;
+        let mut raw_sp = raw_sp_for_issued_response(sp, idp_setting)?;
         raw_sp.setting.want_message_signed = sign_response;
         let (binding, explicit_acs) = match request {
             Some(request) => response_target(&raw_sp, request.message(), options.binding)?,

@@ -21,6 +21,7 @@ compatible additions.
 - [Limited base64 decoding ignores only space, tab, CR, LF, and form feed](unreleased-base64-whitespace.md)
 - [Web SSO response over HTTP-Artifact](unreleased-http-artifact-response.md)
 - [Single Logout over SOAP](unreleased-soap-logout.md)
+- [Conformance §4 algorithms](unreleased-conformance-algorithms.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).

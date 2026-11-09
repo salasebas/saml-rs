@@ -128,6 +128,8 @@ pub enum SignatureAlgorithm {
     RsaSha256,
     RsaSha384,
     RsaSha512,
+    RsaSha1,
+    DsaSha1,
     Custom(String),
 }
 

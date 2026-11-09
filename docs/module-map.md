@@ -69,6 +69,7 @@ stay unclaimed.
 | XML signature verification | `src/crypto/verify.rs` |
 | Protocol response roots that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | XML signature generation | `src/crypto/sign.rs` |
+| Algorithm variants and `AlgorithmPolicy` | `src/config/algorithms.rs`, `src/config/policies.rs` |
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |
 | Peer descriptors | `src/config/descriptors.rs` |
@@ -97,6 +98,7 @@ Logout is the directory `src/logout/`.
 | Web Browser SSO response over HTTP-Artifact | [`web-browser-sso-artifact.md`](conformance/web-browser-sso-artifact.md) |
 | Artifact resolution over SOAP | [`artifact-resolution.md`](conformance/artifact-resolution.md) |
 | Metadata trust and replay | [`metadata-and-replay.md`](conformance/metadata-and-replay.md) |
+| XML Signature and XML Encryption algorithms | [`xml-security-algorithms.md`](conformance/xml-security-algorithms.md) |
 
 ## Compatibility crates
 
