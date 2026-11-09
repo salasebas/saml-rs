@@ -2886,7 +2886,7 @@ fn recommended_idp_receive_ignores_a_spurious_post_signature_field(
 }
 
 #[test]
-fn recommended_idp_receive_rejects_authenticated_request_without_destination(
+fn idp_receive_rejects_authenticated_request_without_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signing_sp = Saml::sp(sp_config()?)?;
     let strict_idp = Saml::idp(idp_config()?)?;
@@ -2903,42 +2903,39 @@ fn recommended_idp_receive_rejects_authenticated_request_without_destination(
     let started = signing_sp.start_sso(&idp_descriptor, StartSso::post())?;
     let xml = without_destination(&authn_request_xml(&started.outbound)?)?;
     let resigned = resign_response(&xml)?;
-    let input = post_authn_request_input_with_xml(&resigned);
-    match recommended_idp.receive_sso(&sp_descriptor, input, validation()) {
-        Err(SamlError::DestinationMismatch { actual, .. }) if actual.is_none() => {}
-        other => {
-            return Err(format!(
-                "expected missing Destination on a signed POST AuthnRequest, got {other:?}"
-            )
-            .into());
-        }
-    }
-    strict_idp.receive_sso(
-        &sp_descriptor,
-        post_authn_request_input_with_xml(&resigned),
-        validation(),
-    )?;
-
     let redirect = signing_sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     let query = signed_redirect_query_without_destination(&authn_request_xml(&redirect.outbound)?)?;
-    match recommended_idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(&query),
-        validation(),
-    ) {
-        Err(SamlError::DestinationMismatch { actual, .. }) if actual.is_none() => {}
-        other => {
-            return Err(format!(
-                "expected missing Destination on a signed Redirect AuthnRequest, got {other:?}"
-            )
-            .into());
+    for (policy, idp) in [
+        ("RequireSigned", &strict_idp),
+        ("recommended", &recommended_idp),
+    ] {
+        match idp.receive_sso(
+            &sp_descriptor,
+            post_authn_request_input_with_xml(&resigned),
+            validation(),
+        ) {
+            Err(SamlError::DestinationMismatch { actual, .. }) if actual.is_none() => {}
+            other => {
+                return Err(format!(
+                    "expected missing Destination on a signed POST AuthnRequest under {policy}, got {other:?}"
+                )
+                .into());
+            }
+        }
+        match idp.receive_sso(
+            &sp_descriptor,
+            BrowserInput::<AuthnRequest>::redirect(&query),
+            validation(),
+        ) {
+            Err(SamlError::DestinationMismatch { actual, .. }) if actual.is_none() => {}
+            other => {
+                return Err(format!(
+                    "expected missing Destination on a signed Redirect AuthnRequest under {policy}, got {other:?}"
+                )
+                .into());
+            }
         }
     }
-    strict_idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(query),
-        validation(),
-    )?;
 
     let unsigned_sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?)?;
     let (unsigned_descriptor, recommended_descriptor) =

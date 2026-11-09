@@ -174,7 +174,8 @@ Rules:
 
 - Validate issuer and signature according to IdP policy.
 - Validate AuthnRequest `Destination` against this IdP's SSO endpoint when the
-  request carries `Destination`.
+  request carries `Destination`. Once the signature authenticates the request,
+  `Destination` is also required.
 - Use `SamlValidationContext` for inbound signed, timed, or replay-sensitive
   AuthnRequest validation.
 - Validate requested ACS URL/index against SP metadata before response

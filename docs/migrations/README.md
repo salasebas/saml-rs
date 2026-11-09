@@ -32,6 +32,7 @@ compatible additions.
 - [Generated IDs are 160 random bits in 41 characters](unreleased-generated-id-length.md)
 - [NameID formats must be absolute URIs](unreleased-name-id-format-uri.md)
 - [Every EncryptedAssertion is decrypted](unreleased-every-encrypted-assertion.md)
+- [A signed AuthnRequest must carry Destination under RequireSigned](unreleased-signed-authn-request-destination.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
