@@ -11,7 +11,8 @@
 //! - Only content covered by a verified reference is returned for extraction.
 
 use super::keys::load_certificate;
-use crate::constants::{namespace, transform_algorithm};
+use super::response_root::root_uses_protocol_response_rules;
+use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
 use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node, XmlLimits};
@@ -19,9 +20,6 @@ use bergshamra::core::ns as bergshamra_ns;
 use bergshamra::dsig::verify::verify_all_document_with_source;
 use bergshamra::xml::{uppsala, Document as BergshamraDocument, NodeId as BergshamraNodeId};
 use bergshamra::{verify, DsigContext, KeysManager, VerifiedReference, VerifyResult};
-use quick_xml::events::Event;
-use quick_xml::name::{Namespace, ResolveResult};
-use quick_xml::reader::NsReader;
 use std::collections::HashSet;
 
 fn children_named<'a>(node: &'a Node, name: &str) -> Vec<&'a Node> {
@@ -263,47 +261,6 @@ fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool 
             || assertions
                 .iter()
                 .all(|assertion| id_target_matches_node(targets, assertion)))
-}
-
-/// Protocol-namespace local names that use response coverage and wrapping checks.
-fn is_protocol_response_name(local_name: &str) -> bool {
-    matches!(
-        local_name,
-        "Response"
-            | "ArtifactResponse"
-            | "LogoutResponse"
-            | "ManageNameIDResponse"
-            | "NameIDMappingResponse"
-    )
-}
-
-fn document_element_name(xml: &str) -> Result<(String, String), SamlError> {
-    let mut reader = NsReader::from_str(xml);
-    let mut buffer = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buffer) {
-            Ok(Event::Start(element) | Event::Empty(element)) => {
-                let (resolved, local_name) = reader.resolver().resolve_element(element.name());
-                let local_name = local_name.as_ref().to_string();
-                let resolved = match resolved {
-                    ResolveResult::Bound(Namespace(uri)) => uri.to_string(),
-                    ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
-                };
-                return Ok((resolved, local_name));
-            }
-            Ok(Event::Eof) => {
-                return Err(SamlError::Xml("no document element".into()));
-            }
-            Ok(_) => {}
-            Err(error) => return Err(SamlError::Xml(error.to_string())),
-        }
-        buffer.clear();
-    }
-}
-
-fn root_uses_protocol_response_rules(xml: &str) -> Result<bool, SamlError> {
-    let (element_namespace, local_name) = document_element_name(xml)?;
-    Ok(element_namespace == namespace::PROTOCOL && is_protocol_response_name(&local_name))
 }
 
 /// Return the source of the content covered by a verified reference: the first
@@ -2045,48 +2002,6 @@ mod tests {
         assert!(content.is_none());
         // keep the extractor import exercised
         let _ = extract("<a/>", &[ExtractorField::new("x", &["a"])])?;
-        Ok(())
-    }
-
-    #[test]
-    fn protocol_response_roots_match_exact_namespace_aware_names(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let protocol = namespace::PROTOCOL;
-        for local_name in [
-            "Response",
-            "ArtifactResponse",
-            "LogoutResponse",
-            "ManageNameIDResponse",
-            "NameIDMappingResponse",
-        ] {
-            let prefixed = format!(r#"<samlp:{local_name} xmlns:samlp="{protocol}"/>"#);
-            let default_namespace = format!(r#"<{local_name} xmlns="{protocol}"/>"#);
-            assert!(
-                root_uses_protocol_response_rules(&prefixed)?,
-                "{local_name}"
-            );
-            assert!(
-                root_uses_protocol_response_rules(&default_namespace)?,
-                "{local_name}"
-            );
-        }
-
-        let prologue = format!(
-            "<?xml version=\"1.0\"?><!-- before --><samlp:Response xmlns:samlp=\"{protocol}\"/>"
-        );
-        assert!(root_uses_protocol_response_rules(&prologue)?);
-        assert!(!root_uses_protocol_response_rules(
-            r#"<samlp:Response xmlns:samlp="urn:example:not-saml"/>"#
-        )?);
-        assert!(!root_uses_protocol_response_rules(&format!(
-            r#"<samlp:FooResponse xmlns:samlp="{protocol}"/>"#
-        ))?);
-        assert!(!root_uses_protocol_response_rules(&format!(
-            r#"<samlp:LogoutRequest xmlns:samlp="{protocol}"/>"#
-        ))?);
-        assert!(!root_uses_protocol_response_rules(
-            "<samlp:Response>x</samlp:Response>"
-        )?);
         Ok(())
     }
 
