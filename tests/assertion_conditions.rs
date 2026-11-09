@@ -405,7 +405,7 @@ fn accept_simple_sign(
     )?)
 }
 
-#[cfg(feature = "crypto-rustcrypto")]
+#[cfg(not(feature = "crypto-fips"))]
 fn sign_first_assertion(xml: &str, algorithm: &str) -> Result<String, Box<dyn std::error::Error>> {
     let key = load_private_key(PRIVKEY, None)?;
     Ok(construct_saml_signature(
@@ -419,7 +419,7 @@ fn sign_first_assertion(xml: &str, algorithm: &str) -> Result<String, Box<dyn st
     )?)
 }
 
-#[cfg(feature = "crypto-rustcrypto")]
+#[cfg(not(feature = "crypto-fips"))]
 fn move_last_assertion_first(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     let first = xml.find("<saml:Assertion").ok_or("missing assertion")?;
     let last = xml.rfind("<saml:Assertion").ok_or("missing assertion")?;
@@ -886,4 +886,320 @@ fn several_assertions_are_accepted_over_simple_sign() -> Result<(), Box<dyn std:
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert_ne!(session.assertion_id().as_str(), "_second_assertion");
     Ok(())
+}
+
+/// Each `<EncryptedAssertion>` of a response is decrypted and evaluated as a
+/// plaintext `<Assertion>` is (Conformance §3.4).
+///
+/// FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
+#[cfg(not(feature = "crypto-fips"))]
+mod encrypted_assertions {
+    use super::*;
+    use saml_rs::constants::data_encryption_algorithm::{AES_128_GCM, AES_256};
+    use saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
+    use saml_rs::crypto::encrypt_assertion;
+    use saml_rs::{AssertionSignaturePolicy, XmlEncryptionPolicy, XmlPolicy};
+
+    const OTHER_RECIPIENT_CERT: &str = include_str!("fixtures/key/idp_cert.cer");
+    const ENCRYPTED_ID: &str = concat!(
+        "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\">",
+        "<xenc:CipherData><xenc:CipherValue>AAAA</xenc:CipherValue></xenc:CipherData>",
+        "</xenc:EncryptedData></saml:EncryptedID>",
+    );
+
+    fn decrypting_sp(
+        acs: AcsEndpoint,
+        validation: SpValidationPolicy,
+    ) -> Result<Saml<saml_rs::Sp>, SamlError> {
+        Saml::sp(
+            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+                .acs_endpoint(acs)
+                .credentials(Credentials {
+                    decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
+                    ..credentials()
+                })
+                .validation(validation)
+                .xml(XmlPolicy {
+                    encryption: XmlEncryptionPolicy::default()
+                        .with_insecure_software_rsa_key_transport_decryption_allowed(),
+                    ..XmlPolicy::default()
+                })
+                .build()?,
+        )
+    }
+
+    fn post_exchange(
+        validation: SpValidationPolicy,
+    ) -> Result<Exchange, Box<dyn std::error::Error>> {
+        Ok(Exchange {
+            sp: decrypting_sp(AcsEndpoint::post(SP_ACS_POST)?.mark_default(), validation)?,
+            ..exchange_for(SpValidationPolicy::recommended(), false)?
+        })
+    }
+
+    /// The response of `exchange` with a second assertion `_second_assertion`
+    /// for the same principal, and no signatures.
+    fn two_assertions(exchange: &Exchange) -> Result<String, Box<dyn std::error::Error>> {
+        strip_embedded_signatures(&duplicate_assertion(
+            &response_xml(&exchange.response_fields)?,
+            "_second_assertion",
+        )?)
+    }
+
+    /// `xml` with its first plaintext `<Assertion>` encrypted for `recipient_cert`.
+    fn encrypt_first(
+        xml: &str,
+        data_algorithm: &str,
+        recipient_cert: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        Ok(encrypt_assertion(
+            xml,
+            recipient_cert,
+            data_algorithm,
+            RSA_OAEP_MGF1P,
+            "saml",
+        )?)
+    }
+
+    /// `xml` with both assertions encrypted for the service provider, and the
+    /// response signed over the ciphertext.
+    fn both_encrypted_then_response_signed(
+        xml: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let first = encrypt_first(xml, AES_256, CERT)?;
+        let both = encrypt_first(&first, AES_256, CERT)?;
+        assert_eq!(both.matches("<saml:EncryptedAssertion").count(), 2);
+        resign_response(&both)
+    }
+
+    fn expect_error(
+        result: Result<SsoSession, Box<dyn std::error::Error>>,
+        expected: fn(&SamlError) -> bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        match result {
+            Err(error) => match error.downcast_ref::<SamlError>() {
+                Some(saml_error) if expected(saml_error) => Ok(()),
+                _ => Err(format!("unexpected error {error:?}").into()),
+            },
+            Ok(session) => {
+                Err(format!("accepted assertion {}", session.assertion_id().as_str()).into())
+            }
+        }
+    }
+
+    #[test]
+    fn every_encrypted_assertion_is_evaluated_and_replay_recorded(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let plaintext = two_assertions(&exchange)?;
+        let xml = both_encrypted_then_response_signed(&plaintext)?;
+        let mut cache = MemoryReplayCache::default();
+        let session = accept_with(
+            &exchange,
+            &xml,
+            SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache)),
+        )?;
+        assert_eq!(session.name_id().value(), "alice@example.com");
+        for id in assertion_ids(&plaintext)? {
+            if !cache.seen.contains_key(&format!("assertion_id:{id}")) {
+                return Err(format!("assertion {id} was not replay-recorded").into());
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_second_encrypted_assertion_with_the_wrong_audience_is_rejected(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let plaintext =
+            replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
+        let xml = both_encrypted_then_response_signed(&plaintext)?;
+        expect_error(
+            accept(&exchange, &xml),
+            |error| matches!(error, SamlError::AudienceMismatch { expected } if expected == SP_ENTITY_ID),
+        )
+    }
+
+    #[test]
+    fn a_second_encrypted_assertion_that_does_not_decrypt_is_rejected(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let first = encrypt_first(&two_assertions(&exchange)?, AES_256, CERT)?;
+        let xml = resign_response(&encrypt_first(&first, AES_256, OTHER_RECIPIENT_CERT)?)?;
+        expect_error(accept(&exchange, &xml), |error| {
+            matches!(error, SamlError::Crypto(_))
+        })
+    }
+
+    #[test]
+    fn each_decrypted_assertion_must_be_signed_when_assertions_must_be_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy {
+            assertions: AssertionSignaturePolicy::RequireSigned,
+            ..SpValidationPolicy::recommended()
+        })?;
+        let first_signed = encrypt_first(
+            &sign_first_assertion(&two_assertions(&exchange)?, RSA_SHA256)?,
+            AES_256,
+            CERT,
+        )?;
+
+        let both_signed = encrypt_first(
+            &sign_first_assertion(&first_signed, RSA_SHA256)?,
+            AES_256,
+            CERT,
+        )?;
+        accept(&exchange, &resign_response(&both_signed)?)?;
+
+        let second_unsigned = encrypt_first(&first_signed, AES_256, CERT)?;
+        expect_error(
+            accept(&exchange, &resign_response(&second_unsigned)?),
+            |error| matches!(error, SamlError::SignatureMissing),
+        )
+    }
+
+    fn require_signed() -> SpValidationPolicy {
+        SpValidationPolicy {
+            assertions: AssertionSignaturePolicy::RequireSigned,
+            ..SpValidationPolicy::recommended()
+        }
+    }
+
+    /// `xml` with its first plaintext `<Assertion>` signed, then encrypted.
+    fn sign_and_encrypt_first(
+        xml: &str,
+        data_algorithm: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        encrypt_first(
+            &sign_first_assertion(xml, RSA_SHA256)?,
+            data_algorithm,
+            CERT,
+        )
+    }
+
+    #[test]
+    fn each_assertion_signed_inside_its_encryption_must_be_signed_when_assertions_must_be_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(require_signed())?;
+        let first_signed = sign_and_encrypt_first(&two_assertions(&exchange)?, AES_128_GCM)?;
+
+        accept(
+            &exchange,
+            &sign_and_encrypt_first(&first_signed, AES_128_GCM)?,
+        )?;
+
+        let second_unsigned = encrypt_first(&first_signed, AES_128_GCM, CERT)?;
+        assert!(!second_unsigned.contains("<ds:Signature"));
+        expect_error(accept(&exchange, &second_unsigned), |error| {
+            matches!(error, SamlError::PotentialWrappingAttack)
+        })
+    }
+
+    #[test]
+    fn an_unsigned_plaintext_assertion_beside_a_signed_encrypted_one_is_rejected_when_assertions_must_be_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(require_signed())?;
+        let xml = sign_and_encrypt_first(&two_assertions(&exchange)?, AES_128_GCM)?;
+        assert_eq!(xml.matches("<saml:EncryptedAssertion").count(), 1);
+        assert!(xml.contains("<saml:Assertion "));
+        expect_error(accept(&exchange, &xml), |error| {
+            matches!(error, SamlError::PotentialWrappingAttack)
+        })
+    }
+
+    #[test]
+    fn each_encrypted_assertion_must_be_signed_over_simple_sign_when_assertions_must_be_signed(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = Exchange {
+            sp: decrypting_sp(
+                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default(),
+                require_signed(),
+            )?,
+            ..exchange_simple_sign()?
+        };
+        let first_signed = sign_and_encrypt_first(&two_assertions(&exchange)?, AES_256)?;
+
+        accept_simple_sign(&exchange, &sign_and_encrypt_first(&first_signed, AES_256)?)?;
+
+        let second_unsigned = encrypt_first(&first_signed, AES_256, CERT)?;
+        expect_error(accept_simple_sign(&exchange, &second_unsigned), |error| {
+            matches!(error, SamlError::PotentialWrappingAttack)
+        })
+    }
+
+    #[test]
+    fn an_encrypted_id_in_several_assertions_of_an_unsigned_response_is_not_decrypted(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let plaintext = two_assertions(&exchange)?;
+        let last = plaintext
+            .rfind("<saml:Assertion")
+            .ok_or("missing assertion")?;
+        let name_id_start = plaintext[last..]
+            .find("<saml:NameID")
+            .ok_or("missing NameID")?
+            + last;
+        let end_tag = "</saml:NameID>";
+        let name_id_end = plaintext[name_id_start..]
+            .find(end_tag)
+            .ok_or("unterminated NameID")?
+            + name_id_start
+            + end_tag.len();
+        let with_encrypted_id = format!(
+            "{}{ENCRYPTED_ID}{}",
+            &plaintext[..name_id_start],
+            &plaintext[name_id_end..]
+        );
+        let first_signed = sign_first_assertion(&with_encrypted_id, RSA_SHA256)?;
+        let xml = sign_first_assertion(&move_last_assertion_first(&first_signed)?, RSA_SHA256)?;
+        assert_eq!(xml.matches("</ds:Signature>").count(), 2);
+        expect_error(
+            accept(&exchange, &xml),
+            |error| matches!(error, SamlError::Unsupported(message) if message.contains("several assertions")),
+        )
+    }
+
+    #[test]
+    fn every_assertion_signed_inside_its_encryption_is_evaluated(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let plaintext =
+            replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
+        let first = encrypt_first(
+            &sign_first_assertion(&plaintext, RSA_SHA256)?,
+            AES_128_GCM,
+            CERT,
+        )?;
+        let xml = encrypt_first(
+            &sign_first_assertion(&first, RSA_SHA256)?,
+            AES_128_GCM,
+            CERT,
+        )?;
+        assert!(!xml.contains("<ds:Signature"));
+        expect_error(
+            accept(&exchange, &xml),
+            |error| matches!(error, SamlError::AudienceMismatch { expected } if expected == SP_ENTITY_ID),
+        )
+    }
+
+    #[test]
+    fn every_encrypted_assertion_is_evaluated_over_simple_sign(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = Exchange {
+            sp: decrypting_sp(
+                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default(),
+                SpValidationPolicy::recommended(),
+            )?,
+            ..exchange_simple_sign()?
+        };
+        let plaintext =
+            replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
+        let first = encrypt_first(&plaintext, AES_256, CERT)?;
+        let xml = encrypt_first(&first, AES_256, CERT)?;
+        expect_error(
+            accept_simple_sign(&exchange, &xml),
+            |error| matches!(error, SamlError::AudienceMismatch { expected } if expected == SP_ENTITY_ID),
+        )
+    }
 }
