@@ -245,6 +245,22 @@ pub mod data_encryption_algorithm {
     pub const AES_128_GCM: &str = "http://www.w3.org/2009/xmlenc11#aes128-gcm";
 }
 
+/// AES-GCM, the XML Encryption 1.1 block encryption that authenticates
+/// its ciphertext.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+pub(crate) fn is_xml_encryption_gcm_algorithm(algorithm: &str) -> bool {
+    matches!(
+        algorithm,
+        data_encryption_algorithm::AES_128_GCM
+            | "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+            | "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+    )
+}
+
 pub(crate) fn is_xml_encryption_cbc_algorithm(algorithm: &str) -> bool {
     matches!(
         algorithm,

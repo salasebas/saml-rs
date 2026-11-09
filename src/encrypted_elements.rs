@@ -32,8 +32,34 @@ pub(crate) fn require_one_assertion_unless_message_authenticated(
     Ok(())
 }
 
-/// Decrypt the selected `<EncryptedID>` and `<EncryptedAttribute>` children of
-/// the verified response and of its consumed assertion.
+/// Whether an assertion of `saml_content` carries an `<EncryptedID>` or an
+/// `<EncryptedAttribute>`.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+pub(crate) fn carries_encrypted_elements(
+    saml_content: &str,
+    limits: XmlLimits,
+) -> Result<bool, SamlError> {
+    crate::crypto::enc::carries_encrypted_assertion_elements(saml_content, limits)
+}
+
+#[cfg(not(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+)))]
+pub(crate) fn carries_encrypted_elements(
+    _saml_content: &str,
+    _limits: XmlLimits,
+) -> Result<bool, SamlError> {
+    Ok(false)
+}
+
+/// Decrypt the `<EncryptedID>` and `<EncryptedAttribute>` children of the
+/// verified response and of its consumed assertion.
 #[cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
@@ -65,6 +91,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
         options,
         opts.xml_limits,
         opts.assertion_elements,
+        opts.received_encrypted_elements,
     )?;
     is_valid_xml_with_limits(&content, opts.xml_limits)?;
     validate_protocol_profile(&content, ParserType::SamlResponse, opts.xml_limits)?;

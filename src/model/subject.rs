@@ -302,7 +302,10 @@ pub enum RequestedSubjectIdentifier {
     NameId(NameId),
     /// `<BaseID>`, not decoded.
     BaseId,
-    /// `<EncryptedID>`, not decrypted.
+    /// `<EncryptedID>` this identity provider did not decrypt: it has no
+    /// decryption key, the request is unsigned and its data encryption is not
+    /// AES-GCM, or the ciphertext does not decrypt to one `<NameID>`. A
+    /// decrypted one is [`Self::NameId`].
     EncryptedId,
 }
 

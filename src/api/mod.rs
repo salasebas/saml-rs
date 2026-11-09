@@ -102,6 +102,7 @@ mod name_id_management;
 mod options;
 mod paos;
 mod raw_mapping;
+mod requested_subject;
 mod slo;
 mod sp;
 

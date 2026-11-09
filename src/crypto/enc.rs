@@ -9,6 +9,7 @@ use super::xml_syntax::validate_crypto_xml_prefix;
 use crate::binding::xml_escape;
 use crate::config::{
     AssertionElementEncryption, AttributeEncryptionPolicy, IdentifierEncryptionPolicy,
+    ReceivedEncryptedElements,
 };
 use crate::constants::{key_encryption_algorithm, namespace};
 use crate::error::SamlError;
@@ -568,7 +569,100 @@ pub(crate) fn decrypt_root_child(
     Ok(decrypted)
 }
 
-/// Decrypt the selected children of each assertion in `xml` with `enc_key`.
+/// Whether a verified signature covers a received request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RequestAuthentication {
+    Authenticated,
+    Unauthenticated,
+}
+
+/// `xml` with the `<EncryptedID>` of the `<Subject>` of its `<AuthnRequest>`
+/// replaced by the `<NameID>` it carries, decrypted with `enc_key`.
+///
+/// Returns `None` when the `<Subject>` carries no `<EncryptedID>`, and for an
+/// unauthenticated request whose `EncryptedData` does not name AES-GCM: CBC
+/// ciphertext is decrypted only under a verified signature.
+///
+/// # Errors
+///
+/// Returns [`SamlError`] when decryption fails or the plaintext is not one
+/// `<NameID>`, as [`decrypt_assertion_elements`] does.
+pub(crate) fn decrypt_authn_request_encrypted_id(
+    xml: &str,
+    enc_key: &Key,
+    options: AssertionDecryptionOptions,
+    limits: XmlLimits,
+    authentication: RequestAuthentication,
+) -> Result<Option<String>, SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    dom::parse_with_limits(xml, limits)?;
+    let document = parse_xml_document(xml)?;
+    let [subject] = root_children(&document, namespace::ASSERTION, "Subject")?[..] else {
+        return Ok(None);
+    };
+    let encrypted_ids: Vec<NodeId> =
+        assertion_children(&document, subject, "EncryptedID").collect();
+    let [encrypted_id] = encrypted_ids[..] else {
+        return Ok(None);
+    };
+    match authentication {
+        RequestAuthentication::Authenticated => {}
+        RequestAuthentication::Unauthenticated => {
+            if !uses_gcm(&document, encrypted_id) {
+                return Ok(None);
+            }
+        }
+    }
+    require_software_rsa_opt_in(options)?;
+    let replacement = decrypted_element(
+        &document,
+        encrypted_id,
+        ENCRYPTED_ID,
+        enc_key,
+        options,
+        limits,
+    )?;
+    let decrypted = splice(xml, vec![replacement]);
+    limits.check_input_bytes(decrypted.len())?;
+    Ok(Some(decrypted))
+}
+
+/// Whether the `EncryptedData` of `encrypted` names an AES-GCM
+/// `EncryptionMethod`.
+fn uses_gcm(document: &XmlDocument<'_>, encrypted: NodeId) -> bool {
+    let child = |parent: NodeId, local_name: &'static str| {
+        document.children_iter(parent).find(|child| {
+            document
+                .element(*child)
+                .is_some_and(|element| element.matches_name_ns(ENC, local_name))
+        })
+    };
+    child(encrypted, "EncryptedData")
+        .and_then(|data| child(data, "EncryptionMethod"))
+        .and_then(|method| document.element(method))
+        .and_then(|method| method.get_attribute("Algorithm"))
+        .is_some_and(crate::constants::is_xml_encryption_gcm_algorithm)
+}
+
+/// Whether an assertion in `xml` carries an `<EncryptedID>` in its `<Subject>`
+/// or an `<EncryptedAttribute>` in an `<AttributeStatement>`.
+pub(crate) fn carries_encrypted_assertion_elements(
+    xml: &str,
+    limits: XmlLimits,
+) -> Result<bool, SamlError> {
+    dom::parse_with_limits(xml, limits)?;
+    let document = parse_xml_document(xml)?;
+    for kind in [ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE] {
+        if !assertion_elements(&document, kind.parent, kind.encrypted)?.is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Decrypt the children of each assertion in `xml` with `enc_key`: the ones
+/// `selection` selects, and every one when `received` is
+/// [`ReceivedEncryptedElements::DecryptReceived`].
 ///
 /// Each `<EncryptedID>` of an assertion `<Subject>` becomes the `<NameID>` it
 /// carries, and each `<EncryptedAttribute>` of an `<AttributeStatement>`
@@ -588,18 +682,26 @@ pub(crate) fn decrypt_assertion_elements(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
     selection: AssertionElementEncryption,
+    received: ReceivedEncryptedElements,
 ) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     require_software_rsa_opt_in(options)?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
-    let mut replacements = Vec::new();
-    for kind in selected_kinds(selection) {
+    let selected = selected_kinds(selection);
+    let decrypted = match received {
+        ReceivedEncryptedElements::DecryptReceived => vec![ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE],
+        ReceivedEncryptedElements::DecryptSelected => selected.clone(),
+    };
+    for kind in &selected {
         if !assertion_elements(&document, kind.parent, kind.plaintext)?.is_empty() {
             return Err(SamlError::EncryptionRequired {
                 element: kind.plaintext,
             });
         }
+    }
+    let mut replacements = Vec::new();
+    for kind in decrypted {
         for element in assertion_elements(&document, kind.parent, kind.encrypted)? {
             replacements.push(decrypted_element(
                 &document, element, kind, enc_key, options, limits,
@@ -862,6 +964,7 @@ mod tests {
                 software_rsa_test_options(),
                 XmlLimits::default(),
                 encrypted_ids(),
+                ReceivedEncryptedElements::DecryptSelected,
             )
         };
 
@@ -917,6 +1020,7 @@ mod tests {
             software_rsa_test_options(),
             XmlLimits::default(),
             encrypted_ids(),
+            ReceivedEncryptedElements::DecryptSelected,
         );
         assert!(
             matches!(
@@ -974,6 +1078,7 @@ mod tests {
             software_rsa_test_options(),
             XmlLimits::default(),
             encrypted_ids(),
+            ReceivedEncryptedElements::DecryptSelected,
         )?;
         assert!(!decrypted.contains("EncryptedID"));
         assert!(decrypted.contains(">_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7</saml:NameID>"));

@@ -708,6 +708,7 @@ impl ServiceProvider {
                 decrypt_key_pass: self.setting.enc_private_key_pass.as_deref(),
                 assertion_elements: self.setting.assertion_element_encryption,
                 element_decrypt_key: self.setting.enc_private_key.as_deref(),
+                received_encrypted_elements: self.setting.received_encrypted_elements,
                 allow_insecure_software_rsa_key_transport_decryption: self
                     .setting
                     .allow_insecure_software_rsa_key_transport_decryption,

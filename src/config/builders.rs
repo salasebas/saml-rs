@@ -17,8 +17,8 @@ use super::policies::{
     authn_request_signature_required, authn_request_signing_enabled,
     encrypted_cbc_response_signature_required, logout_signature_required, name_id_creation_allowed,
     response_signature_required, verify_present_authn_request_signature, AlgorithmPolicy,
-    AssertionEncryptionPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy, SpValidationPolicy,
-    TemplatePolicy, XmlPolicy,
+    AssertionEncryptionPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy,
+    ReceivedEncryptedElements, SpValidationPolicy, TemplatePolicy, XmlPolicy,
 };
 #[cfg(not(any(
     feature = "crypto-rustcrypto",
@@ -644,6 +644,7 @@ fn apply_common_settings(
         AssertionEncryptionPolicy::EncryptAssertions
     );
     setting.assertion_element_encryption = xml.encryption.assertion_elements();
+    setting.received_encrypted_elements = ReceivedEncryptedElements::DecryptReceived;
     setting.allow_insecure_software_rsa_key_transport_decryption = xml
         .encryption
         .allows_insecure_software_rsa_key_transport_decryption();

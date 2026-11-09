@@ -89,7 +89,8 @@ mapping is not implemented.
 | XML signature generation | `src/crypto/sign.rs` |
 | Algorithm variants and `AlgorithmPolicy` | `src/config/algorithms.rs`, `src/config/policies.rs` |
 | `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`, and `NewEncryptedID` | `src/crypto/enc.rs` |
-| Decryption of a verified response's encrypted children | `src/flow.rs` |
+| Decryption of a verified response's encrypted children | `src/flow.rs`, `src/encrypted_elements.rs` |
+| `EncryptedID` in the requested `Subject` of a received `AuthnRequest` | `src/api/requested_subject.rs`, `src/crypto/enc.rs` |
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |
 | Peer descriptors | `src/config/descriptors.rs` |
