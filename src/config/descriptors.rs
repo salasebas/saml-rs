@@ -30,6 +30,28 @@ impl ArtifactResolutionService {
     }
 }
 
+/// SOAP `ManageNameIDService` published by an identity provider.
+///
+/// Publishing it turns on name identifier management for this identity
+/// provider. Without it, the identity provider neither sends nor accepts
+/// `ManageNameIDRequest`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManageNameIdService {
+    location: EndpointUrl,
+}
+
+impl ManageNameIdService {
+    /// Publish a SOAP name identifier management endpoint.
+    pub fn soap(location: EndpointUrl) -> Self {
+        Self { location }
+    }
+
+    /// Endpoint location.
+    pub fn location(&self) -> &EndpointUrl {
+        &self.location
+    }
+}
+
 use super::algorithms::NameIdFormat;
 use super::credentials::HmacSecret;
 use super::metadata_trust::{
@@ -166,6 +188,8 @@ pub struct IdpMetadataConfig {
     pub single_logout_service: Vec<SloEndpoint>,
     /// SOAP `ArtifactResolutionService` endpoints.
     pub artifact_resolution_service: Vec<ArtifactResolutionService>,
+    /// SOAP `ManageNameIDService` endpoints.
+    pub manage_name_id_service: Vec<ManageNameIdService>,
     /// Element ordering profile for generated metadata.
     pub elements_order: Option<Vec<String>>,
 }
@@ -181,6 +205,7 @@ impl IdpMetadataConfig {
             single_sign_on_service,
             single_logout_service: Vec::new(),
             artifact_resolution_service: Vec::new(),
+            manage_name_id_service: Vec::new(),
             elements_order: None,
         }
     }

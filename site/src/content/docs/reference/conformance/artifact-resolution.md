@@ -141,8 +141,9 @@ message and does not accept a session. `finish_sso` accepts it through
 
 `SoapProtocolMessage` places one SAML protocol element in a SOAP 1.1 body and
 reads one element back. Single Logout uses that envelope; its rules are in
-[SOAP binding](single-logout.md#soap-binding). Name identifier management and
-the assertion query profile are not implemented.
+[SOAP binding](single-logout.md#soap-binding).
+[Name identifier management](name-id-management.md) uses it too. The assertion
+query profile is not implemented.
 
 ## Outside this flow
 

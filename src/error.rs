@@ -219,8 +219,8 @@ pub enum SamlError {
     /// An `ArtifactResponse` did not contain the dereferenced protocol message.
     #[error("artifact response did not contain the protocol message")]
     ArtifactNotReturned,
-    /// The SOAP channel lacks the protection this artifact dereference requires.
-    #[error("SOAP channel protection is not sufficient for this artifact dereference")]
+    /// The SOAP channel lacks the protection this exchange requires.
+    #[error("SOAP channel protection is not sufficient for this exchange")]
     SoapChannelProtection,
     /// Response carried a non-success SAML status code.
     #[error("status not success: top={top}, second={second:?}")]

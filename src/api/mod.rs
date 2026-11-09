@@ -70,9 +70,35 @@
 //!     CommonDomainCookieLifetime::Session,
 //! ));
 //! ```
+//!
+//! Name identifier management over SOAP is an identity-provider operation.
+//! The service provider cannot send or answer it.
+//!
+//! ```compile_fail
+//! use saml_rs::{IdpDescriptor, NameId, NameIdChange, Saml, SoapChannel, Sp};
+//!
+//! let sp: Saml<Sp> = unreachable!();
+//! let peer: IdpDescriptor = unreachable!();
+//! let name_id: NameId = unreachable!();
+//! let channel: SoapChannel = unreachable!();
+//!
+//! let _ = sp.start_name_id_management(&peer, &name_id, &NameIdChange::Terminate, channel);
+//! ```
+//!
+//! ```compile_fail
+//! use saml_rs::{IdpDescriptor, Saml, SamlValidationContext, SoapChannel, Sp};
+//!
+//! let sp: Saml<Sp> = unreachable!();
+//! let peer: IdpDescriptor = unreachable!();
+//! let channel: SoapChannel = unreachable!();
+//! let validation: SamlValidationContext<'static> = unreachable!();
+//!
+//! let _ = sp.receive_name_id_management(&peer, "", channel, validation);
+//! ```
 
 mod artifact;
 mod idp;
+mod name_id_management;
 mod options;
 mod paos;
 mod raw_mapping;

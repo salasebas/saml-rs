@@ -693,6 +693,9 @@ impl Saml<Idp> {
                 in_response_to: request.message().id().as_str(),
                 user: &user,
                 name_id_format: name_id_format.as_deref(),
+                sp_provided_id: subject
+                    .as_ref()
+                    .and_then(|subject| subject.name_id().sp_provided_id()),
                 issuance_lifetime: self.0.issuance_lifetime,
                 status: status.as_ref(),
             })?;

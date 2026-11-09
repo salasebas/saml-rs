@@ -96,6 +96,7 @@ fn idp_builder_and_struct_literal_reach_same_config() -> Result<(), Box<dyn std:
             single_sign_on_service: vec![sso],
             single_logout_service: vec![slo],
             artifact_resolution_service: Vec::new(),
+            manage_name_id_service: Vec::new(),
             elements_order: None,
         },
         credentials: Credentials::default(),

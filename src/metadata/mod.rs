@@ -319,6 +319,16 @@ impl Metadata {
         )
     }
 
+    /// Every `Location` published on a SOAP `ManageNameIDService` of this
+    /// role, in document order.
+    pub(crate) fn soap_manage_name_id_service_locations(&self) -> Vec<String> {
+        published_locations_for_binding(
+            self.meta.get("manageNameIDService"),
+            Binding::Soap,
+            EndpointDirection::Request,
+        )
+    }
+
     /// Write the metadata XML to `path`.
     ///
     /// # Errors

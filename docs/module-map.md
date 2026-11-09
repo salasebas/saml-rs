@@ -37,6 +37,18 @@ is in [`docs/architecture/`](architecture/README.md).
 The enhanced-client role is not a facade. The IdP and SP operational modes
 stay unclaimed.
 
+## Name identifier management
+
+| Behaviour | File |
+| --- | --- |
+| IdP `start_name_id_management`, `receive_name_id_management`, `respond_name_id_management` | `src/api/name_id_management.rs` |
+| `ManageNameIDRequest` and `ManageNameIDResponse` over SOAP | `src/name_id_management.rs` |
+| `ManageNameIDService` in metadata | `src/metadata/mod.rs`, `src/metadata/generate.rs` |
+| Protocol elements read with their namespaces | `src/xml/protocol_element.rs` |
+
+The service provider has no SOAP name identifier management. HTTP-Redirect
+name identifier management and name identifier mapping are not implemented.
+
 ## Identity Provider Discovery
 
 | Behaviour | File |
@@ -97,6 +109,7 @@ Logout is the directory `src/logout/`.
 | SAML-defined identifiers | [`identifiers.md`](conformance/identifiers.md) |
 | Web Browser SSO response over HTTP-Artifact | [`web-browser-sso-artifact.md`](conformance/web-browser-sso-artifact.md) |
 | Artifact resolution over SOAP | [`artifact-resolution.md`](conformance/artifact-resolution.md) |
+| Name identifier management over SOAP | [`name-id-management.md`](conformance/name-id-management.md) |
 | Metadata trust and replay | [`metadata-and-replay.md`](conformance/metadata-and-replay.md) |
 | XML Signature and XML Encryption algorithms | [`xml-security-algorithms.md`](conformance/xml-security-algorithms.md) |
 

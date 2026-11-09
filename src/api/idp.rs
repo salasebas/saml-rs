@@ -124,6 +124,11 @@ impl Saml<Idp> {
     /// [`Self::remember_identity_provider`] after authentication when the
     /// caller wants this identity provider remembered.
     ///
+    /// The assertion `NameID` carries the `subject` value, format, and
+    /// `SPProvidedID`. After a service provider sets its alternative identifier
+    /// through [`Self::receive_name_id_management`], pass that value as
+    /// `SPProvidedID` with [`NameId::with_qualifiers`](crate::NameId::with_qualifiers).
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the request issuer does not match the SP
@@ -136,8 +141,9 @@ impl Saml<Idp> {
     /// login response template, an error status is combined with a login
     /// response template, [`RespondSso::attributes`] is combined with a login
     /// response template or names a basic attribute that is not an XML name,
-    /// the persistent or transient `NameID` of `subject` is longer than 256
-    /// characters, or response creation fails.
+    /// a `subject` `NameId` with `SPProvidedID` is combined with a login
+    /// response template, the persistent or transient `NameID` of `subject` is
+    /// longer than 256 characters, or response creation fails.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
@@ -248,11 +254,13 @@ impl Saml<Idp> {
             .name_id()
             .format()
             .map(|format| format.as_uri().to_string());
+        let sp_provided_id = subject.name_id().sp_provided_id().map(str::to_string);
         let user = user_from_subject(subject);
         let in_response_to = request.map(|request| request.message().id().as_str());
         let overrides = |acs| LoginResponseOverrides {
             acs,
             name_id_format: name_id_format.as_deref(),
+            sp_provided_id: sp_provided_id.as_deref(),
             issuance_lifetime: Some(self.0.issuance_lifetime),
             web_browser_sso_producer: options.web_browser_sso_producer,
             status: options.status.as_ref(),

@@ -27,7 +27,8 @@ pub(crate) fn validate_issued_name_id_length(
 /// NameID value, format, and optional qualifier attributes.
 ///
 /// [`Self::new`] leaves the qualifiers unset. Response generation copies the
-/// value and format only.
+/// value, format, and `SPProvidedID`. It does not write `NameQualifier` or
+/// `SPNameQualifier`.
 ///
 /// [`Self::generate_transient`], [`Self::generate_persistent`], and
 /// [`Self::persistent`] create the identifiers an identity provider issues in

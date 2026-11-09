@@ -88,6 +88,8 @@ pub enum ReplayKey {
     LogoutRequestId(MessageId),
     /// SAML LogoutResponse ID.
     LogoutResponseId(MessageId),
+    /// SAML ManageNameIDRequest ID.
+    ManageNameIdRequestId(MessageId),
     /// SAML protocol response ID.
     ResponseId(MessageId),
     /// SAML assertion ID.
@@ -101,6 +103,7 @@ impl ReplayKey {
             Self::AuthnRequestId(_) => "authn_request_id",
             Self::LogoutRequestId(_) => "logout_request_id",
             Self::LogoutResponseId(_) => "logout_response_id",
+            Self::ManageNameIdRequestId(_) => "manage_name_id_request_id",
             Self::ResponseId(_) => "response_id",
             Self::AssertionId(_) => "assertion_id",
         }
@@ -109,9 +112,10 @@ impl ReplayKey {
     /// Raw SAML identifier value.
     pub fn value(&self) -> &str {
         match self {
-            Self::AuthnRequestId(id) | Self::LogoutRequestId(id) | Self::LogoutResponseId(id) => {
-                id.as_str()
-            }
+            Self::AuthnRequestId(id)
+            | Self::LogoutRequestId(id)
+            | Self::LogoutResponseId(id)
+            | Self::ManageNameIdRequestId(id) => id.as_str(),
             Self::ResponseId(id) => id.as_str(),
             Self::AssertionId(id) => id.as_str(),
         }

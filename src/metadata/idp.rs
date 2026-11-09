@@ -85,6 +85,15 @@ impl IdpMetadata {
                 ],
             )
             .attrs(&["Binding", "Location", "index"]),
+            ExtractorField::new(
+                "manageNameIDService",
+                &[
+                    "EntityDescriptor",
+                    "IDPSSODescriptor",
+                    "ManageNameIDService",
+                ],
+            )
+            .attrs(&["Binding", "Location"]),
         ];
         Ok(Self {
             inner: Metadata::parse_with_limits(xml, extra, limits)?,
