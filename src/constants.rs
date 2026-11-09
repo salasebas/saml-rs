@@ -366,15 +366,23 @@ impl ParserType {
 ///
 /// Some IdPs restrict the order of elements in entity descriptors.
 pub mod elements_order {
-    /// Default order.
+    /// Default order: the `SPSSODescriptor` sequence of the metadata schema.
     pub const DEFAULT: &[&str] = &[
+        "KeyDescriptor",
+        "SingleLogoutService",
+        "NameIDFormat",
+        "AssertionConsumerService",
+    ];
+    /// OneLogin order, which puts `NameIDFormat` before `SingleLogoutService`.
+    ///
+    /// This is not the schema sequence. It was the default before the default
+    /// followed the schema.
+    pub const ONELOGIN: &[&str] = &[
         "KeyDescriptor",
         "NameIDFormat",
         "SingleLogoutService",
         "AssertionConsumerService",
     ];
-    /// OneLogin order (same as default).
-    pub const ONELOGIN: &[&str] = DEFAULT;
     /// Shibboleth order.
     pub const SHIBBOLETH: &[&str] = &[
         "KeyDescriptor",
@@ -386,13 +394,15 @@ pub mod elements_order {
 
     /// IdP metadata element ordering profiles.
     pub mod idp {
-        /// Default IdP order.
+        /// Default IdP order: the `IDPSSODescriptor` sequence of the metadata
+        /// schema.
         pub const DEFAULT: &[&str] = &[
             "KeyDescriptor",
-            "NameIDFormat",
             "ArtifactResolutionService",
-            "SingleSignOnService",
             "SingleLogoutService",
+            "ManageNameIDService",
+            "NameIDFormat",
+            "SingleSignOnService",
         ];
         /// OneLogin IdP order.
         pub const ONELOGIN: &[&str] = &[
@@ -498,8 +508,8 @@ mod tests {
 
     #[test]
     fn elements_order_profiles() {
-        assert_eq!(elements_order::DEFAULT.len(), 4);
-        assert_eq!(elements_order::ONELOGIN, elements_order::DEFAULT);
+        assert_eq!(elements_order::DEFAULT, &elements_order::SHIBBOLETH[..4]);
+        assert_eq!(elements_order::ONELOGIN[1], "NameIDFormat");
         assert_eq!(elements_order::SHIBBOLETH[1], "SingleLogoutService");
     }
 }
