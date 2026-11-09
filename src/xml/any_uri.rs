@@ -137,11 +137,36 @@ fn is_authority(value: &str) -> bool {
         return false;
     };
     userinfo.is_none_or(|userinfo| all_allowed(userinfo, is_userinfo_char))
-        && address.parse::<Ipv6Addr>().is_ok()
+        && is_ipv6_address(address)
         && (port.is_empty()
             || port
                 .strip_prefix(':')
                 .is_some_and(|digits| digits.bytes().all(|byte| byte.is_ascii_digit())))
+}
+
+/// RFC 2373 §2.2 text forms. An embedded IPv4 piece is a decimal value of
+/// at most 255 and may have leading zeros, which `Ipv6Addr` does not accept.
+fn is_ipv6_address(value: &str) -> bool {
+    let Some((head, ipv4)) = value
+        .rsplit_once(':')
+        .filter(|(_, tail)| tail.contains('.'))
+    else {
+        return value.parse::<Ipv6Addr>().is_ok();
+    };
+    let pieces: Option<Vec<u8>> = ipv4
+        .split('.')
+        .map(|piece| {
+            ((1..=3).contains(&piece.len()) && piece.bytes().all(|byte| byte.is_ascii_digit()))
+                .then(|| piece.parse::<u8>().ok())
+                .flatten()
+        })
+        .collect();
+    match pieces.as_deref() {
+        Some([a, b, c, d]) => format!("{head}:{a}.{b}.{c}.{d}")
+            .parse::<Ipv6Addr>()
+            .is_ok(),
+        _ => false,
+    }
 }
 
 /// Every octet satisfies `allowed`, or starts an `escaped` `"%" hex hex`.
@@ -202,6 +227,8 @@ mod tests {
             "https://example.com/name-id-format",
             "https://user:pw@example.com:8443/a;b/c?d=e&f#g",
             "http://[2001:db8::1]:8080/format",
+            "http://[::ffff:192.000.2.1]/format",
+            "http://[::13.1.68.3]/format",
             "file:///tmp/format",
             "http://",
             "mailto:alice@example.com",
@@ -240,6 +267,9 @@ mod tests {
             "http://[not-an-address]/",
             "http://[::1]x/",
             "http://[::1]:80a/",
+            "http://[::ffff:192.0.2.256]/",
+            "http://[::ffff:192.0.2]/",
+            "http://[::ffff:192.0.2.+1]/",
             "http://example.com/a[b]",
             "urn:example:\u{1}",
             "urn:example:\u{fffe}",
