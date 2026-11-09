@@ -14,6 +14,7 @@ use super::raw_mapping::{
     default_response_target, ensure_entity_id, input_binding, raw_sp_descriptor,
     raw_sp_for_browser_response, relay_state_from_input, response_target,
 };
+use super::requested_subject::decrypt_requested_subject;
 use super::{Idp, RespondSso, Saml, SamlError};
 
 /// Where an issued response goes.
@@ -92,6 +93,11 @@ impl Saml<Idp> {
             &request,
             validation.now(),
             validation.clock_skew().as_millis(),
+        )?;
+        let flow = decrypt_requested_subject(
+            flow,
+            &self.raw_identity_provider().setting,
+            message_authenticated,
         )?;
         let authn = AuthnRequest::try_from(flow)?;
         let verify_present_signature = self

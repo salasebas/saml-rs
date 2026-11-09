@@ -1,10 +1,11 @@
 //! `<EncryptedID>` and `<EncryptedAttribute>` through the typed
 //! identity-provider and service-provider flows.
 //!
-//! SAML Core §2.2.4 and §2.7.3.2. Both are optional capabilities that stay off
-//! until `XmlEncryptionPolicy` selects them, like `<EncryptedAssertion>`. A
-//! service provider that selects one rejects the plaintext form; that is
-//! library policy, not an OASIS receiver rule.
+//! SAML Core §2.2.4 and §2.7.3.2. An identity provider generates them only
+//! when `XmlEncryptionPolicy` selects them, like `<EncryptedAssertion>`. A
+//! service provider with a decryption key decrypts each one it receives
+//! (Conformance §3.4). A service provider that selects one rejects the
+//! plaintext form; that is library policy, not an OASIS receiver rule.
 //!
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
@@ -18,8 +19,8 @@ use saml_rs::{
     BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem,
     ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
-    Subject, XmlEncryptionPolicy, XmlPolicy,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
+    SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -270,6 +271,78 @@ fn encrypted_elements_round_trip_inside_an_encrypted_assertion(
     let session = exchange.session?;
     assert_eq!(session.name_id(), &alice());
     assert_eq!(session.attributes(), &attributes());
+    Ok(())
+}
+
+#[test]
+fn service_provider_decrypts_encrypted_elements_it_does_not_select(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange(ids_and_attributes(), XmlEncryptionPolicy::default())?;
+
+    assert!(exchange.xml.contains("<saml:EncryptedID>"));
+    assert_eq!(exchange.xml.matches("<saml:EncryptedAttribute>").count(), 2);
+    let session = exchange.session?;
+    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.attributes(), &attributes());
+    Ok(())
+}
+
+#[test]
+fn service_provider_decrypts_an_encrypted_assertion_it_does_not_select(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange(
+        XmlEncryptionPolicy::encrypt_assertions(),
+        XmlEncryptionPolicy::default(),
+    )?;
+
+    assert!(exchange.xml.contains("EncryptedAssertion"));
+    assert!(!exchange.xml.contains("alice-persistent-id"));
+    let session = exchange.session?;
+    assert_eq!(session.name_id(), &alice());
+    assert_eq!(session.attributes(), &attributes());
+    Ok(())
+}
+
+#[test]
+fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std::error::Error>> {
+    for sp_encryption in [
+        XmlEncryptionPolicy::default(),
+        XmlEncryptionPolicy::encrypt_assertions(),
+    ] {
+        let sp = Saml::sp(
+            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+                .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS)?.mark_default())
+                .credentials(credentials())
+                .validation(SpValidationPolicy::recommended())
+                .xml(xml(sp_encryption))
+                .build()?,
+        )?;
+        let idp = idp(XmlEncryptionPolicy::encrypt_assertions())?;
+        let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+        let started = sp.start_sso(
+            &idp_descriptor,
+            StartSso::post().response_binding(SsoResponseBinding::SimpleSign),
+        )?;
+        let received = idp.receive_sso(
+            &sp_descriptor,
+            BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+            validation(),
+        )?;
+        let response = idp.respond_sso(
+            &sp_descriptor,
+            &received,
+            Subject::new(alice(), Vec::new()),
+            RespondSso::simple_sign().attributes(attributes()),
+        )?;
+        let session = sp.finish_sso(
+            &idp_descriptor,
+            &started.pending,
+            BrowserInput::<SsoResponse>::simple_sign(response.post_form()?.fields().to_vec()),
+            validation(),
+        )?;
+        assert_eq!(session.name_id(), &alice(), "{sp_encryption:?}");
+        assert_eq!(session.attributes(), &attributes(), "{sp_encryption:?}");
+    }
     Ok(())
 }
 

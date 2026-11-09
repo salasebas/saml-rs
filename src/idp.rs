@@ -1,6 +1,6 @@
 //! SAML Identity Provider entity.
 
-use crate::config::AssertionElementEncryption;
+use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
     capture_idp_issuance_window, generate_id, BindingContext, CustomTagReplacement, EntitySetting,
@@ -655,6 +655,7 @@ impl IdentityProvider {
                 decrypt_key_pass: None,
                 assertion_elements: AssertionElementEncryption::default(),
                 element_decrypt_key: None,
+                received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
                 allow_insecure_software_rsa_key_transport_decryption: false,
                 allow_rsa15_key_transport_decryption: false,
                 clock_drifts,

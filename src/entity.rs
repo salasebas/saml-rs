@@ -4,8 +4,8 @@
 use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
-use crate::config::AssertionElementEncryption;
 use crate::config::HmacSecret;
+use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
     MessageSignatureOrder,
@@ -36,6 +36,8 @@ pub struct EntitySetting {
     /// Typed config: assertion `<NameID>` and attributes carried as
     /// `<EncryptedID>` and `<EncryptedAttribute>`.
     pub(crate) assertion_element_encryption: AssertionElementEncryption,
+    /// Encrypted elements of a received login response that are decrypted.
+    pub(crate) received_encrypted_elements: ReceivedEncryptedElements,
     /// Allow XML-Enc RSA key-transport decryption with the bundled RustCrypto
     /// software RSA backend.
     ///
@@ -180,6 +182,10 @@ impl fmt::Debug for EntitySetting {
                 &self.assertion_element_encryption,
             )
             .field(
+                "received_encrypted_elements",
+                &self.received_encrypted_elements,
+            )
+            .field(
                 "allow_insecure_software_rsa_key_transport_decryption",
                 &self.allow_insecure_software_rsa_key_transport_decryption,
             )
@@ -312,6 +318,7 @@ impl Default for EntitySetting {
             allow_create: false,
             is_assertion_encrypted: false,
             assertion_element_encryption: AssertionElementEncryption::default(),
+            received_encrypted_elements: ReceivedEncryptedElements::default(),
             allow_insecure_software_rsa_key_transport_decryption: false,
             allow_rsa15_key_transport_decryption: false,
             relay_state: String::new(),

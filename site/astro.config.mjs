@@ -80,6 +80,10 @@ export default defineConfig({
 							items: [
 								{ label: 'How to read them', slug: 'reference/conformance' },
 								{
+									label: 'IdP and SP operational modes',
+									slug: 'reference/conformance/idp-sp-operational-modes',
+								},
+								{
 									label: 'SSO acceptance',
 									slug: 'reference/conformance/web-browser-sso-acceptance',
 								},

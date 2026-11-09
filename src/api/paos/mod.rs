@@ -595,6 +595,11 @@ impl Saml<Idp> {
             validation.now(),
             validation.clock_skew().as_millis(),
         )?;
+        let flow = super::requested_subject::decrypt_requested_subject(
+            flow,
+            &self.raw_identity_provider().setting,
+            message_authenticated,
+        )?;
         let authn = AuthnRequest::try_from_paos_flow(flow)?;
         let verify_present_signature = self
             .raw_identity_provider()

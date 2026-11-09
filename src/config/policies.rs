@@ -311,6 +311,10 @@ impl Default for LogoutPolicy {
 }
 
 /// Whether assertions are encrypted in generated responses.
+///
+/// A service provider with a `decryption_key` decrypts an
+/// `<EncryptedAssertion>` it receives under either value.
+/// [`Self::EncryptAssertions`] also makes it reject a plaintext `<Assertion>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum AssertionEncryptionPolicy {
     /// Do not encrypt assertions.
@@ -324,9 +328,10 @@ pub enum AssertionEncryptionPolicy {
 ///
 /// In [`XmlEncryptionPolicy::identifiers`], an identity provider encrypts the
 /// `<NameID>` of each assertion `<Subject>` in a generated response. A service
-/// provider decrypts each `<EncryptedID>` after the signature that covers it
-/// verifies, and rejects a response whose assertion `<Subject>` carries a
-/// plaintext `<NameID>`.
+/// provider with a `decryption_key` decrypts each `<EncryptedID>` after the
+/// signature that covers it verifies, under either value. Selected, it also
+/// rejects a response whose assertion `<Subject>` carries a plaintext
+/// `<NameID>`.
 ///
 /// [`crate::StartSlo::identifier_encryption`] selects it for one
 /// `LogoutRequest`, on either role.
@@ -346,10 +351,11 @@ pub enum IdentifierEncryptionPolicy {
 /// Whether assertion attributes are carried as `<EncryptedAttribute>`.
 ///
 /// An identity provider encrypts each `<Attribute>` of each assertion
-/// `<AttributeStatement>` in a generated response. A service provider decrypts
-/// each `<EncryptedAttribute>` after the signature that covers it verifies, and
-/// rejects a response whose assertion `<AttributeStatement>` carries a
-/// plaintext `<Attribute>`.
+/// `<AttributeStatement>` in a generated response. A service provider with a
+/// `decryption_key` decrypts each `<EncryptedAttribute>` after the signature
+/// that covers it verifies, under either value. Selected, it also rejects a
+/// response whose assertion `<AttributeStatement>` carries a plaintext
+/// `<Attribute>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum AttributeEncryptionPolicy {
     /// Do not encrypt attributes.
@@ -495,6 +501,19 @@ impl AssertionElementEncryption {
         self.identifiers == IdentifierEncryptionPolicy::EncryptIdentifiers
             || self.attributes == AttributeEncryptionPolicy::EncryptAttributes
     }
+}
+
+/// Which encrypted elements of a received login response a service provider
+/// decrypts with its decryption key.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ReceivedEncryptedElements {
+    /// Raw samlify port: only the `<EncryptedAssertion>` that
+    /// `is_assertion_encrypted` selects.
+    #[default]
+    DecryptSelected,
+    /// Typed configuration: every `<EncryptedAssertion>`, assertion
+    /// `<EncryptedID>`, and `<EncryptedAttribute>` received (Conformance §3.4).
+    DecryptReceived,
 }
 
 /// XML parser, redirect decompression, clock, and XML encryption policy.

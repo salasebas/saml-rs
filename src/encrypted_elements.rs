@@ -1,6 +1,13 @@
-//! Decryption of the `<EncryptedID>` and `<EncryptedAttribute>` children of a
-//! verified login response.
+//! Decryption of the `<EncryptedAssertion>`, `<EncryptedID>`, and
+//! `<EncryptedAttribute>` children of a verified login response.
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+use crate::config::ReceivedEncryptedElements;
+use crate::constants::ParserType;
 use crate::error::SamlError;
 use crate::flow::FlowOptions;
 use crate::xml::XmlLimits;
@@ -32,8 +39,34 @@ pub(crate) fn require_one_assertion_unless_message_authenticated(
     Ok(())
 }
 
-/// Decrypt the selected `<EncryptedID>` and `<EncryptedAttribute>` children of
-/// the verified response and of its consumed assertion.
+/// Whether an assertion of `saml_content` carries an `<EncryptedID>` or an
+/// `<EncryptedAttribute>`.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+pub(crate) fn carries_encrypted_elements(
+    saml_content: &str,
+    limits: XmlLimits,
+) -> Result<bool, SamlError> {
+    crate::crypto::enc::carries_encrypted_assertion_elements(saml_content, limits)
+}
+
+#[cfg(not(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+)))]
+pub(crate) fn carries_encrypted_elements(
+    _saml_content: &str,
+    _limits: XmlLimits,
+) -> Result<bool, SamlError> {
+    Ok(false)
+}
+
+/// Decrypt the `<EncryptedID>` and `<EncryptedAttribute>` children of the
+/// verified response and of its consumed assertion.
 #[cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
@@ -65,6 +98,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
         options,
         opts.xml_limits,
         opts.assertion_elements,
+        opts.received_encrypted_elements,
     )?;
     is_valid_xml_with_limits(&content, opts.xml_limits)?;
     validate_protocol_profile(&content, ParserType::SamlResponse, opts.xml_limits)?;
@@ -140,4 +174,93 @@ pub(crate) fn decrypt_verified_assertion_elements(
     Err(SamlError::Unsupported(
         "XML decryption requires a crypto provider feature".into(),
     ))
+}
+
+/// The key that decrypts the `<EncryptedAssertion>` of `xml`. A selected
+/// `decrypt_key` requires one. A typed service provider also decrypts one it
+/// did not select.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+pub(crate) fn encrypted_assertion_key<'a>(
+    xml: &str,
+    parser_type: ParserType,
+    opts: &FlowOptions<'a>,
+) -> Result<Option<&'a str>, SamlError> {
+    if opts.decrypt_key.is_some() {
+        return Ok(opts.decrypt_key);
+    }
+    match (opts.received_encrypted_elements, parser_type) {
+        (ReceivedEncryptedElements::DecryptReceived, ParserType::SamlResponse) => {
+            let document = crate::xml::dom::parse_with_limits(xml, opts.xml_limits)?;
+            let carries_encrypted_assertion = document
+                .root
+                .children
+                .iter()
+                .any(|child| child.local_name == "EncryptedAssertion");
+            if carries_encrypted_assertion {
+                Ok(opts.element_decrypt_key)
+            } else {
+                Ok(None)
+            }
+        }
+        (ReceivedEncryptedElements::DecryptReceived, _)
+        | (ReceivedEncryptedElements::DecryptSelected, _) => Ok(None),
+    }
+}
+
+/// `xml`, whose detached signature verified, with its `<EncryptedAssertion>`
+/// decrypted for a typed service provider, and the decrypted `<Assertion>`.
+/// `None` when no key applies, and for the raw service provider.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+pub(crate) fn decrypt_detached_signed_assertion(
+    xml: &str,
+    parser_type: ParserType,
+    opts: &FlowOptions<'_>,
+) -> Result<Option<(String, String)>, SamlError> {
+    use crate::crypto::{
+        decrypt_assertion_with_limits, enc::AssertionDecryptionOptions, keys::load_private_key,
+    };
+
+    let key_pem = match opts.received_encrypted_elements {
+        ReceivedEncryptedElements::DecryptReceived => {
+            encrypted_assertion_key(xml, parser_type, opts)?
+        }
+        ReceivedEncryptedElements::DecryptSelected => None,
+    };
+    let Some(key_pem) = key_pem else {
+        return Ok(None);
+    };
+    let (content, assertion) = decrypt_assertion_with_limits(
+        xml,
+        &load_private_key(key_pem, opts.decrypt_key_pass)?,
+        AssertionDecryptionOptions {
+            allow_insecure_software_rsa_key_transport_decryption: opts
+                .allow_insecure_software_rsa_key_transport_decryption,
+            allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
+        },
+        opts.xml_limits,
+    )?;
+    crate::context::is_valid_xml_with_limits(&content, opts.xml_limits)?;
+    crate::xml::validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
+    Ok(Some((content, assertion)))
+}
+
+#[cfg(not(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+)))]
+pub(crate) fn decrypt_detached_signed_assertion(
+    _xml: &str,
+    _parser_type: ParserType,
+    _opts: &FlowOptions<'_>,
+) -> Result<Option<(String, String)>, SamlError> {
+    Ok(None)
 }

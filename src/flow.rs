@@ -4,8 +4,8 @@
 use crate::binding::{
     base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-use crate::config::AssertionElementEncryption;
 use crate::config::HmacSecret;
+use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, ParserType};
 use crate::context::is_valid_xml_with_limits;
 use crate::error::SamlError;
@@ -130,6 +130,9 @@ pub struct FlowOptions<'a> {
     pub(crate) assertion_elements: AssertionElementEncryption,
     /// Typed SP: decryption private key PEM for `assertion_elements`.
     pub(crate) element_decrypt_key: Option<&'a str>,
+    /// Typed SP: encrypted elements decrypted with `element_decrypt_key`
+    /// whatever `decrypt_key` and `assertion_elements` select.
+    pub(crate) received_encrypted_elements: ReceivedEncryptedElements,
     /// Allow XML-Enc RSA key-transport decryption with the bundled RustCrypto
     /// software RSA backend.
     ///
@@ -170,6 +173,7 @@ impl<'a> Default for FlowOptions<'a> {
             decrypt_key_pass: None,
             assertion_elements: AssertionElementEncryption::default(),
             element_decrypt_key: None,
+            received_encrypted_elements: ReceivedEncryptedElements::default(),
             allow_insecure_software_rsa_key_transport_decryption: false,
             allow_rsa15_key_transport_decryption: false,
             clock_drifts: (0, 0),
@@ -673,7 +677,8 @@ fn verify_and_prepare(
         }
         require_response_coverage(response_signature_required, evidence.response_covered)?;
     }
-    let decrypt_required = opts.decrypt_key.is_some();
+    let decrypt_key = crate::encrypted_elements::encrypted_assertion_key(xml, parser_type, opts)?;
+    let decrypt_required = decrypt_key.is_some();
     let decrypt_options = AssertionDecryptionOptions {
         allow_insecure_software_rsa_key_transport_decryption: opts
             .allow_insecure_software_rsa_key_transport_decryption,
@@ -682,7 +687,7 @@ fn verify_and_prepare(
     if decrypt_required {
         require_software_rsa_opt_in(decrypt_options)?;
     }
-    let load_key = || load_private_key(opts.decrypt_key.unwrap_or_default(), opts.decrypt_key_pass);
+    let load_key = || load_private_key(decrypt_key.unwrap_or_default(), opts.decrypt_key_pass);
 
     if decrypt_required && evidence.verified && parser_type == ParserType::SamlResponse {
         if let Some(node) = evidence.verified_node.as_deref() {
@@ -1078,6 +1083,19 @@ fn flow_inner(
                             assertion_signature,
                             ResponseSignatureRequirement::Optional,
                         )?
+                    } else if let Some((saml_content, assertion)) =
+                        crate::encrypted_elements::decrypt_detached_signed_assertion(
+                            &xml,
+                            parser_type,
+                            opts,
+                        )?
+                    {
+                        PreparedMessage {
+                            saml_content,
+                            assertion: Some(assertion),
+                            message_authenticated: false,
+                            verified_xml_signatures: Vec::new(),
+                        }
                     } else {
                         let assertion = if parser_type == ParserType::SamlResponse {
                             assertion_shortcut(&xml, opts.xml_limits)?
@@ -1124,8 +1142,17 @@ fn flow_inner(
             };
             (xml, assertion, None, false, Vec::new())
         };
-    let (saml_content, assertion) = match (parser_type, opts.assertion_elements.is_selected()) {
-        (ParserType::SamlResponse, true) if verify_signature => {
+    let decrypt_elements = parser_type == ParserType::SamlResponse
+        && (opts.assertion_elements.is_selected()
+            || (verify_signature
+                && opts.received_encrypted_elements == ReceivedEncryptedElements::DecryptReceived
+                && opts.element_decrypt_key.is_some()
+                && crate::encrypted_elements::carries_encrypted_elements(
+                    &saml_content,
+                    opts.xml_limits,
+                )?));
+    let (saml_content, assertion) = match (decrypt_elements, verify_signature) {
+        (true, true) => {
             let key_pem = opts
                 .element_decrypt_key
                 .ok_or_else(|| SamlError::MissingKey("decryption_key".into()))?;
@@ -1141,8 +1168,8 @@ fn flow_inner(
                 opts,
             )?
         }
-        (ParserType::SamlResponse, true) => return Err(SamlError::SignatureMissing),
-        _ => (saml_content, assertion),
+        (true, false) => return Err(SamlError::SignatureMissing),
+        (false, _) => (saml_content, assertion),
     };
 
     let fields = default_fields(parser_type, assertion.as_deref())?;

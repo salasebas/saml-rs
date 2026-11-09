@@ -3,8 +3,50 @@
 This change is unreleased. It applies to the release that first publishes
 `XmlEncryptionPolicy::encrypt_ids` and `XmlEncryptionPolicy::encrypt_attributes`.
 
-Nothing changes until a configuration selects one of them. Two things are new
-for callers that handle errors or compare policies.
+Generation stays off until a configuration selects one of them. A service
+provider or identity provider with `Credentials::decryption_key` now decrypts
+the encrypted elements it receives without that selection, as Conformance
+§3.4 requires. Callers that handle errors or compare policies also have two
+new things to handle.
+
+## Expect decrypted elements in a response you did not select them for
+
+Who must change: a service provider that configures
+`Credentials::decryption_key` and whose identity provider sends
+`<EncryptedAssertion>`, `<EncryptedID>`, or `<EncryptedAttribute>` that its
+`XmlEncryptionPolicy` does not select, for example Shibboleth IdP, which
+encrypts assertions by default.
+
+`finish_sso`, `accept_unsolicited_sso`, and `finish_paos_sso` used to reject a
+response with an unselected `<EncryptedAssertion>` or `<EncryptedID>`, and
+ignore an unselected `<EncryptedAttribute>`. They now decrypt each one with the
+`decryption_key` and return the session. An `<EncryptedAttribute>` that does
+not decrypt, for example one encrypted for another recipient, now fails with
+`SamlError::Crypto` instead of being ignored. On RustCrypto, decryption still
+needs `XmlEncryptionPolicy::with_insecure_software_rsa_key_transport_decryption_allowed`;
+without it such a response now fails with that error. Selecting
+`encrypt_assertions`, `encrypt_ids`, or `encrypt_attributes` still rejects the
+plaintext form. Without a `decryption_key`, nothing changes.
+
+## Expect a `NameID` from an encrypted `AuthnRequest` subject
+
+Who must change: an identity provider that configures
+`Credentials::decryption_key` and matches
+`RequestedSubjectIdentifier::EncryptedId` from `receive_sso` or
+`receive_paos_sso`.
+
+A requested `<Subject>` whose `<EncryptedID>` decrypts is now
+`RequestedSubjectIdentifier::NameId`. The request must be signed, or its
+`EncryptedData` must use AES-GCM. `EncryptedId` now means that the identifier
+was not decrypted: there is no `decryption_key`, the request is unsigned and
+uses CBC, or the ciphertext does not decrypt to one `<NameID>`. Answer it with
+an error `<Response>`, as for a requested subject you do not recognize.
+
+`receive_sso` and `receive_paos_sso` now fail for such a request when the
+`decryption_key` does not load, or with `SamlError::Unsupported` when the
+default RustCrypto provider decrypts without
+`XmlEncryptionPolicy::with_insecure_software_rsa_key_transport_decryption_allowed`,
+as a service provider already does.
 
 ## Handle the new error
 
