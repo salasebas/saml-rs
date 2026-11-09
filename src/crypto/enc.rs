@@ -365,25 +365,26 @@ pub(crate) fn decrypt_assertion_elements(
             });
         }
         for element in assertion_elements(&document, kind.parent, kind.encrypted)? {
-            let encrypted_data = document
-                .children_iter(element)
-                .find(|child| {
-                    document
-                        .element(*child)
-                        .is_some_and(|data| data.matches_name_ns(ENC, "EncryptedData"))
-                })
-                .ok_or_else(|| {
-                    SamlError::ProtocolProfile(format!("{} has no EncryptedData", kind.encrypted))
-                })?;
-            let encrypted_data_xml =
-                String::from_utf8(namespace_complete(&document, encrypted_data)?)
-                    .map_err(|error| SamlError::Xml(error.to_string()))?;
+            let has_encrypted_data = document.children_iter(element).any(|child| {
+                document
+                    .element(child)
+                    .is_some_and(|data| data.matches_name_ns(ENC, "EncryptedData"))
+            });
+            if !has_encrypted_data {
+                return Err(SamlError::ProtocolProfile(format!(
+                    "{} has no EncryptedData",
+                    kind.encrypted
+                )));
+            }
+            // The whole wrapper is decrypted so that an `EncryptedKey` beside
+            // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
+            let wrapper = String::from_utf8(namespace_complete(&document, element)?)
+                .map_err(|error| SamlError::Xml(error.to_string()))?;
             let mut manager = KeysManager::new();
             manager.add_key(enc_key.clone());
             let ctx = EncContext::new(manager);
-            let decrypted = decrypt(&ctx, &encrypted_data_xml).map_err(crypto_err)?;
-            let plaintext = strip_xml_declaration(&decrypted);
-            require_plaintext_element(plaintext, kind, limits)?;
+            let decrypted = decrypt(&ctx, &wrapper).map_err(crypto_err)?;
+            let plaintext = decrypted_plaintext(&decrypted, kind, limits)?;
             replacements.push((node_range(&document, element)?, plaintext.to_string()));
         }
     }
@@ -392,14 +393,31 @@ pub(crate) fn decrypt_assertion_elements(
     Ok(decrypted)
 }
 
-fn require_plaintext_element(
-    plaintext: &str,
+/// The one element that took the place of `EncryptedData` in the decrypted
+/// `wrapper`, beside any `EncryptedKey`.
+fn decrypted_plaintext(
+    wrapper: &str,
     kind: EncryptedElementKind,
     limits: XmlLimits,
-) -> Result<(), SamlError> {
-    let element = dom::parse_with_limits(plaintext, limits)?.root;
+) -> Result<&str, SamlError> {
+    let root = dom::parse_with_limits(wrapper, limits)?.root;
+    let carried: Vec<&Node> = root
+        .children
+        .iter()
+        .filter(|child| child.local_name != "EncryptedKey")
+        .collect();
+    let only_whitespace = root
+        .text
+        .bytes()
+        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'));
+    let [element] = carried.as_slice() else {
+        return Err(must_carry(kind));
+    };
+    if !only_whitespace {
+        return Err(must_carry(kind));
+    }
     if element.local_name == kind.plaintext {
-        return Ok(());
+        return Ok(&wrapper[element.start..element.end]);
     }
     if kind
         .unsupported_plaintext
@@ -410,10 +428,14 @@ fn require_plaintext_element(
             kind.encrypted, element.local_name
         )));
     }
-    Err(SamlError::ProtocolProfile(format!(
-        "{} must carry {}",
+    Err(must_carry(kind))
+}
+
+fn must_carry(kind: EncryptedElementKind) -> SamlError {
+    SamlError::ProtocolProfile(format!(
+        "{} must carry one {}",
         kind.encrypted, kind.plaintext
-    )))
+    ))
 }
 
 /// Drop a leading `<?xml ... ?>` declaration (and surrounding whitespace).
@@ -533,7 +555,7 @@ mod tests {
         )?;
         assert!(matches!(
             decrypt(&attribute),
-            Err(SamlError::ProtocolProfile(message)) if message == "EncryptedID must carry NameID"
+            Err(SamlError::ProtocolProfile(message)) if message == "EncryptedID must carry one NameID"
         ));
 
         let base_id = response_with_encrypted_id_carrying(
@@ -544,7 +566,61 @@ mod tests {
         let two_elements = response_with_encrypted_id_carrying(
             "<saml:NameID>a</saml:NameID><saml:NameID>b</saml:NameID>",
         )?;
-        assert!(matches!(decrypt(&two_elements), Err(SamlError::Xml(_))));
+        assert!(matches!(
+            decrypt(&two_elements),
+            Err(SamlError::ProtocolProfile(message)) if message == "EncryptedID must carry one NameID"
+        ));
+        Ok(())
+    }
+
+    /// Move the inline `EncryptedKey` of `encrypted_data` beside it, linked by a
+    /// `RetrievalMethod`: the SAML Core Errata 05 E43 peer placement.
+    fn with_peer_key(encrypted_data: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let start = encrypted_data
+            .find("<xenc:EncryptedKey>")
+            .ok_or("missing EncryptedKey")?;
+        let end_tag = "</xenc:EncryptedKey>";
+        let end = encrypted_data
+            .find(end_tag)
+            .ok_or("missing EncryptedKey end")?
+            + end_tag.len();
+        let key = encrypted_data[start..end].replacen(
+            "<xenc:EncryptedKey>",
+            &format!("<xenc:EncryptedKey xmlns:xenc=\"{ENC}\" Id=\"_peer_key\">"),
+            1,
+        );
+        let retrieval =
+            format!("<ds:RetrievalMethod URI=\"#_peer_key\" Type=\"{ENC}EncryptedKey\"/>");
+        Ok(format!(
+            "{}{retrieval}{}{key}",
+            &encrypted_data[..start],
+            &encrypted_data[end..]
+        ))
+    }
+
+    #[test]
+    fn encrypted_id_resolves_a_peer_key_named_by_retrieval_method(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let encrypted = encrypt_assertion_elements(
+            RESPONSE,
+            SP_CERT,
+            AES_256,
+            RSA_OAEP_MGF1P,
+            encrypted_ids(),
+        )?;
+        let encrypted_data = only_encrypted_data(&encrypted)?;
+        let peer = encrypted.replacen(encrypted_data, &with_peer_key(encrypted_data)?, 1);
+        assert!(peer.contains("</xenc:EncryptedData><xenc:EncryptedKey"));
+
+        let decrypted = decrypt_assertion_elements(
+            &peer,
+            &load_private_key(SP_PRIVKEY, None)?,
+            software_rsa_test_options(),
+            XmlLimits::default(),
+            encrypted_ids(),
+        )?;
+        assert!(!decrypted.contains("EncryptedID"));
+        assert!(decrypted.contains(">_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7</saml:NameID>"));
         Ok(())
     }
 
