@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::attributes::{Attribute, AttributeValue, Attributes};
 use super::endpoint::EndpointUrl;
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
@@ -115,31 +117,29 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Attributes {
                 .into_iter()
                 .map(AttributeValue::new)
                 .collect();
-            let name_format = name_formats
-                .iter()
-                .find(|(attribute, _)| attribute == name)
-                .and_then(|(_, name_format)| name_format.clone());
+            let name_format = name_formats.get(name.as_str()).cloned().flatten();
             Attribute::new(name.clone(), name_format, values)
         })
         .collect();
     Attributes::new(attributes)
 }
 
-/// `Name` and `NameFormat` of each extracted `<Attribute>`, in document order.
-fn attribute_name_formats(extract: &Value) -> Vec<(&str, Option<String>)> {
+/// `NameFormat` of the first extracted `<Attribute>` with each `Name`.
+fn attribute_name_formats(extract: &Value) -> HashMap<&str, Option<String>> {
     let elements = match extract.get("attributeNameFormats") {
         Some(Value::Array(elements)) => elements.iter().collect(),
         Some(element @ Value::Object(_)) => vec![element],
         Some(Value::Null | Value::Str(_)) | None => Vec::new(),
     };
-    elements
-        .into_iter()
-        .filter_map(|element| {
-            let name = element.get_str("name")?;
-            let name_format = element.get_str("nameFormat").map(str::to_string);
-            Some((name, name_format))
-        })
-        .collect()
+    let mut name_formats = HashMap::new();
+    for element in elements {
+        if let Some(name) = element.get_str("name") {
+            name_formats
+                .entry(name)
+                .or_insert_with(|| element.get_str("nameFormat").map(str::to_string));
+        }
+    }
+    name_formats
 }
 
 pub(super) fn subject_confirmations_from_extract(extract: &Value) -> Vec<SubjectConfirmation> {
