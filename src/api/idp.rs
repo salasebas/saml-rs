@@ -100,11 +100,7 @@ impl Saml<Idp> {
             message_authenticated,
         )?;
         let authn = AuthnRequest::try_from(flow)?;
-        let verify_present_signature = self
-            .raw_identity_provider()
-            .setting
-            .verify_authn_request_signature_if_present;
-        if authn.destination().is_some() || (message_authenticated && verify_present_signature) {
+        if authn.destination().is_some() || message_authenticated {
             let locations = self
                 .raw_identity_provider()
                 .metadata
