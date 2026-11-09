@@ -911,6 +911,10 @@ struct SloExchange {
 }
 
 fn sp_started_exchange() -> Result<SloExchange, SamlError> {
+    sp_started_exchange_answered_with(RespondSlo::post())
+}
+
+fn sp_started_exchange_answered_with(answer: RespondSlo) -> Result<SloExchange, SamlError> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let relay_state = RelayStateParam::try_from_option(Some("logout-state".to_string()))?;
@@ -931,7 +935,7 @@ fn sp_started_exchange() -> Result<SloExchange, SamlError> {
     assert_eq!(received.message().session_indexes().len(), 1);
     assert!(!received.message().raw_flow().saml_content.is_empty());
 
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let response = idp.respond_slo(&sp_descriptor, &received, answer)?;
     assert_eq!(response.raw_context().request_type, "SAMLResponse");
     let response_fields = post_fields(&response)?;
 
@@ -2696,6 +2700,92 @@ fn typed_facade_rejects_slo_wrong_pending_request_id() -> Result<(), Box<dyn std
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
     }
+}
+
+fn refused_logout_status() -> Status {
+    Status::responder().with_subordinate(SubordinateStatusCode::partial_logout())
+}
+
+#[test]
+fn typed_facade_finish_slo_reports_signed_correlated_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange =
+        sp_started_exchange_answered_with(RespondSlo::post().status(refused_logout_status()))?;
+
+    match exchange.sp.finish_slo(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess { top, second }) => {
+            assert_eq!(top, saml_rs::constants::status_code::RESPONDER);
+            assert_eq!(
+                second.as_deref(),
+                Some(saml_rs::constants::status_code::PARTIAL_LOGOUT)
+            );
+            Ok(())
+        }
+        other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange =
+        sp_started_exchange_answered_with(RespondSlo::post().status(refused_logout_status()))?;
+    let mut snapshot: PendingSnapshot<LogoutRequest> = exchange.pending.snapshot();
+    snapshot.id = "_different_logout".to_string();
+    let wrong_pending = PendingLogoutRequest::from_snapshot(snapshot)?;
+
+    match exchange.sp.finish_slo(
+        &exchange.idp_descriptor,
+        &wrong_pending,
+        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        validation(),
+    ) {
+        Err(SamlError::InResponseToMismatch { expected, actual }) => {
+            assert_eq!(expected.as_deref(), Some("_different_logout"));
+            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
+            Ok(())
+        }
+        other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_facade_finish_slo_requires_signature_before_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    for binding in UNSIGNED_COMPATIBILITY_BINDINGS {
+        let started = sp.start_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding))?;
+        let xml = logout_response_xml(
+            &format!("_unsigned_refusal_{binding:?}"),
+            IDP_ENTITY_ID,
+            started.pending.id().as_str(),
+            None,
+        )
+        .replace(
+            saml_rs::constants::status_code::SUCCESS,
+            saml_rs::constants::status_code::REQUESTER,
+        );
+        match sp.finish_slo(
+            &idp_descriptor,
+            &started.pending,
+            unsigned_logout_response_input(&xml, binding)?,
+            validation(),
+        ) {
+            Err(SamlError::SignatureMissing) => {}
+            other => {
+                return Err(
+                    format!("expected SignatureMissing over {binding:?}, got {other:?}").into(),
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 #[test]

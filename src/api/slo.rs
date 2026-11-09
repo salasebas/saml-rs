@@ -141,6 +141,9 @@ impl Saml<Sp> {
     /// validation detects a duplicate or expired message. Response signatures
     /// follow [`crate::LogoutPolicy::responses`]. The Single Logout accept
     /// combination sets that field to [`crate::LogoutSignaturePolicy::RequireSigned`].
+    /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
+    /// only after the signature, issuer, `InResponseTo`, and destination
+    /// checks pass.
     ///
     /// # Examples
     ///
@@ -369,6 +372,9 @@ impl Saml<Idp> {
     /// validation detects a duplicate or expired message. Response signatures
     /// follow [`crate::LogoutPolicy::responses`]. The Single Logout accept
     /// combination sets that field to [`crate::LogoutSignaturePolicy::RequireSigned`].
+    /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
+    /// only after the signature, issuer, `InResponseTo`, and destination
+    /// checks pass.
     ///
     /// # Examples
     ///

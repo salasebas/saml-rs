@@ -980,16 +980,16 @@ fn validate_context(
 }
 
 /// Whether a non-success status is reported before the message is
-/// authenticated and correlated. A `ManageNameIDResponse` reports its status
-/// only after the signature, issuer, `InResponseTo`, and `Destination` checks.
+/// authenticated and correlated. A `LogoutResponse` or `ManageNameIDResponse`
+/// reports its status only after the signature, issuer, `InResponseTo`, and
+/// `Destination` checks.
 fn status_precedes_authentication(parser_type: ParserType) -> bool {
     match parser_type {
         ParserType::SamlRequest
         | ParserType::SamlResponse
         | ParserType::LogoutRequest
-        | ParserType::LogoutResponse
         | ParserType::ManageNameIdRequest => true,
-        ParserType::ManageNameIdResponse => false,
+        ParserType::LogoutResponse | ParserType::ManageNameIdResponse => false,
     }
 }
 

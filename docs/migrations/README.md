@@ -25,6 +25,7 @@ compatible additions.
 - [Name identifier management](unreleased-name-id-management.md)
 - [Metadata in the schema element order](unreleased-metadata-element-order.md)
 - [EncryptedID and EncryptedAttribute](unreleased-encrypted-id-and-attribute.md)
+- [LogoutResponse status after authentication](unreleased-logout-response-status.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
