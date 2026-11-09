@@ -4,6 +4,8 @@
 //! certificate/key string normalisation and collection helpers used by the
 //! extractor and metadata layers.
 
+use std::collections::{HashMap, HashSet};
+
 /// A dynamically-typed value tree produced by the XML extractor.
 ///
 /// Dotted-path [`Value::get`] lookups support extracted SAML field trees such
@@ -143,14 +145,15 @@ where
     I: IntoIterator<Item = S>,
     S: Into<String>,
 {
-    let mut seen = Vec::new();
+    let mut seen = HashSet::new();
+    let mut unique = Vec::new();
     for item in items {
         let s = item.into();
-        if !seen.contains(&s) {
-            seen.push(s);
+        if seen.insert(s.clone()) {
+            unique.push(s);
         }
     }
-    seen
+    unique
 }
 
 /// Last element of a slice.
@@ -211,25 +214,24 @@ pub fn camel_case(input: &str) -> String {
 /// duplicate keys are aggregated into a [`Value::Array`].
 pub fn zip_object(keys: &[String], values: Vec<Value>, skip_duplicated: bool) -> Value {
     let mut out: Vec<(String, Value)> = Vec::new();
-    for (key, value) in keys.iter().cloned().zip(values) {
+    let mut positions: HashMap<&str, usize> = HashMap::new();
+    for (key, value) in keys.iter().zip(values) {
+        let Some(&position) = positions.get(key.as_str()) else {
+            positions.insert(key, out.len());
+            out.push((key.clone(), value));
+            continue;
+        };
+        let slot = &mut out[position].1;
         if skip_duplicated {
-            if let Some(slot) = out.iter_mut().find(|(k, _)| *k == key) {
-                slot.1 = value;
-            } else {
-                out.push((key, value));
-            }
+            *slot = value;
             continue;
         }
-        if let Some(slot) = out.iter_mut().find(|(k, _)| *k == key) {
-            match &mut slot.1 {
-                Value::Array(items) => items.push(value),
-                existing => {
-                    let prev = std::mem::take(existing);
-                    *existing = Value::Array(vec![prev, value]);
-                }
+        match slot {
+            Value::Array(items) => items.push(value),
+            existing => {
+                let prev = std::mem::take(existing);
+                *existing = Value::Array(vec![prev, value]);
             }
-        } else {
-            out.push((key, value));
         }
     }
     Value::Object(out)
