@@ -16,7 +16,9 @@ use std::time::SystemTime;
 use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::entity::iso8601_offset;
 use saml_rs::raw::{Binding, LoginResponseOptions, User};
-use saml_rs::template::{replace_tags_by_value, LoginResponseAttribute, LoginResponseTemplate};
+use saml_rs::template::{
+    replace_tags_by_value, LoginResponseAttribute, LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE,
+};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
     Attributes, AudienceValidationPolicy, AuthnRequest, BrowserInput, CertificatePem, Credentials,
@@ -677,6 +679,29 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         &sp_descriptor,
         subject(unformatted),
         RespondSso::post(),
+    ))?;
+
+    // The raw template renderer fills the same NameID.
+    let templated = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .credentials(credentials())
+            .validation(IdpValidationPolicy::recommended())
+            .name_id_format(NameIdFormat::Persistent)
+            .templates(TemplatePolicy {
+                login_response_template: Some(LoginResponseTemplate {
+                    context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+                    attributes: Vec::new(),
+                }),
+                ..TemplatePolicy::default()
+            })
+            .build()?,
+    )?;
+    expect_name_id_length_error(templated.raw_identity_provider().create_login_response(
+        sp.raw_service_provider(),
+        Binding::Post,
+        &User::new("x".repeat(257)),
+        &LoginResponseOptions::default(),
     ))?;
 
     // The rule applies to these two formats only.
