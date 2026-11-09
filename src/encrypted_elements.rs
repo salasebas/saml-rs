@@ -58,14 +58,71 @@ pub(crate) fn decrypt_verified_assertion_elements(
         allow_insecure_software_rsa_key_transport_decryption: opts
             .allow_insecure_software_rsa_key_transport_decryption,
     };
-    let decrypt = |xml: &str| {
-        decrypt_assertion_elements(xml, &key, options, opts.xml_limits, opts.assertion_elements)
-    };
-    let content = decrypt(saml_content)?;
+    let content = decrypt_assertion_elements(
+        saml_content,
+        &key,
+        options,
+        opts.xml_limits,
+        opts.assertion_elements,
+    )?;
     is_valid_xml_with_limits(&content, opts.xml_limits)?;
     validate_protocol_profile(&content, ParserType::SamlResponse, opts.xml_limits)?;
-    let assertion = assertion.map(decrypt).transpose()?;
+    let assertion = assertion
+        .map(|assertion| {
+            let position = direct_assertion_position(saml_content, assertion, opts.xml_limits)?;
+            direct_assertion(&content, position, opts.xml_limits)
+        })
+        .transpose()?;
     Ok((content, assertion))
+}
+
+/// Direct `<Assertion>` children of the response root.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+fn direct_assertions(root: &crate::xml::dom::Node) -> impl Iterator<Item = &crate::xml::dom::Node> {
+    root.children
+        .iter()
+        .filter(|child| child.local_name == "Assertion")
+}
+
+/// Position of the consumed `assertion` among the direct assertions of
+/// `response`, which contains its source.
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+fn direct_assertion_position(
+    response: &str,
+    assertion: &str,
+    limits: XmlLimits,
+) -> Result<usize, SamlError> {
+    let start = response
+        .find(assertion)
+        .ok_or(SamlError::SignedReferenceMismatch)?;
+    let document = crate::xml::dom::parse_with_limits(response, limits)?;
+    let position = direct_assertions(&document.root).position(|node| node.start == start);
+    position.ok_or(SamlError::SignedReferenceMismatch)
+}
+
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+fn direct_assertion(
+    response: &str,
+    position: usize,
+    limits: XmlLimits,
+) -> Result<String, SamlError> {
+    let document = crate::xml::dom::parse_with_limits(response, limits)?;
+    let node = direct_assertions(&document.root)
+        .nth(position)
+        .ok_or(SamlError::SignedReferenceMismatch)?;
+    Ok(response[node.start..node.end].to_string())
 }
 
 #[cfg(not(any(

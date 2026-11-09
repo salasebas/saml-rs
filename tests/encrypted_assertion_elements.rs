@@ -378,3 +378,80 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
         other => Err(format!("expected Unsupported before decryption, got {other:?}").into()),
     }
 }
+
+const ASSERTION_NS_DECLARATION: &str = " xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"";
+const XENC_NS_DECLARATION: &str = " xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"";
+
+/// Remove the `occurrence`th (0-based) copy of `declaration` from `xml`.
+fn without_declaration(
+    xml: &str,
+    declaration: &str,
+    occurrence: usize,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let (start, _) = xml
+        .match_indices(declaration)
+        .nth(occurrence)
+        .ok_or("missing namespace declaration")?;
+    Ok(format!(
+        "{}{}",
+        &xml[..start],
+        &xml[start + declaration.len()..]
+    ))
+}
+
+/// Exclusive canonicalization renders a namespace where it is used, so moving
+/// a declaration to an ancestor keeps every signature valid.
+#[test]
+fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let encryption = ids_and_attributes();
+    let sp = sp(encryption)?;
+    let idp = idp(encryption)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        Subject::new(alice(), Vec::new()),
+        RespondSso::post().attributes(attributes()),
+    )?;
+    let xml = response_xml(&response)?;
+
+    // The assertion prefix is declared on the Response alone.
+    let saml_on_response = without_declaration(&xml, ASSERTION_NS_DECLARATION, 1)?;
+    // The XML-Enc prefix is declared on the Response alone.
+    let mut xenc_on_response = xml.clone();
+    while xenc_on_response.contains(XENC_NS_DECLARATION) {
+        xenc_on_response = without_declaration(&xenc_on_response, XENC_NS_DECLARATION, 0)?;
+    }
+    let response_tag_end = xenc_on_response.find('>').ok_or("missing Response tag")?;
+    xenc_on_response.insert_str(response_tag_end, XENC_NS_DECLARATION);
+
+    for tampered in [saml_on_response, xenc_on_response] {
+        let fields = response
+            .post_form()?
+            .fields()
+            .iter()
+            .map(|field| match field.name() {
+                "SAMLResponse" => {
+                    FormField::new("SAMLResponse", base64_encode(tampered.as_bytes()))
+                }
+                _ => field.clone(),
+            })
+            .collect::<Vec<_>>();
+        let session = sp.finish_sso(
+            &idp_descriptor,
+            &started.pending,
+            BrowserInput::<SsoResponse>::post(fields),
+            validation(),
+        )?;
+        assert_eq!(session.name_id(), &alice());
+        assert_eq!(session.attributes(), &attributes());
+    }
+    Ok(())
+}

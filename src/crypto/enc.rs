@@ -273,6 +273,19 @@ fn qualified_name(document: &XmlDocument<'_>, node: NodeId, local_name: &str) ->
     }
 }
 
+/// Inclusive canonical form of `element`, which declares every namespace in
+/// scope, so the element parses on its own.
+fn namespace_complete(document: &XmlDocument<'_>, element: NodeId) -> Result<Vec<u8>, SamlError> {
+    let node_set = NodeSet::tree_without_comments(element, document);
+    canonicalize_doc(
+        document,
+        C14nMode::Inclusive,
+        Some(&node_set),
+        &[] as &[&str],
+    )
+    .map_err(crypto_err)
+}
+
 /// Replace each `(range, replacement)` of `xml`. Ranges are disjoint.
 fn splice(xml: &str, mut replacements: Vec<(Range<usize>, String)>) -> String {
     replacements.sort_by_key(|(range, _)| range.start);
@@ -293,8 +306,8 @@ fn splice(xml: &str, mut replacements: Vec<(Range<usize>, String)>) -> String {
 /// Each `<NameID>` of an assertion `<Subject>` becomes an `<EncryptedID>`, and
 /// each `<Attribute>` of an `<AttributeStatement>` becomes an
 /// `<EncryptedAttribute>`. The wrapper takes the prefix of the element it
-/// replaces. The encrypted element is namespace-complete: it is the inclusive
-/// canonical form of that element, which declares every namespace in scope.
+/// replaces. The encrypted element is its inclusive canonical form, so it
+/// declares every namespace in scope.
 pub(crate) fn encrypt_assertion_elements(
     xml: &str,
     encrypt_cert: &str,
@@ -307,14 +320,7 @@ pub(crate) fn encrypt_assertion_elements(
     let mut replacements = Vec::new();
     for kind in selected_kinds(selection) {
         for element in assertion_elements(&document, kind.parent, kind.plaintext)? {
-            let node_set = NodeSet::tree_without_comments(element, &document);
-            let plaintext = canonicalize_doc(
-                &document,
-                C14nMode::Inclusive,
-                Some(&node_set),
-                &[] as &[&str],
-            )
-            .map_err(crypto_err)?;
+            let plaintext = namespace_complete(&document, element)?;
             let encrypted_data = encrypted_data_xml(&plaintext, encrypt_cert, data_alg, key_alg)?;
             let wrapper = qualified_name(&document, element, kind.encrypted);
             replacements.push((
@@ -369,11 +375,13 @@ pub(crate) fn decrypt_assertion_elements(
                 .ok_or_else(|| {
                     SamlError::ProtocolProfile(format!("{} has no EncryptedData", kind.encrypted))
                 })?;
-            let encrypted_data_xml = &xml[node_range(&document, encrypted_data)?];
+            let encrypted_data_xml =
+                String::from_utf8(namespace_complete(&document, encrypted_data)?)
+                    .map_err(|error| SamlError::Xml(error.to_string()))?;
             let mut manager = KeysManager::new();
             manager.add_key(enc_key.clone());
             let ctx = EncContext::new(manager);
-            let decrypted = decrypt(&ctx, encrypted_data_xml).map_err(crypto_err)?;
+            let decrypted = decrypt(&ctx, &encrypted_data_xml).map_err(crypto_err)?;
             let plaintext = strip_xml_declaration(&decrypted);
             require_plaintext_element(plaintext, kind, limits)?;
             replacements.push((node_range(&document, element)?, plaintext.to_string()));
