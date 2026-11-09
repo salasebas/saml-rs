@@ -419,7 +419,7 @@ fn sign_first_assertion(xml: &str, algorithm: &str) -> Result<String, Box<dyn st
     )?)
 }
 
-#[cfg(feature = "crypto-rustcrypto")]
+#[cfg(not(feature = "crypto-fips"))]
 fn move_last_assertion_first(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     let first = xml.find("<saml:Assertion").ok_or("missing assertion")?;
     let last = xml.rfind("<saml:Assertion").ok_or("missing assertion")?;
@@ -901,6 +901,11 @@ mod encrypted_assertions {
     use saml_rs::{AssertionSignaturePolicy, XmlEncryptionPolicy, XmlPolicy};
 
     const OTHER_RECIPIENT_CERT: &str = include_str!("fixtures/key/idp_cert.cer");
+    const ENCRYPTED_ID: &str = concat!(
+        "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\">",
+        "<xenc:CipherData><xenc:CipherValue>AAAA</xenc:CipherValue></xenc:CipherData>",
+        "</xenc:EncryptedData></saml:EncryptedID>",
+    );
 
     fn decrypting_sp(
         acs: AcsEndpoint,
@@ -1121,6 +1126,38 @@ mod encrypted_assertions {
         expect_error(accept_simple_sign(&exchange, &second_unsigned), |error| {
             matches!(error, SamlError::PotentialWrappingAttack)
         })
+    }
+
+    #[test]
+    fn an_encrypted_id_in_several_assertions_of_an_unsigned_response_is_not_decrypted(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let plaintext = two_assertions(&exchange)?;
+        let last = plaintext
+            .rfind("<saml:Assertion")
+            .ok_or("missing assertion")?;
+        let name_id_start = plaintext[last..]
+            .find("<saml:NameID")
+            .ok_or("missing NameID")?
+            + last;
+        let end_tag = "</saml:NameID>";
+        let name_id_end = plaintext[name_id_start..]
+            .find(end_tag)
+            .ok_or("unterminated NameID")?
+            + name_id_start
+            + end_tag.len();
+        let with_encrypted_id = format!(
+            "{}{ENCRYPTED_ID}{}",
+            &plaintext[..name_id_start],
+            &plaintext[name_id_end..]
+        );
+        let first_signed = sign_first_assertion(&with_encrypted_id, RSA_SHA256)?;
+        let xml = sign_first_assertion(&move_last_assertion_first(&first_signed)?, RSA_SHA256)?;
+        assert_eq!(xml.matches("</ds:Signature>").count(), 2);
+        expect_error(
+            accept(&exchange, &xml),
+            |error| matches!(error, SamlError::Unsupported(message) if message.contains("several assertions")),
+        )
     }
 
     #[test]
