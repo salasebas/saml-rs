@@ -9,6 +9,61 @@ Entries before the rebrand use the package names that were current at the time.
 
 ## Unreleased
 
+## [0.7.0](https://github.com/salasebas/saml-rs/compare/v0.6.1...v0.7.0) - 2026-11-09
+
+### Added
+
+- *(api)* [**breaking**] decrypt every encrypted element a provider receives, and record the IdP and SP operational modes ([#271](https://github.com/salasebas/saml-rs/pull/271))
+- *(crypto)* resolve a peer EncryptedKey for EncryptedAssertion ([#269](https://github.com/salasebas/saml-rs/pull/269))
+- *(crypto)* [**breaking**] refuse inbound RSA-v1.5 key transport unless selected ([#261](https://github.com/salasebas/saml-rs/pull/261))
+- *(api)* keep the identifier confidential in name identifier management with EncryptedID and NewEncryptedID ([#263](https://github.com/salasebas/saml-rs/pull/263))
+- *(api)* [**breaking**] process and generate EncryptedID in a Single Logout LogoutRequest ([#262](https://github.com/salasebas/saml-rs/pull/262))
+- *(api)* [**breaking**] change or end a name identifier over HTTP-Redirect ([#247](https://github.com/salasebas/saml-rs/pull/247))
+- *(crypto)* keep the NameID and attributes confidential with EncryptedID and EncryptedAttribute ([#244](https://github.com/salasebas/saml-rs/pull/244))
+- *(api)* [**breaking**] let the identity provider change or end a NameID over SOAP ([#245](https://github.com/salasebas/saml-rs/pull/245))
+- *(api)* [**breaking**] implement the Conformance §4 algorithms, with SHA-1, Triple DES, and RSA-v1.5 off until selected ([#246](https://github.com/salasebas/saml-rs/pull/246))
+- *(api)* [**breaking**] send and accept Single Logout over SOAP ([#243](https://github.com/salasebas/saml-rs/pull/243))
+- *(api)* [**breaking**] deliver a Web SSO response over HTTP-Artifact ([#217](https://github.com/salasebas/saml-rs/pull/217))
+- *(api)* [**breaking**] add attribute name formats and persistent and transient identifiers ([#215](https://github.com/salasebas/saml-rs/pull/215))
+- *(api)* return the identity provider discovery cookie ([#207](https://github.com/salasebas/saml-rs/pull/207))
+- *(api)* add Enhanced Client/Proxy SSO over PAOS ([#211](https://github.com/salasebas/saml-rs/pull/211))
+- *(api)* [**breaking**] resolve artifacts over SOAP ([#210](https://github.com/salasebas/saml-rs/pull/210))
+- *(api)* [**breaking**] remove strict() and start construction on Recommended ([#212](https://github.com/salasebas/saml-rs/pull/212))
+
+### Fixed
+
+- *(xml)* aggregate extracted attributes in linear time ([#290](https://github.com/salasebas/saml-rs/pull/290))
+- *(metadata)* [**breaking**] select signing and encryption certificates by KeyDescriptor use ([#285](https://github.com/salasebas/saml-rs/pull/285))
+- *(metadata)* [**breaking**] verify and encrypt with the keys of the peer's own role ([#287](https://github.com/salasebas/saml-rs/pull/287))
+- *(metadata)* [**breaking**] honor WantAuthnRequestsSigned="1" and the other xs:boolean signing flags ([#288](https://github.com/salasebas/saml-rs/pull/288))
+- *(idp)* [**breaking**] reject a signed AuthnRequest without Destination under RequireSigned, as the weaker policy already does ([#286](https://github.com/salasebas/saml-rs/pull/286))
+- *(artifact)* expire ArtifactUses entries after a caller-chosen period ([#283](https://github.com/salasebas/saml-rs/pull/283))
+- *(api)* [**breaking**] check every EncryptedAssertion in a response, not only the first ([#282](https://github.com/salasebas/saml-rs/pull/282))
+- [**breaking**] write only absolute URI references as NameID formats ([#270](https://github.com/salasebas/saml-rs/pull/270))
+- *(api)* [**breaking**] generate SAML IDs with 160 random bits to meet Core §1.3.4 ([#268](https://github.com/salasebas/saml-rs/pull/268))
+- *(xml)* reject a non-digit in an xs:dateTime field without overflowing ([#267](https://github.com/salasebas/saml-rs/pull/267))
+- *(metadata)* [**breaking**] send and accept Single Logout at the peer's own role endpoints ([#260](https://github.com/salasebas/saml-rs/pull/260))
+- *(api)* [**breaking**] report a LogoutResponse status only after it is authenticated ([#259](https://github.com/salasebas/saml-rs/pull/259))
+- *(metadata)* [**breaking**] generate SP and IdP metadata in the schema element order ([#254](https://github.com/salasebas/saml-rs/pull/254))
+- [**breaking**] keep template values literal, parse extractor shortcuts once, and ignore only ASCII whitespace in limited base64 ([#229](https://github.com/salasebas/saml-rs/pull/229))
+- *(crypto)* match protocol response roots by namespace and share verifier prechecks ([#230](https://github.com/salasebas/saml-rs/pull/230))
+- *(validator)* stop verify_time_at from panicking on out-of-range skew ([#242](https://github.com/salasebas/saml-rs/pull/242))
+- [**breaking**] enforce scoped metadata endpoints for SSO and logout ([#231](https://github.com/salasebas/saml-rs/pull/231))
+- *(idp)* [**breaking**] omit the NameID Format when no format is configured ([#233](https://github.com/salasebas/saml-rs/pull/233))
+- *(logout)* [**breaking**] send the subject's NameID format and qualifiers in LogoutRequest ([#227](https://github.com/salasebas/saml-rs/pull/227))
+
+### Other
+
+- consolidate 0.7 upgrade steps in one guide ([#292](https://github.com/salasebas/saml-rs/pull/292))
+- *(entity)* state that iso8601_offset panics past year 9999 ([#289](https://github.com/salasebas/saml-rs/pull/289))
+- gate crypto-dependent typed config and model tests on a crypto provider ([#272](https://github.com/salasebas/saml-rs/pull/272))
+- *(deps)* bump the cargo-maintenance group across 1 directory with 2 updates ([#265](https://github.com/salasebas/saml-rs/pull/265))
+- *(deps)* bump bergshamra ([#237](https://github.com/salasebas/saml-rs/pull/237))
+- gate crypto-dependent builder policy tests on a crypto provider ([#258](https://github.com/salasebas/saml-rs/pull/258))
+- *(deps)* bump uuid ([#235](https://github.com/salasebas/saml-rs/pull/235))
+- *(api)* rename unreleased PAOS and discovery names ([#214](https://github.com/salasebas/saml-rs/pull/214))
+- add the public Starlight and mdBook sites ([#208](https://github.com/salasebas/saml-rs/pull/208))
+
 ## [0.6.1](https://github.com/salasebas/saml-rs/compare/v0.6.0...v0.6.1) - 2026-10-07
 
 ### Added
