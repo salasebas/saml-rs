@@ -35,6 +35,7 @@ compatible additions.
 - [A signed AuthnRequest must carry Destination under RequireSigned](unreleased-signed-authn-request-destination.md)
 - [Metadata signing flags read `1` as true](unreleased-metadata-signing-flag-booleans.md)
 - [Metadata keys from the peer's role](unreleased-metadata-role-keys.md)
+- [KeyDescriptor `use` selects signing and encryption certificates](unreleased-key-descriptor-use.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
