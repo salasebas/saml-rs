@@ -830,6 +830,42 @@ fn custom_logout_response_omits_optional_in_response_to_placeholder(
 }
 
 #[test]
+fn custom_logout_response_keeps_placeholder_text_in_the_destination(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut sender = idp()?;
+    let target = ServiceProvider::from_config(
+        &SpMetadataConfig {
+            entity_id: "https://sp.example.com/metadata".into(),
+            single_logout_service: vec![Endpoint::new(
+                Binding::Post,
+                "https://sp/slo?next={InResponseTo}",
+            )],
+            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            ..Default::default()
+        },
+        unsigned_setting(),
+    )?;
+    sender.setting.logout_response_template = Some(custom_logout_response_template(
+        r#"IssueInstant="{IssueInstant}""#,
+    ));
+
+    let context = create_logout_response(
+        &sender.setting,
+        &sender.metadata,
+        &target.metadata,
+        Binding::Post,
+        Some("_req1"),
+        None,
+        false,
+    )?;
+    let xml = decode_logout_response_context(&context)?;
+
+    assert!(xml.contains(r#"Destination="https://sp/slo?next={InResponseTo}""#));
+    assert!(xml.contains(r#"InResponseTo="_req1""#));
+    Ok(())
+}
+
+#[test]
 fn custom_logout_response_rejects_root_signature_before_each_supported_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sender = idp()?;
