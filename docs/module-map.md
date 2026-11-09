@@ -51,6 +51,7 @@ stay unclaimed.
 | Behaviour | File |
 | --- | --- |
 | XML signature verification | `src/crypto/verify.rs` |
+| Protocol response roots that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | XML signature generation | `src/crypto/sign.rs` |
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |
