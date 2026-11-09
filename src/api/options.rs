@@ -190,6 +190,8 @@ impl<Delivery> RespondSso<Delivery> {
     ///
     /// HTTP-POST embeds an XML signature covering the Response. HTTP-POST-
     /// SimpleSign continues to use its binding-defined detached signature.
+    /// A response stored for an HTTP-Artifact embeds an XML signature, as
+    /// HTTP-POST does.
     pub fn sign_response(mut self) -> Self {
         self.response_signing = ResponseSigning::Always;
         self
