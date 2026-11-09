@@ -73,6 +73,16 @@ impl SingleLogoutRole {
     }
 }
 
+/// Value of an unqualified `xs:boolean` attribute: `true`, `1`, `false`, or
+/// `0`, with surrounding XML whitespace. Another lexical form is `None`.
+pub(crate) fn xs_boolean(value: Option<&str>) -> Option<bool> {
+    match value.map(|value| value.trim_matches([' ', '\t', '\r', '\n'])) {
+        Some("true" | "1") => Some(true),
+        Some("false" | "0") => Some(false),
+        Some(_) | None => None,
+    }
+}
+
 /// Normalise a "single object or array of objects" value into a node list.
 pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     match value {
@@ -506,6 +516,41 @@ mod tests {
             .get_name_id_format()
             .iter()
             .any(|f| f.contains("persistent")));
+        Ok(())
+    }
+
+    #[test]
+    fn signing_flags_read_every_xs_boolean_lexical_form() -> Result<(), Box<dyn std::error::Error>>
+    {
+        for (value, expected) in [
+            ("true", true),
+            ("1", true),
+            (" 1\n", true),
+            ("false", false),
+            ("0", false),
+        ] {
+            let xml = format!(
+                r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://dual.example.com">
+  <IDPSSODescriptor WantAuthnRequestsSigned="{value}" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/idp/sso"/>
+  </IDPSSODescriptor>
+  <SPSSODescriptor AuthnRequestsSigned="{value}" WantAssertionsSigned="{value}" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/sp/acs" index="0"/>
+  </SPSSODescriptor>
+</EntityDescriptor>"#
+            );
+            let idp = IdpMetadata::from_xml(&xml)?;
+            let sp = SpMetadata::from_xml(&xml)?;
+            assert_eq!(
+                (
+                    idp.is_want_authn_requests_signed(),
+                    sp.is_authn_request_signed(),
+                    sp.is_want_assertions_signed(),
+                ),
+                (expected, expected, expected),
+                "{value:?}"
+            );
+        }
         Ok(())
     }
 

@@ -178,6 +178,32 @@ fn assert_hostile_request_parses(
     Ok(())
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+#[test]
+fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_request(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata = IdentityProvider::from_config(&idp_config(true), EntitySetting::default())?
+        .metadata
+        .get_metadata()
+        .replace(
+            r#"WantAuthnRequestsSigned="true""#,
+            r#"WantAuthnRequestsSigned="1""#,
+        );
+    assert!(metadata.contains(r#"WantAuthnRequestsSigned="1""#));
+    let idp = IdentityProvider::from_metadata(&metadata, EntitySetting::default())?;
+    let sp = unsigned_sp()?;
+    let ctx = sp.create_login_request(&unsigned_idp()?, Binding::Post, None)?;
+
+    match idp.parse_login_request(&sp, Binding::Post, &login_request_http_request(&ctx)?) {
+        Err(SamlError::SignatureMissing) => Ok(()),
+        other => Err(format!("expected SignatureMissing, got {other:?}").into()),
+    }
+}
+
 #[test]
 fn legacy_create_login_request_callback_still_works() -> Result<(), Box<dyn std::error::Error>> {
     let replace = |_template: &str| {

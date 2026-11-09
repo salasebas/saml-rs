@@ -105,9 +105,11 @@ impl IdpMetadata {
         })
     }
 
-    /// `WantAuthnRequestsSigned` flag (absent ⇒ false).
+    /// `WantAuthnRequestsSigned` flag.
+    ///
+    /// `true` and `1` are true. An absent attribute or another value is false.
     pub fn is_want_authn_requests_signed(&self) -> bool {
-        self.inner.meta.get_str("wantAuthnRequestsSigned") == Some("true")
+        super::xs_boolean(self.inner.meta.get_str("wantAuthnRequestsSigned")) == Some(true)
     }
 
     /// First `SingleSignOnService` `Location` for `binding`.
