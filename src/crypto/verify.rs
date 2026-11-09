@@ -734,6 +734,155 @@ pub fn verify_signature(
     verify_signature_with_limits(xml, metadata_certs, XmlLimits::default())
 }
 
+/// The parsed message after the checks shared by every message signature
+/// verifier, with one verification context per loadable metadata certificate.
+struct PreparedSignatureVerification {
+    dom: dom::Document,
+    protocol_response: bool,
+    contexts: Vec<DsigContext>,
+}
+
+fn metadata_verification_context(certificate: &str) -> Result<DsigContext, SamlError> {
+    let key = load_certificate(certificate)?;
+    let mut manager = KeysManager::new();
+    manager.add_key(key);
+    // Metadata certificates are the only verification keys. Inline KeyInfo
+    // is not imported. `with_insecure(true)` skips X.509 chain and time
+    // checks only; signature, digest, reference, duplicate-ID, and XSW
+    // checks stay on. Do not replace this with `DsigContext::new_permissive()`.
+    Ok(DsigContext::new(manager)
+        .with_trusted_keys_only(true)
+        .with_strict_verification(true)
+        .with_require_reference_digests(true)
+        .with_hmac_min_out_len(160)
+        .with_insecure(true))
+}
+
+/// Load one context per metadata certificate (rolling-cert support): the
+/// signature verifies if any one of the declared keys matches. An unloadable
+/// certificate is skipped while another one loads.
+fn metadata_verification_contexts(
+    metadata_certs: &[String],
+) -> Result<Vec<DsigContext>, SamlError> {
+    let mut contexts = Vec::new();
+    let mut key_load_error = None;
+    for certificate in metadata_certs {
+        match metadata_verification_context(certificate) {
+            Ok(context) => contexts.push(context),
+            Err(error) => {
+                key_load_error.get_or_insert(error);
+            }
+        }
+    }
+    if contexts.is_empty() {
+        return Err(key_load_error.unwrap_or(SamlError::NoTrustedCertificate));
+    }
+    Ok(contexts)
+}
+
+fn reject_unpinned_inline_certificate(
+    signatures: &[&Node],
+    metadata_certs: &[String],
+) -> Result<(), SamlError> {
+    // If the message embeds a certificate, it must be one declared in metadata
+    // (rolling-cert safety). Verification itself still uses only the metadata
+    // certs.
+    let Some(inline) = inline_signature_cert(signatures) else {
+        return Ok(());
+    };
+    let inline = normalize_cert_string(&inline);
+    if !metadata_certs.is_empty()
+        && !metadata_certs
+            .iter()
+            .any(|certificate| normalize_cert_string(certificate) == inline)
+    {
+        return Err(SamlError::CertificateMismatch);
+    }
+    Ok(())
+}
+
+/// Run the wrapping, duplicate-ID, reference, and inline-certificate checks
+/// shared by [`verify_signature_with_limits`] and
+/// [`verify_signatures_detailed_with_profile`], then load the metadata
+/// certificates.
+///
+/// Returns `None` when the document carries no SAML signature.
+fn prepare_signature_verification(
+    xml: &str,
+    metadata_certs: &[String],
+    limits: XmlLimits,
+) -> Result<Option<PreparedSignatureVerification>, SamlError> {
+    let dom = dom::parse_with_limits(xml, limits)?;
+    let protocol_response = root_uses_protocol_response_rules(xml)?;
+    if protocol_response && wrapping_detected(&dom.root) {
+        return Err(SamlError::PotentialWrappingAttack);
+    }
+    let mut seen_ids = HashSet::new();
+    if duplicate_saml_id(&dom.root, &mut seen_ids).is_some() {
+        return Err(SamlError::PotentialWrappingAttack);
+    }
+
+    // Candidate signatures: message-level (root > Signature) or assertion-level.
+    let signature_candidates = saml_signature_candidates(&dom.root);
+    if signature_candidates.is_empty() {
+        return Ok(None);
+    }
+    preflight_saml_reference_uris(&signature_candidates)?;
+    reject_unpinned_inline_certificate(&signature_candidates, metadata_certs)?;
+    super::provider::ensure_crypto_provider_initialized()?;
+    let contexts = metadata_verification_contexts(metadata_certs)?;
+    Ok(Some(PreparedSignatureVerification {
+        dom,
+        protocol_response,
+        contexts,
+    }))
+}
+
+/// A leftover unloadable cert must not poison a rolling-cert verdict. A clean
+/// "invalid" (key mismatch / tampered) is a non-error unverified result; a
+/// structural error surfaces only when no loaded certificate produced a verdict.
+fn certificate_error_without_verdict(
+    tried_invalid: bool,
+    last_error: Option<SamlError>,
+) -> Result<(), SamlError> {
+    match last_error {
+        Some(error) if !tried_invalid => Err(error),
+        _ => Ok(()),
+    }
+}
+
+/// Verify the XML-DSig signature(s) of `xml` with explicit XML parser limits.
+///
+/// # Errors
+///
+/// Returns [`SamlError`] when XML parsing, trust checks, reference resolution,
+/// cryptographic verification, or signed-content coverage checks fail.
+pub fn verify_signature_with_limits(
+    xml: &str,
+    metadata_certs: &[String],
+    limits: XmlLimits,
+) -> Result<(bool, Option<String>), SamlError> {
+    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, limits)? else {
+        return Ok((false, None));
+    };
+    let root = &prepared.dom.root;
+    let mut tried_invalid = false;
+    let mut last_error = None;
+    for context in &prepared.contexts {
+        match verify(context, xml) {
+            Ok(VerifyResult::Valid { references, .. }) => {
+                let targets = verified_targets(&references)?;
+                let content = verified_content(root, xml, &targets, prepared.protocol_response)?;
+                return Ok((true, content));
+            }
+            Ok(VerifyResult::Invalid { .. }) => tried_invalid = true,
+            Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
+        }
+    }
+    certificate_error_without_verdict(tried_invalid, last_error)?;
+    Ok((false, None))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SignatureVerification {
     verified: bool,
@@ -775,295 +924,100 @@ impl SignatureVerification {
     }
 }
 
-enum CertificateVerification {
-    /// Stop at the first signature reported by bergshamra `verify`.
-    SingleSignature,
-    /// Verify every signature with `verify_all_document_with_source`.
-    AllDocumentSignatures { strict_xml_signature_profile: bool },
-}
-
-enum PreparedCertificateVerification<'a> {
-    SingleSignature,
-    AllDocumentSignatures {
-        strict_xml_signature_profile: bool,
-        document: Box<BergshamraDocument<'a>>,
-    },
-}
-
-fn metadata_verification_context(certificate: &str) -> Result<DsigContext, SamlError> {
-    let key = load_certificate(certificate)?;
-    let mut manager = KeysManager::new();
-    manager.add_key(key);
-    // Metadata certificates are the only verification keys. Inline KeyInfo
-    // is not imported. `with_insecure(true)` skips X.509 chain and time
-    // checks only; signature, digest, reference, duplicate-ID, and XSW
-    // checks stay on. Do not replace this with `DsigContext::new_permissive()`.
-    Ok(DsigContext::new(manager)
-        .with_trusted_keys_only(true)
-        .with_strict_verification(true)
-        .with_require_reference_digests(true)
-        .with_hmac_min_out_len(160)
-        .with_insecure(true))
-}
-
-fn reject_duplicate_saml_ids(root: &Node) -> Result<(), SamlError> {
-    let mut seen_ids = HashSet::new();
-    if duplicate_saml_id(root, &mut seen_ids).is_some() {
-        return Err(SamlError::PotentialWrappingAttack);
-    }
-    Ok(())
-}
-
-fn reject_unpinned_inline_certificate(
-    signatures: &[&Node],
-    metadata_certs: &[String],
-) -> Result<(), SamlError> {
-    // If the message embeds a certificate, it must be one declared in metadata
-    // (rolling-cert safety). Verification itself still uses only the metadata
-    // certs.
-    let Some(inline) = inline_signature_cert(signatures) else {
-        return Ok(());
-    };
-    let inline = normalize_cert_string(&inline);
-    if !metadata_certs.is_empty()
-        && !metadata_certs
-            .iter()
-            .any(|certificate| normalize_cert_string(certificate) == inline)
-    {
-        return Err(SamlError::CertificateMismatch);
-    }
-    Ok(())
-}
-
-fn signature_verification_or_certificate_error(
-    tried_invalid: bool,
-    last_error: Option<SamlError>,
-) -> Result<SignatureVerification, SamlError> {
-    // A leftover unloadable cert must not poison a rolling-cert verdict.
-    // A clean "invalid" (key mismatch / tampered) is a non-error false; only
-    // surface a structural error when no loaded certificate produced a verdict.
-    match last_error {
-        Some(error) if !tried_invalid => Err(error),
-        _ => Ok(SignatureVerification::unverified()),
-    }
-}
-
-/// Run the wrapping, duplicate-ID, inline-certificate, and metadata-certificate
-/// checks shared by [`verify_signature_with_limits`] and
-/// [`verify_signatures_detailed_with_profile`].
-///
-/// `SingleSignature` calls bergshamra `verify` and returns the first valid
-/// signature. `AllDocumentSignatures` calls `verify_all_document_with_source`
-/// and keeps every verified signature.
-fn verify_with_metadata_certificates(
-    xml: &str,
-    metadata_certs: &[String],
-    limits: XmlLimits,
-    mode: CertificateVerification,
-) -> Result<SignatureVerification, SamlError> {
-    let doc = dom::parse_with_limits(xml, limits)?;
-    let root = &doc.root;
-    let protocol_response = root_uses_protocol_response_rules(xml)?;
-    if protocol_response && wrapping_detected(root) {
-        return Err(SamlError::PotentialWrappingAttack);
-    }
-    reject_duplicate_saml_ids(root)?;
-
-    // Candidate signatures: message-level (root > Signature) or assertion-level.
-    let signature_candidates = saml_signature_candidates(root);
-    if signature_candidates.is_empty() {
-        return Ok(SignatureVerification::unverified());
-    }
-    preflight_saml_reference_uris(&signature_candidates)?;
-    reject_unpinned_inline_certificate(&signature_candidates, metadata_certs)?;
-    super::provider::ensure_crypto_provider_initialized()?;
-
-    let checks_every_signature =
-        matches!(&mode, CertificateVerification::AllDocumentSignatures { .. });
-    let prepared = match mode {
-        CertificateVerification::SingleSignature => {
-            PreparedCertificateVerification::SingleSignature
-        }
-        CertificateVerification::AllDocumentSignatures {
-            strict_xml_signature_profile,
-        } => {
-            // Reuse this exact verifier DOM for every pinned certificate attempt
-            // and for evidence extraction from each successful signature node.
-            let document = Box::new(
-                uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?,
-            );
-            PreparedCertificateVerification::AllDocumentSignatures {
-                strict_xml_signature_profile,
-                document,
-            }
-        }
-    };
-
-    let mut have_key = false;
-    let mut key_load_error = None;
-    let mut tried_invalid = false;
-    let mut last_error = None;
-    let mut first_signature_verified = false;
-    let mut targets = Vec::new();
-    let mut verified_signature_nodes = HashSet::new();
-    let mut verified_embedded_signatures = Vec::new();
-
-    // Try each metadata certificate individually (rolling-cert support): the
-    // signature verifies if any one of the declared keys matches.
-    for certificate in metadata_certs {
-        let context = match metadata_verification_context(certificate) {
-            Ok(context) => context,
-            Err(error) => {
-                key_load_error.get_or_insert(error);
-                continue;
-            }
-        };
-        have_key = true;
-        match &prepared {
-            PreparedCertificateVerification::SingleSignature => match verify(&context, xml) {
-                Ok(VerifyResult::Valid { references, .. }) => {
-                    let verified_references = verified_targets(&references)?;
-                    return Ok(SignatureVerification {
-                        verified: true,
-                        signed_content: verified_content(
-                            root,
-                            xml,
-                            &verified_references,
-                            protocol_response,
-                        )?,
-                        assertion_directly_covered: assertion_is_directly_covered(
-                            root,
-                            &verified_references,
-                            protocol_response,
-                        ),
-                        response_covered: protocol_response
-                            && response_is_covered(&verified_references, root),
-                        verified_embedded_signatures: Vec::new(),
-                    });
-                }
-                Ok(VerifyResult::Invalid { .. }) => tried_invalid = true,
-                Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
-            },
-            PreparedCertificateVerification::AllDocumentSignatures {
-                strict_xml_signature_profile,
-                document,
-            } => {
-                let strict_xml_signature_profile = *strict_xml_signature_profile;
-                match verify_all_document_with_source(&context, document, Some(xml)) {
-                    Ok(results) => {
-                        first_signature_verified |=
-                            matches!(results.first(), Some(VerifyResult::Valid { .. }));
-                        for result in results {
-                            match result {
-                                VerifyResult::Valid {
-                                    signature_node,
-                                    references,
-                                    ..
-                                } => {
-                                    let signature_targets = verified_targets(&references)?;
-                                    if verified_signature_nodes.insert(signature_node) {
-                                        let signature = verified_embedded_signature(
-                                            document,
-                                            signature_node,
-                                            &references,
-                                            &signature_targets,
-                                        )?;
-                                        // SSO evidence does not include LogoutRequest or
-                                        // LogoutResponse coverage. A protocol Response can
-                                        // also be evidence when `verified_content` returns
-                                        // no XML. Enforce the profile for either case.
-                                        if strict_xml_signature_profile
-                                            && (signature.is_some()
-                                                || references_cover_direct_assertion(
-                                                    document,
-                                                    &references,
-                                                )
-                                                || verified_targets_cover_accepted_content(
-                                                    root,
-                                                    &signature_targets,
-                                                    protocol_response,
-                                                ))
-                                        {
-                                            enforce_strict_profile_on_verified_signature(
-                                                document,
-                                                signature_node,
-                                            )?;
-                                        }
-                                        if let Some(signature) = signature {
-                                            verified_embedded_signatures
-                                                .push((signature_node.index(), signature));
-                                        }
-                                    }
-                                    targets.extend(signature_targets);
-                                }
-                                VerifyResult::Invalid { .. } => tried_invalid = true,
-                            }
-                        }
-                    }
-                    Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
-                }
-            }
-        }
-    }
-
-    if !have_key {
-        return Err(key_load_error.unwrap_or(SamlError::NoTrustedCertificate));
-    }
-    if checks_every_signature && first_signature_verified && !targets.is_empty() {
-        verified_embedded_signatures.sort_by_key(|(index, _)| *index);
-        return Ok(SignatureVerification {
-            verified: true,
-            signed_content: verified_content(root, xml, &targets, protocol_response)?,
-            assertion_directly_covered: assertion_is_directly_covered(
-                root,
-                &targets,
-                protocol_response,
-            ),
-            response_covered: protocol_response && response_is_covered(&targets, root),
-            verified_embedded_signatures: verified_embedded_signatures
-                .into_iter()
-                .map(|(_, signature)| signature)
-                .collect(),
-        });
-    }
-    signature_verification_or_certificate_error(tried_invalid, last_error)
-}
-
-/// Verify the XML-DSig signature(s) of `xml` with explicit XML parser limits.
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when XML parsing, trust checks, reference resolution,
-/// cryptographic verification, or signed-content coverage checks fail.
-pub fn verify_signature_with_limits(
-    xml: &str,
-    metadata_certs: &[String],
-    limits: XmlLimits,
-) -> Result<(bool, Option<String>), SamlError> {
-    let verification = verify_with_metadata_certificates(
-        xml,
-        metadata_certs,
-        limits,
-        CertificateVerification::SingleSignature,
-    )?;
-    let verified = verification.verified();
-    Ok((verified, verification.into_signed_content()))
-}
-
 pub(crate) fn verify_signatures_detailed_with_profile(
     xml: &str,
     metadata_certs: &[String],
     limits: XmlLimits,
     strict_xml_signature_profile: bool,
 ) -> Result<SignatureVerification, SamlError> {
-    verify_with_metadata_certificates(
-        xml,
-        metadata_certs,
-        limits,
-        CertificateVerification::AllDocumentSignatures {
-            strict_xml_signature_profile,
-        },
-    )
+    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, limits)? else {
+        return Ok(SignatureVerification::unverified());
+    };
+    let root = &prepared.dom.root;
+    let protocol_response = prepared.protocol_response;
+
+    let mut tried_invalid = false;
+    let mut last_error = None;
+    let mut first_signature_verified = false;
+    let mut targets = Vec::new();
+    // Reuse this exact verifier DOM for every pinned certificate attempt and
+    // for evidence extraction from each successful signature node.
+    let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    let mut verified_signature_nodes = HashSet::new();
+    let mut verified_embedded_signatures = Vec::new();
+    for context in &prepared.contexts {
+        match verify_all_document_with_source(context, &document, Some(xml)) {
+            Ok(results) => {
+                first_signature_verified |=
+                    matches!(results.first(), Some(VerifyResult::Valid { .. }));
+                for result in results {
+                    match result {
+                        VerifyResult::Valid {
+                            signature_node,
+                            references,
+                            ..
+                        } => {
+                            let signature_targets = verified_targets(&references)?;
+                            if verified_signature_nodes.insert(signature_node) {
+                                let signature = verified_embedded_signature(
+                                    &document,
+                                    signature_node,
+                                    &references,
+                                    &signature_targets,
+                                )?;
+                                // SSO evidence does not include LogoutRequest or
+                                // LogoutResponse coverage. A protocol Response can
+                                // also be evidence when `verified_content` returns
+                                // no XML. Enforce the profile for either case.
+                                if strict_xml_signature_profile
+                                    && (signature.is_some()
+                                        || references_cover_direct_assertion(
+                                            &document,
+                                            &references,
+                                        )
+                                        || verified_targets_cover_accepted_content(
+                                            root,
+                                            &signature_targets,
+                                            protocol_response,
+                                        ))
+                                {
+                                    enforce_strict_profile_on_verified_signature(
+                                        &document,
+                                        signature_node,
+                                    )?;
+                                }
+                                if let Some(signature) = signature {
+                                    verified_embedded_signatures
+                                        .push((signature_node.index(), signature));
+                                }
+                            }
+                            targets.extend(signature_targets);
+                        }
+                        VerifyResult::Invalid { .. } => tried_invalid = true,
+                    }
+                }
+            }
+            Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
+        }
+    }
+    if first_signature_verified && !targets.is_empty() {
+        verified_embedded_signatures.sort_by_key(|(index, _)| *index);
+        let assertion_directly_covered =
+            assertion_is_directly_covered(root, &targets, protocol_response);
+        let response_covered = protocol_response && response_is_covered(&targets, root);
+        return Ok(SignatureVerification {
+            verified: true,
+            signed_content: verified_content(root, xml, &targets, protocol_response)?,
+            assertion_directly_covered,
+            response_covered,
+            verified_embedded_signatures: verified_embedded_signatures
+                .into_iter()
+                .map(|(_, signature)| signature)
+                .collect(),
+        });
+    }
+    certificate_error_without_verdict(tried_invalid, last_error)?;
+    Ok(SignatureVerification::unverified())
 }
 
 /// Detailed metadata signature verification result.
