@@ -1157,3 +1157,40 @@ fn logout_response_uses_response_location_and_request_uses_location(
     );
     Ok(())
 }
+
+#[test]
+fn raw_logout_generation_rejects_soap() -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp()?;
+    let idp = idp()?;
+    let request = create_logout_request(
+        &sp.setting,
+        &sp.metadata,
+        &idp.metadata,
+        Binding::Soap,
+        &User::new("alice@example.com"),
+        None,
+        false,
+    );
+    assert!(matches!(
+        request,
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Soap
+        })
+    ));
+    let response = create_logout_response(
+        &idp.setting,
+        &idp.metadata,
+        &sp.metadata,
+        Binding::Soap,
+        Some("_request"),
+        None,
+        false,
+    );
+    assert!(matches!(
+        response,
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Soap
+        })
+    ));
+    Ok(())
+}

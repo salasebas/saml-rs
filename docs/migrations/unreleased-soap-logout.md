@@ -19,8 +19,11 @@ snapshot reports it when the logout was started with `StartSlo::soap`.
 Who must change: code that matches `saml_rs::raw::Binding` (also
 `saml_rs::constants::Binding`), for example on `BindingContext::binding`.
 
-Add an arm for `Binding::Soap`. Raw SSO creation returns
+Add an arm for `Binding::Soap`. Raw SSO and logout creation return
 `SamlError::UnsupportedBinding` for it, and the raw parsers do not read it.
+`Metadata::get_support_bindings` now lists `Binding::Soap` when metadata
+publishes a SOAP `SingleLogoutService`. An identity provider that publishes
+only that endpoint now writes `SessionIndex` in its assertions.
 `Binding::from_urn` now returns `Binding::Soap` for
 `urn:oasis:names:tc:SAML:2.0:bindings:SOAP` instead of `None`. An
 `AuthnRequest` whose `ProtocolBinding` is that URN now fails with

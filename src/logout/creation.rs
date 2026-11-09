@@ -68,6 +68,7 @@ pub fn create_logout_request_with_id(
     want_signed: bool,
     message_id: Option<&str>,
 ) -> Result<BindingContext, SamlError> {
+    reject_raw_soap(binding)?;
     let issue_instant = now_iso8601();
     let subject = LogoutRequestSubject::from_user(user);
     Ok(create_logout_request_for_subject_inner(LogoutRequestInput {
@@ -411,6 +412,7 @@ pub fn create_logout_response_with_id(
     want_signed: bool,
     message_id: Option<&str>,
 ) -> Result<BindingContext, SamlError> {
+    reject_raw_soap(binding)?;
     let status = Status::success();
     create_logout_response_with_status(
         init_setting,
@@ -613,6 +615,13 @@ fn reject_soap_relay_state(binding: Binding, relay_state: Option<&str>) -> Resul
         return Err(SamlError::ProtocolProfile(
             "the SOAP binding does not carry RelayState".into(),
         ));
+    }
+    Ok(())
+}
+
+fn reject_raw_soap(binding: Binding) -> Result<(), SamlError> {
+    if binding == Binding::Soap {
+        return Err(SamlError::UnsupportedBinding { binding });
     }
     Ok(())
 }

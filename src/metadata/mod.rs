@@ -330,10 +330,15 @@ impl Metadata {
 
     /// Bindings for which a `SingleLogoutService` endpoint is declared.
     pub fn get_support_bindings(&self) -> Vec<Binding> {
-        [Binding::Redirect, Binding::Post, Binding::SimpleSign]
-            .into_iter()
-            .filter(|b| self.get_single_logout_service(*b).is_some())
-            .collect()
+        [
+            Binding::Redirect,
+            Binding::Post,
+            Binding::SimpleSign,
+            Binding::Soap,
+        ]
+        .into_iter()
+        .filter(|b| self.get_single_logout_service(*b).is_some())
+        .collect()
     }
 
     /// Verify this metadata document's enveloped signature against trusted

@@ -18,7 +18,7 @@ pub enum Binding {
     /// with it. The raw flows do not implement it.
     Artifact,
     /// SOAP binding for a synchronous request and response. The typed API
-    /// sends Single Logout with it. The raw flows do not parse it.
+    /// sends Single Logout with it. The raw flows do not implement it.
     Soap,
 }
 
