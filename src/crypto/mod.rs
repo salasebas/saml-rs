@@ -33,6 +33,12 @@ mod provider;
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
+mod response_root;
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 pub mod sign;
 #[cfg(any(
     feature = "crypto-rustcrypto",

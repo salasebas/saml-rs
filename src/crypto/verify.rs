@@ -11,6 +11,7 @@
 //! - Only content covered by a verified reference is returned for extraction.
 
 use super::keys::load_certificate;
+use super::response_root::root_uses_protocol_response_rules;
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
 use crate::util::normalize_cert_string;
@@ -263,17 +264,18 @@ fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool 
 }
 
 /// Return the source of the content covered by a verified reference: the first
-/// bearer `<Assertion>`, a consumed root element, or the whole `<Response>`
-/// when assertions are encrypted.
+/// bearer `<Assertion>`, a consumed root element, or the whole protocol
+/// response when assertions are encrypted.
 fn verified_content(
     root: &Node,
     xml: &str,
     targets: &[VerifiedTarget],
+    protocol_response: bool,
 ) -> Result<Option<String>, SamlError> {
     if root.local_name == "Assertion" {
         return verified_root_content(root, xml, targets).map(Some);
     }
-    if root.local_name.contains("Response") {
+    if protocol_response {
         let assertions = children_named(root, "Assertion");
         if !assertions.is_empty() {
             if !response_assertions_covered(root, targets) {
@@ -319,11 +321,15 @@ fn verified_content(
 /// This is the strict-profile gate for signatures that authenticate a message
 /// without becoming SSO evidence, including `LogoutRequest` and
 /// `LogoutResponse`. Keep the branches aligned with [`verified_content`].
-fn verified_targets_cover_accepted_content(root: &Node, targets: &[VerifiedTarget]) -> bool {
+fn verified_targets_cover_accepted_content(
+    root: &Node,
+    targets: &[VerifiedTarget],
+    protocol_response: bool,
+) -> bool {
     if root.local_name == "Assertion" {
         return target_matches_node(targets, root);
     }
-    if root.local_name.contains("Response") {
+    if protocol_response {
         let assertions = children_named(root, "Assertion");
         if !assertions.is_empty() {
             return response_assertions_covered(root, targets);
@@ -347,11 +353,15 @@ fn verified_targets_cover_accepted_content(root: &Node, targets: &[VerifiedTarge
     false
 }
 
-fn assertion_is_directly_covered(root: &Node, targets: &[VerifiedTarget]) -> bool {
+fn assertion_is_directly_covered(
+    root: &Node,
+    targets: &[VerifiedTarget],
+    protocol_response: bool,
+) -> bool {
     if root.local_name == "Assertion" {
         return target_matches_node(targets, root);
     }
-    if root.local_name.contains("Response") {
+    if protocol_response {
         let assertions = children_named(root, "Assertion");
         return !assertions.is_empty()
             && assertions
@@ -681,6 +691,123 @@ pub fn verify_signature(
     verify_signature_with_limits(xml, metadata_certs, XmlLimits::default())
 }
 
+/// The parsed message after the checks shared by every message signature
+/// verifier, with one verification context per loadable metadata certificate.
+struct PreparedSignatureVerification {
+    dom: dom::Document,
+    protocol_response: bool,
+    contexts: Vec<DsigContext>,
+}
+
+fn metadata_verification_context(certificate: &str) -> Result<DsigContext, SamlError> {
+    let key = load_certificate(certificate)?;
+    let mut manager = KeysManager::new();
+    manager.add_key(key);
+    // Metadata certificates are the only verification keys. Inline KeyInfo
+    // is not imported. `with_insecure(true)` skips X.509 chain and time
+    // checks only; signature, digest, reference, duplicate-ID, and XSW
+    // checks stay on. Do not replace this with `DsigContext::new_permissive()`.
+    Ok(DsigContext::new(manager)
+        .with_trusted_keys_only(true)
+        .with_strict_verification(true)
+        .with_require_reference_digests(true)
+        .with_hmac_min_out_len(160)
+        .with_insecure(true))
+}
+
+/// Load one context per metadata certificate (rolling-cert support): the
+/// signature verifies if any one of the declared keys matches. An unloadable
+/// certificate is skipped while another one loads.
+fn metadata_verification_contexts(
+    metadata_certs: &[String],
+) -> Result<Vec<DsigContext>, SamlError> {
+    let mut contexts = Vec::new();
+    let mut key_load_error = None;
+    for certificate in metadata_certs {
+        match metadata_verification_context(certificate) {
+            Ok(context) => contexts.push(context),
+            Err(error) => {
+                key_load_error.get_or_insert(error);
+            }
+        }
+    }
+    if contexts.is_empty() {
+        return Err(key_load_error.unwrap_or(SamlError::NoTrustedCertificate));
+    }
+    Ok(contexts)
+}
+
+fn reject_unpinned_inline_certificate(
+    signatures: &[&Node],
+    metadata_certs: &[String],
+) -> Result<(), SamlError> {
+    // If the message embeds a certificate, it must be one declared in metadata
+    // (rolling-cert safety). Verification itself still uses only the metadata
+    // certs.
+    let Some(inline) = inline_signature_cert(signatures) else {
+        return Ok(());
+    };
+    let inline = normalize_cert_string(&inline);
+    if !metadata_certs.is_empty()
+        && !metadata_certs
+            .iter()
+            .any(|certificate| normalize_cert_string(certificate) == inline)
+    {
+        return Err(SamlError::CertificateMismatch);
+    }
+    Ok(())
+}
+
+/// Run the wrapping, duplicate-ID, reference, and inline-certificate checks
+/// shared by [`verify_signature_with_limits`] and
+/// [`verify_signatures_detailed_with_profile`], then load the metadata
+/// certificates.
+///
+/// Returns `None` when the document carries no SAML signature.
+fn prepare_signature_verification(
+    xml: &str,
+    metadata_certs: &[String],
+    limits: XmlLimits,
+) -> Result<Option<PreparedSignatureVerification>, SamlError> {
+    let dom = dom::parse_with_limits(xml, limits)?;
+    let protocol_response = root_uses_protocol_response_rules(xml)?;
+    if protocol_response && wrapping_detected(&dom.root) {
+        return Err(SamlError::PotentialWrappingAttack);
+    }
+    let mut seen_ids = HashSet::new();
+    if duplicate_saml_id(&dom.root, &mut seen_ids).is_some() {
+        return Err(SamlError::PotentialWrappingAttack);
+    }
+
+    // Candidate signatures: message-level (root > Signature) or assertion-level.
+    let signature_candidates = saml_signature_candidates(&dom.root);
+    if signature_candidates.is_empty() {
+        return Ok(None);
+    }
+    preflight_saml_reference_uris(&signature_candidates)?;
+    reject_unpinned_inline_certificate(&signature_candidates, metadata_certs)?;
+    super::provider::ensure_crypto_provider_initialized()?;
+    let contexts = metadata_verification_contexts(metadata_certs)?;
+    Ok(Some(PreparedSignatureVerification {
+        dom,
+        protocol_response,
+        contexts,
+    }))
+}
+
+/// A leftover unloadable cert must not poison a rolling-cert verdict. A clean
+/// "invalid" (key mismatch / tampered) is a non-error unverified result; a
+/// structural error surfaces only when no loaded certificate produced a verdict.
+fn certificate_error_without_verdict(
+    tried_invalid: bool,
+    last_error: Option<SamlError>,
+) -> Result<(), SamlError> {
+    match last_error {
+        Some(error) if !tried_invalid => Err(error),
+        _ => Ok(()),
+    }
+}
+
 /// Verify the XML-DSig signature(s) of `xml` with explicit XML parser limits.
 ///
 /// # Errors
@@ -692,91 +819,25 @@ pub fn verify_signature_with_limits(
     metadata_certs: &[String],
     limits: XmlLimits,
 ) -> Result<(bool, Option<String>), SamlError> {
-    let doc = dom::parse_with_limits(xml, limits)?;
-    let root = &doc.root;
-
-    if root.local_name.contains("Response") && wrapping_detected(root) {
-        return Err(SamlError::PotentialWrappingAttack);
-    }
-
-    let mut seen_ids = HashSet::new();
-    if duplicate_saml_id(root, &mut seen_ids).is_some() {
-        return Err(SamlError::PotentialWrappingAttack);
-    }
-
-    // Candidate signatures: message-level (root > Signature) or assertion-level.
-    let signature_candidates = saml_signature_candidates(root);
-    if signature_candidates.is_empty() {
+    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, limits)? else {
         return Ok((false, None));
-    }
-    preflight_saml_reference_uris(&signature_candidates)?;
-
-    // If the message embeds a certificate, it must be one declared in metadata
-    // (rolling-cert safety). Verification itself still uses only the metadata
-    // certs.
-    if let Some(inline) = inline_signature_cert(&signature_candidates) {
-        let inline = normalize_cert_string(&inline);
-        if !metadata_certs.is_empty()
-            && !metadata_certs
-                .iter()
-                .any(|c| normalize_cert_string(c) == inline)
-        {
-            return Err(SamlError::CertificateMismatch);
-        }
-    }
-
-    super::provider::ensure_crypto_provider_initialized()?;
-
-    // Try each metadata certificate individually (rolling-cert support): the
-    // signature verifies if any one of the declared keys matches.
-    let mut have_key = false;
-    let mut key_load_error = None;
+    };
+    let root = &prepared.dom.root;
     let mut tried_invalid = false;
-    let mut last_err: Option<SamlError> = None;
-    for cert in metadata_certs {
-        let key = match load_certificate(cert) {
-            Ok(key) => key,
-            Err(error) => {
-                key_load_error.get_or_insert(error);
-                continue;
-            }
-        };
-        have_key = true;
-        let mut manager = KeysManager::new();
-        manager.add_key(key);
-        // Metadata certificates are the only verification keys. Inline KeyInfo
-        // is not imported. `with_insecure(true)` skips X.509 chain and time
-        // checks only; signature, digest, reference, duplicate-ID, and XSW
-        // checks stay on. Do not replace this with `DsigContext::new_permissive()`.
-        let ctx = DsigContext::new(manager)
-            .with_trusted_keys_only(true)
-            .with_strict_verification(true)
-            .with_require_reference_digests(true)
-            .with_hmac_min_out_len(160)
-            .with_insecure(true);
-        match verify(&ctx, xml) {
-            Ok(VerifyResult::Valid {
-                signature_node: _,
-                references,
-                ..
-            }) => {
+    let mut last_error = None;
+    for context in &prepared.contexts {
+        match verify(context, xml) {
+            Ok(VerifyResult::Valid { references, .. }) => {
                 let targets = verified_targets(&references)?;
-                return Ok((true, verified_content(root, xml, &targets)?));
+                let content = verified_content(root, xml, &targets, prepared.protocol_response)?;
+                return Ok((true, content));
             }
             Ok(VerifyResult::Invalid { .. }) => tried_invalid = true,
-            Err(e) => last_err = Some(SamlError::Crypto(e.to_string())),
+            Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
         }
     }
-    if !have_key {
-        return Err(key_load_error.unwrap_or(SamlError::NoTrustedCertificate));
-    }
-    // A leftover unloadable cert must not poison a rolling-cert verdict.
-    // A clean "invalid" (key mismatch / tampered) is a non-error false; only
-    // surface a structural error when no loaded certificate produced a verdict.
-    match last_err {
-        Some(err) if !tried_invalid => Err(err),
-        _ => Ok((false, None)),
-    }
+    certificate_error_without_verdict(tried_invalid, last_error)?;
+    Ok((false, None))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -789,6 +850,16 @@ pub(crate) struct SignatureVerification {
 }
 
 impl SignatureVerification {
+    fn unverified() -> Self {
+        Self {
+            verified: false,
+            signed_content: None,
+            assertion_directly_covered: false,
+            response_covered: false,
+            verified_embedded_signatures: Vec::new(),
+        }
+    }
+
     pub(crate) fn verified(&self) -> bool {
         self.verified
     }
@@ -816,47 +887,14 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     limits: XmlLimits,
     strict_xml_signature_profile: bool,
 ) -> Result<SignatureVerification, SamlError> {
-    let doc = dom::parse_with_limits(xml, limits)?;
-    let root = &doc.root;
+    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, limits)? else {
+        return Ok(SignatureVerification::unverified());
+    };
+    let root = &prepared.dom.root;
+    let protocol_response = prepared.protocol_response;
 
-    if root.local_name.contains("Response") && wrapping_detected(root) {
-        return Err(SamlError::PotentialWrappingAttack);
-    }
-
-    let mut seen_ids = HashSet::new();
-    if duplicate_saml_id(root, &mut seen_ids).is_some() {
-        return Err(SamlError::PotentialWrappingAttack);
-    }
-
-    let signature_candidates = saml_signature_candidates(root);
-    if signature_candidates.is_empty() {
-        return Ok(SignatureVerification {
-            verified: false,
-            signed_content: None,
-            assertion_directly_covered: false,
-            response_covered: false,
-            verified_embedded_signatures: Vec::new(),
-        });
-    }
-    preflight_saml_reference_uris(&signature_candidates)?;
-
-    if let Some(inline) = inline_signature_cert(&signature_candidates) {
-        let inline = normalize_cert_string(&inline);
-        if !metadata_certs.is_empty()
-            && !metadata_certs
-                .iter()
-                .any(|c| normalize_cert_string(c) == inline)
-        {
-            return Err(SamlError::CertificateMismatch);
-        }
-    }
-
-    super::provider::ensure_crypto_provider_initialized()?;
-
-    let mut have_key = false;
-    let mut key_load_error = None;
     let mut tried_invalid = false;
-    let mut last_err: Option<SamlError> = None;
+    let mut last_error = None;
     let mut first_signature_verified = false;
     let mut targets = Vec::new();
     // Reuse this exact verifier DOM for every pinned certificate attempt and
@@ -864,24 +902,8 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
     let mut verified_signature_nodes = HashSet::new();
     let mut verified_embedded_signatures = Vec::new();
-    for cert in metadata_certs {
-        let key = match load_certificate(cert) {
-            Ok(key) => key,
-            Err(error) => {
-                key_load_error.get_or_insert(error);
-                continue;
-            }
-        };
-        have_key = true;
-        let mut manager = KeysManager::new();
-        manager.add_key(key);
-        let ctx = DsigContext::new(manager)
-            .with_trusted_keys_only(true)
-            .with_strict_verification(true)
-            .with_require_reference_digests(true)
-            .with_hmac_min_out_len(160)
-            .with_insecure(true);
-        match verify_all_document_with_source(&ctx, &document, Some(xml)) {
+    for context in &prepared.contexts {
+        match verify_all_document_with_source(context, &document, Some(xml)) {
             Ok(results) => {
                 first_signature_verified |=
                     matches!(results.first(), Some(VerifyResult::Valid { .. }));
@@ -913,6 +935,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                                         || verified_targets_cover_accepted_content(
                                             root,
                                             &signature_targets,
+                                            protocol_response,
                                         ))
                                 {
                                     enforce_strict_profile_on_verified_signature(
@@ -931,20 +954,17 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                     }
                 }
             }
-            Err(error) => last_err = Some(SamlError::Crypto(error.to_string())),
+            Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
         }
-    }
-    if !have_key {
-        return Err(key_load_error.unwrap_or(SamlError::NoTrustedCertificate));
     }
     if first_signature_verified && !targets.is_empty() {
         verified_embedded_signatures.sort_by_key(|(index, _)| *index);
-        let assertion_directly_covered = assertion_is_directly_covered(root, &targets);
-        let response_covered =
-            root.local_name.contains("Response") && response_is_covered(&targets, root);
+        let assertion_directly_covered =
+            assertion_is_directly_covered(root, &targets, protocol_response);
+        let response_covered = protocol_response && response_is_covered(&targets, root);
         return Ok(SignatureVerification {
             verified: true,
-            signed_content: verified_content(root, xml, &targets)?,
+            signed_content: verified_content(root, xml, &targets, protocol_response)?,
             assertion_directly_covered,
             response_covered,
             verified_embedded_signatures: verified_embedded_signatures
@@ -953,16 +973,8 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                 .collect(),
         });
     }
-    match last_err {
-        Some(error) if !tried_invalid => Err(error),
-        _ => Ok(SignatureVerification {
-            verified: false,
-            signed_content: None,
-            assertion_directly_covered: false,
-            response_covered: false,
-            verified_embedded_signatures: Vec::new(),
-        }),
-    }
+    certificate_error_without_verdict(tried_invalid, last_error)?;
+    Ok(SignatureVerification::unverified())
 }
 
 /// Detailed metadata signature verification result.
@@ -1990,6 +2002,170 @@ mod tests {
         assert!(content.is_none());
         // keep the extractor import exercised
         let _ = extract("<a/>", &[ExtractorField::new("x", &["a"])])?;
+        Ok(())
+    }
+
+    fn subject_confirmation_wrapping(root_open: &str, root_close: &str) -> String {
+        format!(
+            "{root_open}<saml:Assertion xmlns:saml=\"{assertion}\"><saml:Subject><saml:SubjectConfirmation><saml:SubjectConfirmationData><saml:Assertion/></saml:SubjectConfirmationData></saml:SubjectConfirmation></saml:Subject></saml:Assertion>{root_close}",
+            assertion = namespace::ASSERTION,
+        )
+    }
+
+    #[test]
+    fn protocol_responses_reject_subject_confirmation_wrapping(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for local_name in [
+            "Response",
+            "ArtifactResponse",
+            "LogoutResponse",
+            "ManageNameIDResponse",
+            "NameIDMappingResponse",
+        ] {
+            let xml = subject_confirmation_wrapping(
+                &format!(
+                    r#"<samlp:{local_name} xmlns:samlp="{protocol}">"#,
+                    protocol = namespace::PROTOCOL,
+                ),
+                &format!("</samlp:{local_name}>"),
+            );
+            for result in [
+                verify_signature(&xml, &[]).map(|_| ()),
+                verify_signatures_detailed_with_profile(&xml, &[], XmlLimits::default(), false)
+                    .map(|_| ()),
+            ] {
+                match result {
+                    Err(SamlError::PotentialWrappingAttack) => {}
+                    other => {
+                        return Err(format!(
+                            "{local_name}: expected wrapping rejection, got {other:?}"
+                        )
+                        .into());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn substring_and_foreign_namespace_roots_skip_response_wrapping(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let protocol = namespace::PROTOCOL;
+        let cases = [
+            subject_confirmation_wrapping(
+                &format!(r#"<samlp:FooResponse xmlns:samlp="{protocol}">"#),
+                "</samlp:FooResponse>",
+            ),
+            subject_confirmation_wrapping(
+                r#"<Response xmlns="urn:example:not-saml">"#,
+                "</Response>",
+            ),
+            subject_confirmation_wrapping(
+                r#"<samlp:LogoutResponse xmlns:samlp="urn:example:not-saml">"#,
+                "</samlp:LogoutResponse>",
+            ),
+            subject_confirmation_wrapping(
+                r#"<samlp:ArtifactResponse xmlns:samlp="urn:example:not-saml">"#,
+                "</samlp:ArtifactResponse>",
+            ),
+        ];
+        for xml in cases {
+            let (verified, content) = verify_signature(&xml, &[])?;
+            assert!(!verified && content.is_none(), "{xml}");
+            let detailed =
+                verify_signatures_detailed_with_profile(&xml, &[], XmlLimits::default(), false)?;
+            assert!(
+                !detailed.verified() && !detailed.response_covered(),
+                "{xml}"
+            );
+        }
+        Ok(())
+    }
+
+    fn sign_message_root(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let key = load_private_key(SP_PRIVKEY, None)?;
+        Ok(construct_saml_signature(
+            xml,
+            true,
+            &key,
+            SP_SIGNING_CERT,
+            RSA_SHA256,
+            &[],
+            None,
+        )?)
+    }
+
+    fn signed_protocol_message(
+        local_name: &str,
+        inner: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let xml = format!(
+            r#"<samlp:{local_name} xmlns:samlp="{protocol}" xmlns:saml="{assertion}" ID="_{local_name}" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"><saml:Issuer>https://idp.example.com</saml:Issuer>{inner}</samlp:{local_name}>"#,
+            protocol = namespace::PROTOCOL,
+            assertion = namespace::ASSERTION,
+        );
+        sign_message_root(&xml)
+    }
+
+    fn assert_both_verifiers_agree(
+        signed: &str,
+        response_covered: bool,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let certificates = [SP_SIGNING_CERT.to_string()];
+        let (verified, content) = verify_signature(signed, &certificates)?;
+        assert!(verified);
+        let detailed = verify_signatures_detailed_with_profile(
+            signed,
+            &certificates,
+            XmlLimits::default(),
+            false,
+        )?;
+        assert!(detailed.verified());
+        assert_eq!(detailed.response_covered(), response_covered);
+        assert!(!detailed.assertion_directly_covered());
+        let detailed_content = detailed.into_signed_content();
+        assert_eq!(content.as_deref(), detailed_content.as_deref());
+        Ok(content)
+    }
+
+    #[test]
+    fn logout_and_artifact_responses_keep_signature_coverage(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        const NESTED_ASSERTION: &str = r#"<saml:Assertion ID="_nested" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"><saml:Issuer>https://idp.example.com</saml:Issuer></saml:Assertion>"#;
+
+        let logout =
+            assert_both_verifiers_agree(&signed_protocol_message("LogoutResponse", "")?, true)?;
+        let logout = logout.ok_or("expected signed LogoutResponse content")?;
+        assert!(logout.contains("LogoutResponse"));
+
+        let logout_assertion = assert_both_verifiers_agree(
+            &signed_protocol_message("LogoutResponse", NESTED_ASSERTION)?,
+            true,
+        )?;
+        let logout_assertion =
+            logout_assertion.ok_or("expected LogoutResponse assertion content")?;
+        assert!(logout_assertion.starts_with("<saml:Assertion"));
+        assert!(!logout_assertion.contains("LogoutResponse"));
+
+        let artifact =
+            assert_both_verifiers_agree(&signed_protocol_message("ArtifactResponse", "")?, true)?;
+        assert!(artifact.is_none());
+
+        let artifact_assertion = assert_both_verifiers_agree(
+            &signed_protocol_message("ArtifactResponse", NESTED_ASSERTION)?,
+            true,
+        )?;
+        let artifact_assertion =
+            artifact_assertion.ok_or("expected ArtifactResponse assertion content")?;
+        assert!(artifact_assertion.starts_with("<saml:Assertion"));
+        assert!(!artifact_assertion.contains("ArtifactResponse"));
+
+        let custom = sign_message_root(
+            r#"<FooResponse xmlns="urn:example:custom" ID="_foo"><Issuer>https://idp.example.com</Issuer><Assertion ID="_nested">kept</Assertion></FooResponse>"#,
+        )?;
+        let custom = assert_both_verifiers_agree(&custom, false)?;
+        assert!(custom.is_none());
         Ok(())
     }
 }
