@@ -10,7 +10,7 @@ use crate::binding::xml_escape;
 use crate::config::{
     AssertionElementEncryption, AttributeEncryptionPolicy, IdentifierEncryptionPolicy,
 };
-use crate::constants::namespace;
+use crate::constants::{key_encryption_algorithm, namespace};
 use crate::error::SamlError;
 use crate::xml::dom::{self, Node, XmlLimits};
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
@@ -20,6 +20,7 @@ use bergshamra::{decrypt, encrypt, EncContext, KeysManager};
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
 const SOFTWARE_RSA_DECRYPTION_DISABLED: &str = "XML-Enc RSA key-transport decryption with software private keys is disabled by default because the bundled RustCrypto rsa backend is affected by RUSTSEC-2023-0071. Enable allow_insecure_software_rsa_key_transport_decryption only as an explicit compatibility exception.";
+const RSA15_DECRYPTION_DISABLED: &str = "XML-Enc RSA-v1.5 key transport (http://www.w3.org/2001/04/xmlenc#rsa-1_5) is refused before decryption unless allow_rsa15_key_transport_decryption is selected";
 
 /// Options for XML-Enc assertion decryption.
 #[derive(Debug, Clone, Copy, Default)]
@@ -36,6 +37,16 @@ pub struct AssertionDecryptionOptions {
     /// flag. FIPS still rejects algorithms outside its approved set, including
     /// the SHA-1 `RSA_OAEP_MGF1P` key transport.
     pub allow_insecure_software_rsa_key_transport_decryption: bool,
+    /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport.
+    ///
+    /// When this is `false`, an encrypted element whose XML names
+    /// `http://www.w3.org/2001/04/xmlenc#rsa-1_5` in an `<EncryptionMethod>`
+    /// is refused with [`SamlError::Unsupported`] before any key is
+    /// decrypted. RSA-v1.5 is open to Bleichenbacher's chosen-ciphertext
+    /// attack. Set it only for a peer that cannot send RSA-OAEP. It also
+    /// needs `crypto-legacy-algorithms`, and on RustCrypto
+    /// `allow_insecure_software_rsa_key_transport_decryption`.
+    pub allow_rsa15_key_transport_decryption: bool,
 }
 
 fn crypto_err(err: impl std::fmt::Display) -> SamlError {
@@ -58,6 +69,40 @@ pub(crate) fn require_software_rsa_opt_in(
         return Err(software_rsa_decryption_disabled());
     }
     Ok(())
+}
+
+/// Decrypt the `<EncryptedData>` in `xml` with `enc_key`, after refusing an
+/// unselected RSA-v1.5 `<EncryptionMethod>` anywhere in `xml`.
+fn decrypt_with_key(
+    xml: &str,
+    enc_key: &Key,
+    options: AssertionDecryptionOptions,
+) -> Result<String, SamlError> {
+    if !options.allow_rsa15_key_transport_decryption && names_rsa15_key_transport(xml)? {
+        return Err(SamlError::Unsupported(RSA15_DECRYPTION_DISABLED.into()));
+    }
+    let mut manager = KeysManager::new();
+    manager.add_key(enc_key.clone());
+    decrypt(&EncContext::new(manager), xml).map_err(crypto_err)
+}
+
+/// Whether an `<xenc:EncryptionMethod>` of `xml` has an `Algorithm` attribute
+/// naming RSA-v1.5. `bergshamra` parses the same text with `uppsala` and reads
+/// `Algorithm` by local name, so every such attribute is checked.
+fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
+    let document = uppsala::parse(xml).map_err(crypto_err)?;
+    Ok(document
+        .descendants(document.root())
+        .into_iter()
+        .any(|node| {
+            document.element(node).is_some_and(|element| {
+                element.matches_name_ns(ENC, "EncryptionMethod")
+                    && element.attributes.iter().any(|attribute| {
+                        attribute.name.local_name == "Algorithm"
+                            && attribute.value == key_encryption_algorithm::RSA_1_5
+                    })
+            })
+        }))
 }
 
 fn child<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
@@ -152,10 +197,7 @@ pub fn decrypt_assertion_with_limits(
         .ok_or_else(|| SamlError::Crypto("ERR_UNDEFINED_ENCRYPTED_ASSERTION".into()))?;
     let encrypted_data_xml = &xml[encrypted_data.start..encrypted_data.end];
 
-    let mut manager = KeysManager::new();
-    manager.add_key(enc_key.clone());
-    let ctx = EncContext::new(manager);
-    let decrypted = decrypt(&ctx, encrypted_data_xml).map_err(crypto_err)?;
+    let decrypted = decrypt_with_key(encrypted_data_xml, enc_key, options)?;
     // The decrypted element may carry an XML declaration; strip it so the
     // assertion can be spliced back into the middle of the Response document.
     let assertion = strip_xml_declaration(&decrypted).to_string();
@@ -502,7 +544,7 @@ pub(crate) fn decrypt_root_child(
             kind.parent, kind.encrypted
         )));
     };
-    let replacement = decrypted_element(&document, element, kind, enc_key, limits)?;
+    let replacement = decrypted_element(&document, element, kind, enc_key, options, limits)?;
     let decrypted = splice(xml, vec![replacement]);
     limits.check_input_bytes(decrypted.len())?;
     Ok(decrypted)
@@ -542,7 +584,7 @@ pub(crate) fn decrypt_assertion_elements(
         }
         for element in assertion_elements(&document, kind.parent, kind.encrypted)? {
             replacements.push(decrypted_element(
-                &document, element, kind, enc_key, limits,
+                &document, element, kind, enc_key, options, limits,
             )?);
         }
     }
@@ -584,6 +626,7 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
         *encrypted_id,
         LOGOUT_REQUEST_ENCRYPTED_ID,
         enc_key,
+        options,
         limits,
     )?;
     let decrypted = splice(xml, vec![replacement]);
@@ -597,6 +640,7 @@ fn decrypted_element(
     element: NodeId,
     kind: EncryptedElementKind,
     enc_key: &Key,
+    options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<(Range<usize>, String), SamlError> {
     let peer_keys = require_encrypted_element_children(document, element, kind)?;
@@ -604,10 +648,7 @@ fn decrypted_element(
     // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
     let wrapper = String::from_utf8(namespace_complete(document, element)?)
         .map_err(|error| SamlError::Xml(error.to_string()))?;
-    let mut manager = KeysManager::new();
-    manager.add_key(enc_key.clone());
-    let ctx = EncContext::new(manager);
-    let decrypted = decrypt(&ctx, &wrapper).map_err(crypto_err)?;
+    let decrypted = decrypt_with_key(&wrapper, enc_key, options)?;
     let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
     Ok((node_range(document, element)?, plaintext.to_string()))
 }
@@ -938,6 +979,7 @@ mod tests {
             allow_insecure_software_rsa_key_transport_decryption: cfg!(
                 feature = "crypto-rustcrypto"
             ),
+            ..AssertionDecryptionOptions::default()
         }
     }
 
@@ -977,6 +1019,29 @@ mod tests {
             Err(SamlError::Unsupported(message))
                 if message.contains("RUSTSEC-2023-0071")
         ));
+        Ok(())
+    }
+
+    #[cfg(feature = "crypto-legacy-algorithms")]
+    #[test]
+    fn decrypt_refuses_rsa15_key_transport_unless_selected(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::constants::key_encryption_algorithm::RSA_1_5;
+
+        let encrypted = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_1_5, "saml")?;
+        let key = load_private_key(SP_PRIVKEY, None)?;
+        let refused = decrypt_assertion(&encrypted, &key, software_rsa_test_options());
+        assert!(
+            matches!(&refused, Err(SamlError::Unsupported(message)) if message.contains("rsa-1_5")),
+            "{refused:?}"
+        );
+
+        let selected = AssertionDecryptionOptions {
+            allow_rsa15_key_transport_decryption: true,
+            ..software_rsa_test_options()
+        };
+        let (_, assertion) = decrypt_assertion(&encrypted, &key, selected)?;
+        assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
         Ok(())
     }
 

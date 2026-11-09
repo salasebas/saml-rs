@@ -137,6 +137,10 @@ pub struct FlowOptions<'a> {
     /// `RUSTSEC-2023-0071`-affected `rsa` code when an attacker can observe
     /// timing. AWS-LC and FIPS ignore this flag.
     pub allow_insecure_software_rsa_key_transport_decryption: bool,
+    /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport. When
+    /// `false`, decryption returns `SamlError::Unsupported` before any key is
+    /// decrypted.
+    pub allow_rsa15_key_transport_decryption: bool,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),
     /// Validation instant. `None` keeps raw compatibility behavior by reading
@@ -167,6 +171,7 @@ impl<'a> Default for FlowOptions<'a> {
             assertion_elements: AssertionElementEncryption::default(),
             element_decrypt_key: None,
             allow_insecure_software_rsa_key_transport_decryption: false,
+            allow_rsa15_key_transport_decryption: false,
             clock_drifts: (0, 0),
             now: None,
             expected_audience: None,
@@ -672,6 +677,7 @@ fn verify_and_prepare(
     let decrypt_options = AssertionDecryptionOptions {
         allow_insecure_software_rsa_key_transport_decryption: opts
             .allow_insecure_software_rsa_key_transport_decryption,
+        allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
     };
     if decrypt_required {
         require_software_rsa_opt_in(decrypt_options)?;

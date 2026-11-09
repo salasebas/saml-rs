@@ -57,6 +57,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
     let options = AssertionDecryptionOptions {
         allow_insecure_software_rsa_key_transport_decryption: opts
             .allow_insecure_software_rsa_key_transport_decryption,
+        allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
     };
     let content = decrypt_assertion_elements(
         saml_content,

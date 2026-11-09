@@ -112,6 +112,7 @@ fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<
         AssertionDecryptionOptions {
             allow_insecure_software_rsa_key_transport_decryption: setting
                 .allow_insecure_software_rsa_key_transport_decryption,
+            allow_rsa15_key_transport_decryption: setting.allow_rsa15_key_transport_decryption,
         },
         setting.xml_limits,
     )

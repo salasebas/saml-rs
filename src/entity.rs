@@ -47,6 +47,12 @@ pub struct EntitySetting {
     /// an explicit compatibility exception for RustCrypto deployments that
     /// accept that risk.
     pub allow_insecure_software_rsa_key_transport_decryption: bool,
+    /// SP: decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport.
+    ///
+    /// Default `false`: an encrypted assertion, `<EncryptedID>`, or
+    /// `<EncryptedAttribute>` that names RSA-v1.5 is rejected with
+    /// `SamlError::Unsupported` before any key is decrypted.
+    pub allow_rsa15_key_transport_decryption: bool,
     /// Default RelayState.
     pub relay_state: String,
     /// SP: signs its AuthnRequests.
@@ -172,6 +178,10 @@ impl fmt::Debug for EntitySetting {
             .field(
                 "allow_insecure_software_rsa_key_transport_decryption",
                 &self.allow_insecure_software_rsa_key_transport_decryption,
+            )
+            .field(
+                "allow_rsa15_key_transport_decryption",
+                &self.allow_rsa15_key_transport_decryption,
             )
             .field("relay_state", &self.relay_state)
             .field("authn_requests_signed", &self.authn_requests_signed)
@@ -301,6 +311,7 @@ impl Default for EntitySetting {
             is_assertion_encrypted: false,
             assertion_element_encryption: AssertionElementEncryption::default(),
             allow_insecure_software_rsa_key_transport_decryption: false,
+            allow_rsa15_key_transport_decryption: false,
             relay_state: String::new(),
             authn_requests_signed: false,
             want_assertions_signed: false,
