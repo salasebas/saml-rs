@@ -335,8 +335,9 @@
 //! message signatures) is delegated to `bergshamra`. The default
 //! `crypto-bergshamra` feature selects RustCrypto; applications
 //! can instead select `crypto-aws-lc` or `crypto-fips` with default features
-//! disabled. Configure assertion encryption and the RustCrypto XML-Enc exception
-//! through [`XmlEncryptionPolicy`].
+//! disabled. Configure assertion, `<EncryptedID>`, and `<EncryptedAttribute>`
+//! encryption and the RustCrypto XML-Enc exception through
+//! [`XmlEncryptionPolicy`].
 //! Disable default features to build the crypto-free protocol layer; crypto
 //! operations then fail closed with [`SamlError::Unsupported`].
 
@@ -381,6 +382,7 @@ pub mod context;
 #[doc(hidden)]
 pub mod crypto;
 mod discovery;
+mod encrypted_elements;
 #[doc(hidden)]
 pub mod entity;
 pub mod error;
@@ -423,14 +425,15 @@ pub use browser::{
 };
 pub use config::{
     AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,
-    AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
-    DigestAlgorithm, EntityId, HmacSecret, IdpConfig, IdpConfigBuilder, IdpDescriptor,
-    IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
-    LogoutSignaturePolicy, ManageNameIdService, MetadataTrustPolicy, NameIdCreationPolicy,
-    NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy, SignatureAlgorithm, SpConfig,
-    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
-    TransformAlgorithm, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
+    AssertionSignaturePolicy, AttributeEncryptionPolicy, AudienceValidationPolicy,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
+    DataEncryptionAlgorithm, DigestAlgorithm, EntityId, HmacSecret, IdentifierEncryptionPolicy,
+    IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig, IdpValidationPolicy,
+    KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService,
+    MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
+    ResponseSignaturePolicy, SignatureAlgorithm, SpConfig, SpConfigBuilder, SpDescriptor,
+    SpMetadataConfig, SpValidationPolicy, TemplatePolicy, TransformAlgorithm, XmlEncryptionPolicy,
+    XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(any(
     feature = "crypto-rustcrypto",

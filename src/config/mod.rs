@@ -20,9 +20,11 @@ pub use descriptors::{
     SpDescriptor, SpMetadataConfig,
 };
 pub use metadata_trust::MetadataTrustPolicy;
+pub(crate) use policies::AssertionElementEncryption;
 pub use policies::{
-    AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy, AudienceValidationPolicy,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, IdpValidationPolicy, LogoutPolicy,
+    AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
+    AttributeEncryptionPolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
+    AuthnRequestValidationPolicy, IdentifierEncryptionPolicy, IdpValidationPolicy, LogoutPolicy,
     LogoutSignaturePolicy, NameIdCreationPolicy, ResponseSignaturePolicy, SpValidationPolicy,
     TemplatePolicy, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
 };

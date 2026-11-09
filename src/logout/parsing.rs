@@ -1,4 +1,5 @@
 use crate::browser::BrowserInput;
+use crate::config::AssertionElementEncryption;
 use crate::config::HmacSecret;
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
@@ -176,6 +177,8 @@ fn parse_logout_request_inner(
             hmac_secret: validation.peer_hmac_secret,
             decrypt_key: None,
             decrypt_key_pass: None,
+            assertion_elements: AssertionElementEncryption::default(),
+            element_decrypt_key: None,
             allow_insecure_software_rsa_key_transport_decryption: false,
             clock_drifts: validation.clock_drifts,
             now: validation.now,
@@ -212,6 +215,8 @@ fn parse_logout_response_inner(
             hmac_secret: validation.peer_hmac_secret,
             decrypt_key: None,
             decrypt_key_pass: None,
+            assertion_elements: AssertionElementEncryption::default(),
+            element_decrypt_key: None,
             allow_insecure_software_rsa_key_transport_decryption: false,
             clock_drifts: validation.clock_drifts,
             now: validation.now,

@@ -281,6 +281,13 @@ pub enum SamlError {
     /// Assertion-signature policy requires direct coverage of the consumed assertion.
     #[error("consumed assertion is not directly covered by a trusted XML signature")]
     AssertionSignatureRequired,
+    /// The selected `XmlEncryptionPolicy` requires this assertion element in
+    /// encrypted form, and the message carries it in plaintext.
+    #[error("{element} must be encrypted")]
+    EncryptionRequired {
+        /// Local name of the plaintext element: `NameID` or `Attribute`.
+        element: &'static str,
+    },
 
     /// An embedded XML signature selected an algorithm outside the strict SAML profile.
     #[error("embedded XML signature algorithm is not allowed")]

@@ -184,12 +184,24 @@ pub struct XmlPolicy {
 
 pub struct XmlEncryptionPolicy {
     pub assertions: AssertionEncryptionPolicy,
+    pub identifiers: IdentifierEncryptionPolicy,
+    pub attributes: AttributeEncryptionPolicy,
     // private explicit risk opt-in for software RSA key transport decryption
 }
 
 pub enum AssertionEncryptionPolicy {
     PlaintextAssertions,
     EncryptAssertions,
+}
+
+pub enum IdentifierEncryptionPolicy {
+    PlaintextIdentifiers,
+    EncryptIdentifiers,
+}
+
+pub enum AttributeEncryptionPolicy {
+    PlaintextAttributes,
+    EncryptAttributes,
 }
 
 pub enum AssertionSignaturePolicy {
