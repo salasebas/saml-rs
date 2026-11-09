@@ -29,6 +29,7 @@ compatible additions.
 - [Single Logout endpoints from the peer's role](unreleased-slo-role-endpoints.md)
 - [RSA-v1.5 key-transport decryption](unreleased-rsa15-key-transport-decryption.md)
 - [EncryptedAssertion content](unreleased-encrypted-assertion-content.md)
+- [Generated IDs are 160 random bits in 41 characters](unreleased-generated-id-length.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).

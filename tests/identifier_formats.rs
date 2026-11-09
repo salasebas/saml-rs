@@ -566,16 +566,33 @@ fn service_provider_keeps_one_attribute_for_each_name() -> Result<(), Box<dyn st
 }
 
 fn assert_opaque_identifier(value: &str) {
-    // 160 random bits, hex encoded after an underscore: an xs:ID.
     assert_eq!(value.len(), 41, "{value}");
     assert!(value.starts_with('_'), "{value}");
     assert!(
         value[1..]
             .chars()
-            .all(|character| character.is_ascii_hexdigit()),
+            .all(|character| matches!(character, '0'..='9' | 'a'..='f')),
         "{value}"
     );
     assert!(value.chars().count() <= 256);
+}
+
+#[test]
+fn generated_request_response_and_assertion_ids_have_160_random_bits(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange(alice(), RespondSso::post())?;
+    let request_id = exchange
+        .session
+        .in_response_to()
+        .ok_or("the solicited response has no InResponseTo")?;
+    let response_id = exchange.session.response_id().as_str();
+    let assertion_id = exchange.session.assertion_id().as_str();
+
+    for id in [request_id.as_str(), response_id, assertion_id] {
+        assert_opaque_identifier(id);
+    }
+    assert_ne!(response_id, assertion_id);
+    Ok(())
 }
 
 #[test]

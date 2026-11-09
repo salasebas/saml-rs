@@ -7,6 +7,10 @@ service provider reads them with `finish_sso` and `accept_unsolicited_sso`.
 The identity provider reads a requested `<NameID>` with `receive_sso`. This
 page does not claim the IdP operational mode or the SP operational mode.
 
+[Generated message and assertion identifiers](#generated-message-and-assertion-identifiers)
+covers the `ID` of every message and assertion the crate generates, in every
+flow.
+
 Normative text is Conformance Requirements §3.3 and SAML Core §1.3.4, §2.2.2,
 §2.7.3.1, §8.2, and §8.3, as corrected by Approved Errata 05 E49, E55, E78,
 and E86.
@@ -59,3 +63,9 @@ any other `Format` URI.
 | A persistent value is not shared in clear text with other providers, is not logged without controls, and is not a non-opaque value | Deployment | Use of the identifier | Mandatory for the deployment. Core §8.3.7. This crate writes no log. Who receives the value and where it is stored are outside the crate |
 | `NameId::new` takes any value for the persistent and transient formats | Identity provider | Generate Response | Library behaviour. The response still enforces the 256-character limit. Randomness, opacity, and non-reassignment cannot be checked on a value the caller supplies: `NameId::generate_transient` and `NameId::generate_persistent` produce values that meet them. A raw `LoginResponseOptions::custom` callback writes its own `<NameID>`, and its value is not checked |
 | A persistent or transient `<NameID>` is accepted when it parses | Service provider on a `Response`, identity provider on a requested `<Subject>` | Accept | No receiver rule. Conformance §3.3 places Core §8.3.7 and §8.3.8 on the producer. A value longer than 256 characters, or one that resembles a username, is accepted and reported as it was sent. Core §8.3.8 says a relying party `SHOULD` treat a transient value as opaque and temporary. That is the application's use of the value |
+
+## Generated message and assertion identifiers
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| Two generated `ID` values are equal with a probability of at most 2^-128 | Every producer | Generate any request, response, or assertion | Mandatory, with a recommendation of at most 2^-160. Core §1.3.4. `entity::generate_id` writes `_` and 160 random bits as 40 hexadecimal digits, an `xs:ID` of 41 characters, so it meets both. The bits come from the operating system's random source. Every SSO, ECP, logout, artifact resolution, and name identifier management message and assertion the crate generates takes its `ID` from it. A `SessionIndex` the identity provider writes is the assertion `ID`. An `ID` the caller supplies, through a template or a logout `message_id`, gets no randomness check |
