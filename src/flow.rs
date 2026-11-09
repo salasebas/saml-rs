@@ -4,6 +4,7 @@
 use crate::binding::{
     base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
+use crate::config::AssertionElementEncryption;
 use crate::config::HmacSecret;
 use crate::constants::{Binding, ParserType};
 use crate::context::is_valid_xml_with_limits;
@@ -122,8 +123,13 @@ pub struct FlowOptions<'a> {
     pub hmac_secret: Option<&'a HmacSecret>,
     /// Our decryption private key PEM (when assertions are encrypted).
     pub decrypt_key: Option<&'a str>,
-    /// Passphrase for `decrypt_key`.
+    /// Passphrase for `decrypt_key` and `element_decrypt_key`.
     pub decrypt_key_pass: Option<&'a str>,
+    /// Typed SP: assertion children that arrive encrypted. They are decrypted
+    /// with `element_decrypt_key` after a signature verifies.
+    pub(crate) assertion_elements: AssertionElementEncryption,
+    /// Typed SP: decryption private key PEM for `assertion_elements`.
+    pub(crate) element_decrypt_key: Option<&'a str>,
     /// Allow XML-Enc RSA key-transport decryption with the bundled RustCrypto
     /// software RSA backend.
     ///
@@ -158,6 +164,8 @@ impl<'a> Default for FlowOptions<'a> {
             hmac_secret: None,
             decrypt_key: None,
             decrypt_key_pass: None,
+            assertion_elements: AssertionElementEncryption::default(),
+            element_decrypt_key: None,
             allow_insecure_software_rsa_key_transport_decryption: false,
             clock_drifts: (0, 0),
             now: None,
@@ -1081,6 +1089,26 @@ fn flow_inner(
             };
             (xml, assertion, None, false, Vec::new())
         };
+    let (saml_content, assertion) = match (parser_type, opts.assertion_elements.is_selected()) {
+        (ParserType::SamlResponse, true) if verify_signature => {
+            let key_pem = opts
+                .element_decrypt_key
+                .ok_or_else(|| SamlError::MissingKey("decryption_key".into()))?;
+            crate::encrypted_elements::require_one_assertion_unless_message_authenticated(
+                &saml_content,
+                message_authenticated,
+                opts.xml_limits,
+            )?;
+            crate::encrypted_elements::decrypt_verified_assertion_elements(
+                &saml_content,
+                assertion.as_deref(),
+                key_pem,
+                opts,
+            )?
+        }
+        (ParserType::SamlResponse, true) => return Err(SamlError::SignatureMissing),
+        _ => (saml_content, assertion),
+    };
 
     let fields = default_fields(parser_type, assertion.as_deref())?;
     let extracted = extract_with_limits(&saml_content, &fields, opts.xml_limits)?;

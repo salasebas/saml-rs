@@ -24,6 +24,7 @@ compatible additions.
 - [Conformance §4 algorithms](unreleased-conformance-algorithms.md)
 - [Name identifier management over SOAP](unreleased-name-id-management.md)
 - [Metadata in the schema element order](unreleased-metadata-element-order.md)
+- [EncryptedID and EncryptedAttribute](unreleased-encrypted-id-and-attribute.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).

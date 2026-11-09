@@ -472,11 +472,7 @@ fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
     ) {
         validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
     }
-    if matches!(
-        config.xml.encryption.assertions,
-        AssertionEncryptionPolicy::EncryptAssertions
-    ) && config.credentials.decryption_key.is_none()
-    {
+    if config.xml.encryption.selects_any_element() && config.credentials.decryption_key.is_none() {
         return Err(SamlError::MissingKey("decryption_key".into()));
     }
     Ok(())
@@ -584,10 +580,7 @@ fn sp_config_requires_crypto(config: &SpConfig) -> bool {
         config.validation.authn_requests,
         AuthnRequestSigningPolicy::Sign
     ) || logout_policy_requires_crypto(config.validation.logout)
-        || matches!(
-            config.xml.encryption.assertions,
-            AssertionEncryptionPolicy::EncryptAssertions
-        )
+        || config.xml.encryption.selects_any_element()
 }
 
 #[cfg(not(any(
@@ -600,10 +593,7 @@ fn idp_config_requires_crypto(config: &IdpConfig) -> bool {
         config.validation.authn_requests,
         AuthnRequestValidationPolicy::RequireSigned
     ) || logout_policy_requires_crypto(config.validation.logout)
-        || matches!(
-            config.xml.encryption.assertions,
-            AssertionEncryptionPolicy::EncryptAssertions
-        )
+        || config.xml.encryption.selects_any_element()
 }
 
 #[cfg(not(any(
@@ -643,6 +633,7 @@ fn apply_common_settings(
         xml.encryption.assertions,
         AssertionEncryptionPolicy::EncryptAssertions
     );
+    setting.assertion_element_encryption = xml.encryption.assertion_elements();
     setting.allow_insecure_software_rsa_key_transport_decryption = xml
         .encryption
         .allows_insecure_software_rsa_key_transport_decryption();

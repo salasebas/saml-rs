@@ -16,7 +16,8 @@ Root exports in this design:
 pub use api::{Idp, Saml, Sp, Unknown};
 pub use config::{
     AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, Credentials,
+    AttributeEncryptionPolicy, AuthnRequestSigningPolicy,
+    AuthnRequestValidationPolicy, Credentials, IdentifierEncryptionPolicy,
     IdpConfig, IdpConfigBuilder, IdpValidationPolicy, LogoutSignaturePolicy,
     SpConfig, SpConfigBuilder, SpValidationPolicy, XmlEncryptionPolicy,
     XmlPolicy,

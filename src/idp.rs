@@ -1,5 +1,6 @@
 //! SAML Identity Provider entity.
 
+use crate::config::AssertionElementEncryption;
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
     capture_idp_issuance_window, generate_id, BindingContext, CustomTagReplacement, EntitySetting,
@@ -489,7 +490,9 @@ impl IdentityProvider {
         _encrypt_then_sign: bool,
         error_response: bool,
     ) -> Result<String, SamlError> {
-        use crate::crypto::{encrypt_assertion, SigningCredential};
+        use crate::crypto::{
+            enc::encrypt_assertion_elements, encrypt_assertion, SigningCredential,
+        };
 
         let credential = SigningCredential::from_setting(&self.setting)?;
         credential.require_certificate()?;
@@ -516,7 +519,17 @@ impl IdentityProvider {
         let sign_message =
             binding == Binding::Post && (sp.setting.want_message_signed || !want_assertions_signed);
 
-        // step: sign assertion -> (encrypt) -> sign message
+        // step: encrypt identifiers and attributes -> sign assertion -> (encrypt) -> sign message
+        let element_encryption = self.setting.assertion_element_encryption;
+        if element_encryption.is_selected() {
+            xml = encrypt_assertion_elements(
+                &xml,
+                &sp_encryption_certificate(sp)?,
+                &self.setting.data_encryption_algorithm,
+                &self.setting.key_encryption_algorithm,
+                element_encryption,
+            )?;
+        }
         if want_assertions_signed {
             xml = credential.sign_xml(
                 &xml,
@@ -539,13 +552,9 @@ impl IdentityProvider {
             )?;
         }
         if self.setting.is_assertion_encrypted {
-            let encrypt_cert = sp
-                .metadata
-                .get_x509_certificate(crate::constants::CertUse::Encryption)
-                .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))?;
             xml = encrypt_assertion(
                 &xml,
-                &encrypt_cert,
+                &sp_encryption_certificate(sp)?,
                 &self.setting.data_encryption_algorithm,
                 &self.setting.key_encryption_algorithm,
                 &self.setting.tag_prefix_encrypted_assertion,
@@ -639,6 +648,8 @@ impl IdentityProvider {
                 hmac_secret: sp.setting.hmac_secret.as_ref(),
                 decrypt_key: None,
                 decrypt_key_pass: None,
+                assertion_elements: AssertionElementEncryption::default(),
+                element_decrypt_key: None,
                 allow_insecure_software_rsa_key_transport_decryption: false,
                 clock_drifts,
                 now,
@@ -650,6 +661,17 @@ impl IdentityProvider {
             request,
         )
     }
+}
+
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+fn sp_encryption_certificate(sp: &ServiceProvider) -> Result<String, SamlError> {
+    sp.metadata
+        .get_x509_certificate(crate::constants::CertUse::Encryption)
+        .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))
 }
 
 fn response_in_response_to(

@@ -82,6 +82,8 @@ name identifier management and name identifier mapping are not implemented.
 | Protocol response roots that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | XML signature generation | `src/crypto/sign.rs` |
 | Algorithm variants and `AlgorithmPolicy` | `src/config/algorithms.rs`, `src/config/policies.rs` |
+| `EncryptedAssertion`, `EncryptedID`, and `EncryptedAttribute` | `src/crypto/enc.rs` |
+| Decryption of a verified response's encrypted children | `src/flow.rs` |
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |
 | Peer descriptors | `src/config/descriptors.rs` |

@@ -320,6 +320,37 @@ pub enum AssertionEncryptionPolicy {
     EncryptAssertions,
 }
 
+/// Whether the assertion `<NameID>` is carried as an `<EncryptedID>`.
+///
+/// An identity provider encrypts the `<NameID>` of each assertion `<Subject>`
+/// in a generated response. A service provider decrypts each `<EncryptedID>`
+/// after the signature that covers it verifies, and rejects a response whose
+/// assertion `<Subject>` carries a plaintext `<NameID>`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum IdentifierEncryptionPolicy {
+    /// Do not encrypt identifiers.
+    #[default]
+    PlaintextIdentifiers,
+    /// Encrypt identifiers.
+    EncryptIdentifiers,
+}
+
+/// Whether assertion attributes are carried as `<EncryptedAttribute>`.
+///
+/// An identity provider encrypts each `<Attribute>` of each assertion
+/// `<AttributeStatement>` in a generated response. A service provider decrypts
+/// each `<EncryptedAttribute>` after the signature that covers it verifies, and
+/// rejects a response whose assertion `<AttributeStatement>` carries a
+/// plaintext `<Attribute>`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AttributeEncryptionPolicy {
+    /// Do not encrypt attributes.
+    #[default]
+    PlaintextAttributes,
+    /// Encrypt attributes.
+    EncryptAttributes,
+}
+
 /// XML encryption policy.
 ///
 /// # Examples
@@ -341,10 +372,25 @@ pub enum AssertionEncryptionPolicy {
 /// # let _ = idp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
+///
+/// Each element is selected on its own. Selecting identifier encryption does
+/// not select attribute or assertion encryption:
+///
+/// ```
+/// use saml_rs::{AttributeEncryptionPolicy, XmlEncryptionPolicy};
+///
+/// let mut encryption = XmlEncryptionPolicy::encrypt_ids();
+/// encryption.attributes = AttributeEncryptionPolicy::EncryptAttributes;
+/// # let _ = encryption;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct XmlEncryptionPolicy {
     /// Assertion encryption behavior.
     pub assertions: AssertionEncryptionPolicy,
+    /// `<EncryptedID>` behavior for the assertion `<Subject>`.
+    pub identifiers: IdentifierEncryptionPolicy,
+    /// `<EncryptedAttribute>` behavior for assertion attribute statements.
+    pub attributes: AttributeEncryptionPolicy,
     allow_insecure_software_rsa_key_transport_decryption: bool,
 }
 
@@ -353,6 +399,22 @@ impl XmlEncryptionPolicy {
     pub fn encrypt_assertions() -> Self {
         Self {
             assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..Self::default()
+        }
+    }
+
+    /// Enable `<EncryptedID>` for the assertion `<Subject>` identifier.
+    pub fn encrypt_ids() -> Self {
+        Self {
+            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+            ..Self::default()
+        }
+    }
+
+    /// Enable `<EncryptedAttribute>` for assertion attributes.
+    pub fn encrypt_attributes() -> Self {
+        Self {
+            attributes: AttributeEncryptionPolicy::EncryptAttributes,
             ..Self::default()
         }
     }
@@ -374,6 +436,35 @@ impl XmlEncryptionPolicy {
 
     pub(super) fn allows_insecure_software_rsa_key_transport_decryption(self) -> bool {
         self.allow_insecure_software_rsa_key_transport_decryption
+    }
+
+    pub(super) fn selects_any_element(self) -> bool {
+        self.assertions == AssertionEncryptionPolicy::EncryptAssertions
+            || self.assertion_elements().is_selected()
+    }
+
+    pub(super) fn assertion_elements(self) -> AssertionElementEncryption {
+        AssertionElementEncryption {
+            identifiers: self.identifiers,
+            attributes: self.attributes,
+        }
+    }
+}
+
+/// Assertion children that an [`XmlEncryptionPolicy`] carries in encrypted
+/// form.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct AssertionElementEncryption {
+    /// `<NameID>` of each assertion `<Subject>`, as `<EncryptedID>`.
+    pub(crate) identifiers: IdentifierEncryptionPolicy,
+    /// `<Attribute>` of each `<AttributeStatement>`, as `<EncryptedAttribute>`.
+    pub(crate) attributes: AttributeEncryptionPolicy,
+}
+
+impl AssertionElementEncryption {
+    pub(crate) fn is_selected(self) -> bool {
+        self.identifiers == IdentifierEncryptionPolicy::EncryptIdentifiers
+            || self.attributes == AttributeEncryptionPolicy::EncryptAttributes
     }
 }
 
