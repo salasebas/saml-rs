@@ -23,3 +23,4 @@ pub use parsing::{
 pub(crate) use parsing::{
     parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
 };
+pub(crate) use signing::sign_browser_message;

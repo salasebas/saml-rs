@@ -22,7 +22,7 @@ compatible additions.
 - [Web SSO response over HTTP-Artifact](unreleased-http-artifact-response.md)
 - [Single Logout over SOAP](unreleased-soap-logout.md)
 - [Conformance §4 algorithms](unreleased-conformance-algorithms.md)
-- [Name identifier management over SOAP](unreleased-name-id-management.md)
+- [Name identifier management](unreleased-name-id-management.md)
 - [Metadata in the schema element order](unreleased-metadata-element-order.md)
 - [EncryptedID and EncryptedAttribute](unreleased-encrypted-id-and-attribute.md)
 

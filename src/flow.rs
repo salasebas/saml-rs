@@ -310,6 +310,8 @@ fn default_fields(
         }
         ParserType::LogoutRequest => fields::logout_request_fields(),
         ParserType::LogoutResponse => fields::logout_response_fields(),
+        ParserType::ManageNameIdRequest => fields::manage_name_id_request_fields(),
+        ParserType::ManageNameIdResponse => fields::manage_name_id_response_fields(),
     })
 }
 
@@ -751,7 +753,11 @@ fn verify_and_prepare(
         )?;
         if matches!(
             parser_type,
-            ParserType::SamlRequest | ParserType::LogoutRequest | ParserType::LogoutResponse
+            ParserType::SamlRequest
+                | ParserType::LogoutRequest
+                | ParserType::LogoutResponse
+                | ParserType::ManageNameIdRequest
+                | ParserType::ManageNameIdResponse
         ) {
             let content = evidence
                 .verified_node
@@ -884,10 +890,12 @@ fn validate_message_destination(
         return Ok(());
     };
     let destination = match parser_type {
-        ParserType::SamlResponse | ParserType::LogoutResponse => {
-            extracted.get_str("response.destination")
+        ParserType::SamlResponse
+        | ParserType::LogoutResponse
+        | ParserType::ManageNameIdResponse => extracted.get_str("response.destination"),
+        ParserType::LogoutRequest | ParserType::ManageNameIdRequest => {
+            extracted.get_str("request.destination")
         }
-        ParserType::LogoutRequest => extracted.get_str("request.destination"),
         ParserType::SamlRequest => return Ok(()),
     };
     // SAML Bindings 2.0 §§3.4.5.2 and 3.5.5.2, and SimpleSign §2.4,
@@ -921,6 +929,8 @@ fn validate_context(
             | ParserType::SamlResponse
             | ParserType::LogoutRequest
             | ParserType::LogoutResponse
+            | ParserType::ManageNameIdRequest
+            | ParserType::ManageNameIdResponse
     );
     if should_validate_issuer {
         if let Some(expected) = opts.from_issuer {
@@ -932,7 +942,7 @@ fn validate_context(
     }
     let is_response = matches!(
         parser_type,
-        ParserType::SamlResponse | ParserType::LogoutResponse
+        ParserType::SamlResponse | ParserType::LogoutResponse | ParserType::ManageNameIdResponse
     );
     if is_response {
         if let Some(expected) = opts.expected_in_response_to {
@@ -963,7 +973,24 @@ fn validate_context(
             opts.clock_drifts.1,
         )?;
     }
+    if !status_precedes_authentication(parser_type) {
+        check_status_with_limits(saml_content, parser_type, opts.xml_limits)?;
+    }
     Ok(())
+}
+
+/// Whether a non-success status is reported before the message is
+/// authenticated and correlated. A `ManageNameIDResponse` reports its status
+/// only after the signature, issuer, `InResponseTo`, and `Destination` checks.
+fn status_precedes_authentication(parser_type: ParserType) -> bool {
+    match parser_type {
+        ParserType::SamlRequest
+        | ParserType::SamlResponse
+        | ParserType::LogoutRequest
+        | ParserType::LogoutResponse
+        | ParserType::ManageNameIdRequest => true,
+        ParserType::ManageNameIdResponse => false,
+    }
 }
 
 fn signature_is_present(
@@ -1023,7 +1050,9 @@ fn flow_inner(
     )?;
     is_valid_xml_with_limits(&xml, opts.xml_limits)?;
     validate_protocol_profile(&xml, parser_type, opts.xml_limits)?;
-    check_status_with_limits(&xml, parser_type, opts.xml_limits)?;
+    if status_precedes_authentication(parser_type) {
+        check_status_with_limits(&xml, parser_type, opts.xml_limits)?;
+    }
 
     let verify_signature = opts.check_signature
         || (opts.verify_signature_if_present

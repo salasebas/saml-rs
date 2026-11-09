@@ -158,8 +158,9 @@ pub(crate) fn conditions_time_bounds(
 
 /// Check the two-tier `<StatusCode>` of a response.
 ///
-/// Only `SAMLResponse` / `LogoutResponse` are checked; other parser types are
-/// skipped. Success resolves to `Ok(())`; anything else is an error.
+/// Only `SAMLResponse`, `LogoutResponse`, and `ManageNameIDResponse` are
+/// checked; request parser types are skipped. Success resolves to `Ok(())`;
+/// anything else is an error.
 pub fn check_status(content: &str, parser_type: ParserType) -> Result<(), SamlError> {
     check_status_with_limits(content, parser_type, XmlLimits::default())
 }
@@ -173,7 +174,10 @@ pub fn check_status_with_limits(
     let fields = match parser_type {
         ParserType::SamlResponse => fields::login_response_status_fields(),
         ParserType::LogoutResponse => fields::logout_response_status_fields(),
-        _ => return Ok(()),
+        ParserType::ManageNameIdResponse => fields::manage_name_id_response_status_fields(),
+        ParserType::SamlRequest | ParserType::LogoutRequest | ParserType::ManageNameIdRequest => {
+            return Ok(())
+        }
     };
     let result = extract_with_limits(content, &fields, limits)?;
     match result.get_str("top") {

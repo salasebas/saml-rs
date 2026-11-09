@@ -93,7 +93,7 @@ impl IdpMetadata {
                     "ManageNameIDService",
                 ],
             )
-            .attrs(&["Binding", "Location"]),
+            .attrs(&["Binding", "Location", "ResponseLocation"]),
         ];
         Ok(Self {
             inner: Metadata::parse_with_limits(xml, extra, limits)?,

@@ -8,7 +8,7 @@ use quick_xml::reader::NsReader;
 
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
-use crate::xml::dom::{self, Node};
+use crate::xml::dom::{self, Node, XmlLimits};
 
 pub(crate) struct SamlElement {
     pub(crate) local_name: String,
@@ -51,9 +51,16 @@ pub(crate) struct PartyName {
 }
 
 pub(crate) fn parse_saml(xml: &str) -> Result<SamlElement, SamlError> {
-    let document = dom::parse(xml)?;
-    let mut namespaces = element_namespaces(xml)?;
-    annotate(&document.root, xml.len(), &mut namespaces)
+    parse_saml_with_limits(xml, XmlLimits::default())
+}
+
+pub(crate) fn parse_saml_with_limits(
+    xml: &str,
+    limits: XmlLimits,
+) -> Result<SamlElement, SamlError> {
+    let document = dom::parse_with_limits(xml, limits)?;
+    let mut elements = resolved_elements(xml)?;
+    annotate(&document.root, xml.len(), &mut elements)
 }
 
 /// The first non-empty `saml:Issuer` child.
@@ -111,12 +118,22 @@ pub(crate) fn status_codes(response: &SamlElement) -> Result<(String, Option<Str
     Ok((top, second))
 }
 
+struct ResolvedElement {
+    local_name: String,
+    namespace: String,
+    unqualified_attributes: Vec<(String, String)>,
+}
+
 fn annotate(
     node: &Node,
     xml_len: usize,
-    namespaces: &mut std::vec::IntoIter<(String, String)>,
+    elements: &mut std::vec::IntoIter<ResolvedElement>,
 ) -> Result<SamlElement, SamlError> {
-    let (local_name, namespace) = namespaces
+    let ResolvedElement {
+        local_name,
+        namespace,
+        unqualified_attributes,
+    } = elements
         .next()
         .ok_or_else(|| SamlError::Xml("protocol element is missing a namespace".into()))?;
     if local_name != node.local_name {
@@ -126,7 +143,7 @@ fn annotate(
     }
     let mut children = Vec::new();
     for child in &node.children {
-        children.push(annotate(child, xml_len, namespaces)?);
+        children.push(annotate(child, xml_len, elements)?);
     }
     if node.end < node.start || node.end > xml_len {
         return Err(SamlError::Xml("protocol element is incomplete".into()));
@@ -134,14 +151,14 @@ fn annotate(
     Ok(SamlElement {
         local_name,
         namespace,
-        attributes: node.attrs.clone(),
+        attributes: unqualified_attributes,
         text: node.text.clone(),
         children,
         span: node.start..node.end,
     })
 }
 
-fn element_namespaces(xml: &str) -> Result<std::vec::IntoIter<(String, String)>, SamlError> {
+fn resolved_elements(xml: &str) -> Result<std::vec::IntoIter<ResolvedElement>, SamlError> {
     let mut reader = NsReader::from_str(xml);
     let mut buf = Vec::new();
     let mut names = Vec::new();
@@ -154,7 +171,23 @@ fn element_namespaces(xml: &str) -> Result<std::vec::IntoIter<(String, String)>,
                     ResolveResult::Bound(Namespace(uri)) => uri.to_string(),
                     ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
                 };
-                names.push((local_name, namespace));
+                let mut unqualified_attributes = Vec::new();
+                for attribute in element.attributes() {
+                    let attribute = attribute.map_err(|err| SamlError::Xml(err.to_string()))?;
+                    if attribute.key.prefix().is_some() || attribute.key.as_ref() == "xmlns" {
+                        continue;
+                    }
+                    let value = attribute
+                        .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                        .map_err(|err| SamlError::Xml(err.to_string()))?
+                        .into_owned();
+                    unqualified_attributes.push((attribute.key.as_ref().to_string(), value));
+                }
+                names.push(ResolvedElement {
+                    local_name,
+                    namespace,
+                    unqualified_attributes,
+                });
             }
             Ok(Event::DocType(_)) => {
                 return Err(SamlError::Xml("DOCTYPE is not allowed".into()));

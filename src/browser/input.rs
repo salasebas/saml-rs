@@ -11,6 +11,7 @@ use crate::binding::{base64_decode_with_limit, base64_encode, build_simplesign_o
 use crate::constants::url_params;
 use crate::error::SamlError;
 use crate::model::{AuthnRequest, LogoutRequest, LogoutResponse, SsoResponse};
+use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
 use crate::raw::HttpRequest;
 use crate::soap::{read_soap_body, SoapChannel};
 use crate::xml::XmlLimits;
@@ -240,6 +241,20 @@ impl BrowserInput<LogoutResponse> {
     }
 }
 
+impl BrowserInput<ManageNameIdRequest> {
+    /// Create Redirect input from a raw query string.
+    pub fn redirect(raw_query: impl Into<String>) -> Self {
+        redirect_input(raw_query)
+    }
+}
+
+impl BrowserInput<ManageNameIdResponse> {
+    /// Create Redirect input from a raw query string.
+    pub fn redirect(raw_query: impl Into<String>) -> Self {
+        redirect_input(raw_query)
+    }
+}
+
 impl TryFrom<BrowserInput<AuthnRequest>> for HttpRequest {
     type Error = SamlError;
 
@@ -275,6 +290,22 @@ impl TryFrom<BrowserInput<LogoutResponse>> for HttpRequest {
             BrowserInput::Soap { envelope, .. } => soap_request(&envelope, MessageField::Response),
             other => http_request_from_input(other, true, MessageField::Response),
         }
+    }
+}
+
+impl TryFrom<BrowserInput<ManageNameIdRequest>> for HttpRequest {
+    type Error = SamlError;
+
+    fn try_from(value: BrowserInput<ManageNameIdRequest>) -> Result<Self, Self::Error> {
+        http_request_from_input(value, true, MessageField::Request)
+    }
+}
+
+impl TryFrom<BrowserInput<ManageNameIdResponse>> for HttpRequest {
+    type Error = SamlError;
+
+    fn try_from(value: BrowserInput<ManageNameIdResponse>) -> Result<Self, Self::Error> {
+        http_request_from_input(value, true, MessageField::Response)
     }
 }
 

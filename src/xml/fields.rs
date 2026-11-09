@@ -155,6 +155,44 @@ pub fn logout_request_fields() -> Vec<ExtractorField> {
     ]
 }
 
+/// Fields for a `<ManageNameIDRequest>`.
+pub(crate) fn manage_name_id_request_fields() -> Vec<ExtractorField> {
+    vec![
+        ExtractorField::new("request", &["ManageNameIDRequest"]).attrs(&[
+            "ID",
+            "IssueInstant",
+            "Destination",
+        ]),
+        ExtractorField::new("issuer", &["ManageNameIDRequest", "Issuer"]),
+    ]
+}
+
+/// Fields for a `<ManageNameIDResponse>`.
+pub(crate) fn manage_name_id_response_fields() -> Vec<ExtractorField> {
+    vec![
+        ExtractorField::new("response", &["ManageNameIDResponse"]).attrs(&[
+            "ID",
+            "IssueInstant",
+            "Destination",
+            "InResponseTo",
+        ]),
+        ExtractorField::new("issuer", &["ManageNameIDResponse", "Issuer"]),
+    ]
+}
+
+/// Two-tier status fields for a `<ManageNameIDResponse>`.
+pub(crate) fn manage_name_id_response_status_fields() -> Vec<ExtractorField> {
+    vec![
+        ExtractorField::new("top", &["ManageNameIDResponse", "Status", "StatusCode"])
+            .attrs(&["Value"]),
+        ExtractorField::new(
+            "second",
+            &["ManageNameIDResponse", "Status", "StatusCode", "StatusCode"],
+        )
+        .attrs(&["Value"]),
+    ]
+}
+
 /// Fields for a `<LogoutResponse>` (`logoutResponseFields`).
 pub fn logout_response_fields() -> Vec<ExtractorField> {
     vec![

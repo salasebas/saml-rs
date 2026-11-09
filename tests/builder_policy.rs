@@ -57,6 +57,7 @@ fn sp_builder_and_struct_literal_reach_same_config() -> Result<(), Box<dyn std::
             name_id_format: vec![saml_rs::NameIdFormat::EmailAddress],
             single_logout_service: vec![slo],
             assertion_consumer_service: vec![acs],
+            manage_name_id_service: Vec::new(),
             elements_order: None,
         },
         credentials,

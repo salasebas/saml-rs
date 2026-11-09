@@ -42,12 +42,16 @@ stay unclaimed.
 | Behaviour | File |
 | --- | --- |
 | IdP `start_name_id_management`, `receive_name_id_management`, `respond_name_id_management` | `src/api/name_id_management.rs` |
-| `ManageNameIDRequest` and `ManageNameIDResponse` over SOAP | `src/name_id_management.rs` |
+| `start_name_id_management_redirect`, `receive_name_id_management_redirect`, `respond_name_id_management_redirect`, `finish_name_id_management_redirect` on both roles | `src/api/name_id_management/redirect.rs` |
+| `ManageNameIdRequest`, `NameIdChange`, and SOAP messages | `src/name_id_management.rs` |
+| Request and response XML for both bindings, including the E14 transient rule | `src/name_id_management/xml.rs` |
+| HTTP-Redirect signing and parsing | `src/name_id_management/redirect.rs` |
+| `PendingManageNameIdRequest` | `src/browser/pending.rs` |
 | `ManageNameIDService` in metadata | `src/metadata/mod.rs`, `src/metadata/generate.rs` |
 | Protocol elements read with their namespaces | `src/xml/protocol_element.rs` |
 
-The service provider has no SOAP name identifier management. HTTP-Redirect
-name identifier management and name identifier mapping are not implemented.
+The service provider has no SOAP name identifier management. Name identifier
+mapping is not implemented.
 
 ## Identity Provider Discovery
 
@@ -111,7 +115,7 @@ Logout is the directory `src/logout/`.
 | SAML-defined identifiers | [`identifiers.md`](conformance/identifiers.md) |
 | Web Browser SSO response over HTTP-Artifact | [`web-browser-sso-artifact.md`](conformance/web-browser-sso-artifact.md) |
 | Artifact resolution over SOAP | [`artifact-resolution.md`](conformance/artifact-resolution.md) |
-| Name identifier management over SOAP | [`name-id-management.md`](conformance/name-id-management.md) |
+| Name identifier management | [`name-id-management.md`](conformance/name-id-management.md) |
 | Metadata trust and replay | [`metadata-and-replay.md`](conformance/metadata-and-replay.md) |
 | XML Signature and XML Encryption algorithms | [`xml-security-algorithms.md`](conformance/xml-security-algorithms.md) |
 

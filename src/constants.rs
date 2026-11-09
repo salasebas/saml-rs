@@ -339,6 +339,10 @@ pub enum ParserType {
     LogoutRequest,
     /// `<LogoutResponse>`.
     LogoutResponse,
+    /// `<ManageNameIDRequest>`.
+    ManageNameIdRequest,
+    /// `<ManageNameIDResponse>`.
+    ManageNameIdResponse,
 }
 
 impl ParserType {
@@ -349,6 +353,8 @@ impl ParserType {
             ParserType::SamlResponse => "SAMLResponse",
             ParserType::LogoutRequest => "LogoutRequest",
             ParserType::LogoutResponse => "LogoutResponse",
+            ParserType::ManageNameIdRequest => "ManageNameIDRequest",
+            ParserType::ManageNameIdResponse => "ManageNameIDResponse",
         }
     }
 
@@ -356,8 +362,12 @@ impl ParserType {
     /// `SAMLRequest`, response types to `SAMLResponse`.
     pub fn query_param(self) -> &'static str {
         match self {
-            ParserType::SamlRequest | ParserType::LogoutRequest => url_params::SAML_REQUEST,
-            ParserType::SamlResponse | ParserType::LogoutResponse => url_params::SAML_RESPONSE,
+            ParserType::SamlRequest
+            | ParserType::LogoutRequest
+            | ParserType::ManageNameIdRequest => url_params::SAML_REQUEST,
+            ParserType::SamlResponse
+            | ParserType::LogoutResponse
+            | ParserType::ManageNameIdResponse => url_params::SAML_RESPONSE,
         }
     }
 }

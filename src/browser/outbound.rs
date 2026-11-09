@@ -11,6 +11,7 @@ use crate::error::SamlError;
 use crate::model::{
     AuthnRequest, EndpointUrl, LogoutRequest, LogoutResponse, MessageId, RelayState, SsoResponse,
 };
+use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
 use crate::soap::{SoapProtocolMessage, SoapRequest, SoapResponse};
 
 #[derive(Debug, Clone)]
@@ -299,6 +300,22 @@ fn soap_outbound<Message>(
         raw_context,
         _message: PhantomData,
     })
+}
+
+impl TryFrom<BindingContext> for Outbound<ManageNameIdRequest> {
+    type Error = SamlError;
+
+    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+        outbound_from_context(raw_context, true, MessageField::Request)
+    }
+}
+
+impl TryFrom<BindingContext> for Outbound<ManageNameIdResponse> {
+    type Error = SamlError;
+
+    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+        outbound_from_context(raw_context, true, MessageField::Response)
+    }
 }
 
 fn outbound_from_context<Message>(

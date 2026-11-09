@@ -516,3 +516,97 @@ impl RespondSlo {
         self.rules.allows_http()
     }
 }
+
+/// TLS recommendation for a name identifier management exchange.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum NameIdManagementTransport {
+    /// Send the user agent to an `https` `ManageNameIDService`.
+    #[default]
+    RequireHttps,
+    /// Allow an `http` `ManageNameIDService`.
+    AllowHttp,
+}
+
+/// Options for issuing a `<ManageNameIDRequest>`.
+///
+/// The request is always signed. It goes to an `https` peer
+/// `ManageNameIDService` unless [`Self::allow_http_name_id_management`] is
+/// selected.
+#[derive(Debug, Clone)]
+pub struct StartNameIdManagement {
+    pub(super) relay_state: RelayStateParam,
+    transport: NameIdManagementTransport,
+}
+
+impl StartNameIdManagement {
+    /// Send the request over HTTP-Redirect.
+    pub fn redirect() -> Self {
+        Self {
+            relay_state: RelayStateParam::absent(),
+            transport: NameIdManagementTransport::default(),
+        }
+    }
+
+    /// Set exact RelayState state for the request.
+    pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
+        self.relay_state = relay_state;
+        self
+    }
+
+    /// Allow delivery to an `http` `ManageNameIDService`.
+    ///
+    /// This relaxes the Profiles §4.5.3.1 recommendation to protect the HTTP
+    /// exchange with TLS. The request stays signed.
+    pub fn allow_http_name_id_management(mut self) -> Self {
+        self.transport = NameIdManagementTransport::AllowHttp;
+        self
+    }
+
+    pub(super) fn allows_http(&self) -> bool {
+        matches!(self.transport, NameIdManagementTransport::AllowHttp)
+    }
+}
+
+/// Options for answering a `<ManageNameIDRequest>`.
+///
+/// The response is always signed and carries the exact RelayState received
+/// with the request. It goes to an `https` peer `ManageNameIDService` unless
+/// [`Self::allow_http_name_id_management`] is selected.
+#[derive(Debug, Clone)]
+pub struct RespondNameIdManagement {
+    pub(super) status: Option<Status>,
+    transport: NameIdManagementTransport,
+}
+
+impl RespondNameIdManagement {
+    /// Send the response over HTTP-Redirect.
+    pub fn redirect() -> Self {
+        Self {
+            status: None,
+            transport: NameIdManagementTransport::default(),
+        }
+    }
+
+    /// Set the response status. Omitting it emits top-level `Success`.
+    ///
+    /// For a `<NameID>` this provider does not recognize, pass an error
+    /// status. [`crate::SubordinateStatusCode::unknown_principal`] is the
+    /// subordinate code Core §3.6.3 names for it.
+    pub fn status(mut self, status: Status) -> Self {
+        self.status = Some(status);
+        self
+    }
+
+    /// Allow delivery to an `http` `ManageNameIDService`.
+    ///
+    /// This relaxes the Profiles §4.5.3.2 recommendation to protect the HTTP
+    /// exchange with TLS. The response stays signed.
+    pub fn allow_http_name_id_management(mut self) -> Self {
+        self.transport = NameIdManagementTransport::AllowHttp;
+        self
+    }
+
+    pub(super) fn allows_http(&self) -> bool {
+        matches!(self.transport, NameIdManagementTransport::AllowHttp)
+    }
+}

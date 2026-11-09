@@ -12,9 +12,12 @@ mod pending;
 
 pub use crate::model::EndpointUrl;
 pub use artifact::{ArtifactDelivery, DeliveredArtifact};
-pub use bindings::{LogoutBinding, SsoRequestBinding, SsoResponseBinding};
+pub use bindings::{LogoutBinding, NameIdManagementBinding, SsoRequestBinding, SsoResponseBinding};
 pub use endpoints::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 pub use forms::{FormField, PostForm};
 pub use input::BrowserInput;
 pub use outbound::Outbound;
-pub use pending::{Pending, PendingAuthnRequest, PendingLogoutRequest, PendingSnapshot, Started};
+pub use pending::{
+    Pending, PendingAuthnRequest, PendingLogoutRequest, PendingManageNameIdRequest,
+    PendingSnapshot, Started,
+};

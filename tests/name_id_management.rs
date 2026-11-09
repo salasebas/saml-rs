@@ -150,7 +150,7 @@ fn received_request(
     received: ReceivedNameIdManagement,
 ) -> Result<saml_rs::Received<saml_rs::ManageNameIdRequest>, Box<dyn std::error::Error>> {
     match received {
-        ReceivedNameIdManagement::Request(request) => Ok(request),
+        ReceivedNameIdManagement::Request(request) => Ok(*request),
         ReceivedNameIdManagement::Refused(refused) => {
             Err(format!("request was refused: {:?}", refused.reason()).into())
         }
@@ -312,6 +312,34 @@ fn a_response_for_another_request_or_from_another_issuer_is_rejected() -> TestRe
         )?),
         Err(SamlError::IssuerMismatch { .. })
     ));
+    Ok(())
+}
+
+#[test]
+fn a_transient_identifier_is_not_managed() -> TestResult {
+    let sp = soap_service_provider()?;
+    let transient_default = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
+            .name_id_format(NameIdFormat::Transient)
+            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+                IDP_NIM_URL,
+            )?))
+            .validation(saml_rs::IdpValidationPolicy::compatibility())
+            .build()?,
+    )?;
+
+    for (idp, current) in [
+        (
+            identity_provider(Some(IDP_NIM_URL))?,
+            NameId::generate_transient(),
+        ),
+        (transient_default, NameId::new("current-value", None)),
+    ] {
+        let started =
+            idp.start_name_id_management(&sp, &current, &NameIdChange::Terminate, authenticated());
+        assert!(matches!(started, Err(SamlError::ProtocolProfile(_))));
+    }
     Ok(())
 }
 

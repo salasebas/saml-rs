@@ -125,7 +125,7 @@ pub(crate) fn response_location_for_binding(
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum EndpointDirection {
+pub(crate) enum EndpointDirection {
     Request,
     Response,
 }
@@ -322,11 +322,17 @@ impl Metadata {
     /// Every `Location` published on a SOAP `ManageNameIDService` of this
     /// role, in document order.
     pub(crate) fn soap_manage_name_id_service_locations(&self) -> Vec<String> {
-        published_locations_for_binding(
-            self.meta.get("manageNameIDService"),
-            Binding::Soap,
-            EndpointDirection::Request,
-        )
+        self.manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request)
+    }
+
+    /// Every location published on a `ManageNameIDService` of this role for
+    /// `binding` and message direction, in document order.
+    pub(crate) fn manage_name_id_service_locations(
+        &self,
+        binding: Binding,
+        direction: EndpointDirection,
+    ) -> Vec<String> {
+        published_locations_for_binding(self.meta.get("manageNameIDService"), binding, direction)
     }
 
     /// Write the metadata XML to `path`.

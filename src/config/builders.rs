@@ -156,6 +156,15 @@ impl SpConfigBuilder {
         self
     }
 
+    /// Publish an HTTP-Redirect `ManageNameIDService` endpoint.
+    ///
+    /// This turns on name identifier management over HTTP-Redirect for this
+    /// service provider. A SOAP endpoint makes [`Self::build`] fail.
+    pub fn manage_name_id_service(mut self, service: ManageNameIdService) -> Self {
+        self.metadata.manage_name_id_service.push(service);
+        self
+    }
+
     /// Add an advertised NameID format.
     pub fn name_id_format(mut self, format: NameIdFormat) -> Self {
         self.metadata.name_id_format.push(format);
@@ -367,13 +376,14 @@ impl IdpConfigBuilder {
         self
     }
 
-    /// Publish a SOAP `ManageNameIDService` endpoint.
+    /// Publish a SOAP or HTTP-Redirect `ManageNameIDService` endpoint.
     ///
-    /// This turns on name identifier management over SOAP:
+    /// This turns on name identifier management over that binding.
     /// [`Saml::start_name_id_management`](crate::Saml::start_name_id_management)
     /// and
     /// [`Saml::receive_name_id_management`](crate::Saml::receive_name_id_management)
-    /// fail without it.
+    /// fail without a SOAP endpoint, and the `_redirect` operations without an
+    /// HTTP-Redirect one.
     pub fn manage_name_id_service(mut self, service: ManageNameIdService) -> Self {
         self.metadata.manage_name_id_service.push(service);
         self

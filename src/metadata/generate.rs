@@ -58,6 +58,8 @@ pub struct SpMetadataConfig {
     pub single_logout_service: Vec<Endpoint>,
     /// `AssertionConsumerService` endpoints.
     pub assertion_consumer_service: Vec<Endpoint>,
+    /// `ManageNameIDService` endpoints.
+    pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::DEFAULT`]).
     pub elements_order: Option<Vec<String>>,
 }
@@ -81,8 +83,8 @@ pub struct IdpMetadataConfig {
     pub single_logout_service: Vec<Endpoint>,
     /// `ArtifactResolutionService` endpoints. Each binding is SOAP.
     pub artifact_resolution_service: Vec<ArtifactResolutionEndpoint>,
-    /// `ManageNameIDService` locations. Each binding is SOAP.
-    pub manage_name_id_service: Vec<String>,
+    /// `ManageNameIDService` endpoints.
+    pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::idp::DEFAULT`]).
     pub elements_order: Option<Vec<String>>,
 }
@@ -169,15 +171,9 @@ fn write_artifact_resolution_service(
     }
 }
 
-fn write_manage_name_id_service(w: &mut MetadataWriter, locations: &[String]) {
-    for location in locations {
-        w.empty(
-            "ManageNameIDService",
-            &[
-                ("Binding", crate::constants::SOAP_BINDING_URN),
-                ("Location", location.as_str()),
-            ],
-        );
+fn write_manage_name_id_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
+    for endpoint in endpoints {
+        write_endpoint_attrs(w, "ManageNameIDService", endpoint, None);
     }
 }
 
@@ -186,6 +182,7 @@ fn write_sp_group(w: &mut MetadataWriter, cfg: &SpMetadataConfig, name: &str) {
         "KeyDescriptor" => write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs),
         "NameIDFormat" => write_name_id_formats(w, &cfg.name_id_format, true),
         "SingleLogoutService" => write_single_logout(w, &cfg.single_logout_service),
+        "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
         "AssertionConsumerService" => {
             write_assertion_consumer_service(w, &cfg.assertion_consumer_service)
         }
@@ -237,10 +234,29 @@ fn bool_str(value: bool) -> &'static str {
     }
 }
 
+fn insert_manage_name_id_service(order: &mut Vec<String>) {
+    let before_role_elements = order
+        .iter()
+        .position(|ordered| {
+            matches!(
+                ordered.as_str(),
+                "NameIDFormat"
+                    | "SingleSignOnService"
+                    | "AssertionConsumerService"
+                    | "AttributeConsumingService"
+            )
+        })
+        .unwrap_or(order.len());
+    order.insert(before_role_elements, "ManageNameIDService".into());
+}
+
 /// Generate SP metadata XML.
 pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> String {
     let is_custom_order = cfg.elements_order.is_some();
-    let order = elements_order_or_default(&cfg.elements_order, elements_order::DEFAULT);
+    let mut order = elements_order_or_default(&cfg.elements_order, elements_order::DEFAULT);
+    if !order.iter().any(|ordered| ordered == "ManageNameIDService") {
+        insert_manage_name_id_service(&mut order);
+    }
     let mut w = MetadataWriter::new();
     w.start(
         "EntityDescriptor",
@@ -290,11 +306,7 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> String {
         order.insert(after_key_descriptor, "ArtifactResolutionService".into());
     }
     if is_custom_order && !order.iter().any(|ordered| ordered == "ManageNameIDService") {
-        let after_single_logout = order
-            .iter()
-            .position(|ordered| ordered == "SingleLogoutService")
-            .map_or(order.len(), |position| position + 1);
-        order.insert(after_single_logout, "ManageNameIDService".into());
+        insert_manage_name_id_service(&mut order);
     }
     let descriptors = [
         "KeyDescriptor",
@@ -392,6 +404,7 @@ mod tests {
                 },
                 Endpoint::new(Binding::Redirect, "https://sp.example.com/acs-redirect"),
             ],
+            manage_name_id_service: Vec::new(),
             elements_order: None,
         };
         let xml = generate_sp_metadata(&cfg);
@@ -702,7 +715,7 @@ mod tests {
             name_id_format: vec![name_id_format::PERSISTENT.to_string()],
             single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
             single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-            manage_name_id_service: vec!["https://idp/nameid".into()],
+            manage_name_id_service: vec![Endpoint::new(Binding::Soap, "https://idp/nameid")],
             elements_order: Some(
                 elements_order::idp::SHIBBOLETH
                     .iter()
@@ -777,7 +790,7 @@ mod tests {
                 index: 0,
                 location: "https://idp/artifact".into(),
             }],
-            manage_name_id_service: vec!["https://idp/nameid".into()],
+            manage_name_id_service: vec![Endpoint::new(Binding::Soap, "https://idp/nameid")],
             ..Default::default()
         });
         let sp = generate_sp_metadata(&SpMetadataConfig {
