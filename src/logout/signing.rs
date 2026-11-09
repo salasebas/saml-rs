@@ -22,6 +22,7 @@ pub(super) fn sign_logout(
     parser_type: ParserType,
 ) -> Result<(String, Option<String>, Option<String>), SamlError> {
     use crate::binding::{append_signature, build_redirect_octet};
+    use crate::constants::transform_algorithm;
     use crate::crypto::SigningCredential;
 
     if matches!(binding, Binding::Artifact) {
@@ -52,7 +53,14 @@ pub(super) fn sign_logout(
             None,
             None,
         )),
-        Binding::Soap => Ok((embedded_signature(&[])?, None, None)),
+        Binding::Soap => Ok((
+            embedded_signature(&[
+                transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
+                transform_algorithm::EXC_C14N.to_string(),
+            ])?,
+            None,
+            None,
+        )),
         Binding::SimpleSign => {
             let octet = crate::binding::build_simplesign_octet(
                 parser_type.query_param(),

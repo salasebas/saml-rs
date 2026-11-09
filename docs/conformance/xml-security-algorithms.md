@@ -27,7 +27,7 @@ set, listed in each row.
 
 The signer's algorithm applies to every message it signs: the `AuthnRequest`,
 the `Response`, and logout messages. It is the XML-DSig `SignatureMethod` on
-HTTP-POST and the `SigAlg` on HTTP-Redirect and HTTP-POST-SimpleSign. The
+HTTP-POST and SOAP, and the `SigAlg` on HTTP-Redirect and HTTP-POST-SimpleSign. The
 encryption algorithms apply to `EncryptedAssertion`.
 
 ## XML Signature
@@ -41,7 +41,7 @@ encryption algorithms apply to `EncryptedAssertion`.
 | An HMAC secret is at least 20 bytes | Identity provider and service provider | Configure signing and verification | Library policy. RFC 2104 §3 discourages a key shorter than the hash output, which is 20 bytes for SHA-1. `HmacSecret::try_new` rejects a shorter secret with `SamlError::Invalid`. It is local configuration and does not reject a message |
 | Canonical XML 1.0 without comments | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::CanonicalXml` puts it in `signed_reference_transforms`, for the messages in the row below. `SignedInfo` is canonicalized with exclusive canonicalization. Verification accepts it on `SignedInfo` and on a reference under `AllowProviderSupportedForCompatibility`. `StrictRsaSha2` rejects it |
 | Enveloped-signature transform | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::EnvelopedSignature` is the first default transform |
-| The identity provider signs a browser response with its own transforms | Identity provider | Generate Response | Library behaviour. `IdpConfig::algorithms.signed_reference_transforms` applies to `respond_sso` and `initiate_sso`. `respond_sso_artifact`, `initiate_sso_artifact`, and `respond_paos_sso` keep the enveloped-signature and exclusive canonicalization transforms. Their `Response` is signed before it is placed in a SOAP envelope, and Canonical XML would take the envelope's namespace declarations into the digest of a verifier that checks the signature in place |
+| A message carried in SOAP keeps exclusive canonicalization | Identity provider and service provider | Generate Response and logout messages | Library behaviour. `signed_reference_transforms` applies to the `AuthnRequest`, to `respond_sso` and `initiate_sso`, and to logout messages on HTTP-POST. `respond_sso_artifact`, `initiate_sso_artifact`, `respond_paos_sso`, and logout messages over SOAP keep the enveloped-signature and exclusive canonicalization transforms. Each message is signed before it is placed in a SOAP envelope, and Canonical XML would take the envelope's namespace declarations into the digest of a verifier that checks the signature in place |
 | RSA-SHA256, RSA-SHA384, RSA-SHA512, and a backend URI | Identity provider and service provider | Sign and verify | Optional. Errata 05 E50. `SignatureAlgorithm::RsaSha256` is the default. `SignatureAlgorithm::Custom` passes a URI to the provider |
 
 ## XML Encryption

@@ -68,8 +68,9 @@ the default, and expects its responses to keep the default transforms.
 enveloped-signature and exclusive canonicalization transforms, whatever the
 identity provider configured. They now use `signed_reference_transforms`, as
 the service provider and logout messages already did. `respond_sso_artifact`,
-`initiate_sso_artifact`, and `respond_paos_sso` still use the default
-transforms. The raw
+`initiate_sso_artifact`, `respond_paos_sso`, and logout messages over SOAP use
+the default transforms, because they are signed before they go into a SOAP
+envelope. The raw
 `IdentityProvider` still signs with the transforms on the raw service
 provider's `EntitySetting`.
 

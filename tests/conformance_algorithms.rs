@@ -15,15 +15,16 @@ use saml_rs::XmlEncryptionPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequest, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
-    PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
-    Subject, TransformAlgorithm, XmlPolicy,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutSubject,
+    MetadataTrustPolicy, NameId, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, Saml,
+    SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSlo, StartSso, Subject,
+    TransformAlgorithm, XmlPolicy,
 };
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 use saml_rs::{DataEncryptionAlgorithm, KeyEncryptionAlgorithm};
 #[cfg(feature = "crypto-rustcrypto")]
-use saml_rs::{HmacSecret, LogoutRequest, LogoutSubject, SignatureAlgorithm, StartSlo};
+use saml_rs::{HmacSecret, SignatureAlgorithm};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -33,6 +34,8 @@ const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const SP_SLO_REDIRECT: &str = "https://sp.example.com/slo/redirect";
 const IDP_SLO_REDIRECT: &str = "https://idp.example.com/slo/redirect";
+const SP_SLO_SOAP: &str = "https://sp.example.com/slo/soap";
+const IDP_SLO_SOAP: &str = "https://idp.example.com/slo/soap";
 
 const RSA_KEY: &str = include_str!("fixtures/key/sp_privkey.pem");
 const RSA_CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
@@ -83,6 +86,7 @@ fn peers(sp: Side, idp: Side, xml: XmlPolicy) -> Result<Peers, SamlError> {
     let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
         .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
+        .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
         .credentials(sp.credentials)
         .validation(SpValidationPolicy {
             authn_requests: AuthnRequestSigningPolicy::Sign,
@@ -95,6 +99,7 @@ fn peers(sp: Side, idp: Side, xml: XmlPolicy) -> Result<Peers, SamlError> {
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
         .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
+        .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
         .credentials(idp.credentials)
         .validation(IdpValidationPolicy {
             authn_requests: AuthnRequestValidationPolicy::RequireSigned,
@@ -339,6 +344,28 @@ fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn s
         verified_algorithms(&exchange.session),
         [signature_algorithm::RSA_SHA256]
     );
+
+    let started = peers.idp.start_slo(
+        &peers.sp_descriptor,
+        LogoutSubject::with_session_index(
+            NameId::new("alice@example.com", None),
+            SessionIndex::try_new("_session")?,
+        ),
+        StartSlo::soap(),
+    )?;
+    let envelope = started.outbound.soap_request()?.envelope();
+    assert_eq!(
+        algorithm_attributes(envelope, "Transform"),
+        [
+            transform_algorithm::ENVELOPED_SIGNATURE,
+            transform_algorithm::EXC_C14N
+        ]
+    );
+    peers.sp.receive_slo(
+        &peers.idp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(envelope),
+        validation(),
+    )?;
     Ok(())
 }
 
@@ -444,7 +471,10 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
 
     let started = peers.sp.start_slo(
         &peers.idp_descriptor,
-        LogoutSubject::from_name_id(NameId::new("alice@example.com", None)),
+        LogoutSubject::with_session_index(
+            NameId::new("alice@example.com", None),
+            SessionIndex::try_new("_session")?,
+        ),
         StartSlo::redirect(),
     )?;
     let url = Url::parse(started.outbound.redirect_url()?)?;
@@ -457,6 +487,25 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
     assert!(url
         .query_pairs()
         .any(|(key, value)| key == "SigAlg" && value == signature_algorithm::HMAC_SHA1));
+
+    let started = peers.sp.start_slo(
+        &peers.idp_descriptor,
+        LogoutSubject::with_session_index(
+            NameId::new("alice@example.com", None),
+            SessionIndex::try_new("_session")?,
+        ),
+        StartSlo::soap(),
+    )?;
+    let envelope = started.outbound.soap_request()?.envelope();
+    assert_eq!(
+        algorithm_attributes(envelope, "SignatureMethod"),
+        [signature_algorithm::HMAC_SHA1]
+    );
+    peers.idp.receive_slo(
+        &peers.sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(envelope),
+        validation(),
+    )?;
     Ok(())
 }
 
