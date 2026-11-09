@@ -3,6 +3,7 @@
 use crate::constants::{elements_order, name_id_format, namespace, Binding};
 use crate::error::SamlError;
 use crate::metadata::write::MetadataWriter;
+use crate::model::validate_name_id_format;
 use crate::util::{is_non_empty_array, normalize_cert_string};
 
 /// Indexed `ArtifactResolutionService` location. The binding is SOAP.
@@ -109,14 +110,20 @@ fn write_key_descriptors(w: &mut MetadataWriter, signing: &[String], encrypt: &[
     }
 }
 
-fn write_name_id_formats(w: &mut MetadataWriter, formats: &[String], default_to_email: bool) {
+fn write_name_id_formats(
+    w: &mut MetadataWriter,
+    formats: &[String],
+    default_to_email: bool,
+) -> Result<(), SamlError> {
     if is_non_empty_array(formats) {
         for format in formats {
+            validate_name_id_format(Some(format))?;
             w.text_element("NameIDFormat", format);
         }
     } else if default_to_email {
         w.text_element("NameIDFormat", name_id_format::EMAIL_ADDRESS);
     }
+    Ok(())
 }
 
 fn write_endpoint_attrs(w: &mut MetadataWriter, name: &str, e: &Endpoint, index: Option<String>) {
@@ -177,10 +184,14 @@ fn write_manage_name_id_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) 
     }
 }
 
-fn write_sp_group(w: &mut MetadataWriter, cfg: &SpMetadataConfig, name: &str) {
+fn write_sp_group(
+    w: &mut MetadataWriter,
+    cfg: &SpMetadataConfig,
+    name: &str,
+) -> Result<(), SamlError> {
     match name {
         "KeyDescriptor" => write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs),
-        "NameIDFormat" => write_name_id_formats(w, &cfg.name_id_format, true),
+        "NameIDFormat" => write_name_id_formats(w, &cfg.name_id_format, true)?,
         "SingleLogoutService" => write_single_logout(w, &cfg.single_logout_service),
         "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
         "AssertionConsumerService" => {
@@ -188,6 +199,7 @@ fn write_sp_group(w: &mut MetadataWriter, cfg: &SpMetadataConfig, name: &str) {
         }
         _ => {}
     }
+    Ok(())
 }
 
 fn idp_group_has_content(cfg: &IdpMetadataConfig, name: &str) -> bool {
@@ -204,10 +216,14 @@ fn idp_group_has_content(cfg: &IdpMetadataConfig, name: &str) -> bool {
     }
 }
 
-fn write_idp_group(w: &mut MetadataWriter, cfg: &IdpMetadataConfig, name: &str) {
+fn write_idp_group(
+    w: &mut MetadataWriter,
+    cfg: &IdpMetadataConfig,
+    name: &str,
+) -> Result<(), SamlError> {
     match name {
         "KeyDescriptor" => write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs),
-        "NameIDFormat" => write_name_id_formats(w, &cfg.name_id_format, false),
+        "NameIDFormat" => write_name_id_formats(w, &cfg.name_id_format, false)?,
         "SingleSignOnService" => write_single_sign_on_service(w, &cfg.single_sign_on_service),
         "SingleLogoutService" => write_single_logout(w, &cfg.single_logout_service),
         "ArtifactResolutionService" => {
@@ -216,6 +232,7 @@ fn write_idp_group(w: &mut MetadataWriter, cfg: &IdpMetadataConfig, name: &str) 
         "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
         _ => {}
     }
+    Ok(())
 }
 
 fn elements_order_or_default(order: &Option<Vec<String>>, default: &[&str]) -> Vec<String> {
@@ -251,7 +268,12 @@ fn insert_manage_name_id_service(order: &mut Vec<String>) {
 }
 
 /// Generate SP metadata XML.
-pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> String {
+///
+/// # Errors
+///
+/// Returns [`SamlError::Invalid`] when a `<NameIDFormat>` it writes is not an
+/// absolute URI reference.
+pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError> {
     let is_custom_order = cfg.elements_order.is_some();
     let mut order = elements_order_or_default(&cfg.elements_order, elements_order::DEFAULT);
     if !order.iter().any(|ordered| ordered == "ManageNameIDService") {
@@ -276,22 +298,27 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> String {
         ],
     );
     for name in &order {
-        write_sp_group(&mut w, cfg, name);
+        write_sp_group(&mut w, cfg, name)?;
     }
     if is_custom_order
         && !order
             .iter()
             .any(|ordered| ordered == "AssertionConsumerService")
     {
-        write_sp_group(&mut w, cfg, "AssertionConsumerService");
+        write_sp_group(&mut w, cfg, "AssertionConsumerService")?;
     }
     w.end("SPSSODescriptor");
     w.end("EntityDescriptor");
-    w.finish()
+    Ok(w.finish())
 }
 
 /// Generate IdP metadata XML.
-pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> String {
+///
+/// # Errors
+///
+/// Returns [`SamlError::Invalid`] when a `<NameIDFormat>` it writes is not an
+/// absolute URI reference.
+pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
     let is_custom_order = cfg.elements_order.is_some();
     let mut order = elements_order_or_default(&cfg.elements_order, elements_order::idp::DEFAULT);
     if is_custom_order
@@ -338,23 +365,23 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> String {
     );
     for name in &order {
         if descriptors.contains(&name.as_str()) && idp_group_has_content(cfg, name) {
-            write_idp_group(&mut w, cfg, name);
+            write_idp_group(&mut w, cfg, name)?;
         }
     }
     if is_custom_order {
         if !order.iter().any(|ordered| ordered == "SingleSignOnService") {
-            write_idp_group(&mut w, cfg, "SingleSignOnService");
+            write_idp_group(&mut w, cfg, "SingleSignOnService")?;
         }
     } else {
         for name in descriptors {
             if idp_group_has_content(cfg, name) && !order.iter().any(|ordered| ordered == name) {
-                write_idp_group(&mut w, cfg, name);
+                write_idp_group(&mut w, cfg, name)?;
             }
         }
     }
     w.end("IDPSSODescriptor");
     w.end("EntityDescriptor");
-    w.finish()
+    Ok(w.finish())
 }
 
 /// Generate IdP metadata XML, validating required config-driven metadata first.
@@ -362,14 +389,15 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> String {
 /// # Errors
 ///
 /// Returns [`SamlError::MissingMetadata`] when the config does not include at
-/// least one `SingleSignOnService` endpoint.
+/// least one `SingleSignOnService` endpoint, and the errors of
+/// [`generate_idp_metadata`].
 pub fn try_generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
     if !is_non_empty_array(&cfg.single_sign_on_service) {
         return Err(SamlError::MissingMetadata(
             "SingleSignOnService".to_string(),
         ));
     }
-    Ok(generate_idp_metadata(cfg))
+    generate_idp_metadata(cfg)
 }
 
 #[cfg(test)]
@@ -407,7 +435,7 @@ mod tests {
             manage_name_id_service: Vec::new(),
             elements_order: None,
         };
-        let xml = generate_sp_metadata(&cfg);
+        let xml = generate_sp_metadata(&cfg)?;
         let parsed = SpMetadata::from_xml(&xml)?;
         assert_eq!(
             parsed.get_entity_id(),
@@ -439,18 +467,19 @@ mod tests {
     }
 
     #[test]
-    fn sp_elements_order_respected() {
+    fn sp_elements_order_respected() -> TestResult {
         let cfg = SpMetadataConfig {
             entity_id: "x".into(),
             single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
         };
-        let xml = generate_sp_metadata(&cfg);
+        let xml = generate_sp_metadata(&cfg)?;
         let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
         let acs = xml.find("AssertionConsumerService").unwrap_or(0);
         // default order places SingleLogoutService before AssertionConsumerService
         assert!(slo < acs);
+        Ok(())
     }
 
     #[test]
@@ -465,7 +494,7 @@ mod tests {
             )],
             ..Default::default()
         };
-        let xml = generate_idp_metadata(&cfg);
+        let xml = generate_idp_metadata(&cfg)?;
         let parsed = IdpMetadata::from_xml(&xml)?;
         assert!(parsed.is_want_authn_requests_signed());
         assert_eq!(
@@ -530,7 +559,7 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_sp_metadata(&cfg);
+        let xml = generate_sp_metadata(&cfg)?;
         let parsed = SpMetadata::from_xml(&xml)?;
 
         assert!(!xml.contains(" ID=\"_evil\""));
@@ -557,7 +586,7 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_sp_metadata(&cfg);
+        let xml = generate_sp_metadata(&cfg)?;
         let parsed = SpMetadata::from_xml(&xml)?;
 
         assert!(xml.contains("&lt;NameIDFormat&gt;evil&lt;/NameIDFormat&gt;"));
@@ -567,7 +596,7 @@ mod tests {
     }
 
     #[test]
-    fn sp_custom_elements_order_preserves_omitted_populated_acs() {
+    fn sp_custom_elements_order_preserves_omitted_populated_acs() -> TestResult {
         let cfg = SpMetadataConfig {
             entity_id: "https://sp.example.com/metadata".into(),
             signing_certs: vec!["MIIBsigning".into()],
@@ -578,7 +607,7 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_sp_metadata(&cfg);
+        let xml = generate_sp_metadata(&cfg)?;
         let key = xml.find("<KeyDescriptor").unwrap_or(usize::MAX);
         let acs = xml.find("<AssertionConsumerService").unwrap_or(usize::MAX);
 
@@ -586,6 +615,7 @@ mod tests {
         assert!(key < acs);
         assert!(!xml.contains("<NameIDFormat"));
         assert!(!xml.contains("<SingleLogoutService"));
+        Ok(())
     }
 
     #[test]
@@ -620,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn idp_custom_elements_order_can_place_sso_before_key_descriptor() {
+    fn idp_custom_elements_order_can_place_sso_before_key_descriptor() -> TestResult {
         let cfg = IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec!["MIIBsigning".into()],
@@ -636,7 +666,7 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_idp_metadata(&cfg);
+        let xml = generate_idp_metadata(&cfg)?;
         let sso = xml.find("<SingleSignOnService").unwrap_or(usize::MAX);
         let key = xml.find("<KeyDescriptor").unwrap_or(usize::MAX);
         let name_id = xml.find("<NameIDFormat").unwrap_or(usize::MAX);
@@ -645,10 +675,11 @@ mod tests {
         assert!(sso < key);
         assert!(key < name_id);
         assert!(name_id < slo);
+        Ok(())
     }
 
     #[test]
-    fn idp_elements_order_filters_empty_groups() {
+    fn idp_elements_order_filters_empty_groups() -> TestResult {
         let cfg = IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
@@ -662,16 +693,17 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_idp_metadata(&cfg);
+        let xml = generate_idp_metadata(&cfg)?;
 
         assert!(!xml.contains("<KeyDescriptor"));
         assert!(!xml.contains("<NameIDFormat"));
         assert!(xml.contains("<SingleSignOnService"));
         assert!(xml.contains("<SingleLogoutService"));
+        Ok(())
     }
 
     #[test]
-    fn idp_custom_elements_order_omits_unlisted_optional_groups() {
+    fn idp_custom_elements_order_omits_unlisted_optional_groups() -> TestResult {
         let cfg = IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec!["MIIBsigning".into()],
@@ -682,16 +714,17 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_idp_metadata(&cfg);
+        let xml = generate_idp_metadata(&cfg)?;
 
         assert_eq!(xml.matches("<SingleSignOnService").count(), 1);
         assert!(!xml.contains("<KeyDescriptor"));
         assert!(!xml.contains("<NameIDFormat"));
         assert!(!xml.contains("<SingleLogoutService"));
+        Ok(())
     }
 
     #[test]
-    fn idp_custom_elements_order_preserves_omitted_populated_sso() {
+    fn idp_custom_elements_order_preserves_omitted_populated_sso() -> TestResult {
         let cfg = IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec!["MIIBsigning".into()],
@@ -700,16 +733,18 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_idp_metadata(&cfg);
+        let xml = generate_idp_metadata(&cfg)?;
         let key = xml.find("<KeyDescriptor").unwrap_or(usize::MAX);
         let sso = xml.find("<SingleSignOnService").unwrap_or(usize::MAX);
 
         assert_eq!(xml.matches("<SingleSignOnService").count(), 1);
         assert!(key < sso);
+        Ok(())
     }
 
     #[test]
-    fn idp_custom_elements_order_writes_omitted_manage_name_id_service_after_logout() {
+    fn idp_custom_elements_order_writes_omitted_manage_name_id_service_after_logout() -> TestResult
+    {
         let cfg = IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
             name_id_format: vec![name_id_format::PERSISTENT.to_string()],
@@ -725,7 +760,7 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_idp_metadata(&cfg);
+        let xml = generate_idp_metadata(&cfg)?;
         let positions = [
             "<SingleLogoutService",
             "<ManageNameIDService",
@@ -740,10 +775,11 @@ mod tests {
         assert_eq!(xml.matches("<ManageNameIDService").count(), 1);
         assert!(positions.iter().all(Option::is_some));
         assert!(positions.is_sorted());
+        Ok(())
     }
 
     #[test]
-    fn idp_custom_elements_order_writes_omitted_artifact_resolution_after_keys() {
+    fn idp_custom_elements_order_writes_omitted_artifact_resolution_after_keys() -> TestResult {
         let cfg = IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec!["MIIBsigning".into()],
@@ -763,7 +799,7 @@ mod tests {
             ..Default::default()
         };
 
-        let xml = generate_idp_metadata(&cfg);
+        let xml = generate_idp_metadata(&cfg)?;
         let positions = [
             "<KeyDescriptor",
             "<ArtifactResolutionService",
@@ -776,10 +812,11 @@ mod tests {
         assert_eq!(xml.matches("<ArtifactResolutionService").count(), 1);
         assert!(positions.iter().all(Option::is_some));
         assert!(positions.is_sorted());
+        Ok(())
     }
 
     #[test]
-    fn default_orders_follow_the_metadata_schema_sequence() {
+    fn default_orders_follow_the_metadata_schema_sequence() -> TestResult {
         let idp = generate_idp_metadata(&IdpMetadataConfig {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec!["MIIBsigning".into()],
@@ -792,7 +829,7 @@ mod tests {
             }],
             manage_name_id_service: vec![Endpoint::new(Binding::Soap, "https://idp/nameid")],
             ..Default::default()
-        });
+        })?;
         let sp = generate_sp_metadata(&SpMetadataConfig {
             entity_id: "https://sp.example.com/metadata".into(),
             signing_certs: vec!["MIIBsigning".into()],
@@ -800,7 +837,7 @@ mod tests {
             single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
-        });
+        })?;
 
         let idp_positions = [
             "<KeyDescriptor",
@@ -823,6 +860,7 @@ mod tests {
             assert!(positions.iter().all(Option::is_some));
             assert!(positions.is_sorted());
         }
+        Ok(())
     }
 
     #[test]

@@ -587,8 +587,16 @@ pub struct TemplatePolicy {
     /// IdP tag prefix for generated `<EncryptedAssertion>` elements.
     pub tag_prefix_encrypted_assertion: String,
     /// IdP login response template and attributes.
+    ///
+    /// `{NameIDFormat}` receives a format that has been checked to be an
+    /// absolute URI reference. A `Format` the template writes itself is not
+    /// checked.
     pub login_response_template: Option<LoginResponseTemplate>,
     /// SP login request template.
+    ///
+    /// `{NameIDFormat}` receives the first configured NameID format, checked
+    /// to be an absolute URI reference. With no configured format, an
+    /// attribute whose complete value is `{NameIDFormat}` is omitted.
     pub login_request_template: Option<String>,
     /// Logout request template.
     ///

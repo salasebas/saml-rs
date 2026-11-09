@@ -149,7 +149,8 @@ impl Saml {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the SP config cannot be converted into raw
-    /// settings or metadata, including missing metadata, missing keys, or
+    /// settings or metadata, including missing metadata, missing keys, a
+    /// configured NameID format that is not an absolute URI reference, or
     /// unsupported crypto configuration.
     pub fn sp(config: SpConfig) -> Result<Saml<Sp>, SamlError> {
         let setting = EntitySetting::try_from(&config)?;
@@ -164,7 +165,8 @@ impl Saml {
     ///
     /// Returns [`SamlError`] when the IdP config cannot be converted into raw
     /// settings or metadata, including an invalid issuance lifetime, missing
-    /// metadata, missing keys, or unsupported crypto configuration.
+    /// metadata, missing keys, a configured NameID format that is not an
+    /// absolute URI reference, or unsupported crypto configuration.
     pub fn idp(config: IdpConfig) -> Result<Saml<Idp>, SamlError> {
         let issuance_lifetime = validated_idp_issuance_lifetime(config.issuance_lifetime)?;
         let setting = EntitySetting::try_from(&config)?;

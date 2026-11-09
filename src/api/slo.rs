@@ -29,7 +29,8 @@ impl Saml<Sp> {
     ///
     /// Returns [`SamlError`] when relay state is invalid, IdP metadata cannot
     /// be parsed, a compatible logout endpoint or signing key is missing, the
-    /// selected binding is unsupported, or logout request creation fails.
+    /// selected binding is unsupported, the subject's NameID format is not an
+    /// absolute URI reference, or logout request creation fails.
     /// [`StartSlo::apply_single_logout_generation_rules`] also rejects a
     /// missing `SessionIndex`, an `http` peer endpoint unless
     /// [`StartSlo::allow_http_single_logout`] is selected, and rejects the
@@ -226,7 +227,8 @@ impl Saml<Idp> {
     ///
     /// Returns [`SamlError`] when relay state is invalid, SP metadata cannot be
     /// parsed, a compatible logout endpoint or signing key is missing, the
-    /// selected binding is unsupported, logout request creation fails, or the
+    /// selected binding is unsupported, the NameID format sent for the subject
+    /// is not an absolute URI reference, logout request creation fails, or the
     /// configured issuance lifetime cannot be added to the current issue
     /// instant. [`StartSlo::apply_single_logout_generation_rules`] also
     /// rejects [`LogoutSigning::DoNotSignForCompatibility`].

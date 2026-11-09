@@ -382,6 +382,35 @@ fn unpublished_assertion_consumer_on_the_request_is_rejected(
     Ok(())
 }
 
+#[test]
+fn response_name_id_format_that_is_not_an_absolute_uri_is_not_sent(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    )?;
+    let subject = Subject::new(
+        NameId::new(
+            "alice@example.com",
+            Some(NameIdFormat::Custom("local-format".into())),
+        ),
+        Vec::new(),
+    );
+    match idp.respond_paos_sso(&sp_descriptor, &received, subject) {
+        Err(SamlError::Invalid(message)) if message.contains("absolute URI reference") => Ok(()),
+        Err(error) => Err(format!("unexpected {error:?}").into()),
+        Ok(_) => Err("a relative NameID format is not sent".into()),
+    }
+}
+
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> {

@@ -72,7 +72,7 @@ fn issue_31_query_param_invalid() {
 
 #[test]
 fn issue_33_sp_acs_index_increments() -> Result<(), Box<dyn std::error::Error>> {
-    let xml = generate_sp_metadata(&sp_config());
+    let xml = generate_sp_metadata(&sp_config())?;
     let r = extract(
         &xml,
         &[ExtractorField::new(
@@ -94,7 +94,7 @@ fn issue_33_sp_acs_index_increments() -> Result<(), Box<dyn std::error::Error>> 
 
 #[test]
 fn issue_352_no_index_on_sp_slo() -> Result<(), Box<dyn std::error::Error>> {
-    let xml = generate_sp_metadata(&sp_config());
+    let xml = generate_sp_metadata(&sp_config())?;
     let r = extract(
         &xml,
         &[ExtractorField::new(

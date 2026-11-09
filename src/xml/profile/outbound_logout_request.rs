@@ -5,6 +5,7 @@ use super::{
 use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::{parse_with_limits, Document, XmlLimits};
 use crate::xml::parse_generated_saml_utc_date_time;
 use quick_xml::events::{BytesRef, BytesStart, Event};
@@ -255,16 +256,16 @@ fn validate_name_id(
         }
     }
     match (attribute_value(&attributes, b"Format"), expected_format) {
-        (Some(format), Some(expected)) if format != expected => Err(profile_error(format!(
-            "LogoutRequest NameID Format mismatch: expected {expected}, got {format}",
-        ))),
-        (None, Some(expected))
-            if !expected.is_empty() && expected != name_id_format::UNSPECIFIED =>
+        (Some(format), Some(expected))
+            if collapse_whitespace(format) != collapse_whitespace(expected) =>
         {
             Err(profile_error(format!(
-                "LogoutRequest NameID is missing expected Format {expected}",
+                "LogoutRequest NameID Format mismatch: expected {expected}, got {format}",
             )))
         }
+        (None, Some(expected)) if expected != name_id_format::UNSPECIFIED => Err(profile_error(
+            format!("LogoutRequest NameID is missing expected Format {expected}",),
+        )),
         (Some(format), None) if format != name_id_format::UNSPECIFIED => Err(profile_error(
             format!("LogoutRequest NameID Format must be omitted or unspecified, got {format}",),
         )),

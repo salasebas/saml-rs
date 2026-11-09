@@ -81,7 +81,7 @@ fn get_acs_with_one_binding() -> Result<(), Box<dyn std::error::Error>> {
             "https:sp.example.org/sp/slo",
         )],
         ..Default::default()
-    }))?;
+    })?)?;
     assert_eq!(
         sp.get_assertion_consumer_service(Binding::Post).as_deref(),
         Some(loc)
@@ -100,7 +100,7 @@ fn get_acs_with_two_bindings() -> Result<(), Box<dyn std::error::Error>> {
             Endpoint::new(Binding::Artifact, artifact),
         ],
         ..Default::default()
-    }))?;
+    })?)?;
     assert_eq!(
         sp.get_assertion_consumer_service(Binding::Post).as_deref(),
         Some(post)
@@ -125,17 +125,18 @@ fn order_base_config() -> SpMetadataConfig {
 }
 
 #[test]
-fn sp_metadata_with_default_elements_order() {
-    let xml = generate_sp_metadata(&order_base_config());
+fn sp_metadata_with_default_elements_order() -> Result<(), Box<dyn std::error::Error>> {
+    let xml = generate_sp_metadata(&order_base_config())?;
     let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
     let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
     let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
     let acs = xml.find("AssertionConsumerService").unwrap_or(0);
     assert!(key < slo && slo < nid && nid < acs);
+    Ok(())
 }
 
 #[test]
-fn sp_metadata_with_onelogin_elements_order() {
+fn sp_metadata_with_onelogin_elements_order() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = SpMetadataConfig {
         elements_order: Some(
             elements_order::ONELOGIN
@@ -145,16 +146,17 @@ fn sp_metadata_with_onelogin_elements_order() {
         ),
         ..order_base_config()
     };
-    let xml = generate_sp_metadata(&cfg);
+    let xml = generate_sp_metadata(&cfg)?;
     let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
     let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
     let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
     let acs = xml.find("AssertionConsumerService").unwrap_or(0);
     assert!(key < nid && nid < slo && slo < acs);
+    Ok(())
 }
 
 #[test]
-fn sp_metadata_with_shibboleth_elements_order() {
+fn sp_metadata_with_shibboleth_elements_order() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = SpMetadataConfig {
         elements_order: Some(
             elements_order::SHIBBOLETH
@@ -164,12 +166,13 @@ fn sp_metadata_with_shibboleth_elements_order() {
         ),
         ..order_base_config()
     };
-    let xml = generate_sp_metadata(&cfg);
+    let xml = generate_sp_metadata(&cfg)?;
     let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
     let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
     let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
     let acs = xml.find("AssertionConsumerService").unwrap_or(0);
     assert!(key < slo && slo < nid && nid < acs);
+    Ok(())
 }
 
 #[test]
@@ -233,7 +236,7 @@ fn undefined_x509_key_in_metadata_returns_none() -> Result<(), Box<dyn std::erro
         entity_id: "sp".into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "http://sp/acs")],
         ..Default::default()
-    }))?;
+    })?)?;
     assert!(sp.get_x509_certificate(CertUse::Signing).is_none());
     assert!(sp.get_x509_certificate(CertUse::Encryption).is_none());
     Ok(())

@@ -192,6 +192,10 @@ impl TransformAlgorithm {
 }
 
 /// SAML NameID format URI.
+///
+/// A message or metadata that writes the format rejects a value that is not a
+/// non-blank absolute URI reference with [`crate::SamlError::Invalid`]. A
+/// received format is reported as sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NameIdFormat {
     /// Email address format.

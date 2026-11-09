@@ -143,7 +143,8 @@ impl Saml<Idp> {
     /// response template or names a basic attribute that is not an XML name,
     /// a `subject` `NameId` with `SPProvidedID` is combined with a login
     /// response template, the persistent or transient `NameID` of `subject` is
-    /// longer than 256 characters, or response creation fails.
+    /// longer than 256 characters, the NameID format is not an absolute URI
+    /// reference, or response creation fails.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,

@@ -69,6 +69,7 @@ mapping is not implemented.
 | `RespondSso::attributes` and the `AttributeStatement` it writes | `src/api/options.rs`, `src/idp/login_response.rs` |
 | `NameFormat` of an accepted attribute | `src/xml/fields.rs`, `src/model/extract.rs` |
 | `xs:Name` and `xs:NCName` | `src/xml/name.rs` |
+| Absolute `xs:anyURI` name identifier formats | `src/xml/any_uri.rs`, `src/model/subject.rs` |
 
 ## Raw login
 

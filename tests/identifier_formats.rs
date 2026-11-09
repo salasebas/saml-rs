@@ -1,10 +1,11 @@
-//! Attribute name formats, and persistent and transient name identifiers,
-//! through the typed identity-provider and service-provider flows.
+//! Attribute name formats, name identifier formats, and persistent and
+//! transient name identifiers, through the typed identity-provider and
+//! service-provider flows.
 //!
-//! SAML Core §8.2, §8.3.7 and §8.3.8, with Conformance Requirements §3.3 and
-//! Approved Errata 05 E78 and E86. The producer rules bind the party that
-//! generates an identifier. A receiver parses a peer's identifier and does not
-//! reject it for missing one of them.
+//! SAML Core §1.3.2, §8.2, §8.3.7 and §8.3.8, with Conformance Requirements
+//! §3.3 and Approved Errata 05 E78 and E86. The producer rules bind the party
+//! that generates an identifier. A receiver parses a peer's identifier and does
+//! not reject it for missing one of them.
 #![cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
@@ -15,6 +16,9 @@ use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::entity::iso8601_offset;
+use saml_rs::metadata::{
+    generate_idp_metadata, generate_sp_metadata, IdpMetadataConfig, SpMetadataConfig,
+};
 use saml_rs::raw::{Binding, LoginResponseOptions, User};
 use saml_rs::template::{
     replace_tags_by_value, LoginResponseAttribute, LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE,
@@ -933,6 +937,10 @@ fn existing_name_id_format_uris_resolve_as_before() -> Result<(), Box<dyn std::e
             NameIdFormat::Custom("https://example.com/name-id-format".to_string()),
             "https://example.com/name-id-format",
         ),
+        (
+            NameIdFormat::Custom("urn:example:name-id-format".to_string()),
+            "urn:example:name-id-format",
+        ),
     ] {
         assert_eq!(format.as_uri(), uri);
         let name_id = NameId::new("subject-1", Some(format));
@@ -942,6 +950,176 @@ fn existing_name_id_format_uris_resolve_as_before() -> Result<(), Box<dyn std::e
             "{uri}"
         );
         assert_eq!(exchange.session.name_id(), &name_id);
+    }
+    Ok(())
+}
+
+/// Blank, relative, and malformed values. SAML Core §1.3.2 requires a written
+/// URI reference to have a non-whitespace character and to be absolute. Read
+/// as an `xs:anyURI`, `urn:` has an empty opaque part, `urn:%zz` an invalid
+/// escape, and `urn:a#b#c` a second `#`.
+const INVALID_FORMATS: [&str; 6] = ["", "   ", "local-format", "urn:", "urn:%zz", "urn:a#b#c"];
+
+fn expect_name_id_format_error<T>(
+    result: Result<T, SamlError>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match result {
+        Err(SamlError::Invalid(message)) if message.contains("absolute URI reference") => Ok(()),
+        Err(error) => Err(format!("expected NameID format error, got {error:?}").into()),
+        Ok(_) => Err("expected NameID format error, got Ok".into()),
+    }
+}
+
+fn templated_idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
+    idp_with(TemplatePolicy {
+        login_response_template: Some(LoginResponseTemplate {
+            context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+            attributes: Vec::new(),
+        }),
+        ..TemplatePolicy::default()
+    })
+}
+
+#[test]
+fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp()?;
+    let templated = templated_idp()?;
+    let (sp_descriptor, _) = descriptors(&sp, &templated)?;
+    for format in INVALID_FORMATS {
+        let name_id = NameId::new("subject-1", Some(NameIdFormat::Custom(format.into())));
+        for options in [
+            RespondSso::post(),
+            RespondSso::post().apply_web_browser_sso_generation_rules(),
+        ] {
+            expect_name_id_format_error(respond(subject(name_id.clone()), options))?;
+        }
+        // A login response template receives the value in {NameIDFormat}.
+        expect_name_id_format_error(templated.initiate_sso(
+            &sp_descriptor,
+            subject(name_id),
+            RespondSso::post(),
+        ))?;
+
+        // A NameID without a format is issued in the first configured format.
+        let mut raw_idp = idp()?.raw_identity_provider().clone();
+        raw_idp.setting.name_id_format = vec![format.to_string()];
+        expect_name_id_format_error(raw_idp.create_login_response(
+            sp.raw_service_provider(),
+            Binding::Post,
+            &User::new("subject-1"),
+            &LoginResponseOptions::default(),
+        ))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_writes_xml_markup_in_a_name_id_format_as_character_data(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // XLink escaping maps `<`, `"`, and `>` to %3C, %22, and %3E, so the value
+    // is an absolute URI reference. The XML writer escapes the markup.
+    let name_id = NameId::new(
+        "subject-1",
+        Some(NameIdFormat::Custom("urn:example:a<b\"c>&d".into())),
+    );
+    let exchange = exchange(subject(name_id.clone()), RespondSso::post())?;
+    assert!(
+        name_id_element(&exchange.xml)?.contains("Format=\"urn:example:a&lt;b&quot;c&gt;&amp;d\"")
+    );
+    assert_eq!(exchange.session.name_id(), &name_id);
+    Ok(())
+}
+
+#[test]
+fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for format in INVALID_FORMATS {
+        let custom = NameIdFormat::Custom(format.into());
+        expect_name_id_format_error(Saml::sp(
+            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+                .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
+                .credentials(credentials())
+                .name_id_format(custom.clone())
+                .build()?,
+        ))?;
+        expect_name_id_format_error(Saml::idp(
+            IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+                .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+                .credentials(credentials())
+                .name_id_format(custom)
+                .build()?,
+        ))?;
+
+        // Every advertised format is checked, not only the first.
+        let formats = vec![
+            NameIdFormat::EmailAddress.as_uri().to_string(),
+            format.to_string(),
+        ];
+        expect_name_id_format_error(generate_sp_metadata(&SpMetadataConfig {
+            entity_id: SP_ENTITY_ID.into(),
+            name_id_format: formats.clone(),
+            ..SpMetadataConfig::default()
+        }))?;
+        expect_name_id_format_error(generate_idp_metadata(&IdpMetadataConfig {
+            entity_id: IDP_ENTITY_ID.into(),
+            name_id_format: formats,
+            ..IdpMetadataConfig::default()
+        }))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn service_provider_does_not_request_a_name_id_format_that_is_not_an_absolute_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = idp()?;
+    for format in INVALID_FORMATS {
+        let mut raw_sp = sp()?.raw_service_provider().clone();
+        raw_sp.setting.name_id_format = vec![format.to_string()];
+        expect_name_id_format_error(raw_sp.create_login_request(
+            idp.raw_identity_provider(),
+            Binding::Post,
+            None,
+        ))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // An omitted NameIDPolicy Format leaves the identity provider free to
+    // return any kind of identifier (SAML Core §3.4.1.1).
+    let idp = idp()?;
+    let mut raw_sp = sp()?.raw_service_provider().clone();
+    raw_sp.setting.name_id_format = Vec::new();
+    for template in [
+        None,
+        Some(saml_rs::template::LOGIN_REQUEST_TEMPLATE.to_string()),
+    ] {
+        raw_sp.setting.login_request_template = template;
+        let context =
+            raw_sp.create_login_request(idp.raw_identity_provider(), Binding::Post, None)?;
+        let xml = String::from_utf8(base64_decode(&context.context)?)?;
+        let policy = xml
+            .split("<samlp:NameIDPolicy")
+            .nth(1)
+            .and_then(|rest| rest.split("/>").next())
+            .ok_or("missing NameIDPolicy")?;
+        assert_eq!(policy, " AllowCreate=\"false\"");
+    }
+    Ok(())
+}
+
+#[test]
+fn service_provider_accepts_a_name_id_format_that_is_not_an_absolute_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // SAML Core §1.3.2 binds the writer of the value. No receiver rule rejects it.
+    for format in ["local-format", "urn:%zz"] {
+        let name_id = NameId::new("subject-1", Some(NameIdFormat::Custom(format.into())));
+        let session = accept_peer_name_id(&name_id)?;
+        assert_eq!(session.name_id(), &name_id);
     }
     Ok(())
 }
