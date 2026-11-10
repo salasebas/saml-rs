@@ -35,7 +35,6 @@ pub struct StartSlo {
 
 pub struct RespondSlo {
     binding: LogoutBinding,
-    relay_state: Option<RelayState>,
     signing: LogoutSigning,
 }
 
@@ -183,9 +182,8 @@ impl Saml<Idp> {
 Rules:
 
 - `InResponseTo` comes from `Received<LogoutRequest>`.
-- `respond_slo` echoes `Received<LogoutRequest>` RelayState by default. An
-  explicit `relay_state(RelayStateParam::absent())` suppresses echo, and an
-  explicit present RelayState overrides it.
+- `respond_slo` echoes `Received<LogoutRequest>` RelayState exactly. There is
+  no option to replace or suppress it.
 - The typed API takes `Received<LogoutRequest>` rather than a caller-supplied
   request-identifier string, so `InResponseTo` cannot drift from the request
   that was accepted.
@@ -221,7 +219,9 @@ Rules:
 
 - Use `PendingLogoutRequest` as the only source of expected `InResponseTo`.
 - Check pending peer entity ID against the passed descriptor.
-- Check inbound binding against the pending expected logout binding.
+- Accept a response to a front-channel request over any front-channel binding,
+  and a response to a SOAP request over SOAP only. Resolve the local
+  `Destination` for the binding the response arrived on.
 - Match RelayState exactly: absent, present empty, and present value are
   distinct. If pending expects absent and the inbound message carries
   RelayState, fail unless the samlify-port Compatibility preset permits it.

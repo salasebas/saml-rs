@@ -397,6 +397,46 @@ fn logout_request_input(
     }
 }
 
+fn logout_response_input(
+    outbound: &Outbound<LogoutResponse>,
+    binding: LogoutBinding,
+) -> Result<BrowserInput<LogoutResponse>, SamlError> {
+    match binding {
+        LogoutBinding::Redirect => {
+            let url = outbound.redirect_url()?;
+            let (_, query) = url
+                .split_once('?')
+                .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
+            Ok(BrowserInput::<LogoutResponse>::redirect(query))
+        }
+        LogoutBinding::Post => Ok(BrowserInput::<LogoutResponse>::post(post_fields(outbound)?)),
+        LogoutBinding::SimpleSign => Ok(BrowserInput::<LogoutResponse>::simple_sign(post_fields(
+            outbound,
+        )?)),
+        LogoutBinding::Soap => Ok(BrowserInput::<LogoutResponse>::soap(
+            outbound.soap_response()?.envelope(),
+        )),
+    }
+}
+
+fn respond_slo_for_binding(binding: LogoutBinding) -> RespondSlo {
+    match binding {
+        LogoutBinding::Redirect => RespondSlo::redirect(),
+        LogoutBinding::Post => RespondSlo::post(),
+        LogoutBinding::SimpleSign => RespondSlo::simple_sign(),
+        LogoutBinding::Soap => RespondSlo::soap(),
+    }
+}
+
+fn sp_slo_endpoint(binding: LogoutBinding) -> &'static str {
+    match binding {
+        LogoutBinding::Redirect => SP_SLO_REDIRECT,
+        LogoutBinding::Post => SP_SLO_POST,
+        LogoutBinding::SimpleSign => SP_SLO_SIMPLESIGN,
+        LogoutBinding::Soap => SP_SLO_SOAP,
+    }
+}
+
 fn tampered_logout_request_expiration_input(
     outbound: &Outbound<LogoutRequest>,
     binding: LogoutBinding,
@@ -2628,27 +2668,155 @@ fn typed_facade_rejects_slo_pending_peer_mismatch() -> Result<(), Box<dyn std::e
 }
 
 #[test]
-fn typed_facade_rejects_slo_response_binding_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = sp_started_exchange()?;
-    let pending = PendingLogoutRequest::try_new(
-        exchange.pending.id().clone(),
-        exchange.pending.relay_state().clone(),
-        LogoutBinding::SimpleSign,
-        exchange.pending.peer_entity_id().clone(),
-    )?;
+fn typed_facade_finish_slo_accepts_another_front_channel_response_binding(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let relay_state = RelayStateParam::try_from_option(Some("logout-state".to_string()))?;
+    for request_binding in ALL_LOGOUT_BINDINGS {
+        for response_binding in ALL_LOGOUT_BINDINGS {
+            if request_binding == response_binding {
+                continue;
+            }
+            let started = sp.start_slo(
+                &idp_descriptor,
+                subject()?,
+                start_slo_for_binding(request_binding).relay_state(relay_state.clone()),
+            )?;
+            let received = idp.receive_slo(
+                &sp_descriptor,
+                logout_request_input(&started.outbound, request_binding)?,
+                validation(),
+            )?;
+            let response = idp.respond_slo(
+                &sp_descriptor,
+                &received,
+                respond_slo_for_binding(response_binding),
+            )?;
+            let completed = sp
+                .finish_slo(
+                    &idp_descriptor,
+                    &started.pending,
+                    logout_response_input(&response, response_binding)?,
+                    validation(),
+                )
+                .map_err(|error| {
+                    format!(
+                        "{request_binding:?} request answered over {response_binding:?}: {error:?}"
+                    )
+                })?;
+            assert_eq!(
+                completed
+                    .response()
+                    .and_then(LogoutResponse::destination)
+                    .map(|url| url.as_str()),
+                Some(sp_slo_endpoint(response_binding))
+            );
+        }
+    }
+    Ok(())
+}
 
-    match exchange.sp.finish_slo(
-        &exchange.idp_descriptor,
-        &pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
-        validation(),
-    ) {
-        Err(SamlError::UnsupportedBinding { binding }) => {
-            assert_eq!(binding, saml_rs::raw::Binding::Post);
+#[test]
+fn typed_facade_checks_destination_for_the_binding_the_response_arrived_on(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::redirect())?;
+    let response = signed_logout_response_input(
+        &logout_response_xml(
+            "_post_response_for_redirect",
+            IDP_ENTITY_ID,
+            started.pending.id().as_str(),
+            Some(SP_SLO_REDIRECT),
+        ),
+        LogoutBinding::Post,
+    )?;
+    match sp.finish_slo(&idp_descriptor, &started.pending, response, validation()) {
+        Err(SamlError::DestinationMismatch { expected, actual }) => {
+            assert_eq!(expected, SP_SLO_POST);
+            assert_eq!(actual.as_deref(), Some(SP_SLO_REDIRECT));
             Ok(())
         }
-        other => Err(format!("expected UnsupportedBinding, got {other:?}").into()),
+        other => Err(format!("expected DestinationMismatch, got {other:?}").into()),
     }
+}
+
+#[test]
+fn typed_facade_rejects_a_response_binding_the_local_metadata_does_not_publish(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
+            .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
+            .credentials(credentials())
+            .validation(signing_sp_validation())
+            .build()?,
+    )?;
+    let idp = Saml::idp(idp_config()?)?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::redirect())?;
+    let response = signed_logout_response_input(
+        &logout_response_xml(
+            "_post_response_without_post_endpoint",
+            IDP_ENTITY_ID,
+            started.pending.id().as_str(),
+            Some(SP_SLO_POST),
+        ),
+        LogoutBinding::Post,
+    )?;
+    match sp.finish_slo(&idp_descriptor, &started.pending, response, validation()) {
+        Err(SamlError::MissingMetadata(field)) => {
+            assert_eq!(field, "SingleLogoutService");
+            Ok(())
+        }
+        other => Err(format!("expected MissingMetadata, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_facade_rejects_slo_response_crossing_the_soap_exchange(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = sp_started_exchange()?;
+    let soap_pending = PendingLogoutRequest::try_new(
+        exchange.pending.id().clone(),
+        RelayStateParam::absent(),
+        LogoutBinding::Soap,
+        exchange.pending.peer_entity_id().clone(),
+    )?;
+    let post_response: Vec<FormField> = exchange
+        .response_fields
+        .iter()
+        .filter(|field| field.name() != "RelayState")
+        .cloned()
+        .collect();
+    let soap_response = signed_logout_response_input(
+        &logout_response_xml(
+            "_soap_response",
+            IDP_ENTITY_ID,
+            exchange.pending.id().as_str(),
+            None,
+        ),
+        LogoutBinding::Soap,
+    )?;
+    let cases = [
+        (
+            soap_pending,
+            BrowserInput::<LogoutResponse>::post(post_response),
+            Binding::Post,
+        ),
+        (exchange.pending.clone(), soap_response, Binding::Soap),
+    ];
+    for (pending, input, expected) in cases {
+        match exchange
+            .sp
+            .finish_slo(&exchange.idp_descriptor, &pending, input, validation())
+        {
+            Err(SamlError::UnsupportedBinding { binding }) => assert_eq!(binding, expected),
+            other => return Err(format!("expected UnsupportedBinding, got {other:?}").into()),
+        }
+    }
+    Ok(())
 }
 
 #[test]
@@ -2819,61 +2987,19 @@ fn typed_facade_finish_slo_requires_signature_before_error_status(
 }
 
 #[test]
-fn typed_facade_rejects_unexpected_slo_relay_state() -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp) = facades()?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
-    let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-    let response = idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        RespondSlo::post().relay_state(RelayStateParam::try_from_option(Some(
-            "unexpected".to_string(),
-        ))?),
-    )?;
-
-    match sp.finish_slo(
-        &idp_descriptor,
-        &started.pending,
-        BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
-        validation(),
-    ) {
-        Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(expected, RelayStateParam::Absent);
-            assert_eq!(
-                actual,
-                RelayStateParam::try_from_option(Some("unexpected".to_string()))?
-            );
-            Ok(())
-        }
-        other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
-    }
-}
-
-#[test]
-fn typed_facade_allows_respond_slo_to_suppress_relay_state_echo(
+fn typed_facade_rejects_a_slo_response_that_dropped_the_relay_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp) = facades()?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("logout-state".to_string()))?;
-    let started = sp.start_slo(
-        &idp_descriptor,
-        subject()?,
-        StartSlo::post().relay_state(relay_state),
-    )?;
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
-    let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-    let response = idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        RespondSlo::post().relay_state(RelayStateParam::absent()),
-    )?;
-
-    match sp.finish_slo(
-        &idp_descriptor,
-        &started.pending,
-        BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
+    let exchange = sp_started_exchange()?;
+    let without_relay_state: Vec<FormField> = exchange
+        .response_fields
+        .iter()
+        .filter(|field| field.name() != "RelayState")
+        .cloned()
+        .collect();
+    match exchange.sp.finish_slo(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<LogoutResponse>::post(without_relay_state),
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
@@ -2889,45 +3015,59 @@ fn typed_facade_allows_respond_slo_to_suppress_relay_state_echo(
 }
 
 #[test]
-fn typed_facade_allows_respond_slo_to_override_relay_state_echo(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn typed_facade_rejects_unexpected_slo_relay_state() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("logout-state".to_string()))?;
-    let started = sp.start_slo(
-        &idp_descriptor,
-        subject()?,
-        StartSlo::post().relay_state(relay_state),
-    )?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-    let response = idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        RespondSlo::post().relay_state(RelayStateParam::try_from_option(Some(
-            "override".to_string(),
-        ))?),
-    )?;
+    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let mut response_fields = post_fields(&response)?;
+    response_fields.push(FormField::new("RelayState", "unexpected"));
 
     match sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
+        BrowserInput::<LogoutResponse>::post(response_fields),
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(
-                expected,
-                RelayStateParam::try_from_option(Some("logout-state".to_string()))?
-            );
+            assert_eq!(expected, RelayStateParam::Absent);
             assert_eq!(
                 actual,
-                RelayStateParam::try_from_option(Some("override".to_string()))?
+                RelayStateParam::try_from_option(Some("unexpected".to_string()))?
             );
             Ok(())
         }
         other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
     }
+}
+
+#[test]
+fn typed_facade_respond_slo_echoes_the_received_relay_state_exactly(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    for relay_state in [
+        RelayStateParam::absent(),
+        RelayStateParam::try_from_option(Some(String::new()))?,
+        RelayStateParam::try_from_option(Some("logout-state".to_string()))?,
+    ] {
+        let started = sp.start_slo(
+            &idp_descriptor,
+            subject()?,
+            StartSlo::post().relay_state(relay_state.clone()),
+        )?;
+        let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+        let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
+        let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+        let echoed = response
+            .post_form()?
+            .value("RelayState")
+            .map(str::to_string);
+        assert_eq!(RelayStateParam::try_from_option(echoed)?, relay_state);
+    }
+    Ok(())
 }
 
 #[test]
@@ -3922,21 +4062,21 @@ fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn soap_respond_slo_rejects_relay_state() -> Result<(), Box<dyn std::error::Error>> {
+fn soap_respond_slo_rejects_a_request_with_relay_state() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+    let started = sp.start_slo(
+        &idp_descriptor,
+        subject()?,
+        StartSlo::post().relay_state(relay_state),
+    )?;
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(started.outbound.soap_request()?.envelope()),
+        BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?),
         validation(),
     )?;
-    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
-    match idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        RespondSlo::soap().relay_state(relay_state),
-    ) {
+    match idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap()) {
         Err(SamlError::ProtocolProfile(_)) => Ok(()),
         other => Err(format!("expected ProtocolProfile, got {other:?}").into()),
     }

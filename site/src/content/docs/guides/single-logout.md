@@ -41,7 +41,7 @@ let status = completed.status();
 1. Call `receive_slo` with the browser fields from the `LogoutRequest`.
 2. Call `respond_slo`. Typed `respond_slo` always signs the response.
 
-`stored_relay_state` is the `RelayState` you kept with the pending logout. The example copies `logout.pending.relay_state()`.
+The response carries the exact `RelayState` that arrived with the request. It may use another front-channel binding than the request; the service provider's `finish_slo` accepts any front-channel binding its metadata publishes.
 
 ```rust
 let logout_request = idp.receive_slo(
@@ -49,11 +49,7 @@ let logout_request = idp.receive_slo(
     BrowserInput::<LogoutRequest>::post(request_fields),
     validation,
 )?;
-let logout_response = idp.respond_slo(
-    &sp,
-    &logout_request,
-    RespondSlo::post().relay_state(stored_relay_state),
-)?;
+let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::post())?;
 ```
 
 When the identity provider starts logout itself, `Saml<Idp>::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
