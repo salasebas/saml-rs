@@ -22,9 +22,11 @@ use crate::soap::{
 use crate::xml::fragment::standalone_element;
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml, status_codes, PartyName, SamlElement,
+    issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, status_codes, PartyName,
+    SamlElement,
 };
 use crate::xml::write::XmlWriter;
+use crate::xml::XmlLimits;
 
 const ARTIFACT_TYPE_CODE: u16 = 0x0004;
 const ARTIFACT_LEN: usize = 44;
@@ -354,6 +356,7 @@ pub struct ArtifactResolution {
     identity_provider: String,
     artifact: String,
     web_browser_sso: bool,
+    xml_limits: XmlLimits,
 }
 
 impl ArtifactResolution {
@@ -371,13 +374,13 @@ impl ArtifactResolution {
     /// does not contain the protocol message, or the message is a `Response`
     /// and the dereference is not [`ArtifactDereference::web_browser_sso`].
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
-        let body = read_soap_body(response_envelope)?;
+        let body = read_soap_body(response_envelope, self.xml_limits)?;
         if body.local_name != "ArtifactResponse" || body.namespace != namespace::PROTOCOL {
             return Err(SamlError::ProtocolProfile(
                 "SOAP body must be an ArtifactResponse".into(),
             ));
         }
-        let response = parse_saml(&body.xml)?;
+        let response = parse_saml_with_limits(&body.xml, self.xml_limits)?;
         let version = response.required_attr("Version")?;
         if version != "2.0" {
             return Err(SamlError::ProtocolProfile(
@@ -512,6 +515,7 @@ pub(crate) fn resolve(
     artifact: &Artifact,
     dereference: ArtifactDereference,
     uses: &mut ArtifactUses,
+    xml_limits: XmlLimits,
 ) -> Result<ArtifactResolution, SamlError> {
     require_channel(dereference.channel, dereference.web_browser_sso)?;
     let idp_entity_id = identity_provider.entity_id().as_str();
@@ -545,6 +549,7 @@ pub(crate) fn resolve(
         identity_provider: idp_entity_id.to_string(),
         artifact: artifact.as_str().to_string(),
         web_browser_sso: dereference.web_browser_sso,
+        xml_limits,
     })
 }
 
@@ -554,18 +559,19 @@ pub(crate) fn answer(
     request_envelope: &str,
     issued: &mut IssuedArtifacts,
     channel: SoapChannel,
+    xml_limits: XmlLimits,
 ) -> Result<AnsweredArtifact, SamlError> {
     let entity_id = metadata
         .get_entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();
-    let body = read_soap_body(request_envelope)?;
+    let body = read_soap_body(request_envelope, xml_limits)?;
     if body.local_name != "ArtifactResolve" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be an ArtifactResolve".into(),
         ));
     }
-    let request = parse_resolve(&body.xml)?;
+    let request = parse_resolve(&body.xml, xml_limits)?;
     if request.version != "2.0" {
         return answered(
             &entity_id,
@@ -728,8 +734,8 @@ struct ResolveRequest {
     artifact: String,
 }
 
-fn parse_resolve(xml: &str) -> Result<ResolveRequest, SamlError> {
-    let element = parse_saml(xml)?;
+fn parse_resolve(xml: &str, limits: XmlLimits) -> Result<ResolveRequest, SamlError> {
+    let element = parse_saml_with_limits(xml, limits)?;
     if element.local_name != "ArtifactResolve" || element.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be an ArtifactResolve".into(),

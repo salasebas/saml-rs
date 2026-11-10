@@ -17,8 +17,9 @@ use crate::model::{
 use crate::soap::{read_soap_body, SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse};
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml, status_codes, SamlElement,
+    issuer, issuer_format_is_entity, parse_saml_with_limits, status_codes, SamlElement,
 };
+use crate::xml::XmlLimits;
 
 mod encryption;
 pub(crate) mod redirect;
@@ -170,6 +171,7 @@ pub struct StartedNameIdManagement {
     request: SoapRequest,
     request_id: String,
     service_provider: String,
+    xml_limits: XmlLimits,
 }
 
 impl StartedNameIdManagement {
@@ -191,13 +193,13 @@ impl StartedNameIdManagement {
     /// not a `ManageNameIDResponse` from that service provider for this
     /// request.
     pub fn finish(&self, response_envelope: &str) -> Result<(), SamlError> {
-        let body = read_soap_body(response_envelope)?;
+        let body = read_soap_body(response_envelope, self.xml_limits)?;
         if body.local_name != "ManageNameIDResponse" || body.namespace != namespace::PROTOCOL {
             return Err(SamlError::ProtocolProfile(
                 "SOAP body must be a ManageNameIDResponse".into(),
             ));
         }
-        let response = parse_saml(&body.xml)?;
+        let response = parse_saml_with_limits(&body.xml, self.xml_limits)?;
         if response.required_attr("Version")? != "2.0" {
             return Err(SamlError::ProtocolProfile(
                 "ManageNameIDResponse Version must be 2.0".into(),
@@ -272,6 +274,7 @@ pub(crate) fn start(
         request,
         request_id,
         service_provider: sp_entity_id.to_string(),
+        xml_limits: idp.setting.xml_limits,
     })
 }
 
@@ -284,13 +287,13 @@ pub(crate) fn receive(
 ) -> Result<ReceivedNameIdManagement, SamlError> {
     let locations = local_services(idp.metadata)?;
     require_channel(channel)?;
-    let body = read_soap_body(request_envelope)?;
+    let body = read_soap_body(request_envelope, idp.setting.xml_limits)?;
     if body.local_name != "ManageNameIDRequest" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be a ManageNameIDRequest".into(),
         ));
     }
-    let request = parse_saml(&body.xml)?;
+    let request = parse_saml_with_limits(&body.xml, idp.setting.xml_limits)?;
     let id = MessageId::try_new(request.required_attr("ID")?)?;
     let version = request.required_attr("Version")?;
     require_utc_instant(&request)?;

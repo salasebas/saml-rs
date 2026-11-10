@@ -4169,3 +4169,60 @@ fn soap_logout_verifies_a_present_signature_over_an_attested_mutual_channel(
         other => Err(format!("expected XmlSignature failure, got {other:?}").into()),
     }
 }
+
+#[test]
+fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let limits = saml_rs::xml::XmlLimits {
+        max_depth: 12,
+        ..saml_rs::xml::XmlLimits::default()
+    };
+    let mut sp_config = sp_config()?;
+    sp_config.xml.limits = limits;
+    let mut idp_config = idp_config()?;
+    idp_config.xml.limits = limits;
+    let (sp, idp) = (Saml::sp(sp_config)?, Saml::idp(idp_config)?);
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let deep_header = "<soap:Header><a><b><c><d><e><f><g><h><i><j><k>note</k></j></i></h></g></f></e></d></c></b></a></soap:Header><soap:Body>";
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
+    let request = started.outbound.soap_request()?.envelope();
+
+    let refused = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(request.replacen("<soap:Body>", deep_header, 1)),
+        validation(),
+    );
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        "{refused:?}"
+    );
+
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(request),
+        validation(),
+    )?;
+    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
+    let response_envelope = response.soap_response()?.envelope();
+    let refused = sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<LogoutResponse>::soap(response_envelope.replacen(
+            "<soap:Body>",
+            deep_header,
+            1,
+        )),
+        validation(),
+    );
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        "{refused:?}"
+    );
+    sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<LogoutResponse>::soap(response_envelope),
+        validation(),
+    )?;
+    Ok(())
+}

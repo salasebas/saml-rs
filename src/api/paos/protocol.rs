@@ -2,6 +2,7 @@
 
 use crate::error::SamlError;
 use crate::model::RelayStateParam;
+use crate::soap::envelope_parts;
 use crate::xml::dom::{parse_with_limits, Node};
 use crate::xml::write::XmlWriter;
 use crate::xml::XmlLimits;
@@ -157,33 +158,13 @@ pub(super) fn read_soap_body(
             "SOAP child count did not match the envelope".into(),
         ));
     }
-    // A SOAP 1.1 envelope carries at most one Header followed by exactly one
-    // Body. Anything else is not this profile's exchange.
-    let mut saw_header = false;
-    let mut saw_body = false;
-    for (node, is_soap) in document.root.children.iter().zip(&scan.child_is_soap) {
-        if !is_soap || (node.local_name != "Header" && node.local_name != "Body") {
-            return Err(SamlError::ProtocolProfile(
-                "SOAP envelope must contain only a Header and a Body".into(),
-            ));
-        }
-        if node.local_name == "Header" {
-            if saw_header || saw_body {
-                return Err(SamlError::ProtocolProfile(
-                    "SOAP envelope must contain at most one Header before the Body".into(),
-                ));
-            }
-            saw_header = true;
-        } else if saw_body {
-            return Err(SamlError::ProtocolProfile(
-                "SOAP envelope must contain exactly one Body".into(),
-            ));
-        } else {
-            saw_body = true;
-        }
+    if scan.child_is_soap.contains(&false) {
+        return Err(SamlError::ProtocolProfile(
+            "SOAP envelope must contain only a Header and a Body".into(),
+        ));
     }
-    let body = soap_child(&document.root, &scan.child_is_soap, "Body")
-        .ok_or_else(|| SamlError::ProtocolProfile("SOAP envelope is missing a Body".into()))?;
+    let parts = envelope_parts(&document.root)?;
+    let body = parts.body;
     let [element] = body.children.as_slice() else {
         return Err(SamlError::ProtocolProfile(format!(
             "SOAP body must contain one {element_name}"
@@ -208,7 +189,7 @@ pub(super) fn read_soap_body(
         }
     }
     let element_xml = scan.with_inherited_namespaces(xml_slice(envelope_xml, element)?)?;
-    let relay_state = match soap_child(&document.root, &scan.child_is_soap, "Header") {
+    let relay_state = match parts.header {
         Some(header) => relay_state_header(header, &scan.relay_state_in_ecp)?,
         None => RelayStateParam::absent(),
     };
@@ -428,15 +409,6 @@ fn used_prefixes(
         }
     }
     Ok(())
-}
-
-fn soap_child<'a>(envelope: &'a Node, child_is_soap: &[bool], name: &str) -> Option<&'a Node> {
-    envelope
-        .children
-        .iter()
-        .zip(child_is_soap)
-        .find(|(node, is_soap)| node.local_name == name && **is_soap)
-        .map(|(node, _)| node)
 }
 
 fn relay_state_header(

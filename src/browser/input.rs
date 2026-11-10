@@ -200,6 +200,10 @@ impl BrowserInput<LogoutRequest> {
     pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
         simple_sign_body_input(raw_body)
     }
+
+    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
+        logout_http_request(self, MessageField::Request, limits)
+    }
 }
 
 impl BrowserInput<LogoutResponse> {
@@ -239,6 +243,10 @@ impl BrowserInput<LogoutResponse> {
     pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
         simple_sign_body_input(raw_body)
     }
+
+    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
+        logout_http_request(self, MessageField::Response, limits)
+    }
 }
 
 impl BrowserInput<ManageNameIdRequest> {
@@ -275,10 +283,7 @@ impl TryFrom<BrowserInput<LogoutRequest>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<LogoutRequest>) -> Result<Self, Self::Error> {
-        match value {
-            BrowserInput::Soap { envelope, .. } => soap_request(&envelope, MessageField::Request),
-            other => http_request_from_input(other, true, MessageField::Request),
-        }
+        value.into_http_request(XmlLimits::default())
     }
 }
 
@@ -286,10 +291,7 @@ impl TryFrom<BrowserInput<LogoutResponse>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<LogoutResponse>) -> Result<Self, Self::Error> {
-        match value {
-            BrowserInput::Soap { envelope, .. } => soap_request(&envelope, MessageField::Response),
-            other => http_request_from_input(other, true, MessageField::Response),
-        }
+        value.into_http_request(XmlLimits::default())
     }
 }
 
@@ -339,9 +341,24 @@ fn soap_input<Message>(envelope: impl Into<String>, channel: SoapChannel) -> Bro
     }
 }
 
+fn logout_http_request<Message>(
+    value: BrowserInput<Message>,
+    expected_message: MessageField,
+    limits: XmlLimits,
+) -> Result<HttpRequest, SamlError> {
+    match value {
+        BrowserInput::Soap { envelope, .. } => soap_request(&envelope, expected_message, limits),
+        other => http_request_from_input(other, true, expected_message),
+    }
+}
+
 /// The protocol element of a SOAP body, carried as an HTTP-POST message.
-fn soap_request(envelope: &str, expected_message: MessageField) -> Result<HttpRequest, SamlError> {
-    let body = read_soap_body(envelope)?;
+fn soap_request(
+    envelope: &str,
+    expected_message: MessageField,
+    limits: XmlLimits,
+) -> Result<HttpRequest, SamlError> {
+    let body = read_soap_body(envelope, limits)?;
     Ok(HttpRequest::post(vec![(
         expected_message.param_name().to_string(),
         base64_encode(body.xml.as_bytes()),
