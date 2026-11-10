@@ -12,23 +12,22 @@ pub fn base64_encode(input: &[u8]) -> String {
     STANDARD.encode(input)
 }
 
-/// Decode standard base64, ignoring any SAML-inserted whitespace.
+/// Decode standard base64.
+///
+/// ASCII whitespace is ignored: space, tab, line feed, form feed, and carriage
+/// return. Any other byte outside the base64 alphabet is rejected.
 pub fn base64_decode(input: &str) -> Result<Vec<u8>, SamlError> {
-    let normalized: String = input.split_whitespace().collect();
+    let normalized: Vec<u8> = non_whitespace_bytes(input).collect();
     Ok(STANDARD.decode(normalized)?)
 }
 
 /// Decode standard base64, rejecting inputs whose decoded output would exceed
 /// `max_output_len` bytes.
 ///
-/// The size check and the decoder both ignore ASCII whitespace: space, tab,
-/// line feed, form feed, and carriage return. Any other byte outside the
-/// base64 alphabet is rejected.
+/// Whitespace is handled as in [`base64_decode`], and ignored whitespace does
+/// not count toward the limit.
 pub fn base64_decode_with_limit(input: &str, max_output_len: usize) -> Result<Vec<u8>, SamlError> {
-    let normalized_len = input
-        .bytes()
-        .filter(|byte| !byte.is_ascii_whitespace())
-        .count();
+    let normalized_len = non_whitespace_bytes(input).count();
     let max_encoded_len = max_output_len
         .saturating_add(2)
         .saturating_div(3)
@@ -38,12 +37,16 @@ pub fn base64_decode_with_limit(input: &str, max_output_len: usize) -> Result<Ve
     }
 
     let mut normalized = Vec::with_capacity(normalized_len);
-    normalized.extend(input.bytes().filter(|byte| !byte.is_ascii_whitespace()));
+    normalized.extend(non_whitespace_bytes(input));
     let out = STANDARD.decode(normalized)?;
     if out.len() > max_output_len {
         return Err(SamlError::Invalid(BASE64_OUTPUT_LIMIT_EXCEEDED.into()));
     }
     Ok(out)
+}
+
+fn non_whitespace_bytes(input: &str) -> impl Iterator<Item = u8> + '_ {
+    input.bytes().filter(|byte| !byte.is_ascii_whitespace())
 }
 
 #[cfg(test)]
@@ -59,6 +62,8 @@ mod tests {
         assert_eq!(base64_decode_with_limit(" \n\t\r\u{000c}", 0)?, b"");
         assert_eq!(base64_decode_with_limit("QUFBQQ==", 4)?, b"AAAA");
         assert_eq!(base64_decode_with_limit("QU FB\nQQ==", 4)?, b"AAAA");
+        assert_eq!(base64_decode("Q Q\n=\t=\r\u{000c}")?, b"A");
+        assert_eq!(base64_decode(" \n\t\r\u{000c}")?, b"");
         match base64_decode_with_limit("QUFBQQ==", 1) {
             Err(SamlError::Invalid(message)) if message == BASE64_OUTPUT_LIMIT_EXCEEDED => Ok(()),
             other => Err(format!("expected an output-limit error, got {other:?}").into()),
@@ -67,11 +72,25 @@ mod tests {
 
     #[test]
     fn non_ascii_whitespace_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
-        for input in ["QQ==\u{00a0}", "Q\u{000b}Q==", "QQ==\u{2028}", "\u{00a0}"] {
-            match base64_decode_with_limit(input, 64) {
-                Err(SamlError::Base64(_)) => {}
-                other => {
-                    return Err(format!("input {input:?} produced {other:?}").into());
+        for input in [
+            "QQ==\u{00a0}",
+            "Q\u{000b}Q==",
+            "QQ==\u{2028}",
+            "QUJD\u{3000}",
+            "\u{00a0}",
+        ] {
+            for (decoder, result) in [
+                (
+                    "base64_decode_with_limit",
+                    base64_decode_with_limit(input, 64),
+                ),
+                ("base64_decode", base64_decode(input)),
+            ] {
+                match result {
+                    Err(SamlError::Base64(_)) => {}
+                    other => {
+                        return Err(format!("{decoder} input {input:?} produced {other:?}").into());
+                    }
                 }
             }
         }

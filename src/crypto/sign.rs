@@ -582,6 +582,10 @@ mod tests {
         let octet = "SAMLRequest=abc&RelayState=xyz&SigAlg=http%3A%2F%2Fexample";
         let sig = construct_message_signature(octet, &key, RSA_SHA256)?;
         assert!(verify_message_signature(octet, &sig, SP_CERT, RSA_SHA256)?);
+        assert!(matches!(
+            verify_message_signature(octet, &format!("{sig}\u{a0}"), SP_CERT, RSA_SHA256),
+            Err(SamlError::Base64(_))
+        ));
         // tampered octet string must fail
         assert!(!verify_message_signature(
             "SAMLRequest=TAMPERED",
