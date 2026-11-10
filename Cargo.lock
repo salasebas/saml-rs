@@ -204,11 +204,11 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bergshamra"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73b42864f6f8199e7621425f05c5672d7e55711d6943f6a1f43b1d432122569c"
+checksum = "5e0898d1f83adf8329d66205a7a822bd007dd2d423177956305598faed319de0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "bergshamra-c14n",
  "bergshamra-core",
  "bergshamra-crypto",
@@ -224,9 +224,9 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-c14n"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4143f27997e7fd8154a49d88cfbd728ca645a6cb5ab43e971d8003661d44531c"
+checksum = "d83629baad10a07a47d4e450d9ebbc266ba3d0ee1fcf63aba93a14d2190af024"
 dependencies = [
  "bergshamra-core",
  "bergshamra-xml",
@@ -236,18 +236,18 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-core"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ba25068568d9b5da19387a3ee0995291cb5b8fadb6a929e92c8f9ec7d62066e"
+checksum = "83646137297e3ae2c0a79905f9173153b867aad75cd8e00cd8bcd963a448b245"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "bergshamra-crypto"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e267776f2a20aebc3802c8f874d7801d58311a9c53e6467a57a6f8a3bdcc84e"
+checksum = "9613d433e3e58b42f1ab6a2c306bf748353e52df46e9831d9fa14ef5d19971c4"
 dependencies = [
  "bergshamra-core",
  "kryptering",
@@ -255,9 +255,9 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-dsig"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "487bf2fdc0d50fe7a8c5f35339d4cfe3c98504ed3e2f44973740e86e3744b115"
+checksum = "1f1919ce4ba9a6dbb63185a82b5a69defe0bec621a0e52e50bababcf7a210b6e"
 dependencies = [
  "base64 0.23.1",
  "bergshamra-c14n",
@@ -274,9 +274,9 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-enc"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d498640f8b93635b74559a14c907daa84627ddea73738bfcb683d346cd82ca0"
+checksum = "5706e7ebe08b717b787cfccccaedd1feb21c911137a6cf465948ae19c883aa60"
 dependencies = [
  "base64 0.23.1",
  "bergshamra-c14n",
@@ -291,9 +291,9 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-keys"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb1d52cf97c2faa5b443d06efd3d24a43a815a2195f616a44bb8ca4b0692be0d"
+checksum = "50bbf43c1e886fd5db71da6e621059156f6d9e84708af38044b9e3f7acca3d09"
 dependencies = [
  "base64 0.23.1",
  "bergshamra-core",
@@ -312,10 +312,10 @@ dependencies = [
  "p384",
  "p521",
  "pem-rfc7468 1.0.0",
- "pkcs1 0.7.5",
+ "pkcs1",
  "pkcs8 0.10.2",
  "pkcs8 0.11.0",
- "rsa 0.9.10",
+ "rsa",
  "signature 2.2.0",
  "slh-dsa",
  "spki 0.7.3",
@@ -328,9 +328,9 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-pkcs12"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18ecfa36325071b0ad983ff012295bde57ffa5d25ea78fb577c224d39cbc05b8"
+checksum = "c792940d424e9456abba8ee6a82d38460ea629299a82807e5805d0263cae36f5"
 dependencies = [
  "bergshamra-core",
  "cipher 0.5.2",
@@ -341,9 +341,9 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-transforms"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0212b448078048cfd7af7507b653ced6892c86022c30982dda548f0c584f46d2"
+checksum = "45f6993ea2e68b678089734468ff51cb59e576d3b5c0308cf34cf4a6e7740e69"
 dependencies = [
  "base64 0.23.1",
  "bergshamra-c14n",
@@ -356,9 +356,9 @@ dependencies = [
 
 [[package]]
 name = "bergshamra-xml"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f87e6e7a86ced495705f77786817b9ef6cbec9db55f162aa2731dd2253f33ce"
+checksum = "6825e7372e62d9bf6bb17cf213e192f64b12d128df6c760d671be63e97cef519"
 dependencies = [
  "bergshamra-core",
  "rustc-hash",
@@ -880,7 +880,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer 0.10.4",
- "const-oid 0.9.6",
  "crypto-common 0.1.7",
  "subtle",
 ]
@@ -1537,7 +1536,7 @@ dependencies = [
  "pbkdf2 0.13.0",
  "pkcs8 0.11.0",
  "ripemd",
- "rsa 0.10.0",
+ "rsa",
  "rustls",
  "sha1 0.11.0",
  "sha2 0.11.0",
@@ -1745,7 +1744,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
- "libm",
 ]
 
 [[package]]
@@ -1857,17 +1855,6 @@ name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
-
-[[package]]
-name = "pkcs1"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8ffb9f10fa047879315e6625af03c164b16962a5368d724ed16323b68ace47f"
-dependencies = [
- "der 0.7.10",
- "pkcs8 0.10.2",
- "spki 0.7.3",
-]
 
 [[package]]
 name = "pkcs1"
@@ -2173,26 +2160,6 @@ dependencies = [
 
 [[package]]
 name = "rsa"
-version = "0.9.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8573f03f5883dcaebdfcf4725caa1ecb9c15b2ef50c43a07b816e06799bb12d"
-dependencies = [
- "const-oid 0.9.6",
- "digest 0.10.7",
- "num-bigint-dig 0.8.6",
- "num-integer",
- "num-traits",
- "pkcs1 0.7.5",
- "pkcs8 0.10.2",
- "rand_core 0.6.4",
- "signature 2.2.0",
- "spki 0.7.3",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "rsa"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23e77fd77e0dea28b3011fd62d15445b7de7959333b0276d930e03be0f755699"
@@ -2203,7 +2170,7 @@ dependencies = [
  "crypto-primes",
  "digest 0.11.3",
  "hmac 0.13.0",
- "pkcs1 0.8.0",
+ "pkcs1",
  "pkcs8 0.11.0",
  "rand_core 0.10.1",
  "sha2 0.11.0",

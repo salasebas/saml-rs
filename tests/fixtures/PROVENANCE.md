@@ -32,7 +32,8 @@ compatibility depend on encrypted or provider-specific private-key formats and
 unusual key sizes retained for loader regressions.
 
 The committed RSA certificate fixtures were audited for the provider matrix:
-their public keys range from 2048 to 4096 bits. Historical encrypted keys and
+their public keys range from 2048 to 4096 bits, apart from the 512-bit
+rejection fixture below. Historical encrypted keys and
 expired certificates remain test-only inputs for their existing focused
 regressions and are not provider-support or production-security claims.
 
@@ -51,6 +52,26 @@ self-signed certificate for the DSAwithSHA1 test in
 
 The certificate SHA-256 fingerprint is
 `2E:82:88:A6:72:6E:56:11:FA:97:56:58:AD:70:78:91:89:44:20:9B:E6:63:4C:9C:03:BD:20:2E:9D:57:02:2C`.
+
+## 512-bit RSA rejection fixture
+
+`key/rsa512/privkey.pkcs8.pem` and `key/rsa512/cert.pem` are a test-only
+512-bit RSA key and self-signed certificate for the rejection tests in
+`tests/provider_regression.rs`. They were generated with OpenSSL `4.1.0`:
+`genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:512` and
+`req -new -x509 -sha256 -days 36500`. The `RSA_512_SIGNATURE` constant is
+`dgst -sha256 -sign` over `SAMLRequest=rsa-512`. `key/rsa512/response_signed.xml`
+is `misc/response.xml` signed with that key by `construct_saml_signature` and
+`RSA_SHA256` on the default `crypto-bergshamra` feature.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `key/rsa512/privkey.pkcs8.pem` | `4a6968217335ba77cefc5d5716af42e6852ddb20b4578db20b0182163042e87c` |
+| `key/rsa512/cert.pem` | `3a28ccd9ac1cba749fddd7b582b99b2e74bd81aeda839444f1d8953a1978a96c` |
+| `key/rsa512/response_signed.xml` | `174c8031643eaa401aea519302e864d3aac25ad0840e2f62a2aebbdd7c6c6693` |
+
+The certificate SHA-256 fingerprint is
+`F5:90:41:E6:A5:8C:02:F5:68:5A:D0:E6:9C:1C:15:09:10:07:78:A5:7C:AD:79:30:E1:0C:74:60:4C:16:F2:1C`.
 
 ## External SLO HTTP-Redirect fixtures
 
@@ -179,6 +200,8 @@ canonical path; tests and unit tests load it from that path.
   samlify IdP and SP test certificates and keys. `key/idp/README.md` maps each
   IdP private key to its certificate.
 - `tests/fixtures/key/dsa/**` - the DSA signing fixture described above.
+- `tests/fixtures/key/rsa512/**` - the 512-bit RSA rejection fixture described
+  above.
 - `tests/fixtures/interop/**` - immutable external interoperability inputs and
   associated public test-only keys and metadata. The signing keys and
   certificates are not loaded by tests; they are kept with their SHA-256
