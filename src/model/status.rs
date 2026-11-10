@@ -1,5 +1,6 @@
 use crate::constants::status_code;
 use crate::error::SamlError;
+use crate::xml::any_uri::is_absolute_uri_reference;
 
 /// Top-level `StatusCode` value.
 ///
@@ -82,16 +83,15 @@ impl SubordinateStatusCode {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when `uri` is empty, has whitespace, is
-    /// not absolute, or contains `&`, `"`, `'`, `<`, or `>`.
+    /// Returns [`SamlError::Invalid`] when `uri` has whitespace, contains `&`,
+    /// `"`, `'`, `<`, or `>`, or is not an absolute URI reference.
     pub fn try_new(uri: impl Into<String>) -> Result<Self, SamlError> {
         let uri = uri.into();
-        if uri.is_empty()
-            || uri.chars().any(char::is_whitespace)
+        if uri.chars().any(char::is_whitespace)
             || uri
                 .chars()
                 .any(|character| matches!(character, '&' | '"' | '\'' | '<' | '>'))
-            || url::Url::parse(&uri).is_err()
+            || !is_absolute_uri_reference(&uri)
         {
             return Err(SamlError::Invalid(
                 "subordinate status code must be a non-empty absolute URI without whitespace or XML attribute markup"

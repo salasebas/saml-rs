@@ -4,6 +4,7 @@ use super::{
 };
 use crate::constants::{name_id_format, namespace, status_code};
 use crate::error::SamlError;
+use crate::xml::any_uri::is_absolute_uri_reference;
 use crate::xml::dom::{parse_with_limits, Document, XmlLimits};
 use crate::xml::name::is_ncname;
 use crate::xml::parse_generated_saml_utc_date_time;
@@ -158,7 +159,7 @@ fn validate_outbound_logout_root(
 
     state.destination = attribute_value(&attributes, b"Destination").map(str::to_string);
     if let Some(actual) = state.destination.as_deref() {
-        if !is_absolute_saml_uri(actual) {
+        if !is_absolute_url(actual) {
             return Err(profile_error(
                 "LogoutResponse Destination must be a non-empty absolute URI without whitespace",
             ));
@@ -242,8 +243,12 @@ fn validate_outbound_issuer(
     Ok(())
 }
 
-fn is_absolute_saml_uri(value: &str) -> bool {
+fn is_absolute_url(value: &str) -> bool {
     !value.is_empty() && !value.chars().any(char::is_whitespace) && Url::parse(value).is_ok()
+}
+
+fn is_absolute_saml_uri(value: &str) -> bool {
+    !value.chars().any(char::is_whitespace) && is_absolute_uri_reference(value)
 }
 
 fn is_entity_identifier(value: &str) -> bool {

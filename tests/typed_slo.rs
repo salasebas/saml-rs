@@ -3260,34 +3260,76 @@ fn typed_session_authority_logout_response_carries_caller_status(
 }
 
 #[test]
+fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    for location in [
+        "https://idp.example.com/slo/[t]/post",
+        "https://idp.example.com/slo/post?next=100%",
+    ] {
+        let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            sp.metadata_xml(),
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        )?;
+        let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            &idp.metadata_xml().replace(
+                &format!(r#"Location="{IDP_SLO_POST}""#),
+                &format!(r#"Location="{location}""#),
+            ),
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        )?;
+        let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
+        let received = sp.receive_slo(
+            &idp_descriptor,
+            logout_request_input(&started.outbound, LogoutBinding::Post)?,
+            validation(),
+        )?;
+        let response = sp.respond_slo(&idp_descriptor, &received, RespondSlo::post())?;
+
+        assert_eq!(response.raw_context().entity_endpoint, location);
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_logout_response_carries_caller_defined_subordinate_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
-    let received = sp.receive_slo(
-        &idp_descriptor,
-        logout_request_input(&started.outbound, LogoutBinding::Post)?,
-        validation(),
-    )?;
-    let response = sp.respond_slo(
-        &idp_descriptor,
-        &received,
-        RespondSlo::post().status(Status::requester().with_subordinate(
-            SubordinateStatusCode::try_new("urn:example:logout:local-failure")?,
-        )),
-    )?;
+    for subordinate in [
+        "urn:example:logout:local-failure",
+        "https://idp.example:70000/logout/local-failure",
+    ] {
+        let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
+        let received = sp.receive_slo(
+            &idp_descriptor,
+            logout_request_input(&started.outbound, LogoutBinding::Post)?,
+            validation(),
+        )?;
+        let response = sp.respond_slo(
+            &idp_descriptor,
+            &received,
+            RespondSlo::post().status(
+                Status::requester().with_subordinate(SubordinateStatusCode::try_new(subordinate)?),
+            ),
+        )?;
 
-    assert_eq!(
-        status_element(&outbound_xml(&response, "SAMLResponse")?)?,
-        concat!(
-            "<samlp:Status>",
-            "<samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Requester\">",
-            "<samlp:StatusCode Value=\"urn:example:logout:local-failure\"/>",
-            "</samlp:StatusCode>",
-            "</samlp:Status>"
-        )
-    );
+        assert_eq!(
+            status_element(&outbound_xml(&response, "SAMLResponse")?)?,
+            format!(
+                concat!(
+                    "<samlp:Status>",
+                    "<samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Requester\">",
+                    "<samlp:StatusCode Value=\"{}\"/>",
+                    "</samlp:StatusCode>",
+                    "</samlp:Status>"
+                ),
+                subordinate
+            )
+        );
+    }
     Ok(())
 }
 
@@ -3299,6 +3341,10 @@ fn typed_logout_response_rejects_a_subordinate_status_that_is_not_an_absolute_ur
         "relative",
         "urn:example:has space",
         "https://idp.example/status?a=1&b=2",
+        "urn:",
+        "urn:example:%zz",
+        "urn:example:a#b#c",
+        "urn:example:\u{1}",
     ] {
         match SubordinateStatusCode::try_new(uri) {
             Err(SamlError::Invalid(message))
