@@ -199,7 +199,7 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
     let channel = SoapChannel::mutually_authenticated_confidential();
     let now =
         || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
     let artifact = idp.issue_artifact(&current_sp, artifact_message()?, 0, &mut issued)?;
     let resolve_envelope = sp
         .resolve_artifact(

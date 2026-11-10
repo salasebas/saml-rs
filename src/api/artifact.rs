@@ -180,7 +180,7 @@ impl Saml<Idp> {
     /// let message = IssuedMessage::web_browser_sso_response(
     ///     r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">artifact-message</samlp:Response>"#,
     /// )?;
-    /// let mut issued = IssuedArtifacts::new();
+    /// let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
     /// let artifact = idp.issue_artifact(&sp_descriptor, message, 0, &mut issued)?;
     /// let channel = SoapChannel::mutually_authenticated_confidential();
     /// let resolution = sp.resolve_artifact(

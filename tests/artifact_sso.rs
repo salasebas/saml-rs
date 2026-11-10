@@ -37,6 +37,7 @@ const SP_ACS_POST: &str = "https://sp.example.com/acs/post";
 const SP_ACS_ARTIFACT: &str = "https://sp.example.com/acs/artifact";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const RESOLUTION_URL: &str = "https://idp.example.com/artifact";
+const ARTIFACT_LIFETIME: Duration = Duration::from_secs(60);
 const BLOCKED_FOR: Duration = Duration::from_secs(10 * 60);
 const USER: &str = "user@example.com";
 const AUTHN_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
@@ -182,7 +183,7 @@ fn a_response_delivered_as_an_artifact_establishes_the_session(
     assert_eq!(pending.response_binding(), SsoResponseBinding::Artifact);
     assert_eq!(pending.acs().location().as_str(), SP_ACS_ARTIFACT);
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -224,7 +225,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
         ..AlgorithmPolicy::default()
     })?;
     let (pending, request) = requested(&parties, RelayStateParam::absent())?;
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -266,7 +267,7 @@ fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Err
     let relay_state = RelayStateParam::try_from_option(Some("state & more=1"))?;
     let (pending, request) = requested(&parties, relay_state.clone())?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -294,7 +295,7 @@ fn an_artifact_redirect_keeps_the_consumer_fragment_after_the_query(
     )?;
     let (_, request) = requested(&parties, RelayStateParam::absent())?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -322,7 +323,7 @@ fn a_relay_state_the_service_provider_did_not_send_is_rejected(
         RelayStateParam::try_from_option(Some("expected"))?,
     )?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -409,7 +410,7 @@ fn an_artifact_delivered_in_a_form_establishes_the_session(
     let relay_state = RelayStateParam::try_from_option(Some("form-state"))?;
     let (pending, request) = requested(&parties, relay_state)?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -440,7 +441,7 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
     let parties = parties()?;
     let (pending, request) = requested(&parties, RelayStateParam::absent())?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -478,7 +479,7 @@ fn an_unsolicited_artifact_response_establishes_the_session(
     let parties = unsolicited_parties()?;
     let relay_state = RelayStateParam::try_from_option(Some("https://sp.example.com/app"))?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
         subject(),
@@ -524,7 +525,7 @@ fn a_request_for_an_artifact_response_is_not_answered_over_post(
 fn a_missing_resolution_service_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let (_pending, request) = requested(&parties, RelayStateParam::absent())?;
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     assert!(matches!(
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
@@ -543,7 +544,7 @@ fn a_message_resolved_from_another_artifact_is_rejected() -> Result<(), Box<dyn 
 {
     let parties = parties()?;
     let (pending, request) = requested(&parties, RelayStateParam::absent())?;
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let respond = |issued: &mut IssuedArtifacts| {
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
@@ -579,7 +580,7 @@ fn a_resolved_response_is_not_accepted_at_a_post_consumer() -> Result<(), Box<dy
     )?;
     assert_eq!(started.pending.response_binding(), SsoResponseBinding::Post);
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
         subject(),
@@ -674,7 +675,7 @@ fn store_and_finish(
 #[test]
 fn a_signed_artifact_response_may_omit_destination() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let (pending, xml) = unsigned_response(&parties, &mut issued)?;
     let without_destination = xml.replace(&format!(" Destination=\"{SP_ACS_ARTIFACT}\""), "");
     assert!(!without_destination.contains("Destination="));
@@ -693,7 +694,7 @@ fn a_signed_artifact_response_may_omit_destination() -> Result<(), Box<dyn std::
 fn an_artifact_response_destination_must_be_the_assertion_consumer(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let (pending, xml) = unsigned_response(&parties, &mut issued)?;
     let elsewhere = xml.replace(
         &format!("Destination=\"{SP_ACS_ARTIFACT}\""),
@@ -711,7 +712,7 @@ fn an_artifact_response_destination_must_be_the_assertion_consumer(
 #[test]
 fn an_unsigned_artifact_response_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let (pending, xml) = unsigned_response(&parties, &mut issued)?;
 
     let result = store_and_finish(&parties, &pending, xml, &mut issued);
@@ -741,7 +742,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = other.initiate_sso_artifact(
         &parties.sp_metadata,
         subject(),
@@ -817,7 +818,7 @@ fn a_pending_artifact_login_survives_a_snapshot() -> Result<(), Box<dyn std::err
     assert_eq!(restored.response_binding(), SsoResponseBinding::Artifact);
     assert_eq!(restored.acs(), pending.acs());
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -839,7 +840,7 @@ fn an_unsolicited_artifact_is_not_sent_when_the_default_consumer_has_another_bin
             &parties.sp_metadata,
             subject(),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
-            &mut IssuedArtifacts::new(),
+            &mut IssuedArtifacts::expire_after(ARTIFACT_LIFETIME),
         ),
         Err(SamlError::Invalid(_))
     ));
@@ -866,7 +867,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &sp_metadata,
         subject(),
@@ -935,7 +936,7 @@ fn an_artifact_must_be_delivered_once_and_be_a_saml_v2_artifact(
 fn a_bearer_recipient_must_be_the_consumer_the_artifact_was_delivered_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let (pending, xml) = unsigned_response(&parties, &mut issued)?;
     let recipient = format!("Recipient=\"{SP_ACS_ARTIFACT}\"");
     assert_eq!(xml.matches(&recipient).count(), 1);
@@ -969,7 +970,7 @@ fn a_request_for_a_posted_response_is_not_answered_with_an_artifact(
         Some(SsoResponseBinding::Post)
     );
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     assert!(matches!(
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
@@ -1035,7 +1036,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
         encrypted_assertion_parties(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?))?;
     let (pending, request) = requested(&parties, RelayStateParam::absent())?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -1069,7 +1070,7 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
     )?;
     let (pending, request) = requested(&parties, RelayStateParam::absent())?;
 
-    let mut issued = IssuedArtifacts::new();
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,

@@ -198,32 +198,70 @@ impl IssuedMessage {
 
 /// Artifacts an identity provider has issued and not yet resolved.
 ///
-/// The caller owns eviction: [`Self::remove`] an artifact that will never
-/// resolve, for example after a deployment-selected timeout, to bound memory.
-#[derive(Debug, Default)]
+/// An artifact resolves only within its lifetime. Each issue drops the
+/// artifacts issued more than one lifetime ago, so memory holds only the
+/// artifacts of the last lifetime.
+#[derive(Debug)]
 pub struct IssuedArtifacts {
+    lifetime: Duration,
     entries: HashMap<String, IssuedEntry>,
+    oldest_first: VecDeque<(Instant, String)>,
 }
 
 #[derive(Debug)]
 struct IssuedEntry {
+    issued_at: Instant,
     service_provider: String,
     message_xml: String,
     web_browser_sso_response: bool,
 }
 
 impl IssuedArtifacts {
-    /// An empty set of outstanding artifacts.
-    pub fn new() -> Self {
-        Self::default()
+    /// Outstanding artifacts that each resolve for `lifetime` after issue.
+    ///
+    /// Choose the shortest `lifetime` in which the service provider receives
+    /// the artifact and sends `ArtifactResolve`. A later `ArtifactResolve`
+    /// gets Success without the message. The service provider's
+    /// [`ArtifactUses::enforce_single_use`] period should be longer. A zero
+    /// `lifetime` resolves nothing.
+    pub fn expire_after(lifetime: Duration) -> Self {
+        Self {
+            lifetime,
+            entries: HashMap::new(),
+            oldest_first: VecDeque::new(),
+        }
     }
 
     /// Discard `artifact` and its stored message without returning it.
     ///
-    /// Returns whether the artifact was outstanding. A later
-    /// `ArtifactResolve` for it gets Success without the message.
+    /// Returns whether the artifact was outstanding. A later `ArtifactResolve`
+    /// for it gets Success without the message.
     pub fn remove(&mut self, artifact: &Artifact) -> bool {
-        self.entries.remove(artifact.as_str()).is_some()
+        let now = Instant::now();
+        self.entries
+            .remove(artifact.as_str())
+            .is_some_and(|entry| now.saturating_duration_since(entry.issued_at) < self.lifetime)
+    }
+
+    fn insert(&mut self, artifact: String, entry: IssuedEntry) {
+        while self
+            .oldest_first
+            .front()
+            .is_some_and(|(at, _)| entry.issued_at.saturating_duration_since(*at) >= self.lifetime)
+        {
+            if let Some((_, expired)) = self.oldest_first.pop_front() {
+                self.entries.remove(&expired);
+            }
+        }
+        self.oldest_first
+            .push_back((entry.issued_at, artifact.clone()));
+        self.entries.insert(artifact, entry);
+    }
+
+    fn outstanding(&self, artifact: &str, now: Instant) -> Option<&IssuedEntry> {
+        self.entries
+            .get(artifact)
+            .filter(|entry| now.saturating_duration_since(entry.issued_at) < self.lifetime)
     }
 }
 
@@ -293,7 +331,8 @@ impl ArtifactUses {
 /// Why an understood `ArtifactResolve` did not include the protocol message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArtifactWithheld {
-    /// No outstanding artifact matched, including one already resolved.
+    /// No outstanding artifact matched, including one already resolved or
+    /// past its lifetime.
     NotOutstanding,
     /// The presenter is not the service provider the artifact was issued to.
     DifferentPresenter,
@@ -498,9 +537,10 @@ pub(crate) fn issue(
         ));
     }
     let artifact = Artifact::try_from_encoded(encoded)?;
-    issued.entries.insert(
+    issued.insert(
         artifact.as_str().to_string(),
         IssuedEntry {
+            issued_at: Instant::now(),
             service_provider: service_provider.entity_id().as_str().to_string(),
             message_xml: message.xml,
             web_browser_sso_response: message.web_browser_sso_response,
@@ -588,7 +628,7 @@ pub(crate) fn answer(
         return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
     }
     let message_xml = {
-        let Some(entry) = issued.entries.get(artifact.as_str()) else {
+        let Some(entry) = issued.outstanding(artifact.as_str(), Instant::now()) else {
             return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
         };
         if let Ok(service) = soap_service(metadata, artifact.endpoint_index()) {
@@ -917,6 +957,29 @@ mod tests {
         assert_eq!(blocked.values, HashSet::from(["0".to_string()]));
         assert_eq!(blocked.oldest_first.len(), 1);
         Ok(())
+    }
+
+    #[test]
+    fn issued_artifacts_resolve_and_are_kept_only_for_the_lifetime() {
+        let lifetime = Duration::from_secs(60);
+        let start = Instant::now();
+        let entry = |issued_at| IssuedEntry {
+            issued_at,
+            service_provider: "sp".into(),
+            message_xml: String::new(),
+            web_browser_sso_response: false,
+        };
+        let mut issued = IssuedArtifacts::expire_after(lifetime);
+        for n in 0u32..1_000 {
+            issued.insert(n.to_string(), entry(start));
+        }
+        let before = start + lifetime - Duration::from_secs(1);
+        assert!(issued.outstanding("0", before).is_some());
+        assert!(issued.outstanding("0", start + lifetime).is_none());
+
+        issued.insert("new".into(), entry(start + lifetime));
+        assert_eq!(issued.entries.keys().collect::<Vec<_>>(), ["new"]);
+        assert_eq!(issued.oldest_first.len(), 1);
     }
 
     fn hex(bytes: &[u8]) -> String {

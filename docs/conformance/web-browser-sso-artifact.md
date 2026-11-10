@@ -30,7 +30,7 @@ this actor.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| The response is stored while its artifact is outstanding | Identity provider | Generate Response | Bindings §3.6.2: the artifact issuer maintains state while the artifact is pending. The caller owns `IssuedArtifacts` |
+| The response is stored while its artifact is outstanding | Identity provider | Generate Response | Bindings §3.6.2: the artifact issuer maintains state while the artifact is pending. The caller owns `IssuedArtifacts`, which keeps the response for the lifetime the caller chooses. Core §3.5.3 asks for the shortest practical lifetime; that row is in [Artifact resolution](artifact-resolution.md) |
 | Publish at least one `ArtifactResolutionService` | Identity provider | IdP metadata | Mandatory. Profiles §4.1.6. Errata 05 E2 recommends indexed endpoints. A delivery whose index has no SOAP endpoint in local metadata is `SamlError::MissingMetadata`, and nothing is stored |
 | URL encoding places the URL-encoded artifact in a `SAMLart` query parameter | Identity provider | Deliver artifact | Mandatory when that encoding is used. Bindings §3.6.3.2. `ArtifactDelivery::redirect`. The parameter follows any query the assertion consumer URL already has |
 | The URL-encoded artifact is returned with HTTP 302 or 303 | Identity provider | HTTP | Mandatory. Bindings §3.6.5. `Outbound::redirect_url` is the `Location`. The deployment sends the status |
