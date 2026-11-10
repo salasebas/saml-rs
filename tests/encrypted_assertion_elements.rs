@@ -21,9 +21,9 @@ use saml_rs::{
     AttributeNameFormat, AttributeValue, Attributes, AudienceValidationPolicy, AuthnRequest,
     BrowserInput, CertificatePem, Credentials, DecryptionCredential, EntityId, FormField,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoResponseBinding, SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
+    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoResponse, SsoResponseBinding, SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";

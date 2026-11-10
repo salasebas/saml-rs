@@ -148,10 +148,10 @@ pub struct Credentials {
     ///
     /// Each certificate is published in metadata after
     /// [`Self::encryption_certificate`], so a peer may encrypt for any of
-    /// them. Use it to roll over the encryption key: add the next key here,
-    /// publish both, then make it the [`Self::decryption_key`] and drop the
-    /// old one once every peer encrypts for the new certificate. Requires
-    /// [`Self::decryption_key`].
+    /// them. To roll over the encryption key, add the next key here. Then
+    /// make it the [`Self::decryption_key`] and [`Self::encryption_certificate`]
+    /// and move the old key here. Drop the old key once every peer has
+    /// refreshed this entity's metadata. Requires [`Self::decryption_key`].
     pub additional_decryption_keys: Vec<DecryptionCredential>,
 }
 
