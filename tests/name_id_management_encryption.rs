@@ -41,8 +41,8 @@ const SP_DECRYPTION_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypte
 const SP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const IDP_DECRYPTION_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const IDP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
-const IDP_NEXT_DECRYPTION_KEY: &str = include_str!("fixtures/key/idp/privkey2.pem");
-const IDP_NEXT_ENCRYPTION_CERT: &str = include_str!("fixtures/key/idp/cert2.cer");
+const IDP_NEXT_DECRYPTION_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const IDP_NEXT_ENCRYPTION_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     Credentials {

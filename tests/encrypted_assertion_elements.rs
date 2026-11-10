@@ -21,9 +21,9 @@ use saml_rs::{
     AttributeNameFormat, AttributeValue, Attributes, AudienceValidationPolicy, AuthnRequest,
     BrowserInput, CertificatePem, Credentials, DecryptionCredential, EntityId, FormField,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, SsoResponseBinding, SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
+    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
+    SsoResponseBinding, SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -34,8 +34,8 @@ const PERSISTENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/privkey2.pem");
-const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert2.cer");
+const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
 
 fn credentials() -> Credentials {

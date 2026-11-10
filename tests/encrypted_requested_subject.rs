@@ -37,8 +37,8 @@ const RSA_OAEP: &str = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/privkey2.pem");
-const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert2.cer");
+const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {

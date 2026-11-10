@@ -111,6 +111,26 @@ mod tests {
 
     #[test]
     #[cfg(feature = "crypto-rustcrypto")]
+    fn loads_each_additional_decryption_key_with_its_own_passphrase(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::config::{CertificatePem, Passphrase, PrivateKeyPem};
+
+        let keys = load_decryption_keys(
+            SP_PRIVKEY,
+            None,
+            &[DecryptionCredential {
+                certificate: CertificatePem::new(SP_CERT),
+                key: PrivateKeyPem::new(SP_PRIVKEY_ENC),
+                passphrase: Some(Passphrase::new(SP_PASS)),
+            }],
+        )?;
+        assert_eq!(keys.len(), 2);
+        assert!(keys.iter().all(Key::has_private_key));
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "crypto-rustcrypto")]
     fn loads_encrypted_private_key_with_passphrase() -> Result<(), Box<dyn std::error::Error>> {
         let key = load_private_key(SP_PRIVKEY_ENC, Some(SP_PASS))?;
         assert!(key.has_private_key());

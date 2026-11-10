@@ -32,8 +32,8 @@ const PRINCIPAL: &str = "alice-persistent-id";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/privkey2.pem");
-const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert2.cer");
+const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 
 const BINDINGS: [LogoutBinding; 4] = [
     LogoutBinding::Post,
