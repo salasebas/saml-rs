@@ -14,7 +14,6 @@ use saml_rs::crypto::{
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::crypto::{decrypt_assertion, AssertionDecryptionOptions};
-#[cfg(any(feature = "crypto-aws-lc", feature = "crypto-fips"))]
 use saml_rs::SamlError;
 use saml_rs::{initialize_crypto_provider, CryptoFipsStatus, CryptoProvider};
 
@@ -25,6 +24,15 @@ const RESPONSE_SIGNED_SHA1: &str = include_str!("fixtures/misc/response_signed.x
 const RSA_SHA1_OCTETS: &str = "SAMLRequest=provider-matrix";
 // PKCS#1 v1.5 RSA-SHA1 over RSA_SHA1_OCTETS with provider_matrix_privkey.
 const RSA_SHA1_SIGNATURE: &str = "C6V+Aylkp2rFZJEZrpZrYFZDl2xn8kLuuSZcsxZ6ClDkYUBADwl3cVdDstU0i1Kx9CV56m3La/iT463DoKASWY+Jg31NU2741dgH6q3vuWLnUOlKTWHCHrbGOBdpU1DzZw2Ab9CA2KOg7KPlOFvJZMfY2IfdznPyQk4GNr54ij/HZWTZbASdBca6yGONqbsyU2f+IdKAYd+qDOgXn7WZQ3LkCNY1tOTGSoGmRv1FRCfJ4MP2FW2MMSueuS8NLPeW4tsgZ7pIK5Vx2HGeKNz4QtEOlMkOnWNJb6o9MgdywQ0sxbN+vI/m2O1qZz4G/JuoX1NXj+hoQ7UJ2UejcdiscA==";
+
+#[cfg(any(feature = "crypto-aws-lc", feature = "crypto-fips"))]
+const RSA_512_PRIVATE_KEY: &str = include_str!("fixtures/key/rsa512/privkey.pkcs8.pem");
+const RSA_512_CERTIFICATE: &str = include_str!("fixtures/key/rsa512/cert.pem");
+const RSA_512_RESPONSE_SIGNED: &str = include_str!("fixtures/key/rsa512/response_signed.xml");
+const RSA_512_OCTETS: &str = "SAMLRequest=rsa-512";
+// PKCS#1 v1.5 RSA-SHA256 over RSA_512_OCTETS with rsa512/privkey.pkcs8.pem.
+const RSA_512_SIGNATURE: &str =
+    "A34mA3xCl9z1j77oDAk2A+o9JTAgYpZnnpw2uJlFlP+cGf8xrpsW/nseSnqMyMJxCjh/OWh3YDb1DsOra4jOyA==";
 
 #[test]
 fn provider_initialization_reports_selected_provider_and_attestation(
@@ -173,6 +181,39 @@ fn fips_provider_rejects_verifying_rsa_sha1() -> Result<(), Box<dyn std::error::
     ));
     assert!(matches!(
         verify_signature(RESPONSE_SIGNED_SHA1, &[CERTIFICATE.to_string()]),
+        Err(SamlError::Crypto(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn providers_reject_a_512_bit_rsa_certificate_for_signature_verification(
+) -> Result<(), Box<dyn std::error::Error>> {
+    initialize_crypto_provider()?;
+
+    assert!(matches!(
+        verify_message_signature(
+            RSA_512_OCTETS,
+            RSA_512_SIGNATURE,
+            RSA_512_CERTIFICATE,
+            RSA_SHA256,
+        ),
+        Err(SamlError::Crypto(_))
+    ));
+    assert!(matches!(
+        verify_signature(RSA_512_RESPONSE_SIGNED, &[RSA_512_CERTIFICATE.to_string()]),
+        Err(SamlError::Crypto(_))
+    ));
+    Ok(())
+}
+
+#[cfg(any(feature = "crypto-aws-lc", feature = "crypto-fips"))]
+#[test]
+fn aws_lc_providers_reject_a_512_bit_rsa_private_key() -> Result<(), Box<dyn std::error::Error>> {
+    initialize_crypto_provider()?;
+
+    assert!(matches!(
+        load_private_key(RSA_512_PRIVATE_KEY, None),
         Err(SamlError::Crypto(_))
     ));
     Ok(())

@@ -10,7 +10,7 @@ cargo install --locked cargo-nextest
 ```
 
 All published workspace packages require Rust 1.88. The default
-`crypto-bergshamra` feature uses `bergshamra` 0.11 with `kryptering` 0.7 and
+`crypto-bergshamra` feature uses `bergshamra` 0.12 with `kryptering` 0.7 and
 preserves the RustCrypto-backed defaults.
 
 ## How to run the checks

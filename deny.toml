@@ -1,8 +1,3 @@
-[advisories]
-ignore = [
-    { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 is required by bergshamra-keys 0.11.2 for RSA key parsing and encoding; RSA private-key operations run in kryptering on patched rsa 0.10, and saml-rs still gates software RSA key-transport decryption by default." },
-]
-
 [licenses]
 allow = [
     "Apache-2.0",
