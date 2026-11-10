@@ -94,13 +94,17 @@ fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<
     use crate::crypto::enc::{
         decrypt_root_child, AssertionDecryptionOptions, MANAGED_NAME_ID, NEW_ID,
     };
-    use crate::crypto::keys::load_private_key;
+    use crate::crypto::keys::load_decryption_keys;
 
     let key_pem = setting
         .enc_private_key
         .as_deref()
         .ok_or_else(|| SamlError::MissingKey("decryption_key".into()))?;
-    let key = load_private_key(key_pem, setting.enc_private_key_pass.as_deref())?;
+    let keys = load_decryption_keys(
+        key_pem,
+        setting.enc_private_key_pass.as_deref(),
+        &setting.additional_decryption_keys,
+    )?;
     let kind = match child {
         EncryptedChild::EncryptedId => MANAGED_NAME_ID,
         EncryptedChild::NewEncryptedId => NEW_ID,
@@ -108,7 +112,7 @@ fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<
     decrypt_root_child(
         xml,
         kind,
-        &key,
+        &keys,
         AssertionDecryptionOptions {
             allow_insecure_software_rsa_key_transport_decryption: setting
                 .allow_insecure_software_rsa_key_transport_decryption,

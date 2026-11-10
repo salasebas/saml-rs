@@ -1,7 +1,8 @@
 use crate::browser::{AcsEndpoint, BrowserInput, SsoResponseBinding};
 use crate::config::{
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, EntityId, HmacSecret,
-    IdpConfig, IdpDescriptor, ManageNameIdService, NameIdFormat, SpConfig, SpDescriptor,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials, EntityId,
+    HmacSecret, IdpConfig, IdpDescriptor, ManageNameIdService, NameIdFormat, SpConfig,
+    SpDescriptor,
 };
 use crate::constants::Binding;
 use crate::entity::{EntitySetting, User};
@@ -21,7 +22,7 @@ pub(super) fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
     RawSpMetadataConfig {
         entity_id: config.entity_id.as_str().to_string(),
         signing_certs: certificates(&config.credentials.signing_certificate),
-        encrypt_certs: certificates(&config.credentials.encryption_certificate),
+        encrypt_certs: encryption_certificates(&config.credentials),
         authn_requests_signed: matches!(
             config.validation.authn_requests,
             AuthnRequestSigningPolicy::Sign
@@ -58,7 +59,7 @@ pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfi
     RawIdpMetadataConfig {
         entity_id: config.entity_id.as_str().to_string(),
         signing_certs: certificates(&config.credentials.signing_certificate),
-        encrypt_certs: certificates(&config.credentials.encryption_certificate),
+        encrypt_certs: encryption_certificates(&config.credentials),
         want_authn_requests_signed: matches!(
             config.validation.authn_requests,
             AuthnRequestValidationPolicy::RequireSigned
@@ -101,6 +102,20 @@ fn certificates(certificate: &Option<CertificatePem>) -> Vec<String> {
         .as_ref()
         .map(|certificate| vec![certificate.as_str().to_string()])
         .unwrap_or_default()
+}
+
+fn encryption_certificates(credentials: &Credentials) -> Vec<String> {
+    credentials
+        .encryption_certificate
+        .iter()
+        .chain(
+            credentials
+                .additional_decryption_keys
+                .iter()
+                .map(|credential| &credential.certificate),
+        )
+        .map(|certificate| certificate.as_str().to_string())
+        .collect()
 }
 
 fn name_id_format_uris(formats: &[NameIdFormat]) -> Vec<String> {

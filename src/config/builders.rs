@@ -483,7 +483,9 @@ fn validate_common_credentials(credentials: &Credentials) -> Result<(), SamlErro
     if credentials.signing_key_passphrase.is_some() && credentials.signing_key.is_none() {
         return Err(SamlError::MissingKey("signing_key".into()));
     }
-    if credentials.decryption_key_passphrase.is_some() && credentials.decryption_key.is_none() {
+    let decryption_key_needed = credentials.decryption_key_passphrase.is_some()
+        || !credentials.additional_decryption_keys.is_empty();
+    if decryption_key_needed && credentials.decryption_key.is_none() {
         return Err(SamlError::MissingKey("decryption_key".into()));
     }
     Ok(())
@@ -693,6 +695,9 @@ fn apply_common_settings(
         .decryption_key_passphrase
         .as_ref()
         .map(|passphrase| passphrase.as_str().to_string());
+    setting
+        .additional_decryption_keys
+        .clone_from(&credentials.additional_decryption_keys);
     setting.clock_drifts = xml.clock_drifts;
     setting.redirect_inflate_max_bytes = xml.redirect_inflate_max_bytes;
     setting.xml_limits = xml.limits;

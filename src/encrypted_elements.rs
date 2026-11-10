@@ -82,11 +82,11 @@ pub(crate) fn decrypt_verified_assertion_elements(
     use crate::context::is_valid_xml_with_limits;
     use crate::crypto::{
         enc::{decrypt_assertion_elements, AssertionDecryptionOptions},
-        keys::load_private_key,
+        keys::load_decryption_keys,
     };
     use crate::xml::validate_protocol_profile;
 
-    let key = load_private_key(key_pem, opts.decrypt_key_pass)?;
+    let keys = load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?;
     let options = AssertionDecryptionOptions {
         allow_insecure_software_rsa_key_transport_decryption: opts
             .allow_insecure_software_rsa_key_transport_decryption,
@@ -94,7 +94,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
     };
     let content = decrypt_assertion_elements(
         saml_content,
-        &key,
+        &keys,
         options,
         opts.xml_limits,
         opts.assertion_elements,
@@ -226,7 +226,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
 ) -> Result<Option<String>, SamlError> {
     use crate::crypto::{
         enc::{decrypt_assertions_with_limits, AssertionDecryptionOptions},
-        keys::load_private_key,
+        keys::load_decryption_keys,
     };
 
     let key_pem = match opts.received_encrypted_elements {
@@ -240,7 +240,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
     };
     let (content, _) = decrypt_assertions_with_limits(
         xml,
-        &load_private_key(key_pem, opts.decrypt_key_pass)?,
+        &load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?,
         AssertionDecryptionOptions {
             allow_insecure_software_rsa_key_transport_decryption: opts
                 .allow_insecure_software_rsa_key_transport_decryption,

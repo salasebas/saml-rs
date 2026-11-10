@@ -18,11 +18,11 @@ use saml_rs::crypto::{
 };
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    PrivateKeyPem, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
-    XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, DecryptionCredential,
+    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
+    NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RequestedSubject,
+    RequestedSubjectIdentifier, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSso, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -37,6 +37,9 @@ const RSA_OAEP: &str = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/privkey2.pem");
+const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert2.cer");
+const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
@@ -60,16 +63,27 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 fn idp_with(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
+    idp_with_credentials(encryption, idp_credentials())
+}
+
+fn idp_credentials() -> Credentials {
+    Credentials {
+        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
+        signing_certificate: Some(CertificatePem::new(CERT)),
+        encryption_certificate: Some(CertificatePem::new(CERT)),
+        decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
+        ..Credentials::default()
+    }
+}
+
+fn idp_with_credentials(
+    encryption: XmlEncryptionPolicy,
+    credentials: Credentials,
+) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(Credentials {
-                signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-                signing_certificate: Some(CertificatePem::new(CERT)),
-                encryption_certificate: Some(CertificatePem::new(CERT)),
-                decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-                ..Credentials::default()
-            })
+            .credentials(credentials)
             .validation(IdpValidationPolicy::recommended())
             .xml(XmlPolicy {
                 encryption,
@@ -88,6 +102,14 @@ enum Signing {
 /// An `<EncryptedID>` that carries `<NameID>` for the identity provider's
 /// encryption certificate.
 fn encrypted_id(data_alg: &str) -> Result<String, Box<dyn std::error::Error>> {
+    encrypted_id_for(CERT, data_alg)
+}
+
+/// An `<EncryptedID>` that carries `<NameID>` for `encryption_cert`.
+fn encrypted_id_for(
+    encryption_cert: &str,
+    data_alg: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
     let name_id = format!(
         "<saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Format=\"{EMAIL_FORMAT}\">alice@example.com</saml:NameID>"
     );
@@ -95,7 +117,7 @@ fn encrypted_id(data_alg: &str) -> Result<String, Box<dyn std::error::Error>> {
         "<xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\" Type=\"http://www.w3.org/2001/04/xmlenc#Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{RSA_OAEP}\"/><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>"
     );
     let mut manager = KeysManager::new();
-    manager.add_key(load_certificate(CERT)?);
+    manager.add_key(load_certificate(encryption_cert)?);
     let encrypted_data = encrypt(&EncContext::new(manager), &template, name_id.as_bytes())?;
     Ok(format!(
         "<saml:EncryptedID>{encrypted_data}</saml:EncryptedID>"
@@ -198,6 +220,33 @@ fn unsigned_request_encrypted_id_is_decrypted_only_with_gcm(
     );
     assert_eq!(
         received_identifier(&encrypted_id(AES256_CBC)?, Signing::Unsigned)?,
+        RequestedSubjectIdentifier::EncryptedId
+    );
+    Ok(())
+}
+
+#[test]
+fn encrypted_id_made_for_either_published_certificate_is_the_requested_name_id(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = idp_with_credentials(
+        XmlEncryptionPolicy::default()
+            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+        Credentials {
+            additional_decryption_keys: vec![DecryptionCredential {
+                certificate: CertificatePem::new(NEXT_CERT),
+                key: PrivateKeyPem::new(NEXT_PRIVKEY),
+                passphrase: None,
+            }],
+            ..idp_credentials()
+        },
+    )?;
+    for encryption_cert in [CERT, NEXT_CERT] {
+        let encrypted = encrypted_id_for(encryption_cert, AES128_GCM)?;
+        assert_eq!(received_by(&idp, &encrypted, Signing::Signed)?, alice());
+    }
+    let encrypted = encrypted_id_for(UNKNOWN_CERT, AES128_GCM)?;
+    assert_eq!(
+        received_by(&idp, &encrypted, Signing::Signed)?,
         RequestedSubjectIdentifier::EncryptedId
     );
     Ok(())

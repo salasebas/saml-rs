@@ -53,6 +53,7 @@ fn decrypted(
         &flow.saml_content,
         key_pem,
         setting.enc_private_key_pass.as_deref(),
+        &setting.additional_decryption_keys,
         AssertionDecryptionOptions {
             allow_insecure_software_rsa_key_transport_decryption: setting
                 .allow_insecure_software_rsa_key_transport_decryption,

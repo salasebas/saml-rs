@@ -15,14 +15,14 @@ use saml_rs::binding::{append_signature, build_redirect_octet};
 use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserType};
 use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
 use saml_rs::{
-    AcsEndpoint, BrowserInput, CertificatePem, Credentials, EndpointUrl, EntityId,
-    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, ManageNameIdRequest,
-    ManageNameIdResponse, ManageNameIdService, MessageConfidentiality, MessageIntegrity,
-    MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound,
-    PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement, ReceivedNameIdManagement,
-    ReplayPolicy, RespondNameIdManagement, Saml, SamlError, SamlValidationContext, SoapChannel,
-    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartNameIdManagement, XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, BrowserInput, CertificatePem, Credentials, DecryptionCredential, EndpointUrl,
+    EntityId, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MessageConfidentiality,
+    MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
+    NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
+    ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement, Saml, SamlError,
+    SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, XmlEncryptionPolicy, XmlPolicy,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -41,6 +41,8 @@ const SP_DECRYPTION_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypte
 const SP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const IDP_DECRYPTION_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const IDP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+const IDP_NEXT_DECRYPTION_KEY: &str = include_str!("fixtures/key/idp/privkey2.pem");
+const IDP_NEXT_ENCRYPTION_CERT: &str = include_str!("fixtures/key/idp/cert2.cer");
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     Credentials {
@@ -86,6 +88,10 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
+    idp_with(credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY))
+}
+
+fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
@@ -95,7 +101,7 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
             .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
                 IDP_MANAGE_SOAP,
             )?))
-            .credentials(credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY))
+            .credentials(credentials)
             .validation(IdpValidationPolicy::recommended())
             .xml(xml())
             .build()?,
@@ -303,6 +309,46 @@ fn service_provider_encrypts_the_identifier_and_new_value_for_the_identity_provi
         response_input(&response)?,
         validation(),
     )?;
+    Ok(())
+}
+
+#[test]
+fn identity_provider_decrypts_identifiers_made_for_either_published_certificate() -> TestResult {
+    let sp = sp()?;
+    let sp_peer = sp_descriptor(&sp)?;
+    let idp = idp_with(Credentials {
+        additional_decryption_keys: vec![DecryptionCredential {
+            certificate: CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
+            key: PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
+            passphrase: None,
+        }],
+        ..credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY)
+    })?;
+    for encryption_cert in [IDP_ENCRYPTION_CERT, IDP_NEXT_ENCRYPTION_CERT] {
+        let published = idp_with(credentials(encryption_cert, IDP_DECRYPTION_KEY))?;
+        let started = sp.start_name_id_management_redirect(
+            &idp_descriptor(&published)?,
+            &alice(),
+            &NameIdChange::NewId("sp-alias".into()),
+            encrypted(),
+        )?;
+        encrypted_identifier_and_new_value(&redirect_message_xml(&started.outbound)?)?;
+
+        let ReceivedNameIdManagement::Request(request) = idp.receive_name_id_management_redirect(
+            &sp_peer,
+            request_input(&started.outbound)?,
+            ReceiveNameIdManagement::redirect(),
+            validation(),
+        )?
+        else {
+            return Err("the encrypted request was refused".into());
+        };
+        assert_eq!(request.message().name_id(), &alice());
+        assert_eq!(
+            request.message().change(),
+            &NameIdChange::NewId("sp-alias".into())
+        );
+    }
     Ok(())
 }
 

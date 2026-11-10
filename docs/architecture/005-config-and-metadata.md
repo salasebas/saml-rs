@@ -107,6 +107,13 @@ pub struct Credentials {
     encryption_certificate: Option<CertificatePem>,
     decryption_key: Option<PrivateKeyPem>,
     decryption_key_passphrase: Option<Passphrase>,
+    additional_decryption_keys: Vec<DecryptionCredential>,
+}
+
+pub struct DecryptionCredential {
+    certificate: CertificatePem,
+    key: PrivateKeyPem,
+    passphrase: Option<Passphrase>,
 }
 
 pub struct PrivateKeyPem(String);
@@ -118,6 +125,10 @@ pub struct HmacSecret(Vec<u8>);
 Rules:
 
 - Secret-bearing types have redacted `Debug`.
+- Decryption tries `decryption_key`, then each of
+  `additional_decryption_keys` in order. Metadata publishes
+  `encryption_certificate`, then the certificate of each additional key, as
+  `<KeyDescriptor use="encryption">`.
 - Credential strings stay behind typed wrappers, with `as_str()` available as a
   raw compatibility and migration escape hatch.
 - `EntitySetting` with raw strings stays a raw-compatibility escape, not the

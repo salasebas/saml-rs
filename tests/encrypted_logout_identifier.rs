@@ -14,13 +14,13 @@ use std::time::SystemTime;
 use saml_rs::binding::{base64_decode, deflate_raw_decode};
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutBinding,
-    LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
-    NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy,
-    RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSlo, StartSso,
-    Subject, XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, DecryptionCredential,
+    EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem,
+    Received, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
+    SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoResponse, StartSlo, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -32,6 +32,8 @@ const PRINCIPAL: &str = "alice-persistent-id";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/privkey2.pem");
+const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert2.cer");
 
 const BINDINGS: [LogoutBinding; 4] = [
     LogoutBinding::Post,
@@ -99,6 +101,14 @@ fn idp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
 ) -> Result<Saml<saml_rs::Idp>, SamlError> {
+    idp_with_credentials(logout, encryption, credentials())
+}
+
+fn idp_with_credentials(
+    logout: LogoutPolicy,
+    encryption: XmlEncryptionPolicy,
+    credentials: Credentials,
+) -> Result<Saml<saml_rs::Idp>, SamlError> {
     let mut builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO)?);
     for endpoint in slo_endpoints("idp.example.com")? {
@@ -106,7 +116,7 @@ fn idp_with(
     }
     Saml::idp(
         builder
-            .credentials(credentials())
+            .credentials(credentials)
             .validation(IdpValidationPolicy {
                 logout,
                 ..IdpValidationPolicy::recommended()
@@ -350,6 +360,52 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
             };
             assert!(completed.response().is_some(), "{initiator:?} {binding:?}");
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certificate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rolling = Credentials {
+        additional_decryption_keys: vec![DecryptionCredential {
+            certificate: CertificatePem::new(NEXT_CERT),
+            key: PrivateKeyPem::new(NEXT_PRIVKEY),
+            passphrase: None,
+        }],
+        ..credentials()
+    };
+    for encryption_cert in [CERT, NEXT_CERT] {
+        let published = idp_with_credentials(
+            LogoutPolicy::recommended(),
+            XmlEncryptionPolicy::default(),
+            Credentials {
+                encryption_certificate: Some(CertificatePem::new(encryption_cert)),
+                ..credentials()
+            },
+        )?;
+        let parties = Parties {
+            idp: idp_with_credentials(
+                LogoutPolicy::recommended(),
+                XmlEncryptionPolicy::default(),
+                rolling.clone(),
+            )?,
+            ..parties_with(
+                sp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
+                published,
+            )?
+        };
+        let options =
+            StartSlo::post().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
+        let sent = start(&parties, Initiator::Sp, options)?;
+        assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));
+
+        let received = receive(
+            &parties,
+            Initiator::Sp,
+            request_input(&sent.outbound, LogoutBinding::Post)?,
+        )?;
+        assert_eq!(received.message().name_id(), Some(&principal()));
     }
     Ok(())
 }

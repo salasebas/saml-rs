@@ -6,8 +6,8 @@ use std::{str::FromStr, time::Duration};
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AudienceValidationPolicy,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
-    DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting, IdpConfig,
-    IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
+    DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm, EntityId, EntitySetting,
+    IdpConfig, IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
     LogoutSignaturePolicy, NameIdCreationPolicy, Passphrase, PrivateKeyPem,
     ResponseSignaturePolicy, SamlError, SignatureAlgorithm, SpConfig, SpMetadataConfig,
     SpValidationPolicy, SsoEndpoint, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
@@ -641,6 +641,28 @@ fn sp_builder_rejects_decryption_passphrase_without_decryption_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let credentials = Credentials {
         decryption_key_passphrase: Some(Passphrase::new("test passphrase")),
+        ..Credentials::default()
+    };
+
+    let result = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+        .validation(SpValidationPolicy::compatibility())
+        .credentials(credentials)
+        .build();
+
+    assert_missing_key(result, "decryption_key");
+    Ok(())
+}
+
+#[test]
+fn sp_builder_rejects_additional_decryption_keys_without_decryption_key(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let credentials = Credentials {
+        additional_decryption_keys: vec![DecryptionCredential {
+            certificate: CertificatePem::new("certificate"),
+            key: PrivateKeyPem::new("key"),
+            passphrase: None,
+        }],
         ..Credentials::default()
     };
 
