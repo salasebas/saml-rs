@@ -496,12 +496,15 @@ fn outbound_logout_response_rejects_invalid_destination_or_consent_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let children = format!("{}{}", issuer("", ISSUER), success_status());
     expect_profile_error(&response_xml(RESPONSE_ID, Some("relative/path"), &children))?;
-    expect_profile_error(&response_xml_with_attributes(
-        RESPONSE_ID,
-        Some(DESTINATION),
-        r#" Consent="relative consent""#,
-        &children,
-    ))
+    for consent in ["relative consent", "urn:example:%zz"] {
+        expect_profile_error(&response_xml_with_attributes(
+            RESPONSE_ID,
+            Some(DESTINATION),
+            &format!(r#" Consent="{consent}""#),
+            &children,
+        ))?;
+    }
+    Ok(())
 }
 
 #[test]

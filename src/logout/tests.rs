@@ -905,6 +905,36 @@ fn custom_logout_response_rejects_root_signature_before_each_supported_binding(
 }
 
 #[test]
+fn logout_response_rejects_a_peer_slo_location_that_is_not_a_url(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sender = idp()?;
+    for location in ["http://", "https://sp:70000/slo"] {
+        let target = ServiceProvider::from_config(
+            &SpMetadataConfig {
+                entity_id: "https://sp.example.com/metadata".into(),
+                single_logout_service: vec![Endpoint::new(Binding::Redirect, location)],
+                assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+                ..Default::default()
+            },
+            EntitySetting::default(),
+        )?;
+        assert_protocol_profile_error(
+            create_logout_response(
+                &sender.setting,
+                &sender.metadata,
+                &target.metadata,
+                Binding::Redirect,
+                Some("_req1"),
+                None,
+                false,
+            ),
+            "LogoutResponse Destination must be",
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
 fn custom_logout_response_rejects_doctype_before_profile_validation(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sender = idp()?;
