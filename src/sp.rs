@@ -1,5 +1,8 @@
 //! SAML Service Provider entity.
 
+use crate::assertion_acceptance::{
+    reject_unsolicited_bearer_in_response_to, UnsolicitedInResponseTo,
+};
 use crate::binding::{base64_encode, build_redirect_url};
 use crate::constants::{namespace, Binding, CertUse, ParserType};
 use crate::entity::{
@@ -88,7 +91,7 @@ impl WebBrowserSsoProducer {
 
 #[derive(Debug, Clone, Copy)]
 enum LoginResponseCorrelation<'a> {
-    Unsolicited,
+    Unsolicited(UnsolicitedInResponseTo),
     MessageId(&'a str),
 }
 
@@ -575,7 +578,7 @@ impl ServiceProvider {
             idp,
             binding,
             request,
-            LoginResponseCorrelation::Unsolicited,
+            LoginResponseCorrelation::Unsolicited(UnsolicitedInResponseTo::RejectNonEmpty),
             LoginResponseParseOptions::compatibility(self.setting.clock_drifts),
         )
     }
@@ -591,7 +594,7 @@ impl ServiceProvider {
             idp,
             binding,
             request,
-            LoginResponseCorrelation::Unsolicited,
+            LoginResponseCorrelation::Unsolicited(UnsolicitedInResponseTo::RejectPresent),
             options,
         )
     }
@@ -686,7 +689,7 @@ impl ServiceProvider {
         let audience = self.entity_id();
         let expected_in_response_to = match correlation {
             LoginResponseCorrelation::MessageId(request_id) => Some(request_id),
-            LoginResponseCorrelation::Unsolicited => None,
+            LoginResponseCorrelation::Unsolicited(_) => None,
         };
         let recipient = match options.expected_recipient {
             Some(recipient) => recipient.to_string(),
@@ -740,21 +743,15 @@ impl ServiceProvider {
             },
             options.signed_destination,
         )?;
-        if matches!(correlation, LoginResponseCorrelation::Unsolicited)
-            && result
-                .extract()
-                .get_str("response.inResponseTo")
-                .is_some_and(|actual| !actual.is_empty())
-        {
-            return Err(SamlError::in_response_to_mismatch(
-                None,
-                result.extract().get_str("response.inResponseTo"),
-            ));
-        }
-        if matches!(correlation, LoginResponseCorrelation::Unsolicited) {
-            crate::assertion_acceptance::reject_unsolicited_bearer_in_response_to(
+        if let LoginResponseCorrelation::Unsolicited(rule) = correlation {
+            let in_response_to = result.extract().get_str("response.inResponseTo");
+            if in_response_to.is_some_and(|actual| rule.rejects(actual)) {
+                return Err(SamlError::in_response_to_mismatch(None, in_response_to));
+            }
+            reject_unsolicited_bearer_in_response_to(
                 result.saml_content(),
                 self.setting.xml_limits,
+                rule,
             )?;
         }
         Ok(result)
