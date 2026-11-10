@@ -587,7 +587,7 @@ mod tests {
     #[test]
     fn soap_body_must_contain_one_element() -> Result<(), String> {
         let xml = format!(
-            "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"{SOAP_ENVELOPE_NS}\"><SOAP-ENV:Body><samlp:AuthnRequest ID=\"_1\"></samlp:AuthnRequest><samlp:Response ID=\"_2\"></samlp:Response></SOAP-ENV:Body></SOAP-ENV:Envelope>"
+            "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"{SOAP_ENVELOPE_NS}\" xmlns:samlp=\"{PROTOCOL_NS}\"><SOAP-ENV:Body><samlp:AuthnRequest ID=\"_1\"></samlp:AuthnRequest><samlp:Response ID=\"_2\"></samlp:Response></SOAP-ENV:Body></SOAP-ENV:Envelope>"
         );
         match read_soap_body(&xml, "AuthnRequest", XmlLimits::default()) {
             Err(SamlError::ProtocolProfile(_)) => Ok(()),
@@ -616,7 +616,7 @@ mod tests {
     #[test]
     fn a_non_soap_body_is_rejected() -> Result<(), String> {
         let xml = format!(
-            "<!-- {SOAP_ENVELOPE_NS} --><SOAP-ENV:Envelope xmlns:SOAP-ENV=\"{SOAP_ENVELOPE_NS}\" xmlns:other=\"urn:example:other\"><other:Body><samlp:AuthnRequest ID=\"_1\"></samlp:AuthnRequest></other:Body></SOAP-ENV:Envelope>"
+            "<!-- {SOAP_ENVELOPE_NS} --><SOAP-ENV:Envelope xmlns:SOAP-ENV=\"{SOAP_ENVELOPE_NS}\" xmlns:other=\"urn:example:other\" xmlns:samlp=\"{PROTOCOL_NS}\"><other:Body><samlp:AuthnRequest ID=\"_1\"></samlp:AuthnRequest></other:Body></SOAP-ENV:Envelope>"
         );
         match read_soap_body(&xml, "AuthnRequest", XmlLimits::default()) {
             Err(SamlError::ProtocolProfile(_)) => Ok(()),

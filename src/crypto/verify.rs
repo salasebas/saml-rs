@@ -2029,7 +2029,10 @@ mod tests {
     #[test]
     fn no_signature_returns_false() -> Result<(), Box<dyn std::error::Error>> {
         // a document without any Signature element verifies to (false, None)
-        let (verified, content) = verify_signature("<samlp:Response>x</samlp:Response>", &[])?;
+        let (verified, content) = verify_signature(
+            "<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\">x</samlp:Response>",
+            &[],
+        )?;
         assert!(!verified);
         assert!(content.is_none());
         // keep the extractor import exercised

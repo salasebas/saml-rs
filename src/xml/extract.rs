@@ -237,6 +237,10 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
 }
 
 /// Extract `fields` from `xml`, returning a [`Value::Object`] keyed by field key.
+///
+/// `xml` and each shortcut may be one element cut out of a larger document,
+/// such as an extracted `context` value: a namespace prefix it uses may be
+/// declared on an ancestor outside it.
 pub fn extract(xml: &str, fields: &[ExtractorField]) -> Result<Value, SamlError> {
     extract_with_limits(xml, fields, XmlLimits::default())
 }
@@ -250,7 +254,7 @@ pub fn extract_with_limits(
     fields: &[ExtractorField],
     limits: XmlLimits,
 ) -> Result<Value, SamlError> {
-    let root_doc = dom::parse_with_limits(xml, limits)?;
+    let root_doc = dom::parse_fragment_with_limits(xml, limits)?;
     let mut shortcut_docs: Vec<(&str, dom::Document)> = Vec::new();
     let mut out: Vec<(String, Value)> = Vec::with_capacity(fields.len());
     for field in fields {
@@ -275,7 +279,7 @@ fn cached_shortcut<'cache, 'src>(
     if let Some(index) = cache.iter().position(|(cached, _)| *cached == shortcut) {
         return Ok(&cache[index].1);
     }
-    cache.push((shortcut, dom::parse_with_limits(shortcut, limits)?));
+    cache.push((shortcut, dom::parse_fragment_with_limits(shortcut, limits)?));
     let index = cache.len() - 1;
     Ok(&cache[index].1)
 }

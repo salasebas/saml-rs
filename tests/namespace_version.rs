@@ -694,7 +694,15 @@ fn foreign_root_namespace_is_rejected() -> Result<(), Box<dyn std::error::Error>
 fn unbound_root_prefix_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let xml =
         r#"<p:AuthnRequest ID="_request" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#;
-    expect_profile_rejection_with_context(xml, ParserType::SamlRequest, "expected root")
+    match run_flow(xml, ParserType::SamlRequest) {
+        Err(SamlError::Xml(message))
+            if message.contains("namespace prefix `p` is not declared") =>
+        {
+            Ok(())
+        }
+        Err(other) => Err(format!("expected an undeclared prefix error, got {other:?}").into()),
+        Ok(()) => Err("expected an undeclared prefix to be rejected".into()),
+    }
 }
 
 #[test]

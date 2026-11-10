@@ -169,7 +169,7 @@ pub(crate) struct AssertionReplayId {
 ///
 /// Returns [`SamlError`] when `xml` cannot be parsed.
 pub(crate) fn assertion_replays(xml: &str) -> Result<Vec<AssertionReplayId>, SamlError> {
-    let document = dom::parse_with_limits(xml, XmlLimits::unbounded())?;
+    let document = dom::parse_fragment_with_limits(xml, XmlLimits::unbounded())?;
     let nodes = if document.root.local_name == "Assertion" {
         vec![&document.root]
     } else {
