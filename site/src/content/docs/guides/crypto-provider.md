@@ -7,9 +7,8 @@ Pick the provider before the first release build. Keep the default unless you ne
 
 ## Default
 
-```toml
-[dependencies]
-saml-rs = "0.6"
+```sh
+cargo add saml-rs
 ```
 
 `crypto-bergshamra` selects RustCrypto together with bergshamra's legacy-algorithm, post-quantum, and PKCS#11 capabilities. `saml-rs` initialises that provider before the first crypto operation.

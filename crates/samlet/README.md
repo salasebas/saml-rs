@@ -19,9 +19,8 @@ source repository.
 
 ## How to keep an existing dependency
 
-```toml
-[dependencies]
-samlet = "0.5"
+```sh
+cargo add samlet
 ```
 
 ```rust
