@@ -258,6 +258,55 @@ fn caller_login_response_template_is_rewritten_before_custom_callback(
 }
 
 #[test]
+fn caller_login_response_template_rewrites_each_prefix_once(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut setting = prefixed_setting("saml", "a");
+    setting.login_response_template = Some(LoginResponseTemplate {
+        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
+        attributes: Vec::new(),
+    });
+    let idp = idp_with_setting(setting)?;
+    let sp = sp(true)?;
+    let seen_template = RefCell::new(None);
+    let callback = |template: &str| {
+        seen_template.replace(Some(template.to_string()));
+        fill_login_response(template, "callback@example.com")
+    };
+
+    let ctx = idp.create_login_response(
+        &sp,
+        Binding::Post,
+        &User::new("callback@example.com"),
+        &LoginResponseOptions {
+            custom: Some(&callback as &dyn Fn(&str) -> (String, String)),
+            ..Default::default()
+        },
+    )?;
+
+    let captured = seen_template
+        .into_inner()
+        .ok_or("custom callback did not receive a template")?;
+    assert!(captured.starts_with(concat!(
+        r#"<saml:Response xmlns:saml="urn:oasis:names:tc:SAML:2.0:protocol" "#,
+        r#"xmlns:a="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}""#,
+    )));
+    assert!(captured.contains("<a:Issuer>{Issuer}</a:Issuer><saml:Status>"));
+
+    let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
+    let parsed = sp.parse_login_response_with_request_id(
+        &idp,
+        Binding::Post,
+        &request,
+        "_custom_prefix_req",
+    )?;
+    assert_eq!(
+        parsed.extract.get_str("nameID"),
+        Some("callback@example.com")
+    );
+    Ok(())
+}
+
+#[test]
 fn logout_request_defaults_render_overridden_prefixes_for_post_redirect_and_simplesign(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp_with_setting(prefixed_setting("samlp2", "saml2"))?;
@@ -326,9 +375,24 @@ fn invalid_prefixes_are_rejected_before_rendering() -> Result<(), Box<dyn std::e
         Err(SamlError::Invalid(message)) if message.contains("protocol")
     ));
 
-    let idp = idp_with_setting(prefixed_setting("samlp", "bad prefix"))?;
-    assert!(matches!(
-        create_logout_response(
+    for invalid in ["bad prefix", "1a", "a,b", "-x", "xml", "xmlns"] {
+        let idp = idp_with_setting(prefixed_setting(invalid, "saml"))?;
+        let result = idp.create_login_response(
+            &sp,
+            Binding::Post,
+            &User::new("invalid@example.com"),
+            &LoginResponseOptions {
+                in_response_to: Some(REQUEST_ID),
+                ..Default::default()
+            },
+        );
+        assert!(
+            matches!(&result, Err(SamlError::Invalid(message)) if message.contains("protocol tag prefix")),
+            "{invalid:?}: {result:?}"
+        );
+
+        let idp = idp_with_setting(prefixed_setting("samlp", invalid))?;
+        let result = create_logout_response(
             &idp.setting,
             &idp.metadata,
             &sp.metadata,
@@ -336,8 +400,26 @@ fn invalid_prefixes_are_rejected_before_rendering() -> Result<(), Box<dyn std::e
             Some("_logout_req"),
             None,
             false,
-        ),
-        Err(SamlError::Invalid(message)) if message.contains("assertion")
-    ));
+        );
+        assert!(
+            matches!(&result, Err(SamlError::Invalid(message)) if message.contains("assertion tag prefix")),
+            "{invalid:?}: {result:?}"
+        );
+    }
+
+    let idp = idp_with_setting(prefixed_setting("p", "p"))?;
+    let result = create_logout_response(
+        &idp.setting,
+        &idp.metadata,
+        &sp.metadata,
+        Binding::Post,
+        Some("_logout_req"),
+        None,
+        false,
+    );
+    assert!(
+        matches!(&result, Err(SamlError::Invalid(message)) if message.contains("tag prefixes must differ")),
+        "{result:?}"
+    );
     Ok(())
 }

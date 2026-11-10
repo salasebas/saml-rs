@@ -9,6 +9,7 @@
 use crate::binding::xml_escape;
 use crate::error::SamlError;
 use crate::util::camel_case;
+use crate::xml::name::is_ncname;
 use crate::xml::write::XmlWriter;
 
 /// Default `<AuthnRequest>` template.
@@ -33,32 +34,69 @@ pub const LOGIN_RESPONSE_TEMPLATE: &str = "<samlp:Response xmlns:samlp=\"urn:oas
 /// Default `<LogoutResponse>` template.
 pub const LOGOUT_RESPONSE_TEMPLATE: &str = "<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\" InResponseTo=\"{InResponseTo}\"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"{StatusCode}\"/></samlp:Status></samlp:LogoutResponse>";
 
-/// Rewrite known SAML template prefixes while preserving namespace URIs.
+/// Rewrite known SAML template prefixes in one pass while preserving namespace
+/// URIs.
 pub(crate) fn apply_tag_prefixes(
     xml: &str,
     protocol_prefix: &str,
     assertion_prefix: &str,
 ) -> String {
-    xml.replace("<samlp:", &format!("<{protocol_prefix}:"))
-        .replace("</samlp:", &format!("</{protocol_prefix}:"))
-        .replace("xmlns:samlp=", &format!("xmlns:{protocol_prefix}="))
-        .replace("<saml:", &format!("<{assertion_prefix}:"))
-        .replace("</saml:", &format!("</{assertion_prefix}:"))
-        .replace("xmlns:saml=", &format!("xmlns:{assertion_prefix}="))
+    let rewrites = [
+        ("<samlp:", format!("<{protocol_prefix}:")),
+        ("</samlp:", format!("</{protocol_prefix}:")),
+        ("xmlns:samlp=", format!("xmlns:{protocol_prefix}=")),
+        ("<saml:", format!("<{assertion_prefix}:")),
+        ("</saml:", format!("</{assertion_prefix}:")),
+        ("xmlns:saml=", format!("xmlns:{assertion_prefix}=")),
+    ];
+    let mut result = String::with_capacity(xml.len());
+    let mut rest = xml;
+    while let Some(start) = rest.find(['<', 'x']) {
+        result.push_str(&rest[..start]);
+        rest = &rest[start..];
+        match rewrites.iter().find(|(from, _)| rest.starts_with(from)) {
+            Some((from, to)) => {
+                result.push_str(to);
+                rest = &rest[from.len()..];
+            }
+            None => {
+                result.push_str(&rest[..1]);
+                rest = &rest[1..];
+            }
+        }
+    }
+    result.push_str(rest);
+    result
 }
 
-pub(crate) fn validate_tag_prefix(name: &str, prefix: &str) -> Result<(), SamlError> {
+pub(crate) fn validate_tag_prefixes(
+    protocol_prefix: &str,
+    assertion_prefix: &str,
+) -> Result<(), SamlError> {
+    validate_tag_prefix("protocol", protocol_prefix)?;
+    validate_tag_prefix("assertion", assertion_prefix)?;
+    if protocol_prefix == assertion_prefix {
+        return Err(SamlError::Invalid(
+            "protocol and assertion tag prefixes must differ".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_tag_prefix(name: &str, prefix: &str) -> Result<(), SamlError> {
     if prefix.is_empty() {
         return Err(SamlError::Invalid(format!(
             "{name} tag prefix cannot be empty"
         )));
     }
-    if prefix
-        .chars()
-        .any(|ch| ch.is_whitespace() || matches!(ch, '<' | '>' | '"' | '\'' | '/' | ':'))
-    {
+    if matches!(prefix, "xml" | "xmlns") {
         return Err(SamlError::Invalid(format!(
-            "{name} tag prefix contains an invalid character"
+            "{name} tag prefix `{prefix}` is reserved"
+        )));
+    }
+    if !is_ncname(prefix) {
+        return Err(SamlError::Invalid(format!(
+            "{name} tag prefix must be an XML NCName"
         )));
     }
     Ok(())

@@ -118,8 +118,14 @@ pub struct EntitySetting {
     /// XML parser resource limits for inbound messages and metadata parsing.
     pub xml_limits: XmlLimits,
     /// IdP: protocol tag prefix for generated IdP messages (default `samlp`).
+    ///
+    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
     /// IdP: assertion tag prefix for generated IdP messages (default `saml`).
+    ///
+    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
     /// IdP: tag prefix for the `<EncryptedAssertion>` element (default `saml`).
     pub tag_prefix_encrypted_assertion: String,

@@ -4,7 +4,7 @@ use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, Use
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
-use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefix};
+use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefixes};
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
@@ -226,8 +226,10 @@ fn create_logout_request_for_subject_inner(
                 "custom LogoutRequest templates cannot render multiple SessionIndex values".into(),
             ));
         }
-        validate_tag_prefix("protocol", &init_setting.tag_prefix_protocol)?;
-        validate_tag_prefix("assertion", &init_setting.tag_prefix_assertion)?;
+        validate_tag_prefixes(
+            &init_setting.tag_prefix_protocol,
+            &init_setting.tag_prefix_assertion,
+        )?;
         let template = apply_tag_prefixes(
             template,
             &init_setting.tag_prefix_protocol,
@@ -515,8 +517,10 @@ fn create_logout_response_inner(
                     .into(),
             ));
         }
-        validate_tag_prefix("protocol", &init_setting.tag_prefix_protocol)?;
-        validate_tag_prefix("assertion", &init_setting.tag_prefix_assertion)?;
+        validate_tag_prefixes(
+            &init_setting.tag_prefix_protocol,
+            &init_setting.tag_prefix_assertion,
+        )?;
         let template = apply_tag_prefixes(
             template,
             &init_setting.tag_prefix_protocol,

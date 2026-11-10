@@ -15,7 +15,8 @@ use crate::model::{
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
     apply_tag_prefixes, attr_tag, attribute_statement_builder, replace_tags_by_optional_value,
-    validate_tag_prefix, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
+    validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
+    LOGIN_RESPONSE_TEMPLATE,
 };
 
 mod artifact;
@@ -145,8 +146,10 @@ impl IdentityProvider {
         acs: &str,
         rendering: LoginResponseRendering<'_>,
     ) -> Result<(String, String), SamlError> {
-        validate_tag_prefix("protocol", &self.setting.tag_prefix_protocol)?;
-        validate_tag_prefix("assertion", &self.setting.tag_prefix_assertion)?;
+        validate_tag_prefixes(
+            &self.setting.tag_prefix_protocol,
+            &self.setting.tag_prefix_assertion,
+        )?;
         let tmpl = self.setting.login_response_template.as_ref();
         let attributes = tmpl.map(|t| t.attributes.as_slice()).unwrap_or(&[]);
         let has_custom_context = tmpl.and_then(|t| t.context.as_ref()).is_some();
