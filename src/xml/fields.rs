@@ -165,6 +165,7 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
             &["Assertion", "AttributeStatement", "Attribute"],
         )
         .attrs(&["Name", "NameFormat"])
+        .child_texts(&["AttributeValue"])
         .with_shortcut(assertion),
     ]
 }

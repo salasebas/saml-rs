@@ -1085,6 +1085,53 @@ fn typed_models_sso_session_rejects_malformed_assertion_issue_instant_with_profi
 }
 
 #[test]
+fn typed_models_sso_session_rejects_attributes_without_their_elements() {
+    let mut without_elements = minimal_sso_flow(None);
+    without_elements.extract.insert(
+        "attributes",
+        value_object(vec![("mail", value_str("a@example.com"))]),
+    );
+    let mut without_values = minimal_sso_flow(None);
+    without_values.extract.insert(
+        "attributeNameFormats",
+        value_object(vec![("name", value_str("mail"))]),
+    );
+
+    let mut null_elements = minimal_sso_flow(None);
+    null_elements.extract.insert(
+        "attributes",
+        value_object(vec![("mail", value_str("a@example.com"))]),
+    );
+    null_elements
+        .extract
+        .insert("attributeNameFormats", Value::Null);
+
+    for (flow, missing) in [
+        (without_elements, "attributeNameFormats"),
+        (without_values, "attributeValue"),
+        (null_elements, "attributeNameFormats"),
+    ] {
+        assert!(
+            matches!(
+                SsoSession::try_from(flow),
+                Err(SamlError::Invalid(ref message)) if message.contains(missing)
+            ),
+            "{missing}"
+        );
+    }
+
+    let mut no_attributes = minimal_sso_flow(None);
+    no_attributes
+        .extract
+        .insert("attributes", value_object(Vec::new()));
+    assert!(matches!(
+        SsoSession::try_from(no_attributes)
+            .map(|session| session.attributes().as_slice().is_empty()),
+        Ok(true)
+    ));
+}
+
+#[test]
 fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let flow = FlowResult {
@@ -1118,6 +1165,16 @@ fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
                     "eduPersonAffiliation",
                     Value::Array(vec![value_str("users"), value_str("examplerole1")]),
                 )]),
+            ),
+            (
+                "attributeNameFormats",
+                value_object(vec![
+                    ("name", value_str("eduPersonAffiliation")),
+                    (
+                        "attributeValue",
+                        Value::Array(vec![value_str("users"), value_str("examplerole1")]),
+                    ),
+                ]),
             ),
             (
                 "sessionIndex",

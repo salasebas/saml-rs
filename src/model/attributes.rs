@@ -66,6 +66,8 @@ impl Attribute {
     /// Create a SAML attribute.
     ///
     /// `name_format` is the `NameFormat` URI. `None` omits it.
+    /// [`crate::RespondSso::attributes`] rejects one that is not an absolute
+    /// URI reference.
     pub fn new(
         name: impl Into<String>,
         name_format: Option<String>,
@@ -82,7 +84,8 @@ impl Attribute {
     ///
     /// [`AttributeNameFormat::Custom`] with the URI of another variant is
     /// stored as that variant. [`crate::RespondSso::attributes`] rejects an
-    /// [`AttributeNameFormat::Basic`] attribute whose name is not an XML name.
+    /// [`AttributeNameFormat::Basic`] attribute whose name is not an XML name,
+    /// and a `NameFormat` that is not an absolute URI reference.
     ///
     /// # Examples
     ///
@@ -158,7 +161,10 @@ impl Attributes {
         &self.0
     }
 
-    /// Find an attribute by name.
+    /// Find the first attribute with `name`.
+    ///
+    /// A received response has one attribute for each `Name` and `NameFormat`
+    /// pair, so the same name can appear more than once.
     pub fn get(&self, name: &str) -> Option<&Attribute> {
         self.0.iter().find(|attribute| attribute.name() == name)
     }

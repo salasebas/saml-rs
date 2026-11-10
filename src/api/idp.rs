@@ -143,7 +143,8 @@ impl Saml<Idp> {
     /// supported timestamp range, producer rules are combined with a custom
     /// login response template, an error status is combined with a login
     /// response template, [`RespondSso::attributes`] is combined with a login
-    /// response template or names a basic attribute that is not an XML name,
+    /// response template, names a basic attribute that is not an XML name, or
+    /// has a `NameFormat` that is not an absolute URI reference,
     /// a `subject` `NameId` with `SPProvidedID` is combined with a login
     /// response template, the persistent or transient `NameID` of `subject` is
     /// longer than 256 characters, the NameID format is not an absolute URI

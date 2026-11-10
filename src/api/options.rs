@@ -172,9 +172,9 @@ impl<Delivery> RespondSso<Delivery> {
     /// without values is written without `AttributeValue`. An empty collection
     /// writes no `AttributeStatement`, and so does an error response.
     ///
-    /// The response is rejected when an [`crate::AttributeNameFormat::Basic`]
-    /// name is not an XML name, or when a login response template is
-    /// configured.
+    /// The response is rejected when a `NameFormat` is not an absolute URI
+    /// reference, when an [`crate::AttributeNameFormat::Basic`] name is not an
+    /// XML name, or when a login response template is configured.
     pub fn attributes(mut self, attributes: Attributes) -> Self {
         self.attributes = attributes;
         self

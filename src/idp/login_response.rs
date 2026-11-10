@@ -2,6 +2,7 @@ use crate::constants::{attribute_name_format, namespace};
 use crate::error::SamlError;
 use crate::model::{Attribute, AuthnContextReference, AuthnContextReferenceKind, Status};
 use crate::template::{write_login_response_attribute_statement, LoginResponseAttribute};
+use crate::xml::any_uri::is_absolute_uri_reference;
 use crate::xml::name::is_name;
 use crate::xml::write::XmlWriter;
 
@@ -217,8 +218,8 @@ fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &Authn
 ///
 /// # Errors
 ///
-/// Returns [`SamlError::Invalid`] when a basic attribute name is not an
-/// `xs:Name`.
+/// Returns [`SamlError::Invalid`] when a `NameFormat` is not an absolute URI
+/// reference, or a basic attribute name is not an `xs:Name`.
 fn write_attribute_statement(
     writer: &mut XmlWriter,
     prefix: &str,
@@ -232,6 +233,14 @@ fn write_attribute_statement(
     let value_name = qname(prefix, "AttributeValue");
     writer.start(&statement_name, &[]);
     for attribute in attributes {
+        if let Some(name_format) = attribute.name_format() {
+            if !is_absolute_uri_reference(name_format) {
+                return Err(SamlError::Invalid(format!(
+                    "attribute `{}` NameFormat must be an absolute URI reference with at least one non-whitespace character",
+                    attribute.name()
+                )));
+            }
+        }
         if attribute.name_format() == Some(attribute_name_format::BASIC)
             && !is_name(attribute.name())
         {

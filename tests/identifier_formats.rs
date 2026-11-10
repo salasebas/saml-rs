@@ -554,19 +554,91 @@ fn service_provider_reports_the_name_format_of_each_peer_attribute(
 }
 
 #[test]
-fn service_provider_keeps_one_attribute_for_each_name() -> Result<(), Box<dyn std::error::Error>> {
-    // Values are grouped by `Name` alone, as before `NameFormat` was read. The
-    // attribute reports the `NameFormat` of the first element with that name.
+fn service_provider_keeps_one_attribute_for_each_name_and_name_format(
+) -> Result<(), Box<dyn std::error::Error>> {
     let session = accept_peer_attributes(&[("role", URI, "admin"), ("role", BASIC, "auditor")])?;
 
     assert_eq!(
         session.attributes().as_slice(),
-        [Attribute::with_name_format(
-            "role",
-            AttributeNameFormat::Uri,
-            values(&["admin", "auditor"])
-        )]
+        [
+            Attribute::with_name_format("role", AttributeNameFormat::Uri, values(&["admin"])),
+            Attribute::with_name_format("role", AttributeNameFormat::Basic, values(&["auditor"])),
+        ]
     );
+    Ok(())
+}
+
+#[test]
+fn service_provider_keeps_every_value_of_repeated_attribute_elements(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let attributes = Attributes::new(vec![
+        Attribute::with_name_format("role", AttributeNameFormat::Basic, values(&["a1"])),
+        Attribute::with_name_format("role", AttributeNameFormat::Basic, values(&["b1", "b2"])),
+        Attribute::with_name_format("group", AttributeNameFormat::Basic, values(&["g1", "g2"])),
+        Attribute::with_name_format("group", AttributeNameFormat::Basic, values(&["g3"])),
+        Attribute::new("uid", None, values(&["alice"])),
+        Attribute::with_name_format("uid", AttributeNameFormat::Unspecified, values(&["al"])),
+        Attribute::new(
+            "uid",
+            Some(DEPLOYMENT_FORMAT.to_string()),
+            values(&["0001"]),
+        ),
+    ]);
+
+    let exchange = exchange(alice(), RespondSso::post().attributes(attributes))?;
+
+    assert_eq!(
+        exchange.session.attributes().as_slice(),
+        [
+            Attribute::with_name_format(
+                "role",
+                AttributeNameFormat::Basic,
+                values(&["a1", "b1", "b2"])
+            ),
+            Attribute::with_name_format(
+                "group",
+                AttributeNameFormat::Basic,
+                values(&["g1", "g2", "g3"])
+            ),
+            Attribute::new("uid", None, values(&["alice", "al"])),
+            Attribute::new(
+                "uid",
+                Some(DEPLOYMENT_FORMAT.to_string()),
+                values(&["0001"])
+            ),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn identity_provider_does_not_generate_a_name_format_that_is_not_an_absolute_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for name_format in [
+        "",
+        "  ",
+        "not a uri",
+        "attribute-name-format",
+        "/relative/path",
+    ] {
+        for attribute in [
+            Attribute::new("role", Some(name_format.to_string()), values(&["admin"])),
+            Attribute::with_name_format(
+                "role",
+                AttributeNameFormat::Custom(name_format.to_string()),
+                values(&["admin"]),
+            ),
+        ] {
+            match respond(
+                alice(),
+                RespondSso::post().attributes(Attributes::new(vec![attribute])),
+            ) {
+                Err(SamlError::Invalid(message)) if message.contains("NameFormat") => {}
+                Err(other) => return Err(other.into()),
+                Ok(_) => return Err(format!("NameFormat {name_format:?} was written").into()),
+            }
+        }
+    }
     Ok(())
 }
 
