@@ -28,7 +28,7 @@ use saml_rs::{
     TransformAlgorithm,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{XmlEncryptionPolicy, XmlPolicy};
+use saml_rs::{IdpConfigBuilder, SloEndpoint, XmlEncryptionPolicy, XmlPolicy};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -984,17 +984,16 @@ fn a_request_for_a_posted_response_is_not_answered_with_an_artifact(
 }
 
 #[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn encrypted_assertion_parties(
+    idp: IdpConfigBuilder,
+) -> Result<Parties, Box<dyn std::error::Error>> {
     let encryption = || XmlPolicy {
         encryption: XmlEncryptionPolicy::encrypt_assertions()
             .with_insecure_software_rsa_key_transport_decryption_allowed(),
         ..XmlPolicy::default()
     };
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+        idp.sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
             .artifact_resolution_service(ArtifactResolutionService::new(
                 0,
                 EndpointUrl::try_new(RESOLUTION_URL)?,
@@ -1014,7 +1013,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
             .xml(encryption())
             .build()?,
     )?;
-    let parties = Parties {
+    Ok(Parties {
         idp_metadata: IdpDescriptor::from_metadata_xml(
             idp.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
@@ -1025,7 +1024,15 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
         )?,
         idp,
         sp,
-    };
+    })
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+#[test]
+fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties =
+        encrypted_assertion_parties(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?))?;
     let (pending, request) = requested(&parties, RelayStateParam::absent())?;
 
     let mut issued = IssuedArtifacts::new();
@@ -1036,6 +1043,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
+    assert_eq!(response.session_index(), None);
     let delivered = delivered_by(&response)?;
     let resolved = resolve(&parties, &delivered, &mut issued)?;
     assert!(resolved.xml().contains("EncryptedAssertion"));
@@ -1048,5 +1056,44 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
         validation(),
     )?;
     assert_eq!(session.name_id().value(), USER);
+    Ok(())
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+#[test]
+fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = encrypted_assertion_parties(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
+    )?;
+    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+
+    let mut issued = IssuedArtifacts::new();
+    let response = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        subject(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0))
+            .apply_web_browser_sso_generation_rules(),
+        &mut issued,
+    )?;
+    let delivered = delivered_by(&response)?;
+    let resolved = resolve(&parties, &delivered, &mut issued)?;
+    assert!(resolved.xml().contains("EncryptedAssertion"));
+
+    let session = parties.sp.finish_sso(
+        &parties.idp_metadata,
+        &pending,
+        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        validation(),
+    )?;
+    let accepted = session
+        .logout_subject()
+        .ok_or("accepted session is missing a logout subject")?;
+    assert_eq!(
+        response.session_index().map(std::slice::from_ref),
+        Some(accepted.session_indexes())
+    );
     Ok(())
 }

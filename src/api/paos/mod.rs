@@ -13,8 +13,8 @@ use crate::flow::HttpRequest;
 use crate::idp::PaosSsoResponseInput;
 use crate::model::{
     Attribute, Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive,
-    MessageId, OutstandingLogout, RelayStateParam, SamlValidationContext, SsoResponse, SsoSession,
-    Status, Subject, TopLevelStatusCode,
+    MessageId, OutstandingLogout, RelayStateParam, SamlValidationContext, SessionIndex,
+    SsoResponse, SsoSession, Status, Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
 
@@ -296,6 +296,7 @@ pub struct PaosHttpResponse<Message> {
     status: u16,
     headers: Vec<HttpHeader>,
     soap_envelope: String,
+    session_index: Option<SessionIndex>,
     _message: PhantomData<Message>,
 }
 
@@ -334,6 +335,7 @@ impl<Message> PaosHttpResponse<Message> {
                 },
             ],
             soap_envelope,
+            session_index: None,
             _message: PhantomData,
         }
     }
@@ -342,6 +344,20 @@ impl<Message> PaosHttpResponse<Message> {
         let mut response = Self::from_parts(content_type, soap_envelope);
         response.status = 500;
         response
+    }
+}
+
+impl PaosHttpResponse<SsoResponse> {
+    /// `SessionIndex` this library wrote in the issued assertion's
+    /// `AuthnStatement`.
+    ///
+    /// Record it with the user's session to match the `SessionIndex` of a
+    /// later `LogoutRequest`. `None` when this library wrote no
+    /// `SessionIndex`. A `SessionIndex` written by
+    /// [`TemplatePolicy::login_response_template`](crate::TemplatePolicy::login_response_template)
+    /// is not reported.
+    pub fn session_index(&self) -> Option<&SessionIndex> {
+        self.session_index.as_ref()
     }
 }
 
@@ -744,28 +760,31 @@ impl Saml<Idp> {
             Some(subject) => user_from_subject(subject)?,
             None => User::new(""),
         };
-        let xml = self
+        let input = PaosSsoResponseInput {
+            sp: &raw_sp,
+            acs: acs.as_str(),
+            in_response_to: request.message().id().as_str(),
+            user: &user,
+            name_id_format: name_id_format.as_deref(),
+            sp_provided_id: subject
+                .as_ref()
+                .and_then(|subject| subject.name_id().sp_provided_id()),
+            issuance_lifetime: self.0.issuance_lifetime,
+            status: status.as_ref(),
+            attributes,
+            authn_context,
+            requested_authn_context: request.message().requested_authn_context(),
+        };
+        let issued = self
             .raw_identity_provider()
-            .render_paos_sso_response(&PaosSsoResponseInput {
-                sp: &raw_sp,
-                acs: acs.as_str(),
-                in_response_to: request.message().id().as_str(),
-                user: &user,
-                name_id_format: name_id_format.as_deref(),
-                sp_provided_id: subject
-                    .as_ref()
-                    .and_then(|subject| subject.name_id().sp_provided_id()),
-                issuance_lifetime: self.0.issuance_lifetime,
-                status: status.as_ref(),
-                attributes,
-                authn_context,
-                requested_authn_context: request.message().requested_authn_context(),
-            })?;
+            .render_paos_sso_response(&input)?;
         let envelope = idp_to_ecp_envelope(&IdpToEcp {
             assertion_consumer_service_url: acs.as_str(),
-            response_xml: &xml,
+            response_xml: &issued.xml,
         });
-        Ok(PaosHttpResponse::from_parts(SOAP_MEDIA_TYPE, envelope))
+        let mut response = PaosHttpResponse::from_parts(SOAP_MEDIA_TYPE, envelope);
+        response.session_index = issued.session_index;
+        Ok(response)
     }
 }
 

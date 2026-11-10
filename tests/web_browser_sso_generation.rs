@@ -309,6 +309,7 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
     assert!(!xml.contains("InResponseTo"));
     assert!(!xml.contains("AuthnStatement"));
     assert!(!xml.contains("SessionIndex="));
+    assert_eq!(response.session_index(), None);
 
     let fields = response.post_form()?.fields().to_vec();
     let raw_request = HttpRequest::post(
@@ -506,6 +507,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
         .ok_or("accepted session dropped SessionIndex")?;
     assert_eq!(session_index.as_str(), session.assertion_id().as_str());
     assert_eq!(session_index.as_str(), assertion_id);
+    assert_eq!(response.session_index(), Some(session_index));
 
     let idp_without_logout = idp_with(signed_authn_request_idp_validation(), false)?;
     let (sp_descriptor, _) = descriptors(&sp, &idp_without_logout)?;
@@ -517,6 +519,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let xml = response_xml(&response)?;
     assert!(xml.contains("<saml:AuthnStatement "));
     assert!(!xml.contains("SessionIndex="));
+    assert_eq!(response.session_index(), None);
 
     let soap_only_idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
@@ -532,7 +535,11 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
         subject(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
-    assert!(response_xml(&response)?.contains("SessionIndex="));
+    let xml = response_xml(&response)?;
+    let issued = response
+        .session_index()
+        .ok_or("SOAP-only logout response did not return its SessionIndex")?;
+    assert!(xml.contains(&format!("SessionIndex=\"{}\"", issued.as_str())));
     Ok(())
 }
 

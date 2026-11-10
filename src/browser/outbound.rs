@@ -9,7 +9,8 @@ use crate::constants::Binding;
 use crate::entity::BindingContext;
 use crate::error::SamlError;
 use crate::model::{
-    AuthnRequest, EndpointUrl, LogoutRequest, LogoutResponse, MessageId, RelayState, SsoResponse,
+    AuthnRequest, EndpointUrl, LogoutRequest, LogoutResponse, MessageId, RelayState, SessionIndex,
+    SsoResponse,
 };
 use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
 use crate::soap::{SoapProtocolMessage, SoapRequest, SoapResponse};
@@ -92,6 +93,7 @@ pub struct Outbound<Message> {
     relay_state: Option<RelayState>,
     action: OutboundAction,
     raw_context: BindingContext,
+    session_index: Option<SessionIndex>,
     _message: PhantomData<Message>,
 }
 
@@ -189,6 +191,25 @@ impl Outbound<LogoutResponse> {
 }
 
 impl Outbound<SsoResponse> {
+    /// `SessionIndex` this library wrote in the issued assertion's
+    /// `AuthnStatement`.
+    ///
+    /// Record it with the user's session to match the `SessionIndex` of a
+    /// later `LogoutRequest`. It is available when the assertion is encrypted
+    /// or delivered by artifact. `None` when this library wrote no
+    /// `SessionIndex`, and for an outbound built from a [`BindingContext`]. A
+    /// `SessionIndex` written by
+    /// [`TemplatePolicy::login_response_template`](crate::TemplatePolicy::login_response_template)
+    /// is not reported.
+    pub fn session_index(&self) -> Option<&SessionIndex> {
+        self.session_index.as_ref()
+    }
+
+    pub(crate) fn with_session_index(mut self, session_index: Option<SessionIndex>) -> Self {
+        self.session_index = session_index;
+        self
+    }
+
     /// Browser action that delivers `artifact` to the assertion consumer `acs`.
     ///
     /// `id` is the ID of the stored `<Response>`.
@@ -235,6 +256,7 @@ impl Outbound<SsoResponse> {
             relay_state,
             action,
             raw_context,
+            session_index: None,
             _message: PhantomData,
         })
     }
@@ -298,6 +320,7 @@ fn soap_outbound<Message>(
         relay_state: None,
         action,
         raw_context,
+        session_index: None,
         _message: PhantomData,
     })
 }
@@ -342,6 +365,7 @@ fn outbound_from_context<Message>(
                 relay_state,
                 action: OutboundAction::Redirect(raw_context.context.clone()),
                 raw_context,
+                session_index: None,
                 _message: PhantomData,
             })
         }
@@ -353,6 +377,7 @@ fn outbound_from_context<Message>(
                 relay_state,
                 action: OutboundAction::Post(form),
                 raw_context,
+                session_index: None,
                 _message: PhantomData,
             })
         }
@@ -364,6 +389,7 @@ fn outbound_from_context<Message>(
                 relay_state,
                 action: OutboundAction::SimpleSignPost(form),
                 raw_context,
+                session_index: None,
                 _message: PhantomData,
             })
         }

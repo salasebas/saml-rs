@@ -282,7 +282,7 @@ impl Saml<Idp> {
         };
         let (delivery, issued) = match options.delivery {
             ResponseTransport::Browser => {
-                let context = self
+                let issued = self
                     .raw_identity_provider()
                     .create_login_response_with_overrides(
                         &raw_sp,
@@ -296,7 +296,8 @@ impl Saml<Idp> {
                         },
                         overrides(explicit_acs.as_deref()),
                     )?;
-                return Outbound::<SsoResponse>::try_from(context);
+                return Outbound::<SsoResponse>::try_from(issued.context)
+                    .map(|outbound| outbound.with_session_index(issued.session_index));
             }
             ResponseTransport::Artifact(delivery, issued) => (delivery, issued),
         };
@@ -307,7 +308,7 @@ impl Saml<Idp> {
                 .get_assertion_consumer_service(Binding::Artifact)
                 .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?,
         };
-        let (response_id, xml) = self.raw_identity_provider().render_artifact_sso_response(
+        let rendered = self.raw_identity_provider().render_artifact_sso_response(
             &raw_sp,
             &user,
             in_response_to,
@@ -316,17 +317,18 @@ impl Saml<Idp> {
         let artifact = artifact::issue(
             &self.raw_identity_provider().metadata,
             sp,
-            IssuedMessage::web_browser_sso_response(xml)?,
+            IssuedMessage::web_browser_sso_response(rendered.xml)?,
             delivery.endpoint_index(),
             issued,
         )?;
         Outbound::<SsoResponse>::artifact(
-            response_id,
+            rendered.id,
             relay_state.as_deref().map(str::to_string),
             &acs,
             &artifact,
             delivery.encoding(),
         )
+        .map(|outbound| outbound.with_session_index(rendered.session_index))
         .inspect_err(|_| {
             issued.remove(&artifact);
         })
