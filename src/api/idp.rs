@@ -155,7 +155,7 @@ impl Saml<Idp> {
     /// meet an exact `RequestedAuthnContext`, producer rules are selected and
     /// the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
-    /// `unspecified`, or response creation fails. Returns
+    /// `unspecified` or `encrypted`, or response creation fails. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
     pub fn respond_sso(
         &self,

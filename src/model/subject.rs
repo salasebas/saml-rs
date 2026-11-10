@@ -257,7 +257,7 @@ impl NameIdPolicy {
 
     /// Reject an issued `SPNameQualifier` that differs from the requested one
     /// when the policy asks for a SAML-defined format other than
-    /// `unspecified`.
+    /// `unspecified` or `encrypted`.
     pub(crate) fn ensure_sp_name_qualifier_met_by(
         &self,
         issued: Option<&str>,

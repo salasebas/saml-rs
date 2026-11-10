@@ -692,7 +692,7 @@ impl Saml<Idp> {
     /// authentication context does not meet an exact `RequestedAuthnContext`,
     /// the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
-    /// `unspecified`, or the response cannot be signed. Returns
+    /// `unspecified` or `encrypted`, or the response cannot be signed. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
     pub fn respond_paos_sso(
         &self,
