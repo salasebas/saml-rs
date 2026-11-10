@@ -56,8 +56,11 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # zizmor: ignore[ref-version-mismatch]
+      - uses: taiki-e/install-action@682ce6c3c696a4cd5168a05f98e51aa02b877941 # v2.89.1
+        with:
+          tool: nextest
       - run: cargo check -p saml-rs --no-default-features
-      - run: cargo test -p saml-rs --no-default-features --test no_default_features
+      - run: cargo nextest run -p saml-rs --no-default-features
       - run: cargo test -p saml-rs --doc --no-default-features
       - run: RUSTDOCFLAGS="-D warnings -D missing_docs" cargo doc -p saml-rs --lib --no-deps --no-default-features
 
@@ -101,22 +104,7 @@ jobs:
       - run: cargo check --workspace --locked --no-default-features --features "$CRYPTO_PROVIDER_FEATURES"
       - run: cargo clippy --workspace --locked --all-targets --no-default-features --features "$CRYPTO_PROVIDER_FEATURES" -- -D warnings
       - run: RUSTDOCFLAGS="-D warnings -D missing_docs" cargo doc -p saml-rs --lib --no-deps --no-default-features --features "$CRYPTO_PROVIDER_FEATURES"
-      - name: Run provider security regressions
-        run: >-
-          cargo nextest run -p saml-rs --locked
-          --no-default-features --features "$CRYPTO_PROVIDER_FEATURES"
-          --test provider_regression
-          --test index_conformance
-          --test typed_sso
-          --test xsw
-          --test metadata_signature
-          --test metadata_trust
-          --test external_slo_redirect
-      - name: Run provider error propagation regression
-        run: >-
-          cargo nextest run -p saml-rs --locked
-          --no-default-features --features "$CRYPTO_PROVIDER_FEATURES"
-          --lib detached_verification_preserves_provider_error unloadable_peer
+      - run: cargo nextest run -p saml-rs --locked --no-default-features --features "$CRYPTO_PROVIDER_FEATURES"
 
   msrv:
     name: MSRV (Rust 1.88)

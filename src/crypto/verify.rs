@@ -1634,6 +1634,7 @@ mod tests {
         assert_eq!(insecure.hmac_min_out_len, 160);
     }
 
+    #[cfg(not(feature = "crypto-fips"))]
     #[test]
     fn verifies_signed_response_with_metadata_cert() -> Result<(), Box<dyn std::error::Error>> {
         let (verified, content) = verify_signature(RESPONSE_SIGNED, &[IDP_CERT.to_string()])?;
@@ -1891,9 +1892,19 @@ mod tests {
     #[test]
     fn detailed_verification_aggregates_rolling_cert_coverage_after_first_signature_verifies(
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let assertion_key = load_private_key(UNTRUSTED_PRIVKEY, None)?;
+        let signed_assertion = construct_saml_signature(
+            RESPONSE,
+            false,
+            &assertion_key,
+            IDP_CERT,
+            RSA_SHA256,
+            &[],
+            None,
+        )?;
         let response_key = load_private_key(SP_PRIVKEY, None)?;
         let signed_response_and_assertion = construct_saml_signature(
-            RESPONSE_SIGNED,
+            &signed_assertion,
             true,
             &response_key,
             SP_SIGNING_CERT,

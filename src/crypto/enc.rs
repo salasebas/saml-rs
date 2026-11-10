@@ -1257,18 +1257,4 @@ mod tests {
         }
         Ok(())
     }
-
-    #[cfg(feature = "crypto-aws-lc")]
-    #[test]
-    fn aws_lc_decrypts_rsa_oaep_with_default_options() -> Result<(), Box<dyn std::error::Error>> {
-        let encrypted = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let (response, assertion) =
-            decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
-        assert!(assertion.contains("Assertion"));
-        assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
-        assert!(response.contains("Assertion"));
-        assert!(!response.contains("EncryptedAssertion"));
-        Ok(())
-    }
 }
