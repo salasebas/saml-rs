@@ -210,6 +210,7 @@ impl Saml<Idp> {
             request_envelope,
             issued,
             channel,
+            self.raw_identity_provider().setting.xml_limits,
         )
     }
 }
@@ -241,6 +242,13 @@ impl Saml<Sp> {
             .metadata
             .get_entity_id()
             .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?;
-        artifact::resolve(entity_id, identity_provider, artifact, dereference, uses)
+        artifact::resolve(
+            entity_id,
+            identity_provider,
+            artifact,
+            dereference,
+            uses,
+            self.raw_service_provider().setting.xml_limits,
+        )
     }
 }

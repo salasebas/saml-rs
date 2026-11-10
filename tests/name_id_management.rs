@@ -841,3 +841,80 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
     assert_eq!(request.message().change(), &NameIdChange::Terminate);
     Ok(())
 }
+
+#[test]
+fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
+            .name_id_format(NameIdFormat::Persistent)
+            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+                IDP_NIM_URL,
+            )?))
+            .xml(saml_rs::XmlPolicy {
+                limits: saml_rs::xml::XmlLimits {
+                    max_depth: 6,
+                    max_attribute_value_bytes: 64 * 1024,
+                    ..saml_rs::xml::XmlLimits::default()
+                },
+                ..saml_rs::XmlPolicy::default()
+            })
+            .validation(saml_rs::IdpValidationPolicy::compatibility())
+            .build()?,
+    )?;
+    let sp = soap_service_provider()?;
+    let deep_header =
+        "<soap:Header><a><b><c><d><e>note</e></d></c></b></a></soap:Header><soap:Body>";
+    let consent = format!(r#"Consent="{}" "#, "a".repeat(20 * 1024));
+
+    let request = sp_request(&format!("{}<samlp:Terminate/>", current_name_id_xml()))?;
+    let refused = idp.receive_name_id_management(
+        &sp,
+        &request.replacen("<soap:Body>", deep_header, 1),
+        authenticated(),
+        validation(),
+    );
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        "{refused:?}"
+    );
+    received_request(idp.receive_name_id_management(
+        &sp,
+        &request,
+        authenticated(),
+        validation(),
+    )?)?;
+    received_request(idp.receive_name_id_management(
+        &sp,
+        &request.replacen(
+            "<samlp:ManageNameIDRequest ",
+            &format!("<samlp:ManageNameIDRequest {consent}"),
+            1,
+        ),
+        authenticated(),
+        validation(),
+    )?)?;
+
+    let started = idp.start_name_id_management(
+        &sp,
+        &NameId::new("current-value", None),
+        &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        authenticated(),
+    )?;
+    let xml = body(started.request().envelope())?;
+    let request_id = attribute(&xml, "ID").ok_or("request ID is missing")?;
+    let response = sp_response(request_id, SP_ENTITY_ID, &success_status())?;
+    let refused = started.finish(&response.replacen("<soap:Body>", deep_header, 1));
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        "{refused:?}"
+    );
+    started.finish(&response)?;
+    started.finish(&response.replacen(
+        "<samlp:ManageNameIDResponse ",
+        &format!("<samlp:ManageNameIDResponse {consent}"),
+        1,
+    ))?;
+    Ok(())
+}

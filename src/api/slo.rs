@@ -3,7 +3,6 @@ use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::error::SamlError as Error;
-use crate::flow::HttpRequest;
 use crate::logout::{
     create_logout_request_with_session_indexes, create_logout_response_with_status,
     parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
@@ -603,7 +602,7 @@ fn receive_slo_impl(
         &validation,
     )?;
     let receipt = LogoutReceipt::of_input(&input)?;
-    let request = HttpRequest::try_from(input)?;
+    let request = input.into_http_request(local_setting.xml_limits)?;
     let flow = parse_logout_request_at(
         local_setting,
         peer.metadata,
@@ -693,7 +692,7 @@ fn finish_slo_impl(
         }
     };
     let receipt = LogoutReceipt::of_input(&input)?;
-    let request = HttpRequest::try_from(input)?;
+    let request = input.into_http_request(local_setting.xml_limits)?;
     let flow = parse_logout_response_at(
         local_setting,
         peer.metadata,

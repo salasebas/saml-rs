@@ -12,12 +12,13 @@ use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use saml_rs::xml::XmlLimits;
 use saml_rs::{
     AcsEndpoint, Artifact, ArtifactDereference, ArtifactRelease, ArtifactResolutionService,
     ArtifactUses, ArtifactWithheld, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, IssuedArtifacts, IssuedMessage, MessageConfidentiality, MessageIntegrity,
     MetadataTrustPolicy, PartyAuthentication, Saml, SamlError, SoapChannel, Sp, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, XmlPolicy,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -46,6 +47,10 @@ struct Parties {
 }
 
 fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
+    parties_with(XmlPolicy::default())
+}
+
+fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
@@ -53,11 +58,12 @@ fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
                 0,
                 EndpointUrl::try_new(RESOLUTION_URL)?,
             ))
+            .xml(xml)
             .validation(IdpValidationPolicy::compatibility())
             .build()?,
     )?;
-    let sp = service_provider(SP_ENTITY_ID, "https://sp.example.com/acs")?;
-    let other = service_provider(OTHER_ENTITY_ID, "https://other.example.com/acs")?;
+    let sp = service_provider(SP_ENTITY_ID, "https://sp.example.com/acs", xml)?;
+    let other = service_provider(OTHER_ENTITY_ID, "https://other.example.com/acs", xml)?;
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -80,10 +86,15 @@ fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
     })
 }
 
-fn service_provider(entity_id: &str, acs: &str) -> Result<Saml<Sp>, Box<dyn std::error::Error>> {
+fn service_provider(
+    entity_id: &str,
+    acs: &str,
+    xml: XmlPolicy,
+) -> Result<Saml<Sp>, Box<dyn std::error::Error>> {
     Ok(Saml::sp(
         SpConfig::builder(EntityId::try_new(entity_id)?)
             .acs_endpoint(AcsEndpoint::post(acs)?)
+            .xml(xml)
             .validation(SpValidationPolicy::compatibility())
             .build()?,
     )?)
@@ -1157,5 +1168,76 @@ fn a_removed_artifact_is_no_longer_outstanding() -> Result<(), Box<dyn std::erro
         answer.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::NotOutstanding)
     );
+    Ok(())
+}
+
+#[test]
+fn soap_envelopes_are_read_under_the_configured_xml_limits(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties_with(XmlPolicy {
+        limits: XmlLimits {
+            max_depth: 6,
+            max_attribute_value_bytes: 64 * 1024,
+            ..XmlLimits::default()
+        },
+        ..XmlPolicy::default()
+    })?;
+    let mut issued = IssuedArtifacts::new();
+    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let channel = confidential();
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        ArtifactDereference::web_browser_sso(channel)?,
+        &mut ArtifactUses::allow_reuse(),
+    )?;
+    let deep_header =
+        "<soap:Header><a><b><c><d><e>note</e></d></c></b></a></soap:Header><soap:Body>";
+    let consent = format!(r#"Consent="{}" "#, "a".repeat(20 * 1024));
+    let deep_request = resolution
+        .request()
+        .envelope()
+        .replacen("<soap:Body>", deep_header, 1);
+    let refused = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &deep_request,
+        &mut issued,
+        channel,
+    );
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        "{refused:?}"
+    );
+
+    let wide_request = resolution.request().envelope().replacen(
+        "<samlp:ArtifactResolve ",
+        &format!("<samlp:ArtifactResolve {consent}"),
+        1,
+    );
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        &wide_request,
+        &mut issued,
+        channel,
+    )?;
+    let deep_response = answer.envelope().replacen("<soap:Body>", deep_header, 1);
+    let refused = resolution.finish(&deep_response);
+    assert!(
+        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        "{refused:?}"
+    );
+    assert!(resolution
+        .finish(answer.envelope())?
+        .xml()
+        .contains(WEB_SSO_MARKER));
+    let wide_response = answer.envelope().replacen(
+        "<samlp:ArtifactResponse ",
+        &format!("<samlp:ArtifactResponse {consent}"),
+        1,
+    );
+    assert!(resolution
+        .finish(&wide_response)?
+        .xml()
+        .contains(WEB_SSO_MARKER));
     Ok(())
 }

@@ -87,7 +87,7 @@ and 3.6.3, Profiles §4.5.3.2 and §4.5.4.1.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| The SOAP body is one `ManageNameIDRequest` | Responder | Inbound ManageNameIDRequest | Bindings §3.2.2.1. Another body, a second body element, or a SOAP header with `mustUnderstand` is `SamlError`. The deployment can answer it with a SOAP fault |
+| The SOAP body is one `ManageNameIDRequest` | Responder | Inbound ManageNameIDRequest | Bindings §3.2.2.1. Another body, a second body element, a SOAP header with `mustUnderstand`, or a `Header` that is not one element before the `Body` is `SamlError`, as in artifact resolution. The deployment can answer it with a SOAP fault |
 | `ID` is present and `IssueInstant` is a UTC `xs:dateTime` | Responder | Inbound ManageNameIDRequest | Protocol schema `RequestAbstractType`; Core §1.3.3 |
 | A `Version` other than `2.0` is answered with `VersionMismatch` | Responder | Generate ManageNameIDResponse | Core §3.2.2.2. `ReceivedNameIdManagement::Refused` carries the response, with `NameIdManagementRefusal::VersionMismatch` |
 | The requester authenticated itself and protected integrity | Requester | SOAP exchange | Mandatory. Profiles §4.5.4.1. The check is `SoapChannel`: mutual authentication and integrity, or `SamlError::SoapChannelProtection` before the envelope is read. A request signature is not verified. Refusing a signed request on a channel that does not authenticate the requester is library policy: Profiles §4.5.3.1 also accepts a signature. The looser rule cannot be applied because this identity provider does not verify signatures on this message, so the request would be processed without any authentication |

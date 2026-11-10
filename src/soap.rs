@@ -11,6 +11,7 @@ use crate::model::EndpointUrl;
 use crate::xml::dom::{self, Node};
 use crate::xml::fragment::standalone_element;
 use crate::xml::write::XmlWriter;
+use crate::xml::XmlLimits;
 
 const SOAP_NAMESPACE: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 const SOAP_ACTION: &str = "http://www.oasis-open.org/committees/security";
@@ -226,7 +227,7 @@ impl SoapProtocolMessage {
     /// not contain exactly one element, or a SOAP header requires processing
     /// this crate does not provide.
     pub fn from_envelope(envelope: &str) -> Result<Self, SamlError> {
-        let body = read_soap_body(envelope)?;
+        let body = read_soap_body(envelope, XmlLimits::default())?;
         Ok(Self {
             local_name: body.local_name,
             namespace: body.namespace,
@@ -271,10 +272,10 @@ pub(crate) struct SoapBody {
     pub(crate) xml: String,
 }
 
-pub(crate) fn read_soap_body(envelope: &str) -> Result<SoapBody, SamlError> {
-    let document = dom::parse(envelope)?;
+pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBody, SamlError> {
+    let document = dom::parse_with_limits(envelope, limits)?;
     let child_namespace = soap_body_namespace(envelope)?;
-    let body = envelope_body(&document.root)?;
+    let body = envelope_parts(&document.root)?.body;
     let child = single_element_child(body)?;
     if child.local_name != child_namespace.local_name {
         return Err(SamlError::Xml(
@@ -286,6 +287,26 @@ pub(crate) fn read_soap_body(envelope: &str) -> Result<SoapBody, SamlError> {
         namespace: child_namespace.namespace,
         xml: standalone_element(envelope, child.start, child.end)?,
     })
+}
+
+pub(crate) struct EnvelopeParts<'a> {
+    pub(crate) header: Option<&'a Node>,
+    pub(crate) body: &'a Node,
+}
+
+pub(crate) fn envelope_parts(envelope: &Node) -> Result<EnvelopeParts<'_>, SamlError> {
+    match envelope.children.as_slice() {
+        [body] if body.local_name == "Body" => Ok(EnvelopeParts { header: None, body }),
+        [header, body] if header.local_name == "Header" && body.local_name == "Body" => {
+            Ok(EnvelopeParts {
+                header: Some(header),
+                body,
+            })
+        }
+        _ => Err(SamlError::ProtocolProfile(
+            "SOAP envelope must contain an optional Header followed by one Body".into(),
+        )),
+    }
 }
 
 fn envelope(element_xml: &str) -> Result<String, SamlError> {
@@ -309,34 +330,6 @@ fn single_element(xml: &str) -> Result<String, SamlError> {
 struct NamedNamespace {
     local_name: String,
     namespace: String,
-}
-
-fn envelope_body(envelope: &Node) -> Result<&Node, SamlError> {
-    if envelope.local_name != "Envelope" {
-        return Err(SamlError::Xml(
-            "SOAP message must contain one Envelope element".into(),
-        ));
-    }
-    let mut body = None;
-    for child in &envelope.children {
-        match child.local_name.as_str() {
-            "Header" => {}
-            "Body" => {
-                if body.is_some() {
-                    return Err(SamlError::Xml(
-                        "SOAP envelope must contain one Body element".into(),
-                    ));
-                }
-                body = Some(child);
-            }
-            _ => {
-                return Err(SamlError::Xml(
-                    "SOAP envelope contains an element other than Header or Body".into(),
-                ));
-            }
-        }
-    }
-    body.ok_or_else(|| SamlError::Xml("SOAP envelope is missing Body".into()))
 }
 
 fn single_element_child(body: &Node) -> Result<&Node, SamlError> {
@@ -546,6 +539,26 @@ mod tests {
             SoapProtocolMessage::from_envelope(envelope),
             Err(SamlError::Xml(_))
         ));
+    }
+
+    #[test]
+    fn soap_header_must_be_one_element_before_the_body() {
+        let body = r#"<soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body>"#;
+        for children in [
+            format!("{body}<soap:Header/>"),
+            format!("<soap:Header/><soap:Header/>{body}"),
+        ] {
+            let envelope = format!(
+                r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">{children}</soap:Envelope>"#
+            );
+            assert!(
+                matches!(
+                    SoapProtocolMessage::from_envelope(&envelope),
+                    Err(SamlError::ProtocolProfile(_))
+                ),
+                "{envelope}"
+            );
+        }
     }
 
     #[test]
