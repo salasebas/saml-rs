@@ -12,7 +12,7 @@ use crate::model::{
 
 use super::raw_mapping::{
     default_response_target, ensure_entity_id, input_binding, raw_sp_descriptor,
-    raw_sp_for_browser_response, relay_state_from_input, response_target,
+    raw_sp_for_browser_response, relay_state_from_input, response_target, user_from_subject,
 };
 use super::requested_subject::decrypt_requested_subject;
 use super::{Idp, RespondSso, Saml, SamlError};
@@ -146,7 +146,8 @@ impl Saml<Idp> {
     /// a `subject` `NameId` with `SPProvidedID` is combined with a login
     /// response template, the persistent or transient `NameID` of `subject` is
     /// longer than 256 characters, the NameID format is not an absolute URI
-    /// reference, or response creation fails.
+    /// reference, or response creation fails. Returns
+    /// [`SamlError::Unsupported`] when `subject` has confirmations.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
@@ -176,7 +177,8 @@ impl Saml<Idp> {
     /// a login response template, [`RespondSso::attributes`] is combined with a
     /// login response template or names a basic attribute that is not an XML
     /// name, the persistent or transient `NameID` of `subject` is longer than
-    /// 256 characters, or response creation fails.
+    /// 256 characters, or response creation fails. Returns
+    /// [`SamlError::Unsupported`] when `subject` has confirmations.
     ///
     /// # Examples
     ///
@@ -258,7 +260,7 @@ impl Saml<Idp> {
             .format()
             .map(|format| format.as_uri().to_string());
         let sp_provided_id = subject.name_id().sp_provided_id().map(str::to_string);
-        let user = user_from_subject(subject);
+        let user = user_from_subject(&subject)?;
         let in_response_to = request.map(|request| request.message().id().as_str());
         let overrides = |acs| LoginResponseOverrides {
             acs,
@@ -368,8 +370,4 @@ impl Saml<Idp> {
     ) -> Result<CommonDomainCookie, SamlError> {
         discovery::remember_identity_provider(&self.raw_identity_provider().entity_id(), options)
     }
-}
-fn user_from_subject(subject: Subject) -> crate::entity::User {
-    let name_id = subject.name_id().value().to_string();
-    crate::entity::User::new(name_id)
 }

@@ -263,6 +263,13 @@ impl SubjectConfirmation {
 }
 
 /// SAML subject.
+///
+/// An accepted assertion's subject lists its `<SubjectConfirmation>` elements
+/// in [`Self::confirmations`]. The identity provider methods that issue an
+/// assertion, such as `respond_sso`, take only the `NameId` and write their own
+/// bearer confirmation. They return [`SamlError::Unsupported`] for a subject
+/// with confirmations, including the subject of an accepted assertion; build a
+/// new subject from its `NameId` to re-issue it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Subject {
     name_id: NameId,

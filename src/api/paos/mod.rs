@@ -17,7 +17,9 @@ use crate::model::{
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
 
-use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
+use super::raw_mapping::{
+    ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor, user_from_subject,
+};
 use super::{Idp, Saml, SamlError, Sp};
 use protocol::{
     idp_to_ecp_envelope, parse_client_headers, read_soap_body, soap_fault_envelope,
@@ -655,7 +657,8 @@ impl Saml<Idp> {
     /// `subject` is longer than 256 characters, the NameID format is not an
     /// absolute URI reference, [`RespondPaosSso::attributes`] is combined with
     /// a login response template or names a basic attribute that is not an
-    /// XML name, or the response cannot be signed.
+    /// XML name, or the response cannot be signed. Returns
+    /// [`SamlError::Unsupported`] when `subject` has confirmations.
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,
@@ -720,10 +723,10 @@ impl Saml<Idp> {
                 .format()
                 .map(|format| format.as_uri().to_string())
         });
-        let user = subject
-            .as_ref()
-            .map(|subject| User::new(subject.name_id().value()))
-            .unwrap_or_else(|| User::new(""));
+        let user = match &subject {
+            Some(subject) => user_from_subject(subject)?,
+            None => User::new(""),
+        };
         let xml = self
             .raw_identity_provider()
             .render_paos_sso_response(&PaosSsoResponseInput {
