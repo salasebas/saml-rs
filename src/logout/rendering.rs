@@ -3,7 +3,7 @@ use crate::entity::{EntitySetting, User};
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::Status;
-use crate::template::validate_tag_prefix;
+use crate::template::validate_tag_prefixes;
 use crate::xml::write::XmlWriter;
 use crate::xml::OutboundNameIdQualifiers;
 
@@ -45,8 +45,7 @@ pub(super) fn render_default_logout_response(
     issuer: &str,
     status: &Status,
 ) -> Result<String, SamlError> {
-    validate_tag_prefix("protocol", &setting.tag_prefix_protocol)?;
-    validate_tag_prefix("assertion", &setting.tag_prefix_assertion)?;
+    validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
 
     let protocol_prefix = &setting.tag_prefix_protocol;
     let assertion_prefix = &setting.tag_prefix_assertion;
@@ -100,8 +99,7 @@ pub(super) fn render_default_logout_request(
     subject: &LogoutRequestSubject<'_>,
     name_id_format: Option<&str>,
 ) -> Result<String, SamlError> {
-    validate_tag_prefix("protocol", &setting.tag_prefix_protocol)?;
-    validate_tag_prefix("assertion", &setting.tag_prefix_assertion)?;
+    validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
 
     let protocol_prefix = &setting.tag_prefix_protocol;
     let assertion_prefix = &setting.tag_prefix_assertion;

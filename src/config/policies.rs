@@ -600,8 +600,14 @@ pub struct TemplatePolicy {
     /// Default RelayState.
     pub relay_state: String,
     /// IdP protocol tag prefix for generated messages.
+    ///
+    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
     /// IdP assertion tag prefix for generated messages.
+    ///
+    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
     /// IdP tag prefix for generated `<EncryptedAssertion>` elements.
     pub tag_prefix_encrypted_assertion: String,

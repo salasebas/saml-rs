@@ -6,7 +6,7 @@ use crate::error::SamlError;
 use crate::model::{
     is_name_id_format, validate_issued_name_id_length, validate_name_id_format, NameId, Status,
 };
-use crate::template::validate_tag_prefix;
+use crate::template::validate_tag_prefixes;
 use crate::xml::write::XmlWriter;
 
 use super::NameIdChange;
@@ -33,8 +33,7 @@ impl Prefixes<'static> {
 
 impl<'a> Prefixes<'a> {
     pub(crate) fn of(setting: &'a EntitySetting) -> Result<Self, SamlError> {
-        validate_tag_prefix("protocol", &setting.tag_prefix_protocol)?;
-        validate_tag_prefix("assertion", &setting.tag_prefix_assertion)?;
+        validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
         Ok(Self {
             protocol: &setting.tag_prefix_protocol,
             assertion: &setting.tag_prefix_assertion,
