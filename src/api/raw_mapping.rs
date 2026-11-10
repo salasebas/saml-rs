@@ -4,14 +4,14 @@ use crate::config::{
     IdpConfig, IdpDescriptor, ManageNameIdService, NameIdFormat, SpConfig, SpDescriptor,
 };
 use crate::constants::Binding;
-use crate::entity::EntitySetting;
+use crate::entity::{EntitySetting, User};
 use crate::error::SamlError as Error;
 use crate::idp::IdentityProvider;
 use crate::metadata::{
     ArtifactResolutionEndpoint, IdpMetadataConfig as RawIdpMetadataConfig,
     SpMetadataConfig as RawSpMetadataConfig,
 };
-use crate::model::{AuthnRequest, RelayStateParam};
+use crate::model::{AuthnRequest, RelayStateParam, Subject};
 use crate::sp::ServiceProvider;
 
 use super::SamlError;
@@ -303,4 +303,13 @@ pub(super) fn ensure_sso_response_binding(
         return Ok(());
     }
     Err(Error::UnsupportedBinding { binding: actual })
+}
+
+pub(super) fn user_from_subject(subject: &Subject) -> Result<User, SamlError> {
+    if !subject.confirmations().is_empty() {
+        return Err(Error::Unsupported(
+            "an issued assertion takes no caller-supplied SubjectConfirmation; the identity provider writes its own bearer confirmation".into(),
+        ));
+    }
+    Ok(User::new(subject.name_id().value()))
 }

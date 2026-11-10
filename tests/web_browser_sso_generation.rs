@@ -19,7 +19,7 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, NameIdCreationPolicy, NameIdFormat, Outbound, PrivateKeyPem,
     ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SloEndpoint, SpConfig,
     SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Status, Subject,
-    SubordinateStatusCode,
+    SubjectConfirmation, SubordinateStatusCode,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{XmlEncryptionPolicy, XmlPolicy};
@@ -255,6 +255,45 @@ fn typed_unsolicited_sso_omits_in_response_to_under_producer_rules(
     )?;
     assert_eq!(session.in_response_to(), None);
     assert_eq!(session.name_id().value(), "alice@example.com");
+    Ok(())
+}
+
+#[test]
+fn typed_sso_rejects_a_subject_with_caller_supplied_confirmations(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::recommended())?;
+    let idp = idp_with(IdpValidationPolicy::recommended(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let holder_of_key = || {
+        Subject::new(
+            NameId::new("alice@example.com", None),
+            vec![SubjectConfirmation::from_raw_xml(
+                "<saml:SubjectConfirmation xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Method=\"urn:oasis:names:tc:SAML:2.0:cm:holder-of-key\"/>",
+            )],
+        )
+    };
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+
+    let solicited = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        holder_of_key(),
+        RespondSso::post(),
+    );
+    assert!(
+        matches!(solicited, Err(SamlError::Unsupported(_))),
+        "a caller-supplied SubjectConfirmation is not dropped silently"
+    );
+    let unsolicited = idp.initiate_sso(&sp_descriptor, holder_of_key(), RespondSso::post());
+    assert!(
+        matches!(unsolicited, Err(SamlError::Unsupported(_))),
+        "a caller-supplied SubjectConfirmation is not dropped silently"
+    );
     Ok(())
 }
 

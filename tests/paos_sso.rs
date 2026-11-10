@@ -18,7 +18,8 @@ use saml_rs::{
     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
     PaosAuthnRequest, PaosClientRequest, PaosSsoResponse, RelayStateParam, ReplayPolicy,
     RespondPaosSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartPaosSso, Status, Subject, SubordinateStatusCode,
+    SpValidationPolicy, SsoEndpoint, StartPaosSso, Status, Subject, SubjectConfirmation,
+    SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -428,6 +429,39 @@ fn response_name_id_format_that_is_not_an_absolute_uri_is_not_sent(
         Err(SamlError::Invalid(message)) if message.contains("absolute URI reference") => Ok(()),
         Err(error) => Err(format!("unexpected {error:?}").into()),
         Ok(_) => Err("a relative NameID format is not sent".into()),
+    }
+}
+
+#[test]
+fn response_subject_with_caller_supplied_confirmations_is_not_sent(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    )?;
+    let subject = Subject::new(
+        NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress)),
+        vec![SubjectConfirmation::from_raw_xml(
+            "<saml:SubjectConfirmation xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Method=\"urn:oasis:names:tc:SAML:2.0:cm:holder-of-key\"/>",
+        )],
+    );
+    match idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject,
+        RespondPaosSso::default(),
+    ) {
+        Err(SamlError::Unsupported(_)) => Ok(()),
+        Err(error) => Err(format!("unexpected {error:?}").into()),
+        Ok(_) => Err("a caller-supplied SubjectConfirmation is not dropped silently".into()),
     }
 }
 
