@@ -20,9 +20,8 @@ source repository.
 
 ## How to keep an existing dependency
 
-```toml
-[dependencies]
-samlify = "0.5"
+```sh
+cargo add samlify
 ```
 
 ```rust

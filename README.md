@@ -25,12 +25,15 @@ Before a minor upgrade, follow the
 
 ## Install
 
-```toml
-[dependencies]
-saml-rs = "0.5"
+```sh
+cargo add saml-rs
+```
 
-# Protocol layer only, with signing and encryption disabled:
-# saml-rs = { version = "0.5", default-features = false }
+Cargo records the latest published release. For the protocol layer only,
+with signing and encryption disabled:
+
+```sh
+cargo add saml-rs --no-default-features
 ```
 
 Rust 1.88 or newer is required.
@@ -63,12 +66,33 @@ Source: [`examples/sso.rs`](examples/sso.rs). The same calls, checked by
 Those snippets use `ReplayPolicy::DisabledForCompatibility` and, where noted,
 `MetadataTrustPolicy::UnsignedForCompatibility` so they compile alone. Both
 names preserve a raw or samlify-port choice: no replay cache, and an unsigned
-metadata import. `recommended()` does not turn either one on.
+metadata import. `recommended()` does not turn either one on. Neither is a
+conformance claim.
 
-If inbound responses need replay protection, pass `ReplayPolicy::RequireCache`
-with a caller-owned replay cache. Choose the metadata policy in
+A service provider that accepts responses over HTTP-POST must ensure bearer
+assertions are not replayed
+([Profiles §4.1.4.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)).
+Pass `ReplayPolicy::RequireCache` with a caller-owned
+[`ReplayCache`](https://docs.rs/saml-rs/latest/saml_rs/model/trait.ReplayCache.html)
+in the context given to `finish_sso` or `accept_unsolicited_sso`:
+
+```rust
+let validation = SamlValidationContext::new(
+    SystemTime::now(),
+    ReplayPolicy::RequireCache(&mut replay_cache),
+);
+```
+
+The flow asks the cache to keep each assertion `ID` until its bearer
+`SubjectConfirmationData@NotOnOrAfter` plus the clock skew. The cache returns
+`SamlError::ReplayDetected` for a key it has already stored. Use storage that
+every process serving the assertion consumer service shares. The other stored
+identifiers and bindings are in
+[metadata and replay](docs/conformance/metadata-and-replay.md#replay).
+
+Choose the metadata policy in
 [metadata trust](https://docs.rs/saml-rs/latest/saml_rs/#metadata-trust) and
-[`SamlValidationContext`](https://docs.rs/saml-rs/latest/saml_rs/struct.SamlValidationContext.html).
+[`SamlValidationContext`](https://docs.rs/saml-rs/latest/saml_rs/model/struct.SamlValidationContext.html).
 
 `Default`, `new`, `try_new`, and the config builders use Recommended.
 Hardenings are separate fields on that preset. The legacy permissive preset
@@ -132,7 +156,7 @@ product, and a minimal expected flow on
 | Run a full flow | [`examples/sso.rs`](examples/sso.rs) and [`examples/slo.rs`](examples/slo.rs) |
 | Change an existing integration | [Migration guides](docs/migrations/README.md) |
 | Look up a type or method | [docs.rs](https://docs.rs/saml-rs/latest/saml_rs/) |
-| Choose metadata trust or replay policy | [Metadata trust](https://docs.rs/saml-rs/latest/saml_rs/#metadata-trust) and [`SamlValidationContext`](https://docs.rs/saml-rs/latest/saml_rs/struct.SamlValidationContext.html) |
+| Choose metadata trust or replay policy | [Metadata trust](https://docs.rs/saml-rs/latest/saml_rs/#metadata-trust) and [`SamlValidationContext`](https://docs.rs/saml-rs/latest/saml_rs/model/struct.SamlValidationContext.html) |
 | See which rules a flow claims | [Conformance records](docs/conformance/web-browser-sso-acceptance.md) |
 | See why the presets differ | [Validation presets](docs/adr/0002-validation-presets.md) |
 
@@ -183,7 +207,7 @@ With `crypto-bergshamra` enabled:
 - Signed-reference placement checks help mitigate XML Signature Wrapping.
 - XML-Enc is available. On RustCrypto, software RSA key-transport decryption
   stays off until the caller opts in through
-  [`XmlEncryptionPolicy`](https://docs.rs/saml-rs/latest/saml_rs/struct.XmlEncryptionPolicy.html).
+  [`XmlEncryptionPolicy`](https://docs.rs/saml-rs/latest/saml_rs/config/struct.XmlEncryptionPolicy.html).
   AWS-LC decrypts RSA-OAEP with the default options.
 
 ## How to surface provider initialisation at startup
