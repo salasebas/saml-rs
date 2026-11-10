@@ -1,11 +1,16 @@
+codecov:
+  notify:
+    after_n_builds: 4
+
 coverage:
   status:
     project:
       default:
-        informational: true
+        target: auto
+        threshold: 0.5%
     patch:
       default:
-        informational: true
+        target: 90%
 
 comment:
   layout: "condensed_header, components, condensed_files, condensed_footer"
