@@ -56,7 +56,7 @@
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let subject: Subject = unreachable!();
-//! let mut issued = IssuedArtifacts::new();
+//! let mut issued = IssuedArtifacts::expire_after(std::time::Duration::from_secs(60));
 //!
 //! let _ = idp.respond_sso_artifact(&peer, &request, subject, RespondSso::post(), &mut issued);
 //! ```
