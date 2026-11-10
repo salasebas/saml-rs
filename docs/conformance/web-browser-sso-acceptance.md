@@ -67,12 +67,14 @@ select the accept combination by setting the fields below.
 
 ## Identity provider
 
-`receive_sso` reads `IdpValidationPolicy.authn_requests`. The accept combination
-is `AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`.
+`receive_sso` reads `IdpValidationPolicy.authn_requests` and
+`IdpValidationPolicy.xml_signatures`. The accept combination is
+`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
 | Require a signed `AuthnRequest` | Identity provider | Inbound | Optional. Stays off unless `RequireSigned` |
+| Do not verify with MD5, RIPEMD-160, or an RSA key shorter than 2048 bits | Identity provider | Inbound | Library policy, on. `XmlSignatureProfile::ExcludeWeakAlgorithms`. `AllowProviderSupportedForCompatibility` relaxes it. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) |
 | Verify a signature that is present | Identity provider | Inbound | Mandatory. Core §3.2.1. `AllowUnsignedForCompatibility` is the samlify-port hatch and does not verify it |
 | UTC `IssueInstant` | Identity provider | Inbound | Mandatory. No off switch. An inbound leap-second value stays accepted |
 | Limit an `AuthnRequest` `IssueInstant` to a caller-chosen maximum age | Identity provider | Inbound `receive_sso` | Library hardening, off. Core §1.3.3 requires a UTC `IssueInstant` and does not define a maximum age. Enabling it can reject a conformant request. `AuthnRequestAgePolicy::Disabled` is the default on `SamlValidationContext::new`. `Bounded { max_age }` accepts an instant at or after `now - max_age - past_tolerance` and at or before `now + future_tolerance`, both edges inclusive. Past tolerance is the `NotOnOrAfter` skew when that skew is positive, otherwise zero. Future tolerance is the magnitude of the `NotBefore` skew when that skew is negative, otherwise zero. `ClockSkew::five_minutes` widens only a `Bounded` window. An inverted skew does not shrink `max_age`. `max_age` of zero leaves that skew neighborhood. The check runs after signature and `Destination` handling and before replay storage. It is not a field of `IdpValidationPolicy` and it is not part of `recommended()` or Compatibility |

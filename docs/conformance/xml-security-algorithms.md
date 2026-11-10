@@ -80,13 +80,13 @@ build verifies them.
 
 | Excluded | Rule | Level |
 | --- | --- | --- |
-| RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, or a detached `SigAlg`, that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, the Shibboleth SP 3 excludes RSA-MD5 and MD5 by default, and xmlsec1 has built without MD5 by default since 1.3.0 |
+| RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, or a detached `SigAlg`, that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, and xmlsec1 has built without MD5 by default since 1.3.0 |
 | RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles. No OASIS rule requires a receiver to reject them. They are outside Conformance §4.1. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
 | An RSA signing certificate shorter than 2048 bits | The certificate is not used to verify. When the peer has no other usable key, verification returns `SamlError::Crypto`, as it does on AWS-LC. Otherwise a message signed with the short key fails signature verification | Library policy, on in Recommended for both roles. XML Signature 1.1 §6.4.2 lets a verifier use an RSA key of 1024 bits or less, and names 2048-bit public keys the minimum recommended key length. RustCrypto without `crypto-legacy-algorithms`, AWS-LC, and FIPS refuse it in every profile. OpenSAML sets no minimum |
 
 SHA-1 stays accepted under `ExcludeWeakAlgorithms`: Conformance §4.1 makes the
-SHA-1 digest and RSAwithSHA1 mandatory to implement, and OpenSAML, the
-Shibboleth SP 3, and xmlsec1 verify them by default. `StrictRsaSha2` excludes
+SHA-1 digest and RSAwithSHA1 mandatory to implement, and OpenSAML and xmlsec1
+verify them by default. `StrictRsaSha2` excludes
 SHA-1 as well. A metadata signature is verified with the provider-supported
 set in every profile.
 
@@ -100,10 +100,11 @@ The default build is `crypto-bergshamra`: RustCrypto with
 `crypto-legacy-algorithms` and `crypto-post-quantum`. A row marked Legacy
 needs `crypto-legacy-algorithms`, and a row marked Post-quantum needs
 `crypto-post-quantum`. A signature with an algorithm the build does not
-verify does not verify. For a message signature, an RSA key shorter than 2048
+verify does not verify. For a message signature, an RSA key of 1024 to 2047
 bits verifies only on RustCrypto with `crypto-legacy-algorithms`, and only
 under `AllowProviderSupportedForCompatibility`. RustCrypto without it, AWS-LC, and
-FIPS reject it.
+FIPS reject it. An RSA key shorter than 1024 bits verifies on no build in any
+profile.
 
 | `SignatureMethod` | Default build | `crypto-aws-lc` | `crypto-fips` |
 | --- | --- | --- | --- |
