@@ -1,4 +1,5 @@
-//! Identity-provider receipt of `ForceAuthn`, `Is passive`, and `Subject`.
+//! Identity-provider receipt of `ForceAuthn`, `Is passive`, `Subject`, and
+//! `RequestedAuthnContext`.
 //!
 //! SAML Core §3.4.1. These fields are exposed to the identity provider
 //! application. Their presence does not reject the request.
@@ -13,11 +14,12 @@ use std::time::SystemTime;
 use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, ForceAuthn,
-    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, IsPassive, MetadataTrustPolicy,
-    NameId, NameIdFormat, Outbound, PrivateKeyPem, Received, ReplayPolicy, RequestedSubject,
-    RequestedSubjectIdentifier, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, Subject,
+    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, BrowserInput,
+    CertificatePem, Credentials, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, IsPassive, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
+    PrivateKeyPem, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
+    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartSso, Status, Subject, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -26,6 +28,11 @@ const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const EMAIL_FORMAT: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
 const BEARER: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+const SMARTCARD: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:Smartcard";
+const PASSWORD_PROTECTED_TRANSPORT: &str =
+    "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
+const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
+const DECLARATION: &str = "https://idp.example.com/authn-context/hardware-token";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
 const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
@@ -137,6 +144,33 @@ fn insert_before_name_id_policy(
     let needle = "<samlp:NameIDPolicy";
     let position = xml.find(needle).ok_or("missing NameIDPolicy")?;
     Ok(format!("{}{element}{}", &xml[..position], &xml[position..]))
+}
+
+fn insert_after_name_id_policy(
+    xml: String,
+    element: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let position = xml
+        .find("<samlp:NameIDPolicy")
+        .ok_or("missing NameIDPolicy")?;
+    let end = position + xml[position..].find("/>").ok_or("unclosed NameIDPolicy")? + 2;
+    Ok(format!("{}{element}{}", &xml[..end], &xml[end..]))
+}
+
+fn requested_authn_context(comparison: &str, references: &str) -> String {
+    format!("<samlp:RequestedAuthnContext{comparison}>{references}</samlp:RequestedAuthnContext>")
+}
+
+fn class_ref(uri: &str) -> String {
+    format!("<saml:AuthnContextClassRef>{uri}</saml:AuthnContextClassRef>")
+}
+
+fn response_xml(
+    response: &Outbound<saml_rs::SsoResponse>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(String::from_utf8(base64_decode(
+        &response.raw_context().context,
+    )?)?)
 }
 
 #[test]
@@ -552,4 +586,245 @@ fn received_authn_request_rejects_a_qualified_flag_and_a_foreign_subject(
             && error.to_string().contains("namespace")
     ));
     Ok(())
+}
+
+#[test]
+fn received_authn_request_exposes_the_requested_authn_context_in_request_order(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let omitted = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
+    assert_eq!(omitted.received.message().requested_authn_context(), None);
+
+    let classes = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| {
+            insert_after_name_id_policy(
+                xml,
+                &requested_authn_context(
+                    "",
+                    &format!(
+                        "{}{}",
+                        class_ref(&format!("\n  {SMARTCARD} ")),
+                        class_ref(PASSWORD_PROTECTED_TRANSPORT)
+                    ),
+                ),
+            )
+        },
+    )?;
+    let requested = classes
+        .received
+        .message()
+        .requested_authn_context()
+        .ok_or("missing RequestedAuthnContext")?;
+    assert_eq!(requested.comparison(), AuthnContextComparison::Exact);
+    assert_eq!(
+        requested.references(),
+        [
+            AuthnContextReference::class(SMARTCARD)?,
+            AuthnContextReference::class(PASSWORD_PROTECTED_TRANSPORT)?,
+        ]
+    );
+
+    let declarations = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| {
+            insert_after_name_id_policy(
+                xml,
+                &requested_authn_context(
+                    " Comparison=\"minimum\"",
+                    &format!("<saml:AuthnContextDeclRef>{DECLARATION}</saml:AuthnContextDeclRef>"),
+                ),
+            )
+        },
+    )?;
+    let requested = declarations
+        .received
+        .message()
+        .requested_authn_context()
+        .ok_or("missing RequestedAuthnContext")?;
+    assert_eq!(requested.comparison(), AuthnContextComparison::Minimum);
+    assert_eq!(
+        requested.references(),
+        [AuthnContextReference::declaration(DECLARATION)?]
+    );
+    Ok(())
+}
+
+#[test]
+fn received_authn_request_rejects_a_requested_authn_context_outside_its_schema(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        (
+            requested_authn_context(" Comparison=\"Exact\"", &class_ref(SMARTCARD)),
+            "Comparison",
+        ),
+        (requested_authn_context("", ""), "must contain"),
+        (
+            requested_authn_context(
+                "",
+                &format!(
+                    "{}<saml:AuthnContextDeclRef>{DECLARATION}</saml:AuthnContextDeclRef>",
+                    class_ref(SMARTCARD)
+                ),
+            ),
+            "must not mix",
+        ),
+        (
+            format!(
+                "{0}{0}",
+                requested_authn_context("", &class_ref(SMARTCARD))
+            ),
+            "must occur once",
+        ),
+        (
+            requested_authn_context(
+                " xmlns:x=\"urn:example:foreign\" x:Comparison=\"minimum\"",
+                &class_ref(SMARTCARD),
+            ),
+            "unqualified",
+        ),
+        (
+            requested_authn_context(
+                "",
+                "<x:AuthnContextDeclRef xmlns:x=\"urn:example:foreign\">urn:example:decl</x:AuthnContextDeclRef>",
+            ),
+            "namespace",
+        ),
+    ];
+    for (element, expected) in cases {
+        let received = receive(
+            IdpValidationPolicy::recommended(),
+            StartSso::post(),
+            |xml| insert_after_name_id_policy(xml, &element),
+        );
+        let Err(error) = received else {
+            return Err(format!("{element} was accepted").into());
+        };
+        if !error.to_string().contains(expected) {
+            return Err(format!("{element} produced {error}").into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_request(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| insert_after_name_id_policy(xml, &requested_authn_context("", &class_ref(SMARTCARD))),
+    )?;
+    let subject = || Subject::new(NameId::new("alice@example.com", None), Vec::new());
+    let respond = |options: RespondSso| {
+        receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            subject(),
+            options.apply_web_browser_sso_generation_rules(),
+        )
+    };
+
+    let unspecified = respond(RespondSso::post());
+    assert!(
+        matches!(unspecified, Err(SamlError::Invalid(message)) if message.contains(UNSPECIFIED))
+    );
+    let other_class = respond(
+        RespondSso::post()
+            .authn_context(AuthnContextReference::class(PASSWORD_PROTECTED_TRANSPORT)?),
+    );
+    assert!(
+        matches!(other_class, Err(SamlError::Invalid(message)) if message.contains(PASSWORD_PROTECTED_TRANSPORT))
+    );
+    let declaration_with_the_class_uri =
+        respond(RespondSso::post().authn_context(AuthnContextReference::declaration(SMARTCARD)?));
+    assert!(matches!(
+        declaration_with_the_class_uri,
+        Err(SamlError::Invalid(_))
+    ));
+
+    let met = response_xml(&respond(
+        RespondSso::post().authn_context(AuthnContextReference::class(SMARTCARD)?),
+    )?)?;
+    assert!(met.contains(&format!(
+        "<saml:AuthnContext><saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef></saml:AuthnContext>"
+    )));
+
+    let refused = response_xml(&respond(RespondSso::post().status(
+        Status::responder().with_subordinate(SubordinateStatusCode::no_authn_context()),
+    ))?)?;
+    assert!(refused.contains(
+        "<samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Responder\"><samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:NoAuthnContext\"/></samlp:StatusCode>"
+    ));
+    assert!(!refused.contains("Assertion"));
+
+    let compatibility = response_xml(&receipt.idp.respond_sso(
+        &receipt.sp_descriptor,
+        &receipt.received,
+        subject(),
+        RespondSso::post(),
+    )?)?;
+    assert!(!compatibility.contains("AuthnStatement"));
+    Ok(())
+}
+
+#[test]
+fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| {
+            insert_after_name_id_policy(
+                xml,
+                &requested_authn_context(
+                    " Comparison=\"minimum\"",
+                    &class_ref(PASSWORD_PROTECTED_TRANSPORT),
+                ),
+            )
+        },
+    )?;
+    let response = response_xml(
+        &receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+            RespondSso::post()
+                .apply_web_browser_sso_generation_rules()
+                .authn_context(AuthnContextReference::declaration(DECLARATION)?),
+        )?,
+    )?;
+    assert!(response.contains(&format!(
+        "<saml:AuthnContext><saml:AuthnContextDeclRef>{DECLARATION}</saml:AuthnContextDeclRef></saml:AuthnContext>"
+    )));
+    Ok(())
+}
+
+#[test]
+fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
+    let response = receipt.idp.respond_sso(
+        &receipt.sp_descriptor,
+        &receipt.received,
+        Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+        RespondSso::post().authn_context(AuthnContextReference::class(SMARTCARD)?),
+    );
+    assert!(
+        matches!(response, Err(SamlError::Invalid(message)) if message.contains("Web Browser SSO generation rules"))
+    );
+    Ok(())
+}
+
+#[test]
+fn authn_context_reference_requires_an_absolute_uri() {
+    assert!(matches!(
+        AuthnContextReference::class("Smartcard"),
+        Err(SamlError::Invalid(_))
+    ));
+    assert!(matches!(
+        AuthnContextReference::declaration(""),
+        Err(SamlError::Invalid(_))
+    ));
 }

@@ -10,7 +10,8 @@ use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
 use crate::model::{
-    validate_issued_name_id_length, validate_name_id_format, Attribute, Status, TopLevelStatusCode,
+    validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
+    RequestedAuthnContext, Status, TopLevelStatusCode,
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
@@ -55,6 +56,8 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(crate) status: Option<&'a Status>,
     pub(crate) typed_attributes: &'a [Attribute],
+    pub(crate) authn_context: Option<&'a AuthnContextReference>,
+    pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
 }
 
 #[derive(Clone, Copy)]
@@ -66,6 +69,8 @@ struct LoginResponseRendering<'a> {
     web_browser_sso_producer: WebBrowserSsoProducer,
     status: Option<&'a Status>,
     typed_attributes: &'a [Attribute],
+    authn_context: Option<&'a AuthnContextReference>,
+    requested_authn_context: Option<&'a RequestedAuthnContext>,
 }
 
 /// A SAML 2.0 Identity Provider: runtime [`EntitySetting`] plus parsed [`IdpMetadata`].
@@ -185,6 +190,12 @@ impl IdentityProvider {
                 "response attributes cannot be combined with a login response template".into(),
             ));
         }
+        if rendering.authn_context.is_some() && !rendering.web_browser_sso_producer.follows() {
+            return Err(SamlError::Invalid(
+                "an authentication context is written only under Web Browser SSO generation rules"
+                    .into(),
+            ));
+        }
         if error_response {
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
             let id = generate_id();
@@ -211,6 +222,16 @@ impl IdentityProvider {
             validate_issued_name_id_length(name_id_format, &user.name_id)?;
         }
         if rendering.custom.is_none() && !has_custom_context {
+            let authn_context = rendering
+                .authn_context
+                .cloned()
+                .unwrap_or_else(AuthnContextReference::unspecified_class);
+            if let Some(requested) = rendering
+                .requested_authn_context
+                .filter(|_| rendering.web_browser_sso_producer.follows())
+            {
+                requested.ensure_met_by(&authn_context)?;
+            }
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
             let id = generate_id();
             let assertion_id = generate_id();
@@ -244,6 +265,7 @@ impl IdentityProvider {
                     login_response::AuthnStatementXml {
                         authn_instant: &window.issue_instant,
                         session_index,
+                        authn_context: &authn_context,
                     },
                 ),
                 attributes,
@@ -395,6 +417,8 @@ impl IdentityProvider {
                 web_browser_sso_producer: overrides.web_browser_sso_producer,
                 status: overrides.status,
                 typed_attributes: overrides.typed_attributes,
+                authn_context: overrides.authn_context,
+                requested_authn_context: overrides.requested_authn_context,
             },
         )?;
         let error_response = overrides

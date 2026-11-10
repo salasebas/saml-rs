@@ -124,6 +124,8 @@ pub mod attribute_name_format {
 
 /// AuthnContext class references (`namespace.authnContextClassRef`).
 pub mod authn_context_class_ref {
+    /// Unspecified class.
+    pub const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
     /// Password class.
     pub const PASSWORD: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:Password";
     /// Password-protected transport class.

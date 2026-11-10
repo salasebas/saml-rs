@@ -14,10 +14,10 @@ use std::time::SystemTime;
 use saml_rs::constants::status_code::AUTH_FAILED;
 use saml_rs::xml::dom::{parse, Node};
 use saml_rs::{
-    AcsEndpoint, Attribute, AttributeNameFormat, AttributeValue, Attributes, EndpointUrl, EntityId,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    PaosAuthnRequest, PaosClientRequest, PaosSsoResponse, RelayStateParam, ReplayPolicy,
-    RespondPaosSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
+    AcsEndpoint, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContextReference,
+    EndpointUrl, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
+    NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest, PaosSsoResponse, RelayStateParam,
+    ReplayPolicy, RespondPaosSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, StartPaosSso, Status, Subject, SubjectConfirmation,
     SubordinateStatusCode,
 };
@@ -395,6 +395,46 @@ fn unpublished_assertion_consumer_on_the_request_is_rejected(
         Ok(_) => return Err("an unpublished assertion consumer is rejected".into()),
     };
     assert!(matches!(error, SamlError::Invalid(_)));
+    Ok(())
+}
+
+#[test]
+fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dyn std::error::Error>>
+{
+    const SMARTCARD: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:Smartcard";
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let requested = idp_request.replace(
+        "</samlp:AuthnRequest>",
+        &format!("<samlp:RequestedAuthnContext><saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef></samlp:RequestedAuthnContext></samlp:AuthnRequest>"),
+    );
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(requested, IDP_SOAP)?,
+        validation(),
+    )?;
+    let unspecified = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default(),
+    );
+    assert!(matches!(unspecified, Err(SamlError::Invalid(_))));
+
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default().authn_context(AuthnContextReference::class(SMARTCARD)?),
+    )?;
+    assert!(answered.envelope().contains(&format!(
+        "<saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef>"
+    )));
     Ok(())
 }
 

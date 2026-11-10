@@ -11,9 +11,9 @@ use crate::entity::User;
 use crate::flow::HttpRequest;
 use crate::idp::PaosSsoResponseInput;
 use crate::model::{
-    Attribute, Attributes, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
-    OutstandingLogout, RelayStateParam, SamlValidationContext, SsoResponse, SsoSession, Status,
-    Subject, TopLevelStatusCode,
+    Attribute, Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive,
+    MessageId, OutstandingLogout, RelayStateParam, SamlValidationContext, SsoResponse, SsoSession,
+    Status, Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
 
@@ -166,6 +166,7 @@ impl StartPaosSso {
 #[derive(Debug, Clone, Default)]
 pub struct RespondPaosSso {
     attributes: Attributes,
+    authn_context: Option<AuthnContextReference>,
 }
 
 impl RespondPaosSso {
@@ -175,6 +176,17 @@ impl RespondPaosSso {
     /// empty collection writes no `AttributeStatement`.
     pub fn attributes(mut self, attributes: Attributes) -> Self {
         self.attributes = attributes;
+        self
+    }
+
+    /// Set the authentication context of the assertion's `AuthnStatement`.
+    ///
+    /// It is written, and checked against the request's
+    /// [`crate::RequestedAuthnContext`], as [`crate::RespondSso::authn_context`]
+    /// does. Omitting it writes the unspecified class. When no requested
+    /// context can be met, answer with [`Saml::reject_paos_sso`].
+    pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
+        self.authn_context = Some(authn_context);
         self
     }
 }
@@ -657,7 +669,8 @@ impl Saml<Idp> {
     /// `subject` is longer than 256 characters, the NameID format is not an
     /// absolute URI reference, [`RespondPaosSso::attributes`] is combined with
     /// a login response template or names a basic attribute that is not an
-    /// XML name, or the response cannot be signed. Returns
+    /// XML name, the authentication context does not meet an exact
+    /// `RequestedAuthnContext`, or the response cannot be signed. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
     pub fn respond_paos_sso(
         &self,
@@ -672,6 +685,7 @@ impl Saml<Idp> {
             Some(subject),
             None,
             options.attributes.as_slice(),
+            options.authn_context.as_ref(),
         )
     }
 
@@ -695,7 +709,7 @@ impl Saml<Idp> {
                 "reject_paos_sso requires an error status".into(),
             ));
         }
-        self.issue_paos_sso(sp, request, None, Some(status), &[])
+        self.issue_paos_sso(sp, request, None, Some(status), &[], None)
     }
 
     fn issue_paos_sso(
@@ -705,6 +719,7 @@ impl Saml<Idp> {
         subject: Option<Subject>,
         status: Option<Status>,
         attributes: &[Attribute],
+        authn_context: Option<&AuthnContextReference>,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = assertion_consumer_for_request(sp, request.message())?;
@@ -741,6 +756,8 @@ impl Saml<Idp> {
                 issuance_lifetime: self.0.issuance_lifetime,
                 status: status.as_ref(),
                 attributes,
+                authn_context,
+                requested_authn_context: request.message().requested_authn_context(),
             })?;
         let envelope = idp_to_ecp_envelope(&IdpToEcp {
             assertion_consumer_service_url: acs.as_str(),

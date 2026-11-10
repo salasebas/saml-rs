@@ -322,7 +322,7 @@ fn expected_child_namespace(stack: &[ExpandedName], child: &[u8]) -> Option<Name
         if root.is(b"AuthnRequest", NamespaceKind::Protocol) {
             return match child {
                 b"NameIDPolicy" | b"RequestedAuthnContext" => Some(NamespaceKind::Protocol),
-                b"Subject" | b"AuthnContextClassRef" => Some(NamespaceKind::Assertion),
+                b"Subject" => Some(NamespaceKind::Assertion),
                 _ => None,
             };
         }
@@ -361,7 +361,8 @@ fn expected_child_namespace(stack: &[ExpandedName], child: &[u8]) -> Option<Name
         return (child == b"StatusCode").then_some(NamespaceKind::Protocol);
     }
     if parent.is(b"RequestedAuthnContext", NamespaceKind::Protocol) {
-        return (child == b"AuthnContextClassRef").then_some(NamespaceKind::Assertion);
+        return matches!(child, b"AuthnContextClassRef" | b"AuthnContextDeclRef")
+            .then_some(NamespaceKind::Assertion);
     }
     if parent.is(b"Assertion", NamespaceKind::Assertion) {
         return match child {
@@ -440,6 +441,7 @@ fn consumed_attributes(element: &ExpandedName) -> &'static [&'static [u8]] {
         (NamespaceKind::Assertion, b"Assertion") => &[b"ID", b"Version", b"IssueInstant"],
         (NamespaceKind::Protocol, b"StatusCode") => &[b"Value"],
         (NamespaceKind::Protocol, b"NameIDPolicy") => &[b"Format", b"AllowCreate"],
+        (NamespaceKind::Protocol, b"RequestedAuthnContext") => &[b"Comparison"],
         (NamespaceKind::Assertion, b"Conditions") => &[b"NotBefore", b"NotOnOrAfter"],
         (NamespaceKind::Assertion, b"NameID") => &[b"Format"],
         (NamespaceKind::Assertion, b"SubjectConfirmation") => &[b"Method"],

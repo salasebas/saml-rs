@@ -465,12 +465,14 @@ pub use idp::IdentityProvider;
 pub use metadata::MetadataSignatureVerification;
 pub use model::{
     Assertion, AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes,
-    AuthnRequest, AuthnRequestAgePolicy, AuthnSession, ClockSkew, LogoutCompleted, LogoutRequest,
-    LogoutResponse, LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy,
-    OutstandingLogout, Received, RelayState, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy,
-    RequestedSubject, RequestedSubjectIdentifier, SamlInstant, SamlValidationContext, SessionIndex,
-    SsoResponse, SsoSession, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
-    TopLevelStatusCode, VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RELAY_STATE_BYTES,
+    AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, AuthnRequest,
+    AuthnRequestAgePolicy, AuthnSession, ClockSkew, LogoutCompleted, LogoutRequest, LogoutResponse,
+    LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy, OutstandingLogout,
+    Received, RelayState, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy,
+    RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,
+    SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, Subject,
+    SubjectConfirmation, SubordinateStatusCode, TopLevelStatusCode, VerifiedXmlSignature,
+    VerifiedXmlSignatureCoverage, MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
     ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementRefusal,
