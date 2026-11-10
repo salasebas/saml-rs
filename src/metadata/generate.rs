@@ -1,5 +1,7 @@
 //! SAML SP and IdP metadata generation.
 
+use std::collections::HashSet;
+
 use crate::constants::{elements_order, name_id_format, namespace, Binding};
 use crate::error::SamlError;
 use crate::metadata::write::MetadataWriter;
@@ -23,8 +25,13 @@ pub struct Endpoint {
     /// Endpoint URL.
     pub location: String,
     /// ACS index for `AssertionConsumerService`; ignored for other endpoint kinds.
+    ///
+    /// An ACS without one is written with its position in the list. When
+    /// another ACS already has that index, it gets the smallest index no
+    /// other ACS uses.
     pub index: Option<u16>,
-    /// Whether this is the default endpoint.
+    /// Writes `isDefault="true"` on an `AssertionConsumerService`; ignored for
+    /// other endpoint kinds.
     pub is_default: bool,
 }
 
@@ -126,38 +133,75 @@ fn write_name_id_formats(
     Ok(())
 }
 
-fn write_endpoint_attrs(w: &mut MetadataWriter, name: &str, e: &Endpoint, index: Option<String>) {
-    let mut attrs = Vec::with_capacity(4);
-    if let Some(index) = index.as_deref() {
-        attrs.push(("index", index));
-    }
-    if e.is_default {
-        attrs.push(("isDefault", "true"));
-    }
-    attrs.push(("Binding", e.binding.urn()));
-    attrs.push(("Location", e.location.as_str()));
-    w.empty(name, &attrs);
+fn write_endpoint(w: &mut MetadataWriter, name: &str, e: &Endpoint) {
+    w.empty(
+        name,
+        &[
+            ("Binding", e.binding.urn()),
+            ("Location", e.location.as_str()),
+        ],
+    );
 }
 
 fn write_single_logout(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
     for endpoint in endpoints {
-        write_endpoint_attrs(w, "SingleLogoutService", endpoint, None);
+        write_endpoint(w, "SingleLogoutService", endpoint);
     }
 }
 
-fn write_assertion_consumer_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
-    for (i, endpoint) in endpoints.iter().enumerate() {
-        let index = endpoint
-            .index
-            .map(|index| index.to_string())
-            .unwrap_or_else(|| i.to_string());
-        write_endpoint_attrs(w, "AssertionConsumerService", endpoint, Some(index));
+fn assertion_consumer_service_indexes(endpoints: &[Endpoint]) -> Result<Vec<u16>, SamlError> {
+    let mut explicit = HashSet::new();
+    for index in endpoints.iter().filter_map(|endpoint| endpoint.index) {
+        if !explicit.insert(index) {
+            return Err(SamlError::Invalid(format!(
+                "duplicate AssertionConsumerService index {index}"
+            )));
+        }
     }
+    let indexes: Vec<Option<u16>> = endpoints
+        .iter()
+        .enumerate()
+        .map(|(position, endpoint)| {
+            endpoint.index.or_else(|| {
+                u16::try_from(position)
+                    .ok()
+                    .filter(|index| !explicit.contains(index))
+            })
+        })
+        .collect();
+    let used: HashSet<u16> = indexes.iter().flatten().copied().collect();
+    let mut unused = (0..=u16::MAX).filter(|index| !used.contains(index));
+    indexes
+        .into_iter()
+        .map(|index| {
+            index.or_else(|| unused.next()).ok_or_else(|| {
+                SamlError::Invalid("more AssertionConsumerService endpoints than indexes".into())
+            })
+        })
+        .collect()
+}
+
+fn write_assertion_consumer_service(
+    w: &mut MetadataWriter,
+    endpoints: &[Endpoint],
+) -> Result<(), SamlError> {
+    let indexes = assertion_consumer_service_indexes(endpoints)?;
+    for (endpoint, index) in endpoints.iter().zip(indexes) {
+        let index = index.to_string();
+        let mut attrs = vec![("index", index.as_str())];
+        if endpoint.is_default {
+            attrs.push(("isDefault", "true"));
+        }
+        attrs.push(("Binding", endpoint.binding.urn()));
+        attrs.push(("Location", endpoint.location.as_str()));
+        w.empty("AssertionConsumerService", &attrs);
+    }
+    Ok(())
 }
 
 fn write_single_sign_on_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
     for endpoint in endpoints {
-        write_endpoint_attrs(w, "SingleSignOnService", endpoint, None);
+        write_endpoint(w, "SingleSignOnService", endpoint);
     }
 }
 
@@ -180,7 +224,7 @@ fn write_artifact_resolution_service(
 
 fn write_manage_name_id_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
     for endpoint in endpoints {
-        write_endpoint_attrs(w, "ManageNameIDService", endpoint, None);
+        write_endpoint(w, "ManageNameIDService", endpoint);
     }
 }
 
@@ -195,7 +239,7 @@ fn write_sp_group(
         "SingleLogoutService" => write_single_logout(w, &cfg.single_logout_service),
         "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
         "AssertionConsumerService" => {
-            write_assertion_consumer_service(w, &cfg.assertion_consumer_service)
+            write_assertion_consumer_service(w, &cfg.assertion_consumer_service)?
         }
         _ => {}
     }
@@ -272,7 +316,9 @@ fn insert_manage_name_id_service(order: &mut Vec<String>) {
 /// # Errors
 ///
 /// Returns [`SamlError::Invalid`] when a `<NameIDFormat>` it writes is not an
-/// absolute URI reference.
+/// absolute URI reference, when two `AssertionConsumerService` endpoints set
+/// the same [`Endpoint::index`], or when there are more of them than
+/// `unsignedShort` indexes.
 pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError> {
     let is_custom_order = cfg.elements_order.is_some();
     let mut order = elements_order_or_default(&cfg.elements_order, elements_order::DEFAULT);
@@ -463,6 +509,174 @@ mod tests {
             parsed.get_x509_certificate(CertUse::Encryption).as_deref(),
             Some("MIIBencrypt")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
+        let config =
+            crate::SpConfig::builder(crate::EntityId::try_new("https://sp.example.com/metadata")?)
+                .acs_endpoint(crate::AcsEndpoint::post("https://sp/acs-implicit")?)
+                .acs_endpoint(crate::AcsEndpoint::post("https://sp/acs-zero")?.with_index(0))
+                .validation(crate::SpValidationPolicy::compatibility())
+                .build()?;
+
+        let sp = crate::Saml::sp(config)?;
+        let parsed = SpMetadata::from_xml(sp.metadata_xml())?;
+
+        let endpoint = |index, location: &str| crate::metadata::sp::AcsMetadataEndpoint {
+            binding: Binding::Post,
+            location: location.into(),
+            index: Some(index),
+            is_default: false,
+            is_default_false: false,
+        };
+        assert_eq!(
+            parsed.get_assertion_consumer_service_by_index(0)?,
+            Some(endpoint(0, "https://sp/acs-zero"))
+        );
+        assert_eq!(
+            parsed.get_assertion_consumer_service_by_index(1)?,
+            Some(endpoint(1, "https://sp/acs-implicit"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn sp_metadata_keeps_free_positions_and_fills_taken_ones() -> TestResult {
+        let acs = |index, location: &str| Endpoint {
+            index,
+            ..Endpoint::new(Binding::Post, location)
+        };
+        let cfg = SpMetadataConfig {
+            entity_id: "https://sp.example.com/metadata".into(),
+            assertion_consumer_service: vec![
+                acs(None, "https://sp/a"),
+                acs(None, "https://sp/b"),
+                acs(Some(0), "https://sp/c"),
+                acs(None, "https://sp/d"),
+                acs(Some(7), "https://sp/e"),
+            ],
+            ..Default::default()
+        };
+
+        let xml = generate_sp_metadata(&cfg)?;
+
+        let post = Binding::Post.urn();
+        let written = [("2", "a"), ("1", "b"), ("0", "c"), ("3", "d"), ("7", "e")]
+            .map(|(index, name)| {
+                format!(
+                    r#"<AssertionConsumerService index="{index}" Binding="{post}" Location="https://sp/{name}"/>"#
+                )
+            })
+            .concat();
+        assert!(xml.contains(&written), "{xml}");
+        Ok(())
+    }
+
+    #[test]
+    fn sp_metadata_rejects_duplicate_explicit_acs_index() {
+        let acs = |location: &str| Endpoint {
+            index: Some(3),
+            ..Endpoint::new(Binding::Post, location)
+        };
+        let cfg = SpMetadataConfig {
+            entity_id: "https://sp.example.com/metadata".into(),
+            assertion_consumer_service: vec![acs("https://sp/a"), acs("https://sp/b")],
+            ..Default::default()
+        };
+
+        let result = generate_sp_metadata(&cfg);
+
+        assert!(matches!(
+            result,
+            Err(SamlError::Invalid(message))
+                if message == "duplicate AssertionConsumerService index 3"
+        ));
+    }
+
+    #[test]
+    fn sp_metadata_rejects_more_acs_endpoints_than_indexes() {
+        let cfg = SpMetadataConfig {
+            entity_id: "https://sp.example.com/metadata".into(),
+            assertion_consumer_service: vec![
+                Endpoint::new(Binding::Post, "https://sp/acs");
+                usize::from(u16::MAX) + 2
+            ],
+            ..Default::default()
+        };
+
+        let result = generate_sp_metadata(&cfg);
+
+        assert!(matches!(
+            result,
+            Err(SamlError::Invalid(message))
+                if message == "more AssertionConsumerService endpoints than indexes"
+        ));
+    }
+
+    #[test]
+    fn metadata_writes_is_default_only_on_indexed_endpoints() -> TestResult {
+        let default = |binding, location: &str| Endpoint {
+            is_default: true,
+            ..Endpoint::new(binding, location)
+        };
+        let sp = generate_sp_metadata(&SpMetadataConfig {
+            entity_id: "https://sp.example.com/metadata".into(),
+            single_logout_service: vec![default(Binding::Redirect, "https://sp/slo")],
+            assertion_consumer_service: vec![default(Binding::Post, "https://sp/acs")],
+            manage_name_id_service: vec![default(Binding::Redirect, "https://sp/nameid")],
+            ..Default::default()
+        })?;
+        let idp = generate_idp_metadata(&IdpMetadataConfig {
+            entity_id: "https://idp.example.com/metadata".into(),
+            single_sign_on_service: vec![default(Binding::Redirect, "https://idp/sso")],
+            single_logout_service: vec![default(Binding::Redirect, "https://idp/slo")],
+            manage_name_id_service: vec![default(Binding::Soap, "https://idp/nameid")],
+            ..Default::default()
+        })?;
+
+        let redirect = Binding::Redirect.urn();
+        let soap = Binding::Soap.urn();
+        let post = Binding::Post.urn();
+        for (xml, element) in [
+            (
+                &sp,
+                format!(r#"<SingleLogoutService Binding="{redirect}" Location="https://sp/slo"/>"#),
+            ),
+            (
+                &sp,
+                format!(
+                    r#"<ManageNameIDService Binding="{redirect}" Location="https://sp/nameid"/>"#
+                ),
+            ),
+            (
+                &sp,
+                format!(
+                    r#"<AssertionConsumerService index="0" isDefault="true" Binding="{post}" Location="https://sp/acs"/>"#
+                ),
+            ),
+            (
+                &idp,
+                format!(
+                    r#"<SingleSignOnService Binding="{redirect}" Location="https://idp/sso"/>"#
+                ),
+            ),
+            (
+                &idp,
+                format!(
+                    r#"<SingleLogoutService Binding="{redirect}" Location="https://idp/slo"/>"#
+                ),
+            ),
+            (
+                &idp,
+                format!(r#"<ManageNameIDService Binding="{soap}" Location="https://idp/nameid"/>"#),
+            ),
+        ] {
+            assert!(xml.contains(&element), "{element} not in {xml}");
+        }
+        assert_eq!(sp.matches("isDefault").count(), 1);
+        assert!(!idp.contains("isDefault"));
         Ok(())
     }
 
