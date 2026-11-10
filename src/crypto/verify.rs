@@ -15,6 +15,7 @@ use super::response_root::root_uses_protocol_response_rules;
 use super::signature_profile::{
     allows_digest_method, allows_signature_method, check_verification_key,
 };
+use crate::assertion_acceptance::consumed_assertion;
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
@@ -247,17 +248,6 @@ fn verified_root_content(
 
 /// The response signature covers every assertion, or every assertion is signed.
 /// An unsigned sibling is rejected.
-fn assertion_has_bearer_confirmation(assertion: &Node) -> bool {
-    const BEARER: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
-    assertion
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Subject")
-        .flat_map(|subject| subject.children.iter())
-        .filter(|child| child.local_name == "SubjectConfirmation")
-        .any(|confirmation| confirmation.attr("Method") == Some(BEARER))
-}
-
 fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool {
     let assertions = children_named(root, "Assertion");
     !assertions.is_empty()
@@ -288,12 +278,9 @@ fn verified_content(
                 }
                 return Err(verified_content_not_covered());
             }
-            let chosen = assertions
-                .iter()
-                .find(|assertion| assertion_has_bearer_confirmation(assertion))
-                .copied()
-                .unwrap_or(assertions[0]);
-            return Ok(Some(xml[chosen.start..chosen.end].to_string()));
+            return Ok(
+                consumed_assertion(root).map(|chosen| xml[chosen.start..chosen.end].to_string())
+            );
         }
         if has_child(root, "EncryptedAssertion") {
             if response_is_covered(targets, root) {
@@ -465,11 +452,27 @@ impl VerifiedEmbeddedSignature {
     }
 }
 
+/// The `<Assertion>` child of `response` whose source starts at `start`.
+fn child_assertion_at(
+    document: &BergshamraDocument<'_>,
+    response: BergshamraNodeId,
+    start: usize,
+) -> Option<BergshamraNodeId> {
+    document.children_iter(response).find(|child| {
+        document.element(*child).is_some_and(|element| {
+            element.matches_name_ns(crate::constants::namespace::ASSERTION, "Assertion")
+        }) && document
+            .node_range(*child)
+            .is_some_and(|range| range.start == start)
+    })
+}
+
 fn verified_embedded_signature(
     document: &BergshamraDocument<'_>,
     signature_node: BergshamraNodeId,
     references: &[VerifiedReference],
     targets: &[VerifiedTarget],
+    consumed_assertion: Option<&Node>,
 ) -> Result<Option<VerifiedEmbeddedSignature>, SamlError> {
     let Some(root) = document.document_element() else {
         return Ok(None);
@@ -484,19 +487,15 @@ fn verified_embedded_signature(
     let response_covered = root_element
         .matches_name_ns(crate::constants::namespace::PROTOCOL, "Response")
         && (whole_document_covered || reference_covers_node(references, root));
-    let assertion_node =
-        if root_element.matches_name_ns(crate::constants::namespace::ASSERTION, "Assertion") {
-            Some(root)
-        } else if root_element.matches_name_ns(crate::constants::namespace::PROTOCOL, "Response") {
-            bergshamra_child_element(
-                document,
-                root,
-                crate::constants::namespace::ASSERTION,
-                "Assertion",
-            )
-        } else {
-            None
-        };
+    let assertion_node = if root_element
+        .matches_name_ns(crate::constants::namespace::ASSERTION, "Assertion")
+    {
+        Some(root)
+    } else if root_element.matches_name_ns(crate::constants::namespace::PROTOCOL, "Response") {
+        consumed_assertion.and_then(|consumed| child_assertion_at(document, root, consumed.start))
+    } else {
+        None
+    };
     let assertion_directly_covered = assertion_node.is_some_and(|assertion| {
         reference_covers_node(references, assertion)
             || (assertion == root && whole_document_covered)
@@ -961,6 +960,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     };
     let root = &prepared.dom.root;
     let protocol_response = prepared.protocol_response;
+    let consumed = consumed_assertion(root);
 
     let mut tried_invalid = false;
     let mut last_error = None;
@@ -990,6 +990,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                                     signature_node,
                                     &references,
                                     &signature_targets,
+                                    consumed,
                                 )?;
                                 // SSO evidence does not include LogoutRequest or
                                 // LogoutResponse coverage. A protocol Response can

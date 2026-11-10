@@ -90,8 +90,9 @@ verify them by default. `StrictRsaSha2` excludes
 SHA-1 as well. A metadata signature is verified with the provider-supported
 set in every profile.
 
-`SsoSession::verified_xml_signatures` reports each accepted `SignatureMethod`
-URI, and `SsoSession::sig_alg` the accepted detached `SigAlg`. Neither applies
+`SsoSession::verified_xml_signatures` reports the `SignatureMethod` URI of each
+verified signature over the Response root or the consumed Assertion, and
+`SsoSession::sig_alg` the accepted detached `SigAlg`. Neither applies
 an allowlist.
 
 ### Provider-supported set

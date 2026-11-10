@@ -10,7 +10,7 @@ use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::constants::name_id_format::{PERSISTENT, UNSPECIFIED};
-use saml_rs::constants::signature_algorithm::RSA_SHA256;
+use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512};
 use saml_rs::crypto::{
     construct_message_signature, construct_saml_signature, keys::load_private_key,
 };
@@ -19,7 +19,7 @@ use saml_rs::{
     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
     PendingAuthnRequest, PrivateKeyPem, ReplayCache, ReplayKey, ReplayPolicy, RespondSso, Saml,
     SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, SsoSession, StartSso, Subject,
+    SsoResponse, SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -405,7 +405,6 @@ fn accept_simple_sign(
     )?)
 }
 
-#[cfg(not(feature = "crypto-fips"))]
 fn sign_first_assertion(xml: &str, algorithm: &str) -> Result<String, Box<dyn std::error::Error>> {
     let key = load_private_key(PRIVKEY, None)?;
     Ok(construct_saml_signature(
@@ -419,7 +418,6 @@ fn sign_first_assertion(xml: &str, algorithm: &str) -> Result<String, Box<dyn st
     )?)
 }
 
-#[cfg(not(feature = "crypto-fips"))]
 fn move_last_assertion_first(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     let first = xml.find("<saml:Assertion").ok_or("missing assertion")?;
     let last = xml.rfind("<saml:Assertion").ok_or("missing assertion")?;
@@ -756,6 +754,51 @@ fn the_session_comes_from_the_bearer_assertion() -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+/// The response of `exchange` without signatures, with a holder-of-key
+/// assertion `_second_assertion` before the bearer assertion.
+fn holder_of_key_assertion_first(
+    exchange: &Exchange,
+) -> Result<String, Box<dyn std::error::Error>> {
+    move_last_assertion_first(&replace_in_last_assertion(
+        &duplicate_assertion(
+            &strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?,
+            "_second_assertion",
+        )?,
+        "urn:oasis:names:tc:SAML:2.0:cm:bearer",
+        "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key",
+    )?)
+}
+
+#[test]
+fn only_the_bearer_assertion_signature_is_consumed_assertion_evidence(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let holder_of_key_signed =
+        sign_first_assertion(&holder_of_key_assertion_first(&exchange)?, RSA_SHA384)?;
+    let both_signed = sign_first_assertion(
+        &move_last_assertion_first(&holder_of_key_signed)?,
+        RSA_SHA512,
+    )?;
+    let xml = move_last_assertion_first(&both_signed)?;
+    assert_eq!(xml.matches("</ds:Signature>").count(), 2);
+
+    let session = accept(&exchange, &xml)?;
+
+    assert_ne!(session.assertion_id().as_str(), "_second_assertion");
+    let [signature] = session.verified_xml_signatures() else {
+        return Err(format!(
+            "expected only the bearer assertion signature, got {:?}",
+            session.verified_xml_signatures()
+        )
+        .into());
+    };
+    assert_eq!(
+        (signature.algorithm_uri(), signature.coverage()),
+        (RSA_SHA512, VerifiedXmlSignatureCoverage::ConsumedAssertion)
+    );
+    Ok(())
+}
+
 #[cfg(feature = "crypto-rustcrypto")]
 #[test]
 fn a_later_sha1_assertion_signature_is_rejected_by_the_rsa_sha2_profile(
@@ -1057,6 +1100,39 @@ mod encrypted_assertions {
             accept(&exchange, &resign_response(&second_unsigned)?),
             |error| matches!(error, SamlError::SignatureMissing),
         )
+    }
+
+    #[test]
+    fn only_the_decrypted_bearer_assertion_signature_is_consumed_assertion_evidence(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(require_signed())?;
+        let holder_of_key_encrypted = encrypt_first(
+            &sign_first_assertion(&holder_of_key_assertion_first(&exchange)?, RSA_SHA384)?,
+            AES_256,
+            CERT,
+        )?;
+        let both_encrypted = encrypt_first(
+            &sign_first_assertion(&holder_of_key_encrypted, RSA_SHA512)?,
+            AES_256,
+            CERT,
+        )?;
+
+        let session = accept(&exchange, &resign_response(&both_encrypted)?)?;
+
+        assert_ne!(session.assertion_id().as_str(), "_second_assertion");
+        let evidence: Vec<_> = session
+            .verified_xml_signatures()
+            .iter()
+            .map(|signature| (signature.algorithm_uri(), signature.coverage()))
+            .collect();
+        assert_eq!(
+            evidence,
+            [
+                (RSA_SHA256, VerifiedXmlSignatureCoverage::ResponseRoot),
+                (RSA_SHA512, VerifiedXmlSignatureCoverage::ConsumedAssertion),
+            ]
+        );
+        Ok(())
     }
 
     fn require_signed() -> SpValidationPolicy {
