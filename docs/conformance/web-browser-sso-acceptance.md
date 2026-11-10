@@ -42,7 +42,8 @@ select the accept combination by setting the fields below.
 | Verify the signature, then decrypt | Accepting service provider | Inbound | Recommendation, on, with no relaxation. Errata 05 E93 replaces Core §6.2: when CBC is used, a relying party `SHOULD` require integrity protection before it processes assertions that contain encrypted data. Typed acceptance always verifies a signature over the assertion or the response first, for every data-encryption algorithm. Without a covered `Response`, a response with several assertions is rejected with `Unsupported` and nothing is decrypted |
 | Reject a plaintext `<NameID>` or `<Attribute>` once its encrypted form is selected | Accepting service provider | Inbound | Library policy, the same rule a service provider applies to a plaintext `<Assertion>` under `encrypt_assertions`. No OASIS receiver rule requires it. `SamlError::EncryptionRequired` names the element. There is no relaxation; leave the capability unselected to accept both forms |
 | The plaintext is one `<NameID>` or one `<Attribute>` in the assertion namespace | Accepting service provider | Inbound | Library policy. Core §2.2.4 and §2.7.3.2 require that content of the producer. The decrypted element is placed in the same location and the response is validated again against the protocol profile. An `<EncryptedID>` that carries a `<BaseID>` or an `<Assertion>`, which Core allows, returns `Unsupported`. Any other content returns `ProtocolProfile` |
-| Do not require the RSA-SHA2 XML signature profile | Accepting service provider | Inbound | Library hardening, off. `XmlSignatureProfile::AllowProviderSupportedForCompatibility`. Conformance §4.1 requires RSAwithSHA1, and Core §5.4.4 does not require a verifier to reject other transforms |
+| Do not require the RSA-SHA2 XML signature profile | Accepting service provider | Inbound | Library hardening, off. Conformance §4.1 requires RSAwithSHA1, and Core §5.4.4 does not require a verifier to reject other transforms |
+| Do not verify with MD5, RIPEMD-160, or an RSA key shorter than 2048 bits | Accepting service provider | Inbound | Library policy, on. `XmlSignatureProfile::ExcludeWeakAlgorithms`. `AllowProviderSupportedForCompatibility` relaxes it. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) |
 | Evaluate an `<AudienceRestriction>` that is present | Accepting service provider | Inbound | Mandatory when the element is present. `AudienceValidationPolicy::EvaluatePresentRestrictions`. `Validate` also rejects a missing restriction. That extra rejection is library hardening. Recommended uses `EvaluatePresentRestrictions` |
 | Several `<AudienceRestriction>` elements are all required, and audiences inside one restriction are alternatives | Accepting service provider | Inbound | Mandatory when the elements are present. Core §2.5.1.4, Approved Errata 05 E46. No off switch beyond the audience policy above |
 | Reject a `<Conditions>` child that is not understood | Accepting service provider | Inbound | Mandatory. Core §2.5.1.1. Indeterminate is rejected. No off switch |
@@ -66,12 +67,14 @@ select the accept combination by setting the fields below.
 
 ## Identity provider
 
-`receive_sso` reads `IdpValidationPolicy.authn_requests`. The accept combination
-is `AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`.
+`receive_sso` reads `IdpValidationPolicy.authn_requests` and
+`IdpValidationPolicy.xml_signatures`. The accept combination is
+`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
 | Require a signed `AuthnRequest` | Identity provider | Inbound | Optional. Stays off unless `RequireSigned` |
+| Do not verify with MD5, RIPEMD-160, or an RSA key shorter than 2048 bits | Identity provider | Inbound | Library policy, on. `XmlSignatureProfile::ExcludeWeakAlgorithms`. `AllowProviderSupportedForCompatibility` relaxes it. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) |
 | Verify a signature that is present | Identity provider | Inbound | Mandatory. Core §3.2.1. `AllowUnsignedForCompatibility` is the samlify-port hatch and does not verify it |
 | UTC `IssueInstant` | Identity provider | Inbound | Mandatory. No off switch. An inbound leap-second value stays accepted |
 | Limit an `AuthnRequest` `IssueInstant` to a caller-chosen maximum age | Identity provider | Inbound `receive_sso` | Library hardening, off. Core §1.3.3 requires a UTC `IssueInstant` and does not define a maximum age. Enabling it can reject a conformant request. `AuthnRequestAgePolicy::Disabled` is the default on `SamlValidationContext::new`. `Bounded { max_age }` accepts an instant at or after `now - max_age - past_tolerance` and at or before `now + future_tolerance`, both edges inclusive. Past tolerance is the `NotOnOrAfter` skew when that skew is positive, otherwise zero. Future tolerance is the magnitude of the `NotBefore` skew when that skew is negative, otherwise zero. `ClockSkew::five_minutes` widens only a `Bounded` window. An inverted skew does not shrink `max_age`. `max_age` of zero leaves that skew neighborhood. The check runs after signature and `Destination` handling and before replay storage. It is not a field of `IdpValidationPolicy` and it is not part of `recommended()` or Compatibility |

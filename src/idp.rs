@@ -712,7 +712,7 @@ impl IdentityProvider {
                 check_signature: self.metadata.is_want_authn_requests_signed(),
                 verify_signature_if_present: self.setting.verify_authn_request_signature_if_present,
                 require_audience_restriction: true,
-                strict_xml_signature_profile: false,
+                xml_signatures: self.setting.xml_signatures,
                 from_issuer: sp.metadata.get_entity_id(),
                 signing_certs: &signing_certs,
                 hmac_secret: sp.setting.hmac_secret.as_ref(),

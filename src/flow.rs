@@ -4,7 +4,7 @@
 use crate::binding::{
     base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
+use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
 use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{Binding, ParserType};
 use crate::context::is_valid_xml_with_limits;
@@ -115,8 +115,9 @@ pub struct FlowOptions<'a> {
     /// Applies only when `expected_audience` is set. When false, a present
     /// restriction is still evaluated.
     pub require_audience_restriction: bool,
-    /// Whether embedded SAML signatures must satisfy the strict RSA-SHA2 profile.
-    pub strict_xml_signature_profile: bool,
+    /// Algorithms a signature that authenticates the message may use, for an
+    /// embedded signature and a detached `SigAlg`.
+    pub xml_signatures: XmlSignatureProfile,
     /// Expected issuer (peer `entityID`).
     pub from_issuer: Option<&'a str>,
     /// Peer signing certificate(s) for verification.
@@ -170,7 +171,7 @@ impl<'a> Default for FlowOptions<'a> {
             check_signature: false,
             verify_signature_if_present: false,
             require_audience_restriction: true,
-            strict_xml_signature_profile: false,
+            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
             from_issuer: None,
             signing_certs: &[],
             hmac_secret: None,
@@ -555,7 +556,7 @@ fn verify_embedded_signature(
         opts.signing_certs,
         opts.hmac_secret,
         opts.xml_limits,
-        opts.strict_xml_signature_profile,
+        opts.xml_signatures,
     )?;
     let verified_xml_signatures = verification
         .verified_embedded_signatures()
@@ -860,6 +861,9 @@ fn verify_detached(
         sig_alg,
         octet,
     )?;
+    if !crate::crypto::signature_profile::allows_signature_method(opts.xml_signatures, sig_alg) {
+        return Err(SamlError::AlgorithmUnsupported);
+    }
     crate::crypto::initialize_crypto_provider()?;
 
     if let Some(secret) = opts
@@ -875,7 +879,13 @@ fn verify_detached(
     let mut provider_error = None;
     let mut tried_invalid = false;
     for cert in opts.signing_certs {
-        match crate::crypto::verify_message_signature(octet, signature, cert, sig_alg) {
+        match crate::crypto::sign::verify_message_signature_under_profile(
+            octet,
+            signature,
+            cert,
+            sig_alg,
+            opts.xml_signatures,
+        ) {
             Ok(true) => return Ok(sig_alg.to_string()),
             Ok(false) => tried_invalid = true,
             Err(error @ SamlError::Crypto(_)) => {

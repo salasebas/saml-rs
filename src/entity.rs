@@ -4,7 +4,7 @@
 use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
-use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
+use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
 use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
@@ -71,9 +71,9 @@ pub struct EntitySetting {
     pub(crate) require_audience_restriction: bool,
     /// SP: requires signed messages.
     pub want_message_signed: bool,
-    /// Typed SP: enforce the strict RSA-SHA2 profile on embedded signatures that
-    /// authenticate accepted SSO and Single Logout messages.
-    pub(crate) strict_xml_signature_profile: bool,
+    /// Typed SP and IdP: algorithms a signature that authenticates an accepted
+    /// message may use.
+    pub(crate) xml_signatures: XmlSignatureProfile,
     /// Typed SP: requires outer integrity for CBC-encrypted Assertions.
     pub(crate) want_encrypted_cbc_response_signed: bool,
     /// IdP: requires signed AuthnRequests.
@@ -210,10 +210,7 @@ impl fmt::Debug for EntitySetting {
                 &self.require_audience_restriction,
             )
             .field("want_message_signed", &self.want_message_signed)
-            .field(
-                "strict_xml_signature_profile",
-                &self.strict_xml_signature_profile,
-            )
+            .field("xml_signatures", &self.xml_signatures)
             .field(
                 "want_encrypted_cbc_response_signed",
                 &self.want_encrypted_cbc_response_signed,
@@ -339,7 +336,7 @@ impl Default for EntitySetting {
             validate_audience: true,
             require_audience_restriction: true,
             want_message_signed: false,
-            strict_xml_signature_profile: false,
+            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
             want_encrypted_cbc_response_signed: false,
             want_authn_requests_signed: false,
             verify_authn_request_signature_if_present: false,

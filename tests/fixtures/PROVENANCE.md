@@ -73,6 +73,23 @@ is `misc/response.xml` signed with that key by `construct_saml_signature` and
 The certificate SHA-256 fingerprint is
 `F5:90:41:E6:A5:8C:02:F5:68:5A:D0:E6:9C:1C:15:09:10:07:78:A5:7C:AD:79:30:E1:0C:74:60:4C:16:F2:1C`.
 
+## 1024-bit RSA fixture
+
+`key/rsa1024/privkey.pkcs8.pem` and `key/rsa1024/cert.pem` are a test-only
+1024-bit RSA key and self-signed certificate for the short-key tests in
+`tests/conformance_algorithms.rs`. They are not part of the provider matrix
+audit above. They were generated with OpenSSL `4.1.0`:
+`genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:1024` and
+`req -new -x509 -sha256 -days 36500`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `key/rsa1024/privkey.pkcs8.pem` | `55d85e3b69dabd23c64a80f95a04a6781b46f10e3dc18873a0691b73906bb0ef` |
+| `key/rsa1024/cert.pem` | `c7f4594ff7a06722de3eedf4359f945e110f8f7603761ef94feeb88b510970dc` |
+
+The certificate SHA-256 fingerprint is
+`B6:95:E0:D1:5C:B7:AC:E1:A4:0E:0D:6B:55:4D:74:6C:B8:01:1C:05:81:DB:12:F3:84:B1:18:93:7F:61:51:6A`.
+
 ## External SLO HTTP-Redirect fixtures
 
 The fixtures under `tests/fixtures/interop/` are immutable interoperability

@@ -520,7 +520,7 @@ mod signed_tests {
 
     fn strict_sp() -> Result<ServiceProvider, SamlError> {
         let mut service_provider = sp()?;
-        service_provider.setting.strict_xml_signature_profile = true;
+        service_provider.setting.xml_signatures = crate::config::XmlSignatureProfile::StrictRsaSha2;
         Ok(service_provider)
     }
 

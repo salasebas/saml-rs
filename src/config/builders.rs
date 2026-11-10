@@ -736,10 +736,7 @@ impl TryFrom<&SpConfig> for EntitySetting {
         setting.require_audience_restriction =
             audience_restriction_required(config.validation.audience);
         setting.want_message_signed = response_signature_required(config.validation.responses);
-        setting.strict_xml_signature_profile = matches!(
-            config.validation.xml_signatures,
-            super::XmlSignatureProfile::StrictRsaSha2
-        );
+        setting.xml_signatures = config.validation.xml_signatures;
         setting.want_encrypted_cbc_response_signed =
             encrypted_cbc_response_signature_required(config.validation.responses);
         setting.want_logout_request_signed =
@@ -769,6 +766,7 @@ impl TryFrom<&IdpConfig> for EntitySetting {
             authn_request_signature_required(config.validation.authn_requests);
         setting.verify_authn_request_signature_if_present =
             verify_present_authn_request_signature(config.validation.authn_requests);
+        setting.xml_signatures = config.validation.xml_signatures;
         setting.want_logout_request_signed =
             logout_signature_required(config.validation.logout.requests)?;
         setting.want_logout_response_signed =

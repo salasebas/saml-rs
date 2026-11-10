@@ -713,7 +713,7 @@ impl ServiceProvider {
                 check_signature: true,
                 verify_signature_if_present: false,
                 require_audience_restriction: self.setting.require_audience_restriction,
-                strict_xml_signature_profile: self.setting.strict_xml_signature_profile,
+                xml_signatures: self.setting.xml_signatures,
                 from_issuer: idp.metadata.get_entity_id(),
                 signing_certs: &signing_certs,
                 hmac_secret: idp.setting.hmac_secret.as_ref(),
