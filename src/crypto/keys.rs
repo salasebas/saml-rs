@@ -25,11 +25,16 @@ pub(crate) fn load_hmac_secret(secret: &HmacSecret) -> Result<Key, SamlError> {
 }
 
 /// Wrap a bare base64 certificate (as found in metadata) into a PEM block.
-fn to_cert_pem(cert: &str) -> String {
+fn to_cert_pem(cert: &str) -> Result<String, SamlError> {
     if cert.contains("BEGIN CERTIFICATE") {
-        return cert.to_string();
+        return Ok(cert.to_string());
     }
     let b64 = normalize_cert_string(cert);
+    if !b64.is_ascii() {
+        return Err(SamlError::Crypto(
+            "certificate is not base64 text".to_string(),
+        ));
+    }
     let mut body = String::new();
     let mut i = 0;
     while i < b64.len() {
@@ -38,13 +43,15 @@ fn to_cert_pem(cert: &str) -> String {
         body.push('\n');
         i = end;
     }
-    format!("-----BEGIN CERTIFICATE-----\n{body}-----END CERTIFICATE-----\n")
+    Ok(format!(
+        "-----BEGIN CERTIFICATE-----\n{body}-----END CERTIFICATE-----\n"
+    ))
 }
 
 /// Load an X.509 certificate (PEM or bare base64) as a verification key.
 pub fn load_certificate(cert: &str) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    load_x509_cert_pem(to_cert_pem(cert).as_bytes()).map_err(crypto_err)
+    load_x509_cert_pem(to_cert_pem(cert)?.as_bytes()).map_err(crypto_err)
 }
 
 /// Build a `<ds:KeyInfo><ds:X509Data><ds:X509Certificate>` block from a
@@ -106,6 +113,17 @@ mod tests {
         let key_info = build_key_info(SP_CERT);
         assert!(key_info.contains("<ds:X509Certificate>"));
         assert!(key_info.contains("xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\""));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_non_ascii_bare_certificate_across_pem_line_boundary(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let cert = format!("{}\u{a0}AAAA", "A".repeat(63));
+        assert!(matches!(
+            load_certificate(&cert),
+            Err(SamlError::Crypto(message)) if message == "certificate is not base64 text"
+        ));
         Ok(())
     }
 }
