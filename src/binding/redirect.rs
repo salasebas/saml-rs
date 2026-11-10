@@ -17,13 +17,6 @@ fn url_encode(value: &str) -> String {
     byte_serialize(value.as_bytes()).collect()
 }
 
-fn has_query(base_url: &str) -> bool {
-    base_url
-        .split_once('?')
-        .map(|(_, q)| !q.is_empty())
-        .unwrap_or(false)
-}
-
 /// Build the unsigned query string for the SAML HTTP-Redirect binding.
 ///
 /// `saml_param` is `SAMLRequest` or `SAMLResponse`; `b64_value` is the
@@ -45,8 +38,9 @@ pub fn redirect_binding_query(
 
 /// Build a full unsigned HTTP-Redirect URL.
 ///
-/// DEFLATE → base64 → url-encode the message, choose `?`/`&` based on whether
-/// `base_url` already carries a query, and append an optional `RelayState`.
+/// DEFLATE → base64 → url-encode the message and add it, with an optional
+/// `RelayState`, to the query of `base_url`, after any existing query and
+/// before any fragment.
 ///
 /// Rejects a direct child `ds:Signature` on the protocol root. Bindings §3.4.4.1.
 pub fn build_redirect_url(
@@ -62,10 +56,17 @@ pub fn build_redirect_url(
     Ok(append_redirect_query(base_url, &query))
 }
 
-/// Append an encoded query to `base_url`, after any query it already has.
+/// Add an encoded query to `base_url`, after any query it already has and
+/// before any fragment.
 pub(crate) fn append_redirect_query(base_url: &str, query: &str) -> String {
-    let separator = if has_query(base_url) { '&' } else { '?' };
-    format!("{base_url}{separator}{query}")
+    let fragment_start = base_url.find('#').unwrap_or(base_url.len());
+    let (before_fragment, fragment) = base_url.split_at(fragment_start);
+    let separator = match before_fragment.split_once('?') {
+        None => "?",
+        Some((_, "")) => "",
+        Some(_) => "&",
+    };
+    format!("{before_fragment}{separator}{query}{fragment}")
 }
 
 /// Build the octet string to sign for a signed HTTP-Redirect message.
@@ -250,13 +251,12 @@ fn remove_spans(xml: &str, spans: &[(usize, usize)]) -> String {
     rewritten
 }
 
-/// Finish a signed HTTP-Redirect URL: `base_url[?&]<octet>&Signature=<enc(sig)>`.
+/// Finish a signed HTTP-Redirect URL by adding `<octet>&Signature=<enc(sig)>`
+/// to the query of `base_url`, after any existing query and before any
+/// fragment. `octet` is added unchanged.
 pub fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> String {
-    let separator = if has_query(base_url) { '&' } else { '?' };
-    format!(
-        "{base_url}{separator}{octet}&Signature={}",
-        url_encode(signature_b64)
-    )
+    let signed = format!("{octet}&Signature={}", url_encode(signature_b64));
+    append_redirect_query(base_url, &signed)
 }
 
 #[cfg(test)]
@@ -291,14 +291,32 @@ mod tests {
     }
 
     #[test]
-    fn redirect_uses_amp_when_base_has_query() -> Result<(), Box<dyn std::error::Error>> {
-        let url = build_redirect_url(
-            "http://sp.example.com/acs?x=1",
-            ParserType::SamlResponse,
-            REQUEST,
-            None,
-        )?;
-        assert!(url.contains("?x=1&SAMLResponse="));
+    fn redirect_parameters_join_the_query_before_any_fragment(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let deflated = deflate_raw_encode(REQUEST.as_bytes())?;
+        let query = redirect_binding_query("SAMLResponse", &base64_encode(&deflated), None);
+        let octet = build_redirect_octet(ParserType::SamlResponse, REQUEST, None, "sig-alg")?;
+        let signed = format!("{octet}&Signature=a%2Bb%3D");
+        let acs = "https://sp.example.com/acs";
+        let cases = [
+            ("", "?", ""),
+            ("?", "?", ""),
+            ("?x=1", "?x=1&", ""),
+            ("#f", "?", "#f"),
+            ("?#f", "?", "#f"),
+            ("?x=1#f?y", "?x=1&", "#f?y"),
+        ];
+        for (base_suffix, query_prefix, fragment) in cases {
+            let base = format!("{acs}{base_suffix}");
+            let before = format!("{acs}{query_prefix}");
+            let unsigned = build_redirect_url(&base, ParserType::SamlResponse, REQUEST, None)?;
+            assert_eq!(unsigned, format!("{before}{query}{fragment}"), "{base}");
+            assert_eq!(
+                append_signature(&base, &octet, "a+b="),
+                format!("{before}{signed}{fragment}"),
+                "{base}"
+            );
+        }
         Ok(())
     }
 

@@ -285,6 +285,35 @@ fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
+fn an_artifact_redirect_keeps_the_consumer_fragment_after_the_query(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties_with_consumers(
+        AcsEndpoint::post(SP_ACS_POST)?.mark_default(),
+        AcsEndpoint::artifact(format!("{SP_ACS_ARTIFACT}#done"))?,
+        AlgorithmPolicy::default(),
+    )?;
+    let (_, request) = requested(&parties, RelayStateParam::absent())?;
+
+    let mut issued = IssuedArtifacts::new();
+    let response = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        subject(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    )?;
+
+    let url = Url::parse(response.redirect_url()?)?;
+    assert_eq!(url.fragment(), Some("done"));
+    let names: Vec<String> = url
+        .query_pairs()
+        .map(|(name, _)| name.into_owned())
+        .collect();
+    assert_eq!(names, ["SAMLart"]);
+    Ok(())
+}
+
+#[test]
 fn a_relay_state_the_service_provider_did_not_send_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
