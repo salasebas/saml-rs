@@ -11,7 +11,7 @@ use crate::config::EntityId;
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::raw::FlowResult;
-use crate::xml::parse_saml_utc_date_time;
+use crate::xml::{parse_saml_utc_date_time, xs_boolean};
 
 /// `ForceAuthn` on an `<AuthnRequest>` (Core §3.4.1).
 ///
@@ -241,16 +241,16 @@ fn optional_flag(
     path: &str,
     label: &str,
 ) -> Result<Option<bool>, SamlError> {
-    let Some(value) = extract.get_str(path) else {
-        return Ok(None);
-    };
-    match value {
-        "true" | "1" => Ok(Some(true)),
-        "false" | "0" => Ok(Some(false)),
-        _ => Err(SamlError::Invalid(format!(
-            "AuthnRequest {label} must be an XML Schema boolean (true, false, 1, or 0)"
-        ))),
-    }
+    extract
+        .get_str(path)
+        .map(|value| {
+            xs_boolean(Some(value)).ok_or_else(|| {
+                SamlError::Invalid(format!(
+                    "AuthnRequest {label} must be an XML Schema boolean (true, false, 1, or 0)"
+                ))
+            })
+        })
+        .transpose()
 }
 
 fn requested_subject_from_extract(

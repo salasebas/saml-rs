@@ -68,16 +68,6 @@ impl SsoDescriptorRole {
     }
 }
 
-/// Value of an unqualified `xs:boolean` attribute: `true`, `1`, `false`, or
-/// `0`, with surrounding XML whitespace. Another lexical form is `None`.
-pub(crate) fn xs_boolean(value: Option<&str>) -> Option<bool> {
-    match value.map(|value| value.trim_matches([' ', '\t', '\r', '\n'])) {
-        Some("true" | "1") => Some(true),
-        Some("false" | "0") => Some(false),
-        Some(_) | None => None,
-    }
-}
-
 /// Normalise a "single object or array of objects" value into a node list.
 pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     match value {

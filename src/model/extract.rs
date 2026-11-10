@@ -10,6 +10,7 @@ use crate::constants::name_id_format;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::validator::conditions_time_bounds;
+use crate::xml::{xs_boolean, xs_unsigned_short};
 
 pub(super) fn required_str<'a>(extract: &'a Value, path: &str) -> Result<&'a str, SamlError> {
     extract
@@ -39,7 +40,7 @@ pub(super) fn optional_u16(extract: &Value, path: &str) -> Result<Option<u16>, S
     extract
         .get_str(path)
         .map(|value| {
-            value.parse::<u16>().map_err(|_| {
+            xs_unsigned_short(value).ok_or_else(|| {
                 SamlError::Invalid(format!("{path} must be an unsigned 16-bit integer"))
             })
         })
@@ -70,13 +71,8 @@ pub(super) fn name_id_policy_from_extract(
 }
 
 fn parse_bool(value: &str) -> Result<bool, SamlError> {
-    match value {
-        "true" | "1" => Ok(true),
-        "false" | "0" => Ok(false),
-        _ => Err(SamlError::Invalid(
-            "NameIDPolicy AllowCreate must be a boolean".into(),
-        )),
-    }
+    xs_boolean(Some(value))
+        .ok_or_else(|| SamlError::Invalid("NameIDPolicy AllowCreate must be a boolean".into()))
 }
 
 pub(crate) fn name_id_format_from_uri(uri: &str) -> NameIdFormat {

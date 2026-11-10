@@ -428,7 +428,7 @@ fn received_authn_request_accepts_these_fields_under_recommended_and_compatibili
 }
 
 #[test]
-fn received_authn_request_rejects_a_non_boolean_force_authn_or_is_passive(
+fn received_authn_request_rejects_a_non_boolean_flag_or_a_non_integer_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let force_authn = receive(
         IdpValidationPolicy::recommended(),
@@ -443,6 +443,52 @@ fn received_authn_request_rejects_a_non_boolean_force_authn_or_is_passive(
         |xml| insert_root_attribute(xml, "IsPassive", "TRUE"),
     );
     assert!(matches!(is_passive, Err(error) if error.to_string().contains("IsPassive")));
+
+    let non_xml_space = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| insert_root_attribute(xml, "ForceAuthn", "\u{a0}true"),
+    );
+    assert!(matches!(non_xml_space, Err(error) if error.to_string().contains("ForceAuthn")));
+
+    let padded_inner_space = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 1 0 "),
+    );
+    assert!(matches!(
+        padded_inner_space,
+        Err(error) if error.to_string().contains("assertionConsumerServiceIndex")
+    ));
+    Ok(())
+}
+
+#[test]
+fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| {
+            let xml = insert_root_attribute(xml, "ForceAuthn", " true ")?;
+            let xml = insert_root_attribute(xml, "IsPassive", "&#9;0&#10;")?;
+            let xml = insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 0 ")?;
+            if !xml.contains("AllowCreate=\"false\"") {
+                return Err("missing AllowCreate".into());
+            }
+            Ok(xml.replace("AllowCreate=\"false\"", "AllowCreate=\"&#13; true \""))
+        },
+    )?;
+    let message = receipt.received.message();
+    assert_eq!(message.force_authn(), Some(ForceAuthn::Required));
+    assert_eq!(message.is_passive(), Some(IsPassive::NotRequired));
+    assert_eq!(message.acs_index(), Some(0));
+    assert_eq!(
+        message
+            .name_id_policy()
+            .and_then(|policy| policy.allow_create()),
+        Some(true)
+    );
     Ok(())
 }
 

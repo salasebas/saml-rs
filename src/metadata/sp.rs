@@ -109,7 +109,7 @@ impl SpMetadata {
     ///
     /// `true` and `1` are true. An absent attribute or another value is false.
     pub fn is_want_assertions_signed(&self) -> bool {
-        super::xs_boolean(
+        crate::xml::xs_boolean(
             self.inner
                 .meta
                 .get_str("spSSODescriptor.wantAssertionsSigned"),
@@ -120,7 +120,7 @@ impl SpMetadata {
     ///
     /// `true` and `1` are true. An absent attribute or another value is false.
     pub fn is_authn_request_signed(&self) -> bool {
-        super::xs_boolean(
+        crate::xml::xs_boolean(
             self.inner
                 .meta
                 .get_str("spSSODescriptor.authnRequestsSigned"),
@@ -293,7 +293,7 @@ fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMet
 }
 
 fn indexed_default_flags(is_default: Option<&str>) -> (bool, bool) {
-    let is_default = super::xs_boolean(is_default);
+    let is_default = crate::xml::xs_boolean(is_default);
     (is_default == Some(true), is_default == Some(false))
 }
 
