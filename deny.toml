@@ -1,9 +1,6 @@
 [advisories]
 ignore = [
-    # Transitive through bergshamra 0.8.0 / kryptering 0.5.0's RSA dependency.
-    # RustSec currently lists no safe upgrade; keep this explicit while
-    # saml-rs's RustCrypto software RSA XML-Enc key transport path remains gated off by default.
-    { id = "RUSTSEC-2023-0071", reason = "Transitive through bergshamra/kryptering RustCrypto RSA; no safe upgrade is currently available, and saml-rs gates that key-transport path by default." },
+    { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 is required by bergshamra-keys 0.11.2 for RSA key parsing and encoding; RSA private-key operations run in kryptering on patched rsa 0.10, and saml-rs still gates software RSA key-transport decryption by default." },
 ]
 
 [licenses]
