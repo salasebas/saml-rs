@@ -718,6 +718,7 @@ impl IdentityProvider {
                 hmac_secret: sp.setting.hmac_secret.as_ref(),
                 decrypt_key: None,
                 decrypt_key_pass: None,
+                additional_decrypt_keys: &[],
                 assertion_elements: AssertionElementEncryption::default(),
                 element_decrypt_key: None,
                 received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,

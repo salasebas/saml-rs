@@ -13,14 +13,17 @@
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
+use saml_rs::constants::CertUse;
+use saml_rs::metadata::{IdpMetadata, SpMetadata};
+use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeEncryptionPolicy,
     AttributeNameFormat, AttributeValue, Attributes, AudienceValidationPolicy, AuthnRequest,
-    BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem,
-    ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
-    SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
+    BrowserInput, CertificatePem, Credentials, DecryptionCredential, EntityId, FormField,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
+    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
+    SsoResponseBinding, SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -31,6 +34,9 @@ const PERSISTENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
 
 fn credentials() -> Credentials {
     Credentials {
@@ -65,10 +71,18 @@ fn sp_with(
     encryption: XmlEncryptionPolicy,
     validation: SpValidationPolicy,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
+    sp_with_credentials(encryption, validation, credentials())
+}
+
+fn sp_with_credentials(
+    encryption: XmlEncryptionPolicy,
+    validation: SpValidationPolicy,
+    credentials: Credentials,
+) -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-            .credentials(credentials())
+            .credentials(credentials)
             .validation(validation)
             .xml(xml(encryption))
             .build()?,
@@ -152,21 +166,32 @@ fn exchange(
     let sp = sp(sp_encryption)?;
     let idp = idp(idp_encryption)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
+}
+
+/// SP-initiated SSO over HTTP-POST, in which `idp` reads `sp` from
+/// `sp_descriptor`.
+fn exchange_between(
+    sp: &Saml<saml_rs::Sp>,
+    sp_descriptor: &SpDescriptor,
+    idp: &Saml<saml_rs::Idp>,
+    idp_descriptor: &IdpDescriptor,
+) -> Result<Exchange, Box<dyn std::error::Error>> {
+    let started = sp.start_sso(idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
-        &sp_descriptor,
+        sp_descriptor,
         BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(
-        &sp_descriptor,
+        sp_descriptor,
         &received,
         Subject::new(alice(), Vec::new()),
         RespondSso::post().attributes(attributes()),
     )?;
     let xml = response_xml(&response)?;
     let session = sp.finish_sso(
-        &idp_descriptor,
+        idp_descriptor,
         &started.pending,
         BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
         validation(),
@@ -220,6 +245,132 @@ fn encrypted_attribute_carries_each_attribute_to_the_service_provider(
     let session = exchange.session?;
     assert_eq!(session.name_id(), &alice());
     assert_eq!(session.attributes(), &attributes());
+    Ok(())
+}
+
+fn next_decryption_key() -> DecryptionCredential {
+    DecryptionCredential {
+        certificate: CertificatePem::new(NEXT_CERT),
+        key: PrivateKeyPem::new(NEXT_PRIVKEY),
+        passphrase: None,
+    }
+}
+
+/// SSO in which the identity provider encrypts for `encryption_cert` and the
+/// service provider decrypts with `sp_credentials`.
+fn exchange_encrypted_for(
+    encryption: XmlEncryptionPolicy,
+    encryption_cert: &str,
+    sp_credentials: Credentials,
+) -> Result<Exchange, Box<dyn std::error::Error>> {
+    let sp = sp_with_credentials(
+        XmlEncryptionPolicy::default(),
+        sp_validation(),
+        sp_credentials,
+    )?;
+    let published = sp_with_credentials(
+        XmlEncryptionPolicy::default(),
+        sp_validation(),
+        Credentials {
+            encryption_certificate: Some(CertificatePem::new(encryption_cert)),
+            ..credentials()
+        },
+    )?;
+    let idp = idp(encryption)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&published, &idp)?;
+    exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
+}
+
+fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
+    [
+        XmlEncryptionPolicy::encrypt_assertions(),
+        XmlEncryptionPolicy::encrypt_ids(),
+        XmlEncryptionPolicy::encrypt_attributes(),
+    ]
+}
+
+#[test]
+fn metadata_publishes_each_encryption_certificate_in_order(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rolling = Credentials {
+        additional_decryption_keys: vec![next_decryption_key()],
+        ..credentials()
+    };
+    let sp = sp_with_credentials(
+        XmlEncryptionPolicy::default(),
+        sp_validation(),
+        rolling.clone(),
+    )?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .credentials(rolling)
+            .validation(IdpValidationPolicy::recommended())
+            .build()?,
+    )?;
+    let published = vec![
+        normalize_cert_string(CERT),
+        normalize_cert_string(NEXT_CERT),
+    ];
+
+    assert_eq!(
+        SpMetadata::from_xml(sp.metadata_xml())?.x509_certificates(CertUse::Encryption),
+        published
+    );
+    assert_eq!(
+        IdpMetadata::from_xml(idp.metadata_xml())?.x509_certificates(CertUse::Encryption),
+        published
+    );
+    for metadata in [sp.metadata_xml(), idp.metadata_xml()] {
+        assert_eq!(
+            metadata.matches("use=\"encryption\"").count(),
+            2,
+            "{metadata}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn service_provider_decrypts_elements_made_for_either_published_certificate(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rolling = Credentials {
+        additional_decryption_keys: vec![next_decryption_key()],
+        ..credentials()
+    };
+    for encryption in each_encrypted_element() {
+        for encryption_cert in [CERT, NEXT_CERT] {
+            let exchange = exchange_encrypted_for(encryption, encryption_cert, rolling.clone())?;
+
+            assert!(
+                !exchange.xml.contains("alice-persistent-id")
+                    || !exchange.xml.contains("alice@example.com")
+            );
+            let session = exchange.session?;
+            assert_eq!(session.name_id(), &alice());
+            assert_eq!(session.attributes(), &attributes());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn service_provider_without_the_key_keeps_the_single_key_error(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rolling = Credentials {
+        additional_decryption_keys: vec![next_decryption_key()],
+        ..credentials()
+    };
+    for encryption in each_encrypted_element() {
+        let single_key = exchange_encrypted_for(encryption, UNKNOWN_CERT, credentials())?.session;
+        let both_keys = exchange_encrypted_for(encryption, UNKNOWN_CERT, rolling.clone())?.session;
+
+        let (Err(single_key), Err(both_keys)) = (single_key, both_keys) else {
+            return Err("a key that is not configured decrypted".into());
+        };
+        assert!(matches!(both_keys, SamlError::Crypto(_)), "{both_keys:?}");
+        assert_eq!(both_keys.to_string(), single_key.to_string());
+    }
     Ok(())
 }
 

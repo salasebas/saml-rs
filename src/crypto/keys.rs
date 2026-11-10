@@ -1,7 +1,7 @@
 //! Key, certificate and KeyInfo helpers backed by the selected `bergshamra`
 //! provider.
 
-use crate::config::HmacSecret;
+use crate::config::{DecryptionCredential, HmacSecret};
 use crate::error::SamlError;
 use crate::util::normalize_cert_string;
 use bergshamra::keys::keyinfo::build_x509_key_info;
@@ -17,6 +17,26 @@ fn crypto_err(err: impl std::fmt::Display) -> SamlError {
 pub fn load_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     load_pem_auto(pem.as_bytes(), password).map_err(crypto_err)
+}
+
+/// The decryption key `pem`, then each of `additional`, in the order they are
+/// tried.
+pub(crate) fn load_decryption_keys(
+    pem: &str,
+    password: Option<&str>,
+    additional: &[DecryptionCredential],
+) -> Result<Vec<Key>, SamlError> {
+    std::iter::once(load_private_key(pem, password))
+        .chain(additional.iter().map(|credential| {
+            load_private_key(
+                credential.key.as_str(),
+                credential
+                    .passphrase
+                    .as_ref()
+                    .map(|passphrase| passphrase.as_str()),
+            )
+        }))
+        .collect()
 }
 
 pub(crate) fn load_hmac_secret(secret: &HmacSecret) -> Result<Key, SamlError> {
@@ -86,6 +106,26 @@ mod tests {
         let key = load_private_key(SP_PRIVKEY, None)?;
         assert!(key.has_private_key());
         assert_eq!(key.algorithm_name(), "RSA");
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "crypto-rustcrypto")]
+    fn loads_each_additional_decryption_key_with_its_own_passphrase(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::config::{CertificatePem, Passphrase, PrivateKeyPem};
+
+        let keys = load_decryption_keys(
+            SP_PRIVKEY,
+            None,
+            &[DecryptionCredential {
+                certificate: CertificatePem::new(SP_CERT),
+                key: PrivateKeyPem::new(SP_PRIVKEY_ENC),
+                passphrase: Some(Passphrase::new(SP_PASS)),
+            }],
+        )?;
+        assert_eq!(keys.len(), 2);
+        assert!(keys.iter().all(Key::has_private_key));
         Ok(())
     }
 

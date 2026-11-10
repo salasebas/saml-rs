@@ -8,8 +8,8 @@ use super::keys::load_certificate;
 use super::xml_syntax::validate_crypto_xml_prefix;
 use crate::binding::xml_escape;
 use crate::config::{
-    AssertionElementEncryption, AttributeEncryptionPolicy, IdentifierEncryptionPolicy,
-    ReceivedEncryptedElements,
+    AssertionElementEncryption, AttributeEncryptionPolicy, DecryptionCredential,
+    IdentifierEncryptionPolicy, ReceivedEncryptedElements,
 };
 use crate::constants::{key_encryption_algorithm, namespace};
 use crate::error::SamlError;
@@ -73,19 +73,32 @@ pub(crate) fn require_software_rsa_opt_in(
     Ok(())
 }
 
-/// Decrypt the `<EncryptedData>` in `xml` with `enc_key`, after refusing an
-/// unselected RSA-v1.5 `<EncryptionMethod>` anywhere in `xml`.
-fn decrypt_with_key(
+/// Decrypt the `<EncryptedData>` in `xml` with the first of `enc_keys` that
+/// decrypts it, after refusing an unselected RSA-v1.5 `<EncryptionMethod>`
+/// anywhere in `xml`. When none does, the error is the first key's.
+fn decrypt_with_keys(
     xml: &str,
-    enc_key: &Key,
+    enc_keys: &[Key],
     options: AssertionDecryptionOptions,
 ) -> Result<String, SamlError> {
     if !options.allow_rsa15_key_transport_decryption && names_rsa15_key_transport(xml)? {
         return Err(SamlError::Unsupported(RSA15_DECRYPTION_DISABLED.into()));
     }
-    let mut manager = KeysManager::new();
-    manager.add_key(enc_key.clone());
-    decrypt(&EncContext::new(manager), xml).map_err(crypto_err)
+    let mut first_error = None;
+    for enc_key in enc_keys {
+        let mut manager = KeysManager::new();
+        manager.add_key(enc_key.clone());
+        match decrypt(&EncContext::new(manager), xml) {
+            Ok(decrypted) => return Ok(decrypted),
+            Err(error) => {
+                first_error.get_or_insert(error);
+            }
+        }
+    }
+    Err(first_error.map_or_else(
+        || SamlError::MissingKey("decryption_key".into()),
+        crypto_err,
+    ))
 }
 
 /// Whether an `<xenc:EncryptionMethod>` of `xml` has an `Algorithm` attribute
@@ -207,7 +220,8 @@ pub fn decrypt_assertion_with_limits(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<(String, String), SamlError> {
-    let (response, assertions) = decrypt_assertions_with_limits(xml, enc_key, options, limits)?;
+    let (response, assertions) =
+        decrypt_assertions_with_limits(xml, std::slice::from_ref(enc_key), options, limits)?;
     let assertion = assertions
         .into_iter()
         .next()
@@ -219,7 +233,7 @@ pub fn decrypt_assertion_with_limits(
 /// decrypted, and each decrypted `<Assertion>` in document order.
 pub(crate) fn decrypt_assertions_with_limits(
     xml: &str,
-    enc_key: &Key,
+    enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<(String, Vec<String>), SamlError> {
@@ -238,7 +252,7 @@ pub(crate) fn decrypt_assertions_with_limits(
                 &document,
                 element,
                 ENCRYPTED_ASSERTION,
-                enc_key,
+                enc_keys,
                 options,
                 limits,
             )
@@ -573,7 +587,7 @@ pub(crate) fn encrypt_root_children(
 }
 
 /// Replace the one `kind.encrypted` child of the document element of `xml`
-/// with the plaintext it carries, decrypted with `enc_key`.
+/// with the plaintext it carries, decrypted with one of `enc_keys`.
 ///
 /// # Errors
 ///
@@ -583,7 +597,7 @@ pub(crate) fn encrypt_root_children(
 pub(crate) fn decrypt_root_child(
     xml: &str,
     kind: EncryptedElementKind,
-    enc_key: &Key,
+    enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
@@ -597,7 +611,7 @@ pub(crate) fn decrypt_root_child(
             kind.parent, kind.encrypted
         )));
     };
-    let replacement = decrypted_element(&document, element, kind, enc_key, options, limits)?;
+    let replacement = decrypted_element(&document, element, kind, enc_keys, options, limits)?;
     let decrypted = splice(xml, vec![replacement]);
     limits.check_input_bytes(decrypted.len())?;
     Ok(decrypted)
@@ -612,7 +626,7 @@ pub(crate) enum RequestAuthentication {
 
 /// `xml` with the `<EncryptedID>` of the `<Subject>` of its `<AuthnRequest>`
 /// replaced by the `<NameID>` it carries, decrypted with the private key in
-/// `key_pem`.
+/// `key_pem` or one of `additional`.
 ///
 /// Returns `None` when the `<Subject>` carries no `<EncryptedID>`, for an
 /// unauthenticated request whose `EncryptedData` does not name AES-GCM (CBC
@@ -628,6 +642,7 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
     xml: &str,
     key_pem: &str,
     key_pass: Option<&str>,
+    additional: &[DecryptionCredential],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
     authentication: RequestAuthentication,
@@ -652,12 +667,12 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
         }
     }
     require_software_rsa_opt_in(options)?;
-    let enc_key = super::keys::load_private_key(key_pem, key_pass)?;
+    let enc_keys = super::keys::load_decryption_keys(key_pem, key_pass, additional)?;
     let Ok(replacement) = decrypted_element(
         &document,
         encrypted_id,
         ENCRYPTED_ID,
-        &enc_key,
+        &enc_keys,
         options,
         limits,
     ) else {
@@ -701,7 +716,7 @@ pub(crate) fn carries_encrypted_assertion_elements(
     Ok(false)
 }
 
-/// Decrypt the children of each assertion in `xml` with `enc_key`: the ones
+/// Decrypt the children of each assertion in `xml` with `enc_keys`: the ones
 /// `selection` selects, and every one when `received` is
 /// [`ReceivedEncryptedElements::DecryptReceived`].
 ///
@@ -719,7 +734,7 @@ pub(crate) fn carries_encrypted_assertion_elements(
 /// [`SamlError::ProtocolProfile`].
 pub(crate) fn decrypt_assertion_elements(
     xml: &str,
-    enc_key: &Key,
+    enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
     selection: AssertionElementEncryption,
@@ -745,7 +760,7 @@ pub(crate) fn decrypt_assertion_elements(
     for kind in decrypted {
         for element in assertion_elements(&document, kind.parent, kind.encrypted)? {
             replacements.push(decrypted_element(
-                &document, element, kind, enc_key, options, limits,
+                &document, element, kind, enc_keys, options, limits,
             )?);
         }
     }
@@ -755,7 +770,7 @@ pub(crate) fn decrypt_assertion_elements(
 }
 
 /// Replace the `<EncryptedID>` of the `<LogoutRequest>` in `xml` with the
-/// `<NameID>` it carries, decrypted with `enc_key`.
+/// `<NameID>` it carries, decrypted with one of `enc_keys`.
 ///
 /// # Errors
 ///
@@ -764,7 +779,7 @@ pub(crate) fn decrypt_assertion_elements(
 /// `<EncryptedID>`. Its plaintext follows [`decrypt_assertion_elements`].
 pub(crate) fn decrypt_logout_request_encrypted_id(
     xml: &str,
-    enc_key: &Key,
+    enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
@@ -786,7 +801,7 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
         &document,
         *encrypted_id,
         LOGOUT_REQUEST_ENCRYPTED_ID,
-        enc_key,
+        enc_keys,
         options,
         limits,
     )?;
@@ -800,7 +815,7 @@ fn decrypted_element(
     document: &XmlDocument<'_>,
     element: NodeId,
     kind: EncryptedElementKind,
-    enc_key: &Key,
+    enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<(Range<usize>, String), SamlError> {
@@ -809,7 +824,7 @@ fn decrypted_element(
     // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
     let wrapper = String::from_utf8(namespace_complete(document, element)?)
         .map_err(|error| SamlError::Xml(error.to_string()))?;
-    let decrypted = decrypt_with_key(&wrapper, enc_key, options)?;
+    let decrypted = decrypt_with_keys(&wrapper, enc_keys, options)?;
     let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
     Ok((node_range(document, element)?, plaintext.to_string()))
 }
@@ -1030,7 +1045,7 @@ mod tests {
         let decrypt = |xml: &str| {
             decrypt_assertion_elements(
                 xml,
-                &key,
+                std::slice::from_ref(&key),
                 software_rsa_test_options(),
                 XmlLimits::default(),
                 encrypted_ids(),
@@ -1086,7 +1101,7 @@ mod tests {
         )?;
         let result = decrypt_assertion_elements(
             &plaintext_beside,
-            &load_private_key(SP_PRIVKEY, None)?,
+            &[load_private_key(SP_PRIVKEY, None)?],
             software_rsa_test_options(),
             XmlLimits::default(),
             encrypted_ids(),
@@ -1144,7 +1159,7 @@ mod tests {
 
         let decrypted = decrypt_assertion_elements(
             &peer,
-            &load_private_key(SP_PRIVKEY, None)?,
+            &[load_private_key(SP_PRIVKEY, None)?],
             software_rsa_test_options(),
             XmlLimits::default(),
             encrypted_ids(),
@@ -1211,7 +1226,7 @@ mod tests {
         let key = load_private_key(SP_PRIVKEY, None)?;
         let decrypted = decrypt_logout_request_encrypted_id(
             &encrypted,
-            &key,
+            &[key],
             software_rsa_test_options(),
             XmlLimits::default(),
         )?;

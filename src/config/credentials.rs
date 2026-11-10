@@ -144,4 +144,24 @@ pub struct Credentials {
     pub decryption_key: Option<PrivateKeyPem>,
     /// Passphrase for [`Self::decryption_key`].
     pub decryption_key_passphrase: Option<Passphrase>,
+    /// More decryption keys, tried in order after [`Self::decryption_key`].
+    ///
+    /// Each certificate is published in metadata after
+    /// [`Self::encryption_certificate`], so a peer may encrypt for any of
+    /// them. To roll over the encryption key, add the next key here. Then
+    /// make it the [`Self::decryption_key`] and [`Self::encryption_certificate`]
+    /// and move the old key here. Drop the old key once every peer has
+    /// refreshed this entity's metadata. Requires [`Self::decryption_key`].
+    pub additional_decryption_keys: Vec<DecryptionCredential>,
+}
+
+/// A decryption private key and the encryption certificate peers use for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecryptionCredential {
+    /// Encryption certificate published for [`Self::key`].
+    pub certificate: CertificatePem,
+    /// Decryption private key.
+    pub key: PrivateKeyPem,
+    /// Passphrase for [`Self::key`].
+    pub passphrase: Option<Passphrase>,
 }

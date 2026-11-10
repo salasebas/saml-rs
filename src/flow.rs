@@ -4,8 +4,8 @@
 use crate::binding::{
     base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-use crate::config::HmacSecret;
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
+use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{Binding, ParserType};
 use crate::context::is_valid_xml_with_limits;
 use crate::error::SamlError;
@@ -127,6 +127,9 @@ pub struct FlowOptions<'a> {
     pub decrypt_key: Option<&'a str>,
     /// Passphrase for `decrypt_key` and `element_decrypt_key`.
     pub decrypt_key_pass: Option<&'a str>,
+    /// More decryption keys, tried in order after `decrypt_key`. Each one's
+    /// passphrase is its own.
+    pub additional_decrypt_keys: &'a [DecryptionCredential],
     /// Typed SP: assertion children that arrive encrypted. They are decrypted
     /// with `element_decrypt_key` after a signature verifies.
     pub(crate) assertion_elements: AssertionElementEncryption,
@@ -173,6 +176,7 @@ impl<'a> Default for FlowOptions<'a> {
             hmac_secret: None,
             decrypt_key: None,
             decrypt_key_pass: None,
+            additional_decrypt_keys: &[],
             assertion_elements: AssertionElementEncryption::default(),
             element_decrypt_key: None,
             received_encrypted_elements: ReceivedEncryptedElements::default(),
@@ -694,7 +698,7 @@ fn verify_and_prepare(
         enc::{
             decrypt_assertions_with_limits, require_software_rsa_opt_in, AssertionDecryptionOptions,
         },
-        keys::load_private_key,
+        keys::load_decryption_keys,
         verify::has_xml_signature_with_limits,
     };
 
@@ -718,7 +722,13 @@ fn verify_and_prepare(
     if decrypt_required {
         require_software_rsa_opt_in(decrypt_options)?;
     }
-    let load_key = || load_private_key(decrypt_key.unwrap_or_default(), opts.decrypt_key_pass);
+    let load_keys = || {
+        load_decryption_keys(
+            decrypt_key.unwrap_or_default(),
+            opts.decrypt_key_pass,
+            opts.additional_decrypt_keys,
+        )
+    };
 
     if decrypt_required && evidence.verified && parser_type == ParserType::SamlResponse {
         if let Some(node) = evidence.verified_node.as_deref() {
@@ -727,7 +737,7 @@ fn verify_and_prepare(
             // EncryptedAssertions.
             let (content, assertions) = decrypt_assertions_with_limits(
                 node,
-                &load_key()?,
+                &load_keys()?,
                 decrypt_options,
                 opts.xml_limits,
             )?;
@@ -747,7 +757,7 @@ fn verify_and_prepare(
     if decrypt_required && !evidence.verified {
         // encrypted-then-signed: decrypt first, then verify the result.
         let (content, _) =
-            decrypt_assertions_with_limits(xml, &load_key()?, decrypt_options, opts.xml_limits)?;
+            decrypt_assertions_with_limits(xml, &load_keys()?, decrypt_options, opts.xml_limits)?;
         is_valid_xml_with_limits(&content, opts.xml_limits)?;
         validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
         let signature_present = has_xml_signature_with_limits(&content, opts.xml_limits)?;

@@ -4,8 +4,8 @@
 use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
-use crate::config::HmacSecret;
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
+use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
     MessageSignatureOrder,
@@ -107,6 +107,8 @@ pub struct EntitySetting {
     pub enc_private_key: Option<String>,
     /// Passphrase for `enc_private_key`.
     pub enc_private_key_pass: Option<String>,
+    /// More decryption keys, tried in order after `enc_private_key`.
+    pub additional_decryption_keys: Vec<DecryptionCredential>,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
@@ -243,6 +245,10 @@ impl fmt::Debug for EntitySetting {
                 "enc_private_key_pass",
                 &redacted_option(&self.enc_private_key_pass),
             )
+            .field(
+                "additional_decryption_keys",
+                &self.additional_decryption_keys,
+            )
             .field("clock_drifts", &self.clock_drifts)
             .field(
                 "redirect_inflate_max_bytes",
@@ -347,6 +353,7 @@ impl Default for EntitySetting {
             encrypt_cert: None,
             enc_private_key: None,
             enc_private_key_pass: None,
+            additional_decryption_keys: Vec::new(),
             clock_drifts: (0, 0),
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             xml_limits: XmlLimits::default(),
