@@ -34,7 +34,8 @@ use std::time::SystemTime;
 /// Optional inputs for [`IdentityProvider::create_login_response`].
 #[derive(Default)]
 pub struct LoginResponseOptions<'a> {
-    /// `InResponseTo` — the SP request id being answered.
+    /// `InResponseTo` — the SP request id being answered. `None` or an empty
+    /// value omits the attribute.
     pub in_response_to: Option<&'a str>,
     /// RelayState to echo back to the SP.
     pub relay_state: Option<&'a str>,
@@ -155,6 +156,7 @@ impl IdentityProvider {
             &self.setting.tag_prefix_protocol,
             &self.setting.tag_prefix_assertion,
         )?;
+        let in_response_to = in_response_to.filter(|id| !id.is_empty());
         let tmpl = self.setting.login_response_template.as_ref();
         let attributes = tmpl.map(|t| t.attributes.as_slice()).unwrap_or(&[]);
         let has_custom_context = tmpl.and_then(|t| t.context.as_ref()).is_some();
@@ -200,8 +202,6 @@ impl IdentityProvider {
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
             let id = generate_id();
             let issuer = self.entity_id();
-            let emitted_in_response_to =
-                response_in_response_to(rendering.web_browser_sso_producer, in_response_to);
             let xml = render_error_login_response(&ErrorLoginResponseXml {
                 protocol_prefix: &self.setting.tag_prefix_protocol,
                 assertion_prefix: &self.setting.tag_prefix_assertion,
@@ -210,7 +210,7 @@ impl IdentityProvider {
                 destination: acs,
                 issuer: &issuer,
                 status,
-                in_response_to: emitted_in_response_to,
+                in_response_to,
             })?;
             return Ok((id, xml));
         }
@@ -237,8 +237,6 @@ impl IdentityProvider {
             let assertion_id = generate_id();
             let audience = sp.metadata.get_entity_id().unwrap_or_default().to_string();
             let issuer = self.entity_id();
-            let emitted_in_response_to =
-                response_in_response_to(rendering.web_browser_sso_producer, in_response_to);
             let supports_single_logout = !self.metadata.get_support_bindings().is_empty();
             let session_index = (rendering.web_browser_sso_producer.follows()
                 && supports_single_logout)
@@ -260,7 +258,7 @@ impl IdentityProvider {
                 name_id_format,
                 name_id: &user.name_id,
                 sp_provided_id: rendering.sp_provided_id,
-                in_response_to: emitted_in_response_to,
+                in_response_to,
                 authn_statement: rendering.web_browser_sso_producer.follows().then_some(
                     login_response::AuthnStatementXml {
                         authn_instant: &window.issue_instant,
@@ -315,10 +313,6 @@ impl IdentityProvider {
             ("ConditionsNotOnOrAfter", window.expiration.clone()),
             ("SubjectConfirmationDataNotOnOrAfter", window.expiration),
             ("NameID", user.name_id.clone()),
-            (
-                "InResponseTo",
-                in_response_to.unwrap_or_default().to_string(),
-            ),
             ("AuthnStatement", String::new()),
         ];
         // Attribute value placeholders ({attr<Tag>}) are filled from the user's
@@ -331,10 +325,13 @@ impl IdentityProvider {
         for (key, value) in &attr_pairs {
             tags.push((key.as_str(), value.clone()));
         }
-        let tags: Vec<(&str, Option<String>)> =
-            std::iter::once(("NameIDFormat", name_id_format.map(str::to_string)))
-                .chain(tags.into_iter().map(|(key, value)| (key, Some(value))))
-                .collect();
+        let tags: Vec<(&str, Option<String>)> = [
+            ("NameIDFormat", name_id_format.map(str::to_string)),
+            ("InResponseTo", in_response_to.map(str::to_string)),
+        ]
+        .into_iter()
+        .chain(tags.into_iter().map(|(key, value)| (key, Some(value))))
+        .collect();
         Ok((id, replace_tags_by_optional_value(&prepared, &tags)))
     }
 
@@ -706,18 +703,6 @@ fn sp_encryption_certificate(sp: &ServiceProvider) -> Result<String, SamlError> 
     sp.metadata
         .get_x509_certificate(crate::constants::CertUse::Encryption)
         .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))
-}
-
-fn response_in_response_to(
-    producer: WebBrowserSsoProducer,
-    in_response_to: Option<&str>,
-) -> Option<&str> {
-    let raw = in_response_to.unwrap_or("");
-    if producer.follows() && raw.is_empty() {
-        None
-    } else {
-        Some(raw)
-    }
 }
 
 #[cfg(test)]

@@ -10,7 +10,7 @@ use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, deflate_raw_decode};
 use saml_rs::constants::status_code;
-use saml_rs::raw::Binding;
+use saml_rs::raw::{Binding, HttpRequest};
 use saml_rs::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
@@ -306,16 +306,99 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
     let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
     let xml = response_xml(&response)?;
 
-    assert!(xml.contains("InResponseTo=\"\""));
+    assert!(!xml.contains("InResponseTo"));
     assert!(!xml.contains("AuthnStatement"));
     assert!(!xml.contains("SessionIndex="));
 
+    let fields = response.post_form()?.fields().to_vec();
+    let raw_request = HttpRequest::post(
+        fields
+            .iter()
+            .map(|field| (field.name().to_string(), field.value().to_string()))
+            .collect(),
+    );
+    sp.raw_service_provider().parse_unsolicited_login_response(
+        idp.raw_identity_provider(),
+        Binding::Post,
+        &raw_request,
+    )?;
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        BrowserInput::<SsoResponse>::post(fields),
         validation(),
     )?;
     assert_eq!(session.in_response_to(), None);
+    Ok(())
+}
+
+#[test]
+fn login_response_template_writes_in_response_to_only_for_a_request(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation())?;
+    let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+        .credentials(credentials())
+        .validation(signed_authn_request_idp_validation())
+        .build()?;
+    idp_config.templates.login_response_template = Some(LoginResponseTemplate {
+        context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+        attributes: Vec::new(),
+    });
+    let idp = Saml::idp(idp_config)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let unsolicited_xml = response_xml(&unsolicited)?;
+    assert!(
+        !unsolicited_xml.contains("InResponseTo"),
+        "{unsolicited_xml}"
+    );
+    let fields = unsolicited.post_form()?.fields().to_vec();
+    let raw_request = HttpRequest::post(
+        fields
+            .iter()
+            .map(|field| (field.name().to_string(), field.value().to_string()))
+            .collect(),
+    );
+    sp.raw_service_provider().parse_unsolicited_login_response(
+        idp.raw_identity_provider(),
+        Binding::Post,
+        &raw_request,
+    )?;
+    let session = sp.accept_unsolicited_sso(
+        &idp_descriptor,
+        BrowserInput::<SsoResponse>::post(fields),
+        validation(),
+    )?;
+    assert_eq!(session.in_response_to(), None);
+
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let request_id = received.message().id().as_str().to_string();
+    let solicited = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let solicited_xml = response_xml(&solicited)?;
+    assert_eq!(
+        solicited_xml
+            .matches(&format!("InResponseTo=\"{request_id}\""))
+            .count(),
+        2,
+        "{solicited_xml}"
+    );
+    assert!(confirmation_tag(&solicited_xml).contains(&format!("InResponseTo=\"{request_id}\"")));
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(solicited.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    assert_eq!(
+        session.in_response_to().map(|id| id.as_str()),
+        Some(request_id.as_str())
+    );
     Ok(())
 }
 
@@ -927,7 +1010,7 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
     )?;
     let compatibility_xml = response_xml(&compatibility)?;
     assert_error_response_has_no_assertion(&compatibility_xml)?;
-    assert!(compatibility_xml.contains("InResponseTo=\"\""));
+    assert!(!compatibility_xml.contains("InResponseTo"));
     assert!(compatibility_xml.contains(&format!("Destination=\"{SP_ACS}\"")));
     assert!(compatibility_xml.contains(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")));
     Ok(())

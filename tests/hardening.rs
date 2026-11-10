@@ -6,6 +6,7 @@
 ))]
 #![allow(clippy::unwrap_used)]
 
+use saml_rs::binding::base64_decode;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
@@ -436,21 +437,20 @@ fn hardening_default_login_response_rejects_non_empty_in_response_to() {
 fn hardening_unsolicited_response_accepts_empty_in_response_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with("https://sp.example.com/metadata", signing());
-    let ctx = idp().create_login_response(
+    let response = response_for_subject_confirmation(
         &sp,
-        Binding::Post,
-        &User::new("unsolicited@example.com"),
-        &LoginResponseOptions {
-            in_response_to: None,
-            ..Default::default()
+        &SubjectConfirmationCase {
+            method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
+            recipient: "https://sp/acs",
+            not_on_or_after: iso8601_offset(300),
+            response_in_response_to: "",
+            subject_in_response_to: "",
         },
     )?;
-    let req = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let parsed = sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req)?;
-    assert_eq!(
-        parsed.extract.get_str("nameID"),
-        Some("unsolicited@example.com")
-    );
+    let xml = String::from_utf8(base64_decode(&response)?)?;
+    assert_eq!(xml.matches("InResponseTo=\"\"").count(), 2, "{xml}");
+    let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
+    sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req)?;
     Ok(())
 }
 
