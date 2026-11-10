@@ -6,7 +6,7 @@ use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::session::AuthnSession;
 use super::subject::{NameIdPolicy, SubjectConfirmation};
 use crate::config::{EntityId, NameIdFormat};
-use crate::constants::name_id_format;
+use crate::constants::{attribute_name_format, name_id_format};
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::validator::conditions_time_bounds;
@@ -101,41 +101,52 @@ fn value_strings(value: &Value) -> Vec<String> {
     }
 }
 
-pub(super) fn attributes_from_extract(extract: &Value) -> Attributes {
-    let Some(Value::Object(entries)) = extract.get("attributes") else {
-        return Attributes::default();
-    };
-    let name_formats = attribute_name_formats(extract);
-    let attributes = entries
-        .iter()
-        .map(|(name, value)| {
-            let values = value_strings(value)
-                .into_iter()
-                .map(AttributeValue::new)
-                .collect();
-            let name_format = name_formats.get(name.as_str()).cloned().flatten();
-            Attribute::new(name.clone(), name_format, values)
-        })
-        .collect();
-    Attributes::new(attributes)
-}
-
-/// `NameFormat` of the first extracted `<Attribute>` with each `Name`.
-fn attribute_name_formats(extract: &Value) -> HashMap<&str, Option<String>> {
-    let elements = match extract.get("attributeNameFormats") {
+pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, SamlError> {
+    let elements: Vec<&Value> = match extract.get("attributeNameFormats") {
         Some(Value::Array(elements)) => elements.iter().collect(),
         Some(element @ Value::Object(_)) => vec![element],
         Some(Value::Null | Value::Str(_)) | None => Vec::new(),
     };
-    let mut name_formats = HashMap::new();
+    if elements.is_empty()
+        && matches!(extract.get("attributes"), Some(Value::Object(entries)) if !entries.is_empty())
+    {
+        return Err(SamlError::Invalid(
+            "extracted attributes are missing attributeNameFormats".into(),
+        ));
+    }
+    let mut attributes: Vec<(&str, Option<&str>, Vec<AttributeValue>)> = Vec::new();
+    let mut positions: HashMap<(&str, &str), usize> = HashMap::new();
     for element in elements {
-        if let Some(name) = element.get_str("name") {
-            name_formats
-                .entry(name)
-                .or_insert_with(|| element.get_str("nameFormat").map(str::to_string));
+        let name = element.get_str("name").unwrap_or_default();
+        let name_format = element.get_str("nameFormat");
+        let values = element
+            .get("attributeValue")
+            .map(value_strings)
+            .ok_or_else(|| {
+                SamlError::Invalid("extracted Attribute is missing attributeValue".into())
+            })?
+            .into_iter()
+            .map(AttributeValue::new);
+        let identity = (
+            name,
+            name_format.unwrap_or(attribute_name_format::UNSPECIFIED),
+        );
+        match positions.get(&identity) {
+            Some(&position) => attributes[position].2.extend(values),
+            None => {
+                positions.insert(identity, attributes.len());
+                attributes.push((name, name_format, values.collect()));
+            }
         }
     }
-    name_formats
+    Ok(Attributes::new(
+        attributes
+            .into_iter()
+            .map(|(name, name_format, values)| {
+                Attribute::new(name, name_format.map(str::to_string), values)
+            })
+            .collect(),
+    ))
 }
 
 pub(super) fn subject_confirmations_from_extract(extract: &Value) -> Vec<SubjectConfirmation> {

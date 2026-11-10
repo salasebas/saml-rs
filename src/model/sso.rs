@@ -225,7 +225,12 @@ impl SsoSession {
         self.subject.name_id()
     }
 
-    /// Attributes.
+    /// Attributes, one for each `Name` and `NameFormat` pair in document
+    /// order, with the values of every `<Attribute>` that has that pair.
+    ///
+    /// An `<Attribute>` without `NameFormat` has the same identity as one with
+    /// the `unspecified` format. The attribute reports the `NameFormat` of its
+    /// first element.
     pub fn attributes(&self) -> &Attributes {
         &self.attributes
     }
@@ -555,7 +560,7 @@ impl SsoSession {
             name_id,
             subject_confirmations_from_extract(&raw_flow.extract),
         );
-        let attributes = attributes_from_extract(&raw_flow.extract);
+        let attributes = attributes_from_extract(&raw_flow.extract)?;
         let authn_sessions = authn_sessions_from_extract(&raw_flow.extract)?;
         let audience = entity_ids_from_value(raw_flow.extract.get("audience"))?;
         let (not_before, not_on_or_after) = conditions_instants(&raw_flow.extract)?;

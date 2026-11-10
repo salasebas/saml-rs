@@ -686,10 +686,11 @@ impl Saml<Idp> {
     /// the issuer does not match, the persistent or transient `NameID` of
     /// `subject` is longer than 256 characters, the NameID format is not an
     /// absolute URI reference, [`RespondPaosSso::attributes`] is combined with
-    /// a login response template or names a basic attribute that is not an
-    /// XML name, the authentication context does not meet an exact
-    /// `RequestedAuthnContext`, or the response cannot be signed. Returns
-    /// [`SamlError::Unsupported`] when `subject` has confirmations.
+    /// a login response template, names a basic attribute that is not an XML
+    /// name, or has a `NameFormat` that is not an absolute URI reference, the
+    /// authentication context does not meet an exact `RequestedAuthnContext`,
+    /// or the response cannot be signed. Returns [`SamlError::Unsupported`]
+    /// when `subject` has confirmations.
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,

@@ -31,6 +31,10 @@ pub struct ExtractorField {
     /// Key attribute(s) for aggregation.
     pub index: Option<Vec<String>>,
     /// Child element chain whose value is aggregated under the index key.
+    ///
+    /// Without an index, and with two or more attributes, each matched node's
+    /// object also lists the text of every node on this chain under the
+    /// camelCased name of its last element.
     pub attribute_path: Option<Vec<String>>,
     /// Capture the whole matched node's source instead of its value.
     pub context: bool,
@@ -85,6 +89,16 @@ impl ExtractorField {
     pub fn aggregate(mut self, index: &[&str], attribute_path: &[&str]) -> Self {
         self.index = Some(to_vec(index));
         self.attribute_path = Some(to_vec(attribute_path));
+        self
+    }
+
+    /// List the text of each `path` descendant in every matched node's
+    /// attribute object, under the camelCased name of the last element.
+    ///
+    /// Applies when two or more attributes are read and no aggregation is
+    /// configured. The list is an array even with zero or one entry.
+    pub fn child_texts(mut self, path: &[&str]) -> Self {
+        self.attribute_path = Some(to_vec(path));
         self
     }
 
@@ -207,7 +221,7 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
         let objs: Vec<Value> = nodes
             .iter()
             .map(|n| {
-                let entries = field
+                let mut entries: Vec<(String, Value)> = field
                     .attributes
                     .iter()
                     .filter_map(|a| {
@@ -215,6 +229,15 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
                             .map(|v| (camel_case(a), Value::Str(v.to_string())))
                     })
                     .collect();
+                if let Some(path) = &field.attribute_path {
+                    if let Some(last) = path.last() {
+                        let texts = descend(n, path)
+                            .iter()
+                            .map(|t| Value::Str(t.text.clone()))
+                            .collect();
+                        entries.push((camel_case(last), Value::Array(texts)));
+                    }
+                }
                 Value::Object(entries)
             })
             .collect();
@@ -500,15 +523,33 @@ mod tests {
             .and_then(Value::as_array)
             .unwrap_or(&[])
             .iter()
-            .map(|attribute| (attribute.get_str("name"), attribute.get_str("nameFormat")))
+            .map(|attribute| {
+                (
+                    attribute.get_str("name"),
+                    attribute.get_str("nameFormat"),
+                    attribute.get("attributeValue"),
+                )
+            })
             .collect();
         let basic = Some("urn:oasis:names:tc:SAML:2.0:attrname-format:basic");
+        let texts = |texts: &[&str]| {
+            Value::Array(
+                texts
+                    .iter()
+                    .map(|text| Value::Str(text.to_string()))
+                    .collect(),
+            )
+        };
         assert_eq!(
             name_formats,
             [
-                (Some("uid"), basic),
-                (Some("mail"), basic),
-                (Some("eduPersonAffiliation"), basic),
+                (Some("uid"), basic, Some(&texts(&["test"]))),
+                (Some("mail"), basic, Some(&texts(&["test@example.com"]))),
+                (
+                    Some("eduPersonAffiliation"),
+                    basic,
+                    Some(&texts(&["users", "examplerole1"]))
+                ),
             ]
         );
         assert_eq!(
