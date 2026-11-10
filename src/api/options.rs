@@ -1,6 +1,6 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
-use crate::model::{Attributes, RelayStateParam, Status};
+use crate::model::{Attributes, AuthnContextReference, RelayStateParam, Status};
 use crate::sp::WebBrowserSsoProducer;
 
 pub use crate::model::{ForceAuthn, IsPassive};
@@ -101,6 +101,7 @@ pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(super) status: Option<Status>,
     pub(super) attributes: Attributes,
+    pub(super) authn_context: Option<AuthnContextReference>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +131,7 @@ impl RespondSso {
             web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
             status: None,
             attributes: Attributes::default(),
+            authn_context: None,
         }
     }
 }
@@ -159,6 +161,7 @@ impl<Delivery> RespondSso<Delivery> {
             web_browser_sso_producer: self.web_browser_sso_producer,
             status: self.status,
             attributes: self.attributes,
+            authn_context: self.authn_context,
         }
     }
 
@@ -174,6 +177,26 @@ impl<Delivery> RespondSso<Delivery> {
     /// configured.
     pub fn attributes(mut self, attributes: Attributes) -> Self {
         self.attributes = attributes;
+        self
+    }
+
+    /// Set the authentication context of the assertion's `AuthnStatement`.
+    ///
+    /// Pass the context in which the subject was actually authenticated.
+    /// Omitting it writes the unspecified class. An error response writes no
+    /// assertion. The response is rejected when
+    /// [`Self::apply_web_browser_sso_generation_rules`] is not selected, since
+    /// no `AuthnStatement` is written then.
+    ///
+    /// When the request's [`crate::RequestedAuthnContext`] uses
+    /// [`crate::AuthnContextComparison::Exact`], a successful response is
+    /// rejected unless this context, or the unspecified class when it is
+    /// omitted, is one of the requested references. The other comparisons are
+    /// judged by the caller. When no requested context can be met, answer with
+    /// [`Self::status`] set to [`Status::responder`] and, optionally,
+    /// [`crate::SubordinateStatusCode::no_authn_context`].
+    pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
+        self.authn_context = Some(authn_context);
         self
     }
 
@@ -215,6 +238,7 @@ impl<Delivery> RespondSso<Delivery> {
     /// [`RespondSso::artifact`] leave this off. When enabled, a
     /// successful response carries an authentication statement whose
     /// `AuthnInstant` is the assertion `IssueInstant` and whose
+    /// `AuthnContext` is [`Self::authn_context`]. Without it, the
     /// `AuthnContextClassRef` is
     /// `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified`. That class means
     /// the authentication mechanism was not recorded. It is not evidence of a

@@ -53,8 +53,30 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
         )
         .with_context(),
         ExtractorField::new(
+            "requestedAuthnContext",
+            &["AuthnRequest", "RequestedAuthnContext"],
+        )
+        .with_context(),
+        ExtractorField::new(
+            "requestedAuthnContextComparison",
+            &["AuthnRequest", "RequestedAuthnContext"],
+        )
+        .attrs(&["Comparison"]),
+        ExtractorField::new(
             "authnContextClassRef",
-            &["AuthnRequest", "AuthnContextClassRef"],
+            &[
+                "AuthnRequest",
+                "RequestedAuthnContext",
+                "AuthnContextClassRef",
+            ],
+        ),
+        ExtractorField::new(
+            "authnContextDeclRef",
+            &[
+                "AuthnRequest",
+                "RequestedAuthnContext",
+                "AuthnContextDeclRef",
+            ],
         ),
         ExtractorField::new("signature", &["AuthnRequest", "Signature"]).with_context(),
     ]

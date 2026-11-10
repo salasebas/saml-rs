@@ -146,8 +146,10 @@ impl Saml<Idp> {
     /// a `subject` `NameId` with `SPProvidedID` is combined with a login
     /// response template, the persistent or transient `NameID` of `subject` is
     /// longer than 256 characters, the NameID format is not an absolute URI
-    /// reference, or response creation fails. Returns
-    /// [`SamlError::Unsupported`] when `subject` has confirmations.
+    /// reference, [`RespondSso::authn_context`] is set without producer rules
+    /// or does not meet an exact `RequestedAuthnContext`, or response creation
+    /// fails. Returns [`SamlError::Unsupported`] when `subject` has
+    /// confirmations.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
@@ -176,8 +178,9 @@ impl Saml<Idp> {
     /// with a custom login response template, an error status is combined with
     /// a login response template, [`RespondSso::attributes`] is combined with a
     /// login response template or names a basic attribute that is not an XML
-    /// name, the persistent or transient `NameID` of `subject` is longer than
-    /// 256 characters, or response creation fails. Returns
+    /// name, [`RespondSso::authn_context`] is set without producer rules, the
+    /// persistent or transient `NameID` of `subject` is longer than 256
+    /// characters, or response creation fails. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
     ///
     /// # Examples
@@ -270,6 +273,9 @@ impl Saml<Idp> {
             web_browser_sso_producer: options.web_browser_sso_producer,
             status: options.status.as_ref(),
             typed_attributes: options.attributes.as_slice(),
+            authn_context: options.authn_context.as_ref(),
+            requested_authn_context: request
+                .and_then(|request| request.message().requested_authn_context()),
         };
         let (delivery, issued) = match options.delivery {
             ResponseTransport::Browser => {

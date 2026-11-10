@@ -68,6 +68,16 @@ impl SubordinateStatusCode {
         }
     }
 
+    /// `urn:oasis:names:tc:SAML:2.0:status:NoAuthnContext`.
+    ///
+    /// An identity provider may answer with it under top-level `Responder`
+    /// when it cannot meet a [`crate::RequestedAuthnContext`].
+    pub fn no_authn_context() -> Self {
+        Self {
+            uri: status_code::NO_AUTHN_CONTEXT.to_string(),
+        }
+    }
+
     /// Wrap an absolute status-code URI.
     ///
     /// # Errors

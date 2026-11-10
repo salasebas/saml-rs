@@ -1,3 +1,4 @@
+use super::authn_context::{requested_authn_context_from_extract, RequestedAuthnContext};
 use super::extract::{
     name_id_format_from_uri, name_id_policy_from_extract, optional_endpoint, optional_u16,
     required_str, subject_confirmations_at,
@@ -87,6 +88,7 @@ pub struct AuthnRequest {
     force_authn: Option<ForceAuthn>,
     is_passive: Option<IsPassive>,
     requested_subject: Option<RequestedSubject>,
+    requested_authn_context: Option<RequestedAuthnContext>,
     raw_flow: FlowResult,
 }
 
@@ -144,6 +146,11 @@ impl AuthnRequest {
     /// Requested `<Subject>`, when present. See [`RequestedSubject`].
     pub fn requested_subject(&self) -> Option<&RequestedSubject> {
         self.requested_subject.as_ref()
+    }
+
+    /// `<RequestedAuthnContext>`, when present. See [`RequestedAuthnContext`].
+    pub fn requested_authn_context(&self) -> Option<&RequestedAuthnContext> {
+        self.requested_authn_context.as_ref()
     }
 
     /// Check and store this AuthnRequest's replay key using caller cache state.
@@ -210,6 +217,7 @@ impl AuthnRequest {
         let is_passive = optional_flag(&raw_flow.extract, "request.isPassive", "IsPassive")?
             .map(IsPassive::from_bool);
         let requested_subject = requested_subject_from_extract(&raw_flow.extract)?;
+        let requested_authn_context = requested_authn_context_from_extract(&raw_flow.extract)?;
         Ok(Self {
             id,
             issue_instant,
@@ -222,6 +230,7 @@ impl AuthnRequest {
             force_authn,
             is_passive,
             requested_subject,
+            requested_authn_context,
             raw_flow,
         })
     }

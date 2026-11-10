@@ -1,6 +1,6 @@
 use crate::constants::{attribute_name_format, namespace};
 use crate::error::SamlError;
-use crate::model::{Attribute, Status};
+use crate::model::{Attribute, AuthnContextReference, AuthnContextReferenceKind, Status};
 use crate::template::{write_login_response_attribute_statement, LoginResponseAttribute};
 use crate::xml::name::is_name;
 use crate::xml::write::XmlWriter;
@@ -9,11 +9,11 @@ const VERSION: &str = "2.0";
 const XMLNS_XS: &str = "http://www.w3.org/2001/XMLSchema";
 const XMLNS_XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
 const BEARER_CONFIRMATION: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
-const UNSPECIFIED_AUTHN_CONTEXT: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
 
 pub(super) struct AuthnStatementXml<'a> {
     pub(super) authn_instant: &'a str,
     pub(super) session_index: Option<&'a str>,
+    pub(super) authn_context: &'a AuthnContextReference,
 }
 
 pub(super) struct LoginResponseXml<'a> {
@@ -199,10 +199,14 @@ fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &Authn
     }
     writer.start(&name, &attrs);
     writer.start(&qname(prefix, "AuthnContext"), &[]);
+    let reference_name = match statement.authn_context.kind() {
+        AuthnContextReferenceKind::Class => "AuthnContextClassRef",
+        AuthnContextReferenceKind::Declaration => "AuthnContextDeclRef",
+    };
     writer.text_element(
-        &qname(prefix, "AuthnContextClassRef"),
+        &qname(prefix, reference_name),
         &[],
-        UNSPECIFIED_AUTHN_CONTEXT,
+        statement.authn_context.uri(),
     );
     writer.end(&qname(prefix, "AuthnContext"));
     writer.end(&name);
