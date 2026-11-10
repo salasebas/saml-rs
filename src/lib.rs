@@ -342,7 +342,7 @@
 //! `crypto-bergshamra` feature selects RustCrypto; applications
 //! can instead select `crypto-aws-lc` or `crypto-fips` with default features
 //! disabled. Configure assertion, `<EncryptedID>`, and `<EncryptedAttribute>`
-//! encryption and the RustCrypto XML-Enc exception through
+//! encryption and RSA-v1.5 key-transport decryption through
 //! [`XmlEncryptionPolicy`].
 //! Disable default features to build the crypto-free protocol layer; crypto
 //! operations then fail closed with [`SamlError::Unsupported`].

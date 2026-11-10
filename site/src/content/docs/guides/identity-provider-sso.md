@@ -62,7 +62,7 @@ let response = idp.respond_sso(
 
 `allow_unsigned_encrypted_cbc()` relaxes that recommendation only. It is not the Compatibility preset. A service provider that already requires the signature still rejects the relaxed response.
 
-Assertion encryption stays off until you select `XmlEncryptionPolicy::encrypt_assertions`. On RustCrypto, software RSA key-transport decryption stays off until the caller opts in. See [Security](../reference/security.md).
+Assertion encryption stays off until you select `XmlEncryptionPolicy::encrypt_assertions`.
 
 ## Attributes and name identifiers
 

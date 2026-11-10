@@ -22,7 +22,7 @@ use saml_rs::{
     NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
     ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement, Saml, SamlError,
     SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, XmlEncryptionPolicy, XmlPolicy,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -54,14 +54,6 @@ fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     }
 }
 
-fn xml() -> XmlPolicy {
-    XmlPolicy {
-        encryption: XmlEncryptionPolicy::default()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
-        ..XmlPolicy::default()
-    }
-}
-
 fn encrypted() -> StartNameIdManagement {
     StartNameIdManagement::redirect()
         .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers)
@@ -78,7 +70,6 @@ fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> 
             )?))
             .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
             .validation(SpValidationPolicy::recommended())
-            .xml(xml())
             .build()?,
     )
 }
@@ -103,7 +94,6 @@ fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
             )?))
             .credentials(credentials)
             .validation(IdpValidationPolicy::recommended())
-            .xml(xml())
             .build()?,
     )
 }

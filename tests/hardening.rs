@@ -604,7 +604,6 @@ fn hardening_sign_then_encrypt_message_auto_resolves() -> Result<(), Box<dyn std
     let mut sp_setting = signing();
     sp_setting.is_assertion_encrypted = true;
     sp_setting.enc_private_key = Some(PRIVKEY.into());
-    sp_setting.allow_insecure_software_rsa_key_transport_decryption = true;
     let sp = ServiceProvider::from_config(
         &SpMetadataConfig {
             entity_id: "https://sp.example.com/metadata".into(),

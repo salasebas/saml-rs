@@ -50,7 +50,7 @@ fn credentials() -> Credentials {
 
 fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
     XmlPolicy {
-        encryption: encryption.with_insecure_software_rsa_key_transport_decryption_allowed(),
+        encryption,
         ..XmlPolicy::default()
     }
 }

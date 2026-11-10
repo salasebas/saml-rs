@@ -73,8 +73,7 @@ fn rsa(algorithms: AlgorithmPolicy) -> Side {
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_assertions() -> XmlPolicy {
     XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+        encryption: XmlEncryptionPolicy::encrypt_assertions(),
         ..XmlPolicy::default()
     }
 }
@@ -686,7 +685,6 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
         XmlEncryptionPolicy::encrypt_assertions(),
         XmlEncryptionPolicy::encrypt_ids(),
     ] {
-        let encryption = encryption.with_insecure_software_rsa_key_transport_decryption_allowed();
         let default = peers(
             rsa(AlgorithmPolicy::default()),
             rsa(rsa15.clone()),

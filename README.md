@@ -206,10 +206,9 @@ With `crypto-bergshamra` enabled:
 
 - XML signatures can be verified against metadata-declared keys.
 - Signed-reference placement checks help mitigate XML Signature Wrapping.
-- XML-Enc is available. On RustCrypto, software RSA key-transport decryption
-  stays off until the caller opts in through
-  [`XmlEncryptionPolicy`](https://docs.rs/saml-rs/latest/saml_rs/config/struct.XmlEncryptionPolicy.html).
-  AWS-LC decrypts RSA-OAEP with the default options.
+- XML-Enc is available. RSA-OAEP key transport decrypts with the default
+  options. RSA-v1.5 key-transport decryption stays off until the caller selects
+  it through [`XmlEncryptionPolicy`](https://docs.rs/saml-rs/latest/saml_rs/config/struct.XmlEncryptionPolicy.html).
 
 ## How to surface provider initialisation at startup
 
@@ -242,9 +241,6 @@ fn startup() -> Result<(), saml_rs::SamlError> {
 - Detached Redirect and SimpleSign signatures are bound to the fields the flow
   parser consumes.
 - HTTP-Redirect raw DEFLATE output is limited.
-- Software RSA key-transport decryption is disabled by default on RustCrypto
-  because that backend, reached through `bergshamra` and `kryptering`, is
-  affected by RUSTSEC-2023-0071. AWS-LC and FIPS do not use that gate.
 
 Schema validation is optional defence in depth through
 `context::set_schema_validator`.

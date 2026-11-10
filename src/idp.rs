@@ -722,7 +722,6 @@ impl IdentityProvider {
                 assertion_elements: AssertionElementEncryption::default(),
                 element_decrypt_key: None,
                 received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
-                allow_insecure_software_rsa_key_transport_decryption: false,
                 allow_rsa15_key_transport_decryption: false,
                 clock_drifts,
                 now,
