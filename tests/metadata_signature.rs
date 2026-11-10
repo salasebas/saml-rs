@@ -18,9 +18,9 @@ use saml_rs::util::normalize_cert_string;
 use saml_rs::xml::XmlLimits;
 use saml_rs::SamlError;
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
-const WRONG_CERT: &str = include_str!("fixtures/key/idp_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const WRONG_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 const XPATH_TRANSFORM: &str = "http://www.w3.org/TR/1999/REC-xpath-19991116";
 
 fn idp_metadata_xml() -> &'static str {

@@ -22,8 +22,8 @@ const DEFAULT_ACS: &str = "https://sp.example.com/acs/default";
 const IDP_SSO_FIRST: &str = "https://idp.example.com/sso/first";
 const IDP_SSO_SECOND: &str = "https://idp.example.com/sso/second";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn credentials() -> Credentials {
     Credentials {

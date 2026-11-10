@@ -20,7 +20,7 @@ use saml_rs::{initialize_crypto_provider, CryptoFipsStatus, CryptoProvider};
 
 const PRIVATE_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const CERTIFICATE: &str = include_str!("fixtures/key/idp/cert.cer");
-const RESPONSE: &str = include_str!("fixtures/response.xml");
+const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
 const RESPONSE_SIGNED_SHA1: &str = include_str!("fixtures/misc/response_signed.xml");
 const RSA_SHA1_OCTETS: &str = "SAMLRequest=provider-matrix";
 // PKCS#1 v1.5 RSA-SHA1 over RSA_SHA1_OCTETS with provider_matrix_privkey.

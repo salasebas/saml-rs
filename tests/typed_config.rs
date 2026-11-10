@@ -19,8 +19,8 @@ use saml_rs::{
     PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor, TransformAlgorithm,
 };
 
-const IDP_METADATA: &str = include_str!("fixtures/idpmeta.xml");
-const SP_METADATA: &str = include_str!("fixtures/spmeta.xml");
+const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");
+const SP_METADATA: &str = include_str!("fixtures/misc/spmeta.xml");
 
 #[test]
 fn typed_config_private_key_debug_is_redacted() {

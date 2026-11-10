@@ -16,7 +16,7 @@ use saml_rs::{
 };
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-const RESPONSE: &str = include_str!("fixtures/response.xml");
+const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
 
 #[derive(Default)]
 struct MemoryReplayCache {

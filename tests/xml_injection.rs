@@ -23,9 +23,9 @@ use saml_rs::template::{LoginResponseAttribute, LoginResponseTemplate, LOGIN_RES
 use saml_rs::xml::dom::{parse_roots, Node};
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
-const RESPONSE: &str = include_str!("fixtures/response.xml");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
 
 const AUTHN_REQUEST: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>";
 

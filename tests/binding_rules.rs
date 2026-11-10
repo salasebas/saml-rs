@@ -32,8 +32,8 @@ const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const IDP_SSO_SIMPLESIGN: &str = "https://idp.example.com/sso/simple-sign";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 const SIGNED_AUTHN_REQUEST_TEMPLATE: &str = r#"
 <samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"

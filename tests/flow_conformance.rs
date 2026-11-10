@@ -26,8 +26,8 @@ use saml_rs::sp::LoginRequestOptions;
 use saml_rs::template::{replace_tags_by_value, LoginResponseAttribute, LoginResponseTemplate};
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const FAILED: &str = include_str!("fixtures/misc/failed_response.xml");
 
 fn signing() -> EntitySetting {

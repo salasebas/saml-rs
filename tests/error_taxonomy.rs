@@ -16,9 +16,9 @@ use saml_rs::template::{replace_tags_by_value, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::validator::check_status;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
-const FAILED: &str = include_str!("fixtures/failed_response.xml");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const FAILED: &str = include_str!("fixtures/misc/failed_response.xml");
 
 #[derive(Debug, Clone)]
 struct ResponseShape {

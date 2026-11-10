@@ -18,8 +18,8 @@ use saml_rs::util::normalize_cert_string;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{constants::Binding, constants::ParserType, SamlError};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
 const ATTACK: &str = include_str!("fixtures/misc/attack_response_signed.xml");
 

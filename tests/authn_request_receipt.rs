@@ -35,8 +35,8 @@ const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
 const AFFILIATION: &str = "https://affiliation.example.com";
 const DECLARATION: &str = "https://idp.example.com/authn-context/hardware-token";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn credentials() -> Credentials {
     Credentials {

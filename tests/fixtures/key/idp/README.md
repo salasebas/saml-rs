@@ -1,9 +1,9 @@
 # IdP fixture keys
 
-Test-only keys for the rolling-certificate fixtures. The passwords below
-belong to those fixtures. They are not deployment credentials.
+Test-only keys for the IdP and rolling-certificate fixtures. They are not
+deployment credentials.
 
-| File | Password | Certificate |
-| --- | --- | --- |
-| `privkey1.pem` | `q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW` | `cert.cer` |
-| `privkey2.pem` | none | `cert2.cer` |
+| Private key | Certificate |
+| --- | --- |
+| `provider_matrix_privkey.pkcs8.pem` | `cert.cer` |
+| `privkey2.pem` | `cert2.cer` |

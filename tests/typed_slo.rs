@@ -71,8 +71,8 @@ const LOGOUT_BINDINGS_WITH_SOAP: [LogoutBinding; 4] = [
 const UNSIGNED_COMPATIBILITY_BINDINGS: [LogoutBinding; 2] =
     [LogoutBinding::Post, LogoutBinding::Redirect];
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 #[derive(Debug, Clone, Copy)]
 enum LocalSloRole {

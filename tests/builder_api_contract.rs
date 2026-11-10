@@ -18,8 +18,8 @@ const SP_SLO_POST: &str = "https://sp.example.com/slo/post";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SLO_POST: &str = "https://idp.example.com/slo/post";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn assert_send_sync<T: Send + Sync>() {}
 

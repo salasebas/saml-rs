@@ -198,8 +198,8 @@ mod tests {
     use super::*;
     use std::time::Duration as StdDuration;
 
-    const RESPONSE: &str = include_str!("../tests/fixtures/response.xml");
-    const FAILED: &str = include_str!("../tests/fixtures/failed_response.xml");
+    const RESPONSE: &str = include_str!("../tests/fixtures/misc/response.xml");
+    const FAILED: &str = include_str!("../tests/fixtures/misc/failed_response.xml");
 
     #[test]
     fn system_time_conversion_supports_pre_unix_epoch() -> Result<(), Box<dyn std::error::Error>> {

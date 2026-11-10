@@ -44,8 +44,8 @@ const BASIC: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:basic";
 const DEPLOYMENT_FORMAT: &str = "https://example.com/attribute-name-format";
 const MAIL_OID: &str = "urn:oid:0.9.2342.19200300.100.1.3";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn credentials() -> Credentials {
     Credentials {

@@ -37,8 +37,8 @@ const IDP_SLO_REDIRECT: &str = "https://idp.example.com/slo/redirect";
 const SP_SLO_SOAP: &str = "https://sp.example.com/slo/soap";
 const IDP_SLO_SOAP: &str = "https://idp.example.com/slo/soap";
 
-const RSA_KEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const RSA_CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const RSA_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const RSA_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 const DSA_KEY: &str = include_str!("fixtures/key/dsa/privkey.pkcs8.pem");
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]

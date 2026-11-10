@@ -20,8 +20,8 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO: &str = "https://idp.example.com/sso";
 
-const SP_ROLE_KEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const SP_ROLE_CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const SP_ROLE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const SP_ROLE_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const IDP_ROLE_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const IDP_ROLE_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 

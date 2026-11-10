@@ -1298,8 +1298,9 @@ mod tests {
     #[test]
     fn detached_rolling_cert_unloadable_peer_keeps_invalid_verdict(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        const SP_PRIVKEY: &str = include_str!("../tests/fixtures/key/sp_privkey.pem");
-        const SP_CERT: &str = include_str!("../tests/fixtures/key/sp_signing_cert.cer");
+        const SP_PRIVKEY: &str =
+            include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+        const SP_CERT: &str = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
         let key = crate::crypto::keys::load_private_key(SP_PRIVKEY, None)?;
         let signature =
