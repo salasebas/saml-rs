@@ -567,7 +567,7 @@ mod tests {
         let message = SoapProtocolMessage::from_envelope(envelope)?;
         assert_eq!(
             message.xml(),
-            r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout"/>"#
+            r#"<samlp:LogoutRequest xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout"/>"#
         );
         Ok(())
     }

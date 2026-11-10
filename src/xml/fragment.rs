@@ -15,10 +15,12 @@ struct Declaration {
 
 /// Return the element at `start..end` of `xml` as standalone XML.
 ///
-/// A namespace prefix the element or a descendant uses in an element or
-/// attribute name, and that only an ancestor declares, is declared on the
-/// returned element. An element that declares every prefix it uses is
-/// returned unchanged.
+/// Each namespace an ancestor declares, that is in scope at the element and
+/// that the element does not declare itself, is declared on the returned
+/// element. That keeps a prefix used only in a QName value, such as
+/// `xsi:type="xs:string"`, bound. An inherited default namespace is declared
+/// unless an ancestor undeclares it with `xmlns=""`. An element with no
+/// inherited namespace is returned unchanged.
 ///
 /// # Errors
 ///
@@ -51,12 +53,11 @@ pub(crate) fn standalone_element(xml: &str, start: usize, end: usize) -> Result<
     Ok(standalone)
 }
 
-/// Ancestor declarations the element starting at `start` relies on.
+/// Ancestor declarations in scope at the element starting at `start` that
+/// the element does not declare itself, outermost first.
 fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, SamlError> {
     let mut reader = Reader::from_str(xml);
-    let mut scopes: Vec<Vec<Declaration>> = Vec::new();
-    let mut element_depth = None;
-    let mut inherited = Vec::new();
+    let mut ancestors: Vec<Vec<Declaration>> = Vec::new();
     loop {
         let before = reader.buffer_position() as usize;
         let event = reader
@@ -64,34 +65,12 @@ fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, S
             .map_err(|err| SamlError::Xml(err.to_string()))?;
         let after = reader.buffer_position() as usize;
         match event {
-            Event::Start(element) => {
-                if element_depth.is_none() && (before..after).contains(&start) {
-                    element_depth = Some(scopes.len());
-                }
-                scopes.push(declarations(&element)?);
-                if let Some(depth) = element_depth {
-                    collect_inherited(&element, &scopes, depth, &mut inherited)?;
-                }
+            Event::Start(element) | Event::Empty(element) if (before..after).contains(&start) => {
+                return Ok(in_scope(ancestors, &declarations(&element)?));
             }
-            Event::Empty(element) => {
-                let is_element = element_depth.is_none() && (before..after).contains(&start);
-                if is_element {
-                    element_depth = Some(scopes.len());
-                }
-                scopes.push(declarations(&element)?);
-                if let Some(depth) = element_depth {
-                    collect_inherited(&element, &scopes, depth, &mut inherited)?;
-                }
-                scopes.pop();
-                if is_element {
-                    return Ok(inherited);
-                }
-            }
+            Event::Start(element) => ancestors.push(declarations(&element)?),
             Event::End(_) => {
-                scopes.pop();
-                if element_depth == Some(scopes.len()) {
-                    return Ok(inherited);
-                }
+                ancestors.pop();
             }
             Event::DocType(_) => {
                 return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
@@ -99,7 +78,8 @@ fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, S
             Event::Eof => {
                 return Err(SamlError::Xml("element is outside the document".into()));
             }
-            Event::Text(_)
+            Event::Empty(_)
+            | Event::Text(_)
             | Event::CData(_)
             | Event::Comment(_)
             | Event::Decl(_)
@@ -126,54 +106,18 @@ fn declarations(element: &BytesStart<'_>) -> Result<Vec<Declaration>, SamlError>
     Ok(declared)
 }
 
-/// Record each prefix `element` uses that `scopes[depth..]` does not declare.
-fn collect_inherited(
-    element: &BytesStart<'_>,
-    scopes: &[Vec<Declaration>],
-    depth: usize,
-    inherited: &mut Vec<Declaration>,
-) -> Result<(), SamlError> {
-    let element_prefix = match element.name().prefix() {
-        Some(prefix) => prefix.into_inner(),
-        None => "",
-    };
-    let mut used = vec![element_prefix];
-    for attribute in element.attributes() {
-        let attribute = attribute.map_err(|err| SamlError::Xml(err.to_string()))?;
-        if attribute.key.as_namespace_binding().is_some() {
-            continue;
-        }
-        if let Some(prefix) = attribute.key.prefix() {
-            used.push(prefix.into_inner());
-        }
+/// The innermost declaration of each prefix in `ancestors` that `own` does
+/// not redeclare, without undeclarations.
+fn in_scope(ancestors: Vec<Vec<Declaration>>, own: &[Declaration]) -> Vec<Declaration> {
+    let mut scope: Vec<Declaration> = Vec::new();
+    for declaration in ancestors.into_iter().flatten() {
+        scope.retain(|known| known.prefix != declaration.prefix);
+        scope.push(declaration);
     }
-    let (ancestors, local) = scopes.split_at(depth);
-    for prefix in used {
-        if prefix == "xml" || declares(local, prefix).is_some() {
-            continue;
-        }
-        if inherited.iter().any(|known| known.prefix == prefix) {
-            continue;
-        }
-        if let Some(declaration) = declares(ancestors, prefix) {
-            if !declaration.value.is_empty() {
-                inherited.push(Declaration {
-                    prefix: declaration.prefix.clone(),
-                    value: declaration.value.clone(),
-                });
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Innermost declaration of `prefix` in `scopes`.
-fn declares<'a>(scopes: &'a [Vec<Declaration>], prefix: &str) -> Option<&'a Declaration> {
-    scopes
-        .iter()
-        .rev()
-        .flat_map(|scope| scope.iter().rev())
-        .find(|declaration| declaration.prefix == prefix)
+    scope.retain(|declaration| {
+        !declaration.value.is_empty() && !own.iter().any(|known| known.prefix == declaration.prefix)
+    });
+    scope
 }
 
 #[cfg(test)]
@@ -193,8 +137,8 @@ mod tests {
     }
 
     #[test]
-    fn an_element_that_declares_its_prefixes_is_unchanged() -> Result<(), SamlError> {
-        let xml = r#"<a:Root xmlns:a="urn:a" xmlns:b="urn:b"><a:Mid><b:Leaf xmlns:b="urn:inner" b:id="1"/></a:Mid></a:Root>"#;
+    fn an_element_that_redeclares_every_inherited_prefix_is_unchanged() -> Result<(), SamlError> {
+        let xml = r#"<b:Root xmlns:b="urn:b"><b:Mid><b:Leaf xmlns:b="urn:inner" b:id="1"/></b:Mid></b:Root>"#;
         assert_eq!(
             first_grandchild(xml)?,
             r#"<b:Leaf xmlns:b="urn:inner" b:id="1"/>"#
@@ -203,12 +147,30 @@ mod tests {
     }
 
     #[test]
-    fn prefixes_declared_on_ancestors_are_declared_on_the_element() -> Result<(), SamlError> {
+    fn every_namespace_in_scope_is_declared_on_the_element() -> Result<(), SamlError> {
         let xml = r#"<a:Root xmlns:a="urn:a" xmlns:b="urn:b" xmlns:unused="urn:unused"><a:Mid xmlns:c="urn:c"><b:Leaf c:id="1"><a:Inner/></b:Leaf></a:Mid></a:Root>"#;
         assert_eq!(
             first_grandchild(xml)?,
-            r#"<b:Leaf xmlns:b="urn:b" xmlns:c="urn:c" xmlns:a="urn:a" c:id="1"><a:Inner/></b:Leaf>"#
+            r#"<b:Leaf xmlns:a="urn:a" xmlns:b="urn:b" xmlns:unused="urn:unused" xmlns:c="urn:c" c:id="1"><a:Inner/></b:Leaf>"#
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_prefix_used_only_in_a_qname_value_is_declared() -> Result<(), SamlError> {
+        let xml = r#"<a:Root xmlns:a="urn:a" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema"><a:Mid><a:Value xsi:type="xs:string">v</a:Value></a:Mid></a:Root>"#;
+        assert_eq!(
+            first_grandchild(xml)?,
+            r#"<a:Value xmlns:a="urn:a" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string">v</a:Value>"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_undeclared_default_namespace_is_not_inherited() -> Result<(), SamlError> {
+        let xml =
+            r#"<a:Root xmlns="urn:default" xmlns:a="urn:a"><Mid xmlns=""><Leaf/></Mid></a:Root>"#;
+        assert_eq!(first_grandchild(xml)?, r#"<Leaf xmlns:a="urn:a"/>"#);
         Ok(())
     }
 

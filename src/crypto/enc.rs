@@ -14,6 +14,7 @@ use crate::config::{
 use crate::constants::{key_encryption_algorithm, namespace};
 use crate::error::SamlError;
 use crate::xml::dom::{self, Node, XmlLimits};
+use crate::xml::fragment::standalone_element;
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::keys::Key;
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeKind, NodeSet};
@@ -135,6 +136,9 @@ fn encrypted_data_xml(
 /// Encrypt the `<Assertion>` in `xml`, replacing it with
 /// `<{prefix}:EncryptedAssertion>`.
 ///
+/// The plaintext is the `<Assertion>` as written, with each namespace in
+/// scope from its ancestors declared on it, so it parses on its own.
+///
 /// `encrypt_cert` is the recipient's encryption certificate; `data_alg` /
 /// `key_alg` are the data and key encryption algorithm URIs.
 pub fn encrypt_assertion(
@@ -149,7 +153,7 @@ pub fn encrypt_assertion(
     let doc = dom::parse(xml)?;
     let assertion = child(&doc.root, "Assertion")
         .ok_or_else(|| SamlError::MissingMetadata("Assertion to encrypt".into()))?;
-    let assertion_xml = &xml[assertion.start..assertion.end];
+    let assertion_xml = standalone_element(xml, assertion.start, assertion.end)?;
     let encrypted_data =
         encrypted_data_xml(assertion_xml.as_bytes(), encrypt_cert, data_alg, key_alg)?;
 
@@ -941,8 +945,13 @@ mod tests {
         let (response, decrypted) =
             decrypt_assertion(&encrypted, &key, software_rsa_test_options())?;
         assert!(!response.contains("EncryptedAssertion"));
-        assert_eq!(response.matches(assertion).count(), 2);
-        assert_eq!(decrypted, assertion);
+        let standalone = assertion.replacen(
+            "<saml:Assertion ",
+            r#"<saml:Assertion xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" "#,
+            1,
+        );
+        assert_eq!(response.matches(&standalone).count(), 2);
+        assert_eq!(decrypted, standalone);
         Ok(())
     }
 

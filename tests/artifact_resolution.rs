@@ -1104,12 +1104,16 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
         &format!("<soap:Envelope{declarations}"),
         1,
     );
-    for envelope in [inherited_payload, hoisted_response] {
+    let soap = r#" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/""#;
+    for (envelope, in_scope) in [
+        (inherited_payload, format!("{soap}{declarations}")),
+        (hoisted_response, format!("{declarations}{soap}")),
+    ] {
         let resolved = resolution.finish(&envelope)?;
         assert_eq!(
             resolved.xml(),
             format!(
-                r#"<samlp:Response xmlns:samlp="{PROTOCOL}" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{WEB_SSO_MARKER}</samlp:Response>"#
+                r#"<samlp:Response{in_scope} ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{WEB_SSO_MARKER}</samlp:Response>"#
             )
         );
     }

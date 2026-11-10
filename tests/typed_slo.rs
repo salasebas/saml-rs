@@ -14,7 +14,11 @@ use saml_rs::binding::{
     append_signature, base64_decode, base64_encode, build_redirect_octet, deflate_raw_decode,
     deflate_raw_encode,
 };
-use saml_rs::constants::{signature_algorithm::RSA_SHA256, ParserType};
+use saml_rs::constants::{
+    signature_algorithm::RSA_SHA256,
+    transform_algorithm::{C14N, ENVELOPED_SIGNATURE},
+    ParserType,
+};
 use saml_rs::crypto::{
     construct_message_signature, construct_saml_signature, keys::load_private_key,
 };
@@ -4035,6 +4039,62 @@ fn soap_logout_accepts_signed_messages_without_destination(
             validation(),
         )?;
     }
+    Ok(())
+}
+
+const SOAP_NAMESPACE_DECLARATION: &str =
+    r#" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/""#;
+
+fn inclusive_c14n_signed(xml: &str) -> Result<String, SamlError> {
+    let key = load_private_key(PRIVKEY, None)?;
+    let transforms = [ENVELOPED_SIGNATURE.to_string(), C14N.to_string()];
+    construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &transforms, None)
+}
+
+#[test]
+fn soap_logout_rejects_an_inclusive_c14n_signature_made_outside_the_envelope(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let xml = logout_request_xml("_soap_c14n_signed_alone", SP_ENTITY_ID, None);
+    let envelope = SoapProtocolMessage::response_envelope(&inclusive_c14n_signed(&xml)?)?;
+    match idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(envelope.as_str()),
+        validation(),
+    ) {
+        Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature,
+        }) => Ok(()),
+        other => Err(format!("expected XmlSignature failure, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn soap_logout_accepts_an_inclusive_c14n_signature_made_inside_the_envelope(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let xml = logout_request_xml("_soap_c14n_signed_in_place", SP_ENTITY_ID, None).replacen(
+        "<samlp:LogoutRequest",
+        &format!("<samlp:LogoutRequest{SOAP_NAMESPACE_DECLARATION}"),
+        1,
+    );
+    let signed_in_scope = inclusive_c14n_signed(&xml)?;
+    let signed = signed_in_scope.replacen(SOAP_NAMESPACE_DECLARATION, "", 1);
+    if signed == signed_in_scope {
+        return Err("failed to move the soap namespace to the envelope".into());
+    }
+    let envelope = SoapProtocolMessage::response_envelope(&signed)?;
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::soap(envelope.as_str()),
+        validation(),
+    )?;
+    assert_eq!(
+        received.message().id().as_str(),
+        "_soap_c14n_signed_in_place"
+    );
     Ok(())
 }
 
