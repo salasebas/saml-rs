@@ -1,6 +1,8 @@
 //! Response rendering for the SOAP leg of Enhanced Client/Proxy SSO.
 
-use super::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
+use super::{
+    IdentityProvider, LoginResponseOptions, LoginResponseOverrides, RenderedLoginResponse,
+};
 use crate::constants::Binding;
 use crate::entity::User;
 use crate::error::SamlError;
@@ -30,8 +32,8 @@ impl IdentityProvider {
     pub(crate) fn render_paos_sso_response(
         &self,
         input: &PaosSsoResponseInput<'_>,
-    ) -> Result<String, SamlError> {
-        let context = self.create_login_response_with_overrides(
+    ) -> Result<RenderedLoginResponse, SamlError> {
+        let issued = self.create_login_response_with_overrides(
             input.sp,
             Binding::Post,
             input.user,
@@ -53,7 +55,12 @@ impl IdentityProvider {
                 requested_authn_context: input.requested_authn_context,
             },
         )?;
-        let xml = crate::binding::base64_decode(&context.context)?;
-        String::from_utf8(xml).map_err(|err| SamlError::Xml(err.to_string()))
+        let xml = crate::binding::base64_decode(&issued.context.context)?;
+        let xml = String::from_utf8(xml).map_err(|err| SamlError::Xml(err.to_string()))?;
+        Ok(RenderedLoginResponse {
+            id: issued.context.id,
+            xml,
+            session_index: issued.session_index,
+        })
     }
 }

@@ -11,7 +11,7 @@ use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
-    RequestedAuthnContext, Status, TopLevelStatusCode,
+    RequestedAuthnContext, SessionIndex, Status, TopLevelStatusCode,
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
@@ -59,6 +59,17 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
+}
+
+pub(crate) struct RenderedLoginResponse {
+    pub(crate) id: String,
+    pub(crate) xml: String,
+    pub(crate) session_index: Option<SessionIndex>,
+}
+
+pub(crate) struct IssuedLoginResponse {
+    pub(crate) context: BindingContext,
+    pub(crate) session_index: Option<SessionIndex>,
 }
 
 #[derive(Clone, Copy)]
@@ -133,7 +144,7 @@ impl IdentityProvider {
             .unwrap_or_default()
     }
 
-    /// Render the login `<Response>` XML for `sp`, returning `(id, xml)`.
+    /// Render the login `<Response>` XML for `sp`.
     ///
     /// `custom` overrides tag filling: it receives the template with the
     /// `<AttributeStatement>` already injected.
@@ -151,7 +162,7 @@ impl IdentityProvider {
         user: &User,
         acs: &str,
         rendering: LoginResponseRendering<'_>,
-    ) -> Result<(String, String), SamlError> {
+    ) -> Result<RenderedLoginResponse, SamlError> {
         validate_tag_prefixes(
             &self.setting.tag_prefix_protocol,
             &self.setting.tag_prefix_assertion,
@@ -212,7 +223,11 @@ impl IdentityProvider {
                 status,
                 in_response_to,
             })?;
-            return Ok((id, xml));
+            return Ok(RenderedLoginResponse {
+                id,
+                xml,
+                session_index: None,
+            });
         }
         let name_id_format = rendering
             .name_id_format
@@ -240,7 +255,8 @@ impl IdentityProvider {
             let supports_single_logout = !self.metadata.get_support_bindings().is_empty();
             let session_index = (rendering.web_browser_sso_producer.follows()
                 && supports_single_logout)
-                .then_some(assertion_id.as_str());
+                .then(|| SessionIndex::try_new(assertion_id.as_str()))
+                .transpose()?;
             let xml = render_default_login_response(&LoginResponseXml {
                 protocol_prefix: &self.setting.tag_prefix_protocol,
                 assertion_prefix: &self.setting.tag_prefix_assertion,
@@ -262,7 +278,7 @@ impl IdentityProvider {
                 authn_statement: rendering.web_browser_sso_producer.follows().then_some(
                     login_response::AuthnStatementXml {
                         authn_instant: &window.issue_instant,
-                        session_index,
+                        session_index: session_index.as_ref().map(SessionIndex::as_str),
                         authn_context: &authn_context,
                     },
                 ),
@@ -270,7 +286,11 @@ impl IdentityProvider {
                 user_attributes: &user.attributes,
                 typed_attributes: rendering.typed_attributes,
             })?;
-            return Ok((id, xml));
+            return Ok(RenderedLoginResponse {
+                id,
+                xml,
+                session_index,
+            });
         }
 
         let base = tmpl
@@ -292,7 +312,12 @@ impl IdentityProvider {
             &self.setting.tag_prefix_assertion,
         );
         if let Some(f) = rendering.custom {
-            return Ok(f(&prepared));
+            let (id, xml) = f(&prepared);
+            return Ok(RenderedLoginResponse {
+                id,
+                xml,
+                session_index: None,
+            });
         }
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
         let id = generate_id();
@@ -332,7 +357,11 @@ impl IdentityProvider {
         .into_iter()
         .chain(tags.into_iter().map(|(key, value)| (key, Some(value))))
         .collect();
-        Ok((id, replace_tags_by_optional_value(&prepared, &tags)))
+        Ok(RenderedLoginResponse {
+            id,
+            xml: replace_tags_by_optional_value(&prepared, &tags),
+            session_index: None,
+        })
     }
 
     /// Generate a login `<Response>` for `sp` over `binding`.
@@ -368,6 +397,7 @@ impl IdentityProvider {
             options,
             LoginResponseOverrides::default(),
         )
+        .map(|issued| issued.context)
     }
 
     pub(crate) fn create_login_response_with_overrides(
@@ -377,7 +407,7 @@ impl IdentityProvider {
         user: &User,
         options: &LoginResponseOptions<'_>,
         overrides: LoginResponseOverrides<'_>,
-    ) -> Result<BindingContext, SamlError> {
+    ) -> Result<IssuedLoginResponse, SamlError> {
         self.create_login_response_inner(sp, binding, user, options, overrides)
     }
 
@@ -388,7 +418,7 @@ impl IdentityProvider {
         user: &User,
         options: &LoginResponseOptions<'_>,
         overrides: LoginResponseOverrides<'_>,
-    ) -> Result<BindingContext, SamlError> {
+    ) -> Result<IssuedLoginResponse, SamlError> {
         if matches!(binding, Binding::Artifact | Binding::Soap) {
             return Err(SamlError::UnsupportedBinding { binding });
         }
@@ -399,7 +429,7 @@ impl IdentityProvider {
                 .get_assertion_consumer_service(binding)
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
-        let (id, raw) = self.render_login_response(
+        let rendered = self.render_login_response(
             sp,
             options.in_response_to,
             user,
@@ -424,22 +454,25 @@ impl IdentityProvider {
         let signed = self.finalize_login_response(
             sp,
             binding,
-            &raw,
+            &rendered.xml,
             options.encrypt_then_sign,
             error_response,
         )?;
         let relay = options.relay_state.map(str::to_string);
         let (context, signature, sig_alg) =
             self.bind_response(binding, &signed, &acs, relay.as_deref())?;
-        Ok(BindingContext {
-            id,
-            context,
-            relay_state: relay,
-            entity_endpoint: acs,
-            binding,
-            request_type: "SAMLResponse",
-            signature,
-            sig_alg,
+        Ok(IssuedLoginResponse {
+            context: BindingContext {
+                id: rendered.id,
+                context,
+                relay_state: relay,
+                entity_endpoint: acs,
+                binding,
+                request_type: "SAMLResponse",
+                signature,
+                sig_alg,
+            },
+            session_index: rendered.session_index,
         })
     }
 

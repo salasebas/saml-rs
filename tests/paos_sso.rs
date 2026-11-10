@@ -15,11 +15,11 @@ use saml_rs::constants::status_code::AUTH_FAILED;
 use saml_rs::xml::dom::{parse, Node};
 use saml_rs::{
     AcsEndpoint, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContextReference,
-    EndpointUrl, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
-    NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest, PaosSsoResponse, RelayStateParam,
-    ReplayPolicy, RespondPaosSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartPaosSso, Status, Subject, SubjectConfirmation,
-    SubordinateStatusCode,
+    EndpointUrl, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpValidationPolicy,
+    MetadataTrustPolicy, NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest,
+    PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml, SamlError,
+    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -45,15 +45,18 @@ fn credentials() -> saml_rs::Credentials {
     }
 }
 
-fn parties() -> Result<
-    (
-        Saml<saml_rs::Sp>,
-        Saml<saml_rs::Idp>,
-        SpDescriptor,
-        IdpDescriptor,
-    ),
-    SamlError,
-> {
+type Parties = (
+    Saml<saml_rs::Sp>,
+    Saml<saml_rs::Idp>,
+    SpDescriptor,
+    IdpDescriptor,
+);
+
+fn parties() -> Result<Parties, SamlError> {
+    parties_with(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?))
+}
+
+fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
@@ -62,8 +65,7 @@ fn parties() -> Result<
             .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
+        idp.sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
             .credentials(credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
@@ -228,6 +230,51 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert_eq!(pending.acs_url(), &EndpointUrl::try_new(SP_ACS)?);
+    assert_eq!(answered.session_index(), None);
+    Ok(())
+}
+
+#[test]
+fn paos_response_returns_the_session_index_the_service_provider_accepts(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties_with(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
+    )?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::from_headers(PaosClientRequest::ACCEPT, PaosClientRequest::PAOS_HEADER)?,
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?,
+    )?;
+    let (client, idp_request) =
+        enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    )?;
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default(),
+    )?;
+
+    let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
+    let pending = saml_rs::PendingPaosSso::from_snapshot(started.pending.snapshot())?;
+    let session = sp.finish_paos_sso(
+        &idp_descriptor,
+        &pending,
+        &PaosSsoResponse::from_envelope(sp_request)?,
+        validation(),
+    )?;
+    let accepted = session
+        .logout_subject()
+        .ok_or("accepted session is missing a logout subject")?;
+    assert_eq!(
+        answered.session_index().map(std::slice::from_ref),
+        Some(accepted.session_indexes())
+    );
     Ok(())
 }
 
