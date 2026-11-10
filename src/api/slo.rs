@@ -14,6 +14,7 @@ use crate::model::{
     SamlInstant, SamlValidationContext, Status,
 };
 use crate::xml::OutboundNameIdQualifiers;
+use std::time::SystemTime;
 
 use super::raw_mapping::{
     ensure_entity_id, ensure_relay_state, input_binding, raw_idp_descriptor, raw_sp_descriptor,
@@ -60,7 +61,7 @@ impl Saml<Sp> {
         subject: LogoutSubject,
         options: StartSlo,
     ) -> Result<Started<LogoutRequest>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
         start_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
@@ -96,7 +97,7 @@ impl Saml<Sp> {
         input: BrowserInput<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         receive_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
@@ -128,7 +129,7 @@ impl Saml<Sp> {
         request: &Received<LogoutRequest>,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
         respond_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
@@ -200,7 +201,7 @@ impl Saml<Sp> {
         input: BrowserInput<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         finish_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
@@ -267,7 +268,7 @@ impl Saml<Idp> {
         subject: LogoutSubject,
         options: StartSlo,
     ) -> Result<Started<LogoutRequest>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         start_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
@@ -328,7 +329,7 @@ impl Saml<Idp> {
         input: BrowserInput<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         receive_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
@@ -374,7 +375,7 @@ impl Saml<Idp> {
         request: &Received<LogoutRequest>,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         respond_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
@@ -446,7 +447,7 @@ impl Saml<Idp> {
         input: BrowserInput<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         finish_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,

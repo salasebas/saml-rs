@@ -5,6 +5,7 @@ use crate::name_id_management::{
     StartedNameIdManagement,
 };
 use crate::soap::{SoapChannel, SoapResponse};
+use std::time::SystemTime;
 
 mod redirect;
 
@@ -82,6 +83,7 @@ impl Saml<Idp> {
         identifier_encryption: IdentifierEncryptionPolicy,
         channel: SoapChannel,
     ) -> Result<StartedNameIdManagement, SamlError> {
+        sp.ensure_valid_at(SystemTime::now())?;
         name_id_management::start(
             &self.local_identity_provider()?,
             sp,
@@ -123,6 +125,7 @@ impl Saml<Idp> {
         channel: SoapChannel,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagement, SamlError> {
+        sp.ensure_valid_at(validation.now())?;
         name_id_management::receive(
             &self.local_identity_provider()?,
             sp,
@@ -186,6 +189,7 @@ impl Saml<Idp> {
         request: &Received<ManageNameIdRequest>,
         status: &Status,
     ) -> Result<SoapResponse, SamlError> {
+        sp.ensure_valid_at(SystemTime::now())?;
         name_id_management::respond(&self.local_identity_provider()?, sp, request, status)
     }
 

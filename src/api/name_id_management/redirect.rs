@@ -16,6 +16,7 @@ use crate::name_id_management::{
     ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementRefusal,
     ReceivedNameIdManagement, RefusedNameIdManagement,
 };
+use std::time::SystemTime;
 
 use super::super::raw_mapping::{
     ensure_entity_id, ensure_relay_state, input_binding, raw_idp_descriptor, raw_sp_descriptor,
@@ -87,7 +88,7 @@ impl Saml<Sp> {
         change: &NameIdChange,
         options: StartNameIdManagement,
     ) -> Result<Started<ManageNameIdRequest>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
         start(
             self.local(),
             Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
@@ -131,7 +132,7 @@ impl Saml<Sp> {
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         receive(
             self.local(),
             Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
@@ -161,7 +162,7 @@ impl Saml<Sp> {
         request: &Received<ManageNameIdRequest>,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
         respond(
             self.local(),
             Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
@@ -190,7 +191,7 @@ impl Saml<Sp> {
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<(), SamlError> {
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         finish(
             self.local(),
             Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
@@ -266,7 +267,7 @@ impl Saml<Idp> {
         change: &NameIdChange,
         options: StartNameIdManagement,
     ) -> Result<Started<ManageNameIdRequest>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         start(
             self.local(),
             Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
@@ -334,7 +335,7 @@ impl Saml<Idp> {
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         receive(
             self.local(),
             Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
@@ -359,7 +360,7 @@ impl Saml<Idp> {
         request: &Received<ManageNameIdRequest>,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         respond(
             self.local(),
             Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
@@ -385,7 +386,7 @@ impl Saml<Idp> {
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<(), SamlError> {
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         finish(
             self.local(),
             Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),

@@ -1,9 +1,10 @@
 use core::str::FromStr;
 use std::collections::HashSet;
+use std::time::SystemTime;
 
 use crate::browser::{AcsEndpoint, NameIdManagementBinding, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
-use crate::metadata::{IdpMetadata, MetadataLifetime, SpMetadata};
+use crate::metadata::{IdpMetadata, MetadataLifetime, MetadataValidity, SpMetadata};
 use crate::model::EndpointUrl;
 
 /// SOAP `ArtifactResolutionService` published by an artifact issuer.
@@ -289,11 +290,16 @@ impl IdpMetadataConfig {
 }
 
 /// Typed IdP peer descriptor imported from metadata.
+///
+/// Typed flows refuse it with [`SamlError::TimeWindowInvalid`] once the
+/// earliest `validUntil` of its role descriptor, `EntityDescriptor`, and
+/// enclosing `EntitiesDescriptor` elements has been reached.
 #[derive(Debug, Clone)]
 pub struct IdpDescriptor {
     entity_id: EntityId,
     metadata_xml: String,
     metadata: IdpMetadata,
+    validity: MetadataValidity,
     trust: AppliedMetadataTrust,
     hmac_secret: Option<HmacSecret>,
 }
@@ -304,7 +310,8 @@ impl IdpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent
-    /// or unexpected, or the requested trust policy cannot be satisfied.
+    /// or unexpected, the requested trust policy cannot be satisfied, or a
+    /// `validUntil` is not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml_for(
         expected_entity_id: EntityId,
         xml: &str,
@@ -315,10 +322,12 @@ impl IdpDescriptor {
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;
+        let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
             metadata_xml: xml.to_string(),
             metadata,
+            validity,
             trust,
             hmac_secret: None,
         })
@@ -331,15 +340,18 @@ impl IdpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent,
-    /// or the requested trust policy cannot be satisfied.
+    /// the requested trust policy cannot be satisfied, or a `validUntil` is
+    /// not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
         let metadata = IdpMetadata::from_xml(xml)?;
         let entity_id = EntityId::try_new(metadata_entity_id(&metadata)?)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;
+        let validity = metadata.validity()?;
         Ok(Self {
             entity_id,
             metadata_xml: xml.to_string(),
             metadata,
+            validity,
             trust,
             hmac_secret: None,
         })
@@ -358,6 +370,10 @@ impl IdpDescriptor {
     /// Parsed IdP metadata.
     pub fn metadata(&self) -> &IdpMetadata {
         &self.metadata
+    }
+
+    pub(crate) fn ensure_valid_at(&self, now: SystemTime) -> Result<(), SamlError> {
+        self.validity.ensure_valid_at(now)
     }
 
     /// Verify this identity provider's HMAC signatures with `secret`.
@@ -394,11 +410,16 @@ impl IdpDescriptor {
 }
 
 /// Typed SP peer descriptor imported from metadata.
+///
+/// Typed flows refuse it with [`SamlError::TimeWindowInvalid`] once the
+/// earliest `validUntil` of its role descriptor, `EntityDescriptor`, and
+/// enclosing `EntitiesDescriptor` elements has been reached.
 #[derive(Debug, Clone)]
 pub struct SpDescriptor {
     entity_id: EntityId,
     metadata_xml: String,
     metadata: SpMetadata,
+    validity: MetadataValidity,
     trust: AppliedMetadataTrust,
     hmac_secret: Option<HmacSecret>,
 }
@@ -409,7 +430,8 @@ impl SpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent
-    /// or unexpected, or the requested trust policy cannot be satisfied.
+    /// or unexpected, the requested trust policy cannot be satisfied, or a
+    /// `validUntil` is not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml_for(
         expected_entity_id: EntityId,
         xml: &str,
@@ -420,10 +442,12 @@ impl SpDescriptor {
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;
+        let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
             metadata_xml: xml.to_string(),
             metadata,
+            validity,
             trust,
             hmac_secret: None,
         })
@@ -436,15 +460,18 @@ impl SpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent,
-    /// or the requested trust policy cannot be satisfied.
+    /// the requested trust policy cannot be satisfied, or a `validUntil` is
+    /// not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
         let metadata = SpMetadata::from_xml(xml)?;
         let entity_id = EntityId::try_new(metadata_entity_id(&metadata)?)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;
+        let validity = metadata.validity()?;
         Ok(Self {
             entity_id,
             metadata_xml: xml.to_string(),
             metadata,
+            validity,
             trust,
             hmac_secret: None,
         })
@@ -463,6 +490,10 @@ impl SpDescriptor {
     /// Parsed SP metadata.
     pub fn metadata(&self) -> &SpMetadata {
         &self.metadata
+    }
+
+    pub(crate) fn ensure_valid_at(&self, now: SystemTime) -> Result<(), SamlError> {
+        self.validity.ensure_valid_at(now)
     }
 
     /// Verify this service provider's HMAC signatures with `secret`.

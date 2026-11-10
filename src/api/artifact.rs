@@ -3,6 +3,7 @@ use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::model::{AuthnRequest, Received, SsoResponse, Subject};
 use crate::soap::SoapChannel;
+use std::time::SystemTime;
 
 use super::idp::ResponseTransport;
 use super::raw_mapping::ensure_entity_id;
@@ -27,6 +28,7 @@ impl Saml<Idp> {
         endpoint_index: u16,
         issued: &mut IssuedArtifacts,
     ) -> Result<Artifact, SamlError> {
+        service_provider.ensure_valid_at(SystemTime::now())?;
         artifact::issue(
             &self.raw_identity_provider().metadata,
             service_provider,
@@ -204,6 +206,7 @@ impl Saml<Idp> {
         issued: &mut IssuedArtifacts,
         channel: SoapChannel,
     ) -> Result<AnsweredArtifact, SamlError> {
+        presenter.ensure_valid_at(SystemTime::now())?;
         artifact::answer(
             &self.raw_identity_provider().metadata,
             presenter,
@@ -237,6 +240,7 @@ impl Saml<Sp> {
         dereference: ArtifactDereference,
         uses: &mut ArtifactUses,
     ) -> Result<ArtifactResolution, SamlError> {
+        identity_provider.ensure_valid_at(SystemTime::now())?;
         let entity_id = self
             .raw_service_provider()
             .metadata

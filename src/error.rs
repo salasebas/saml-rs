@@ -108,6 +108,8 @@ pub enum TimeWindowField {
     AuthnRequestIssueInstant,
     /// ManageNameIDRequest `IssueInstant` age window.
     ManageNameIdRequestIssueInstant,
+    /// Metadata `validUntil` is malformed or has been reached.
+    MetadataValidUntil,
 }
 
 impl fmt::Display for TimeWindowField {
@@ -122,6 +124,7 @@ impl fmt::Display for TimeWindowField {
             Self::ManageNameIdRequestIssueInstant => {
                 f.write_str("ManageNameIDRequest@IssueInstant")
             }
+            Self::MetadataValidUntil => f.write_str("metadata validUntil"),
         }
     }
 }

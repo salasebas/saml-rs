@@ -5,6 +5,7 @@ pub mod generate;
 pub mod idp;
 mod lifetime;
 pub mod sp;
+mod validity;
 mod write;
 
 #[cfg(any(
@@ -20,6 +21,7 @@ pub use generate::{
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
 pub use sp::SpMetadata;
+pub(crate) use validity::MetadataValidity;
 
 use std::collections::HashSet;
 
@@ -232,6 +234,7 @@ pub struct Metadata {
     xml: String,
     pub(crate) meta: Value,
     key_certificates: KeyCertificates,
+    valid_until_bounds: Vec<String>,
 }
 
 impl Metadata {
@@ -305,7 +308,12 @@ impl Metadata {
             xml: xml.to_string(),
             meta,
             key_certificates,
+            valid_until_bounds: validity::valid_until_bounds(&roots, role),
         })
+    }
+
+    pub(crate) fn validity(&self) -> Result<MetadataValidity, SamlError> {
+        MetadataValidity::from_bounds(&self.valid_until_bounds)
     }
 
     /// The original metadata XML.
