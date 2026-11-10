@@ -38,7 +38,7 @@ Bergshamra supports AWS-LC and FIPS on Linux x86_64 and aarch64. The provider te
 
 `crypto-fips` means the selected AWS-LC provider attested FIPS mode. It does not certify the binary or the deployment. In a `crypto-fips` build, a successful `initialize_crypto_provider` reports `CryptoFipsStatus::Active`.
 
-FIPS rejects algorithms outside its approved set, including SHA-1 `RSA_OAEP_MGF1P` key transport and both signing and verifying `RSA_SHA1`. Non-FIPS AWS-LC still verifies inbound RSA-SHA1 Redirect and XML-DSig signatures. AWS-LC covers a narrower set than RustCrypto. The table is bergshamra's [provider capabilities](https://github.com/kushaldas/bergshamra/blob/v0.9.0/docs/provider-capabilities.md).
+FIPS rejects algorithms outside its approved set, including SHA-1 `RSA_OAEP_MGF1P` key transport and both signing and verifying `RSA_SHA1`. Non-FIPS AWS-LC still verifies inbound RSA-SHA1 Redirect and XML-DSig signatures. AWS-LC covers a narrower set than RustCrypto. The table is bergshamra's [provider capabilities](https://github.com/kushaldas/bergshamra/blob/v0.11.1/docs/provider-capabilities.md).
 
 ## Next
 

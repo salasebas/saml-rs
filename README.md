@@ -199,7 +199,7 @@ FIPS policy rejects algorithms outside its approved set, including SHA-1
 Non-FIPS AWS-LC still verifies inbound RSA-SHA1 Redirect and XML-DSig
 signatures. AWS-LC has a narrower algorithm set than RustCrypto. Custom
 algorithm URIs are listed in Bergshamra's
-[provider capabilities](https://github.com/kushaldas/bergshamra/blob/v0.9.0/docs/provider-capabilities.md).
+[provider capabilities](https://github.com/kushaldas/bergshamra/blob/v0.11.1/docs/provider-capabilities.md).
 
 With `crypto-bergshamra` enabled:
 
