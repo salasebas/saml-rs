@@ -17,15 +17,17 @@ use saml_rs::constants::{
     name_id_format, signature_algorithm::RSA_SHA256, status_code, ParserType,
 };
 use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
+use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, BrowserInput, CertificatePem, Credentials, EndpointUrl, EntityId, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, ManageNameIdRequest, ManageNameIdResponse,
-    ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
-    NameIdManagementRefusal, Outbound, Pending, PendingManageNameIdRequest, PrivateKeyPem,
-    ReceiveNameIdManagement, Received, ReceivedNameIdManagement, ReceivedNameIdManagementRedirect,
-    RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy, RespondNameIdManagement, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartNameIdManagement, Status, SubordinateStatusCode,
+    AcsEndpoint, BrowserInput, CertificatePem, ClockSkew, Credentials, EndpointUrl, EntityId,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, ManageNameIdRequest,
+    ManageNameIdRequestAgePolicy, ManageNameIdResponse, ManageNameIdService, MetadataTrustPolicy,
+    NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound, Pending,
+    PendingManageNameIdRequest, PrivateKeyPem, ReceiveNameIdManagement, Received,
+    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayStateParam, ReplayCache,
+    ReplayKey, ReplayPolicy, RespondNameIdManagement, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
+    SubordinateStatusCode,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -621,6 +623,91 @@ fn replayed_request_is_rejected() -> TestResult {
         }
         other => Err(format!("expected ReplayDetected, got {other:?}").into()),
     }
+}
+
+fn issued_at_plus(seconds: i64) -> Result<SystemTime, Box<dyn std::error::Error>> {
+    let issued = time::OffsetDateTime::parse(
+        "2026-01-01T00:00:00Z",
+        &time::format_description::well_known::Rfc3339,
+    )?;
+    Ok(SystemTime::from(issued + time::Duration::seconds(seconds)))
+}
+
+fn one_hour_request_age(now: SystemTime, cache: &mut dyn ReplayCache) -> SamlValidationContext<'_> {
+    SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache))
+        .with_clock_skew(ClockSkew::strict())
+        .with_replay_retention(Duration::from_secs(300))
+        .with_manage_name_id_request_age(ManageNameIdRequestAgePolicy::Bounded {
+            max_age: Duration::from_secs(60 * 60),
+        })
+}
+
+fn assert_request_age_rejected(
+    result: Result<ReceivedNameIdManagementRedirect, SamlError>,
+) -> TestResult {
+    match result {
+        Err(SamlError::TimeWindowInvalid {
+            field: TimeWindowField::ManageNameIdRequestIssueInstant,
+        }) => Ok(()),
+        other => Err(format!("expected a request age error, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_storage() -> TestResult
+{
+    let sp = sp()?;
+    let idp = idp()?;
+    let idp_peer = idp_descriptor(&idp)?;
+    let xml = idp_request_xml(
+        r#"<saml:NameID>alice@example.com</saml:NameID>"#,
+        "<samlp:Terminate/>",
+    );
+    let other_version = xml.replace(r#"Version="2.0""#, r#"Version="2.1""#);
+    let mut cache = MemoryReplayCache::default();
+
+    for (seconds, message) in [
+        (60 * 60 + 1, &xml),
+        (-1, &xml),
+        (60 * 60 + 1, &other_version),
+    ] {
+        assert_request_age_rejected(sp.receive_name_id_management_redirect(
+            &idp_peer,
+            signed_request_input(message)?,
+            ReceiveNameIdManagement::redirect(),
+            one_hour_request_age(issued_at_plus(seconds)?, &mut cache),
+        ))?;
+    }
+    assert!(cache.seen.is_empty());
+
+    for seconds in [0, 60 * 60] {
+        let mut cache = MemoryReplayCache::default();
+        request(sp.receive_name_id_management_redirect(
+            &idp_peer,
+            signed_request_input(&xml)?,
+            ReceiveNameIdManagement::redirect(),
+            one_hour_request_age(issued_at_plus(seconds)?, &mut cache),
+        )?)?;
+        assert!(cache
+            .seen
+            .contains_key("manage_name_id_request_id:_manage1"));
+    }
+
+    let unbounded = SamlValidationContext::new(
+        issued_at_plus(30 * 24 * 60 * 60)?,
+        ReplayPolicy::DisabledForCompatibility,
+    );
+    assert_eq!(
+        unbounded.manage_name_id_request_age(),
+        ManageNameIdRequestAgePolicy::Disabled
+    );
+    request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        signed_request_input(&xml)?,
+        ReceiveNameIdManagement::redirect(),
+        unbounded,
+    )?)?;
+    Ok(())
 }
 
 #[test]

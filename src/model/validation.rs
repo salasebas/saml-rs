@@ -223,12 +223,31 @@ pub enum AuthnRequestAgePolicy {
     },
 }
 
+/// Maximum age for a received `ManageNameIDRequest` `IssueInstant`.
+///
+/// [`Self::Disabled`] skips the comparison. [`Self::Bounded`] accepts an
+/// instant inside the window [`AuthnRequestAgePolicy::Bounded`] uses. The
+/// classification is `docs/conformance/name-id-management.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManageNameIdRequestAgePolicy {
+    /// Do not compare `IssueInstant` with the validation clock.
+    Disabled,
+    /// Accept an `IssueInstant` inside an inclusive window of `max_age`.
+    Bounded {
+        /// Maximum age before clock-skew tolerance is applied.
+        ///
+        /// Zero leaves only the skew neighborhood.
+        max_age: Duration,
+    },
+}
+
 /// Caller-owned validation context for typed inbound SAML messages.
 pub struct SamlValidationContext<'a> {
     now: SystemTime,
     recipient_endpoint: Option<EndpointUrl>,
     clock_skew: ClockSkew,
     authn_request_age: AuthnRequestAgePolicy,
+    manage_name_id_request_age: ManageNameIdRequestAgePolicy,
     replay: ReplayPolicy<'a>,
     replay_retention: Option<Duration>,
 }
@@ -245,6 +264,7 @@ impl<'a> SamlValidationContext<'a> {
             recipient_endpoint: None,
             clock_skew: ClockSkew::five_minutes(),
             authn_request_age: AuthnRequestAgePolicy::Disabled,
+            manage_name_id_request_age: ManageNameIdRequestAgePolicy::Disabled,
             replay,
             replay_retention: None,
         }
@@ -309,6 +329,23 @@ impl<'a> SamlValidationContext<'a> {
         self
     }
 
+    /// Select the maximum age of a `ManageNameIDRequest` `IssueInstant`
+    /// received by `receive_name_id_management` or
+    /// `receive_name_id_management_redirect`.
+    ///
+    /// [`ManageNameIdRequestAgePolicy::Bounded`] accepts the window described
+    /// on [`Self::with_authn_request_age`]. A request outside it is
+    /// [`SamlError::TimeWindowInvalid`] with
+    /// [`TimeWindowField::ManageNameIdRequestIssueInstant`], and its `ID` is
+    /// not stored for replay detection.
+    pub fn with_manage_name_id_request_age(
+        mut self,
+        manage_name_id_request_age: ManageNameIdRequestAgePolicy,
+    ) -> Self {
+        self.manage_name_id_request_age = manage_name_id_request_age;
+        self
+    }
+
     /// Set explicit replay retention for protocol messages that do not carry a
     /// SAML `NotOnOrAfter` value suitable for cache expiry.
     pub fn with_replay_retention(mut self, retention: Duration) -> Self {
@@ -331,6 +368,12 @@ impl<'a> SamlValidationContext<'a> {
         self.authn_request_age
     }
 
+    /// Maximum age policy for a received `ManageNameIDRequest`
+    /// `IssueInstant`.
+    pub fn manage_name_id_request_age(&self) -> ManageNameIdRequestAgePolicy {
+        self.manage_name_id_request_age
+    }
+
     /// Replay retention for protocol message IDs without SAML expiry.
     pub fn replay_retention(&self) -> Option<Duration> {
         self.replay_retention
@@ -351,20 +394,53 @@ impl<'a> SamlValidationContext<'a> {
         let AuthnRequestAgePolicy::Bounded { max_age } = self.authn_request_age else {
             return Ok(());
         };
+        self.check_issue_instant_age(
+            issue_instant,
+            max_age,
+            TimeWindowField::AuthnRequestIssueInstant,
+        )
+    }
+
+    pub(crate) fn check_manage_name_id_request_issue_instant(
+        &self,
+        issue_instant: &SamlInstant,
+    ) -> Result<(), SamlError> {
+        let ManageNameIdRequestAgePolicy::Bounded { max_age } = self.manage_name_id_request_age
+        else {
+            return Ok(());
+        };
+        self.check_issue_instant_age(
+            issue_instant,
+            max_age,
+            TimeWindowField::ManageNameIdRequestIssueInstant,
+        )
+    }
+
+    fn check_issue_instant_age(
+        &self,
+        issue_instant: &SamlInstant,
+        max_age: Duration,
+        field: TimeWindowField,
+    ) -> Result<(), SamlError> {
+        let outside_window = || SamlError::TimeWindowInvalid { field };
         let past_tolerance = positive_millis(self.clock_skew.not_on_or_after_millis());
         let future_tolerance = negative_millis_magnitude(self.clock_skew.not_before_millis());
         let past_allowance = max_age
             .checked_add(past_tolerance)
-            .ok_or_else(authn_request_issue_instant_window)?;
-        let now = self
-            .now_offset()
-            .map_err(|_| authn_request_issue_instant_window())?;
-        let earliest = offset_checked_sub(now, past_allowance)?;
-        let latest = offset_checked_add(now, future_tolerance)?;
+            .ok_or_else(outside_window)?;
+        let now = self.now_offset().map_err(|_| outside_window())?;
+        let earliest = time::Duration::try_from(past_allowance)
+            .ok()
+            .and_then(|allowance| now.checked_sub(allowance))
+            .ok_or_else(outside_window)?;
+        let latest = time::Duration::try_from(future_tolerance)
+            .ok()
+            .and_then(|tolerance| now.checked_add(tolerance))
+            .ok_or_else(outside_window)?;
         let issued = OffsetDateTime::parse(issue_instant.as_str(), &Rfc3339)
-            .map_err(|_| authn_request_issue_instant_window())?;
+            .map_err(|_| outside_window())?;
         if issued < earliest || issued > latest {
-            return Err(authn_request_issue_instant_window());
+            return Err(outside_window());
         }
         Ok(())
     }
@@ -433,34 +509,6 @@ fn negative_millis_magnitude(millis: i64) -> Duration {
     } else {
         Duration::ZERO
     }
-}
-
-fn authn_request_issue_instant_window() -> SamlError {
-    SamlError::TimeWindowInvalid {
-        field: TimeWindowField::AuthnRequestIssueInstant,
-    }
-}
-
-fn offset_checked_add(
-    instant: OffsetDateTime,
-    duration: Duration,
-) -> Result<OffsetDateTime, SamlError> {
-    let duration =
-        time::Duration::try_from(duration).map_err(|_| authn_request_issue_instant_window())?;
-    instant
-        .checked_add(duration)
-        .ok_or_else(authn_request_issue_instant_window)
-}
-
-fn offset_checked_sub(
-    instant: OffsetDateTime,
-    duration: Duration,
-) -> Result<OffsetDateTime, SamlError> {
-    let duration =
-        time::Duration::try_from(duration).map_err(|_| authn_request_issue_instant_window())?;
-    instant
-        .checked_sub(duration)
-        .ok_or_else(authn_request_issue_instant_window)
 }
 
 fn system_time_from_offset_datetime(deadline: OffsetDateTime) -> Result<SystemTime, SamlError> {

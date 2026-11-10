@@ -11,12 +11,13 @@
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
 
+use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, EndpointUrl, EntityId, IdentifierEncryptionPolicy, Idp, IdpConfig,
-    ManageNameIdService, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
-    NameIdChange, NameIdFormat, NameIdManagementRefusal, PartyAuthentication,
-    ReceivedNameIdManagement, ReplayCache, ReplayKey, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    ManageNameIdRequestAgePolicy, ManageNameIdService, MessageConfidentiality, MessageIntegrity,
+    MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal,
+    PartyAuthentication, ReceivedNameIdManagement, ReplayCache, ReplayKey, ReplayPolicy, Saml,
+    SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, Status, SubordinateStatusCode,
 };
 
@@ -777,6 +778,35 @@ fn a_replayed_request_is_rejected() -> TestResult {
     assert!(cache
         .seen
         .contains(&format!("manage_name_id_request_id:{SP_REQUEST_ID}")));
+    Ok(())
+}
+
+#[test]
+fn a_bounded_request_age_rejects_an_old_request_before_replay_storage() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let envelope = sp_request(&format!("{}<samlp:Terminate/>", current_name_id_xml()))?;
+    let issued = SystemTime::UNIX_EPOCH + Duration::from_secs(1_704_067_200);
+    let max_age = Duration::from_secs(60 * 60);
+
+    for (now, accepted) in [(issued, true), (issued + max_age * 2, false)] {
+        let mut cache = MemoryReplayCache::default();
+        let validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
+            .with_replay_retention(Duration::from_secs(300))
+            .with_manage_name_id_request_age(ManageNameIdRequestAgePolicy::Bounded { max_age });
+        let received = idp.receive_name_id_management(&sp, &envelope, authenticated(), validation);
+        if accepted {
+            received_request(received?)?;
+        } else {
+            assert!(matches!(
+                received,
+                Err(SamlError::TimeWindowInvalid {
+                    field: TimeWindowField::ManageNameIdRequestIssueInstant
+                })
+            ));
+        }
+        assert_eq!(cache.seen.is_empty(), !accepted);
+    }
     Ok(())
 }
 
