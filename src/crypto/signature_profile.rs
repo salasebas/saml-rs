@@ -1,6 +1,6 @@
 //! The signature and digest algorithms, and the verification keys, each
 //! [`XmlSignatureProfile`] accepts on a signature that authenticates an
-//! accepted message.
+//! accepted message or a signed metadata import.
 
 use crate::binding::base64_decode;
 use crate::config::XmlSignatureProfile;

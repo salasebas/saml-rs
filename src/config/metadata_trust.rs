@@ -62,9 +62,10 @@ pub enum MetadataTrustPolicy<'a> {
     /// Require a valid metadata signature from one of the pinned certificates.
     ///
     /// The signature must be an enveloped `#id` signature over the metadata
-    /// root. A signature that uses an MD5 or RIPEMD-160 signature or digest
-    /// algorithm is rejected with [`SamlError::AlgorithmUnsupported`], and a
-    /// pinned RSA certificate shorter than 2048 bits is not used to verify.
+    /// root. On a build that verifies MD5 or RIPEMD-160, a signature that uses
+    /// one as its signature or digest algorithm is rejected with
+    /// [`SamlError::AlgorithmUnsupported`]. A pinned RSA certificate shorter
+    /// than 2048 bits is not used to verify.
     /// See `docs/conformance/metadata-and-replay.md`.
     RequireSignature {
         /// Caller-pinned certificates trusted to sign the metadata.

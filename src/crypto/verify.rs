@@ -569,9 +569,9 @@ fn dsig_algorithm<'a>(
 
 /// Check one verifier-accepted signature against `profile`.
 ///
-/// Callers apply this only to a signature that authenticated the message being
-/// accepted. An invalid, untrusted, or unrelated signature therefore cannot
-/// reject the message.
+/// Callers apply this only to a signature that authenticated the message or
+/// metadata document being accepted. An invalid, untrusted, or unrelated
+/// signature therefore cannot reject it.
 fn enforce_profile_on_verified_signature(
     document: &BergshamraDocument<'_>,
     signature_node: BergshamraNodeId,

@@ -84,7 +84,6 @@ fn trust_allowing_other_transforms<'a>(
     }
 }
 
-#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 fn trust_allowing_weak_algorithms<'a>(
     certificates: &'a [CertificatePem],
 ) -> MetadataTrustPolicy<'a> {
@@ -360,6 +359,28 @@ fn require_signature_allowing_other_transforms_accepts_inclusive_canonicalizatio
         .signed_entity_descriptor_xml()
         .is_some_and(|xml| xml.contains("https://idp.example.com/metadata")));
     Ok(())
+}
+
+#[test]
+fn allowing_weak_algorithms_keeps_the_profile_transforms() -> Result<(), Box<dyn std::error::Error>>
+{
+    let cert = CertificatePem::new(CERT);
+    let certificates = std::slice::from_ref(&cert);
+    let profile = sign_root_metadata(idp_metadata_xml())?;
+    assert!(
+        import_idp(&profile, trust_allowing_weak_algorithms(certificates))?
+            .was_verified_with_pinned_certificates()
+    );
+
+    let inclusive = sign_metadata_root(
+        idp_metadata_xml(),
+        "EntityDescriptor",
+        &[
+            transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
+            INCLUSIVE_C14N.to_string(),
+        ],
+    )?;
+    assert_signature_shape_rejected(&inclusive, trust_allowing_weak_algorithms(certificates))
 }
 
 #[test]
