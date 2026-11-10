@@ -536,7 +536,7 @@ fn check_bearer_subject_confirmation(
             "subjectConfirmationData",
             &["SubjectConfirmation", "SubjectConfirmationData"],
         )
-        .attrs(&["NotOnOrAfter", "Recipient", "InResponseTo"]),
+        .attrs(&["NotBefore", "NotOnOrAfter", "Recipient", "InResponseTo"]),
     ];
     let extracted = extract_with_limits(xml, &fields, opts.xml_limits)?;
 
@@ -552,7 +552,7 @@ fn check_bearer_subject_confirmation(
         ));
     };
     if !verify_time_at(
-        None,
+        extracted.get_str("subjectConfirmationData.notBefore"),
         Some(not_on_or_after),
         opts.clock_drifts,
         opts.validation_now()?,
