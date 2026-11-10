@@ -1,11 +1,12 @@
 use super::extract::{
-    optional_endpoint, optional_request_id, required_str, session_indexes_from_value,
+    name_id_format_from_uri, optional_endpoint, optional_request_id, required_str,
+    session_indexes_from_value,
 };
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
+use super::status::{Status, SubordinateStatusCode, TopLevelStatusCode};
 use super::subject::NameId;
 use super::EndpointUrl;
 use crate::config::EntityId;
-use crate::constants::status_code;
 use crate::error::SamlError;
 use crate::raw::FlowResult;
 use crate::xml::parse_saml_utc_date_time;
@@ -133,10 +134,19 @@ impl TryFrom<FlowResult> for LogoutRequest {
             false,
         )?;
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
-        let name_id = raw_flow
-            .extract
-            .get_str("nameID")
-            .map(|value| NameId::new(value, None));
+        let name_id_attribute = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
+        let name_id = raw_flow.extract.get_str("nameID").map(|value| {
+            NameId::with_qualifiers(
+                value,
+                raw_flow
+                    .extract
+                    .get_str("nameIDFormat")
+                    .map(name_id_format_from_uri),
+                name_id_attribute("nameIDQualifiers.nameQualifier"),
+                name_id_attribute("nameIDQualifiers.spNameQualifier"),
+                name_id_attribute("nameIDQualifiers.spProvidedId"),
+            )
+        });
         let session_indexes = session_indexes_from_value(raw_flow.extract.get("sessionIndex"))?;
         let destination = optional_endpoint(&raw_flow.extract, "request.destination")?;
         Ok(Self {
@@ -183,6 +193,7 @@ pub struct LogoutResponse {
     issue_instant: SamlInstant,
     in_response_to: Option<MessageId>,
     destination: Option<EndpointUrl>,
+    status: Status,
     raw_flow: FlowResult,
 }
 
@@ -212,6 +223,15 @@ impl LogoutResponse {
         self.destination.as_ref()
     }
 
+    /// Top-level `StatusCode` and the subordinate `StatusCode`, when present.
+    ///
+    /// A session authority reports `PartialLogout` as the subordinate code
+    /// under `Success` when it could not log out every other session
+    /// participant.
+    pub fn status(&self) -> &Status {
+        &self.status
+    }
+
     /// Underlying raw compatibility flow result.
     ///
     /// When this model is built directly with [`TryFrom<FlowResult>`], no typed
@@ -230,15 +250,33 @@ impl TryFrom<FlowResult> for LogoutResponse {
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
         let in_response_to = optional_request_id(&raw_flow.extract, "response.inResponseTo")?;
         let destination = optional_endpoint(&raw_flow.extract, "response.destination")?;
+        let status = status_from_extract(&raw_flow.extract)?;
         Ok(Self {
             id,
             issuer,
             issue_instant,
             in_response_to,
             destination,
+            status,
             raw_flow,
         })
     }
+}
+
+fn status_from_extract(extract: &crate::util::Value) -> Result<Status, SamlError> {
+    let top_level = extract.get_str("statusCode").ok_or_else(|| {
+        SamlError::ProtocolProfile("LogoutResponse is missing required Status/StatusCode".into())
+    })?;
+    let top_level = TopLevelStatusCode::from_uri(top_level).ok_or_else(|| {
+        SamlError::ProtocolProfile(format!(
+            "LogoutResponse top-level StatusCode {top_level} is not a SAML top-level status code"
+        ))
+    })?;
+    let status = Status::from_top_level(top_level);
+    Ok(match extract.get_str("subordinateStatusCode") {
+        Some(subordinate) => status.with_subordinate(SubordinateStatusCode::received(subordinate)),
+        None => status,
+    })
 }
 
 fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstant, SamlError> {
@@ -298,9 +336,14 @@ impl LogoutCompleted {
         self.response.as_ref()
     }
 
-    /// Successful SAML status for the completed logout response.
+    /// Top-level SAML status URI of the completed logout response.
+    ///
+    /// [`LogoutResponse::status`] also carries a subordinate code such as
+    /// `PartialLogout`.
     pub fn status(&self) -> Option<&str> {
-        self.response.as_ref().map(|_| status_code::SUCCESS)
+        self.response
+            .as_ref()
+            .map(|response| response.status().top_level().as_uri())
     }
 
     /// Underlying raw compatibility flow result for the LogoutResponse.

@@ -27,12 +27,24 @@ impl TopLevelStatusCode {
             Self::VersionMismatch => status_code::VERSION_MISMATCH,
         }
     }
+
+    pub(crate) fn from_uri(uri: &str) -> Option<Self> {
+        [
+            Self::Success,
+            Self::Requester,
+            Self::Responder,
+            Self::VersionMismatch,
+        ]
+        .into_iter()
+        .find(|code| code.as_uri() == uri)
+    }
 }
 
 /// Optional second-level `StatusCode`.
 ///
 /// [`Self::partial_logout`] is Core §3.7.3.2 `PartialLogout`. Other absolute
-/// URIs go through [`Self::try_new`].
+/// URIs go through [`Self::try_new`]. A code read from a received response
+/// holds the peer's `Value` unchanged.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubordinateStatusCode {
     uri: String,
@@ -79,7 +91,13 @@ impl SubordinateStatusCode {
         Ok(Self { uri })
     }
 
-    /// Absolute URI carried in the nested `StatusCode/@Value`.
+    pub(crate) fn received(uri: &str) -> Self {
+        Self {
+            uri: uri.to_string(),
+        }
+    }
+
+    /// URI carried in the nested `StatusCode/@Value`.
     pub fn as_uri(&self) -> &str {
         &self.uri
     }
@@ -113,7 +131,7 @@ impl Status {
         Self::from_top_level(TopLevelStatusCode::VersionMismatch)
     }
 
-    fn from_top_level(top_level: TopLevelStatusCode) -> Self {
+    pub(crate) fn from_top_level(top_level: TopLevelStatusCode) -> Self {
         Self {
             top_level,
             subordinate: None,

@@ -310,8 +310,8 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
 
             let received = receive(&parties, initiator, request_input(&sent.outbound, binding)?)?;
             assert_eq!(
-                received.message().name_id().map(NameId::value),
-                Some(PRINCIPAL),
+                received.message().name_id(),
+                Some(&principal()),
                 "{initiator:?} {binding:?}"
             );
             assert_eq!(

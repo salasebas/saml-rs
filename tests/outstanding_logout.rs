@@ -59,10 +59,6 @@ fn principal() -> NameId {
     NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress))
 }
 
-fn subject() -> Subject {
-    Subject::new(principal(), Vec::new())
-}
-
 struct IssuedSso {
     sp: Saml<saml_rs::Sp>,
     idp_descriptor: IdpDescriptor,
@@ -72,6 +68,10 @@ struct IssuedSso {
 }
 
 fn issued_sso() -> Result<IssuedSso, Box<dyn std::error::Error>> {
+    issued_sso_for(principal())
+}
+
+fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Error>> {
     let sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
         .credentials(credentials())
@@ -105,12 +105,12 @@ fn issued_sso() -> Result<IssuedSso, Box<dyn std::error::Error>> {
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        Subject::new(name_id.clone(), Vec::new()),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        Subject::new(name_id.clone(), Vec::new()),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     Ok(IssuedSso {
@@ -367,6 +367,58 @@ fn outstanding_logout_does_not_reject_a_different_principal_or_session(
             .value(),
         "alice@example.com"
     );
+    Ok(())
+}
+
+#[test]
+fn outstanding_logout_with_unspecified_format_rejects_an_assertion_without_format(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let issued = issued_sso_for(NameId::new("alice@example.com", None))?;
+    let now = unix_seconds()? + 2;
+    let accepted = finish(&issued, now, ClockSkew::strict(), None)?;
+    assert_eq!(accepted.name_id().format(), None);
+
+    let outstanding = logout(
+        NameId::new("alice@example.com", Some(NameIdFormat::Unspecified)),
+        Vec::new(),
+        now + 120,
+    )?;
+    match finish(&issued, now, ClockSkew::strict(), Some(&outstanding)) {
+        Err(SamlError::AssertionMatchesOutstandingLogout) => Ok(()),
+        other => Err(format!(
+            "expected an unspecified-format logout to reject an assertion without Format, got {other:?}"
+        )
+        .into()),
+    }
+}
+
+#[test]
+fn outstanding_logout_with_a_custom_spelling_of_the_format_rejects_the_assertion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let issued = issued_sso()?;
+    let now = unix_seconds()? + 2;
+    let email = NameIdFormat::EmailAddress.as_uri();
+    let unspecified = NameIdFormat::Unspecified.as_uri();
+    for spelling in [
+        email.to_string(),
+        format!(" {email} "),
+        format!(" {unspecified} "),
+    ] {
+        let outstanding = logout(
+            NameId::new(
+                "alice@example.com",
+                Some(NameIdFormat::Custom(spelling.clone())),
+            ),
+            Vec::new(),
+            now + 120,
+        )?;
+        match finish(&issued, now, ClockSkew::strict(), Some(&outstanding)) {
+            Err(SamlError::AssertionMatchesOutstandingLogout) => {}
+            other => {
+                return Err(format!("Format {spelling:?} should reject, got {other:?}").into());
+            }
+        }
+    }
     Ok(())
 }
 

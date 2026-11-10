@@ -19,7 +19,7 @@ use saml_rs::{
     IdentityProvider, LogoutCompleted, LogoutRequest, LogoutResponse, MessageId,
     NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, PendingAuthnRequest, RelayState,
     RelayStateParam, SamlError, SamlInstant, ServiceProvider, SsoRequestBinding, SsoResponse,
-    SsoResponseBinding, SsoSession,
+    SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
 };
 
 #[cfg(any(
@@ -1428,6 +1428,10 @@ fn typed_models_logout_response_from_flow_result_exposes_correlation(
         response.destination().map(EndpointUrl::as_str),
         Some("https://sp.example.com/slo")
     );
+    assert_eq!(
+        response.status(),
+        &Status::success().with_subordinate(SubordinateStatusCode::partial_logout())
+    );
     Ok(())
 }
 
@@ -1446,6 +1450,14 @@ fn logout_response_flow(issue_instant: Option<&str>) -> FlowResult {
         extract: value_object(vec![
             ("response", value_object(response)),
             ("issuer", value_str("https://idp.example.com/metadata")),
+            (
+                "statusCode",
+                value_str(saml_rs::constants::status_code::SUCCESS),
+            ),
+            (
+                "subordinateStatusCode",
+                value_str(saml_rs::constants::status_code::PARTIAL_LOGOUT),
+            ),
         ]),
     }
 }
@@ -1457,6 +1469,25 @@ fn typed_models_logout_response_rejects_missing_issue_instant_with_profile_conte
         Err(SamlError::ProtocolProfile(message))
             if message.contains("LogoutResponse is missing required unqualified attribute IssueInstant")
     ));
+}
+
+#[test]
+fn typed_models_logout_response_rejects_missing_status_with_profile_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut flow = logout_response_flow(Some("2024-01-01T00:00:00Z"));
+    let Value::Object(fields) = &mut flow.extract else {
+        return Err("logout response extract is not an object".into());
+    };
+    fields.retain(|(key, _)| key != "statusCode");
+
+    match LogoutResponse::try_from(flow) {
+        Err(SamlError::ProtocolProfile(message))
+            if message.contains("LogoutResponse is missing required Status/StatusCode") =>
+        {
+            Ok(())
+        }
+        other => Err(format!("expected missing status rejection, got {other:?}").into()),
+    }
 }
 
 #[test]

@@ -150,6 +150,12 @@ pub fn logout_request_fields() -> Vec<ExtractorField> {
         ]),
         ExtractorField::new("issuer", &["LogoutRequest", "Issuer"]),
         ExtractorField::new("nameID", &["LogoutRequest", "NameID"]),
+        ExtractorField::new("nameIDFormat", &["LogoutRequest", "NameID"]).attrs(&["Format"]),
+        ExtractorField::new("nameIDQualifiers", &["LogoutRequest", "NameID"]).attrs(&[
+            "NameQualifier",
+            "SPNameQualifier",
+            "SPProvidedID",
+        ]),
         ExtractorField::new("sessionIndex", &["LogoutRequest", "SessionIndex"]),
         ExtractorField::new("signature", &["LogoutRequest", "Signature"]).with_context(),
     ]
@@ -203,6 +209,13 @@ pub fn logout_response_fields() -> Vec<ExtractorField> {
             "InResponseTo",
         ]),
         ExtractorField::new("issuer", &["LogoutResponse", "Issuer"]),
+        ExtractorField::new("statusCode", &["LogoutResponse", "Status", "StatusCode"])
+            .attrs(&["Value"]),
+        ExtractorField::new(
+            "subordinateStatusCode",
+            &["LogoutResponse", "Status", "StatusCode", "StatusCode"],
+        )
+        .attrs(&["Value"]),
         ExtractorField::new("signature", &["LogoutResponse", "Signature"]).with_context(),
     ]
 }
