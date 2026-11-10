@@ -112,11 +112,15 @@ impl IdpMetadata {
         super::xs_boolean(self.inner.meta.get_str("wantAuthnRequestsSigned")) == Some(true)
     }
 
-    /// First `SingleSignOnService` `Location` for `binding`.
+    /// First non-empty `SingleSignOnService` `Location` for `binding`.
     ///
     /// AuthnRequests are sent to this URL.
     pub fn get_single_sign_on_service(&self, binding: Binding) -> Option<String> {
-        super::location_for_binding(self.inner.meta.get("singleSignOnService"), binding)
+        super::first_published_location(
+            self.inner.meta.get("singleSignOnService"),
+            binding,
+            super::EndpointDirection::Request,
+        )
     }
 
     /// Every `Location` published on `SingleSignOnService` for `binding`.
