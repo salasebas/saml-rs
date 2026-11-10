@@ -9,6 +9,7 @@ pub(crate) mod fragment;
 pub(crate) mod name;
 mod profile;
 pub(crate) mod protocol_element;
+mod schema_value;
 pub(crate) mod write;
 
 pub(crate) use date_time::{parse_generated_saml_utc_date_time, parse_saml_utc_date_time};
@@ -19,3 +20,4 @@ pub(crate) use profile::{
     OutboundLogoutExpiration, OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation,
     OutboundLogoutValidation, OutboundNameIdQualifiers,
 };
+pub(crate) use schema_value::{xs_boolean, xs_unsigned_short};
