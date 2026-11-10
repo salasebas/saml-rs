@@ -406,14 +406,17 @@ pub(crate) enum Change {
 pub(crate) fn identifier_and_change(
     request: &SamlElement,
 ) -> Result<(Identifier, Change), SamlError> {
-    let mut content = request.children.iter().filter(|child| {
-        !(child.is(namespace::ASSERTION, "Issuer")
-            || child.is(namespace::DSIG, "Signature")
-            || child.is(namespace::PROTOCOL, "Extensions"))
-    });
+    let mut content = request.children.iter().peekable();
+    for (element_namespace, local_name) in [
+        (namespace::ASSERTION, "Issuer"),
+        (namespace::DSIG, "Signature"),
+        (namespace::PROTOCOL, "Extensions"),
+    ] {
+        content.next_if(|child| child.is(element_namespace, local_name));
+    }
     let malformed = || {
         SamlError::ProtocolProfile(
-            "ManageNameIDRequest requires one NameID or EncryptedID and one NewID, NewEncryptedID, or Terminate"
+            "ManageNameIDRequest requires one NameID or EncryptedID and one NewID, NewEncryptedID, or Terminate, after at most one Issuer, Signature, and Extensions in that order"
                 .into(),
         )
     };

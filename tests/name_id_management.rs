@@ -34,6 +34,9 @@ const REQUESTER: &str = "urn:oasis:names:tc:SAML:2.0:status:Requester";
 const VERSION_MISMATCH: &str = "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch";
 const UNKNOWN_PRINCIPAL: &str = "urn:oasis:names:tc:SAML:2.0:status:UnknownPrincipal";
 const SP_REQUEST_ID: &str = "_sp_manage_request";
+const EXTENSIONS: &str = r#"<samlp:Extensions><ext:Data xmlns:ext="urn:test"/></samlp:Extensions>"#;
+const SIGNATURE: &str = r#"<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"/>"#;
+const TRANSIENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient";
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -243,6 +246,26 @@ fn idp_initiated_termination_reaches_the_service_provider_and_completes() -> Tes
 }
 
 #[test]
+fn idp_initiated_request_qualifies_a_persistent_format_written_with_whitespace() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let format = format!(" {PERSISTENT}\n");
+    let current = NameId::new("current-value", Some(NameIdFormat::Custom(format.clone())));
+    let started = idp.start_name_id_management(
+        &sp,
+        &current,
+        &NameIdChange::Terminate,
+        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        authenticated(),
+    )?;
+
+    let xml = body(started.request().envelope())?;
+    assert_eq!(attribute(&xml, "NameQualifier"), Some(IDP_ENTITY_ID));
+    assert_eq!(attribute(&xml, "SPNameQualifier"), Some(SP_ENTITY_ID));
+    Ok(())
+}
+
+#[test]
 fn idp_initiated_request_keeps_the_established_qualifiers() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
@@ -346,6 +369,13 @@ fn a_transient_identifier_is_not_managed() -> TestResult {
             NameId::generate_transient(),
         ),
         (transient_default, NameId::new("current-value", None)),
+        (
+            identity_provider(Some(IDP_NIM_URL))?,
+            NameId::new(
+                "current-value",
+                Some(NameIdFormat::Custom(format!("\n {TRANSIENT}\t"))),
+            ),
+        ),
     ] {
         let started = idp.start_name_id_management(
             &sp,
@@ -372,6 +402,13 @@ fn a_persistent_value_longer_than_256_characters_is_not_sent() -> TestResult {
         ),
         (
             NameId::new(long.clone(), Some(NameIdFormat::Persistent)),
+            NameIdChange::Terminate,
+        ),
+        (
+            NameId::new(
+                long.clone(),
+                Some(NameIdFormat::Custom(format!(" {PERSISTENT} "))),
+            ),
             NameIdChange::Terminate,
         ),
     ] {
@@ -761,6 +798,10 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
         format!("{name_id}<samlp:Terminate>now</samlp:Terminate>"),
         r#"<saml:NameID><ext:Value xmlns:ext="urn:test">alias</ext:Value></saml:NameID><samlp:Terminate/>"#
             .to_string(),
+        format!("{name_id}<samlp:Terminate/>{EXTENSIONS}"),
+        format!("{name_id}{EXTENSIONS}<samlp:Terminate/>"),
+        format!("{EXTENSIONS}{SIGNATURE}{name_id}<samlp:Terminate/>"),
+        format!("{EXTENSIONS}{EXTENSIONS}{name_id}<samlp:Terminate/>"),
     ] {
         let received = idp.receive_name_id_management(
             &sp,
@@ -773,5 +814,30 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
             "{content} was accepted"
         );
     }
+
+    let issuer = format!("<saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>");
+    let attributes = format!(r#"Version="2.0" Destination="{IDP_NIM_URL}""#);
+    let extensions_first = sp_request_with(
+        &attributes,
+        "",
+        &format!("{EXTENSIONS}{issuer}{name_id}<samlp:Terminate/>"),
+    )?;
+    let received =
+        idp.receive_name_id_management(&sp, &extensions_first, authenticated(), validation());
+    assert!(
+        matches!(received, Err(SamlError::ProtocolProfile(_))),
+        "Extensions before Issuer was accepted"
+    );
+
+    let in_order = sp_request(&format!(
+        "{SIGNATURE}{EXTENSIONS}{name_id}<samlp:Terminate/>"
+    ))?;
+    let request = received_request(idp.receive_name_id_management(
+        &sp,
+        &in_order,
+        authenticated(),
+        validation(),
+    )?)?;
+    assert_eq!(request.message().change(), &NameIdChange::Terminate);
     Ok(())
 }

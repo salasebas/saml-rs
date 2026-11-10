@@ -15,6 +15,7 @@
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
+use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
 use saml_rs::entity::iso8601_offset;
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, IdpMetadataConfig, SpMetadataConfig,
@@ -732,6 +733,12 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         assert_eq!(exchange.session.name_id(), &longest);
 
         let too_long = NameId::new("é".repeat(257), Some(format));
+        expect_name_id_length_error(respond(subject(too_long), RespondSso::post()))?;
+    }
+
+    for format in [PERSISTENT, TRANSIENT] {
+        let padded = NameIdFormat::Custom(format!("\n {format}\t"));
+        let too_long = NameId::new("é".repeat(257), Some(padded));
         expect_name_id_length_error(respond(subject(too_long), RespondSso::post()))?;
     }
 
