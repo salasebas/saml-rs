@@ -114,9 +114,10 @@ needs `crypto-legacy-algorithms`, and a row marked Post-quantum needs
 `crypto-post-quantum`. A signature with an algorithm the build does not
 verify does not verify. For a message signature, an RSA key of 1024 to 2047
 bits verifies only on RustCrypto with `crypto-legacy-algorithms`, and only
-under `AllowProviderSupportedForCompatibility`. For a metadata signature it
+under `AllowProviderSupportedForCompatibility`. For typed metadata import it
 verifies on that build only under
-`RequireSignatureAllowingWeakAlgorithmsForCompatibility`. RustCrypto without it, AWS-LC, and
+`RequireSignatureAllowingWeakAlgorithmsForCompatibility`. The raw metadata
+verification functions accept it there. RustCrypto without it, AWS-LC, and
 FIPS reject it. An RSA key shorter than 1024 bits verifies on no build in any
 profile.
 

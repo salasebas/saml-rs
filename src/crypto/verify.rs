@@ -866,7 +866,9 @@ fn verify_first_signature_with_profile(
         return Ok((false, None));
     };
     let root = &prepared.dom.root;
-    let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    let document = uppsala::parse(xml).map_err(|error| {
+        SamlError::Crypto(bergshamra::Error::XmlParse(error.to_string()).to_string())
+    })?;
     match verify_document_with_source(&prepared.context, &document, Some(xml)) {
         Ok(VerifyResult::Valid {
             signature_node,
