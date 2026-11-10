@@ -137,7 +137,7 @@ impl Saml<Sp> {
 
 Rules:
 
-- This method should reject responses with non-empty `InResponseTo`.
+- This method should reject responses that carry `InResponseTo`, empty or not.
 - The name must stay explicit. Avoid generic `parse_login_response` as the
   typed default.
 - `accept_unsolicited_sso_with_outstanding_logout` applies that same logout.

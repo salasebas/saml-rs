@@ -1877,6 +1877,62 @@ fn typed_facade_rejects_solicited_response_as_unsolicited() -> Result<(), Box<dy
 }
 
 #[test]
+fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let ruled = idp.initiate_sso(
+        &sp_descriptor,
+        subject(),
+        RespondSso::post().apply_web_browser_sso_generation_rules(),
+    )?;
+    let ruled_fields = post_fields(&ruled)?;
+    let ruled_xml = response_xml_from_fields(&ruled_fields)?;
+    let empty_on_response =
+        ruled_xml.replacen("<samlp:Response ", "<samlp:Response InResponseTo=\"\" ", 1);
+    let empty_on_bearer = construct_saml_signature(
+        &strip_embedded_signatures(&ruled_xml.replacen(
+            "<saml:SubjectConfirmationData ",
+            "<saml:SubjectConfirmationData InResponseTo=\"\" ",
+            1,
+        ))?,
+        false,
+        &load_private_key(PRIVKEY, None)?,
+        CERT,
+        RSA_SHA256,
+        &[],
+        None,
+    )?;
+    let cases = [
+        (
+            "Response",
+            response_fields_with_xml(ruled_fields.clone(), &empty_on_response)?,
+        ),
+        (
+            "bearer SubjectConfirmationData",
+            response_fields_with_xml(ruled_fields, &empty_on_bearer)?,
+        ),
+    ];
+
+    for (case, fields) in cases {
+        match sp.accept_unsolicited_sso(
+            &idp_descriptor,
+            BrowserInput::<SsoResponse>::post(fields),
+            validation(),
+        ) {
+            Err(SamlError::InResponseToMismatch { expected, actual }) => {
+                assert_eq!(expected, None, "{case}");
+                assert_eq!(actual.as_deref(), Some(""), "{case}");
+            }
+            other => {
+                return Err(format!("{case}: expected InResponseToMismatch, got {other:?}").into())
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_facade_checks_replay_cache() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
     let mut cache = MemoryReplayCache::default();

@@ -303,7 +303,10 @@ impl Saml<Sp> {
     /// parsed or trusted, XML parsing or signature verification fails,
     /// destination, recipient, audience, condition, or time validation fails,
     /// the assertions do not share one issuer and one principal, or replay
-    /// validation returns `ReplayDetected` or `TimeWindowInvalid`.
+    /// validation returns `ReplayDetected` or `TimeWindowInvalid`. Returns
+    /// [`SamlError::InResponseToMismatch`] when the response or a bearer
+    /// `SubjectConfirmationData` carries an `InResponseTo` attribute, including
+    /// an empty one.
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,
