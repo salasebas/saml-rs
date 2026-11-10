@@ -372,9 +372,10 @@ mod tests {
     use crate::crypto::verify::verify_signature;
     use crate::entity::EntitySetting;
 
-    const SP_PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp_privkey.pem");
-    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp_signing_cert.cer");
-    const RESPONSE: &str = include_str!("../../tests/fixtures/response.xml");
+    const SP_PRIVKEY: &str =
+        include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+    const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
     const AUTHN_REQUEST: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>";
 

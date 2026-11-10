@@ -18,8 +18,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     use std::time::SystemTime;
 
-    let privkey = include_str!("../tests/fixtures/key/sp_privkey.pem");
-    let cert = include_str!("../tests/fixtures/key/sp_signing_cert.cer");
+    let privkey = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    let cert = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     let credentials = || Credentials {
         signing_key: Some(PrivateKeyPem::new(privkey)),
         signing_certificate: Some(CertificatePem::new(cert)),

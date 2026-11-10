@@ -525,9 +525,9 @@ impl Metadata {
 mod tests {
     use super::*;
 
-    const IDPMETA: &str = include_str!("../../tests/fixtures/idpmeta.xml");
-    const SPMETA: &str = include_str!("../../tests/fixtures/spmeta.xml");
-    const MULTIPLE: &str = include_str!("../../tests/fixtures/multiple_entitydescriptor.xml");
+    const IDPMETA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
+    const SPMETA: &str = include_str!("../../tests/fixtures/misc/spmeta.xml");
+    const MULTIPLE: &str = include_str!("../../tests/fixtures/misc/multiple_entitydescriptor.xml");
 
     #[test]
     fn rejects_multiple_entity_descriptors() {

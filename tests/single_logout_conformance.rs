@@ -26,8 +26,8 @@ const IDP_SSO: &str = "https://idp.example.com/sso/post";
 const IDP_SLO_HTTPS: &str = "https://idp.example.com/slo/post";
 const IDP_SLO_HTTP: &str = "http://idp.example.com/slo/post";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn credentials() -> Credentials {
     Credentials {

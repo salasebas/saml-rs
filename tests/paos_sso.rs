@@ -29,8 +29,8 @@ const IDP_SOAP: &str = "https://idp.example.com/sso/soap";
 const ECP_PROFILE: &str = "urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp";
 const SOAP_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 struct EnhancedClient {
     response_consumer_url: String,

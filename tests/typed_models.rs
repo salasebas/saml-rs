@@ -27,13 +27,13 @@ use saml_rs::{
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
-const IDP_PRIVATE_KEY: &str = include_str!("fixtures/key/sp_privkey.pem");
+const IDP_PRIVATE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 #[cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
-const IDP_CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const IDP_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 #[test]
 fn typed_models_empty_request_ids_fail() {

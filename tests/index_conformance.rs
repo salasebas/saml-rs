@@ -359,8 +359,8 @@ mod crypto {
     };
     use saml_rs::SamlError;
 
-    const SP_PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-    const SIGN_CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+    const SP_PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const SIGN_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     const REQUEST: &str = include_str!("fixtures/misc/request.xml");
     #[cfg(not(feature = "crypto-fips"))]
     const RESPONSE_SIGNED: &str = include_str!("fixtures/misc/response_signed.xml");

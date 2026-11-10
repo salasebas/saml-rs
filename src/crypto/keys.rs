@@ -65,16 +65,18 @@ pub fn build_key_info(cert: &str) -> String {
 mod tests {
     use super::*;
 
-    const SP_PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp_privkey.pem");
+    const SP_PRIVKEY: &str =
+        include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     // RustCrypto decrypts this PEM. AWS-LC and FIPS reject it.
     #[cfg(any(
         feature = "crypto-rustcrypto",
         feature = "crypto-aws-lc",
         feature = "crypto-fips"
     ))]
-    const SP_PRIVKEY_ENC: &str = include_str!("../../tests/fixtures/key/sp_privkey_enc.pem");
-    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp_cert.cer");
-    const IDP_CERT: &str = include_str!("../../tests/fixtures/key/idp_cert.cer");
+    const SP_PRIVKEY_ENC: &str =
+        include_str!("../../tests/fixtures/key/sp/privkey.encrypted.pkcs8.pem");
+    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
+    const IDP_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
     // SP signing passphrase from upstream test/key/keypass.txt.
     #[cfg(feature = "crypto-rustcrypto")]
     const SP_PASS: &str = "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px";

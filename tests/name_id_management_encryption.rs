@@ -35,10 +35,10 @@ const IDP_MANAGE_SOAP: &str = "https://idp.example.com/manage-name-id/soap";
 const PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 const ASSERTION: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
 
-const SIGNING_KEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const SIGNING_CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
-const SP_DECRYPTION_KEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const SP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const SIGNING_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const SIGNING_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const SP_DECRYPTION_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const SP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const IDP_DECRYPTION_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const IDP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 

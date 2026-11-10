@@ -100,8 +100,8 @@ mod signed {
     use saml_rs::flow::HttpRequest;
     use saml_rs::logout::{create_logout_request, parse_logout_request};
 
-    const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-    const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+    const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
     fn signing_setting() -> EntitySetting {
         let mut setting = EntitySetting::default();

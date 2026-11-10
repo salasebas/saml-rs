@@ -382,8 +382,8 @@ mod signed_tests {
     use crate::constants::signature_algorithm::RSA_SHA256;
     use crate::entity::{SignatureAction, SignatureConfig};
 
-    const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp_privkey.pem");
-    const CERT: &str = include_str!("../../tests/fixtures/key/sp_signing_cert.cer");
+    const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
     fn signing_setting() -> EntitySetting {
         EntitySetting {

@@ -1365,17 +1365,21 @@ mod tests {
         Ok(())
     }
 
-    const RESPONSE_SIGNED: &str = include_str!("../../tests/fixtures/response_signed.xml");
-    const SIGNED_REQUEST: &str = include_str!("../../tests/fixtures/signed_request_sha256.xml");
-    const ATTACK: &str = include_str!("../../tests/fixtures/attack_response_signed.xml");
-    const FALSE_SIGNED: &str = include_str!("../../tests/fixtures/false_signed_request_sha256.xml");
-    const RESPONSE: &str = include_str!("../../tests/fixtures/response.xml");
-    const SP_PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp_privkey.pem");
+    const RESPONSE_SIGNED: &str = include_str!("../../tests/fixtures/misc/response_signed.xml");
+    const SIGNED_REQUEST: &str =
+        include_str!("../../tests/fixtures/misc/signed_request_sha256.xml");
+    const ATTACK: &str = include_str!("../../tests/fixtures/misc/attack_response_signed.xml");
+    const FALSE_SIGNED: &str =
+        include_str!("../../tests/fixtures/misc/false_signed_request_sha256.xml");
+    const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
+    const SP_PRIVKEY: &str =
+        include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     // IdP signing cert (matches the response_signed.xml signer / idpmeta).
-    const IDP_CERT: &str = include_str!("../../tests/fixtures/key/idp_cert.cer");
+    const IDP_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
     // SP signing cert (matches signed_request_sha256.xml signer).
-    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp_cert.cer");
-    const SP_SIGNING_CERT: &str = include_str!("../../tests/fixtures/key/sp_signing_cert.cer");
+    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
+    const SP_SIGNING_CERT: &str =
+        include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     const UNTRUSTED_PRIVKEY: &str =
         include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
     const UNTRUSTED_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");

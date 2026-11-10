@@ -43,12 +43,12 @@ const LOGOUT_REQUEST_MALFORMED_NOT_ON_OR_AFTER_CONTEXT: &str =
     not(feature = "crypto-fips"),
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
-const PRIVATE_KEY: &str = include_str!("fixtures/key/sp_privkey.pem");
+const PRIVATE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 #[cfg(all(
     not(feature = "crypto-fips"),
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
-const CERTIFICATE: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const CERTIFICATE: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn parse_flow_with_binding(
     xml: &str,

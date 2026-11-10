@@ -861,9 +861,10 @@ mod crypto_tests {
     use crate::idp::LoginResponseOptions;
     use crate::metadata::{Endpoint, IdpMetadataConfig};
 
-    const IDP_CERT: &str = include_str!("../tests/fixtures/key/idp_cert.cer");
-    const SP_PRIVKEY: &str = include_str!("../tests/fixtures/key/sp_privkey.pem");
-    const SP_SIGNING_CERT: &str = include_str!("../tests/fixtures/key/sp_signing_cert.cer");
+    const IDP_CERT: &str = include_str!("../tests/fixtures/key/idp/cert.cer");
+    const SP_PRIVKEY: &str = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const SP_SIGNING_CERT: &str =
+        include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
     fn signing_idp() -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(

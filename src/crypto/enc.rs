@@ -906,9 +906,10 @@ mod tests {
     use crate::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
     use crate::crypto::keys::load_private_key;
 
-    const SP_PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp_privkey.pem");
-    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp_signing_cert.cer");
-    const RESPONSE: &str = include_str!("../../tests/fixtures/response.xml");
+    const SP_PRIVKEY: &str =
+        include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+    const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
     #[test]
     fn encrypt_then_decrypt_round_trip() -> Result<(), Box<dyn std::error::Error>> {

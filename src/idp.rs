@@ -752,7 +752,7 @@ mod tests {
     use crate::constants::Binding;
     use crate::metadata::{Endpoint, SpMetadataConfig};
 
-    const IDPMETA: &str = include_str!("../tests/fixtures/idpmeta.xml");
+    const IDPMETA: &str = include_str!("../tests/fixtures/misc/idpmeta.xml");
 
     fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(
@@ -850,8 +850,8 @@ mod crypto_tests {
     use crate::metadata::{Endpoint, SpMetadataConfig};
 
     // A working RSA keypair (used as both IdP and SP signing material in tests).
-    const PRIVKEY: &str = include_str!("../tests/fixtures/key/sp_privkey.pem");
-    const CERT: &str = include_str!("../tests/fixtures/key/sp_signing_cert.cer");
+    const PRIVKEY: &str = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const CERT: &str = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
     fn signing_setting() -> EntitySetting {
         EntitySetting {

@@ -23,9 +23,10 @@ Fixture key material is test-only. It is not for use outside tests.
 
 `tests/provider_regression.rs` deliberately uses the matching
 `key/idp/provider_matrix_privkey.pkcs8.pem` and `key/idp/cert.cer` pair for
-every provider. The private key is the unencrypted PKCS#8 encoding of the same
-test-only RSA key stored historically as `key/idp/nocrypt.pem`; their public-key
-SHA-256 fingerprints match. The pair has a 2048-bit RSA key with exponent
+every provider. The private key is the unencrypted PKCS#8 encoding of the
+samlify test-only IdP RSA key for `key/idp/cert.cer` (upstream
+`test/key/idp/nocrypt.pem`); their public keys match.
+The pair has a 2048-bit RSA key with exponent
 65537 and a SHA-256-signed certificate. This avoids making provider
 compatibility depend on encrypted or provider-specific private-key formats and
 unusual key sizes retained for loader regressions.
@@ -169,8 +170,37 @@ certificate SHA-256 fingerprint is
 
 ## Fixture Groups
 
-- `tests/fixtures/misc/**` - historical XML request, response, and metadata
-  cases.
-- `tests/fixtures/key/**` - test certificates and keys.
+Every committed fixture belongs to one of these groups. Each fixture has one
+canonical path; tests and unit tests load it from that path.
+
+- `tests/fixtures/misc/**` - historical samlify XML request, response, and
+  metadata cases.
+- `tests/fixtures/key/idp/**` and `tests/fixtures/key/sp/**` - historical
+  samlify IdP and SP test certificates and keys. `key/idp/README.md` maps each
+  IdP private key to its certificate.
+- `tests/fixtures/key/dsa/**` - the DSA signing fixture described above.
 - `tests/fixtures/interop/**` - immutable external interoperability inputs and
-  associated public test-only keys and metadata.
+  associated public test-only keys and metadata. The signing keys and
+  certificates are not loaded by tests; they are kept with their SHA-256
+  values. The SimpleSAMLphp recipe in `interop/REPRODUCING.md` reads its
+  committed key; the Shibboleth key and certificate are the ones its installer
+  generated for the capture, and a new run generates a fresh pair.
+
+The SP signing pair is `key/sp/privkey.unencrypted.pkcs8.pem` with
+`key/sp/cert.unencrypted.pkcs8.cer`. `key/sp/privkey.encrypted.pkcs8.pem` is
+a different, passphrase-protected key that tests load only to exercise
+encrypted private-key loading.
+
+Byte-identical copies of `misc/` documents at the top of `tests/fixtures/`,
+and the flat `key/idp_cert.cer`, `key/sp_cert.cer`, `key/sp_signing_cert.cer`,
+`key/sp_privkey.pem`, and `key/sp_privkey_enc.pem` copies of `key/idp/` and
+`key/sp/` files, were removed in favour of the canonical paths above. Samlify
+fixtures that no test loaded were removed as well. These kept files have
+their partner only upstream, in samlify at the pinned commit:
+
+| Kept file | Partner upstream |
+| --- | --- |
+| `key/sp/privkey.encrypted.pkcs8.pem` | `test/key/sp/cert.encrypted.pkcs8.cer` |
+| `key/sp/encryptKey.pem` | `test/key/sp/encryptionCert.cer` (also embedded in `misc/spmeta.xml`) |
+| `key/sp/cert.cer` | `test/key/sp/privkey.pem` |
+| `key/idp/encryptionCert.cer` | `test/key/idp/encryptKey.pem` |

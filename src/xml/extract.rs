@@ -312,8 +312,8 @@ mod tests {
     use super::*;
     use crate::xml::fields;
 
-    const RESPONSE: &str = include_str!("../../tests/fixtures/response.xml");
-    const SPMETA: &str = include_str!("../../tests/fixtures/spmeta.xml");
+    const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
+    const SPMETA: &str = include_str!("../../tests/fixtures/misc/spmeta.xml");
 
     fn assertion_of(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
         let field = ExtractorField::new("a", &["Response", "Assertion"]).with_context();

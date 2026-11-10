@@ -17,8 +17,8 @@ use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
 use saml_rs::template::{replace_tags_by_value, LoginResponseTemplate};
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
-const CERT: &str = include_str!("fixtures/key/sp_signing_cert.cer");
+const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const REQUEST_ID: &str = "_prefix_req";
 
 fn signing() -> EntitySetting {

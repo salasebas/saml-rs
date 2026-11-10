@@ -19,8 +19,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ServiceProvider, User,
     };
 
-    let privkey = include_str!("../tests/fixtures/key/sp_privkey.pem");
-    let cert = include_str!("../tests/fixtures/key/sp_signing_cert.cer");
+    let privkey = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    let cert = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     let signing = || {
         let mut setting = EntitySetting::default();
         setting.private_key = Some(privkey.into());
