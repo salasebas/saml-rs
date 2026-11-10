@@ -46,7 +46,8 @@ pub(crate) fn allows_digest_method(profile: XmlSignatureProfile, uri: &str) -> b
     }
 }
 
-/// Reject a peer verification key that `profile` does not accept.
+/// Reject a peer or pinned metadata verification key that `profile` does not
+/// accept.
 ///
 /// [`XmlSignatureProfile::StrictRsaSha2`] and
 /// [`XmlSignatureProfile::ExcludeWeakAlgorithms`] reject an RSA key shorter

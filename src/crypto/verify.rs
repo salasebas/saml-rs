@@ -726,9 +726,9 @@ pub fn verify_signature(
     verify_signature_with_limits(xml, metadata_certs, XmlLimits::default())
 }
 
-/// The parsed message after the checks shared by every message signature
-/// verifier, with one verification context that trusts every loadable
-/// metadata key.
+/// The parsed message or metadata document after the checks shared by every
+/// signature verifier, with one verification context that trusts every
+/// loadable metadata key.
 struct PreparedSignatureVerification {
     dom: dom::Document,
     protocol_response: bool,
@@ -797,7 +797,7 @@ fn reject_unpinned_inline_certificate(
 }
 
 /// Run the wrapping, duplicate-ID, reference, and inline-certificate checks
-/// shared by [`verify_signature_with_limits`] and
+/// shared by [`verify_first_signature_with_profile`] and
 /// [`verify_signatures_detailed_with_profile`], then load the metadata
 /// certificates.
 ///
