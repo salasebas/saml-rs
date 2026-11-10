@@ -66,7 +66,7 @@ pub enum SubjectConfirmationReason {
     InvalidMethod,
     /// SubjectConfirmationData omitted `NotOnOrAfter`.
     MissingNotOnOrAfter,
-    /// SubjectConfirmationData `NotOnOrAfter` time bounds were not satisfied.
+    /// SubjectConfirmationData `NotBefore` or `NotOnOrAfter` time bounds were not satisfied.
     TimeWindowInvalid,
     /// SubjectConfirmationData `Recipient` did not match the ACS URL.
     RecipientMismatch,

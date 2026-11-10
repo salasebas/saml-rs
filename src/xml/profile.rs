@@ -444,7 +444,7 @@ fn consumed_attributes(element: &ExpandedName) -> &'static [&'static [u8]] {
         (NamespaceKind::Assertion, b"NameID") => &[b"Format"],
         (NamespaceKind::Assertion, b"SubjectConfirmation") => &[b"Method"],
         (NamespaceKind::Assertion, b"SubjectConfirmationData") => {
-            &[b"NotOnOrAfter", b"Recipient", b"InResponseTo"]
+            &[b"NotBefore", b"NotOnOrAfter", b"Recipient", b"InResponseTo"]
         }
         (NamespaceKind::Assertion, b"AuthnStatement") => {
             &[b"AuthnInstant", b"SessionNotOnOrAfter", b"SessionIndex"]

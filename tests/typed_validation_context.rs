@@ -476,6 +476,42 @@ fn clock_skew_strict_allows_no_skew() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
+fn bearer_subject_confirmation_not_before_allows_five_minutes(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let validation = context_at(SKEW_NOW)?;
+    let xml = xml_with_time_window("2020-01-01T00:00:00Z", FAR_FUTURE, FAR_FUTURE, FAR_FUTURE);
+    let with_bearer_not_before = |not_before: &str| {
+        xml.replace(
+            "<saml:SubjectConfirmationData ",
+            &format!("<saml:SubjectConfirmationData NotBefore=\"{not_before}\" "),
+        )
+    };
+
+    parse_response_at(&with_bearer_not_before("2026-07-15T12:05:00Z"), &validation)?;
+    match parse_response_at(&with_bearer_not_before("2026-07-15T12:05:01Z"), &validation) {
+        Err(SamlError::SubjectConfirmationInvalid { reason }) => {
+            assert_eq!(reason, SubjectConfirmationReason::TimeWindowInvalid);
+        }
+        other => {
+            return Err(
+                format!("expected bearer NotBefore beyond five minutes, got {other:?}").into(),
+            )
+        }
+    }
+
+    let qualified_first = xml.replace(
+        "<saml:SubjectConfirmationData ",
+        "<saml:SubjectConfirmationData xmlns:ext=\"urn:example:ext\" ext:NotBefore=\"2000-01-01T00:00:00Z\" NotBefore=\"2099-01-01T00:00:00Z\" ",
+    );
+    match parse_response_at(&qualified_first, &validation) {
+        Err(SamlError::ProtocolProfile(_)) => Ok(()),
+        other => {
+            Err(format!("expected a qualified NotBefore to be rejected, got {other:?}").into())
+        }
+    }
+}
+
+#[test]
 fn explicit_clock_skew_replaces_five_minute_default() -> Result<(), Box<dyn std::error::Error>> {
     let validation = context_at(SKEW_NOW)?.with_clock_skew(ClockSkew::from_millis(-60_000, 60_000));
 
