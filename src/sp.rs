@@ -220,7 +220,9 @@ impl ServiceProvider {
     ///
     /// # Errors
     ///
-    /// Returns an error if a configured `<NameIDFormat>` is not an absolute URI
+    /// Returns an error if `config.entity_id` is not an absolute URI reference
+    /// of at most 1024 characters with collapsed whitespace, if a configured
+    /// `<NameIDFormat>` is not an absolute URI
     /// reference, if two `AssertionConsumerService` endpoints set the same
     /// index or there are more of them than `unsignedShort` indexes, or if
     /// the generated metadata cannot be parsed back into SP

@@ -399,6 +399,38 @@ fn typed_config_sp_descriptor_accepts_expected_unsigned_metadata(
 }
 
 #[test]
+fn typed_config_descriptors_import_a_peer_entity_id_that_is_not_a_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp_metadata = IDP_METADATA.replace("https://idp.example.com/metadata", "idp.example.com");
+    let sp_metadata = SP_METADATA.replace("https://sp.example.org/metadata", "sp.example.org");
+
+    let idp = IdpDescriptor::from_metadata_xml(
+        &idp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let expected_idp = IdpDescriptor::from_metadata_xml_for(
+        EntityId::new("idp.example.com"),
+        &idp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let sp = SpDescriptor::from_metadata_xml(
+        &sp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let expected_sp = SpDescriptor::from_metadata_xml_for(
+        EntityId::new("sp.example.org"),
+        &sp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+
+    assert_eq!(idp.entity_id().as_str(), "idp.example.com");
+    assert_eq!(expected_idp.entity_id().as_str(), "idp.example.com");
+    assert_eq!(sp.entity_id().as_str(), "sp.example.org");
+    assert_eq!(expected_sp.entity_id().as_str(), "sp.example.org");
+    Ok(())
+}
+
+#[test]
 fn typed_config_sp_descriptor_rejects_empty_expected_entity_id() {
     let result = SpDescriptor::from_metadata_xml_for(
         EntityId::new(""),

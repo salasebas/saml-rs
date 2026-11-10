@@ -133,7 +133,7 @@ impl TryFrom<FlowResult> for LogoutRequest {
             "NotOnOrAfter",
             false,
         )?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
+        let issuer = EntityId::from_peer(required_str(&raw_flow.extract, "issuer")?)?;
         let name_id_attribute = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
         let name_id = raw_flow.extract.get_str("nameID").map(|value| {
             NameId::with_qualifiers(
@@ -247,7 +247,7 @@ impl TryFrom<FlowResult> for LogoutResponse {
     fn try_from(raw_flow: FlowResult) -> Result<Self, Self::Error> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, "response.id")?)?;
         let issue_instant = issue_instant_from_extract(&raw_flow.extract)?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
+        let issuer = EntityId::from_peer(required_str(&raw_flow.extract, "issuer")?)?;
         let in_response_to = optional_request_id(&raw_flow.extract, "response.inResponseTo")?;
         let destination = optional_endpoint(&raw_flow.extract, "response.destination")?;
         let status = status_from_extract(&raw_flow.extract)?;

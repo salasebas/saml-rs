@@ -6,6 +6,9 @@ use crate::browser::{AcsEndpoint, NameIdManagementBinding, SloEndpoint, SsoEndpo
 use crate::error::SamlError;
 use crate::metadata::{IdpMetadata, MetadataLifetime, MetadataValidity, SpMetadata};
 use crate::model::EndpointUrl;
+use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
+
+const MAX_ENTITY_ID_CHARACTERS: usize = 1024;
 
 /// SOAP `ArtifactResolutionService` published by an artifact issuer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,20 +94,30 @@ pub struct EntityId(String);
 impl EntityId {
     /// Wrap an entity ID URI or deployment-specific identifier without validation.
     ///
-    /// Prefer [`Self::try_new`] for caller-provided input. This constructor is
-    /// retained for already-validated compatibility data.
+    /// Prefer [`Self::try_new`] for caller-provided input. Use this constructor
+    /// for already-validated compatibility data, or to name a peer whose
+    /// entity ID is not a URI. A configured provider's own entity ID is still
+    /// checked when its config is validated.
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
-    /// Validate and wrap a non-empty entity ID.
+    /// Validate and wrap an entity ID.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when the entity ID is empty.
+    /// Returns [`SamlError::Invalid`] when the entity ID is not an absolute
+    /// URI reference, is longer than 1024 characters, or has leading or
+    /// trailing whitespace, a tab, a line break, or consecutive spaces.
     pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
         let value = value.into();
-        validate_entity_id_text(&value)?;
+        validate_entity_id_syntax(&value)?;
+        Ok(Self(value))
+    }
+
+    pub(crate) fn from_peer(value: impl Into<String>) -> Result<Self, SamlError> {
+        let value = value.into();
+        validate_peer_entity_id(&value)?;
         Ok(Self(value))
     }
 
@@ -138,15 +151,23 @@ impl TryFrom<String> for EntityId {
     }
 }
 
-pub(super) fn validate_entity_id_text(value: &str) -> Result<(), SamlError> {
-    if value.trim().is_empty() {
-        return Err(SamlError::Invalid("entity ID must not be empty".into()));
+pub(crate) fn validate_entity_id_syntax(value: &str) -> Result<(), SamlError> {
+    if value.chars().count() > MAX_ENTITY_ID_CHARACTERS
+        || !is_absolute_uri_reference(value)
+        || collapse_whitespace(value) != value
+    {
+        return Err(SamlError::Invalid(format!(
+            "an entity ID must be an absolute URI reference of at most {MAX_ENTITY_ID_CHARACTERS} characters with collapsed whitespace"
+        )));
     }
     Ok(())
 }
 
-pub(super) fn validate_entity_id(entity_id: &EntityId) -> Result<(), SamlError> {
-    validate_entity_id_text(entity_id.as_str())
+fn validate_peer_entity_id(value: &str) -> Result<(), SamlError> {
+    if value.trim().is_empty() {
+        return Err(SamlError::Invalid("entity ID must not be empty".into()));
+    }
+    Ok(())
 }
 
 /// Local SP metadata inputs used by typed configuration.
@@ -317,7 +338,7 @@ impl IdpDescriptor {
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        validate_entity_id(&expected_entity_id)?;
+        validate_peer_entity_id(expected_entity_id.as_str())?;
         let metadata = IdpMetadata::from_xml(xml)?;
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
@@ -344,7 +365,7 @@ impl IdpDescriptor {
     /// not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
         let metadata = IdpMetadata::from_xml(xml)?;
-        let entity_id = EntityId::try_new(metadata_entity_id(&metadata)?)?;
+        let entity_id = EntityId::from_peer(metadata_entity_id(&metadata)?)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;
         let validity = metadata.validity()?;
         Ok(Self {
@@ -437,7 +458,7 @@ impl SpDescriptor {
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        validate_entity_id(&expected_entity_id)?;
+        validate_peer_entity_id(expected_entity_id.as_str())?;
         let metadata = SpMetadata::from_xml(xml)?;
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
@@ -464,7 +485,7 @@ impl SpDescriptor {
     /// not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
         let metadata = SpMetadata::from_xml(xml)?;
-        let entity_id = EntityId::try_new(metadata_entity_id(&metadata)?)?;
+        let entity_id = EntityId::from_peer(metadata_entity_id(&metadata)?)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;
         let validity = metadata.validity()?;
         Ok(Self {

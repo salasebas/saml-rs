@@ -538,23 +538,71 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[test]
-fn entity_id_from_str_and_try_from_reject_empty_input() {
-    let parsed = EntityId::from_str(" ");
-    let tried = EntityId::try_from(String::new());
-
-    assert!(matches!(parsed, Err(SamlError::Invalid(_))));
-    assert!(matches!(tried, Err(SamlError::Invalid(_))));
+fn entity_ids_that_are_not_a_uri_of_at_most_1024_characters() -> [String; 6] {
+    [
+        String::new(),
+        " ".into(),
+        "not a uri".into(),
+        "/metadata".into(),
+        " https://sp.example.com/metadata\n".into(),
+        format!("https://sp.example.com/{}", "a".repeat(1002)),
+    ]
 }
 
 #[test]
-fn sp_builder_rejects_empty_entity_id() -> Result<(), Box<dyn std::error::Error>> {
-    let result = SpConfig::builder(EntityId::new("   "))
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .credentials(signing_credentials())
-        .build();
+fn entity_id_constructors_accept_only_a_uri_of_at_most_1024_characters(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for value in entity_ids_that_are_not_a_uri_of_at_most_1024_characters() {
+        assert!(
+            matches!(EntityId::try_new(value.clone()), Err(SamlError::Invalid(_))),
+            "{value}"
+        );
+        assert!(
+            matches!(EntityId::from_str(&value), Err(SamlError::Invalid(_))),
+            "{value}"
+        );
+        assert!(
+            matches!(
+                EntityId::try_from(value.as_str()),
+                Err(SamlError::Invalid(_))
+            ),
+            "{value}"
+        );
+        assert!(
+            matches!(
+                EntityId::try_from(value.clone()),
+                Err(SamlError::Invalid(_))
+            ),
+            "{value}"
+        );
+    }
+    for value in [
+        "https://sp.example.com/metadata".to_string(),
+        "urn:example:sp".into(),
+        format!("https://sp.example.com/{}", "a".repeat(1001)),
+        format!("https://sp.example.com/{}", "\u{e9}".repeat(1001)),
+    ] {
+        assert_eq!(EntityId::try_new(value.clone())?.as_str(), value);
+    }
+    Ok(())
+}
 
-    assert!(matches!(result, Err(SamlError::Invalid(_))));
+#[test]
+fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_characters(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for value in entity_ids_that_are_not_a_uri_of_at_most_1024_characters() {
+        let sp = SpConfig::builder(EntityId::new(value.clone()))
+            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+            .credentials(signing_credentials())
+            .build();
+        let idp = IdpConfig::builder(EntityId::new(value.clone()))
+            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+            .credentials(signing_credentials())
+            .build();
+
+        assert!(matches!(sp, Err(SamlError::Invalid(_))), "{value}");
+        assert!(matches!(idp, Err(SamlError::Invalid(_))), "{value}");
+    }
     Ok(())
 }
 

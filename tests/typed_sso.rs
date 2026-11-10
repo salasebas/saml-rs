@@ -19,21 +19,23 @@ use saml_rs::constants::{status_code, ParserType};
 use saml_rs::crypto::{
     construct_message_signature, construct_saml_signature, keys::load_private_key,
 };
-use saml_rs::entity::{SignatureAction, SignatureConfig};
+use saml_rs::entity::{EntitySetting, SignatureAction, SignatureConfig, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
+use saml_rs::idp::LoginResponseOptions;
+use saml_rs::logout::create_logout_request;
 use saml_rs::raw::Binding;
 use saml_rs::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::xml::dom::parse;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestAgePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput,
-    CertificatePem, ClockSkew, Credentials, EntityId, ForceAuthn, FormField, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
-    PendingAuthnRequest, PendingSnapshot, PrivateKeyPem, Received, RelayStateParam, ReplayCache,
-    ReplayKey, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoResponseBinding, StartSso, Status, Subject, SubordinateStatusCode, TemplatePolicy,
-    VerifiedXmlSignatureCoverage, XmlSignatureProfile,
+    CertificatePem, ClockSkew, Credentials, EntityId, ForceAuthn, FormField, IdentityProvider,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest, MetadataTrustPolicy, NameId,
+    NameIdFormat, Outbound, PendingAuthnRequest, PendingSnapshot, PrivateKeyPem, Received,
+    RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy, RespondSso, ResponseSignaturePolicy,
+    Saml, SamlError, SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding, StartSso, Status, Subject,
+    SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{XmlEncryptionPolicy, XmlPolicy};
@@ -47,6 +49,7 @@ const SP_ACS_SIMPLESIGN: &str = "https://sp.example.com/acs/simple-sign";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const IDP_SSO_SIMPLESIGN: &str = "https://idp.example.com/sso/simple-sign";
+const SP_SLO_POST: &str = "https://sp.example.com/slo/post";
 
 const HOSTILE_SP_ENTITY_ID: &str = concat!(
     "https://sp.example.com/metadata",
@@ -1618,6 +1621,90 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
     )?;
 
     assert_eq!(session.in_response_to(), Some(restored.request_id()));
+    Ok(())
+}
+
+#[test]
+fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const PEER_IDP_ENTITY_ID: &str = "idp.example.com";
+    const PEER_SP_ENTITY_ID: &str = "sp.example.org";
+    let sp = Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+            .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
+            .credentials(credentials())
+            .validation(signing_sp_validation())
+            .build()?,
+    )?;
+    let idp = Saml::idp(idp_config()?)?;
+    let peer_idp_metadata = idp
+        .metadata_xml()
+        .replace(IDP_ENTITY_ID, PEER_IDP_ENTITY_ID);
+    let peer_sp_metadata = sp.metadata_xml().replace(SP_ENTITY_ID, PEER_SP_ENTITY_ID);
+    let peer_idp_descriptor = IdpDescriptor::from_metadata_xml(
+        &peer_idp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let peer_sp_descriptor = SpDescriptor::from_metadata_xml(
+        &peer_sp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let mut signing_setting = EntitySetting::default();
+    signing_setting.private_key = Some(PRIVKEY.to_string());
+    signing_setting.signing_cert = Some(CERT.to_string());
+    signing_setting.want_assertions_signed = true;
+    let peer_idp = IdentityProvider::from_metadata(&peer_idp_metadata, signing_setting.clone())?;
+    let peer_sp = ServiceProvider::from_metadata(&peer_sp_metadata, signing_setting)?;
+    let local_idp = IdentityProvider::from_metadata(idp.metadata_xml(), EntitySetting::default())?;
+    let local_sp = ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
+
+    let request = peer_sp.create_login_request(&local_idp, Binding::Post, None)?;
+    let received = idp.receive_sso(
+        &peer_sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(vec![FormField::new("SAMLRequest", request.context)]),
+        validation(),
+    )?;
+    assert_eq!(received.message().issuer().as_str(), PEER_SP_ENTITY_ID);
+
+    let started = sp.start_sso(&peer_idp_descriptor, StartSso::post())?;
+    let pending = PendingAuthnRequest::from_snapshot(started.pending.snapshot())?;
+    assert_eq!(pending.idp_entity_id().as_str(), PEER_IDP_ENTITY_ID);
+    let response = peer_idp.create_login_response(
+        &local_sp,
+        Binding::Post,
+        &User::new("alice@example.com"),
+        &LoginResponseOptions {
+            in_response_to: Some(pending.request_id().as_str()),
+            ..LoginResponseOptions::default()
+        },
+    )?;
+    let session = sp.finish_sso(
+        &peer_idp_descriptor,
+        &pending,
+        BrowserInput::<SsoResponse>::post(vec![FormField::new("SAMLResponse", response.context)]),
+        validation(),
+    )?;
+    assert_eq!(session.issuer().as_str(), PEER_IDP_ENTITY_ID);
+
+    let logout = create_logout_request(
+        &peer_idp.setting,
+        &peer_idp.metadata,
+        &local_sp.metadata,
+        Binding::Post,
+        &User::new("alice@example.com"),
+        None,
+        true,
+    )?;
+    let received_logout = sp.receive_slo(
+        &peer_idp_descriptor,
+        BrowserInput::<LogoutRequest>::post(vec![FormField::new("SAMLRequest", logout.context)]),
+        validation(),
+    )?;
+    assert_eq!(
+        received_logout.message().issuer().as_str(),
+        PEER_IDP_ENTITY_ID
+    );
     Ok(())
 }
 

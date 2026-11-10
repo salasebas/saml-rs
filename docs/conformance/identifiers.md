@@ -7,13 +7,15 @@ service provider reads them with `finish_sso` and `accept_unsolicited_sso`.
 The identity provider reads a requested `<NameID>` with `receive_sso`. This
 page does not claim the IdP operational mode or the SP operational mode.
 
+[Entity identifiers](#entity-identifiers) covers the `entityID` and `Issuer`
+of the provider the crate configures, and of its peers.
 [Generated message and assertion identifiers](#generated-message-and-assertion-identifiers)
 covers the `ID` of every message and assertion the crate generates, in every
 flow.
 
-Normative text is Conformance Requirements §3.3 and SAML Core §1.3.2, §1.3.4,
-§2.2.2, §2.7.3.1, §8.2, and §8.3, as corrected by Approved Errata 05 E49, E55,
-E78, and E86. A `Format` URI is read as XML Schema 1.0 Part 2 §3.2.17 and
+Normative text is Conformance Requirements §3.3, SAML Core §1.3.2, §1.3.4,
+§2.2.2, §2.7.3.1, §8.2, and §8.3, and Metadata §2.2.1, as corrected by Approved
+Errata 05 E49, E55, E78, and E86. A `Format` URI is read as XML Schema 1.0 Part 2 §3.2.17 and
 §4.3.6 define `anyURI`, with the escaping of
 [XLink 1.0 §5.4](https://www.w3.org/TR/2001/REC-xlink-20010627/#link-locators),
 RFC 2396, and RFC 2732.
@@ -68,6 +70,13 @@ any other `Format` URI.
 | A persistent value is not shared in clear text with other providers, is not logged without controls, and is not a non-opaque value | Deployment | Use of the identifier | Mandatory for the deployment. Core §8.3.7. This crate writes no log. Who receives the value and where it is stored are outside the crate |
 | `NameId::new` takes any value for the persistent and transient formats | Identity provider | Generate Response | Library behaviour. The response still enforces the 256-character limit. Randomness, opacity, and non-reassignment cannot be checked on a value the caller supplies: `NameId::generate_transient` and `NameId::generate_persistent` produce values that meet them. A raw `LoginResponseOptions::custom` callback writes its own `<NameID>`, and its value and `Format` are not checked |
 | A persistent or transient `<NameID>` is accepted when it parses | Service provider on a `Response`, identity provider on a requested `<Subject>` | Accept | No receiver rule. Conformance §3.3 places Core §8.3.7 and §8.3.8 on the producer. A value longer than 256 characters, or one that resembles a username, is accepted and reported as it was sent. Core §8.3.8 says a relying party `SHOULD` treat a transient value as opaque and temporary. That is the application's use of the value |
+
+## Entity identifiers
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| A provider's own entity identifier is an absolute URI reference of at most 1024 characters | Identity provider and service provider | Generate metadata `entityID` and the `Issuer` of each message and assertion | Mandatory. Core §8.3.6 makes an entity identifier a URI of not more than 1024 characters. Core §1.3.2 requires a URI reference value in a SAML-defined element or attribute to have a non-whitespace character and to be absolute. Metadata §2.2.1 types `entityID` as `entityIDType`, an `anyURI` of at most 1024 characters. `EntityId::try_new`, `EntityId::from_str`, `EntityId::try_from`, `SpConfig` and `IdpConfig` validation, `generate_sp_metadata`, `generate_idp_metadata`, and `try_generate_idp_metadata` return `SamlError::Invalid` otherwise. The URI is read as for a [name identifier format](#name-identifier-formats). A character is a Unicode scalar value. Library policy also rejects a value that the `anyURI` whitespace collapse would change, such as one with leading or trailing whitespace, because an `Issuer` is an `xs:string` that a peer reads without collapsing it. `EntityId::new` does not check the value, and config validation still checks the configured one. A raw `ServiceProvider::from_metadata` or `IdentityProvider::from_metadata` writes the `entityID` of the metadata it is given, and the public `EntitySetting::entity_id` it is given, without the check |
+| A peer's entity identifier that is not an absolute URI reference, or is longer than 1024 characters, is read as sent | Identity provider and service provider | Import metadata and accept a message | No receiver rule. Core §8.3.6 and §1.3.2 bind the writer. `IdpDescriptor`, `SpDescriptor`, and a received `Issuer` reject only a value without a non-whitespace character. The metadata schema's 1024-character limit is not applied on import. `EntityId::new` names such a peer as the expected entity ID |
 
 ## Generated message and assertion identifiers
 

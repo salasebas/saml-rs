@@ -276,7 +276,7 @@ impl<Message: PendingMessage> Pending<Message> {
         peer_entity_id: &EntityId,
     ) -> Result<(), SamlError> {
         relay_state.validate()?;
-        EntityId::try_new(peer_entity_id.as_str().to_string())?;
+        EntityId::from_peer(peer_entity_id.as_str().to_string())?;
         Ok(())
     }
 
@@ -401,7 +401,7 @@ impl Pending<AuthnRequest> {
         snapshot.relay_state.validate()?;
         Self::validate_snapshot_timing(&snapshot.issued_at, &snapshot.expires_at)?;
         let request_id = MessageId::try_new(snapshot.id)?;
-        let idp_entity_id = EntityId::try_new(snapshot.peer_entity_id)?;
+        let idp_entity_id = EntityId::from_peer(snapshot.peer_entity_id)?;
         let response_binding =
             sso_response_binding_from_snapshot_value(&snapshot.expected_binding)?;
         let acs_binding = sso_response_binding_from_snapshot_value(&snapshot.acs_binding)?;
@@ -528,7 +528,7 @@ impl Pending<LogoutRequest> {
         snapshot.relay_state.validate()?;
         Self::validate_snapshot_timing(&snapshot.issued_at, &snapshot.expires_at)?;
         let request_id = MessageId::try_new(snapshot.id)?;
-        let peer_entity_id = EntityId::try_new(snapshot.peer_entity_id)?;
+        let peer_entity_id = EntityId::from_peer(snapshot.peer_entity_id)?;
         let response_binding = logout_binding_from_snapshot_value(&snapshot.expected_binding)?;
         let request_binding = snapshot
             .request_binding
@@ -624,7 +624,7 @@ impl Pending<ManageNameIdRequest> {
         snapshot.relay_state.validate()?;
         Self::validate_snapshot_timing(&snapshot.issued_at, &snapshot.expires_at)?;
         let request_id = MessageId::try_new(snapshot.id)?;
-        let peer_entity_id = EntityId::try_new(snapshot.peer_entity_id)?;
+        let peer_entity_id = EntityId::from_peer(snapshot.peer_entity_id)?;
         let response_binding =
             name_id_management_binding_from_snapshot_value(&snapshot.expected_binding)?;
         let request_binding = snapshot

@@ -206,7 +206,7 @@ impl AuthnRequest {
     ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, "request.id")?)?;
         let issue_instant = issue_instant_from_extract(&raw_flow.extract)?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
+        let issuer = EntityId::from_peer(required_str(&raw_flow.extract, "issuer")?)?;
         let destination = optional_endpoint(&raw_flow.extract, "request.destination")?;
         let acs_url = optional_endpoint(&raw_flow.extract, "request.assertionConsumerServiceUrl")?;
         let protocol_binding = response_binding(&raw_flow.extract)?;
