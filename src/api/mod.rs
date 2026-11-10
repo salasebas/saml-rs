@@ -151,8 +151,9 @@ impl Saml {
     ///
     /// Returns [`SamlError`] when the SP config cannot be converted into raw
     /// settings or metadata, including missing metadata, missing keys, a
-    /// configured NameID format that is not an absolute URI reference, or
-    /// unsupported crypto configuration.
+    /// configured NameID format that is not an absolute URI reference, two
+    /// ACS endpoints with the same index, more ACS endpoints than
+    /// `unsignedShort` indexes, or unsupported crypto configuration.
     pub fn sp(config: SpConfig) -> Result<Saml<Sp>, SamlError> {
         let setting = EntitySetting::try_from(&config)?;
         let raw_config = raw_sp_metadata_config(&config);

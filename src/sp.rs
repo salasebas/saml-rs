@@ -218,7 +218,9 @@ impl ServiceProvider {
     /// # Errors
     ///
     /// Returns an error if a configured `<NameIDFormat>` is not an absolute URI
-    /// reference, or if the generated metadata cannot be parsed back into SP
+    /// reference, if two `AssertionConsumerService` endpoints set the same
+    /// index or there are more of them than `unsignedShort` indexes, or if
+    /// the generated metadata cannot be parsed back into SP
     /// metadata, including invalid endpoint or certificate declarations.
     pub fn from_config(
         config: &SpMetadataConfig,
