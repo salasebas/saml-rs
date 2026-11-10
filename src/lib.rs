@@ -264,7 +264,10 @@
 //! or raw import, or require a signature from caller-provided certificates with
 //! [`MetadataTrustPolicy::RequireSignature`].
 //! [`MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization`]
-//! also accepts inclusive canonicalization. Prefer signed metadata with
+//! also accepts inclusive canonicalization. Both reject MD5 and RIPEMD-160
+//! signatures and RSA keys shorter than 2048 bits;
+//! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility`]
+//! accepts them. Prefer signed metadata with
 //! pinned certificates for production trust decisions; the crate does not treat
 //! the public web PKI CA store as SAML metadata trust.
 //!

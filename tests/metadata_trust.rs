@@ -84,6 +84,15 @@ fn trust_allowing_other_transforms<'a>(
     }
 }
 
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+fn trust_allowing_weak_algorithms<'a>(
+    certificates: &'a [CertificatePem],
+) -> MetadataTrustPolicy<'a> {
+    MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility {
+        trusted_certificates: certificates,
+    }
+}
+
 fn import_idp(xml: &str, policy: MetadataTrustPolicy<'_>) -> Result<IdpDescriptor, SamlError> {
     IdpDescriptor::from_metadata_xml_for(
         EntityId::try_new("https://idp.example.com/metadata")?,
@@ -593,4 +602,115 @@ fn require_signature_rejects_a_nested_signature_ahead_of_the_root_signature(
 
     assert_signature_shape_rejected(&nested, policy)?;
     assert_signature_shape_rejected(&with_decoy, policy)
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+const RSA_1024_KEY: &str = include_str!("fixtures/key/rsa1024/privkey.pkcs8.pem");
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+const RSA_1024_CERT: &str = include_str!("fixtures/key/rsa1024/cert.pem");
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+fn sign_idp_metadata_with(
+    signature_method: &str,
+    digest_method: &str,
+    key_pem: &str,
+    cert_pem: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let signature = format!(
+        "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc_c14n}\"/><ds:SignatureMethod Algorithm=\"{signature_method}\"/><ds:Reference URI=\"#_idp_md1\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest_method}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
+        dsig = namespace::DSIG,
+        exc_c14n = transform_algorithm::EXC_C14N,
+        enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
+        cert = normalize_cert_string(cert_pem),
+    );
+    let template = entity_document(Some("_idp_md1"), &signature);
+    let mut manager = KeysManager::new();
+    manager.add_key(load_private_key(key_pem, None)?);
+    let ctx = DsigContext::new(manager).with_insecure(true);
+    Ok(sign(&ctx, &template)?)
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[test]
+fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
+) -> Result<(), Box<dyn std::error::Error>> {
+    use bergshamra::core::algorithm as dsig;
+
+    let cert = CertificatePem::new(CERT);
+    let certificates = std::slice::from_ref(&cert);
+    let mut failures = Vec::new();
+    for (signature_method, digest_method) in [
+        (dsig::RSA_MD5, dsig::SHA256),
+        (dsig::RSA_RIPEMD160, dsig::SHA256),
+        (dsig::RSA_SHA256, dsig::MD5),
+        (dsig::RSA_SHA256, dsig::RIPEMD160),
+    ] {
+        let signed = sign_idp_metadata_with(signature_method, digest_method, PRIVKEY, CERT)?;
+        for policy in [
+            trust(certificates),
+            trust_allowing_other_transforms(certificates),
+        ] {
+            match import_idp(&signed, policy).map(|idp| idp.was_verified_with_pinned_certificates())
+            {
+                Err(SamlError::AlgorithmUnsupported) => {}
+                other => failures.push(format!(
+                    "{signature_method} with {digest_method} under {policy:?}: {other:?}"
+                )),
+            }
+        }
+        let compatible = import_idp(&signed, trust_allowing_weak_algorithms(certificates))?;
+        assert!(compatible.was_verified_with_pinned_certificates());
+        assert!(saml_rs::crypto::verify_metadata_signature(
+            &signed,
+            &[CERT.to_string()]
+        )?);
+    }
+
+    if !failures.is_empty() {
+        return Err(failures.join("\n").into());
+    }
+
+    let sha1 = sign_idp_metadata_with(dsig::RSA_SHA1, dsig::SHA1, PRIVKEY, CERT)?;
+    for policy in [
+        trust(certificates),
+        trust_allowing_other_transforms(certificates),
+    ] {
+        assert!(import_idp(&sha1, policy)?.was_verified_with_pinned_certificates());
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[test]
+fn require_signature_does_not_verify_with_a_1024_bit_rsa_key(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let short = CertificatePem::new(RSA_1024_CERT);
+    let signed = sign_idp_metadata_with(RSA_SHA256, SHA256, RSA_1024_KEY, RSA_1024_CERT)?;
+    let only_short = std::slice::from_ref(&short);
+    for policy in [
+        trust(only_short),
+        trust_allowing_other_transforms(only_short),
+    ] {
+        match import_idp(&signed, policy).map(|idp| idp.was_verified_with_pinned_certificates()) {
+            Err(SamlError::Crypto(message)) if message.contains("1024-bit RSA key") => {}
+            other => return Err(format!("{policy:?}: {other:?}").into()),
+        }
+    }
+
+    let compatible = import_idp(&signed, trust_allowing_weak_algorithms(only_short))?;
+    assert!(compatible.was_verified_with_pinned_certificates());
+    assert!(saml_rs::crypto::verify_metadata_signature(
+        &signed,
+        &[RSA_1024_CERT.to_string()]
+    )?);
+
+    let with_usable_key = [short, CertificatePem::new(CERT)];
+    match import_idp(&signed, trust(&with_usable_key))
+        .map(|idp| idp.was_verified_with_pinned_certificates())
+    {
+        Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature,
+        }) => Ok(()),
+        other => Err(format!("expected signature verification failure, got {other:?}").into()),
+    }
 }
