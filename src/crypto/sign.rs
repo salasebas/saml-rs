@@ -2,9 +2,10 @@
 //! selected `bergshamra` provider.
 
 use super::keys::{load_certificate, load_hmac_secret, load_private_key};
+use super::signature_profile::check_verification_key;
 use super::xml_syntax::validate_crypto_xml_prefix;
 use crate::binding::{base64_decode, base64_encode, xml_escape};
-use crate::config::HmacSecret;
+use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
 use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
 use crate::error::SamlError;
@@ -327,12 +328,25 @@ pub fn verify_message_signature(
     cert: &str,
     sig_alg: &str,
 ) -> Result<bool, SamlError> {
-    verify_detached_with_key(
+    verify_message_signature_under_profile(
         octet_string,
         signature_b64,
-        &load_certificate(cert)?,
+        cert,
         sig_alg,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
     )
+}
+
+pub(crate) fn verify_message_signature_under_profile(
+    octet_string: &str,
+    signature_b64: &str,
+    cert: &str,
+    sig_alg: &str,
+    profile: XmlSignatureProfile,
+) -> Result<bool, SamlError> {
+    let key = load_certificate(cert)?;
+    check_verification_key(profile, &key)?;
+    verify_detached_with_key(octet_string, signature_b64, &key, sig_alg)
 }
 
 pub(crate) fn verify_hmac_message_signature(

@@ -62,9 +62,10 @@ pub enum ResponseSignaturePolicy {
 /// HTTP-POST-SimpleSign message. A signature outside the profile is rejected
 /// with [`SamlError::AlgorithmUnsupported`].
 ///
-/// [`Self::StrictRsaSha2`] is library hardening. Selecting it does not require
-/// a signature directly on the Assertion. The accept combination is classified
-/// in `docs/conformance/web-browser-sso-acceptance.md`.
+/// Recommended uses [`Self::ExcludeWeakAlgorithms`]. [`Self::StrictRsaSha2`] is
+/// library hardening. Selecting it does not require a signature directly on the
+/// Assertion. The accept combination is classified in
+/// `docs/conformance/web-browser-sso-acceptance.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum XmlSignatureProfile {
     /// Require RSA-SHA256/384/512.
@@ -73,9 +74,20 @@ pub enum XmlSignatureProfile {
     /// SHA-256/384/512 digest, and exclusive canonicalization. Each transform
     /// element, when present, must belong to the XML-DSig namespace and use
     /// enveloped-signature or exclusive canonicalization.
+    ///
+    /// An RSA key shorter than 2048 bits does not verify, as under
+    /// [`Self::ExcludeWeakAlgorithms`].
     StrictRsaSha2,
-    /// Accept every algorithm and same-document reference shape supported by
-    /// the selected cryptographic provider.
+    /// Accept every algorithm the selected cryptographic provider supports,
+    /// except MD5 and RIPEMD-160 signatures and digests and RSA keys shorter
+    /// than 2048 bits.
+    ///
+    /// A signature method or digest outside the profile is rejected with
+    /// [`SamlError::AlgorithmUnsupported`]. A shorter RSA certificate is not
+    /// used to verify, and a message only it could verify is rejected.
+    ExcludeWeakAlgorithms,
+    /// Accept every algorithm, RSA key size, and same-document reference shape
+    /// supported by the selected cryptographic provider.
     #[default]
     AllowProviderSupportedForCompatibility,
 }
@@ -178,8 +190,10 @@ pub struct SpValidationPolicy {
 impl SpValidationPolicy {
     /// Validation preset for claimed Web Browser SSO and Single Logout features.
     ///
-    /// Recommendations start enabled. Optional capabilities and library
-    /// hardening stay off until a caller replaces one field.
+    /// Recommendations start enabled, and
+    /// [`XmlSignatureProfile::ExcludeWeakAlgorithms`] excludes weak signature
+    /// algorithms. Optional capabilities and other library hardening stay off
+    /// until a caller replaces one field.
     ///
     /// # Examples
     ///
@@ -192,14 +206,14 @@ impl SpValidationPolicy {
     /// };
     /// assert_eq!(
     ///     with_assertion_signature.xml_signatures,
-    ///     XmlSignatureProfile::AllowProviderSupportedForCompatibility
+    ///     XmlSignatureProfile::ExcludeWeakAlgorithms
     /// );
     /// ```
     pub fn recommended() -> Self {
         Self {
             assertions: AssertionSignaturePolicy::AllowUnsignedForCompatibility,
             responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             authn_requests: AuthnRequestSigningPolicy::DoNotSignForCompatibility,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
@@ -248,11 +262,12 @@ impl IdpValidationPolicy {
     /// Validation preset for claimed Web Browser SSO and Single Logout features.
     ///
     /// An inbound `AuthnRequest` may be unsigned. A signature that is present
-    /// is verified. Logout requests and responses require a signature.
+    /// is verified under [`XmlSignatureProfile::ExcludeWeakAlgorithms`].
+    /// Logout requests and responses require a signature.
     pub fn recommended() -> Self {
         Self {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             logout: LogoutPolicy::recommended(),
         }
     }

@@ -233,11 +233,15 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(sp.validation.logout, LogoutPolicy::recommended());
     assert_eq!(
         sp.validation.xml_signatures,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility
+        XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     assert_eq!(
         idp.validation.authn_requests,
         AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
+    );
+    assert_eq!(
+        idp.validation.xml_signatures,
+        XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     Ok(())
 }
@@ -262,8 +266,16 @@ fn compatibility_policy_names_unsigned_choices_explicitly() {
     assert_eq!(sp.audience, AudienceValidationPolicy::SkipForCompatibility);
     assert_eq!(sp.logout, LogoutPolicy::compatibility());
     assert_eq!(
+        sp.xml_signatures,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility
+    );
+    assert_eq!(
         idp.authn_requests,
         AuthnRequestValidationPolicy::AllowUnsignedForCompatibility
+    );
+    assert_eq!(
+        idp.xml_signatures,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility
     );
     assert_eq!(
         idp.logout.requests,
@@ -318,7 +330,7 @@ fn recommended_preset_matches_classified_validation_and_hardenings_stay_independ
         SpValidationPolicy {
             assertions: AssertionSignaturePolicy::AllowUnsignedForCompatibility,
             responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             authn_requests: AuthnRequestSigningPolicy::DoNotSignForCompatibility,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
@@ -329,7 +341,7 @@ fn recommended_preset_matches_classified_validation_and_hardenings_stay_independ
         IdpValidationPolicy::recommended(),
         IdpValidationPolicy {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             logout: recommended_logout,
         }
     );
@@ -340,7 +352,7 @@ fn recommended_preset_matches_classified_validation_and_hardenings_stay_independ
     };
     assert_eq!(
         assertion_signature.xml_signatures,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility
+        XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     let rsa_sha2 = SpValidationPolicy {
         xml_signatures: XmlSignatureProfile::StrictRsaSha2,
@@ -386,7 +398,7 @@ fn policy_defaults_start_on_recommended_and_field_defaults_stay_permissive() {
     );
     assert_eq!(
         SpValidationPolicy::recommended().xml_signatures,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility
+        XmlSignatureProfile::ExcludeWeakAlgorithms
     );
 }
 

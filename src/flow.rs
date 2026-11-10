@@ -879,7 +879,13 @@ fn verify_detached(
     let mut provider_error = None;
     let mut tried_invalid = false;
     for cert in opts.signing_certs {
-        match crate::crypto::verify_message_signature(octet, signature, cert, sig_alg) {
+        match crate::crypto::sign::verify_message_signature_under_profile(
+            octet,
+            signature,
+            cert,
+            sig_alg,
+            opts.xml_signatures,
+        ) {
             Ok(true) => return Ok(sig_alg.to_string()),
             Ok(false) => tried_invalid = true,
             Err(error @ SamlError::Crypto(_)) => {

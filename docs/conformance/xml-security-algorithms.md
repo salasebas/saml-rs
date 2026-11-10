@@ -38,25 +38,26 @@ encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`,
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| SHA-1 digest | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. Generated only with `SignatureAlgorithm::RsaSha1` or `SignatureAlgorithm::DsaSha1`, which take their digest from the signature algorithm. Verified under `XmlSignatureProfile::AllowProviderSupportedForCompatibility`, the value Recommended uses. `StrictRsaSha2` is library hardening and rejects it |
+| SHA-1 digest | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. Generated only with `SignatureAlgorithm::RsaSha1` or `SignatureAlgorithm::DsaSha1`, which take their digest from the signature algorithm. Verified under `XmlSignatureProfile::ExcludeWeakAlgorithms`, the value Recommended uses, and under `AllowProviderSupportedForCompatibility`. `StrictRsaSha2` is library hardening and rejects it |
 | RSAwithSHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `SignatureAlgorithm::RsaSha1` selects it. It is never the default. AWS-LC and FIPS do not sign with it. FIPS does not verify it |
 | DSAwithSHA1 | Identity provider and service provider | Sign and verify | Recommendation to implement. Conformance §4.1. `SignatureAlgorithm::DsaSha1` selects it with a DSA signing key, and a DSA certificate in the peer's metadata verifies it. It is never the default, on the same library policy as the SHA-1 digest. RustCrypto with `crypto-legacy-algorithms` only |
 | HMAC-SHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `SignatureAlgorithm::HmacSha1` signs with `Credentials::hmac_secret`, and the signature carries no `KeyInfo`. The verifier sets the same secret with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`, next to the peer's metadata certificates. SAML metadata has no shared-secret key, so the secret is exchanged out of band. Metadata signatures are not verified with it. The 160-bit minimum `HMACOutputLength` is existing library hardening |
 | An HMAC secret is at least 20 bytes | Identity provider and service provider | Configure signing and verification | Library policy. RFC 2104 §3 discourages a key shorter than the hash output, which is 20 bytes for SHA-1. `HmacSecret::try_new` rejects a shorter secret with `SamlError::Invalid`. It is local configuration and does not reject a message |
-| Canonical XML 1.0 without comments | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::CanonicalXml` puts it in `signed_reference_transforms`, for the messages in the row below. `SignedInfo` is canonicalized with exclusive canonicalization. Verification accepts it on `SignedInfo` and on a reference under `AllowProviderSupportedForCompatibility`. `StrictRsaSha2` rejects it |
+| Canonical XML 1.0 without comments | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::CanonicalXml` puts it in `signed_reference_transforms`, for the messages in the row below. `SignedInfo` is canonicalized with exclusive canonicalization. Verification accepts it on `SignedInfo` and on a reference under `ExcludeWeakAlgorithms` and `AllowProviderSupportedForCompatibility`. `StrictRsaSha2` rejects it |
 | Enveloped-signature transform | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::EnvelopedSignature` is the first default transform |
 | A message carried in SOAP keeps exclusive canonicalization | Identity provider and service provider | Generate Response and logout messages | Library behaviour. `signed_reference_transforms` applies to the `AuthnRequest`, to `respond_sso` and `initiate_sso`, and to logout messages on HTTP-POST. `respond_sso_artifact`, `initiate_sso_artifact`, `respond_paos_sso`, and logout messages over SOAP keep the enveloped-signature and exclusive canonicalization transforms. Each message is signed before it is placed in a SOAP envelope, and Canonical XML would take the envelope's namespace declarations into the digest of a verifier that checks the signature in place |
 | RSA-SHA256, RSA-SHA384, RSA-SHA512, and a backend URI | Identity provider and service provider | Sign and verify | Optional. Errata 05 E50. `SignatureAlgorithm::RsaSha256` is the default. `SignatureAlgorithm::Custom` passes a URI to the provider |
 
 ## Inbound XML signature verification
 
-A verifier accepts every `SignatureMethod` and `DigestMethod` that the
-selected provider implements and that the peer's key can verify, unless
-`XmlSignatureProfile::StrictRsaSha2` narrows it. `XmlSignatureProfile` is the
-`xml_signatures` field of `SpValidationPolicy` and `IdpValidationPolicy`.
-Recommended and Compatibility both use `AllowProviderSupportedForCompatibility`. Accepting an algorithm
-outside the Conformance §4.1 set is the Errata 05 E50 `MAY`. Neither profile
-is an OASIS receiver rule.
+A verifier accepts the `SignatureMethod` and `DigestMethod` values that the
+selected provider implements, that the peer's key can verify, and that the
+`XmlSignatureProfile` allows. `XmlSignatureProfile` is the `xml_signatures`
+field of `SpValidationPolicy` and `IdpValidationPolicy`. Recommended uses
+`ExcludeWeakAlgorithms`. Compatibility uses
+`AllowProviderSupportedForCompatibility`. Accepting an algorithm outside the
+Conformance §4.1 set is the Errata 05 E50 `MAY`. No profile is an OASIS
+receiver rule.
 
 The key is a signing certificate in the peer's metadata, or the secret set
 with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`.
@@ -66,15 +67,29 @@ key of the same parameter set.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| An embedded signature on a received `Response`, `Assertion`, or logout message is verified under `xml_signatures` | Accepting service provider | Inbound | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts the provider-supported set below. `StrictRsaSha2` is library hardening. A signature over the accepted content must use RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and only the enveloped-signature and exclusive canonicalization transforms. Otherwise it is rejected with `SamlError::AlgorithmUnsupported` |
+| An embedded signature on a received `Response`, `Assertion`, or logout message is verified under `xml_signatures` | Accepting service provider | Inbound | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts the provider-supported set below. `ExcludeWeakAlgorithms` accepts that set without the weak algorithms and keys in the next table. `StrictRsaSha2` is library hardening. A signature over the accepted content must use RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and only the enveloped-signature and exclusive canonicalization transforms. Otherwise it is rejected with `SamlError::AlgorithmUnsupported` |
 | An embedded signature on a received `AuthnRequest` or logout message is verified under `xml_signatures` | Identity provider | Inbound | Optional. Errata 05 E50. The same profiles as the row above |
-| A detached `SigAlg` signature is verified under `xml_signatures` | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts any `SigAlg` in the provider-supported set. `StrictRsaSha2` is library hardening and accepts RSA-SHA256, RSA-SHA384, or RSA-SHA512. Another `SigAlg` is rejected with `SamlError::AlgorithmUnsupported` before the signature is verified |
+| A detached `SigAlg` signature is verified under `xml_signatures` | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts any `SigAlg` in the provider-supported set. `ExcludeWeakAlgorithms` excludes the weak algorithms and keys in the next table. `StrictRsaSha2` is library hardening and accepts RSA-SHA256, RSA-SHA384, or RSA-SHA512. Another `SigAlg` is rejected with `SamlError::AlgorithmUnsupported` before the signature is verified |
 | A signed metadata document | Metadata consumer | Inbound | Optional. Errata 05 E50. `MetadataTrustPolicy` limits the transforms, not the signature or digest algorithm. The provider-supported set applies |
 
-On the default build, the provider-supported set includes SHA-1, MD5, and
-RIPEMD-160 signatures and digests. `StrictRsaSha2` excludes them from the
-signatures it covers. Only the build features exclude them from a metadata
-signature.
+### Weak algorithms and keys
+
+`ExcludeWeakAlgorithms` and `StrictRsaSha2` exclude these from the signatures
+they cover. `AllowProviderSupportedForCompatibility` re-allows them where the
+build verifies them.
+
+| Excluded | Rule | Level |
+| --- | --- | --- |
+| RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, or a detached `SigAlg`, that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, the Shibboleth SP 3 excludes RSA-MD5 and MD5 by default, and xmlsec1 has built without MD5 by default since 1.3.0 |
+| RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles. No OASIS rule requires a receiver to reject them. They are outside Conformance §4.1. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
+| An RSA signing certificate shorter than 2048 bits | The certificate is not used to verify. When the peer has no other usable key, verification returns `SamlError::Crypto`, as it does on AWS-LC. Otherwise a message signed with the short key fails signature verification | Library policy, on in Recommended for both roles. XML Signature 1.1 §6.4.2 lets a verifier use an RSA key of 1024 bits or less, and names 2048-bit public keys the minimum recommended key length. RustCrypto without `crypto-legacy-algorithms`, AWS-LC, and FIPS refuse it in every profile. OpenSAML sets no minimum |
+
+SHA-1 stays accepted under `ExcludeWeakAlgorithms`: Conformance §4.1 makes the
+SHA-1 digest and RSAwithSHA1 mandatory to implement, and OpenSAML, the
+Shibboleth SP 3, and xmlsec1 verify them by default. `StrictRsaSha2` excludes
+SHA-1 as well. A metadata signature is verified with the provider-supported
+set in every profile.
+
 `SsoSession::verified_xml_signatures` reports each accepted `SignatureMethod`
 URI, and `SsoSession::sig_alg` the accepted detached `SigAlg`. Neither applies
 an allowlist.
@@ -85,9 +100,10 @@ The default build is `crypto-bergshamra`: RustCrypto with
 `crypto-legacy-algorithms` and `crypto-post-quantum`. A row marked Legacy
 needs `crypto-legacy-algorithms`, and a row marked Post-quantum needs
 `crypto-post-quantum`. A signature with an algorithm the build does not
-verify does not verify. An RSA key shorter than 2048 bits verifies only on
-RustCrypto with `crypto-legacy-algorithms`, including under `StrictRsaSha2`.
-RustCrypto without it, AWS-LC, and FIPS reject it.
+verify does not verify. For a message signature, an RSA key shorter than 2048
+bits verifies only on RustCrypto with `crypto-legacy-algorithms`, and only
+under `AllowProviderSupportedForCompatibility`. RustCrypto without it, AWS-LC, and
+FIPS reject it.
 
 | `SignatureMethod` | Default build | `crypto-aws-lc` | `crypto-fips` |
 | --- | --- | --- | --- |

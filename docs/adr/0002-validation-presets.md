@@ -13,7 +13,11 @@ option. A producer recommendation does not by itself become a receiver
 rejection. Optional capabilities stay off until selected by name. Library
 hardening that OASIS does not require, such as a direct Assertion signature
 or the RSA-SHA2 XML-DSig profile, is also selected by name on top of
-Recommended rather than collected into a third preset. A bundled strict
+Recommended rather than collected into a third preset. One implementation-security
+default is the exception: Recommended excludes MD5 and RIPEMD-160 signature and
+digest algorithms and RSA keys shorter than 2048 bits
+(`XmlSignatureProfile::ExcludeWeakAlgorithms`), and
+`AllowProviderSupportedForCompatibility` relaxes it. A bundled strict
 preset was rejected because callers need those hardenings independently, and
 because a MAY is an optional capability rather than a stricter conformance
 level.

@@ -43,6 +43,10 @@ const RSA_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer"
 const DSA_KEY: &str = include_str!("fixtures/key/dsa/privkey.pkcs8.pem");
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 const DSA_CERT: &str = include_str!("fixtures/key/dsa/cert.pem");
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+const RSA_1024_KEY: &str = include_str!("fixtures/key/rsa1024/privkey.pkcs8.pem");
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+const RSA_1024_CERT: &str = include_str!("fixtures/key/rsa1024/cert.pem");
 
 struct Side {
     algorithms: AlgorithmPolicy,
@@ -321,18 +325,27 @@ fn rsa_sha1_peers(
 }
 
 #[cfg(feature = "crypto-rustcrypto")]
-fn redirect_and_post_authn_requests(
+fn redirect_authn_request(
     peers: &Peers,
-) -> Result<[BrowserInput<AuthnRequest>; 2], Box<dyn std::error::Error>> {
+) -> Result<BrowserInput<AuthnRequest>, Box<dyn std::error::Error>> {
     let redirect = peers
         .sp
         .start_sso(&peers.idp_descriptor, StartSso::redirect())?;
     let url = Url::parse(redirect.outbound.redirect_url()?)?;
+    Ok(BrowserInput::<AuthnRequest>::redirect(
+        url.query().unwrap_or_default(),
+    ))
+}
+
+#[cfg(feature = "crypto-rustcrypto")]
+fn redirect_and_post_authn_requests(
+    peers: &Peers,
+) -> Result<[BrowserInput<AuthnRequest>; 2], Box<dyn std::error::Error>> {
     let post = peers
         .sp
         .start_sso(&peers.idp_descriptor, StartSso::post())?;
     Ok([
-        BrowserInput::<AuthnRequest>::redirect(url.query().unwrap_or_default()),
+        redirect_authn_request(peers)?,
         BrowserInput::<AuthnRequest>::post(post_fields(&post.outbound)?),
     ])
 }
@@ -406,6 +419,132 @@ fn strict_rsa_sha2_at_the_service_provider_rejects_an_rsa_sha1_sig_alg(
             assert!(matches!(received, Err(SamlError::AlgorithmUnsupported)));
         }
     }
+    Ok(())
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[test]
+fn recommended_identity_provider_rejects_an_md5_or_ripemd160_sig_alg(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for algorithm in [
+        "http://www.w3.org/2001/04/xmldsig-more#rsa-md5",
+        "http://www.w3.org/2001/04/xmldsig-more#rsa-ripemd160",
+    ] {
+        let signer = || {
+            rsa(AlgorithmPolicy {
+                signature: SignatureAlgorithm::Custom(algorithm.into()),
+                ..AlgorithmPolicy::default()
+            })
+        };
+        let recommended = peers(
+            signer(),
+            rsa(AlgorithmPolicy::default()),
+            XmlPolicy::default(),
+        )?;
+        let input = redirect_authn_request(&recommended)?;
+        assert!(
+            matches!(
+                recommended
+                    .idp
+                    .receive_sso(&recommended.sp_descriptor, input, validation()),
+                Err(SamlError::AlgorithmUnsupported)
+            ),
+            "{algorithm}"
+        );
+
+        let compatible = peers_with_profiles(
+            signer(),
+            rsa(AlgorithmPolicy::default()),
+            XmlPolicy::default(),
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        )?;
+        let input = redirect_authn_request(&compatible)?;
+        compatible
+            .idp
+            .receive_sso(&compatible.sp_descriptor, input, validation())?;
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+fn rsa_1024() -> Side {
+    signed_with(AlgorithmPolicy::default(), RSA_1024_KEY, RSA_1024_CERT)
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+fn is_short_rsa_key_error(error: &SamlError) -> bool {
+    matches!(error, SamlError::Crypto(message) if message.contains("1024-bit RSA key"))
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[test]
+fn recommended_identity_provider_does_not_verify_with_a_1024_bit_rsa_key(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for idp_xml_signatures in [
+        IdpValidationPolicy::recommended().xml_signatures,
+        XmlSignatureProfile::StrictRsaSha2,
+    ] {
+        let peers = peers_with_profiles(
+            rsa_1024(),
+            rsa(AlgorithmPolicy::default()),
+            XmlPolicy::default(),
+            SpValidationPolicy::recommended().xml_signatures,
+            idp_xml_signatures,
+        )?;
+        for input in redirect_and_post_authn_requests(&peers)? {
+            match peers
+                .idp
+                .receive_sso(&peers.sp_descriptor, input, validation())
+            {
+                Err(error) if is_short_rsa_key_error(&error) => {}
+                other => return Err(format!("{idp_xml_signatures:?}: {other:?}").into()),
+            }
+        }
+    }
+
+    let compatible = peers_with_profiles(
+        rsa_1024(),
+        rsa(AlgorithmPolicy::default()),
+        XmlPolicy::default(),
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+    )?;
+    for input in redirect_and_post_authn_requests(&compatible)? {
+        compatible
+            .idp
+            .receive_sso(&compatible.sp_descriptor, input, validation())?;
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[test]
+fn recommended_service_provider_does_not_verify_with_a_1024_bit_rsa_key(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let recommended = peers(
+        rsa(AlgorithmPolicy::default()),
+        rsa_1024(),
+        XmlPolicy::default(),
+    )?;
+    let error = signed_redirect_request_then_post_response(&recommended)
+        .err()
+        .ok_or("accepted a response signed with a 1024-bit RSA key")?;
+    assert!(
+        error
+            .downcast_ref::<SamlError>()
+            .is_some_and(is_short_rsa_key_error),
+        "{error:?}"
+    );
+
+    let compatible = peers_with_profiles(
+        rsa(AlgorithmPolicy::default()),
+        rsa_1024(),
+        XmlPolicy::default(),
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        IdpValidationPolicy::recommended().xml_signatures,
+    )?;
+    signed_redirect_request_then_post_response(&compatible)?;
     Ok(())
 }
 

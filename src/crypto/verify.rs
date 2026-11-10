@@ -12,7 +12,9 @@
 
 use super::keys::{load_certificate, load_hmac_secret};
 use super::response_root::root_uses_protocol_response_rules;
-use super::signature_profile::{allows_digest_method, allows_signature_method};
+use super::signature_profile::{
+    allows_digest_method, allows_signature_method, check_verification_key,
+};
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
@@ -566,11 +568,53 @@ fn dsig_algorithm<'a>(
         .and_then(|element| element.get_attribute(bergshamra_ns::attr::ALGORITHM))
 }
 
-/// Check one verifier-accepted signature against the strict RSA-SHA2 profile.
+/// Check one verifier-accepted signature against `profile`.
 ///
 /// Callers apply this only to a signature that authenticated the message being
 /// accepted. An invalid, untrusted, or unrelated signature therefore cannot
 /// reject the message.
+fn enforce_profile_on_verified_signature(
+    document: &BergshamraDocument<'_>,
+    signature_node: BergshamraNodeId,
+    profile: XmlSignatureProfile,
+) -> Result<(), SamlError> {
+    match profile {
+        XmlSignatureProfile::StrictRsaSha2 => {
+            enforce_strict_profile_on_verified_signature(document, signature_node)
+        }
+        XmlSignatureProfile::ExcludeWeakAlgorithms => {
+            enforce_algorithms_on_verified_signature(document, signature_node, profile)
+        }
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility => Ok(()),
+    }
+}
+
+fn enforce_algorithms_on_verified_signature(
+    document: &BergshamraDocument<'_>,
+    signature_node: BergshamraNodeId,
+    profile: XmlSignatureProfile,
+) -> Result<(), SamlError> {
+    for signed_info in dsig_children(document, signature_node, bergshamra_ns::node::SIGNED_INFO) {
+        for method in dsig_children(document, signed_info, bergshamra_ns::node::SIGNATURE_METHOD) {
+            if !dsig_algorithm(document, method)
+                .is_some_and(|algorithm| allows_signature_method(profile, algorithm))
+            {
+                return Err(SamlError::AlgorithmUnsupported);
+            }
+        }
+        for reference in dsig_children(document, signed_info, bergshamra_ns::node::REFERENCE) {
+            for digest in dsig_children(document, reference, bergshamra_ns::node::DIGEST_METHOD) {
+                if !dsig_algorithm(document, digest)
+                    .is_some_and(|algorithm| allows_digest_method(profile, algorithm))
+                {
+                    return Err(SamlError::AlgorithmUnsupported);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn enforce_strict_profile_on_verified_signature(
     document: &BergshamraDocument<'_>,
     signature_node: BergshamraNodeId,
@@ -691,8 +735,12 @@ struct PreparedSignatureVerification {
     contexts: Vec<DsigContext>,
 }
 
-fn metadata_verification_context(certificate: &str) -> Result<DsigContext, SamlError> {
+fn metadata_verification_context(
+    certificate: &str,
+    profile: XmlSignatureProfile,
+) -> Result<DsigContext, SamlError> {
     let key = load_certificate(certificate)?;
+    check_verification_key(profile, &key)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     // Metadata certificates are the only verification keys. Inline KeyInfo
@@ -725,11 +773,12 @@ fn hmac_verification_context(secret: &HmacSecret) -> Result<DsigContext, SamlErr
 fn metadata_verification_contexts(
     metadata_certs: &[String],
     hmac_secret: Option<&HmacSecret>,
+    profile: XmlSignatureProfile,
 ) -> Result<Vec<DsigContext>, SamlError> {
     let mut contexts = Vec::new();
     let mut key_load_error = None;
     for certificate in metadata_certs {
-        match metadata_verification_context(certificate) {
+        match metadata_verification_context(certificate, profile) {
             Ok(context) => contexts.push(context),
             Err(error) => {
                 key_load_error.get_or_insert(error);
@@ -777,6 +826,7 @@ fn prepare_signature_verification(
     metadata_certs: &[String],
     hmac_secret: Option<&HmacSecret>,
     limits: XmlLimits,
+    profile: XmlSignatureProfile,
 ) -> Result<Option<PreparedSignatureVerification>, SamlError> {
     let dom = dom::parse_with_limits(xml, limits)?;
     let protocol_response = root_uses_protocol_response_rules(xml)?;
@@ -796,7 +846,7 @@ fn prepare_signature_verification(
     preflight_saml_reference_uris(&signature_candidates)?;
     reject_unpinned_inline_certificate(&signature_candidates, metadata_certs)?;
     super::provider::ensure_crypto_provider_initialized()?;
-    let contexts = metadata_verification_contexts(metadata_certs, hmac_secret)?;
+    let contexts = metadata_verification_contexts(metadata_certs, hmac_secret, profile)?;
     Ok(Some(PreparedSignatureVerification {
         dom,
         protocol_response,
@@ -828,7 +878,14 @@ pub fn verify_signature_with_limits(
     metadata_certs: &[String],
     limits: XmlLimits,
 ) -> Result<(bool, Option<String>), SamlError> {
-    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, None, limits)? else {
+    let Some(prepared) = prepare_signature_verification(
+        xml,
+        metadata_certs,
+        None,
+        limits,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+    )?
+    else {
         return Ok((false, None));
     };
     let root = &prepared.dom.root;
@@ -897,7 +954,8 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<SignatureVerification, SamlError> {
-    let Some(prepared) = prepare_signature_verification(xml, metadata_certs, hmac_secret, limits)?
+    let Some(prepared) =
+        prepare_signature_verification(xml, metadata_certs, hmac_secret, limits, profile)?
     else {
         return Ok(SignatureVerification::unverified());
     };
@@ -937,21 +995,18 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                                 // LogoutResponse coverage. A protocol Response can
                                 // also be evidence when `verified_content` returns
                                 // no XML. Enforce the profile for either case.
-                                if profile == XmlSignatureProfile::StrictRsaSha2
-                                    && (signature.is_some()
-                                        || references_cover_direct_assertion(
-                                            &document,
-                                            &references,
-                                        )
-                                        || verified_targets_cover_accepted_content(
-                                            root,
-                                            &signature_targets,
-                                            protocol_response,
-                                        ))
+                                if signature.is_some()
+                                    || references_cover_direct_assertion(&document, &references)
+                                    || verified_targets_cover_accepted_content(
+                                        root,
+                                        &signature_targets,
+                                        protocol_response,
+                                    )
                                 {
-                                    enforce_strict_profile_on_verified_signature(
+                                    enforce_profile_on_verified_signature(
                                         &document,
                                         signature_node,
+                                        profile,
                                     )?;
                                 }
                                 if let Some(signature) = signature {
@@ -1561,6 +1616,32 @@ mod tests {
         sign_template(&template)
     }
 
+    #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+    fn response_signed_over_assertion_with(
+        algorithm: &str,
+        digest: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let document = dom::parse(RESPONSE)?;
+        let assertion = children_named(&document.root, "Assertion")
+            .into_iter()
+            .next()
+            .ok_or("missing Assertion")?;
+        let assertion_id = node_saml_id(assertion).ok_or("missing Assertion ID")?;
+        let signature = format!(
+            "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc}\"/><ds:SignatureMethod Algorithm=\"{algorithm}\"/><ds:Reference URI=\"#{assertion_id}\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
+            dsig = namespace::DSIG,
+            exc = transform_algorithm::EXC_C14N,
+            enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
+            cert = normalize_cert_string(SP_SIGNING_CERT),
+        );
+        let template = RESPONSE.replacen(
+            "</saml:Issuer><samlp:Status>",
+            &format!("</saml:Issuer>{signature}<samlp:Status>"),
+            1,
+        );
+        sign_template(&template)
+    }
+
     fn response_with_issuer_only_signature(
         canonicalization: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
@@ -1844,6 +1925,53 @@ mod tests {
             XmlSignatureProfile::StrictRsaSha2,
         );
         assert!(matches!(strict, Err(SamlError::AlgorithmUnsupported)));
+        Ok(())
+    }
+
+    #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+    #[test]
+    fn excluding_weak_algorithms_rejects_md5_and_ripemd160_but_keeps_sha1(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::constants::digest_algorithm::{SHA1, SHA256};
+        use crate::constants::signature_algorithm::RSA_SHA1;
+        const RSA_MD5: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-md5";
+        const RSA_RIPEMD160: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-ripemd160";
+        const MD5: &str = "http://www.w3.org/2001/04/xmldsig-more#md5";
+        const RIPEMD160: &str = "http://www.w3.org/2001/04/xmlenc#ripemd160";
+
+        let verify_under = |signed: &str, profile| {
+            verify_signatures_detailed_with_profile(
+                signed,
+                &[SP_SIGNING_CERT.to_string()],
+                None,
+                XmlLimits::default(),
+                profile,
+            )
+        };
+        for (algorithm, digest, excluded) in [
+            (RSA_MD5, SHA256, true),
+            (RSA_RIPEMD160, SHA256, true),
+            (RSA_SHA256, MD5, true),
+            (RSA_SHA256, RIPEMD160, true),
+            (RSA_SHA1, SHA1, false),
+        ] {
+            let signed = response_signed_over_assertion_with(algorithm, digest)?;
+            let compatible = verify_under(
+                &signed,
+                XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            )?;
+            assert!(compatible.verified() && compatible.assertion_directly_covered());
+
+            let weak_excluded = verify_under(&signed, XmlSignatureProfile::ExcludeWeakAlgorithms);
+            if excluded {
+                assert!(
+                    matches!(weak_excluded, Err(SamlError::AlgorithmUnsupported)),
+                    "{algorithm} with {digest}: {weak_excluded:?}"
+                );
+            } else {
+                assert!(weak_excluded?.verified(), "{algorithm} with {digest}");
+            }
+        }
         Ok(())
     }
 
