@@ -29,6 +29,8 @@ use crate::xml::{
 use std::time::SystemTime;
 use time::OffsetDateTime;
 
+mod error_response;
+
 /// Decoded HTTP request inputs for a binding.
 #[derive(Debug, Default, Clone)]
 pub struct HttpRequest {
@@ -963,12 +965,7 @@ fn validate_context(
         ParserType::SamlResponse | ParserType::LogoutResponse | ParserType::ManageNameIdResponse
     );
     if is_response {
-        if let Some(expected) = opts.expected_in_response_to {
-            let actual = extracted.get_str("response.inResponseTo");
-            if actual != Some(expected) {
-                return Err(SamlError::in_response_to_mismatch(Some(expected), actual));
-            }
-        }
+        validate_in_response_to(extracted, opts.expected_in_response_to)?;
     }
     validate_message_destination(
         parser_type,
@@ -991,24 +988,18 @@ fn validate_context(
             opts.clock_drifts.1,
         )?;
     }
-    if !status_precedes_authentication(parser_type) {
-        check_status_with_limits(saml_content, parser_type, opts.xml_limits)?;
-    }
-    Ok(())
+    check_status_with_limits(saml_content, parser_type, opts.xml_limits)
 }
 
-/// Whether a non-success status is reported before the message is
-/// authenticated and correlated. A `LogoutResponse` or `ManageNameIDResponse`
-/// reports its status only after the signature, issuer, `InResponseTo`, and
-/// `Destination` checks.
-fn status_precedes_authentication(parser_type: ParserType) -> bool {
-    match parser_type {
-        ParserType::SamlRequest
-        | ParserType::SamlResponse
-        | ParserType::LogoutRequest
-        | ParserType::ManageNameIdRequest => true,
-        ParserType::LogoutResponse | ParserType::ManageNameIdResponse => false,
+fn validate_in_response_to(extracted: &Value, expected: Option<&str>) -> Result<(), SamlError> {
+    let Some(expected) = expected else {
+        return Ok(());
+    };
+    let actual = extracted.get_str("response.inResponseTo");
+    if actual != Some(expected) {
+        return Err(SamlError::in_response_to_mismatch(Some(expected), actual));
     }
+    Ok(())
 }
 
 fn signature_is_present(
@@ -1068,8 +1059,18 @@ fn flow_inner(
     )?;
     is_valid_xml_with_limits(&xml, opts.xml_limits)?;
     validate_protocol_profile(&xml, parser_type, opts.xml_limits)?;
-    if status_precedes_authentication(parser_type) {
-        check_status_with_limits(&xml, parser_type, opts.xml_limits)?;
+    if parser_type == ParserType::SamlResponse {
+        if let Err(status) = check_status_with_limits(&xml, parser_type, opts.xml_limits) {
+            error_response::validate_error_response(
+                opts,
+                request,
+                binding,
+                &xml,
+                expected_recipient,
+                signed_destination,
+            )?;
+            return Err(status);
+        }
     }
 
     let verify_signature = opts.check_signature
