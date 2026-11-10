@@ -663,9 +663,6 @@ fn apply_common_settings(
     );
     setting.assertion_element_encryption = xml.encryption.assertion_elements();
     setting.received_encrypted_elements = ReceivedEncryptedElements::DecryptReceived;
-    setting.allow_insecure_software_rsa_key_transport_decryption = xml
-        .encryption
-        .allows_insecure_software_rsa_key_transport_decryption();
     setting.allow_rsa15_key_transport_decryption =
         xml.encryption.allows_rsa15_key_transport_decryption();
     setting.relay_state = templates.relay_state.clone();

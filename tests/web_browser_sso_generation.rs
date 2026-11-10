@@ -665,8 +665,7 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
 fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+        encryption: XmlEncryptionPolicy::encrypt_assertions(),
         ..XmlPolicy::default()
     };
     let encrypted_credentials = Credentials {
@@ -1089,8 +1088,7 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
 fn typed_error_response_stays_plaintext_when_assertion_encryption_is_on(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+        encryption: XmlEncryptionPolicy::encrypt_assertions(),
         ..XmlPolicy::default()
     };
     let sp = sp_with(signing_sp_validation())?;

@@ -15,9 +15,7 @@ use crate::flow::FlowResult;
 ///
 /// # Errors
 ///
-/// Returns [`crate::error::SamlError::Unsupported`] when software RSA
-/// key-transport decryption is not allowed, and another error when the
-/// decryption key does not load.
+/// Returns an error when the decryption key does not load.
 pub(super) fn decrypt_requested_subject(
     flow: FlowResult,
     setting: &EntitySetting,
@@ -55,8 +53,6 @@ fn decrypted(
         setting.enc_private_key_pass.as_deref(),
         &setting.additional_decryption_keys,
         AssertionDecryptionOptions {
-            allow_insecure_software_rsa_key_transport_decryption: setting
-                .allow_insecure_software_rsa_key_transport_decryption,
             allow_rsa15_key_transport_decryption: setting.allow_rsa15_key_transport_decryption,
         },
         setting.xml_limits,

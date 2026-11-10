@@ -139,13 +139,6 @@ pub struct FlowOptions<'a> {
     /// Typed SP: encrypted elements decrypted with `element_decrypt_key`
     /// whatever `decrypt_key` and `assertion_elements` select.
     pub(crate) received_encrypted_elements: ReceivedEncryptedElements,
-    /// Allow XML-Enc RSA key-transport decryption with the bundled RustCrypto
-    /// software RSA backend.
-    ///
-    /// Enforced only for `crypto-rustcrypto`, where that path reaches
-    /// `RUSTSEC-2023-0071`-affected `rsa` code when an attacker can observe
-    /// timing. AWS-LC and FIPS ignore this flag.
-    pub allow_insecure_software_rsa_key_transport_decryption: bool,
     /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport. When
     /// `false`, decryption returns `SamlError::Unsupported` before any key is
     /// decrypted.
@@ -181,7 +174,6 @@ impl<'a> Default for FlowOptions<'a> {
             assertion_elements: AssertionElementEncryption::default(),
             element_decrypt_key: None,
             received_encrypted_elements: ReceivedEncryptedElements::default(),
-            allow_insecure_software_rsa_key_transport_decryption: false,
             allow_rsa15_key_transport_decryption: false,
             clock_drifts: (0, 0),
             now: None,
@@ -696,9 +688,7 @@ fn verify_and_prepare(
     response_signature: ResponseSignatureRequirement,
 ) -> Result<PreparedMessage, SamlError> {
     use crate::crypto::{
-        enc::{
-            decrypt_assertions_with_limits, require_software_rsa_opt_in, AssertionDecryptionOptions,
-        },
+        enc::{decrypt_assertions_with_limits, AssertionDecryptionOptions},
         keys::load_decryption_keys,
         verify::has_xml_signature_with_limits,
     };
@@ -716,13 +706,8 @@ fn verify_and_prepare(
     let decrypt_key = crate::encrypted_elements::encrypted_assertion_key(xml, parser_type, opts)?;
     let decrypt_required = decrypt_key.is_some();
     let decrypt_options = AssertionDecryptionOptions {
-        allow_insecure_software_rsa_key_transport_decryption: opts
-            .allow_insecure_software_rsa_key_transport_decryption,
         allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
     };
-    if decrypt_required {
-        require_software_rsa_opt_in(decrypt_options)?;
-    }
     let load_keys = || {
         load_decryption_keys(
             decrypt_key.unwrap_or_default(),

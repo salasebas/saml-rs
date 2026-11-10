@@ -342,8 +342,7 @@ pub enum RequestedSubjectIdentifier {
     /// AES-GCM, or the ciphertext does not decrypt to one `<NameID>`, for
     /// example under an RSA-v1.5 key transport that is not selected. A
     /// decrypted one is [`Self::NameId`]. A decryption key that does not
-    /// load, or software RSA key-transport decryption that is not allowed,
-    /// is an error of `receive_sso` instead.
+    /// load is an error of `receive_sso` instead.
     EncryptedId,
 }
 

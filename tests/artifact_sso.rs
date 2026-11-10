@@ -989,8 +989,7 @@ fn encrypted_assertion_parties(
     idp: IdpConfigBuilder,
 ) -> Result<Parties, Box<dyn std::error::Error>> {
     let encryption = || XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+        encryption: XmlEncryptionPolicy::encrypt_assertions(),
         ..XmlPolicy::default()
     };
     let idp = Saml::idp(

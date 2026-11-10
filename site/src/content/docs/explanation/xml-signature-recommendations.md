@@ -43,7 +43,7 @@ The adapter does not pick your peer. `recommended()` does not invent a trust anc
 - Import metadata with `MetadataTrustPolicy::RequireSignature` and the certificate you pinned out of band. `UnsignedForCompatibility` is the hatch the examples use so they compile alone.
 - Pass `ReplayPolicy::RequireCache` with a cache you own on browser SSO.
 - Start from `recommended()`, then add `AssertionSignaturePolicy::RequireSigned` or `XmlSignatureProfile::StrictRsaSha2` only when you want that hardening.
-- Leave software RSA key-transport decryption off on RustCrypto unless you have a separate reason to opt in. That backend is affected by RUSTSEC-2023-0071. See [Security](../reference/security.md).
+- Leave RSA-v1.5 key-transport decryption off unless a peer cannot send RSA-OAEP. See [Security](../reference/security.md).
 
 If you call bergshamra yourself, outside this crate, use the configuration secexample prints: trusted keys only, strict verification, and a minimum HMAC length. Inspect `VerifyResult` references before you read an assertion. Leave the raw-inline-key hatch off for untrusted XML. That direct use is a different API from `Saml::sp`.
 

@@ -38,17 +38,6 @@ pub struct EntitySetting {
     pub(crate) assertion_element_encryption: AssertionElementEncryption,
     /// Encrypted elements of a received login response that are decrypted.
     pub(crate) received_encrypted_elements: ReceivedEncryptedElements,
-    /// Allow XML-Enc RSA key-transport decryption with the bundled RustCrypto
-    /// software RSA backend.
-    ///
-    /// This is disabled by default for `crypto-rustcrypto` because that provider
-    /// reaches the RustCrypto `rsa` crate, which is affected by
-    /// `RUSTSEC-2023-0071` when an attacker can observe timing. AWS-LC and FIPS
-    /// ignore this flag because they use `aws-lc-rs`. Prefer an external/HSM
-    /// decryptor once one is exposed through the public API; enable this only as
-    /// an explicit compatibility exception for RustCrypto deployments that
-    /// accept that risk.
-    pub allow_insecure_software_rsa_key_transport_decryption: bool,
     /// SP: decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport.
     ///
     /// Default `false`: an encrypted assertion, `<EncryptedID>`, or
@@ -194,10 +183,6 @@ impl fmt::Debug for EntitySetting {
                 &self.received_encrypted_elements,
             )
             .field(
-                "allow_insecure_software_rsa_key_transport_decryption",
-                &self.allow_insecure_software_rsa_key_transport_decryption,
-            )
-            .field(
                 "allow_rsa15_key_transport_decryption",
                 &self.allow_rsa15_key_transport_decryption,
             )
@@ -328,7 +313,6 @@ impl Default for EntitySetting {
             is_assertion_encrypted: false,
             assertion_element_encryption: AssertionElementEncryption::default(),
             received_encrypted_elements: ReceivedEncryptedElements::default(),
-            allow_insecure_software_rsa_key_transport_decryption: false,
             allow_rsa15_key_transport_decryption: false,
             relay_state: String::new(),
             authn_requests_signed: false,

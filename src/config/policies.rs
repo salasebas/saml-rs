@@ -431,7 +431,6 @@ pub struct XmlEncryptionPolicy {
     pub identifiers: IdentifierEncryptionPolicy,
     /// `<EncryptedAttribute>` behavior for assertion attribute statements.
     pub attributes: AttributeEncryptionPolicy,
-    allow_insecure_software_rsa_key_transport_decryption: bool,
     allow_rsa15_key_transport_decryption: bool,
 }
 
@@ -460,21 +459,6 @@ impl XmlEncryptionPolicy {
         }
     }
 
-    /// Explicitly allow RustCrypto software RSA key-transport decryption despite
-    /// `RUSTSEC-2023-0071` timing-risk concerns in that backend.
-    pub fn allow_insecure_software_rsa_key_transport_decryption() -> Self {
-        Self {
-            allow_insecure_software_rsa_key_transport_decryption: true,
-            ..Self::default()
-        }
-    }
-
-    /// Return a copy with the software RSA key-transport risk explicitly allowed.
-    pub fn with_insecure_software_rsa_key_transport_decryption_allowed(mut self) -> Self {
-        self.allow_insecure_software_rsa_key_transport_decryption = true;
-        self
-    }
-
     /// Return a copy whose service provider decrypts an `<EncryptedKey>` that
     /// uses RSA-v1.5 key transport.
     ///
@@ -483,16 +467,10 @@ impl XmlEncryptionPolicy {
     /// [`SamlError::Unsupported`](crate::SamlError::Unsupported) before any
     /// key is decrypted. RSA-v1.5 is open to Bleichenbacher's
     /// chosen-ciphertext attack. Select it only for an identity provider that
-    /// cannot send RSA-OAEP. It needs `crypto-legacy-algorithms`, and on
-    /// RustCrypto also
-    /// [`with_insecure_software_rsa_key_transport_decryption_allowed`](Self::with_insecure_software_rsa_key_transport_decryption_allowed).
+    /// cannot send RSA-OAEP. It needs `crypto-legacy-algorithms`.
     pub fn with_rsa15_key_transport_decryption_allowed(mut self) -> Self {
         self.allow_rsa15_key_transport_decryption = true;
         self
-    }
-
-    pub(super) fn allows_insecure_software_rsa_key_transport_decryption(self) -> bool {
-        self.allow_insecure_software_rsa_key_transport_decryption
     }
 
     pub(super) fn allows_rsa15_key_transport_decryption(self) -> bool {
@@ -546,18 +524,13 @@ pub(crate) enum ReceivedEncryptedElements {
 ///
 /// # Examples
 ///
-/// Software RSA key-transport decryption is disabled by default on the
-/// RustCrypto provider because that backend, reached through `bergshamra` /
-/// `kryptering`, is affected by `RUSTSEC-2023-0071`. Enable it only as an
-/// explicit RustCrypto exception for a deployment that accepts
-/// that risk. AWS-LC and FIPS ignore this opt-in.
+/// Encrypt assertions and keep the other defaults:
 ///
 /// ```
 /// use saml_rs::{AcsEndpoint, EntityId, SpConfig, XmlEncryptionPolicy, XmlPolicy};
 ///
 /// let xml = XmlPolicy {
-///     encryption: XmlEncryptionPolicy::default()
-///         .with_insecure_software_rsa_key_transport_decryption_allowed(),
+///     encryption: XmlEncryptionPolicy::encrypt_assertions(),
 ///     ..XmlPolicy::default()
 /// };
 /// let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)

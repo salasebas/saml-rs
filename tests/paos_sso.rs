@@ -556,8 +556,7 @@ fn response_subject_with_caller_supplied_confirmations_is_not_sent(
 #[test]
 fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> {
     let encryption = saml_rs::XmlPolicy {
-        encryption: saml_rs::XmlEncryptionPolicy::encrypt_assertions()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+        encryption: saml_rs::XmlEncryptionPolicy::encrypt_assertions(),
         ..saml_rs::XmlPolicy::default()
     };
     let encrypted_credentials = saml_rs::Credentials {

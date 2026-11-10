@@ -210,7 +210,6 @@ fn expect_decrypted_assertion_profile_rejection_with_context(
     options.parser_type = Some(ParserType::SamlResponse);
     options.check_signature = true;
     options.decrypt_key = Some(PRIVATE_KEY);
-    options.allow_insecure_software_rsa_key_transport_decryption = true;
 
     match flow(&options, &request) {
         Err(SamlError::ProtocolProfile(message)) if message.contains(context) => Ok(()),
@@ -982,7 +981,6 @@ fn decrypted_assertion_honors_xml_depth_limit_before_profile(
     }
 
     options.decrypt_key = Some(PRIVATE_KEY);
-    options.allow_insecure_software_rsa_key_transport_decryption = true;
     match flow(&options, &request) {
         Err(SamlError::Invalid(message)) if message.contains("max XML depth") => Ok(()),
         other => Err(format!("expected decrypted max-depth rejection, got {other:?}").into()),

@@ -22,7 +22,7 @@ use saml_rs::{
     EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
     NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RequestedSubject,
     RequestedSubjectIdentifier, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSso, XmlEncryptionPolicy, XmlPolicy,
+    SpValidationPolicy, SsoEndpoint, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -56,14 +56,7 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
-    idp_with(
-        XmlEncryptionPolicy::default()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
-    )
-}
-
-fn idp_with(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    idp_with_credentials(encryption, idp_credentials())
+    idp_with_credentials(idp_credentials())
 }
 
 fn idp_credentials() -> Credentials {
@@ -76,19 +69,12 @@ fn idp_credentials() -> Credentials {
     }
 }
 
-fn idp_with_credentials(
-    encryption: XmlEncryptionPolicy,
-    credentials: Credentials,
-) -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp_with_credentials(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
             .credentials(credentials)
             .validation(IdpValidationPolicy::recommended())
-            .xml(XmlPolicy {
-                encryption,
-                ..XmlPolicy::default()
-            })
             .build()?,
     )
 }
@@ -228,18 +214,14 @@ fn unsigned_request_encrypted_id_is_decrypted_only_with_gcm(
 #[test]
 fn encrypted_id_made_for_either_published_certificate_is_the_requested_name_id(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp_with_credentials(
-        XmlEncryptionPolicy::default()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
-        Credentials {
-            additional_decryption_keys: vec![DecryptionCredential {
-                certificate: CertificatePem::new(NEXT_CERT),
-                key: PrivateKeyPem::new(NEXT_PRIVKEY),
-                passphrase: None,
-            }],
-            ..idp_credentials()
-        },
-    )?;
+    let idp = idp_with_credentials(Credentials {
+        additional_decryption_keys: vec![DecryptionCredential {
+            certificate: CertificatePem::new(NEXT_CERT),
+            key: PrivateKeyPem::new(NEXT_PRIVKEY),
+            passphrase: None,
+        }],
+        ..idp_credentials()
+    })?;
     for encryption_cert in [CERT, NEXT_CERT] {
         let encrypted = encrypted_id_for(encryption_cert, AES128_GCM)?;
         assert_eq!(received_by(&idp, &encrypted, Signing::Signed)?, alice());
@@ -265,15 +247,4 @@ fn encrypted_id_that_does_not_decrypt_stays_unread() -> Result<(), Box<dyn std::
         RequestedSubjectIdentifier::EncryptedId
     );
     Ok(())
-}
-
-#[cfg(feature = "crypto-rustcrypto")]
-#[test]
-fn encrypted_id_without_the_software_rsa_opt_in_is_an_error(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp_with(XmlEncryptionPolicy::default())?;
-    match received_by(&idp, &encrypted_id(AES128_GCM)?, Signing::Signed) {
-        Err(error) if matches!(error.downcast_ref(), Some(SamlError::Unsupported(_))) => Ok(()),
-        other => Err(format!("expected Unsupported, got {other:?}").into()),
-    }
 }

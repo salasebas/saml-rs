@@ -898,7 +898,7 @@ mod encrypted_assertions {
     use saml_rs::constants::data_encryption_algorithm::{AES_128_GCM, AES_256};
     use saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
     use saml_rs::crypto::encrypt_assertion;
-    use saml_rs::{AssertionSignaturePolicy, XmlEncryptionPolicy, XmlPolicy};
+    use saml_rs::AssertionSignaturePolicy;
 
     const OTHER_RECIPIENT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
     const ENCRYPTED_ID: &str = concat!(
@@ -919,11 +919,6 @@ mod encrypted_assertions {
                     ..credentials()
                 })
                 .validation(validation)
-                .xml(XmlPolicy {
-                    encryption: XmlEncryptionPolicy::default()
-                        .with_insecure_software_rsa_key_transport_decryption_allowed(),
-                    ..XmlPolicy::default()
-                })
                 .build()?,
         )
     }

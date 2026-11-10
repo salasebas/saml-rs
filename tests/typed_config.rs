@@ -11,7 +11,7 @@ use saml_rs::flow::FlowOptions;
 use saml_rs::{
     xml::XmlLimits, AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, Credentials, IdpConfig, IdpMetadataConfig,
-    ResponseSignaturePolicy, SpConfig, SpMetadataConfig, SsoEndpoint, XmlEncryptionPolicy,
+    ResponseSignaturePolicy, SpConfig, SpMetadataConfig, SsoEndpoint,
 };
 use saml_rs::{
     CertificatePem, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting, HmacSecret,
@@ -316,30 +316,6 @@ fn typed_config_idp_descriptor_rejects_empty_expected_entity_id() {
     );
 
     assert!(matches!(result, Err(SamlError::Invalid(_))));
-}
-
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
-#[test]
-fn typed_config_insecure_rsa_key_transport_requires_explicit_policy(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let config = SpConfig::new(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-    );
-    let default_setting = EntitySetting::try_from(&config)?;
-    let mut explicit_config = config.clone();
-    explicit_config.xml.encryption =
-        XmlEncryptionPolicy::allow_insecure_software_rsa_key_transport_decryption();
-
-    let explicit_setting = EntitySetting::try_from(&explicit_config)?;
-
-    assert!(!default_setting.allow_insecure_software_rsa_key_transport_decryption);
-    assert!(explicit_setting.allow_insecure_software_rsa_key_transport_decryption);
-    Ok(())
 }
 
 #[test]

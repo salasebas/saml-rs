@@ -21,24 +21,12 @@ use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeKind, NodeSe
 use bergshamra::{decrypt, encrypt, EncContext, KeysManager};
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
-const SOFTWARE_RSA_DECRYPTION_DISABLED: &str = "XML-Enc RSA key-transport decryption with software private keys is disabled by default because the bundled RustCrypto rsa backend is affected by RUSTSEC-2023-0071. Enable allow_insecure_software_rsa_key_transport_decryption only as an explicit compatibility exception.";
 const RSA15_DECRYPTION_DISABLED: &str = "XML-Enc RSA-v1.5 key transport (http://www.w3.org/2001/04/xmlenc#rsa-1_5) is refused before decryption unless allow_rsa15_key_transport_decryption is selected";
 
 /// Options for XML-Enc assertion decryption.
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
 pub struct AssertionDecryptionOptions {
-    /// Allow the bundled RustCrypto software RSA backend for XML-Enc key transport.
-    ///
-    /// This flag is enforced only when `crypto-rustcrypto` is selected. That
-    /// backend reaches `RUSTSEC-2023-0071`-affected `rsa` code when an attacker
-    /// can observe timing. Keep this `false` unless the caller has a
-    /// deployment-specific reason to accept that risk.
-    ///
-    /// AWS-LC and FIPS builds use `aws-lc-rs` for RSA-OAEP and ignore this
-    /// flag. FIPS still rejects algorithms outside its approved set, including
-    /// the SHA-1 `RSA_OAEP_MGF1P` key transport.
-    pub allow_insecure_software_rsa_key_transport_decryption: bool,
     /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport.
     ///
     /// When this is `false`, an encrypted element whose XML names
@@ -46,31 +34,12 @@ pub struct AssertionDecryptionOptions {
     /// is refused with [`SamlError::Unsupported`] before any key is
     /// decrypted. RSA-v1.5 is open to Bleichenbacher's chosen-ciphertext
     /// attack. Set it only for a peer that cannot send RSA-OAEP. It also
-    /// needs `crypto-legacy-algorithms`, and on RustCrypto
-    /// `allow_insecure_software_rsa_key_transport_decryption`.
+    /// needs `crypto-legacy-algorithms`.
     pub allow_rsa15_key_transport_decryption: bool,
 }
 
 fn crypto_err(err: impl std::fmt::Display) -> SamlError {
     SamlError::Crypto(err.to_string())
-}
-
-pub(crate) fn software_rsa_decryption_disabled() -> SamlError {
-    SamlError::Unsupported(SOFTWARE_RSA_DECRYPTION_DISABLED.into())
-}
-
-/// Reject RustCrypto software RSA key-transport decryption unless the caller
-/// opted in. AWS-LC and FIPS ignore the flag because they do not use the
-/// `RUSTSEC-2023-0071`-affected `rsa` crate.
-pub(crate) fn require_software_rsa_opt_in(
-    options: AssertionDecryptionOptions,
-) -> Result<(), SamlError> {
-    if cfg!(feature = "crypto-rustcrypto")
-        && !options.allow_insecure_software_rsa_key_transport_decryption
-    {
-        return Err(software_rsa_decryption_disabled());
-    }
-    Ok(())
 }
 
 /// Decrypt the `<EncryptedData>` in `xml` with the first of `enc_keys` that
@@ -238,7 +207,6 @@ pub(crate) fn decrypt_assertions_with_limits(
     limits: XmlLimits,
 ) -> Result<(String, Vec<String>), SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    require_software_rsa_opt_in(options)?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
     let encrypted = root_children(&document, namespace::ASSERTION, "EncryptedAssertion")?;
@@ -602,7 +570,6 @@ pub(crate) fn decrypt_root_child(
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    require_software_rsa_opt_in(options)?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
     let [element] = root_children(&document, kind.namespace, kind.encrypted)?[..] else {
@@ -635,9 +602,7 @@ pub(crate) enum RequestAuthentication {
 ///
 /// # Errors
 ///
-/// Returns [`SamlError::Unsupported`] when software RSA key-transport
-/// decryption is not allowed, and another [`SamlError`] when the key does not
-/// load.
+/// Returns a [`SamlError`] when the key does not load.
 pub(crate) fn decrypt_authn_request_encrypted_id(
     xml: &str,
     key_pem: &str,
@@ -666,7 +631,6 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
             }
         }
     }
-    require_software_rsa_opt_in(options)?;
     let enc_keys = super::keys::load_decryption_keys(key_pem, key_pass, additional)?;
     let Ok(replacement) = decrypted_element(
         &document,
@@ -741,7 +705,6 @@ pub(crate) fn decrypt_assertion_elements(
     received: ReceivedEncryptedElements,
 ) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    require_software_rsa_opt_in(options)?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
     let selected = selected_kinds(selection);
@@ -784,7 +747,6 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    require_software_rsa_opt_in(options)?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
     let mut identifiers = Vec::new();
@@ -935,7 +897,7 @@ mod tests {
 
         let key = load_private_key(SP_PRIVKEY, None)?;
         let (response, assertion) =
-            decrypt_assertion(&encrypted, &key, software_rsa_test_options())?;
+            decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
         assert!(assertion.contains("Assertion"));
         assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
         assert!(response.contains("Assertion"));
@@ -959,7 +921,7 @@ mod tests {
 
         let key = load_private_key(SP_PRIVKEY, None)?;
         let (response, decrypted) =
-            decrypt_assertion(&encrypted, &key, software_rsa_test_options())?;
+            decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
         assert!(!response.contains("EncryptedAssertion"));
         let standalone = assertion.replacen(
             "<saml:Assertion ",
@@ -1046,7 +1008,7 @@ mod tests {
             decrypt_assertion_elements(
                 xml,
                 std::slice::from_ref(&key),
-                software_rsa_test_options(),
+                AssertionDecryptionOptions::default(),
                 XmlLimits::default(),
                 encrypted_ids(),
                 ReceivedEncryptedElements::DecryptSelected,
@@ -1102,7 +1064,7 @@ mod tests {
         let result = decrypt_assertion_elements(
             &plaintext_beside,
             &[load_private_key(SP_PRIVKEY, None)?],
-            software_rsa_test_options(),
+            AssertionDecryptionOptions::default(),
             XmlLimits::default(),
             encrypted_ids(),
             ReceivedEncryptedElements::DecryptSelected,
@@ -1160,7 +1122,7 @@ mod tests {
         let decrypted = decrypt_assertion_elements(
             &peer,
             &[load_private_key(SP_PRIVKEY, None)?],
-            software_rsa_test_options(),
+            AssertionDecryptionOptions::default(),
             XmlLimits::default(),
             encrypted_ids(),
             ReceivedEncryptedElements::DecryptSelected,
@@ -1189,7 +1151,7 @@ mod tests {
         let (response, assertion) = decrypt_assertion(
             &peer,
             &load_private_key(SP_PRIVKEY, None)?,
-            software_rsa_test_options(),
+            AssertionDecryptionOptions::default(),
         )?;
         assert!(assertion.starts_with("<saml:Assertion"));
         assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
@@ -1197,15 +1159,6 @@ mod tests {
         assert!(!response.contains("EncryptedAssertion"));
         assert!(!response.contains("EncryptedKey"));
         Ok(())
-    }
-
-    fn software_rsa_test_options() -> AssertionDecryptionOptions {
-        AssertionDecryptionOptions {
-            allow_insecure_software_rsa_key_transport_decryption: cfg!(
-                feature = "crypto-rustcrypto"
-            ),
-            ..AssertionDecryptionOptions::default()
-        }
     }
 
     #[test]
@@ -1227,23 +1180,10 @@ mod tests {
         let decrypted = decrypt_logout_request_encrypted_id(
             &encrypted,
             &[key],
-            software_rsa_test_options(),
+            AssertionDecryptionOptions::default(),
             XmlLimits::default(),
         )?;
         assert!(decrypted.contains(">alice</n:NameID>"), "{decrypted}");
-        Ok(())
-    }
-
-    #[cfg(feature = "crypto-rustcrypto")]
-    #[test]
-    fn decrypt_rejects_software_rsa_by_default() -> Result<(), Box<dyn std::error::Error>> {
-        let encrypted = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        assert!(matches!(
-            decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default()),
-            Err(SamlError::Unsupported(message))
-                if message.contains("RUSTSEC-2023-0071")
-        ));
         Ok(())
     }
 
@@ -1258,7 +1198,7 @@ mod tests {
         let peer = embedded.replacen(encrypted_data, &with_peer_key(encrypted_data)?, 1);
         let key = load_private_key(SP_PRIVKEY, None)?;
         for encrypted in [embedded.as_str(), peer.as_str()] {
-            let refused = decrypt_assertion(encrypted, &key, software_rsa_test_options());
+            let refused = decrypt_assertion(encrypted, &key, AssertionDecryptionOptions::default());
             assert!(
                 matches!(&refused, Err(SamlError::Unsupported(message)) if message.contains("rsa-1_5")),
                 "{refused:?}"
@@ -1266,7 +1206,7 @@ mod tests {
 
             let selected = AssertionDecryptionOptions {
                 allow_rsa15_key_transport_decryption: true,
-                ..software_rsa_test_options()
+                ..AssertionDecryptionOptions::default()
             };
             let (_, assertion) = decrypt_assertion(encrypted, &key, selected)?;
             assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));

@@ -84,10 +84,8 @@ fn provider_xml_encryption_round_trip_preserves_assertion() -> Result<(), Box<dy
 {
     let encrypted = encrypt_assertion(RESPONSE, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "saml")?;
     let key = load_private_key(PRIVATE_KEY, None)?;
-    let mut options = AssertionDecryptionOptions::default();
-    options.allow_insecure_software_rsa_key_transport_decryption =
-        cfg!(feature = "crypto-rustcrypto");
-    let (_, assertion) = decrypt_assertion(&encrypted, &key, options)?;
+    let (_, assertion) =
+        decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
 
     assert!(assertion.contains("Assertion"));
     Ok(())

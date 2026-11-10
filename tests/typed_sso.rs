@@ -128,8 +128,7 @@ fn encryption_credentials() -> Credentials {
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_xml_policy() -> XmlPolicy {
     XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions()
-            .with_insecure_software_rsa_key_transport_decryption_allowed(),
+        encryption: XmlEncryptionPolicy::encrypt_assertions(),
         ..XmlPolicy::default()
     }
 }

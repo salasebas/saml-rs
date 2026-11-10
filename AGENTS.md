@@ -131,7 +131,7 @@ Be especially conservative when changing:
 - XML parsing limits, DOCTYPE/XXE handling, and extraction
 - `InResponseTo`, issuer, audience, destination/recipient, and bearer checks
 - HTTP-Redirect DEFLATE handling
-- XML-Enc decryption and software RSA key-transport options
+- XML-Enc decryption and the RSA-v1.5 key-transport option
 - metadata key selection and signed metadata verification
 
 Add regression tests for security fixes.

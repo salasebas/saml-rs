@@ -195,9 +195,8 @@ fn crypto_encrypt_assertion_prefix_still_round_trips() -> TestResult {
     assert!(encrypted.contains("<saml2:EncryptedAssertion"));
 
     let key = load_private_key(PRIVKEY, None)?;
-    let mut options = AssertionDecryptionOptions::default();
-    options.allow_insecure_software_rsa_key_transport_decryption = true;
-    let (response, assertion) = decrypt_assertion(&encrypted, &key, options)?;
+    let (response, assertion) =
+        decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
 
     assert!(assertion.contains("Assertion"));
     assert!(response.contains("Assertion"));
