@@ -106,6 +106,14 @@ pub fn logout_response_status_fields() -> Vec<ExtractorField> {
     ]
 }
 
+/// Fields for a login `<Response>` whose status is not `Success`.
+pub(crate) fn login_error_response_fields() -> Vec<ExtractorField> {
+    vec![
+        ExtractorField::new("response", &["Response"]).attrs(&["Destination", "InResponseTo"]),
+        ExtractorField::new("issuer", &["Response", "Issuer"]),
+    ]
+}
+
 /// Fields for a login `<Response>` (`loginResponseFields`).
 ///
 /// `assertion` is the (verified) assertion XML used as the `shortcut` document

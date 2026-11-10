@@ -228,7 +228,10 @@ impl Saml<Sp> {
     /// provider; when XML, signature, certificate trust,
     /// audience, condition, or time validation fails; when the assertions do
     /// not share one issuer and one principal; or when replay validation
-    /// returns `ReplayDetected` or `TimeWindowInvalid`.
+    /// returns `ReplayDetected` or `TimeWindowInvalid`. A status other than
+    /// `Success` returns [`SamlError::StatusNotSuccess`] once a present
+    /// signature verifies and the issuer, `InResponseTo`, and destination
+    /// checks pass. An error response does not need a signature.
     ///
     /// # Examples
     ///
@@ -307,7 +310,10 @@ impl Saml<Sp> {
     /// validation returns `ReplayDetected` or `TimeWindowInvalid`. Returns
     /// [`SamlError::InResponseToMismatch`] when the response or a bearer
     /// `SubjectConfirmationData` carries an `InResponseTo` attribute, including
-    /// an empty one.
+    /// an empty one. A status other than `Success` returns
+    /// [`SamlError::StatusNotSuccess`] once a present signature verifies and
+    /// the issuer and destination checks pass. An error response does not need
+    /// a signature.
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,

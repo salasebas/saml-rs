@@ -1772,15 +1772,19 @@ fn two_tier_status(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::binding::base64_encode;
     let idp = idp(false);
     let sp = sp(true, false);
+    let failed = FAILED.replace(
+        "http://sp.example.com/demo1/index.php?acs",
+        "https://sp/acs",
+    );
     let request = match binding {
         Binding::Redirect => {
             use saml_rs::binding::deflate_raw_encode;
-            let enc = base64_encode(&deflate_raw_encode(FAILED.as_bytes())?);
+            let enc = base64_encode(&deflate_raw_encode(failed.as_bytes())?);
             HttpRequest::redirect(vec![("SAMLResponse".into(), enc)])
         }
         _ => HttpRequest::post(vec![(
             "SAMLResponse".into(),
-            base64_encode(FAILED.as_bytes()),
+            base64_encode(failed.as_bytes()),
         )]),
     };
     match sp.parse_login_response(&idp, binding, &request) {

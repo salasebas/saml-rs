@@ -80,6 +80,7 @@ mapping is not implemented.
 | Raw identity provider | `src/idp.rs` |
 | Login response construction | `src/idp/login_response.rs` |
 | Shared raw flow | `src/flow.rs` |
+| Checks on a login `Response` with an error status | `src/flow/error_response.rs` |
 
 ## Validation and cryptography
 

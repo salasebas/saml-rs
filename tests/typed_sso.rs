@@ -15,12 +15,12 @@ use saml_rs::binding::{
     append_signature, base64_decode, base64_encode, build_redirect_octet, deflate_raw_decode,
 };
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
-use saml_rs::constants::ParserType;
+use saml_rs::constants::{status_code, ParserType};
 use saml_rs::crypto::{
     construct_message_signature, construct_saml_signature, keys::load_private_key,
 };
 use saml_rs::entity::{SignatureAction, SignatureConfig};
-use saml_rs::error::TimeWindowField;
+use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::raw::Binding;
 use saml_rs::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::xml::dom::parse;
@@ -32,8 +32,8 @@ use saml_rs::{
     PendingAuthnRequest, PendingSnapshot, PrivateKeyPem, Received, RelayStateParam, ReplayCache,
     ReplayKey, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError,
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoResponseBinding, StartSso, Subject, TemplatePolicy, VerifiedXmlSignatureCoverage,
-    XmlSignatureProfile,
+    SsoResponseBinding, StartSso, Status, Subject, SubordinateStatusCode, TemplatePolicy,
+    VerifiedXmlSignatureCoverage, XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{XmlEncryptionPolicy, XmlPolicy};
@@ -1873,6 +1873,199 @@ fn typed_facade_rejects_solicited_response_as_unsolicited() -> Result<(), Box<dy
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
+    }
+}
+
+fn auth_failed_status() -> Result<Status, SamlError> {
+    Ok(Status::responder()
+        .with_subordinate(SubordinateStatusCode::try_new(status_code::AUTH_FAILED)?))
+}
+
+fn error_response_exchange() -> Result<SsoExchange, SamlError> {
+    start_receive_respond_with(
+        StartSso::post(),
+        RespondSso::post().status(auth_failed_status()?),
+    )
+}
+
+fn finish_sso_with_response_xml(
+    exchange: &SsoExchange,
+    xml: &str,
+) -> Result<saml_rs::SsoSession, SamlError> {
+    exchange.sp.finish_sso(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<SsoResponse>::post(vec![FormField::new(
+            "SAMLResponse",
+            base64_encode(xml.as_bytes()),
+        )]),
+        validation(),
+    )
+}
+
+#[test]
+fn typed_finish_sso_reports_an_unsigned_correlated_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?;
+
+    match finish_sso_with_response_xml(&exchange, &xml) {
+        Err(SamlError::StatusNotSuccess { top, second }) => {
+            assert_eq!(top, status_code::RESPONDER);
+            assert_eq!(second.as_deref(), Some(status_code::AUTH_FAILED));
+            Ok(())
+        }
+        other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_finish_sso_checks_in_response_to_before_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let mut snapshot: PendingSnapshot<AuthnRequest> = exchange.pending.snapshot();
+    snapshot.id = "_different_request".to_string();
+    let wrong_pending = PendingAuthnRequest::from_snapshot(snapshot)?;
+
+    match exchange.sp.finish_sso(
+        &exchange.idp_descriptor,
+        &wrong_pending,
+        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        validation(),
+    ) {
+        Err(SamlError::InResponseToMismatch { expected, actual }) => {
+            assert_eq!(expected.as_deref(), Some("_different_request"));
+            assert_eq!(
+                actual.as_deref(),
+                Some(exchange.pending.request_id().as_str())
+            );
+            Ok(())
+        }
+        other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_finish_sso_checks_issuer_before_error_status() -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?
+        .replacen(
+            &format!(">{IDP_ENTITY_ID}<"),
+            ">https://other-idp.example.com/metadata<",
+            1,
+        );
+
+    match finish_sso_with_response_xml(&exchange, &xml) {
+        Err(SamlError::IssuerMismatch { expected, actual }) => {
+            assert_eq!(expected, IDP_ENTITY_ID);
+            assert_eq!(
+                actual.as_deref(),
+                Some("https://other-idp.example.com/metadata")
+            );
+            Ok(())
+        }
+        other => Err(format!("expected IssuerMismatch, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_finish_sso_checks_destination_before_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?
+        .replacen(
+            &format!("Destination=\"{SP_ACS_POST}\""),
+            "Destination=\"https://other-sp.example.com/acs\"",
+            1,
+        );
+
+    match finish_sso_with_response_xml(&exchange, &xml) {
+        Err(SamlError::DestinationMismatch { expected, actual }) => {
+            assert_eq!(expected, SP_ACS_POST);
+            assert_eq!(actual.as_deref(), Some("https://other-sp.example.com/acs"));
+            Ok(())
+        }
+        other => Err(format!("expected DestinationMismatch, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_finish_sso_verifies_a_present_signature_before_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let xml = corrupt_signature_value(&response_xml_from_fields(&exchange.response_fields)?)?;
+
+    match finish_sso_with_response_xml(&exchange, &xml) {
+        Err(SamlError::SignatureVerification { .. }) => Ok(()),
+        other => Err(format!("expected SignatureVerification, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_finish_sso_rejects_an_error_status_with_two_issuers(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let other_issuer = "https://other-idp.example.com/metadata";
+    let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?
+        .replacen(
+            &format!(">{IDP_ENTITY_ID}</saml:Issuer>"),
+            &format!(">{other_issuer}</saml:Issuer><saml:Issuer>{other_issuer}</saml:Issuer>"),
+            1,
+        );
+
+    match finish_sso_with_response_xml(&exchange, &xml) {
+        Err(SamlError::IssuerMismatch { expected, actual }) => {
+            assert_eq!(expected, IDP_ENTITY_ID);
+            assert_eq!(actual, None);
+            Ok(())
+        }
+        other => Err(format!("expected IssuerMismatch, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = start_receive_respond_with(
+        StartSso::post().response_binding(SsoResponseBinding::SimpleSign),
+        RespondSso::simple_sign().status(auth_failed_status()?),
+    )?;
+    let finish = |fields: Vec<FormField>| {
+        exchange.sp.finish_sso(
+            &exchange.idp_descriptor,
+            &exchange.pending,
+            BrowserInput::<SsoResponse>::simple_sign(fields),
+            validation(),
+        )
+    };
+
+    match finish(exchange.response_fields.clone()) {
+        Err(SamlError::StatusNotSuccess { top, second }) => {
+            assert_eq!(top, status_code::RESPONDER);
+            assert_eq!(second.as_deref(), Some(status_code::AUTH_FAILED));
+        }
+        other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+
+    let mut tampered = exchange.response_fields.clone();
+    let signature = tampered
+        .iter_mut()
+        .find(|field| field.name() == "Signature")
+        .ok_or("missing Signature")?;
+    let mut signature_bytes = base64_decode(signature.value())?;
+    let first = signature_bytes.first_mut().ok_or("empty Signature")?;
+    *first ^= 0x01;
+    *signature = FormField::new("Signature", base64_encode(&signature_bytes));
+
+    match finish(tampered) {
+        Err(SamlError::SignatureVerification { reason }) => {
+            assert_eq!(
+                reason,
+                SignatureVerificationReason::DetachedMessageSignature
+            );
+            Ok(())
+        }
+        other => Err(format!("expected SignatureVerification, got {other:?}").into()),
     }
 }
 
