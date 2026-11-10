@@ -165,6 +165,9 @@ impl VerifiedXmlSignature {
 }
 
 /// Parsed SSO login session.
+///
+/// The assertion fields come from the first assertion of the response that
+/// carries a bearer `SubjectConfirmation`, in document order.
 #[derive(Debug, Clone)]
 pub struct SsoSession {
     response_id: MessageId,
@@ -421,6 +424,18 @@ impl SsoSession {
     }
 
     /// Raw validated flow result.
+    ///
+    /// `saml_content` is the whole response after decryption, so it can hold
+    /// assertions other than this session's. Each one shares the session
+    /// issuer and principal. One without a bearer `SubjectConfirmation` was
+    /// not checked for audience, `Conditions` time window,
+    /// `SessionNotOnOrAfter`, or subject confirmation; evaluate it before
+    /// relying on it. A later bearer assertion passed those checks, but its
+    /// statements, attributes, and `SessionNotOnOrAfter` are not in this
+    /// session.
+    ///
+    /// When this session is built directly with [`TryFrom<FlowResult>`], it
+    /// carries only the checks of the flow that produced the `FlowResult`.
     pub fn raw_flow(&self) -> &FlowResult {
         &self.raw_flow
     }
