@@ -6,8 +6,10 @@ not a field of `SpValidationPolicy` or `IdpValidationPolicy`, so Recommended
 and Compatibility do not change it. `AlgorithmPolicy::default()` is what
 `Default`, `new`, `try_new`, and the config builders use: RSA-SHA256 with a
 SHA-256 digest, the enveloped-signature and exclusive canonicalization
-transforms, AES-256-CBC, and RSA-OAEP. This page does not claim the IdP
-operational mode or the SP operational mode.
+transforms, AES-256-CBC, and RSA-OAEP. `AlgorithmPolicy` does not limit what
+is verified. That set is in
+[Inbound XML signature verification](#inbound-xml-signature-verification).
+This page does not claim the IdP operational mode or the SP operational mode.
 
 Normative text is Conformance Requirements §4, as clarified by Approved
 Errata 05 E50. §4.1 lists the XML Signature algorithms and §4.2 the XML
@@ -45,6 +47,73 @@ encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`,
 | Enveloped-signature transform | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::EnvelopedSignature` is the first default transform |
 | A message carried in SOAP keeps exclusive canonicalization | Identity provider and service provider | Generate Response and logout messages | Library behaviour. `signed_reference_transforms` applies to the `AuthnRequest`, to `respond_sso` and `initiate_sso`, and to logout messages on HTTP-POST. `respond_sso_artifact`, `initiate_sso_artifact`, `respond_paos_sso`, and logout messages over SOAP keep the enveloped-signature and exclusive canonicalization transforms. Each message is signed before it is placed in a SOAP envelope, and Canonical XML would take the envelope's namespace declarations into the digest of a verifier that checks the signature in place |
 | RSA-SHA256, RSA-SHA384, RSA-SHA512, and a backend URI | Identity provider and service provider | Sign and verify | Optional. Errata 05 E50. `SignatureAlgorithm::RsaSha256` is the default. `SignatureAlgorithm::Custom` passes a URI to the provider |
+
+## Inbound XML signature verification
+
+A verifier accepts every `SignatureMethod` and `DigestMethod` that the
+selected provider implements and that the peer's key can verify, unless
+`XmlSignatureProfile::StrictRsaSha2` narrows it. `XmlSignatureProfile` is the
+`xml_signatures` field of `SpValidationPolicy`. Recommended and Compatibility
+both use `AllowProviderSupportedForCompatibility`. Accepting an algorithm
+outside the Conformance §4.1 set is the Errata 05 E50 `MAY`. Neither profile
+is an OASIS receiver rule.
+
+The key is a signing certificate in the peer's metadata, or the secret set
+with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`.
+An algorithm verifies only with a key of its family: RSA for RSA and RSA-PSS,
+EC for ECDSA, Ed25519, DSA, the HMAC secret for HMAC, and an ML-DSA or SLH-DSA
+key of the same parameter set.
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| An embedded signature on a received `Response`, `Assertion`, or logout message is verified under `xml_signatures` | Accepting service provider | Inbound | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts the provider-supported set below. `StrictRsaSha2` is library hardening. A signature over the accepted content must use RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and only the enveloped-signature and exclusive canonicalization transforms. Otherwise it is rejected with `SamlError::AlgorithmUnsupported` |
+| An embedded signature on a received `AuthnRequest` or logout message | Identity provider | Inbound | Optional. Errata 05 E50. `IdpValidationPolicy` has no `xml_signatures` field. The provider-supported set applies |
+| A detached `SigAlg` signature | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `XmlSignatureProfile` does not apply, and `StrictRsaSha2` does not narrow it. Any `SigAlg` in the provider-supported set verifies |
+| A signed metadata document | Metadata consumer | Inbound | Optional. Errata 05 E50. `MetadataTrustPolicy` limits the transforms, not the signature or digest algorithm. The provider-supported set applies |
+
+On the default build, the provider-supported set includes SHA-1, MD5, and
+RIPEMD-160 signatures and digests. `StrictRsaSha2` excludes them from the
+embedded signatures it covers. Only the build features exclude them from a
+detached `SigAlg`, a signature an identity provider verifies, or a metadata
+signature.
+`SsoSession::verified_xml_signatures` reports each accepted `SignatureMethod`
+URI, and `SsoSession::sig_alg` the accepted detached `SigAlg`. Neither applies
+an allowlist.
+
+### Provider-supported set
+
+The default build is `crypto-bergshamra`: RustCrypto with
+`crypto-legacy-algorithms` and `crypto-post-quantum`. A row marked Legacy
+needs `crypto-legacy-algorithms`, and a row marked Post-quantum needs
+`crypto-post-quantum`. A signature with an algorithm the build does not
+verify does not verify. An RSA key shorter than 2048 bits verifies only on
+RustCrypto with `crypto-legacy-algorithms`, including under `StrictRsaSha2`.
+RustCrypto without it, AWS-LC, and FIPS reject it.
+
+| `SignatureMethod` | Default build | `crypto-aws-lc` | `crypto-fips` |
+| --- | --- | --- | --- |
+| RSA-SHA256, RSA-SHA384, RSA-SHA512 | Yes | Yes | Yes |
+| RSA-SHA1 | Yes | Yes | No |
+| RSA-SHA224 | Yes | No | No |
+| RSA-PSS with SHA-256, SHA-384, or SHA-512 | Yes | Yes | Yes |
+| RSA-PSS with SHA-1, SHA-224, or SHA-3 | Yes | No | No |
+| ECDSA with SHA-256, SHA-384, or SHA-512 | Yes | Yes | Yes |
+| ECDSA-SHA224 | Yes | P-521 key only | P-521 key only |
+| ECDSA with SHA-1 or SHA-3 | Yes | No | No |
+| EdDSA Ed25519 | Yes | Yes | No |
+| HMAC-SHA224, HMAC-SHA256, HMAC-SHA384, HMAC-SHA512 | Yes | Yes | Yes |
+| HMAC-SHA1 | Yes | Yes | No |
+| DSA-SHA1, DSA-SHA256 | Legacy | No | No |
+| RSA-MD5, RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-MD5, HMAC-RIPEMD160 | Legacy | No | No |
+| ML-DSA-44, ML-DSA-65, ML-DSA-87, and the SLH-DSA-SHA2 parameter sets | Post-quantum | No | No |
+
+| `DigestMethod` | Default build | `crypto-aws-lc` | `crypto-fips` |
+| --- | --- | --- | --- |
+| SHA-224, SHA-256, SHA-384, SHA-512 | Yes | Yes | Yes |
+| SHA-1 | Yes | Yes | No |
+| SHA3-256, SHA3-384, SHA3-512 | Yes | Yes | No |
+| SHA3-224 | Yes | No | No |
+| MD5, RIPEMD-160 | Legacy | No | No |
 
 ## XML Encryption
 
