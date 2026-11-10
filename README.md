@@ -2,6 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/saml-rs.svg)](https://crates.io/crates/saml-rs)
 [![docs.rs](https://img.shields.io/docsrs/saml-rs)](https://docs.rs/saml-rs)
+[![codecov](https://codecov.io/gh/salasebas/saml-rs/branch/main/graph/badge.svg)](https://codecov.io/gh/salasebas/saml-rs)
 [![MIT licensed](https://img.shields.io/crates/l/saml-rs)](https://github.com/salasebas/saml-rs/blob/main/LICENSE)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success)](#security)
 

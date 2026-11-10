@@ -202,8 +202,22 @@ jobs:
       - run: cargo test -p ${{ matrix.package }} --doc --no-default-features
 
   coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
+    name: Coverage (${{ matrix.flag }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flag: rustcrypto
+            features: crypto-bergshamra
+          - flag: aws-lc
+            features: crypto-aws-lc
+          - flag: fips
+            features: crypto-fips
+          - flag: no-default-features
+            features: ""
+    env:
+      COVERAGE_FEATURES: ${{ matrix.features }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -212,15 +226,26 @@ jobs:
         with:
           toolchain: stable
           components: llvm-tools-preview
+      - name: Install AWS-LC native build dependencies
+        if: matrix.flag == 'aws-lc' || matrix.flag == 'fips'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential cmake clang libclang-dev perl pkg-config
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: matrix.flag == 'fips'
+        with:
+          go-version: stable
       - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # zizmor: ignore[ref-version-mismatch]
       - uses: taiki-e/install-action@682ce6c3c696a4cd5168a05f98e51aa02b877941 # v2.89.1
         with:
           tool: cargo-llvm-cov,nextest
-      - run: cargo llvm-cov nextest --workspace --lcov --output-path lcov.info
+      - run: cargo llvm-cov nextest --workspace --locked --no-default-features --features "$COVERAGE_FEATURES" --lcov --output-path lcov.info
       - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
+          disable_search: true
+          flags: ${{ matrix.flag }}
           fail_ci_if_error: true
 
   ci:
