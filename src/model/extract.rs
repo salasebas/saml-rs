@@ -63,11 +63,18 @@ pub(super) fn name_id_policy_from_extract(
     let format = extract
         .get_str("nameIDPolicy.format")
         .map(name_id_format_from_uri);
+    let sp_name_qualifier = extract
+        .get_str("nameIDPolicy.spNameQualifier")
+        .map(str::to_string);
     let allow_create = extract
         .get_str("nameIDPolicy.allowCreate")
         .map(parse_bool)
         .transpose()?;
-    Ok(NameIdPolicy::from_parsed(format, allow_create))
+    Ok(NameIdPolicy::from_parsed(
+        format,
+        sp_name_qualifier,
+        allow_create,
+    ))
 }
 
 fn parse_bool(value: &str) -> Result<bool, SamlError> {

@@ -16,8 +16,11 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
             "IsPassive",
         ]),
         ExtractorField::new("issuer", &["AuthnRequest", "Issuer"]),
-        ExtractorField::new("nameIDPolicy", &["AuthnRequest", "NameIDPolicy"])
-            .attrs(&["Format", "AllowCreate"]),
+        ExtractorField::new("nameIDPolicy", &["AuthnRequest", "NameIDPolicy"]).attrs(&[
+            "Format",
+            "SPNameQualifier",
+            "AllowCreate",
+        ]),
         ExtractorField::new("requestedSubject", &["AuthnRequest", "Subject"]).with_context(),
         ExtractorField::new("requestedNameId", &["AuthnRequest", "Subject", "NameID"]),
         ExtractorField::new(
