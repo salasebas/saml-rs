@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use crate::config::validate_entity_id_syntax;
 use crate::constants::{elements_order, name_id_format, namespace, Binding};
 use crate::error::SamlError;
 use crate::metadata::lifetime::{LifetimeAttributes, MetadataLifetime};
@@ -339,11 +340,13 @@ fn insert_manage_name_id_service(order: &mut Vec<String>) {
 ///
 /// # Errors
 ///
-/// Returns [`SamlError::Invalid`] when a `<NameIDFormat>` it writes is not an
-/// absolute URI reference, when two `AssertionConsumerService` endpoints set
-/// the same [`Endpoint::index`], or when there are more of them than
-/// `unsignedShort` indexes.
+/// Returns [`SamlError::Invalid`] when the `entityID` is not an absolute URI
+/// reference of at most 1024 characters, when a `<NameIDFormat>` it writes is
+/// not an absolute URI reference, when two `AssertionConsumerService`
+/// endpoints set the same [`Endpoint::index`], or when there are more of them
+/// than `unsignedShort` indexes.
 pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError> {
+    validate_entity_id_syntax(&cfg.entity_id)?;
     let is_custom_order = cfg.elements_order.is_some();
     let mut order = elements_order_or_default(&cfg.elements_order, elements_order::DEFAULT);
     if !order.iter().any(|ordered| ordered == "ManageNameIDService") {
@@ -378,9 +381,11 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
 ///
 /// # Errors
 ///
-/// Returns [`SamlError::Invalid`] when a `<NameIDFormat>` it writes is not an
-/// absolute URI reference.
+/// Returns [`SamlError::Invalid`] when the `entityID` is not an absolute URI
+/// reference of at most 1024 characters, or when a `<NameIDFormat>` it writes
+/// is not an absolute URI reference.
 pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
+    validate_entity_id_syntax(&cfg.entity_id)?;
     let is_custom_order = cfg.elements_order.is_some();
     let mut order = elements_order_or_default(&cfg.elements_order, elements_order::idp::DEFAULT);
     if is_custom_order
@@ -692,7 +697,7 @@ mod tests {
     #[test]
     fn sp_elements_order_respected() -> TestResult {
         let cfg = SpMetadataConfig {
-            entity_id: "x".into(),
+            entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()

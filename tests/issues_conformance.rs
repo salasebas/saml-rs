@@ -19,7 +19,7 @@ const SP_META_98: &str = include_str!("fixtures/misc/sp_metadata_98.xml");
 
 fn sp_config() -> SpMetadataConfig {
     SpMetadataConfig {
-        entity_id: "sp.example.com".into(),
+        entity_id: "https://sp.example.com/metadata".into(),
         name_id_format: vec!["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into()],
         assertion_consumer_service: vec![
             Endpoint::new(Binding::Post, "sp.example.com/acs"),
@@ -35,7 +35,7 @@ fn sp_config() -> SpMetadataConfig {
 
 fn idp_config() -> IdpMetadataConfig {
     IdpMetadataConfig {
-        entity_id: "idp.example.com".into(),
+        entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![
             Endpoint::new(Binding::Post, "idp.example.com/sso"),
             Endpoint::new(Binding::Redirect, "idp.example.com/sso"),
@@ -206,7 +206,7 @@ fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::
     let sp = ServiceProvider::from_metadata(SP_META_98, EntitySetting::default())?;
     let idp = IdentityProvider::from_config(
         &IdpMetadataConfig {
-            entity_id: "idp.example.com".into(),
+            entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
             ..Default::default()
         },

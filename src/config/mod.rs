@@ -15,6 +15,7 @@ pub use algorithms::{
 pub(crate) use builders::validated_idp_issuance_lifetime;
 pub use builders::{IdpConfig, IdpConfigBuilder, SpConfig, SpConfigBuilder};
 pub use credentials::{CertificatePem, Credentials, HmacSecret, Passphrase, PrivateKeyPem};
+pub(crate) use descriptors::validate_entity_id_syntax;
 pub use descriptors::{
     ArtifactResolutionService, EntityId, IdpDescriptor, IdpMetadataConfig, ManageNameIdService,
     SpDescriptor, SpMetadataConfig,

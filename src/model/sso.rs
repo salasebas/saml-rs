@@ -65,7 +65,7 @@ impl TryFrom<FlowResult> for SsoResponse {
         let response_id = MessageId::try_new(required_str(&raw_flow.extract, "response.id")?)?;
         let issue_instant =
             issue_instant_from_extract(&raw_flow.extract, "response.issueInstant", "Response")?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
+        let issuer = EntityId::from_peer(required_str(&raw_flow.extract, "issuer")?)?;
         let in_response_to = optional_request_id(&raw_flow.extract, "response.inResponseTo")?;
         Ok(Self {
             response_id,
@@ -537,7 +537,7 @@ impl SsoSession {
         let assertion_id = AssertionId::try_new(required_str(&raw_flow.extract, "assertion.id")?)?;
         let assertion_issue_instant =
             issue_instant_from_extract(&raw_flow.extract, "assertion.issueInstant", "Assertion")?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
+        let issuer = EntityId::from_peer(required_str(&raw_flow.extract, "issuer")?)?;
         let in_response_to = optional_request_id(&raw_flow.extract, "response.inResponseTo")?;
         let name_id_format = raw_flow
             .extract

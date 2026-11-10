@@ -224,7 +224,7 @@ pub(super) fn entity_ids_from_value(value: Option<&Value>) -> Result<Vec<EntityI
     };
     value_strings(value)
         .into_iter()
-        .map(EntityId::try_new)
+        .map(EntityId::from_peer)
         .collect()
 }
 

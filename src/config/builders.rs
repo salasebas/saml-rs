@@ -10,7 +10,7 @@ use super::algorithms::{
 };
 use super::credentials::Credentials;
 use super::descriptors::{
-    validate_entity_id, ArtifactResolutionService, EntityId, IdpMetadataConfig,
+    validate_entity_id_syntax, ArtifactResolutionService, EntityId, IdpMetadataConfig,
     ManageNameIdService, SpMetadataConfig,
 };
 use super::policies::{
@@ -89,9 +89,10 @@ impl SpConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is empty, required SP metadata
-    /// endpoints are missing, or this build has no crypto provider and the
-    /// Recommended preset needs one.
+    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
+    /// of at most 1024 characters, required SP metadata endpoints are missing,
+    /// or this build has no crypto provider and the Recommended preset needs
+    /// one.
     pub fn try_new(entity_id: EntityId, metadata: SpMetadataConfig) -> Result<Self, SamlError> {
         let config = Self::new(entity_id, metadata);
         config.validate()?;
@@ -110,11 +111,12 @@ impl SpConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is empty, required SP
-    /// metadata endpoints are missing, or the selected policy requires crypto
-    /// in a build without a crypto provider.
+    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
+    /// of at most 1024 characters, required SP metadata endpoints are missing,
+    /// or the selected policy requires crypto in a build without a crypto
+    /// provider.
     pub fn validate(&self) -> Result<(), SamlError> {
-        validate_entity_id(&self.entity_id)?;
+        validate_entity_id_syntax(self.entity_id.as_str())?;
         self.metadata.validate()?;
         validate_sp_policy(self)
     }
@@ -306,10 +308,11 @@ impl IdpConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is empty, required IdP
-    /// metadata endpoints are missing, the issuance lifetime is zero or
-    /// outside the range supported by the internal time representation, or
-    /// this build has no crypto provider and the Recommended preset needs one.
+    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
+    /// of at most 1024 characters, required IdP metadata endpoints are missing,
+    /// the issuance lifetime is zero or outside the range supported by the
+    /// internal time representation, or this build has no crypto provider and
+    /// the Recommended preset needs one.
     pub fn try_new(entity_id: EntityId, metadata: IdpMetadataConfig) -> Result<Self, SamlError> {
         let config = Self::new(entity_id, metadata);
         config.validate()?;
@@ -326,13 +329,13 @@ impl IdpConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is empty, required IdP
-    /// metadata endpoints are missing, the issuance lifetime is zero or
-    /// outside the range supported by the internal time representation, or
-    /// the selected policy requires crypto in a build without a crypto
-    /// provider.
+    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
+    /// of at most 1024 characters, required IdP metadata endpoints are missing,
+    /// the issuance lifetime is zero or outside the range supported by the
+    /// internal time representation, or the selected policy requires crypto in
+    /// a build without a crypto provider.
     pub fn validate(&self) -> Result<(), SamlError> {
-        validate_entity_id(&self.entity_id)?;
+        validate_entity_id_syntax(self.entity_id.as_str())?;
         self.metadata.validate()?;
         validate_idp_policy(self)
     }

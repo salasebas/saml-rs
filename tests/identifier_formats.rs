@@ -1,8 +1,8 @@
-//! Attribute name formats, name identifier formats, and persistent and
-//! transient name identifiers, through the typed identity-provider and
+//! Attribute name formats, name identifier formats, entity identifiers, and
+//! persistent and transient name identifiers, through the typed identity-provider and
 //! service-provider flows.
 //!
-//! SAML Core §1.3.2, §8.2, §8.3.7 and §8.3.8, with Conformance Requirements
+//! SAML Core §1.3.2, §8.2, §8.3.6, §8.3.7 and §8.3.8, with Conformance Requirements
 //! §3.3 and Approved Errata 05 E78 and E86. The producer rules bind the party
 //! that generates an identifier. A receiver parses a peer's identifier and does
 //! not reject it for missing one of them.
@@ -1074,6 +1074,35 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
             ..IdpMetadataConfig::default()
         }))?;
     }
+    Ok(())
+}
+
+#[test]
+fn metadata_is_not_generated_for_an_entity_id_that_is_not_a_uri_of_at_most_1024_characters(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for entity_id in [
+        String::new(),
+        "not a uri".into(),
+        format!("https://sp.example.com/{}", "a".repeat(1002)),
+    ] {
+        let sp = generate_sp_metadata(&SpMetadataConfig {
+            entity_id: entity_id.clone(),
+            ..SpMetadataConfig::default()
+        });
+        let idp = generate_idp_metadata(&IdpMetadataConfig {
+            entity_id: entity_id.clone(),
+            ..IdpMetadataConfig::default()
+        });
+
+        assert!(matches!(sp, Err(SamlError::Invalid(_))), "{entity_id}");
+        assert!(matches!(idp, Err(SamlError::Invalid(_))), "{entity_id}");
+    }
+    let longest = format!("https://sp.example.com/{}", "a".repeat(1001));
+    let sp = generate_sp_metadata(&SpMetadataConfig {
+        entity_id: longest.clone(),
+        ..SpMetadataConfig::default()
+    })?;
+    assert!(sp.contains(&format!("entityID=\"{longest}\"")));
     Ok(())
 }
 

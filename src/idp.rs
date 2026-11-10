@@ -120,7 +120,9 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns an error if `config` cannot produce valid IdP metadata, such as
-    /// when required IdP SSO metadata is missing or a configured
+    /// when `config.entity_id` is not an absolute URI reference of at most 1024
+    /// characters with collapsed whitespace, required IdP SSO metadata is
+    /// missing, or a configured
     /// `<NameIDFormat>` is not an absolute URI reference, or if the generated metadata
     /// cannot be parsed back into IdP metadata.
     pub fn from_config(
