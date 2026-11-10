@@ -121,7 +121,8 @@ pub use options::{
 };
 pub use paos::{
     HttpHeader, PaosAuthnRequest, PaosClientRequest, PaosHttpResponse, PaosSsoResponse,
-    PendingPaosSso, PendingPaosSsoSnapshot, SoapFault, StartPaosSso, StartedPaosSso,
+    PendingPaosSso, PendingPaosSsoSnapshot, RespondPaosSso, SoapFault, StartPaosSso,
+    StartedPaosSso,
 };
 
 /// Typed SAML facade for high-level browser SSO/SLO flows.

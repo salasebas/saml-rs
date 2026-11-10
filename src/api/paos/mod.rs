@@ -11,9 +11,9 @@ use crate::entity::User;
 use crate::flow::HttpRequest;
 use crate::idp::PaosSsoResponseInput;
 use crate::model::{
-    AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId, OutstandingLogout,
-    RelayStateParam, SamlValidationContext, SsoResponse, SsoSession, Status, Subject,
-    TopLevelStatusCode,
+    Attribute, Attributes, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
+    OutstandingLogout, RelayStateParam, SamlValidationContext, SsoResponse, SsoSession, Status,
+    Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
 
@@ -153,6 +153,26 @@ impl StartPaosSso {
     /// one will reject the request.
     pub fn allow_unsigned_authn_request(mut self) -> Self {
         self.sign_authn_request = false;
+        self
+    }
+}
+
+/// Options for an identity provider answering PAOS login with success.
+///
+/// Start from [`RespondPaosSso::default`], which writes no
+/// `AttributeStatement`.
+#[derive(Debug, Clone, Default)]
+pub struct RespondPaosSso {
+    attributes: Attributes,
+}
+
+impl RespondPaosSso {
+    /// Set the attributes of the assertion's `AttributeStatement`.
+    ///
+    /// They are written as [`crate::RespondSso::attributes`] writes them. An
+    /// empty collection writes no `AttributeStatement`.
+    pub fn attributes(mut self, attributes: Attributes) -> Self {
+        self.attributes = attributes;
         self
     }
 }
@@ -624,19 +644,32 @@ impl Saml<Idp> {
 
     /// Answer a PAOS login with a success response for `subject`.
     ///
+    /// A request that names no assertion consumer URL or index is answered at
+    /// the service provider role's default assertion consumer. A default that
+    /// is not HTTP-POST or HTTP-POST-SimpleSign is rejected.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the request has no usable assertion consumer,
     /// the issuer does not match, the persistent or transient `NameID` of
     /// `subject` is longer than 256 characters, the NameID format is not an
-    /// absolute URI reference, or the response cannot be signed.
+    /// absolute URI reference, [`RespondPaosSso::attributes`] is combined with
+    /// a login response template or names a basic attribute that is not an
+    /// XML name, or the response cannot be signed.
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,
         request: &crate::model::Received<AuthnRequest>,
         subject: Subject,
+        options: RespondPaosSso,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
-        self.issue_paos_sso(sp, request, Some(subject), None)
+        self.issue_paos_sso(
+            sp,
+            request,
+            Some(subject),
+            None,
+            options.attributes.as_slice(),
+        )
     }
 
     /// End a PAOS login with a SAML error status and no assertion.
@@ -659,7 +692,7 @@ impl Saml<Idp> {
                 "reject_paos_sso requires an error status".into(),
             ));
         }
-        self.issue_paos_sso(sp, request, None, Some(status))
+        self.issue_paos_sso(sp, request, None, Some(status), &[])
     }
 
     fn issue_paos_sso(
@@ -668,6 +701,7 @@ impl Saml<Idp> {
         request: &crate::model::Received<AuthnRequest>,
         subject: Option<Subject>,
         status: Option<Status>,
+        attributes: &[Attribute],
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = assertion_consumer_for_request(sp, request.message())?;
@@ -703,6 +737,7 @@ impl Saml<Idp> {
                     .and_then(|subject| subject.name_id().sp_provided_id()),
                 issuance_lifetime: self.0.issuance_lifetime,
                 status: status.as_ref(),
+                attributes,
             })?;
         let envelope = idp_to_ecp_envelope(&IdpToEcp {
             assertion_consumer_service_url: acs.as_str(),
@@ -762,19 +797,18 @@ fn assertion_consumer_for_request(
                 .into(),
         ));
     }
-    let Some(index) = request.acs_index() else {
-        return Err(SamlError::Invalid(
-            "PAOS AuthnRequest needs AssertionConsumerServiceURL or AssertionConsumerServiceIndex"
-                .into(),
-        ));
-    };
-    let endpoint = sp
-        .metadata()
-        .get_assertion_consumer_service_by_index(index)?
-        .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
+    let endpoint = match request.acs_index() {
+        Some(index) => sp
+            .metadata()
+            .get_assertion_consumer_service_by_index(index)?,
+        None => sp
+            .metadata()
+            .get_default_assertion_consumer_service_endpoint()?,
+    }
+    .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
     if !endpoint.accepts_posted_response() {
         return Err(SamlError::Invalid(
-            "AuthnRequest AssertionConsumerServiceIndex is not published for HTTP-POST or HTTP-POST-SimpleSign in service provider metadata"
+            "AuthnRequest AssertionConsumerServiceIndex, or the default assertion consumer when the request names none, is not HTTP-POST or HTTP-POST-SimpleSign in service provider metadata"
                 .into(),
         ));
     }

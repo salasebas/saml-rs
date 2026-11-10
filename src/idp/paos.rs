@@ -4,7 +4,7 @@ use super::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
 use crate::constants::Binding;
 use crate::entity::User;
 use crate::error::SamlError;
-use crate::model::Status;
+use crate::model::{Attribute, Status};
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 
 pub(crate) struct PaosSsoResponseInput<'a> {
@@ -16,6 +16,7 @@ pub(crate) struct PaosSsoResponseInput<'a> {
     pub(crate) sp_provided_id: Option<&'a str>,
     pub(crate) issuance_lifetime: time::Duration,
     pub(crate) status: Option<&'a Status>,
+    pub(crate) attributes: &'a [Attribute],
 }
 
 impl IdentityProvider {
@@ -45,7 +46,7 @@ impl IdentityProvider {
                 issuance_lifetime: Some(input.issuance_lifetime),
                 web_browser_sso_producer: WebBrowserSsoProducer::Follow,
                 status: input.status,
-                typed_attributes: &[],
+                typed_attributes: input.attributes,
             },
         )?;
         let xml = crate::binding::base64_decode(&context.context)?;
