@@ -329,6 +329,7 @@ fn recommended_preset_matches_classified_validation_and_hardenings_stay_independ
         IdpValidationPolicy::recommended(),
         IdpValidationPolicy {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
+            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
             logout: recommended_logout,
         }
     );

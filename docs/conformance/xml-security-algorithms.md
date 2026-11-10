@@ -53,8 +53,8 @@ encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`,
 A verifier accepts every `SignatureMethod` and `DigestMethod` that the
 selected provider implements and that the peer's key can verify, unless
 `XmlSignatureProfile::StrictRsaSha2` narrows it. `XmlSignatureProfile` is the
-`xml_signatures` field of `SpValidationPolicy`. Recommended and Compatibility
-both use `AllowProviderSupportedForCompatibility`. Accepting an algorithm
+`xml_signatures` field of `SpValidationPolicy` and `IdpValidationPolicy`.
+Recommended and Compatibility both use `AllowProviderSupportedForCompatibility`. Accepting an algorithm
 outside the Conformance §4.1 set is the Errata 05 E50 `MAY`. Neither profile
 is an OASIS receiver rule.
 
@@ -67,14 +67,13 @@ key of the same parameter set.
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
 | An embedded signature on a received `Response`, `Assertion`, or logout message is verified under `xml_signatures` | Accepting service provider | Inbound | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts the provider-supported set below. `StrictRsaSha2` is library hardening. A signature over the accepted content must use RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and only the enveloped-signature and exclusive canonicalization transforms. Otherwise it is rejected with `SamlError::AlgorithmUnsupported` |
-| An embedded signature on a received `AuthnRequest` or logout message | Identity provider | Inbound | Optional. Errata 05 E50. `IdpValidationPolicy` has no `xml_signatures` field. The provider-supported set applies |
-| A detached `SigAlg` signature | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `XmlSignatureProfile` does not apply, and `StrictRsaSha2` does not narrow it. Any `SigAlg` in the provider-supported set verifies |
+| An embedded signature on a received `AuthnRequest` or logout message is verified under `xml_signatures` | Identity provider | Inbound | Optional. Errata 05 E50. The same profiles as the row above |
+| A detached `SigAlg` signature is verified under `xml_signatures` | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts any `SigAlg` in the provider-supported set. `StrictRsaSha2` is library hardening and accepts RSA-SHA256, RSA-SHA384, or RSA-SHA512. Another `SigAlg` is rejected with `SamlError::AlgorithmUnsupported` before the signature is verified |
 | A signed metadata document | Metadata consumer | Inbound | Optional. Errata 05 E50. `MetadataTrustPolicy` limits the transforms, not the signature or digest algorithm. The provider-supported set applies |
 
 On the default build, the provider-supported set includes SHA-1, MD5, and
 RIPEMD-160 signatures and digests. `StrictRsaSha2` excludes them from the
-embedded signatures it covers. Only the build features exclude them from a
-detached `SigAlg`, a signature an identity provider verifies, or a metadata
+signatures it covers. Only the build features exclude them from a metadata
 signature.
 `SsoSession::verified_xml_signatures` reports each accepted `SignatureMethod`
 URI, and `SsoSession::sig_alg` the accepted detached `SigAlg`. Neither applies

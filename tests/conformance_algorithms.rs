@@ -19,7 +19,7 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, Saml,
     SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSlo, StartSso, Subject,
-    TransformAlgorithm, XmlPolicy,
+    TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 use saml_rs::{DataEncryptionAlgorithm, KeyEncryptionAlgorithm};
@@ -83,6 +83,22 @@ struct Peers {
 }
 
 fn peers(sp: Side, idp: Side, xml: XmlPolicy) -> Result<Peers, SamlError> {
+    peers_with_profiles(
+        sp,
+        idp,
+        xml,
+        SpValidationPolicy::recommended().xml_signatures,
+        IdpValidationPolicy::recommended().xml_signatures,
+    )
+}
+
+fn peers_with_profiles(
+    sp: Side,
+    idp: Side,
+    xml: XmlPolicy,
+    sp_xml_signatures: XmlSignatureProfile,
+    idp_xml_signatures: XmlSignatureProfile,
+) -> Result<Peers, SamlError> {
     let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
         .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
@@ -90,6 +106,7 @@ fn peers(sp: Side, idp: Side, xml: XmlPolicy) -> Result<Peers, SamlError> {
         .credentials(sp.credentials)
         .validation(SpValidationPolicy {
             authn_requests: AuthnRequestSigningPolicy::Sign,
+            xml_signatures: sp_xml_signatures,
             ..SpValidationPolicy::recommended()
         })
         .algorithms(sp.algorithms)
@@ -103,6 +120,7 @@ fn peers(sp: Side, idp: Side, xml: XmlPolicy) -> Result<Peers, SamlError> {
         .credentials(idp.credentials)
         .validation(IdpValidationPolicy {
             authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+            xml_signatures: idp_xml_signatures,
             ..IdpValidationPolicy::recommended()
         })
         .algorithms(idp.algorithms)
@@ -281,6 +299,113 @@ fn selected_rsa_sha1_signs_the_authn_request_and_the_response(
         verified_algorithms(&exchange.session),
         [signature_algorithm::RSA_SHA1]
     );
+    Ok(())
+}
+
+#[cfg(feature = "crypto-rustcrypto")]
+fn rsa_sha1_peers(
+    sp_xml_signatures: XmlSignatureProfile,
+    idp_xml_signatures: XmlSignatureProfile,
+) -> Result<Peers, SamlError> {
+    let rsa_sha1 = || AlgorithmPolicy {
+        signature: SignatureAlgorithm::RsaSha1,
+        ..AlgorithmPolicy::default()
+    };
+    peers_with_profiles(
+        rsa(rsa_sha1()),
+        rsa(rsa_sha1()),
+        XmlPolicy::default(),
+        sp_xml_signatures,
+        idp_xml_signatures,
+    )
+}
+
+#[cfg(feature = "crypto-rustcrypto")]
+fn redirect_and_post_authn_requests(
+    peers: &Peers,
+) -> Result<[BrowserInput<AuthnRequest>; 2], Box<dyn std::error::Error>> {
+    let redirect = peers
+        .sp
+        .start_sso(&peers.idp_descriptor, StartSso::redirect())?;
+    let url = Url::parse(redirect.outbound.redirect_url()?)?;
+    let post = peers
+        .sp
+        .start_sso(&peers.idp_descriptor, StartSso::post())?;
+    Ok([
+        BrowserInput::<AuthnRequest>::redirect(url.query().unwrap_or_default()),
+        BrowserInput::<AuthnRequest>::post(post_fields(&post.outbound)?),
+    ])
+}
+
+#[cfg(feature = "crypto-rustcrypto")]
+#[test]
+fn strict_rsa_sha2_at_the_identity_provider_rejects_an_rsa_sha1_authn_request(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let strict = rsa_sha1_peers(
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::StrictRsaSha2,
+    )?;
+    for input in redirect_and_post_authn_requests(&strict)? {
+        assert!(matches!(
+            strict
+                .idp
+                .receive_sso(&strict.sp_descriptor, input, validation()),
+            Err(SamlError::AlgorithmUnsupported)
+        ));
+    }
+
+    let provider_supported = rsa_sha1_peers(
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+    )?;
+    for input in redirect_and_post_authn_requests(&provider_supported)? {
+        provider_supported.idp.receive_sso(
+            &provider_supported.sp_descriptor,
+            input,
+            validation(),
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "crypto-rustcrypto")]
+#[test]
+fn strict_rsa_sha2_at_the_service_provider_rejects_an_rsa_sha1_sig_alg(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (sp_xml_signatures, accepted) in [
+        (XmlSignatureProfile::StrictRsaSha2, false),
+        (
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            true,
+        ),
+    ] {
+        let peers = rsa_sha1_peers(
+            sp_xml_signatures,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        )?;
+        let started = peers.idp.start_slo(
+            &peers.sp_descriptor,
+            LogoutSubject::with_session_index(
+                NameId::new("alice@example.com", None),
+                SessionIndex::try_new("_session")?,
+            ),
+            StartSlo::redirect(),
+        )?;
+        let url = Url::parse(started.outbound.redirect_url()?)?;
+        assert!(url
+            .query_pairs()
+            .any(|(key, value)| key == "SigAlg" && value == signature_algorithm::RSA_SHA1));
+        let received = peers.sp.receive_slo(
+            &peers.idp_descriptor,
+            BrowserInput::<LogoutRequest>::redirect(url.query().unwrap_or_default()),
+            validation(),
+        );
+        if accepted {
+            received?;
+        } else {
+            assert!(matches!(received, Err(SamlError::AlgorithmUnsupported)));
+        }
+    }
     Ok(())
 }
 

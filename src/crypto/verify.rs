@@ -12,7 +12,8 @@
 
 use super::keys::{load_certificate, load_hmac_secret};
 use super::response_root::root_uses_protocol_response_rules;
-use crate::config::HmacSecret;
+use super::signature_profile::{allows_digest_method, allows_signature_method};
+use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
 use crate::util::normalize_cert_string;
@@ -589,14 +590,9 @@ fn enforce_strict_profile_on_verified_signature(
     let signature_method =
         exactly_one_dsig_child(document, signed_info, bergshamra_ns::node::SIGNATURE_METHOD)
             .ok_or(SamlError::AlgorithmUnsupported)?;
-    if !matches!(
-        dsig_algorithm(document, signature_method),
-        Some(
-            crate::constants::signature_algorithm::RSA_SHA256
-                | crate::constants::signature_algorithm::RSA_SHA384
-                | crate::constants::signature_algorithm::RSA_SHA512
-        )
-    ) {
+    if !dsig_algorithm(document, signature_method).is_some_and(|algorithm| {
+        allows_signature_method(XmlSignatureProfile::StrictRsaSha2, algorithm)
+    }) {
         return Err(SamlError::AlgorithmUnsupported);
     }
     let reference = exactly_one_dsig_child(document, signed_info, bergshamra_ns::node::REFERENCE)
@@ -619,14 +615,9 @@ fn enforce_strict_profile_on_verified_signature(
     let digest_method =
         exactly_one_dsig_child(document, reference, bergshamra_ns::node::DIGEST_METHOD)
             .ok_or(SamlError::AlgorithmUnsupported)?;
-    if !matches!(
-        dsig_algorithm(document, digest_method),
-        Some(
-            crate::constants::digest_algorithm::SHA256
-                | crate::constants::digest_algorithm::SHA384
-                | crate::constants::digest_algorithm::SHA512
-        )
-    ) {
+    if !dsig_algorithm(document, digest_method).is_some_and(|algorithm| {
+        allows_digest_method(XmlSignatureProfile::StrictRsaSha2, algorithm)
+    }) {
         return Err(SamlError::AlgorithmUnsupported);
     }
     for transforms in dsig_children(document, reference, bergshamra_ns::node::TRANSFORMS) {
@@ -904,7 +895,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     metadata_certs: &[String],
     hmac_secret: Option<&HmacSecret>,
     limits: XmlLimits,
-    strict_xml_signature_profile: bool,
+    profile: XmlSignatureProfile,
 ) -> Result<SignatureVerification, SamlError> {
     let Some(prepared) = prepare_signature_verification(xml, metadata_certs, hmac_secret, limits)?
     else {
@@ -946,7 +937,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                                 // LogoutResponse coverage. A protocol Response can
                                 // also be evidence when `verified_content` returns
                                 // no XML. Enforce the profile for either case.
-                                if strict_xml_signature_profile
+                                if profile == XmlSignatureProfile::StrictRsaSha2
                                     && (signature.is_some()
                                         || references_cover_direct_assertion(
                                             &document,
@@ -1693,7 +1684,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
         assert!(result.verified() && result.assertion_directly_covered());
         Ok(())
@@ -1727,7 +1718,7 @@ mod tests {
             &[IDP_CERT.to_string()],
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
         assert!(!result.verified() && !result.response_covered());
         assert!(result.verified_embedded_signatures().is_empty());
@@ -1749,7 +1740,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
 
         let [signature] = result.verified_embedded_signatures() else {
@@ -1775,7 +1766,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
 
         let [signature] = result.verified_embedded_signatures() else {
@@ -1800,7 +1791,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            true,
+            XmlSignatureProfile::StrictRsaSha2,
         )?;
 
         let [signature] = result.verified_embedded_signatures() else {
@@ -1821,7 +1812,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            true,
+            XmlSignatureProfile::StrictRsaSha2,
         );
 
         assert!(matches!(result, Err(SamlError::SignedReferenceMismatch)));
@@ -1837,7 +1828,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
         let [signature] = compatible.verified_embedded_signatures() else {
             return Err("expected the assertion-covering signature".into());
@@ -1850,7 +1841,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            true,
+            XmlSignatureProfile::StrictRsaSha2,
         );
         assert!(matches!(strict, Err(SamlError::AlgorithmUnsupported)));
         Ok(())
@@ -1865,7 +1856,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            true,
+            XmlSignatureProfile::StrictRsaSha2,
         );
         assert!(matches!(result, Err(SamlError::SignedReferenceMismatch)));
         Ok(())
@@ -1880,7 +1871,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string()],
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
 
         let [signature] = result.verified_embedded_signatures() else {
@@ -1921,7 +1912,7 @@ mod tests {
             &[SP_SIGNING_CERT.to_string(), IDP_CERT.to_string()],
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
         assert!(
             result.verified() && result.assertion_directly_covered() && result.response_covered()
@@ -1993,7 +1984,7 @@ mod tests {
                 &certs,
                 None,
                 XmlLimits::default(),
-                false,
+                XmlSignatureProfile::AllowProviderSupportedForCompatibility,
             )?;
             assert!(
                 !result.verified()
@@ -2086,7 +2077,7 @@ mod tests {
                     &[],
                     None,
                     XmlLimits::default(),
-                    false,
+                    XmlSignatureProfile::AllowProviderSupportedForCompatibility,
                 )
                 .map(|_| ()),
             ] {
@@ -2134,7 +2125,7 @@ mod tests {
                 &[],
                 None,
                 XmlLimits::default(),
-                false,
+                XmlSignatureProfile::AllowProviderSupportedForCompatibility,
             )?;
             assert!(
                 !detailed.verified() && !detailed.response_covered(),
@@ -2181,7 +2172,7 @@ mod tests {
             &certificates,
             None,
             XmlLimits::default(),
-            false,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         )?;
         assert!(detailed.verified());
         assert_eq!(detailed.response_covered(), response_covered);

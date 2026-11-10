@@ -189,7 +189,7 @@ fn parse_signed(
         // SAML Profiles 2.0 §4.5.3.1 and §4.5.3.2 require a signed message on
         // HTTP-Redirect.
         check_signature: true,
-        strict_xml_signature_profile: setting.strict_xml_signature_profile,
+        xml_signatures: setting.xml_signatures,
         from_issuer: peer_meta.get_entity_id(),
         signing_certs: &signing_certs,
         clock_drifts: validation.clock_drifts,

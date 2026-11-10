@@ -297,8 +297,9 @@ pub enum SamlError {
         element: &'static str,
     },
 
-    /// An embedded XML signature selected an algorithm outside the strict SAML profile.
-    #[error("embedded XML signature algorithm is not allowed")]
+    /// A signature that authenticates the message selected an algorithm
+    /// outside the configured [`crate::XmlSignatureProfile`].
+    #[error("signature algorithm is not allowed")]
     AlgorithmUnsupported,
 
     // Metadata / trust validation.

@@ -45,6 +45,12 @@ pub mod sign;
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
+pub(crate) mod signature_profile;
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 pub mod verify;
 #[cfg(any(
     feature = "crypto-rustcrypto",

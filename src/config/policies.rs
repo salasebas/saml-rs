@@ -54,18 +54,25 @@ pub enum ResponseSignaturePolicy {
     RequireSigned,
 }
 
-/// Inbound embedded XML-signature algorithm profile for accepted SSO and
-/// Single Logout messages.
+/// Inbound signature algorithm profile for the messages a typed service
+/// provider or identity provider accepts.
+///
+/// It applies to an embedded XML signature that authenticates the accepted
+/// message and to the detached `SigAlg` of an HTTP-Redirect or
+/// HTTP-POST-SimpleSign message. A signature outside the profile is rejected
+/// with [`SamlError::AlgorithmUnsupported`].
 ///
 /// [`Self::StrictRsaSha2`] is library hardening. Selecting it does not require
 /// a signature directly on the Assertion. The accept combination is classified
 /// in `docs/conformance/web-browser-sso-acceptance.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum XmlSignatureProfile {
-    /// Require one local `#id` reference, RSA-SHA256/384/512, a SHA-256/384/512
-    /// digest, and exclusive canonicalization. Each transform element, when
-    /// present, must belong to the XML-DSig namespace and use enveloped-signature
-    /// or exclusive canonicalization.
+    /// Require RSA-SHA256/384/512.
+    ///
+    /// An embedded signature must also have one local `#id` reference, a
+    /// SHA-256/384/512 digest, and exclusive canonicalization. Each transform
+    /// element, when present, must belong to the XML-DSig namespace and use
+    /// enveloped-signature or exclusive canonicalization.
     StrictRsaSha2,
     /// Accept every algorithm and same-document reference shape supported by
     /// the selected cryptographic provider.
@@ -156,7 +163,7 @@ pub struct SpValidationPolicy {
     pub assertions: AssertionSignaturePolicy,
     /// Top-level SAML Response signature requirement.
     pub responses: ResponseSignaturePolicy,
-    /// Embedded XML-signature algorithm and reference requirements.
+    /// Signature algorithm and reference requirements.
     pub xml_signatures: XmlSignatureProfile,
     /// Outbound AuthnRequest signing behavior.
     pub authn_requests: AuthnRequestSigningPolicy,
@@ -231,6 +238,8 @@ impl Default for SpValidationPolicy {
 pub struct IdpValidationPolicy {
     /// Inbound AuthnRequest signature requirement.
     pub authn_requests: AuthnRequestValidationPolicy,
+    /// Signature algorithm and reference requirements.
+    pub xml_signatures: XmlSignatureProfile,
     /// Logout signature validation behavior.
     pub logout: LogoutPolicy,
 }
@@ -243,6 +252,7 @@ impl IdpValidationPolicy {
     pub fn recommended() -> Self {
         Self {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
+            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
             logout: LogoutPolicy::recommended(),
         }
     }
@@ -254,6 +264,7 @@ impl IdpValidationPolicy {
     pub fn compatibility() -> Self {
         Self {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsignedForCompatibility,
+            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
             logout: LogoutPolicy::compatibility(),
         }
     }
