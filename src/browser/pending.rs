@@ -570,7 +570,9 @@ impl Pending<LogoutRequest> {
         self.details.binding
     }
 
-    /// Expected logout response binding.
+    /// Logout binding the response is expected on. `finish_slo` also accepts
+    /// a response to a front-channel request over another front-channel
+    /// binding.
     pub fn response_binding(&self) -> LogoutBinding {
         self.details.binding
     }

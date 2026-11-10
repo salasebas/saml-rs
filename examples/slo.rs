@@ -88,11 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         BrowserInput::<LogoutRequest>::post(logout.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
-    let logout_response = idp.respond_slo(
-        &sp_descriptor,
-        &logout_request,
-        RespondSlo::post().relay_state(logout.pending.relay_state().clone()),
-    )?;
+    let logout_response = idp.respond_slo(&sp_descriptor, &logout_request, RespondSlo::post())?;
     let completed = sp.finish_slo(
         &idp_descriptor,
         &logout.pending,

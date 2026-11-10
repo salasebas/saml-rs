@@ -440,10 +440,12 @@ impl StartSlo {
 }
 
 /// Options for issuing a LogoutResponse.
+///
+/// The response carries the exact RelayState received with the
+/// `LogoutRequest`.
 #[derive(Debug, Clone)]
 pub struct RespondSlo {
     pub(super) binding: LogoutBinding,
-    pub(super) relay_state: Option<RelayStateParam>,
     pub(super) status: Option<Status>,
     rules: SingleLogoutRules,
 }
@@ -468,6 +470,7 @@ impl RespondSlo {
     /// [`BrowserInput::soap`](crate::BrowserInput::soap).
     ///
     /// The response is signed and carries no `Destination` and no RelayState.
+    /// A request received with RelayState cannot be answered over SOAP.
     /// Return [`Outbound::soap_response`](crate::Outbound::soap_response) as the
     /// HTTP 200 body of that SOAP request.
     pub fn soap() -> Self {
@@ -477,7 +480,6 @@ impl RespondSlo {
     fn new(binding: LogoutBinding) -> Self {
         Self {
             binding,
-            relay_state: None,
             status: None,
             rules: SingleLogoutRules::default(),
         }
@@ -489,15 +491,6 @@ impl RespondSlo {
     /// subordinate code is rejected when a template is set.
     pub fn status(mut self, status: Status) -> Self {
         self.status = Some(status);
-        self
-    }
-
-    /// Set exact RelayState state for the logout response.
-    ///
-    /// When omitted, the received LogoutRequest RelayState is echoed. Pass
-    /// [`RelayStateParam::absent`] to suppress echo.
-    pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
-        self.relay_state = Some(relay_state);
         self
     }
 

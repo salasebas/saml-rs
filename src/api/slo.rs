@@ -109,12 +109,16 @@ impl Saml<Sp> {
 
     /// Respond to a received IdP LogoutRequest.
     ///
+    /// The response carries the exact RelayState received with the request.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the `LogoutRequest` issuer does not match the
     /// IdP descriptor, IdP metadata cannot be parsed, relay state is invalid,
     /// a compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
+    /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
+    /// request carried RelayState.
     /// [`RespondSlo::apply_single_logout_generation_rules`] also rejects an
     /// `http` peer endpoint unless
     /// [`RespondSlo::allow_http_single_logout`] is
@@ -139,11 +143,17 @@ impl Saml<Sp> {
 
     /// Finish SP-initiated Single Logout using stored pending LogoutRequest state.
     ///
+    /// A request sent over HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign
+    /// accepts a response over any of those bindings that the local metadata
+    /// publishes. A SOAP request accepts only its SOAP response.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
-    /// request, including issuer, binding, relay state, destination, or
-    /// `InResponseTo` mismatches; when IdP metadata cannot be parsed; when XML,
+    /// request, including issuer, relay state, destination, or
+    /// `InResponseTo` mismatches; [`SamlError::UnsupportedBinding`] for a SOAP
+    /// response to a front-channel request or a front-channel response to a
+    /// SOAP request; when IdP metadata cannot be parsed; when XML,
     /// signature, trust, status, or time validation fails; when the receiving
     /// URL is unpublished or multiple local endpoints have no explicit
     /// receiving URL; or when replay
@@ -331,12 +341,16 @@ impl Saml<Idp> {
 
     /// Respond to a received SP LogoutRequest.
     ///
+    /// The response carries the exact RelayState received with the request.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the `LogoutRequest` issuer does not match the
     /// SP descriptor, SP metadata cannot be parsed, relay state is invalid, a
     /// compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
+    /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
+    /// request carried RelayState.
     /// [`RespondSlo::apply_single_logout_generation_rules`] does not add an
     /// `https` requirement for this role.
     ///
@@ -375,11 +389,17 @@ impl Saml<Idp> {
 
     /// Finish IdP-initiated Single Logout using stored pending LogoutRequest state.
     ///
+    /// A request sent over HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign
+    /// accepts a response over any of those bindings that the local metadata
+    /// publishes. A SOAP request accepts only its SOAP response.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the response does not match the pending
-    /// request, including issuer, binding, relay state, destination, or
-    /// `InResponseTo` mismatches; when SP metadata cannot be parsed; when XML,
+    /// request, including issuer, relay state, destination, or
+    /// `InResponseTo` mismatches; [`SamlError::UnsupportedBinding`] for a SOAP
+    /// response to a front-channel request or a front-channel response to a
+    /// SOAP request; when SP metadata cannot be parsed; when XML,
     /// signature, trust, status, or time validation fails; when the receiving
     /// URL is unpublished or multiple local endpoints have no explicit
     /// receiving URL; or when replay
@@ -628,9 +648,7 @@ fn respond_slo_impl(
             LogoutMessageDirection::Response,
         )?;
     }
-    let relay_state = options
-        .relay_state
-        .unwrap_or_else(|| request.relay_state().clone());
+    let relay_state = request.relay_state();
     relay_state.validate()?;
     let status = options.status.clone().unwrap_or_else(Status::success);
     let context = create_logout_response_with_status(
@@ -659,11 +677,11 @@ fn finish_slo_impl(
     mut validation: SamlValidationContext<'_>,
 ) -> Result<LogoutCompleted, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer_entity_id)?;
-    ensure_logout_response_binding(input_binding(&input), pending.response_binding())?;
+    let binding = logout_response_binding(input_binding(&input), pending.request_binding())?;
     ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
     // A SOAP response returns on this party's own HTTP exchange, so no local
     // endpoint received it.
-    let expected_recipient = match pending.response_binding() {
+    let expected_recipient = match binding {
         LogoutBinding::Soap => None,
         binding @ (LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign) => {
             Some(logout_recipient_endpoint(
@@ -765,14 +783,27 @@ fn logout_request_signing(setting: &EntitySetting, signing: LogoutSigning) -> bo
     }
 }
 
-fn ensure_logout_response_binding(
+fn logout_response_binding(
     actual: Binding,
-    expected: LogoutBinding,
-) -> Result<(), SamlError> {
-    if actual == expected.as_binding() {
-        return Ok(());
+    request: LogoutBinding,
+) -> Result<LogoutBinding, SamlError> {
+    let unsupported = || Error::UnsupportedBinding { binding: actual };
+    let response = LogoutBinding::try_from(actual).map_err(|_| unsupported())?;
+    match (request, response) {
+        (LogoutBinding::Soap, LogoutBinding::Soap)
+        | (
+            LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign,
+            LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign,
+        ) => Ok(response),
+        (
+            LogoutBinding::Soap,
+            LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign,
+        )
+        | (
+            LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign,
+            LogoutBinding::Soap,
+        ) => Err(unsupported()),
     }
-    Err(Error::UnsupportedBinding { binding: actual })
 }
 
 fn logout_recipient_endpoint(
