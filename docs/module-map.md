@@ -95,6 +95,7 @@ mapping is not implemented.
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |
 | Peer descriptors | `src/config/descriptors.rs` |
+| `validUntil` and `cacheDuration` on generated metadata | `src/metadata/lifetime.rs` |
 
 ## Logout
 
