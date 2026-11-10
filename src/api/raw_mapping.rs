@@ -122,7 +122,10 @@ pub(super) fn raw_idp_descriptor(
     now: SystemTime,
 ) -> Result<IdentityProvider, SamlError> {
     idp.ensure_valid_at(now)?;
-    IdentityProvider::from_metadata(idp.metadata_xml(), peer_setting(idp.hmac_secret()))
+    Ok(IdentityProvider::from_parsed_metadata(
+        idp.metadata().clone(),
+        peer_setting(idp.hmac_secret()),
+    ))
 }
 
 pub(super) fn raw_sp_descriptor(
@@ -130,7 +133,10 @@ pub(super) fn raw_sp_descriptor(
     now: SystemTime,
 ) -> Result<ServiceProvider, SamlError> {
     sp.ensure_valid_at(now)?;
-    ServiceProvider::from_metadata(sp.metadata_xml(), peer_setting(sp.hmac_secret()))
+    Ok(ServiceProvider::from_parsed_metadata(
+        sp.metadata().clone(),
+        peer_setting(sp.hmac_secret()),
+    ))
 }
 
 pub(super) fn raw_sp_for_browser_response(

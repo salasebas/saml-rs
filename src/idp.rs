@@ -102,8 +102,14 @@ impl IdentityProvider {
     /// Returns an error when `xml` is malformed, exceeds XML limits, or cannot
     /// be parsed as IdP metadata. Metadata parser errors include invalid entity,
     /// SSO endpoint, certificate, or signing flag declarations.
-    pub fn from_metadata(xml: &str, mut setting: EntitySetting) -> Result<Self, SamlError> {
-        let metadata = IdpMetadata::from_xml(xml)?;
+    pub fn from_metadata(xml: &str, setting: EntitySetting) -> Result<Self, SamlError> {
+        Ok(Self::from_parsed_metadata(
+            IdpMetadata::from_xml(xml)?,
+            setting,
+        ))
+    }
+
+    pub(crate) fn from_parsed_metadata(metadata: IdpMetadata, mut setting: EntitySetting) -> Self {
         setting.want_authn_requests_signed = metadata.is_want_authn_requests_signed();
         let formats = metadata.get_name_id_format();
         if !formats.is_empty() {
@@ -112,7 +118,7 @@ impl IdentityProvider {
         if setting.entity_id.is_none() {
             setting.entity_id = metadata.get_entity_id().map(str::to_string);
         }
-        Ok(Self { setting, metadata })
+        Self { setting, metadata }
     }
 
     /// Build by generating IdP metadata from `config`, then importing it.

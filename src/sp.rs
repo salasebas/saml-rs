@@ -202,8 +202,14 @@ impl ServiceProvider {
     /// Returns an error when `xml` is malformed, exceeds XML limits, or cannot
     /// be parsed as SP metadata. Metadata parser errors include invalid entity,
     /// endpoint, certificate, or signing flag declarations.
-    pub fn from_metadata(xml: &str, mut setting: EntitySetting) -> Result<Self, SamlError> {
-        let metadata = SpMetadata::from_xml(xml)?;
+    pub fn from_metadata(xml: &str, setting: EntitySetting) -> Result<Self, SamlError> {
+        Ok(Self::from_parsed_metadata(
+            SpMetadata::from_xml(xml)?,
+            setting,
+        ))
+    }
+
+    pub(crate) fn from_parsed_metadata(metadata: SpMetadata, mut setting: EntitySetting) -> Self {
         setting.authn_requests_signed = metadata.is_authn_request_signed();
         setting.want_assertions_signed = metadata.is_want_assertions_signed();
         let formats = metadata.get_name_id_format();
@@ -213,7 +219,7 @@ impl ServiceProvider {
         if setting.entity_id.is_none() {
             setting.entity_id = metadata.get_entity_id().map(str::to_string);
         }
-        Ok(Self { setting, metadata })
+        Self { setting, metadata }
     }
 
     /// Build by generating SP metadata from `config`, then importing it.
