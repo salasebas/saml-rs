@@ -3,7 +3,9 @@
 use crate::constants::{name_id_format, namespace};
 use crate::entity::{now_iso8601, EntitySetting};
 use crate::error::SamlError;
-use crate::model::{validate_issued_name_id_length, validate_name_id_format, NameId, Status};
+use crate::model::{
+    is_name_id_format, validate_issued_name_id_length, validate_name_id_format, NameId, Status,
+};
 use crate::template::validate_tag_prefix;
 use crate::xml::write::XmlWriter;
 
@@ -82,7 +84,7 @@ pub(crate) fn render_request(
             Requester::IdentityProvider => request.default_format,
             Requester::ServiceProvider => None,
         });
-    if format == Some(name_id_format::TRANSIENT) {
+    if is_name_id_format(format, name_id_format::TRANSIENT) {
         return Err(SamlError::ProtocolProfile(
             "name identifier management is not used with a transient NameID".into(),
         ));
@@ -94,7 +96,7 @@ pub(crate) fn render_request(
     {
         validate_issued_name_id_length(format, value)?;
     }
-    let persistent = format == Some(name_id_format::PERSISTENT);
+    let persistent = is_name_id_format(format, name_id_format::PERSISTENT);
     let name_qualifier = name_id
         .name_qualifier()
         .or(persistent.then_some(request.idp_entity_id));

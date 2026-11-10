@@ -2,7 +2,7 @@ use crate::config::NameIdFormat;
 use crate::constants::name_id_format;
 use crate::entity::generate_id;
 use crate::error::SamlError;
-use crate::xml::any_uri::is_absolute_uri_reference;
+use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
 
@@ -18,16 +18,22 @@ pub(crate) fn validate_name_id_format(format_uri: Option<&str>) -> Result<(), Sa
     }
 }
 
+pub(crate) fn is_name_id_format(format_uri: Option<&str>, expected: &str) -> bool {
+    format_uri.is_some_and(|format| collapse_whitespace(format) == expected)
+}
+
 /// Reject a persistent or transient `NameID` value longer than 256
 /// characters. Other formats have no length limit.
 pub(crate) fn validate_issued_name_id_length(
     format_uri: Option<&str>,
     value: &str,
 ) -> Result<(), SamlError> {
-    let format = match format_uri {
-        Some(name_id_format::PERSISTENT) => "persistent",
-        Some(name_id_format::TRANSIENT) => "transient",
-        _ => return Ok(()),
+    let format = if is_name_id_format(format_uri, name_id_format::PERSISTENT) {
+        "persistent"
+    } else if is_name_id_format(format_uri, name_id_format::TRANSIENT) {
+        "transient"
+    } else {
+        return Ok(());
     };
     if value.chars().count() > MAX_OPAQUE_NAME_ID_CHARS {
         return Err(SamlError::Invalid(format!(
