@@ -727,70 +727,52 @@ pub fn verify_signature(
 }
 
 /// The parsed message after the checks shared by every message signature
-/// verifier, with one verification context per loadable metadata certificate.
+/// verifier, with one verification context that trusts every loadable
+/// metadata key.
 struct PreparedSignatureVerification {
     dom: dom::Document,
     protocol_response: bool,
-    contexts: Vec<DsigContext>,
+    context: DsigContext,
 }
 
+/// Load every metadata certificate the profile accepts (rolling-cert support),
+/// and the peer's HMAC secret when it has one, into one trusted-key context: a
+/// signature verifies if any one of those keys matches. An unloadable or
+/// profile-rejected certificate is skipped while another key loads.
 fn metadata_verification_context(
-    certificate: &str,
-    profile: XmlSignatureProfile,
-) -> Result<DsigContext, SamlError> {
-    let key = load_certificate(certificate)?;
-    check_verification_key(profile, &key)?;
-    let mut manager = KeysManager::new();
-    manager.add_key(key);
-    // Metadata certificates are the only verification keys. Inline KeyInfo
-    // is not imported. `with_insecure(true)` skips X.509 chain and time
-    // checks only; signature, digest, reference, duplicate-ID, and XSW
-    // checks stay on. Do not replace this with `DsigContext::new_permissive()`.
-    Ok(DsigContext::new(manager)
-        .with_trusted_keys_only(true)
-        .with_strict_verification(true)
-        .with_require_reference_digests(true)
-        .with_hmac_min_out_len(160)
-        .with_insecure(true))
-}
-
-fn hmac_verification_context(secret: &HmacSecret) -> Result<DsigContext, SamlError> {
-    let mut manager = KeysManager::new();
-    manager.add_key(load_hmac_secret(secret)?);
-    Ok(DsigContext::new(manager)
-        .with_trusted_keys_only(true)
-        .with_strict_verification(true)
-        .with_require_reference_digests(true)
-        .with_hmac_min_out_len(160)
-        .with_insecure(true))
-}
-
-/// Load one context per metadata certificate (rolling-cert support), and one
-/// for the peer's HMAC secret when it has one: the signature verifies if any
-/// one of those keys matches. An unloadable certificate is skipped while
-/// another key loads.
-fn metadata_verification_contexts(
     metadata_certs: &[String],
     hmac_secret: Option<&HmacSecret>,
     profile: XmlSignatureProfile,
-) -> Result<Vec<DsigContext>, SamlError> {
-    let mut contexts = Vec::new();
+) -> Result<DsigContext, SamlError> {
+    let mut manager = KeysManager::new();
     let mut key_load_error = None;
     for certificate in metadata_certs {
-        match metadata_verification_context(certificate, profile) {
-            Ok(context) => contexts.push(context),
+        let key = load_certificate(certificate)
+            .and_then(|key| check_verification_key(profile, &key).map(|()| key));
+        match key {
+            Ok(key) => manager.add_key(key),
             Err(error) => {
                 key_load_error.get_or_insert(error);
             }
         }
     }
     if let Some(secret) = hmac_secret {
-        contexts.push(hmac_verification_context(secret)?);
+        manager.add_key(load_hmac_secret(secret)?);
     }
-    if contexts.is_empty() {
+    if manager.is_empty() {
         return Err(key_load_error.unwrap_or(SamlError::NoTrustedCertificate));
     }
-    Ok(contexts)
+    // Metadata keys are the only verification keys. Inline KeyInfo is not
+    // imported; it only ranks which trusted key is tried first.
+    // `with_insecure(true)` skips X.509 chain and time checks only; signature,
+    // digest, reference, duplicate-ID, and XSW checks stay on. Do not replace
+    // this with `DsigContext::new_permissive()`.
+    Ok(DsigContext::new(manager)
+        .with_trusted_keys_only(true)
+        .with_strict_verification(true)
+        .with_require_reference_digests(true)
+        .with_hmac_min_out_len(160)
+        .with_insecure(true))
 }
 
 fn reject_unpinned_inline_certificate(
@@ -845,25 +827,12 @@ fn prepare_signature_verification(
     preflight_saml_reference_uris(&signature_candidates)?;
     reject_unpinned_inline_certificate(&signature_candidates, metadata_certs)?;
     super::provider::ensure_crypto_provider_initialized()?;
-    let contexts = metadata_verification_contexts(metadata_certs, hmac_secret, profile)?;
+    let context = metadata_verification_context(metadata_certs, hmac_secret, profile)?;
     Ok(Some(PreparedSignatureVerification {
         dom,
         protocol_response,
-        contexts,
+        context,
     }))
-}
-
-/// A leftover unloadable cert must not poison a rolling-cert verdict. A clean
-/// "invalid" (key mismatch / tampered) is a non-error unverified result; a
-/// structural error surfaces only when no loaded certificate produced a verdict.
-fn certificate_error_without_verdict(
-    tried_invalid: bool,
-    last_error: Option<SamlError>,
-) -> Result<(), SamlError> {
-    match last_error {
-        Some(error) if !tried_invalid => Err(error),
-        _ => Ok(()),
-    }
 }
 
 /// Verify the XML-DSig signature(s) of `xml` with explicit XML parser limits.
@@ -887,22 +856,20 @@ pub fn verify_signature_with_limits(
     else {
         return Ok((false, None));
     };
-    let root = &prepared.dom.root;
-    let mut tried_invalid = false;
-    let mut last_error = None;
-    for context in &prepared.contexts {
-        match verify(context, xml) {
-            Ok(VerifyResult::Valid { references, .. }) => {
-                let targets = verified_targets(&references)?;
-                let content = verified_content(root, xml, &targets, prepared.protocol_response)?;
-                return Ok((true, content));
-            }
-            Ok(VerifyResult::Invalid { .. }) => tried_invalid = true,
-            Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
+    match verify(&prepared.context, xml) {
+        Ok(VerifyResult::Valid { references, .. }) => {
+            let targets = verified_targets(&references)?;
+            let content = verified_content(
+                &prepared.dom.root,
+                xml,
+                &targets,
+                prepared.protocol_response,
+            )?;
+            Ok((true, content))
         }
+        Ok(VerifyResult::Invalid { .. }) => Ok((false, None)),
+        Err(error) => Err(SamlError::Crypto(error.to_string())),
     }
-    certificate_error_without_verdict(tried_invalid, last_error)?;
-    Ok((false, None))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -962,70 +929,50 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     let protocol_response = prepared.protocol_response;
     let consumed = consumed_assertion(root);
 
-    let mut tried_invalid = false;
-    let mut last_error = None;
-    let mut first_signature_verified = false;
-    let mut targets = Vec::new();
-    // Reuse this exact verifier DOM for every pinned certificate attempt and
-    // for evidence extraction from each successful signature node.
+    // Signature nodes in the results index this DOM, so evidence is read
+    // from the same document the verifier saw.
     let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
-    let mut verified_signature_nodes = HashSet::new();
+    let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
+        .map_err(|error| SamlError::Crypto(error.to_string()))?;
+    let first_signature_verified = matches!(results.first(), Some(VerifyResult::Valid { .. }));
+    let mut targets = Vec::new();
     let mut verified_embedded_signatures = Vec::new();
-    for context in &prepared.contexts {
-        match verify_all_document_with_source(context, &document, Some(xml)) {
-            Ok(results) => {
-                first_signature_verified |=
-                    matches!(results.first(), Some(VerifyResult::Valid { .. }));
-                for result in results {
-                    match result {
-                        VerifyResult::Valid {
-                            signature_node,
-                            references,
-                            ..
-                        } => {
-                            let signature_targets = verified_targets(&references)?;
-                            if verified_signature_nodes.insert(signature_node) {
-                                let signature = verified_embedded_signature(
-                                    &document,
-                                    signature_node,
-                                    &references,
-                                    &signature_targets,
-                                    consumed,
-                                )?;
-                                // SSO evidence does not include LogoutRequest or
-                                // LogoutResponse coverage. A protocol Response can
-                                // also be evidence when `verified_content` returns
-                                // no XML. Enforce the profile for either case.
-                                if signature.is_some()
-                                    || references_cover_direct_assertion(&document, &references)
-                                    || verified_targets_cover_accepted_content(
-                                        root,
-                                        &signature_targets,
-                                        protocol_response,
-                                    )
-                                {
-                                    enforce_profile_on_verified_signature(
-                                        &document,
-                                        signature_node,
-                                        profile,
-                                    )?;
-                                }
-                                if let Some(signature) = signature {
-                                    verified_embedded_signatures
-                                        .push((signature_node.index(), signature));
-                                }
-                            }
-                            targets.extend(signature_targets);
-                        }
-                        VerifyResult::Invalid { .. } => tried_invalid = true,
-                    }
+    for result in results {
+        match result {
+            VerifyResult::Valid {
+                signature_node,
+                references,
+                ..
+            } => {
+                let signature_targets = verified_targets(&references)?;
+                let signature = verified_embedded_signature(
+                    &document,
+                    signature_node,
+                    &references,
+                    &signature_targets,
+                    consumed,
+                )?;
+                // SSO evidence does not include LogoutRequest or
+                // LogoutResponse coverage. A protocol Response can
+                // also be evidence when `verified_content` returns
+                // no XML. Enforce the profile for either case.
+                if signature.is_some()
+                    || references_cover_direct_assertion(&document, &references)
+                    || verified_targets_cover_accepted_content(
+                        root,
+                        &signature_targets,
+                        protocol_response,
+                    )
+                {
+                    enforce_profile_on_verified_signature(&document, signature_node, profile)?;
                 }
+                verified_embedded_signatures.extend(signature);
+                targets.extend(signature_targets);
             }
-            Err(error) => last_error = Some(SamlError::Crypto(error.to_string())),
+            VerifyResult::Invalid { .. } => {}
         }
     }
     if first_signature_verified && !targets.is_empty() {
-        verified_embedded_signatures.sort_by_key(|(index, _)| *index);
         let assertion_directly_covered =
             assertion_is_directly_covered(root, &targets, protocol_response);
         let response_covered = protocol_response && response_is_covered(&targets, root);
@@ -1034,13 +981,9 @@ pub(crate) fn verify_signatures_detailed_with_profile(
             signed_content: verified_content(root, xml, &targets, protocol_response)?,
             assertion_directly_covered,
             response_covered,
-            verified_embedded_signatures: verified_embedded_signatures
-                .into_iter()
-                .map(|(_, signature)| signature)
-                .collect(),
+            verified_embedded_signatures,
         });
     }
-    certificate_error_without_verdict(tried_invalid, last_error)?;
     Ok(SignatureVerification::unverified())
 }
 
@@ -2147,6 +2090,90 @@ mod tests {
         assert!(content
             .ok_or("expected signed assertion")?
             .contains("Assertion"));
+        Ok(())
+    }
+
+    #[test]
+    fn rolling_cert_key_info_naming_another_trusted_cert_still_verifies(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let key = load_private_key(SP_PRIVKEY, None)?;
+        let signed =
+            construct_saml_signature(RESPONSE, false, &key, IDP_CERT, RSA_SHA256, &[], None)?;
+        let signer = SP_SIGNING_CERT.to_string();
+        let named = IDP_CERT.to_string();
+        for certs in [vec![signer.clone(), named.clone()], vec![named, signer]] {
+            assert!(verify_signature(&signed, &certs)?.0);
+            let detailed = verify_signatures_detailed_with_profile(
+                &signed,
+                &certs,
+                None,
+                XmlLimits::default(),
+                XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            )?;
+            assert!(detailed.verified() && detailed.assertion_directly_covered());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rolling_cert_rejects_signer_outside_the_trusted_keys(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let key = load_private_key(UNTRUSTED_PRIVKEY, None)?;
+        let signed =
+            construct_saml_signature(RESPONSE, false, &key, SP_CERT, RSA_SHA256, &[], None)?;
+        let certs = [SP_SIGNING_CERT.to_string(), SP_CERT.to_string()];
+        assert_eq!(verify_signature(&signed, &certs)?, (false, None));
+        let detailed = verify_signatures_detailed_with_profile(
+            &signed,
+            &certs,
+            None,
+            XmlLimits::default(),
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        )?;
+        assert!(!detailed.verified());
+        Ok(())
+    }
+
+    #[cfg(not(feature = "crypto-fips"))]
+    #[test]
+    fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::binding::base64_decode;
+        use crate::constants::signature_algorithm::HMAC_SHA1;
+        use crate::crypto::keys::load_hmac_secret;
+
+        let secret = HmacSecret::try_new(b"identity-provider-hmac-secret".as_slice())?;
+        let certs = [SP_SIGNING_CERT.to_string(), IDP_CERT.to_string()];
+        let verified = |signed: &str| -> Result<bool, SamlError> {
+            Ok(verify_signatures_detailed_with_profile(
+                signed,
+                &certs,
+                Some(&secret),
+                XmlLimits::default(),
+                XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            )?
+            .verified())
+        };
+        let sign_hmac = |key_bytes: &[u8]| -> Result<String, SamlError> {
+            let key = load_hmac_secret(&HmacSecret::try_new(key_bytes)?)?;
+            construct_saml_signature(RESPONSE, false, &key, IDP_CERT, HMAC_SHA1, &[], None)
+        };
+
+        let rsa_key = load_private_key(SP_PRIVKEY, None)?;
+        let rsa =
+            construct_saml_signature(RESPONSE, false, &rsa_key, IDP_CERT, RSA_SHA256, &[], None)?;
+        assert!(verified(&rsa)?);
+        assert!(verified(&sign_hmac(secret.as_bytes())?)?);
+
+        let base64 = normalize_cert_string(IDP_CERT);
+        let pem = format!("-----BEGIN CERTIFICATE-----\n{base64}\n-----END CERTIFICATE-----\n");
+        for forged_key in [
+            base64_decode(&base64)?,
+            base64.into_bytes(),
+            pem.into_bytes(),
+        ] {
+            assert!(!verified(&sign_hmac(&forged_key)?)?);
+        }
         Ok(())
     }
 
