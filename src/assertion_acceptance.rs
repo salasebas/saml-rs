@@ -151,7 +151,7 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
     Ok(())
 }
 
-/// Source of the first bearer `<Assertion>`, or the first `<Assertion>`.
+/// Source of the [`consumed_assertion`] of `xml`.
 ///
 /// # Errors
 ///
@@ -161,16 +161,18 @@ pub(crate) fn first_login_assertion_xml(
     limits: XmlLimits,
 ) -> Result<Option<String>, SamlError> {
     let document = dom::parse_with_limits(xml, limits)?;
-    let assertions = direct_assertions(&document.root);
-    let Some(chosen) = assertions
+    Ok(consumed_assertion(&document.root).map(|chosen| xml[chosen.start..chosen.end].to_string()))
+}
+
+/// The direct `<Assertion>` of `response` that a login session reads: the
+/// first with a bearer `SubjectConfirmation`, or else the first.
+pub(crate) fn consumed_assertion(response: &Node) -> Option<&Node> {
+    let assertions = direct_assertions(response);
+    assertions
         .iter()
         .find(|assertion| node_has_bearer(assertion))
+        .or_else(|| assertions.first())
         .copied()
-        .or_else(|| assertions.first().copied())
-    else {
-        return Ok(None);
-    };
-    Ok(Some(xml[chosen.start..chosen.end].to_string()))
 }
 
 /// Replay identity of one direct assertion in an already accepted response.

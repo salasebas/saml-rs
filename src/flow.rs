@@ -569,7 +569,8 @@ fn verify_embedded_signature(
 }
 
 /// Verify the signature over each decrypted `<Assertion>`, which must cover
-/// that assertion directly.
+/// that assertion directly, and return the evidence of the first decrypted
+/// assertion equal to `consumed_assertion`.
 #[cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
@@ -577,10 +578,14 @@ fn verify_embedded_signature(
 ))]
 fn verify_decrypted_assertions(
     assertions: &[String],
+    consumed_assertion: Option<&str>,
     opts: &FlowOptions<'_>,
 ) -> Result<Vec<VerifiedXmlSignatureEvidence>, SamlError> {
+    let consumed = assertions
+        .iter()
+        .position(|assertion| Some(assertion.as_str()) == consumed_assertion);
     let mut verified_xml_signatures = Vec::new();
-    for assertion in assertions {
+    for (index, assertion) in assertions.iter().enumerate() {
         let signature_present =
             crate::crypto::verify::has_xml_signature_with_limits(assertion, opts.xml_limits)?;
         let evidence = verify_embedded_signature(assertion, opts)?;
@@ -591,7 +596,9 @@ fn verify_decrypted_assertions(
             AssertionSignatureRequirement::Direct,
             evidence.assertion_directly_covered,
         )?;
-        verified_xml_signatures.extend(evidence.verified_xml_signatures);
+        if consumed == Some(index) {
+            verified_xml_signatures.extend(evidence.verified_xml_signatures);
+        }
     }
     Ok(verified_xml_signatures)
 }
@@ -729,11 +736,16 @@ fn verify_and_prepare(
             )?;
             is_valid_xml_with_limits(&content, opts.xml_limits)?;
             validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
+            let assertion = assertion_shortcut(&content, opts.xml_limits)?;
             if assertion_signature == AssertionSignatureRequirement::Direct {
-                verified_xml_signatures.extend(verify_decrypted_assertions(&assertions, opts)?);
+                verified_xml_signatures.extend(verify_decrypted_assertions(
+                    &assertions,
+                    assertion.as_deref(),
+                    opts,
+                )?);
             }
             return Ok(PreparedMessage {
-                assertion: assertion_shortcut(&content, opts.xml_limits)?,
+                assertion,
                 saml_content: content,
                 message_authenticated: evidence.response_covered,
                 verified_xml_signatures,
