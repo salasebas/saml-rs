@@ -19,6 +19,8 @@ pub use generate::{
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use sp::SpMetadata;
 
+use std::collections::HashSet;
+
 use crate::constants::{Binding, CertUse};
 use crate::error::SamlError;
 use crate::util::Value;
@@ -180,43 +182,28 @@ fn children_named<'a>(
         .filter(move |child| child.local_name == local_name)
 }
 
-pub(crate) fn location_for_binding(value: Option<&Value>, binding: Binding) -> Option<String> {
-    let value = value?;
-    for obj in as_object_list(value) {
-        if obj.get_str("binding") == Some(binding.urn()) {
-            return obj.get_str("location").map(str::to_string);
-        }
-    }
-    None
-}
-
-/// Response endpoint for the first `binding` match.
-///
-/// `ResponseLocation` is that endpoint when the attribute is present and
-/// non-empty. Otherwise the endpoint's `Location` is used.
-pub(crate) fn response_location_for_binding(
-    value: Option<&Value>,
-    binding: Binding,
-) -> Option<String> {
-    let value = value?;
-    for obj in as_object_list(value) {
-        if obj.get_str("binding") != Some(binding.urn()) {
-            continue;
-        }
-        if let Some(response_location) = non_empty_location(obj.get_str("responseLocation")) {
-            return Some(response_location.to_string());
-        }
-        if let Some(location) = non_empty_location(obj.get_str("location")) {
-            return Some(location.to_string());
-        }
-    }
-    None
-}
-
 #[derive(Clone, Copy)]
 pub(crate) enum EndpointDirection {
     Request,
     Response,
+}
+
+/// Non-empty locations for the binding and message direction, in document
+/// order, including repeats.
+fn published_locations(
+    value: Option<&Value>,
+    binding: Binding,
+    direction: EndpointDirection,
+) -> impl Iterator<Item = &str> {
+    value
+        .into_iter()
+        .flat_map(as_object_list)
+        .filter(move |obj| obj.get_str("binding") == Some(binding.urn()))
+        .filter_map(move |obj| match direction {
+            EndpointDirection::Request => non_empty_location(obj.get_str("location")),
+            EndpointDirection::Response => non_empty_location(obj.get_str("responseLocation"))
+                .or_else(|| non_empty_location(obj.get_str("location"))),
+        })
 }
 
 /// Published locations for the binding and message direction, in document order.
@@ -225,34 +212,26 @@ pub(crate) fn published_locations_for_binding(
     binding: Binding,
     direction: EndpointDirection,
 ) -> Vec<String> {
-    let Some(value) = value else {
-        return Vec::new();
-    };
-    let mut locations = Vec::new();
-    for obj in as_object_list(value) {
-        if obj.get_str("binding") != Some(binding.urn()) {
-            continue;
-        }
-        let location = match direction {
-            EndpointDirection::Request => non_empty_location(obj.get_str("location")),
-            EndpointDirection::Response => non_empty_location(obj.get_str("responseLocation"))
-                .or_else(|| non_empty_location(obj.get_str("location"))),
-        };
-        if let Some(location) = location {
-            push_unique_location(&mut locations, location);
-        }
-    }
-    locations
+    let mut seen = HashSet::new();
+    published_locations(value, binding, direction)
+        .filter(|location| seen.insert(*location))
+        .map(str::to_string)
+        .collect()
+}
+
+/// First published location for the binding and message direction.
+pub(crate) fn first_published_location(
+    value: Option<&Value>,
+    binding: Binding,
+    direction: EndpointDirection,
+) -> Option<String> {
+    published_locations(value, binding, direction)
+        .next()
+        .map(str::to_string)
 }
 
 fn non_empty_location(value: Option<&str>) -> Option<&str> {
     value.filter(|location| !location.is_empty())
-}
-
-fn push_unique_location(locations: &mut Vec<String>, location: &str) {
-    if locations.iter().all(|existing| existing != location) {
-        locations.push(location.to_string());
-    }
 }
 
 /// Parsed entity metadata (the base shared by SP and IdP).
@@ -374,20 +353,28 @@ impl Metadata {
         self.x509_certificates(use_).into_iter().next()
     }
 
-    /// First `SingleLogoutService` `Location` for `binding`.
+    /// First non-empty `SingleLogoutService` `Location` for `binding`.
     ///
     /// Logout requests are sent to this URL. Logout responses use
     /// [`Self::get_single_logout_response_service`].
     pub fn get_single_logout_service(&self, binding: Binding) -> Option<String> {
-        location_for_binding(self.meta.get("singleLogoutService"), binding)
+        first_published_location(
+            self.meta.get("singleLogoutService"),
+            binding,
+            EndpointDirection::Request,
+        )
     }
 
     /// `SingleLogoutService` URL where logout responses are sent for `binding`.
     ///
-    /// This is `ResponseLocation` on the first endpoint for `binding` when that
-    /// attribute is present. Otherwise it is that endpoint's `Location`.
+    /// Each endpoint for `binding` offers its non-empty `ResponseLocation`, or
+    /// else its non-empty `Location`. This is the first such URL.
     pub fn get_single_logout_response_service(&self, binding: Binding) -> Option<String> {
-        response_location_for_binding(self.meta.get("singleLogoutService"), binding)
+        first_published_location(
+            self.meta.get("singleLogoutService"),
+            binding,
+            EndpointDirection::Response,
+        )
     }
 
     /// Every request `Location` published on `SingleLogoutService` for `binding`.
@@ -433,7 +420,8 @@ impl Metadata {
         std::fs::write(path, &self.xml)
     }
 
-    /// Bindings for which a `SingleLogoutService` endpoint is declared.
+    /// Bindings for which a `SingleLogoutService` endpoint declares a
+    /// non-empty `Location`.
     pub fn get_support_bindings(&self) -> Vec<Binding> {
         [
             Binding::Redirect,
@@ -638,6 +626,7 @@ mod tests {
   <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
     <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/slo/a" ResponseLocation="https://sp.example.com/slo/b"/>
     <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/slo/c" ResponseLocation=""/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/slo/a" ResponseLocation="https://sp.example.com/slo/c"/>
     <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://sp.example.com/slo/redirect"/>
   </SPSSODescriptor>
 </EntityDescriptor>"#;
@@ -845,6 +834,44 @@ mod tests {
                 "https://idp.example.com/sso/c".to_string(),
             ]
         );
+        Ok(())
+    }
+
+    #[test]
+    fn endpoints_without_a_location_are_skipped_by_every_accessor(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let xml = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location=""/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/slo"/>
+    <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location=""/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location=""/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso"/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location=""/>
+  </IDPSSODescriptor>
+</EntityDescriptor>"#;
+        let idp = IdpMetadata::from_xml(xml)?;
+        assert_eq!(
+            idp.get_single_sign_on_service(Binding::Post).as_deref(),
+            Some("https://idp.example.com/sso")
+        );
+        assert_eq!(
+            idp.single_sign_on_service_locations(Binding::Post),
+            vec!["https://idp.example.com/sso".to_string()]
+        );
+        assert_eq!(idp.get_single_sign_on_service(Binding::Redirect), None);
+        assert_eq!(
+            idp.get_single_logout_service(Binding::Post).as_deref(),
+            Some("https://idp.example.com/slo")
+        );
+        assert_eq!(
+            idp.get_single_logout_response_service(Binding::Post)
+                .as_deref(),
+            Some("https://idp.example.com/slo")
+        );
+        assert_eq!(idp.get_single_logout_service(Binding::Redirect), None);
+        assert_eq!(idp.get_support_bindings(), vec![Binding::Post]);
         Ok(())
     }
 }
