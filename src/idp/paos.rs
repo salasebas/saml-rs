@@ -6,8 +6,9 @@ use super::{
 use crate::constants::Binding;
 use crate::entity::User;
 use crate::error::SamlError;
-use crate::model::{Attribute, AuthnContextReference, RequestedAuthnContext, Status};
+use crate::model::{Attribute, AuthnContextReference, NameIdPolicy, RequestedAuthnContext, Status};
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
+use crate::xml::OutboundNameIdQualifiers;
 
 pub(crate) struct PaosSsoResponseInput<'a> {
     pub(crate) sp: &'a ServiceProvider,
@@ -15,12 +16,13 @@ pub(crate) struct PaosSsoResponseInput<'a> {
     pub(crate) in_response_to: &'a str,
     pub(crate) user: &'a User,
     pub(crate) name_id_format: Option<&'a str>,
-    pub(crate) sp_provided_id: Option<&'a str>,
+    pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) issuance_lifetime: time::Duration,
     pub(crate) status: Option<&'a Status>,
     pub(crate) attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
+    pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
 
 impl IdentityProvider {
@@ -46,13 +48,14 @@ impl IdentityProvider {
             LoginResponseOverrides {
                 acs: Some(input.acs),
                 name_id_format: input.name_id_format,
-                sp_provided_id: input.sp_provided_id,
+                name_id_qualifiers: input.name_id_qualifiers,
                 issuance_lifetime: Some(input.issuance_lifetime),
                 web_browser_sso_producer: WebBrowserSsoProducer::Follow,
                 status: input.status,
                 typed_attributes: input.attributes,
                 authn_context: input.authn_context,
                 requested_authn_context: input.requested_authn_context,
+                requested_name_id_policy: input.requested_name_id_policy,
             },
         )?;
         let xml = crate::binding::base64_decode(&issued.context.context)?;

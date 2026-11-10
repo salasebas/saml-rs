@@ -4,6 +4,8 @@ use crate::entity::generate_id;
 use crate::error::SamlError;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 
+use super::extract::name_id_format_from_uri;
+
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
 
 /// Reject a NameID format that is written but is not an absolute URI
@@ -45,9 +47,8 @@ pub(crate) fn validate_issued_name_id_length(
 
 /// NameID value, format, and optional qualifier attributes.
 ///
-/// [`Self::new`] leaves the qualifiers unset. Response generation copies the
-/// value, format, and `SPProvidedID`. It does not write `NameQualifier` or
-/// `SPNameQualifier`.
+/// [`Self::new`] leaves the qualifiers unset. Response generation writes the
+/// value, format, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`.
 ///
 /// [`Self::generate_transient`], [`Self::generate_persistent`], and
 /// [`Self::persistent`] create the identifiers an identity provider issues in
@@ -252,6 +253,39 @@ impl NameIdPolicy {
     /// NameID creation request.
     pub fn creation_request(&self) -> NameIdCreationRequest {
         self.creation_request
+    }
+
+    /// Reject an issued `SPNameQualifier` that differs from the requested one
+    /// when the policy asks for a SAML-defined format other than
+    /// `unspecified` or `encrypted`.
+    pub(crate) fn ensure_sp_name_qualifier_met_by(
+        &self,
+        issued: Option<&str>,
+    ) -> Result<(), SamlError> {
+        match self.sp_name_qualifier.as_deref() {
+            Some(requested) if self.requests_saml_defined_format() && issued != Some(requested) => {
+                Err(SamlError::Invalid(format!(
+                    "the NameIDPolicy requests SPNameQualifier {requested}, which the issued NameID must carry"
+                )))
+            }
+            Some(_) | None => Ok(()),
+        }
+    }
+
+    fn requests_saml_defined_format(&self) -> bool {
+        let Some(format) = &self.format else {
+            return false;
+        };
+        match name_id_format_from_uri(&collapse_whitespace(format.as_uri())) {
+            NameIdFormat::EmailAddress
+            | NameIdFormat::Persistent
+            | NameIdFormat::Transient
+            | NameIdFormat::Entity
+            | NameIdFormat::Kerberos
+            | NameIdFormat::WindowsDomainQualifiedName
+            | NameIdFormat::X509SubjectName => true,
+            NameIdFormat::Unspecified | NameIdFormat::Custom(_) => false,
+        }
     }
 
     /// Whether the IdP may create a new identifier.

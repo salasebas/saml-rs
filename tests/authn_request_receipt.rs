@@ -12,6 +12,7 @@
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
+use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, BrowserInput,
@@ -27,6 +28,9 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const EMAIL_FORMAT: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
+const PERSISTENT_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
+const UNSPECIFIED_FORMAT: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified";
+const ENCRYPTED_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
 const BEARER: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
 const SMARTCARD: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:Smartcard";
 const PASSWORD_PROTECTED_TRANSPORT: &str =
@@ -930,6 +934,84 @@ fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules
     assert!(
         matches!(response, Err(SamlError::Invalid(message)) if message.contains("Web Browser SSO generation rules"))
     );
+    Ok(())
+}
+
+#[test]
+fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receive_policy = |attributes: &str| {
+        receive(
+            IdpValidationPolicy::recommended(),
+            StartSso::post(),
+            |xml| {
+                replace_name_id_policy(
+                    xml,
+                    &format!("<samlp:NameIDPolicy{attributes} SPNameQualifier=\"{AFFILIATION}\"/>"),
+                )
+            },
+        )
+    };
+    let respond = |receipt: &Receipt, sp_name_qualifier: Option<&str>, options: RespondSso| {
+        receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            Subject::new(
+                NameId::with_qualifiers(
+                    "pseudonym",
+                    Some(NameIdFormat::Persistent),
+                    None,
+                    sp_name_qualifier.map(str::to_string),
+                    None,
+                ),
+                Vec::new(),
+            ),
+            options,
+        )
+    };
+    let rules = || RespondSso::post().apply_web_browser_sso_generation_rules();
+
+    for format in [
+        PERSISTENT_FORMAT.to_string(),
+        format!(" {PERSISTENT_FORMAT} "),
+    ] {
+        let receipt = receive_policy(&format!(" Format=\"{format}\""))?;
+        for issued in [
+            None,
+            Some(SP_ENTITY_ID),
+            Some(" https://affiliation.example.com"),
+        ] {
+            let refused = respond(&receipt, issued, rules());
+            assert!(
+                matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("SPNameQualifier") && message.contains(AFFILIATION)),
+                "{format} {issued:?}: {refused:?}"
+            );
+        }
+        let answered = response_xml(&respond(&receipt, Some(AFFILIATION), rules())?)?;
+        assert!(answered.contains(&format!("SPNameQualifier=\"{AFFILIATION}\"")));
+
+        let error = respond(
+            &receipt,
+            None,
+            rules().status(
+                Status::responder()
+                    .with_subordinate(SubordinateStatusCode::try_new(INVALID_NAME_ID_POLICY)?),
+            ),
+        );
+        assert!(error.is_ok(), "{error:?}");
+        let compatibility = respond(&receipt, None, RespondSso::post());
+        assert!(compatibility.is_ok(), "{compatibility:?}");
+    }
+
+    for attributes in [
+        format!(" Format=\"{UNSPECIFIED_FORMAT}\""),
+        format!(" Format=\"{ENCRYPTED_FORMAT}\""),
+        String::new(),
+    ] {
+        let receipt = receive_policy(&attributes)?;
+        let answered = respond(&receipt, None, rules());
+        assert!(answered.is_ok(), "{attributes}: {answered:?}");
+    }
     Ok(())
 }
 

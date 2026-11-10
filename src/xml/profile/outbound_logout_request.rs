@@ -52,9 +52,9 @@ pub(crate) struct OutboundLogoutRequestExpectation<'a> {
     pub(crate) session_indexes: &'a [&'a str],
 }
 
-/// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` expected on an
-/// outbound `LogoutRequest` `<NameID>`. `None` expects the attribute to be
-/// absent.
+/// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` of an outbound
+/// `<NameID>`. `None` omits the attribute, and a `LogoutRequest` check expects
+/// it to be absent.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct OutboundNameIdQualifiers<'a> {
     pub(crate) name_qualifier: Option<&'a str>,

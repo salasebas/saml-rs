@@ -9,6 +9,7 @@ use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides}
 use crate::model::{
     AuthnRequest, Received, RelayStateParam, ReplayKey, SamlValidationContext, SsoResponse, Subject,
 };
+use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
@@ -127,9 +128,10 @@ impl Saml<Idp> {
     /// [`Self::remember_identity_provider`] after authentication when the
     /// caller wants this identity provider remembered.
     ///
-    /// The assertion `NameID` carries the `subject` value, format, and
-    /// `SPProvidedID`. After a service provider sets its alternative identifier
-    /// through [`Self::receive_name_id_management`], pass that value as
+    /// The assertion `NameID` carries the `subject` value, format,
+    /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. After a service
+    /// provider sets its alternative identifier through
+    /// [`Self::receive_name_id_management`], pass that value as
     /// `SPProvidedID` with [`NameId::with_qualifiers`](crate::NameId::with_qualifiers).
     ///
     /// # Errors
@@ -145,13 +147,16 @@ impl Saml<Idp> {
     /// response template, [`RespondSso::attributes`] is combined with a login
     /// response template, names a basic attribute that is not an XML name, or
     /// has a `NameFormat` that is not an absolute URI reference,
-    /// a `subject` `NameId` with `SPProvidedID` is combined with a login
-    /// response template, the persistent or transient `NameID` of `subject` is
-    /// longer than 256 characters, the NameID format is not an absolute URI
-    /// reference, [`RespondSso::authn_context`] is set without producer rules
-    /// or does not meet an exact `RequestedAuthnContext`, or response creation
-    /// fails. Returns [`SamlError::Unsupported`] when `subject` has
-    /// confirmations.
+    /// a `subject` `NameId` with `NameQualifier`, `SPNameQualifier`, or
+    /// `SPProvidedID` is combined with a login response template, the
+    /// persistent or transient `NameID` of `subject` is longer than 256
+    /// characters, the NameID format is not an absolute URI reference,
+    /// [`RespondSso::authn_context`] is set without producer rules or does not
+    /// meet an exact `RequestedAuthnContext`, producer rules are selected and
+    /// the `subject` `SPNameQualifier` is not the one the request's
+    /// `NameIDPolicy` asks for with a SAML-defined format other than
+    /// `unspecified` or `encrypted`, or response creation fails. Returns
+    /// [`SamlError::Unsupported`] when `subject` has confirmations.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
@@ -180,7 +185,9 @@ impl Saml<Idp> {
     /// with a custom login response template, an error status is combined with
     /// a login response template, [`RespondSso::attributes`] is combined with a
     /// login response template or names a basic attribute that is not an XML
-    /// name, [`RespondSso::authn_context`] is set without producer rules, the
+    /// name, a `subject` `NameId` with `NameQualifier`, `SPNameQualifier`, or
+    /// `SPProvidedID` is combined with a login response template,
+    /// [`RespondSso::authn_context`] is set without producer rules, the
     /// persistent or transient `NameID` of `subject` is longer than 256
     /// characters, or response creation fails. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
@@ -266,13 +273,16 @@ impl Saml<Idp> {
             .name_id()
             .format()
             .map(|format| format.as_uri().to_string());
-        let sp_provided_id = subject.name_id().sp_provided_id().map(str::to_string);
         let user = user_from_subject(&subject)?;
         let in_response_to = request.map(|request| request.message().id().as_str());
         let overrides = |acs| LoginResponseOverrides {
             acs,
             name_id_format: name_id_format.as_deref(),
-            sp_provided_id: sp_provided_id.as_deref(),
+            name_id_qualifiers: OutboundNameIdQualifiers {
+                name_qualifier: subject.name_id().name_qualifier(),
+                sp_name_qualifier: subject.name_id().sp_name_qualifier(),
+                sp_provided_id: subject.name_id().sp_provided_id(),
+            },
             issuance_lifetime: Some(self.0.issuance_lifetime),
             web_browser_sso_producer: options.web_browser_sso_producer,
             status: options.status.as_ref(),
@@ -280,6 +290,8 @@ impl Saml<Idp> {
             authn_context: options.authn_context.as_ref(),
             requested_authn_context: request
                 .and_then(|request| request.message().requested_authn_context()),
+            requested_name_id_policy: request
+                .and_then(|request| request.message().name_id_policy()),
         };
         let (delivery, issued) = match options.delivery {
             ResponseTransport::Browser => {

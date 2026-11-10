@@ -11,7 +11,7 @@ use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
-    RequestedAuthnContext, SessionIndex, Status, TopLevelStatusCode,
+    NameIdPolicy, RequestedAuthnContext, SessionIndex, Status, TopLevelStatusCode,
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
@@ -19,6 +19,7 @@ use crate::template::{
     validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
     LOGIN_RESPONSE_TEMPLATE,
 };
+use crate::xml::OutboundNameIdQualifiers;
 
 mod artifact;
 mod login_response;
@@ -52,13 +53,14 @@ pub struct LoginResponseOptions<'a> {
 pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) acs: Option<&'a str>,
     pub(crate) name_id_format: Option<&'a str>,
-    pub(crate) sp_provided_id: Option<&'a str>,
+    pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) issuance_lifetime: Option<time::Duration>,
     pub(crate) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(crate) status: Option<&'a Status>,
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
+    pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
 
 pub(crate) struct RenderedLoginResponse {
@@ -75,7 +77,7 @@ pub(crate) struct IssuedLoginResponse {
 #[derive(Clone, Copy)]
 struct LoginResponseRendering<'a> {
     name_id_format: Option<&'a str>,
-    sp_provided_id: Option<&'a str>,
+    name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     custom: Option<CustomTagReplacement<'a>>,
     issuance_lifetime: time::Duration,
     web_browser_sso_producer: WebBrowserSsoProducer,
@@ -83,6 +85,7 @@ struct LoginResponseRendering<'a> {
     typed_attributes: &'a [Attribute],
     authn_context: Option<&'a AuthnContextReference>,
     requested_authn_context: Option<&'a RequestedAuthnContext>,
+    requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
 
 /// A SAML 2.0 Identity Provider: runtime [`EntitySetting`] plus parsed [`IdpMetadata`].
@@ -201,9 +204,15 @@ impl IdentityProvider {
                     .into(),
             ));
         }
-        if rendering.sp_provided_id.is_some() && uses_template {
+        let qualifiers = rendering.name_id_qualifiers;
+        if uses_template
+            && (qualifiers.name_qualifier.is_some()
+                || qualifiers.sp_name_qualifier.is_some()
+                || qualifiers.sp_provided_id.is_some())
+        {
             return Err(SamlError::Invalid(
-                "a NameID SPProvidedID cannot be combined with a login response template".into(),
+                "a NameID NameQualifier, SPNameQualifier, or SPProvidedID cannot be combined with a login response template"
+                    .into(),
             ));
         }
         if !rendering.typed_attributes.is_empty() && (uses_template || !attributes.is_empty()) {
@@ -249,11 +258,13 @@ impl IdentityProvider {
                 .authn_context
                 .cloned()
                 .unwrap_or_else(AuthnContextReference::unspecified_class);
-            if let Some(requested) = rendering
-                .requested_authn_context
-                .filter(|_| rendering.web_browser_sso_producer.follows())
-            {
-                requested.ensure_met_by(&authn_context)?;
+            if rendering.web_browser_sso_producer.follows() {
+                if let Some(requested) = rendering.requested_authn_context {
+                    requested.ensure_met_by(&authn_context)?;
+                }
+                if let Some(policy) = rendering.requested_name_id_policy {
+                    policy.ensure_sp_name_qualifier_met_by(qualifiers.sp_name_qualifier)?;
+                }
             }
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
             let id = generate_id();
@@ -281,7 +292,7 @@ impl IdentityProvider {
                 audience: &audience,
                 name_id_format,
                 name_id: &user.name_id,
-                sp_provided_id: rendering.sp_provided_id,
+                name_id_qualifiers: qualifiers,
                 in_response_to,
                 authn_statement: rendering.web_browser_sso_producer.follows().then_some(
                     login_response::AuthnStatementXml {
@@ -444,7 +455,7 @@ impl IdentityProvider {
             &acs,
             LoginResponseRendering {
                 name_id_format: overrides.name_id_format,
-                sp_provided_id: overrides.sp_provided_id,
+                name_id_qualifiers: overrides.name_id_qualifiers,
                 custom: options.custom,
                 issuance_lifetime: overrides
                     .issuance_lifetime
@@ -454,6 +465,7 @@ impl IdentityProvider {
                 typed_attributes: overrides.typed_attributes,
                 authn_context: overrides.authn_context,
                 requested_authn_context: overrides.requested_authn_context,
+                requested_name_id_policy: overrides.requested_name_id_policy,
             },
         )?;
         let error_response = overrides
