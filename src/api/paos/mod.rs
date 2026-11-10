@@ -17,6 +17,7 @@ use crate::model::{
     SsoResponse, SsoSession, Status, Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
+use crate::xml::OutboundNameIdQualifiers;
 
 use super::raw_mapping::{
     ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor, user_from_subject,
@@ -689,8 +690,10 @@ impl Saml<Idp> {
     /// a login response template, names a basic attribute that is not an XML
     /// name, or has a `NameFormat` that is not an absolute URI reference, the
     /// authentication context does not meet an exact `RequestedAuthnContext`,
-    /// or the response cannot be signed. Returns [`SamlError::Unsupported`]
-    /// when `subject` has confirmations.
+    /// the `subject` `SPNameQualifier` is not the one the request's
+    /// `NameIDPolicy` asks for with a SAML-defined format other than
+    /// `unspecified`, or the response cannot be signed. Returns
+    /// [`SamlError::Unsupported`] when `subject` has confirmations.
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,
@@ -767,14 +770,20 @@ impl Saml<Idp> {
             in_response_to: request.message().id().as_str(),
             user: &user,
             name_id_format: name_id_format.as_deref(),
-            sp_provided_id: subject
-                .as_ref()
-                .and_then(|subject| subject.name_id().sp_provided_id()),
+            name_id_qualifiers: subject.as_ref().map_or_else(
+                OutboundNameIdQualifiers::default,
+                |subject| OutboundNameIdQualifiers {
+                    name_qualifier: subject.name_id().name_qualifier(),
+                    sp_name_qualifier: subject.name_id().sp_name_qualifier(),
+                    sp_provided_id: subject.name_id().sp_provided_id(),
+                },
+            ),
             issuance_lifetime: self.0.issuance_lifetime,
             status: status.as_ref(),
             attributes,
             authn_context,
             requested_authn_context: request.message().requested_authn_context(),
+            requested_name_id_policy: request.message().name_id_policy(),
         };
         let issued = self
             .raw_identity_provider()

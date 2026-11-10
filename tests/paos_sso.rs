@@ -486,6 +486,59 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
 }
 
 #[test]
+fn requested_sp_name_qualifier_is_checked_and_written() -> Result<(), Box<dyn std::error::Error>> {
+    const AFFILIATION: &str = "https://affiliation.example.com";
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let requested = idp_request.replace(
+        "<samlp:NameIDPolicy ",
+        &format!("<samlp:NameIDPolicy SPNameQualifier=\"{AFFILIATION}\" "),
+    );
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(requested, IDP_SOAP)?,
+        validation(),
+    )?;
+    let unqualified = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default(),
+    );
+    assert!(
+        matches!(&unqualified, Err(SamlError::Invalid(message)) if message.contains(AFFILIATION)),
+        "{unqualified:?}"
+    );
+
+    let qualified = Subject::new(
+        NameId::with_qualifiers(
+            "alice@example.com",
+            Some(NameIdFormat::EmailAddress),
+            Some(IDP_ENTITY_ID.to_string()),
+            Some(AFFILIATION.to_string()),
+            None,
+        ),
+        Vec::new(),
+    );
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        qualified,
+        RespondPaosSso::default(),
+    )?;
+    assert!(answered.envelope().contains(&format!(
+        "<saml:NameID NameQualifier=\"{IDP_ENTITY_ID}\" SPNameQualifier=\"{AFFILIATION}\" Format=\"{}\">alice@example.com</saml:NameID>",
+        NameIdFormat::EmailAddress.as_uri()
+    )));
+    Ok(())
+}
+
+#[test]
 fn response_name_id_format_that_is_not_an_absolute_uri_is_not_sent(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;

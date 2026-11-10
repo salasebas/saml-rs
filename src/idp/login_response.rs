@@ -5,6 +5,7 @@ use crate::template::{write_login_response_attribute_statement, LoginResponseAtt
 use crate::xml::any_uri::is_absolute_uri_reference;
 use crate::xml::name::is_name;
 use crate::xml::write::XmlWriter;
+use crate::xml::OutboundNameIdQualifiers;
 
 const VERSION: &str = "2.0";
 const XMLNS_XS: &str = "http://www.w3.org/2001/XMLSchema";
@@ -34,8 +35,7 @@ pub(super) struct LoginResponseXml<'a> {
     /// `<NameID>` `Format`. `None` omits the attribute.
     pub(super) name_id_format: Option<&'a str>,
     pub(super) name_id: &'a str,
-    /// `<NameID>` `SPProvidedID`. `None` omits the attribute.
-    pub(super) sp_provided_id: Option<&'a str>,
+    pub(super) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(super) in_response_to: Option<&'a str>,
     pub(super) authn_statement: Option<AuthnStatementXml<'a>>,
     pub(super) attributes: &'a [LoginResponseAttribute],
@@ -82,8 +82,13 @@ pub(super) fn render_default_login_response(
     writer.text_element(&qname(input.assertion_prefix, "Issuer"), &[], input.issuer);
     writer.start(&qname(input.assertion_prefix, "Subject"), &[]);
     let name_id_attrs: Vec<(&str, &str)> = [
+        ("NameQualifier", input.name_id_qualifiers.name_qualifier),
+        (
+            "SPNameQualifier",
+            input.name_id_qualifiers.sp_name_qualifier,
+        ),
         ("Format", input.name_id_format),
-        ("SPProvidedID", input.sp_provided_id),
+        ("SPProvidedID", input.name_id_qualifiers.sp_provided_id),
     ]
     .into_iter()
     .filter_map(|(name, value)| value.map(|value| (name, value)))

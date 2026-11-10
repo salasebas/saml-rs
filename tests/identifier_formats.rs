@@ -726,13 +726,13 @@ fn stored_persistent_identifier_is_reissued_unchanged() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn identity_provider_sends_the_alternative_identifier_the_service_provider_set(
+fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_issued_identifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let name_id = NameId::with_qualifiers(
         NameId::generate_persistent().value(),
         Some(NameIdFormat::Persistent),
-        None,
-        None,
+        Some("https://origin-idp.example.com/?a=1&b=2".into()),
+        Some("\"affiliation\" <group>".into()),
         Some("sp-alias".into()),
     );
 
@@ -741,7 +741,7 @@ fn identity_provider_sends_the_alternative_identifier_the_service_provider_set(
     assert_eq!(
         name_id_element(&exchange.xml)?,
         format!(
-            "<saml:NameID Format=\"{}\" SPProvidedID=\"sp-alias\">{}",
+            "<saml:NameID NameQualifier=\"https://origin-idp.example.com/?a=1&amp;b=2\" SPNameQualifier=\"&quot;affiliation&quot; &lt;group&gt;\" Format=\"{}\" SPProvidedID=\"sp-alias\">{}",
             NameIdFormat::Persistent.as_uri(),
             name_id.value()
         )
@@ -751,7 +751,7 @@ fn identity_provider_sends_the_alternative_identifier_the_service_provider_set(
 }
 
 #[test]
-fn a_login_response_template_does_not_drop_the_alternative_identifier(
+fn a_login_response_template_does_not_drop_a_name_id_qualifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp_with(TemplatePolicy {
@@ -762,18 +762,29 @@ fn a_login_response_template_does_not_drop_the_alternative_identifier(
         ..TemplatePolicy::default()
     })?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let name_id = NameId::with_qualifiers(
-        "pseudonym",
-        Some(NameIdFormat::Persistent),
-        None,
-        None,
-        Some("sp-alias".into()),
-    );
+    let qualified = |name_qualifier: Option<&str>,
+                     sp_name_qualifier: Option<&str>,
+                     sp_provided_id: Option<&str>| {
+        NameId::with_qualifiers(
+            "pseudonym",
+            Some(NameIdFormat::Persistent),
+            name_qualifier.map(str::to_string),
+            sp_name_qualifier.map(str::to_string),
+            sp_provided_id.map(str::to_string),
+        )
+    };
 
-    match idp.initiate_sso(&sp_descriptor, subject(name_id), RespondSso::post()) {
-        Err(SamlError::Invalid(message)) if message.contains("SPProvidedID") => Ok(()),
-        other => Err(format!("expected SPProvidedID template error, got {other:?}").into()),
+    for name_id in [
+        qualified(Some(IDP_ENTITY_ID), None, None),
+        qualified(None, Some(SP_ENTITY_ID), None),
+        qualified(None, None, Some("sp-alias")),
+    ] {
+        match idp.initiate_sso(&sp_descriptor, subject(name_id), RespondSso::post()) {
+            Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
+            other => return Err(format!("expected a template error, got {other:?}").into()),
+        }
     }
+    Ok(())
 }
 
 #[test]
