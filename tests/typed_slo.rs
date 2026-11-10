@@ -1178,6 +1178,7 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
         Some(saml_rs::constants::status_code::SUCCESS)
     );
     let response = completed.response().ok_or("missing logout response")?;
+    assert_eq!(response.status(), &Status::success());
     assert_eq!(response.in_response_to(), Some(exchange.pending.id()));
     assert_eq!(
         response.issue_instant().as_str(),
@@ -2707,6 +2708,35 @@ fn refused_logout_status() -> Status {
 }
 
 #[test]
+fn typed_facade_finish_slo_returns_partial_logout_under_success(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let partial_logout =
+        Status::success().with_subordinate(SubordinateStatusCode::partial_logout());
+    let exchange =
+        sp_started_exchange_answered_with(RespondSlo::post().status(partial_logout.clone()))?;
+
+    let completed = exchange.sp.finish_slo(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        validation(),
+    )?;
+
+    assert_eq!(
+        completed.status(),
+        Some(saml_rs::constants::status_code::SUCCESS)
+    );
+    assert_eq!(
+        completed
+            .response()
+            .ok_or("missing logout response")?
+            .status(),
+        &partial_logout
+    );
+    Ok(())
+}
+
+#[test]
 fn typed_facade_finish_slo_reports_signed_correlated_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange =
@@ -3185,8 +3215,15 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let name_id = NameId::with_qualifiers(
+        "alice@example.com",
+        Some(NameIdFormat::EmailAddress),
+        Some(IDP_ENTITY_ID.to_string()),
+        Some(SP_ENTITY_ID.to_string()),
+        Some("alice-at-sp".to_string()),
+    );
     let subject = LogoutSubject::new(
-        NameId::new("alice@example.com", None),
+        name_id.clone(),
         vec![
             SessionIndex::try_new("_session-one")?,
             SessionIndex::try_new("_session-two")?,
@@ -3199,10 +3236,7 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
         logout_request_input(&from_participant.outbound, LogoutBinding::Post)?,
         validation(),
     )?;
-    assert_eq!(
-        received_by_authority.message().name_id().map(NameId::value),
-        Some("alice@example.com")
-    );
+    assert_eq!(received_by_authority.message().name_id(), Some(&name_id));
     assert_eq!(
         received_by_authority
             .message()
@@ -3219,13 +3253,7 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
         logout_request_input(&from_authority.outbound, LogoutBinding::Post)?,
         validation(),
     )?;
-    assert_eq!(
-        received_by_participant
-            .message()
-            .name_id()
-            .map(NameId::value),
-        Some("alice@example.com")
-    );
+    assert_eq!(received_by_participant.message().name_id(), Some(&name_id));
     assert_eq!(
         received_by_participant
             .message()

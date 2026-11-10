@@ -2,8 +2,11 @@ use super::identifiers::{SamlInstant, SessionIndex};
 use super::sso::SsoSession;
 use super::subject::NameId;
 use super::validation::SamlValidationContext;
+use crate::config::NameIdFormat;
+use crate::constants::name_id_format;
 use crate::error::SamlError;
 use crate::validator::effective_not_on_or_after;
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::parse_saml_utc_date_time;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -12,7 +15,8 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// Pass it to [`Saml<Sp>::finish_sso_with_outstanding_logout`] or
 /// [`Saml<Sp>::accept_unsolicited_sso_with_outstanding_logout`]. The library
 /// does not store it. NameID values must be equal. A `Format` on the logout
-/// must match; an omitted `Format` compares values only. An empty session list
+/// must match; an omitted or `unspecified` `Format` compares values only. An
+/// empty session list
 /// applies to every session of that principal. The classification is in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
@@ -118,9 +122,14 @@ impl OutstandingLogout {
         if self.principal.value() != name_id.value() {
             return false;
         }
+        let collapsed_uri = |format: &NameIdFormat| collapse_whitespace(format.as_uri());
         self.principal
             .format()
-            .is_none_or(|format| name_id.format() == Some(format))
+            .map(collapsed_uri)
+            .is_none_or(|format| {
+                format == name_id_format::UNSPECIFIED
+                    || name_id.format().map(collapsed_uri) == Some(format)
+            })
     }
 
     fn same_session(&self, session: &SsoSession) -> bool {
