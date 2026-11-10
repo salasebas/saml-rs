@@ -5,6 +5,7 @@
 mod protocol;
 
 use std::marker::PhantomData;
+use std::time::SystemTime;
 
 use crate::config::{EntityId, IdpDescriptor, SpDescriptor};
 use crate::entity::User;
@@ -461,6 +462,7 @@ impl Saml<Sp> {
         _client: PaosClientRequest,
         options: StartPaosSso,
     ) -> Result<StartedPaosSso, SamlError> {
+        idp.ensure_valid_at(SystemTime::now())?;
         options.relay_state.validate()?;
         if let Some(relay_state) = options.relay_state.as_deref() {
             if !relay_state.chars().all(is_xml_char) {
@@ -561,7 +563,7 @@ impl Saml<Sp> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         let limits = self.raw_service_provider().setting.xml_limits;
         let body = read_soap_body(&response.envelope, "Response", limits)?;
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let request = HttpRequest::post(vec![(
             "SAMLResponse".into(),
             crate::binding::base64_encode(body.element_xml.as_bytes()),
@@ -617,7 +619,7 @@ impl Saml<Idp> {
     ) -> Result<crate::model::Received<AuthnRequest>, SamlError> {
         let limits = self.raw_identity_provider().setting.xml_limits;
         let body = read_soap_body(&request.envelope, "AuthnRequest", limits)?;
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let http = HttpRequest::post(vec![(
             "SAMLRequest".into(),
             crate::binding::base64_encode(body.element_xml.as_bytes()),
@@ -723,7 +725,7 @@ impl Saml<Idp> {
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = assertion_consumer_for_request(sp, request.message())?;
-        let mut raw_sp = raw_sp_descriptor(sp)?;
+        let mut raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let sign_encrypted_cbc = {
             let setting = &self.raw_identity_provider().setting;
             super::options::RespondSso::post().should_sign_response(

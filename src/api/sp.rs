@@ -7,6 +7,7 @@ use crate::model::{
     VerifiedXmlSignature,
 };
 use crate::sp::{LoginRequestOptions, LoginResponseParseOptions, ServiceProvider};
+use std::time::SystemTime;
 
 use super::raw_mapping::{
     ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, input_binding,
@@ -175,7 +176,7 @@ impl Saml<Sp> {
         options: StartSso,
     ) -> Result<Started<AuthnRequest>, SamlError> {
         options.relay_state.validate()?;
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
         let acs = selected_acs(
             self.raw_service_provider(),
             options.response_binding,
@@ -344,7 +345,7 @@ impl Saml<Sp> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         ensure_sso_response_binding(input_binding(&input), pending.response_binding())?;
         ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let parse = ResponseParseInput::try_new(idp, input)?;
         let flow = self
             .raw_service_provider()
@@ -366,7 +367,7 @@ impl Saml<Sp> {
     ) -> Result<SsoSession, SamlError> {
         relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input_binding(&input))?;
-        let raw_idp = raw_idp_descriptor(idp)?;
+        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let artifact_consumer = match binding {
             SsoResponseBinding::Artifact => Some(
                 self.raw_service_provider()

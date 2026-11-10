@@ -13,6 +13,7 @@ use crate::metadata::{
 };
 use crate::model::{AuthnRequest, RelayStateParam, Subject};
 use crate::sp::ServiceProvider;
+use std::time::SystemTime;
 
 use super::SamlError;
 
@@ -116,19 +117,28 @@ fn peer_setting(hmac_secret: Option<&HmacSecret>) -> EntitySetting {
     }
 }
 
-pub(super) fn raw_idp_descriptor(idp: &IdpDescriptor) -> Result<IdentityProvider, SamlError> {
+pub(super) fn raw_idp_descriptor(
+    idp: &IdpDescriptor,
+    now: SystemTime,
+) -> Result<IdentityProvider, SamlError> {
+    idp.ensure_valid_at(now)?;
     IdentityProvider::from_metadata(idp.metadata_xml(), peer_setting(idp.hmac_secret()))
 }
 
-pub(super) fn raw_sp_descriptor(sp: &SpDescriptor) -> Result<ServiceProvider, SamlError> {
+pub(super) fn raw_sp_descriptor(
+    sp: &SpDescriptor,
+    now: SystemTime,
+) -> Result<ServiceProvider, SamlError> {
+    sp.ensure_valid_at(now)?;
     ServiceProvider::from_metadata(sp.metadata_xml(), peer_setting(sp.hmac_secret()))
 }
 
 pub(super) fn raw_sp_for_browser_response(
     sp: &SpDescriptor,
     idp_setting: &EntitySetting,
+    now: SystemTime,
 ) -> Result<ServiceProvider, SamlError> {
-    let mut raw_sp = raw_sp_descriptor(sp)?;
+    let mut raw_sp = raw_sp_descriptor(sp, now)?;
     raw_sp.setting.transformation_algorithms = idp_setting.transformation_algorithms.clone();
     Ok(raw_sp)
 }

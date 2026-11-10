@@ -55,9 +55,36 @@ pub(crate) fn parse_generated_saml_utc_date_time(value: &str) -> Option<&str> {
         .map(|(normalized, _)| normalized)
 }
 
+pub(crate) fn parse_timezoned_date_time(value: &str) -> Option<&str> {
+    let value = value.trim_matches(is_xml_schema_whitespace);
+    let without_timezone = value
+        .strip_suffix('Z')
+        .or_else(|| strip_timezone_offset(value))?;
+    parse_date_time_without_timezone(without_timezone)?;
+    Some(value)
+}
+
+fn strip_timezone_offset(value: &str) -> Option<&str> {
+    let split = value.len().checked_sub(6)?;
+    let without_timezone = value.get(..split)?;
+    let offset = value.get(split..)?.as_bytes();
+    let hours = parse_two_ascii_digits(offset, 1)?;
+    let minutes = parse_two_ascii_digits(offset, 4)?;
+    (matches!(offset.first(), Some(b'+' | b'-'))
+        && offset.get(3) == Some(&b':')
+        && minutes <= 59
+        && (hours < 14 || (hours == 14 && minutes == 0)))
+        .then_some(without_timezone)
+}
+
 fn parse_saml_utc_date_time_with_seconds(value: &str) -> Option<(&str, u8)> {
     let value = value.trim_matches(is_xml_schema_whitespace);
     let without_timezone = value.strip_suffix('Z')?;
+    let second = parse_date_time_without_timezone(without_timezone)?;
+    Some((value, second))
+}
+
+fn parse_date_time_without_timezone(without_timezone: &str) -> Option<u8> {
     let bytes = without_timezone.as_bytes();
     let negative_year = bytes.first() == Some(&b'-');
     let year_start = usize::from(negative_year);
@@ -113,12 +140,41 @@ fn parse_saml_utc_date_time_with_seconds(value: &str) -> Option<(&str, u8)> {
             && fractional
                 .get(1..)
                 .is_none_or(|digits| digits.iter().all(|digit| *digit == b'0'))))
-    .then_some((value, second))
+    .then_some(second)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_generated_saml_utc_date_time, parse_saml_utc_date_time};
+    use super::{
+        parse_generated_saml_utc_date_time, parse_saml_utc_date_time, parse_timezoned_date_time,
+    };
+
+    #[test]
+    fn timezoned_date_times_accept_utc_and_offsets() {
+        for value in [
+            "2030-01-01T00:00:00Z",
+            "2030-01-01T00:00:00+02:00",
+            "2030-01-01T00:00:00-14:00",
+            "2030-01-01T00:00:00.5+14:00",
+        ] {
+            assert_eq!(parse_timezoned_date_time(value), Some(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn timezoned_date_times_reject_a_missing_or_invalid_timezone() {
+        for value in [
+            "2030-01-01T00:00:00",
+            "2030-01-01T00:00:00+14:01",
+            "2030-01-01T00:00:00+15:00",
+            "2030-01-01T00:00:00+02:60",
+            "2030-01-01T00:00:00+0200",
+            "2030-01-01T00:00:00*02:00",
+            "2030-02-30T00:00:00+02:00",
+        ] {
+            assert_eq!(parse_timezoned_date_time(value), None, "{value}");
+        }
+    }
 
     #[test]
     fn accepts_and_normalizes_saml_utc_date_times() {

@@ -9,6 +9,7 @@ use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides}
 use crate::model::{
     AuthnRequest, Received, RelayStateParam, ReplayKey, SamlValidationContext, SsoResponse, Subject,
 };
+use std::time::SystemTime;
 
 use super::raw_mapping::{
     default_response_target, ensure_entity_id, input_binding, raw_sp_descriptor,
@@ -85,7 +86,7 @@ impl Saml<Idp> {
     ) -> Result<Received<AuthnRequest>, SamlError> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoRequestBinding::try_from(input_binding(&input))?;
-        let raw_sp = raw_sp_descriptor(sp)?;
+        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let request = HttpRequest::try_from(input)?;
         let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
             &raw_sp,
@@ -250,8 +251,10 @@ impl Saml<Idp> {
         });
         relay_state.validate()?;
         let mut raw_sp = match &options.delivery {
-            ResponseTransport::Browser => raw_sp_for_browser_response(sp, idp_setting)?,
-            ResponseTransport::Artifact(..) => raw_sp_descriptor(sp)?,
+            ResponseTransport::Browser => {
+                raw_sp_for_browser_response(sp, idp_setting, SystemTime::now())?
+            }
+            ResponseTransport::Artifact(..) => raw_sp_descriptor(sp, SystemTime::now())?,
         };
         raw_sp.setting.want_message_signed = sign_response;
         let (binding, explicit_acs) = match request {
