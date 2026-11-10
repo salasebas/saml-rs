@@ -101,8 +101,9 @@ impl Saml<Idp> {
     ///
     /// `sp` is the service provider the deployment authenticated on
     /// `channel`. `validation` selects the receiving endpoint when this
-    /// identity provider publishes more than one, and stores the request `ID`
-    /// for replay detection.
+    /// identity provider publishes more than one, applies its
+    /// `ManageNameIDRequest` age policy, and stores the request `ID` for
+    /// replay detection.
     ///
     /// # Errors
     ///
@@ -112,8 +113,9 @@ impl Saml<Idp> {
     /// authenticate both parties and protect integrity. Returns another
     /// [`SamlError`] when the envelope is not a SOAP 1.1
     /// `ManageNameIDRequest` from `sp`, its `Destination` is not the receiving
-    /// endpoint, or replay validation detects a duplicate. The deployment can
-    /// answer those with an HTTP error or a SOAP fault.
+    /// endpoint, an enabled [`crate::ManageNameIdRequestAgePolicy`] rejects
+    /// `IssueInstant`, or replay validation detects a duplicate. The
+    /// deployment can answer those with an HTTP error or a SOAP fault.
     pub fn receive_name_id_management(
         &self,
         sp: &SpDescriptor,

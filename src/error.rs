@@ -106,6 +106,8 @@ pub enum TimeWindowField {
     ReplayExpiration,
     /// AuthnRequest `IssueInstant` age window.
     AuthnRequestIssueInstant,
+    /// ManageNameIDRequest `IssueInstant` age window.
+    ManageNameIdRequestIssueInstant,
 }
 
 impl fmt::Display for TimeWindowField {
@@ -117,6 +119,9 @@ impl fmt::Display for TimeWindowField {
             Self::Conditions => f.write_str("Conditions"),
             Self::ReplayExpiration => f.write_str("ReplayExpiration"),
             Self::AuthnRequestIssueInstant => f.write_str("AuthnRequest@IssueInstant"),
+            Self::ManageNameIdRequestIssueInstant => {
+                f.write_str("ManageNameIDRequest@IssueInstant")
+            }
         }
     }
 }

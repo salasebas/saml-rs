@@ -15,14 +15,14 @@ use crate::flow::{
 };
 use crate::logout::sign_browser_message;
 use crate::metadata::Metadata;
-use crate::model::MessageId;
+use crate::model::{MessageId, SamlInstant};
 use crate::xml::protocol_element::{issuer, parse_saml_with_limits};
 use crate::xml::XmlLimits;
 
 use super::xml::{render_request, render_response, Prefixes, RequestXml, ResponseXml};
 use super::{
     identifier_and_change, plaintext_content, protect_request, require_one_status_code,
-    ManageNameIdRequest, NameIdManagementRefusal,
+    require_utc_instant, ManageNameIdRequest, NameIdManagementRefusal,
 };
 
 /// The receiving endpoint and clock for an inbound message.
@@ -121,28 +121,33 @@ pub(crate) enum ParsedRequest {
     },
 }
 
-/// The request in `flow`, with `EncryptedID` and `NewEncryptedID` decrypted
-/// by the key in `setting`.
+/// The request in `flow` and its `IssueInstant`, with `EncryptedID` and
+/// `NewEncryptedID` decrypted by the key in `setting`.
 pub(crate) fn request_from_flow(
     flow: &FlowResult,
     setting: &EntitySetting,
-) -> Result<ParsedRequest, SamlError> {
+) -> Result<(SamlInstant, ParsedRequest), SamlError> {
     let request = parse_saml_with_limits(&flow.saml_content, setting.xml_limits)?;
     let id = MessageId::try_new(request.required_attr("ID")?)?;
+    let issue_instant = require_utc_instant(&request)?;
     let issuer = issuer(&request).ok_or_else(|| {
         SamlError::ProtocolProfile("ManageNameIDRequest is missing Issuer".into())
     })?;
     let issuer = EntityId::try_new(issuer.value)?;
     if request.required_attr("Version")? != "2.0" {
-        return Ok(ParsedRequest::Refused {
-            id,
-            issuer,
-            reason: NameIdManagementRefusal::VersionMismatch,
-            decryption_error: None,
-        });
+        return Ok((
+            issue_instant,
+            ParsedRequest::Refused {
+                id,
+                issuer,
+                reason: NameIdManagementRefusal::VersionMismatch,
+                decryption_error: None,
+            },
+        ));
     }
     let (identifier, change) = identifier_and_change(&request)?;
-    Ok(
+    Ok((
+        issue_instant,
         match plaintext_content(&flow.saml_content, identifier, change, setting) {
             Ok((name_id, change)) => ParsedRequest::Plain(ManageNameIdRequest {
                 id,
@@ -157,7 +162,7 @@ pub(crate) fn request_from_flow(
                 decryption_error: Some(undecryptable.error),
             },
         },
-    )
+    ))
 }
 
 pub(crate) fn response_id_from_flow(

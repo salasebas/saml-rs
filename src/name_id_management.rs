@@ -11,7 +11,7 @@ use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::{
-    name_id_format_from_uri, EndpointUrl, MessageId, NameId, Received, ReplayKey,
+    name_id_format_from_uri, EndpointUrl, MessageId, NameId, Received, ReplayKey, SamlInstant,
     SamlValidationContext, Status, SubordinateStatusCode,
 };
 use crate::soap::{read_soap_body, SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse};
@@ -296,7 +296,7 @@ pub(crate) fn receive(
     let request = parse_saml_with_limits(&body.xml, idp.setting.xml_limits)?;
     let id = MessageId::try_new(request.required_attr("ID")?)?;
     let version = request.required_attr("Version")?;
-    require_utc_instant(&request)?;
+    let issue_instant = require_utc_instant(&request)?;
     if version != "2.0" {
         return refused(
             idp.entity_id,
@@ -328,6 +328,7 @@ pub(crate) fn receive(
         }
     }
     let (identifier, change) = identifier_and_change(&request)?;
+    validation.check_manage_name_id_request_issue_instant(&issue_instant)?;
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequestId(id.clone()))?;
     match plaintext_content(&body.xml, identifier, change, idp.setting) {
         Ok((name_id, change)) => Ok(ReceivedNameIdManagement::Request(Box::new(Received::new(
@@ -527,15 +528,15 @@ fn name_id(element: &SamlElement) -> NameId {
     )
 }
 
-fn require_utc_instant(element: &SamlElement) -> Result<(), SamlError> {
+fn require_utc_instant(element: &SamlElement) -> Result<SamlInstant, SamlError> {
     let instant = element.required_attr("IssueInstant")?;
-    if parse_saml_utc_date_time(&instant).is_none() {
-        return Err(SamlError::ProtocolProfile(format!(
+    let instant = parse_saml_utc_date_time(&instant).ok_or_else(|| {
+        SamlError::ProtocolProfile(format!(
             "{} IssueInstant must be a UTC xs:dateTime",
             element.local_name
-        )));
-    }
-    Ok(())
+        ))
+    })?;
+    SamlInstant::try_new(instant)
 }
 
 fn require_peer_issuer(element: &SamlElement, expected: &str) -> Result<(), SamlError> {
