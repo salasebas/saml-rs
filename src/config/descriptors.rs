@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use crate::browser::{AcsEndpoint, NameIdManagementBinding, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
-use crate::metadata::{IdpMetadata, SpMetadata};
+use crate::metadata::{IdpMetadata, MetadataLifetime, SpMetadata};
 use crate::model::EndpointUrl;
 
 /// SOAP `ArtifactResolutionService` published by an artifact issuer.
@@ -161,6 +161,9 @@ pub struct SpMetadataConfig {
     pub manage_name_id_service: Vec<ManageNameIdService>,
     /// Element ordering profile for generated metadata.
     pub elements_order: Option<Vec<String>>,
+    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
+    /// neither.
+    pub lifetime: Option<MetadataLifetime>,
 }
 
 impl SpMetadataConfig {
@@ -175,6 +178,7 @@ impl SpMetadataConfig {
             assertion_consumer_service,
             manage_name_id_service: Vec::new(),
             elements_order: None,
+            lifetime: None,
         }
     }
 
@@ -229,6 +233,9 @@ pub struct IdpMetadataConfig {
     pub manage_name_id_service: Vec<ManageNameIdService>,
     /// Element ordering profile for generated metadata.
     pub elements_order: Option<Vec<String>>,
+    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
+    /// neither.
+    pub lifetime: Option<MetadataLifetime>,
 }
 
 impl IdpMetadataConfig {
@@ -244,6 +251,7 @@ impl IdpMetadataConfig {
             artifact_resolution_service: Vec::new(),
             manage_name_id_service: Vec::new(),
             elements_order: None,
+            lifetime: None,
         }
     }
 

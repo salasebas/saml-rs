@@ -3,6 +3,7 @@ use std::time::Duration;
 use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
+use crate::metadata::MetadataLifetime;
 
 use super::algorithms::{
     name_id_format_uris, transform_algorithm_uris, NameIdFormat, SignatureAlgorithm,
@@ -174,6 +175,12 @@ impl SpConfigBuilder {
     /// Set generated metadata element ordering.
     pub fn elements_order(mut self, elements_order: Vec<String>) -> Self {
         self.metadata.elements_order = Some(elements_order);
+        self
+    }
+
+    /// Write `validUntil`, `cacheDuration`, or both on generated metadata.
+    pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
+        self.metadata.lifetime = Some(lifetime);
         self
     }
 
@@ -398,6 +405,12 @@ impl IdpConfigBuilder {
     /// Set generated metadata element ordering.
     pub fn elements_order(mut self, elements_order: Vec<String>) -> Self {
         self.metadata.elements_order = Some(elements_order);
+        self
+    }
+
+    /// Write `validUntil`, `cacheDuration`, or both on generated metadata.
+    pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
+        self.metadata.lifetime = Some(lifetime);
         self
     }
 

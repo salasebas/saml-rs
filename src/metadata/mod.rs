@@ -3,6 +3,7 @@
 mod endpoints;
 pub mod generate;
 pub mod idp;
+mod lifetime;
 pub mod sp;
 mod write;
 
@@ -17,6 +18,7 @@ pub use generate::{
     ArtifactResolutionEndpoint, Endpoint, IdpMetadataConfig, SpMetadataConfig,
 };
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
+pub use lifetime::MetadataLifetime;
 pub use sp::SpMetadata;
 
 use std::collections::HashSet;

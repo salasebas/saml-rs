@@ -49,6 +49,7 @@ pub(super) fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
             .map(ManageNameIdService::to_raw)
             .collect(),
         elements_order: config.metadata.elements_order.clone(),
+        lifetime: config.metadata.lifetime,
     }
 }
 
@@ -90,6 +91,7 @@ pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfi
             .map(ManageNameIdService::to_raw)
             .collect(),
         elements_order: config.metadata.elements_order.clone(),
+        lifetime: config.metadata.lifetime,
     }
 }
 

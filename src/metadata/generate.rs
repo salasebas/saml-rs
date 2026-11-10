@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use crate::constants::{elements_order, name_id_format, namespace, Binding};
 use crate::error::SamlError;
+use crate::metadata::lifetime::{LifetimeAttributes, MetadataLifetime};
 use crate::metadata::write::MetadataWriter;
 use crate::model::validate_name_id_format;
 use crate::util::{is_non_empty_array, normalize_cert_string};
@@ -70,6 +71,9 @@ pub struct SpMetadataConfig {
     pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::DEFAULT`]).
     pub elements_order: Option<Vec<String>>,
+    /// `validUntil` and `cacheDuration` on the `EntityDescriptor`. `None`
+    /// writes neither.
+    pub lifetime: Option<MetadataLifetime>,
 }
 
 /// IdP metadata generation input.
@@ -95,6 +99,26 @@ pub struct IdpMetadataConfig {
     pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::idp::DEFAULT`]).
     pub elements_order: Option<Vec<String>>,
+    /// `validUntil` and `cacheDuration` on the `EntityDescriptor`. `None`
+    /// writes neither.
+    pub lifetime: Option<MetadataLifetime>,
+}
+
+fn write_entity_descriptor_start(
+    w: &mut MetadataWriter,
+    entity_id: &str,
+    lifetime: Option<MetadataLifetime>,
+) -> Result<(), SamlError> {
+    let lifetime = LifetimeAttributes::new(lifetime)?;
+    let mut attributes = vec![("entityID", entity_id)];
+    attributes.extend(lifetime.attributes());
+    attributes.extend([
+        ("xmlns", namespace::METADATA),
+        ("xmlns:assertion", namespace::ASSERTION),
+        ("xmlns:ds", namespace::DSIG),
+    ]);
+    w.start("EntityDescriptor", &attributes);
+    Ok(())
 }
 
 fn write_key_descriptor(w: &mut MetadataWriter, use_: &str, cert: &str) {
@@ -326,15 +350,7 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
         insert_manage_name_id_service(&mut order);
     }
     let mut w = MetadataWriter::new();
-    w.start(
-        "EntityDescriptor",
-        &[
-            ("entityID", cfg.entity_id.as_str()),
-            ("xmlns", namespace::METADATA),
-            ("xmlns:assertion", namespace::ASSERTION),
-            ("xmlns:ds", namespace::DSIG),
-        ],
-    );
+    write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
     w.start(
         "SPSSODescriptor",
         &[
@@ -390,15 +406,7 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlErro
         "ManageNameIDService",
     ];
     let mut w = MetadataWriter::new();
-    w.start(
-        "EntityDescriptor",
-        &[
-            ("entityID", cfg.entity_id.as_str()),
-            ("xmlns", namespace::METADATA),
-            ("xmlns:assertion", namespace::ASSERTION),
-            ("xmlns:ds", namespace::DSIG),
-        ],
-    );
+    write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
     w.start(
         "IDPSSODescriptor",
         &[
@@ -480,6 +488,7 @@ mod tests {
             ],
             manage_name_id_service: Vec::new(),
             elements_order: None,
+            lifetime: None,
         };
         let xml = generate_sp_metadata(&cfg)?;
         let parsed = SpMetadata::from_xml(&xml)?;
