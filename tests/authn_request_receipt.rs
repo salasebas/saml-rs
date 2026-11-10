@@ -1,5 +1,5 @@
-//! Identity-provider receipt of `ForceAuthn`, `Is passive`, `Subject`, and
-//! `RequestedAuthnContext`.
+//! Identity-provider receipt of `ForceAuthn`, `Is passive`, `Subject`,
+//! `NameIDPolicy`, and `RequestedAuthnContext`.
 //!
 //! SAML Core §3.4.1. These fields are exposed to the identity provider
 //! application. Their presence does not reject the request.
@@ -16,8 +16,8 @@ use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, BrowserInput,
     CertificatePem, Credentials, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, IsPassive, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
-    PrivateKeyPem, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
+    IdpValidationPolicy, IsPassive, MetadataTrustPolicy, NameId, NameIdFormat, NameIdPolicy,
+    Outbound, PrivateKeyPem, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
     RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
     SsoEndpoint, StartSso, Status, Subject, SubordinateStatusCode,
 };
@@ -32,6 +32,7 @@ const SMARTCARD: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:Smartcard";
 const PASSWORD_PROTECTED_TRANSPORT: &str =
     "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport";
 const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
+const AFFILIATION: &str = "https://affiliation.example.com";
 const DECLARATION: &str = "https://idp.example.com/authn-context/hardware-token";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp_privkey.pem");
@@ -155,6 +156,17 @@ fn insert_after_name_id_policy(
         .ok_or("missing NameIDPolicy")?;
     let end = position + xml[position..].find("/>").ok_or("unclosed NameIDPolicy")? + 2;
     Ok(format!("{}{element}{}", &xml[..end], &xml[end..]))
+}
+
+fn replace_name_id_policy(
+    xml: String,
+    element: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let position = xml
+        .find("<samlp:NameIDPolicy")
+        .ok_or("missing NameIDPolicy")?;
+    let end = position + xml[position..].find("/>").ok_or("unclosed NameIDPolicy")? + 2;
+    Ok(format!("{}{element}{}", &xml[..position], &xml[end..]))
 }
 
 fn requested_authn_context(comparison: &str, references: &str) -> String {
@@ -572,6 +584,64 @@ fn received_authn_request_rejects_qualified_name_id_qualifiers(
     assert!(matches!(
         both_forms,
         Err(error) if error.to_string().contains("NameQualifier")
+            && error.to_string().contains("unqualified")
+    ));
+    Ok(())
+}
+
+#[test]
+fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let qualifier_only = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| {
+            replace_name_id_policy(
+                xml,
+                &format!("<samlp:NameIDPolicy SPNameQualifier=\"{AFFILIATION}\"/>"),
+            )
+        },
+    )?;
+    assert_eq!(
+        qualifier_only.received.message().name_id_policy(),
+        Some(&NameIdPolicy::unspecified(None).with_sp_name_qualifier(AFFILIATION))
+    );
+
+    let every_attribute = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| {
+            replace_name_id_policy(
+                xml,
+                &format!(
+                    "<samlp:NameIDPolicy Format=\"{EMAIL_FORMAT}\" SPNameQualifier=\"{AFFILIATION}\" AllowCreate=\"true\"/>"
+                ),
+            )
+        },
+    )?;
+    assert_eq!(
+        every_attribute.received.message().name_id_policy(),
+        Some(
+            &NameIdPolicy::allow_creation(Some(NameIdFormat::EmailAddress))
+                .with_sp_name_qualifier(AFFILIATION)
+        )
+    );
+
+    let qualified = receive(
+        IdpValidationPolicy::recommended(),
+        StartSso::post(),
+        |xml| {
+            replace_name_id_policy(
+                xml,
+                &format!(
+                    "<samlp:NameIDPolicy xmlns:x=\"urn:example:foreign\" x:SPNameQualifier=\"{AFFILIATION}\"/>"
+                ),
+            )
+        },
+    );
+    assert!(matches!(
+        qualified,
+        Err(error) if error.to_string().contains("SPNameQualifier")
             && error.to_string().contains("unqualified")
     ));
     Ok(())

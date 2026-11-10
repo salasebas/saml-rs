@@ -440,7 +440,9 @@ fn consumed_attributes(element: &ExpandedName) -> &'static [&'static [u8]] {
     match (element.namespace, element.local.as_slice()) {
         (NamespaceKind::Assertion, b"Assertion") => &[b"ID", b"Version", b"IssueInstant"],
         (NamespaceKind::Protocol, b"StatusCode") => &[b"Value"],
-        (NamespaceKind::Protocol, b"NameIDPolicy") => &[b"Format", b"AllowCreate"],
+        (NamespaceKind::Protocol, b"NameIDPolicy") => {
+            &[b"Format", b"SPNameQualifier", b"AllowCreate"]
+        }
         (NamespaceKind::Protocol, b"RequestedAuthnContext") => &[b"Comparison"],
         (NamespaceKind::Assertion, b"Conditions") => &[b"NotBefore", b"NotOnOrAfter"],
         (NamespaceKind::Assertion, b"NameID") => &[b"Format"],

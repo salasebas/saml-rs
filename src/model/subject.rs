@@ -170,6 +170,7 @@ impl NameId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIdPolicy {
     format: Option<NameIdFormat>,
+    sp_name_qualifier: Option<String>,
     creation_request: NameIdCreationRequest,
 }
 
@@ -189,6 +190,7 @@ impl NameIdPolicy {
     pub fn new(format: Option<NameIdFormat>, creation_request: NameIdCreationRequest) -> Self {
         Self {
             format,
+            sp_name_qualifier: None,
             creation_request,
         }
     }
@@ -208,23 +210,43 @@ impl NameIdPolicy {
         Self::new(format, NameIdCreationRequest::DoNotAllowCreate)
     }
 
+    /// Set the requested `SPNameQualifier`.
+    pub fn with_sp_name_qualifier(mut self, sp_name_qualifier: impl Into<String>) -> Self {
+        self.sp_name_qualifier = Some(sp_name_qualifier.into());
+        self
+    }
+
     pub(crate) fn from_parsed(
         format: Option<NameIdFormat>,
+        sp_name_qualifier: Option<String>,
         allow_create: Option<bool>,
     ) -> Option<Self> {
-        if format.is_none() && allow_create.is_none() {
+        if format.is_none() && sp_name_qualifier.is_none() && allow_create.is_none() {
             return None;
         }
-        Some(match allow_create {
-            Some(true) => Self::allow_creation(format),
-            Some(false) => Self::disallow_creation(format),
-            None => Self::unspecified(format),
+        let creation_request = match allow_create {
+            Some(true) => NameIdCreationRequest::AllowCreate,
+            Some(false) => NameIdCreationRequest::DoNotAllowCreate,
+            None => NameIdCreationRequest::Unspecified,
+        };
+        Some(Self {
+            format,
+            sp_name_qualifier,
+            creation_request,
         })
     }
 
     /// Requested NameID format.
     pub fn format(&self) -> Option<&NameIdFormat> {
         self.format.as_ref()
+    }
+
+    /// Requested `SPNameQualifier`, when present.
+    ///
+    /// It names the service provider or affiliation whose namespace the
+    /// returned identifier belongs to.
+    pub fn sp_name_qualifier(&self) -> Option<&str> {
+        self.sp_name_qualifier.as_deref()
     }
 
     /// NameID creation request.
