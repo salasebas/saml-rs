@@ -726,11 +726,10 @@ fn verify_and_prepare(
 
     if decrypt_required && evidence.verified && parser_type == ParserType::SamlResponse {
         if let Some(node) = evidence.verified_node.as_deref() {
-            let mut verified_xml_signatures = evidence.verified_xml_signatures.clone();
-            // signed-then-encrypted: the verified content is a Response carrying
-            // EncryptedAssertions.
+            // signed-then-encrypted
+            let signed_content = if evidence.response_covered { xml } else { node };
             let (content, assertions) = decrypt_assertions_with_limits(
-                node,
+                signed_content,
                 &load_keys()?,
                 decrypt_options,
                 opts.xml_limits,
@@ -738,7 +737,29 @@ fn verify_and_prepare(
             is_valid_xml_with_limits(&content, opts.xml_limits)?;
             validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
             let assertion = assertion_shortcut(&content, opts.xml_limits)?;
+            let mut verified_xml_signatures = evidence.verified_xml_signatures.clone();
+            let consumed_was_decrypted = assertions
+                .iter()
+                .any(|decrypted| Some(decrypted.as_str()) == assertion.as_deref());
+            if consumed_was_decrypted {
+                verified_xml_signatures.retain(|signature| signature.response_covered);
+                for signature in &mut verified_xml_signatures {
+                    signature.assertion_directly_covered = false;
+                }
+            }
             if assertion_signature == AssertionSignatureRequirement::Direct {
+                let carries_plaintext_assertion =
+                    crate::xml::dom::parse_with_limits(xml, opts.xml_limits)?
+                        .root
+                        .children
+                        .iter()
+                        .any(|child| child.local_name == "Assertion");
+                if carries_plaintext_assertion {
+                    require_direct_assertion_coverage(
+                        assertion_signature,
+                        evidence.assertion_directly_covered,
+                    )?;
+                }
                 verified_xml_signatures.extend(verify_decrypted_assertions(
                     &assertions,
                     assertion.as_deref(),
