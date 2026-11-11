@@ -14,12 +14,13 @@ use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512
 use saml_rs::crypto::{
     construct_message_signature, construct_saml_signature, keys::load_private_key,
 };
+use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, PrivateKeyPem, ReplayCache, ReplayKey, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
+    AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, BrowserInput, CertificatePem, Credentials,
+    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
+    NameId, Outbound, PendingAuthnRequest, PrivateKeyPem, ReplayCache, ReplayKey, ReplayPolicy,
+    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, SsoResponse, SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -931,6 +932,107 @@ fn several_assertions_are_accepted_over_simple_sign() -> Result<(), Box<dyn std:
     Ok(())
 }
 
+fn expect_error(
+    result: Result<SsoSession, Box<dyn std::error::Error>>,
+    expected: fn(&SamlError) -> bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match result {
+        Err(error) => match error.downcast_ref::<SamlError>() {
+            Some(saml_error) if expected(saml_error) => Ok(()),
+            _ => Err(format!("unexpected error {error:?}").into()),
+        },
+        Ok(session) => {
+            Err(format!("accepted assertion {}", session.assertion_id().as_str()).into())
+        }
+    }
+}
+
+/// `xml` signed over the Response root, keeping its assertion signatures.
+fn sign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let key = load_private_key(PRIVKEY, None)?;
+    Ok(construct_saml_signature(
+        xml,
+        true,
+        &key,
+        CERT,
+        RSA_SHA256,
+        &[],
+        None,
+    )?)
+}
+
+/// The response of `exchange` with its first assertion signed and no other
+/// signature.
+fn assertion_signed(exchange: &Exchange) -> Result<String, Box<dyn std::error::Error>> {
+    sign_first_assertion(
+        &strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?,
+        RSA_SHA256,
+    )
+}
+
+/// `xml` with its first `NameID` changed, so a signature over its assertion
+/// no longer verifies.
+fn with_name_id_changed(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
+    if !xml.contains(">alice@example.com<") {
+        return Err("missing NameID value".into());
+    }
+    Ok(xml.replacen(">alice@example.com<", ">mallory@example.com<", 1))
+}
+
+fn is_xml_signature_failure(error: &SamlError) -> bool {
+    matches!(
+        error,
+        SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature
+        }
+    )
+}
+
+/// Profiles §4.1.4.3, as replaced by Errata 05 E26: the service provider
+/// verifies any signature present on the response or its assertions.
+#[test]
+fn an_assertion_signature_that_does_not_verify_rejects_a_signed_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for policy in [
+        SpValidationPolicy::recommended(),
+        SpValidationPolicy {
+            assertions: AssertionSignaturePolicy::RequireSigned,
+            ..SpValidationPolicy::recommended()
+        },
+    ] {
+        let exchange = exchange_for(policy, false)?;
+        let signed = assertion_signed(&exchange)?;
+        accept(&exchange, &sign_response(&signed)?)?;
+        expect_error(
+            accept(&exchange, &sign_response(&with_name_id_changed(&signed)?)?),
+            is_xml_signature_failure,
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn compatibility_accepts_an_assertion_signature_that_does_not_verify_beside_a_signed_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::compatibility(), false)?;
+    let altered = with_name_id_changed(&assertion_signed(&exchange)?)?;
+    let session = accept(&exchange, &sign_response(&altered)?)?;
+    assert_eq!(session.name_id().value(), "mallory@example.com");
+    Ok(())
+}
+
+#[test]
+fn an_assertion_signature_that_does_not_verify_rejects_a_simple_sign_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_simple_sign()?;
+    let signed = assertion_signed(&exchange)?;
+    accept_simple_sign(&exchange, &signed)?;
+    expect_error(
+        accept_simple_sign(&exchange, &with_name_id_changed(&signed)?),
+        is_xml_signature_failure,
+    )
+}
+
 /// Each `<EncryptedAssertion>` of a response is decrypted and evaluated as a
 /// plaintext `<Assertion>` is (Conformance §3.4).
 ///
@@ -941,7 +1043,6 @@ mod encrypted_assertions {
     use saml_rs::constants::data_encryption_algorithm::{AES_128_GCM, AES_256};
     use saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
     use saml_rs::crypto::encrypt_assertion;
-    use saml_rs::AssertionSignaturePolicy;
 
     const OTHER_RECIPIENT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
     const ENCRYPTED_ID: &str = concat!(
@@ -1008,21 +1109,6 @@ mod encrypted_assertions {
         let both = encrypt_first(&first, AES_256, CERT)?;
         assert_eq!(both.matches("<saml:EncryptedAssertion").count(), 2);
         resign_response(&both)
-    }
-
-    fn expect_error(
-        result: Result<SsoSession, Box<dyn std::error::Error>>,
-        expected: fn(&SamlError) -> bool,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        match result {
-            Err(error) => match error.downcast_ref::<SamlError>() {
-                Some(saml_error) if expected(saml_error) => Ok(()),
-                _ => Err(format!("unexpected error {error:?}").into()),
-            },
-            Ok(session) => {
-                Err(format!("accepted assertion {}", session.assertion_id().as_str()).into())
-            }
-        }
     }
 
     #[test]
@@ -1254,20 +1340,6 @@ mod encrypted_assertions {
         )
     }
 
-    /// `xml` signed over the Response root, keeping its assertion signatures.
-    fn sign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let key = load_private_key(PRIVKEY, None)?;
-        Ok(construct_saml_signature(
-            xml,
-            true,
-            &key,
-            CERT,
-            RSA_SHA256,
-            &[],
-            None,
-        )?)
-    }
-
     /// `xml` with its `<EncryptedAssertion>` moved after the plaintext `<Assertion>`.
     fn move_encrypted_assertion_last(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
         let start = xml
@@ -1406,6 +1478,41 @@ mod encrypted_assertions {
         expect_error(
             accept_simple_sign(&exchange, &xml),
             |error| matches!(error, SamlError::AudienceMismatch { expected } if expected == SP_ENTITY_ID),
+        )
+    }
+
+    #[test]
+    fn a_decrypted_assertion_signature_that_does_not_verify_rejects_a_signed_response(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let signed = assertion_signed(&exchange)?;
+        accept(
+            &exchange,
+            &resign_response(&encrypt_first(&signed, AES_256, CERT)?)?,
+        )?;
+        let altered = encrypt_first(&with_name_id_changed(&signed)?, AES_256, CERT)?;
+        expect_error(
+            accept(&exchange, &resign_response(&altered)?),
+            is_xml_signature_failure,
+        )
+    }
+
+    #[test]
+    fn a_decrypted_assertion_signature_that_does_not_verify_rejects_a_simple_sign_response(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let exchange = Exchange {
+            sp: decrypting_sp(
+                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default(),
+                SpValidationPolicy::recommended(),
+            )?,
+            ..exchange_simple_sign()?
+        };
+        let signed = assertion_signed(&exchange)?;
+        accept_simple_sign(&exchange, &encrypt_first(&signed, AES_256, CERT)?)?;
+        let altered = encrypt_first(&with_name_id_changed(&signed)?, AES_256, CERT)?;
+        expect_error(
+            accept_simple_sign(&exchange, &altered),
+            is_xml_signature_failure,
         )
     }
 }

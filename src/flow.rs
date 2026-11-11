@@ -570,6 +570,32 @@ fn verify_embedded_signature(
     })
 }
 
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+fn verify_present_signatures(xml: &str, opts: &FlowOptions<'_>) -> Result<(), SamlError> {
+    crate::crypto::verify::verify_present_signatures(
+        xml,
+        opts.signing_certs,
+        opts.hmac_secret,
+        opts.xml_limits,
+        opts.xml_signatures,
+    )
+}
+
+#[cfg(not(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+)))]
+fn verify_present_signatures(_xml: &str, _opts: &FlowOptions<'_>) -> Result<(), SamlError> {
+    Err(SamlError::Unsupported(
+        "signature verification requires a crypto provider feature".into(),
+    ))
+}
+
 /// Verify the signature over each decrypted `<Assertion>`, which must cover
 /// that assertion directly, and return the evidence of the first decrypted
 /// assertion equal to `consumed_assertion`.
@@ -765,6 +791,10 @@ fn verify_and_prepare(
                     assertion.as_deref(),
                     opts,
                 )?);
+            } else {
+                for decrypted in &assertions {
+                    verify_present_signatures(decrypted, opts)?;
+                }
             }
             return Ok(PreparedMessage {
                 assertion,
@@ -1118,30 +1148,38 @@ fn flow_inner(
                             assertion_signature,
                             ResponseSignatureRequirement::Optional,
                         )?
-                    } else if let Some(saml_content) =
-                        crate::encrypted_elements::decrypt_detached_signed_assertions(
-                            &xml,
-                            parser_type,
-                            opts,
-                        )?
-                    {
-                        PreparedMessage {
-                            assertion: assertion_shortcut(&saml_content, opts.xml_limits)?,
-                            saml_content,
-                            message_authenticated: false,
-                            verified_xml_signatures: Vec::new(),
-                        }
                     } else {
-                        let assertion = if parser_type == ParserType::SamlResponse {
-                            assertion_shortcut(&xml, opts.xml_limits)?
+                        if parser_type == ParserType::SamlResponse {
+                            verify_present_signatures(&xml, opts)?;
+                        }
+                        if let Some((saml_content, assertions)) =
+                            crate::encrypted_elements::decrypt_detached_signed_assertions(
+                                &xml,
+                                parser_type,
+                                opts,
+                            )?
+                        {
+                            for decrypted in &assertions {
+                                verify_present_signatures(decrypted, opts)?;
+                            }
+                            PreparedMessage {
+                                assertion: assertion_shortcut(&saml_content, opts.xml_limits)?,
+                                saml_content,
+                                message_authenticated: false,
+                                verified_xml_signatures: Vec::new(),
+                            }
                         } else {
-                            None
-                        };
-                        PreparedMessage {
-                            saml_content: xml,
-                            assertion,
-                            message_authenticated: false,
-                            verified_xml_signatures: Vec::new(),
+                            let assertion = if parser_type == ParserType::SamlResponse {
+                                assertion_shortcut(&xml, opts.xml_limits)?
+                            } else {
+                                None
+                            };
+                            PreparedMessage {
+                                saml_content: xml,
+                                assertion,
+                                message_authenticated: false,
+                                verified_xml_signatures: Vec::new(),
+                            }
                         }
                     };
                     (

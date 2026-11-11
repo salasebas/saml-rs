@@ -210,8 +210,8 @@ pub(crate) fn encrypted_assertion_key<'a>(
 }
 
 /// `xml`, whose detached signature verified, with each `<EncryptedAssertion>`
-/// decrypted for a typed service provider. `None` when no key applies, and for
-/// the raw service provider.
+/// decrypted for a typed service provider, and the decrypted assertions.
+/// `None` when no key applies, and for the raw service provider.
 #[cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
@@ -221,7 +221,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
     xml: &str,
     parser_type: ParserType,
     opts: &FlowOptions<'_>,
-) -> Result<Option<String>, SamlError> {
+) -> Result<Option<(String, Vec<String>)>, SamlError> {
     use crate::crypto::{
         enc::{decrypt_assertions_with_limits, AssertionDecryptionOptions},
         keys::load_decryption_keys,
@@ -236,7 +236,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
     let Some(key_pem) = key_pem else {
         return Ok(None);
     };
-    let (content, _) = decrypt_assertions_with_limits(
+    let (content, assertions) = decrypt_assertions_with_limits(
         xml,
         &load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?,
         AssertionDecryptionOptions {
@@ -246,7 +246,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
     )?;
     crate::context::is_valid_xml_with_limits(&content, opts.xml_limits)?;
     crate::xml::validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-    Ok(Some(content))
+    Ok(Some((content, assertions)))
 }
 
 #[cfg(not(any(
@@ -258,6 +258,6 @@ pub(crate) fn decrypt_detached_signed_assertions(
     _xml: &str,
     _parser_type: ParserType,
     _opts: &FlowOptions<'_>,
-) -> Result<Option<String>, SamlError> {
+) -> Result<Option<(String, Vec<String>)>, SamlError> {
     Ok(None)
 }
