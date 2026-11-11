@@ -207,6 +207,11 @@ Rules:
 - The signed root must carry an identifier and one enveloped `#id` reference.
   `RequireSignatureAllowingOtherCanonicalization` also accepts inclusive
   canonicalization. See `docs/conformance/metadata-and-replay.md`.
+- `RequireSignature` and `RequireSignatureAllowingOtherCanonicalization`
+  reject an MD5 or RIPEMD-160 signature or digest algorithm with
+  `AlgorithmUnsupported` on a build that verifies it, and do not verify with
+  a pinned RSA certificate shorter than 2048 bits.
+  `RequireSignatureAllowingWeakAlgorithmsForCompatibility` accepts them.
 - It must prove that signed root is covered and preserve its XML as trust
   evidence.
 - If the signature shape or coverage cannot be determined, fail closed with

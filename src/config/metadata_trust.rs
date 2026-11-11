@@ -18,6 +18,7 @@ use crate::xml::XmlLimits;
 use super::credentials::CertificatePem;
 use super::descriptors::EntityId;
 use super::metadata_signature_shape::{ensure_import_signature_shape, MetadataSignatureTransforms};
+use super::policies::XmlSignatureProfile;
 
 /// Explicit trust policy for imported SAML metadata.
 ///
@@ -61,7 +62,11 @@ pub enum MetadataTrustPolicy<'a> {
     /// Require a valid metadata signature from one of the pinned certificates.
     ///
     /// The signature must be an enveloped `#id` signature over the metadata
-    /// root. See `docs/conformance/metadata-and-replay.md`.
+    /// root. On a build that verifies MD5 or RIPEMD-160, a signature that uses
+    /// one as its signature or digest algorithm is rejected with
+    /// [`SamlError::AlgorithmUnsupported`]. A pinned RSA certificate shorter
+    /// than 2048 bits is not used to verify.
+    /// See `docs/conformance/metadata-and-replay.md`.
     RequireSignature {
         /// Caller-pinned certificates trusted to sign the metadata.
         trusted_certificates: &'a [CertificatePem],
@@ -69,9 +74,20 @@ pub enum MetadataTrustPolicy<'a> {
     /// Require a pinned metadata signature, and also accept inclusive
     /// canonicalization.
     ///
-    /// The identifier and single `#id` reference checks stay on. See
+    /// The identifier, single `#id` reference, algorithm, and key-size checks
+    /// of [`Self::RequireSignature`] stay on. See
     /// `docs/conformance/metadata-and-replay.md`.
     RequireSignatureAllowingOtherCanonicalization {
+        /// Caller-pinned certificates trusted to sign the metadata.
+        trusted_certificates: &'a [CertificatePem],
+    },
+    /// Require a pinned metadata signature, and also accept MD5 and RIPEMD-160
+    /// signature and digest algorithms and RSA certificates shorter than 2048
+    /// bits where the crypto provider verifies them.
+    ///
+    /// The signature shape and transform checks of [`Self::RequireSignature`]
+    /// stay on. See `docs/conformance/metadata-and-replay.md`.
+    RequireSignatureAllowingWeakAlgorithmsForCompatibility {
         /// Caller-pinned certificates trusted to sign the metadata.
         trusted_certificates: &'a [CertificatePem],
     },
@@ -131,6 +147,7 @@ where
             metadata,
             trusted_certificates,
             MetadataSignatureTransforms::Profile,
+            XmlSignatureProfile::ExcludeWeakAlgorithms,
         ),
         MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization {
             trusted_certificates,
@@ -138,6 +155,15 @@ where
             metadata,
             trusted_certificates,
             MetadataSignatureTransforms::AllowOtherCanonicalization,
+            XmlSignatureProfile::ExcludeWeakAlgorithms,
+        ),
+        MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility {
+            trusted_certificates,
+        } => verify_pinned_metadata_signature(
+            metadata,
+            trusted_certificates,
+            MetadataSignatureTransforms::Profile,
+            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         ),
     }
 }
@@ -151,6 +177,7 @@ fn verify_pinned_metadata_signature<M>(
     metadata: &M,
     trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
+    algorithms: XmlSignatureProfile,
 ) -> Result<AppliedMetadataTrust, SamlError>
 where
     M: Deref<Target = Metadata>,
@@ -164,6 +191,7 @@ where
         metadata.get_metadata(),
         &trusted_certificates,
         XmlLimits::default(),
+        algorithms,
     )?;
     if verification.verified() {
         let signed_entity_descriptor_xml = verification
@@ -187,6 +215,7 @@ fn verify_pinned_metadata_signature<M>(
     metadata: &M,
     _trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
+    _algorithms: XmlSignatureProfile,
 ) -> Result<AppliedMetadataTrust, SamlError>
 where
     M: Deref<Target = Metadata>,

@@ -379,6 +379,9 @@ Rules:
   Inclusive canonicalization is
   `RequireSignatureAllowingOtherCanonicalization`. The shape is classified in
   `docs/conformance/metadata-and-replay.md`.
+- MD5 and RIPEMD-160 algorithms and RSA signing keys shorter than 2048 bits
+  are excluded. `RequireSignatureAllowingWeakAlgorithmsForCompatibility`
+  accepts them.
 - `signed_entity_descriptor_xml()` exposes the signed descriptor evidence when
   pinned verification passed.
 - `UnsignedForCompatibility` is explicit and visible in call sites.

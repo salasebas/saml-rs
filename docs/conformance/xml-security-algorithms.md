@@ -70,25 +70,36 @@ key of the same parameter set.
 | An embedded signature on a received `Response`, `Assertion`, or logout message is verified under `xml_signatures` | Accepting service provider | Inbound | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts the provider-supported set below. `ExcludeWeakAlgorithms` accepts that set without the weak algorithms and keys in the next table. `StrictRsaSha2` is library hardening. A signature over the accepted content must use RSA-SHA256, RSA-SHA384, or RSA-SHA512, a SHA-256, SHA-384, or SHA-512 digest, exclusive canonicalization, and only the enveloped-signature and exclusive canonicalization transforms. Otherwise it is rejected with `SamlError::AlgorithmUnsupported` |
 | An embedded signature on a received `AuthnRequest` or logout message is verified under `xml_signatures` | Identity provider | Inbound | Optional. Errata 05 E50. The same profiles as the row above |
 | A detached `SigAlg` signature is verified under `xml_signatures` | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `AllowProviderSupportedForCompatibility` accepts any `SigAlg` in the provider-supported set. `ExcludeWeakAlgorithms` excludes the weak algorithms and keys in the next table. `StrictRsaSha2` is library hardening and accepts RSA-SHA256, RSA-SHA384, or RSA-SHA512. Another `SigAlg` is rejected with `SamlError::AlgorithmUnsupported` before the signature is verified |
-| A signed metadata document | Metadata consumer | Inbound | Optional. Errata 05 E50. `MetadataTrustPolicy` limits the transforms, not the signature or digest algorithm. The provider-supported set applies |
+| A signed metadata document is verified under `MetadataTrustPolicy` | Metadata consumer | Inbound typed descriptor import | Optional. Errata 05 E50, and E81 for Metadata §3.1.1. `RequireSignature` and `RequireSignatureAllowingOtherCanonicalization` accept the provider-supported set without the weak algorithms and keys in the next table. `RequireSignatureAllowingWeakAlgorithmsForCompatibility` accepts the provider-supported set. The raw `verify_metadata_signature` functions and `Metadata::verify_signature` accept the provider-supported set |
 
 ### Weak algorithms and keys
 
 `ExcludeWeakAlgorithms` and `StrictRsaSha2` exclude these from the signatures
 they cover. `AllowProviderSupportedForCompatibility` re-allows them where the
-build verifies them.
+build verifies them. Signed metadata import excludes them under
+`MetadataTrustPolicy::RequireSignature` and
+`RequireSignatureAllowingOtherCanonicalization`, and
+`RequireSignatureAllowingWeakAlgorithmsForCompatibility` re-allows them.
 
 | Excluded | Rule | Level |
 | --- | --- | --- |
-| RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, or a detached `SigAlg`, that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, and xmlsec1 has built without MD5 by default since 1.3.0 |
-| RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles. No OASIS rule requires a receiver to reject them. They are outside Conformance §4.1. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
-| An RSA signing certificate shorter than 2048 bits | The certificate is not used to verify. When the peer has no other usable key, verification returns `SamlError::Crypto`, as it does on AWS-LC. Otherwise a message signed with the short key fails signature verification | Library policy, on in Recommended for both roles. XML Signature 1.1 §6.4.2 lets a verifier use an RSA key of 1024 bits or less, and names 2048-bit public keys the minimum recommended key length. RustCrypto without `crypto-legacy-algorithms`, AWS-LC, and FIPS refuse it in every profile. OpenSAML sets no minimum |
+| RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, a detached `SigAlg`, or a verified metadata signature that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, and xmlsec1 has built without MD5 by default since 1.3.0 |
+| RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. They are outside Conformance §4.1. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
+| An RSA signing certificate shorter than 2048 bits | The certificate is not used to verify. When the peer has no other usable key, verification returns `SamlError::Crypto`, as it does on AWS-LC. Otherwise a message signed with the short key fails signature verification. A pinned metadata signing certificate is treated the same way | Library policy, on in Recommended for both roles and in signed metadata import. XML Signature 1.1 §6.4.2 lets a verifier use an RSA key of 1024 bits or less, and names 2048-bit public keys the minimum recommended key length. RustCrypto without `crypto-legacy-algorithms`, AWS-LC, and FIPS refuse it in every profile. OpenSAML sets no minimum |
 
 SHA-1 stays accepted under `ExcludeWeakAlgorithms`: Conformance §4.1 makes the
 SHA-1 digest and RSAwithSHA1 mandatory to implement, and OpenSAML and xmlsec1
 verify them by default. `StrictRsaSha2` excludes
-SHA-1 as well. A metadata signature is verified with the provider-supported
-set in every profile.
+SHA-1 as well. A metadata signature is checked under `MetadataTrustPolicy`, not
+`xml_signatures`.
+
+The exclusion on signed metadata is stricter than OpenSAML's default there.
+OpenSAML's `SignatureValidationFilter` passes the trust engine no
+`SignatureValidationParametersCriterion`, so the default exclusions apply to a
+metadata signature only when a deployment adds that criterion. The 2048-bit
+floor matches the Shibboleth Metadata Aggregator's `X509RSAKeyLengthValidator`,
+whose default is an error for an RSA key shorter than 2048 bits in a metadata
+certificate.
 
 `SsoSession::verified_xml_signatures` reports the `SignatureMethod` URI of each
 verified signature over the Response root or the consumed Assertion, and
@@ -103,7 +114,10 @@ needs `crypto-legacy-algorithms`, and a row marked Post-quantum needs
 `crypto-post-quantum`. A signature with an algorithm the build does not
 verify does not verify. For a message signature, an RSA key of 1024 to 2047
 bits verifies only on RustCrypto with `crypto-legacy-algorithms`, and only
-under `AllowProviderSupportedForCompatibility`. RustCrypto without it, AWS-LC, and
+under `AllowProviderSupportedForCompatibility`. For typed metadata import it
+verifies on that build only under
+`RequireSignatureAllowingWeakAlgorithmsForCompatibility`. The raw metadata
+verification functions accept it there. RustCrypto without it, AWS-LC, and
 FIPS reject it. An RSA key shorter than 1024 bits verifies on no build in any
 profile.
 

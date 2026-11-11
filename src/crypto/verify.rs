@@ -22,9 +22,9 @@ use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationRe
 use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node, XmlLimits};
 use bergshamra::core::ns as bergshamra_ns;
-use bergshamra::dsig::verify::verify_all_document_with_source;
+use bergshamra::dsig::verify::{verify_all_document_with_source, verify_document_with_source};
 use bergshamra::xml::{uppsala, Document as BergshamraDocument, NodeId as BergshamraNodeId};
-use bergshamra::{verify, DsigContext, KeysManager, VerifiedReference, VerifyResult};
+use bergshamra::{DsigContext, KeysManager, VerifiedReference, VerifyResult};
 use std::collections::HashSet;
 
 fn children_named<'a>(node: &'a Node, name: &str) -> Vec<&'a Node> {
@@ -569,9 +569,9 @@ fn dsig_algorithm<'a>(
 
 /// Check one verifier-accepted signature against `profile`.
 ///
-/// Callers apply this only to a signature that authenticated the message being
-/// accepted. An invalid, untrusted, or unrelated signature therefore cannot
-/// reject the message.
+/// Callers apply this only to a signature that authenticated the message or
+/// metadata document being accepted. An invalid, untrusted, or unrelated
+/// signature therefore cannot reject it.
 fn enforce_profile_on_verified_signature(
     document: &BergshamraDocument<'_>,
     signature_node: BergshamraNodeId,
@@ -726,9 +726,9 @@ pub fn verify_signature(
     verify_signature_with_limits(xml, metadata_certs, XmlLimits::default())
 }
 
-/// The parsed message after the checks shared by every message signature
-/// verifier, with one verification context that trusts every loadable
-/// metadata key.
+/// The parsed message or metadata document after the checks shared by every
+/// signature verifier, with one verification context that trusts every
+/// loadable metadata key.
 struct PreparedSignatureVerification {
     dom: dom::Document,
     protocol_response: bool,
@@ -797,7 +797,7 @@ fn reject_unpinned_inline_certificate(
 }
 
 /// Run the wrapping, duplicate-ID, reference, and inline-certificate checks
-/// shared by [`verify_signature_with_limits`] and
+/// shared by [`verify_first_signature_with_profile`] and
 /// [`verify_signatures_detailed_with_profile`], then load the metadata
 /// certificates.
 ///
@@ -846,25 +846,38 @@ pub fn verify_signature_with_limits(
     metadata_certs: &[String],
     limits: XmlLimits,
 ) -> Result<(bool, Option<String>), SamlError> {
-    let Some(prepared) = prepare_signature_verification(
+    verify_first_signature_with_profile(
         xml,
         metadata_certs,
-        None,
         limits,
         XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-    )?
+    )
+}
+
+fn verify_first_signature_with_profile(
+    xml: &str,
+    metadata_certs: &[String],
+    limits: XmlLimits,
+    profile: XmlSignatureProfile,
+) -> Result<(bool, Option<String>), SamlError> {
+    let Some(prepared) =
+        prepare_signature_verification(xml, metadata_certs, None, limits, profile)?
     else {
         return Ok((false, None));
     };
-    match verify(&prepared.context, xml) {
-        Ok(VerifyResult::Valid { references, .. }) => {
+    let root = &prepared.dom.root;
+    let document = uppsala::parse(xml).map_err(|error| {
+        SamlError::Crypto(bergshamra::Error::XmlParse(error.to_string()).to_string())
+    })?;
+    match verify_document_with_source(&prepared.context, &document, Some(xml)) {
+        Ok(VerifyResult::Valid {
+            signature_node,
+            references,
+            ..
+        }) => {
+            enforce_profile_on_verified_signature(&document, signature_node, profile)?;
             let targets = verified_targets(&references)?;
-            let content = verified_content(
-                &prepared.dom.root,
-                xml,
-                &targets,
-                prepared.protocol_response,
-            )?;
+            let content = verified_content(root, xml, &targets, prepared.protocol_response)?;
             Ok((true, content))
         }
         Ok(VerifyResult::Invalid { .. }) => Ok((false, None)),
@@ -1085,24 +1098,32 @@ pub fn verify_metadata_signature_detailed_with_limits(
 ) -> Result<MetadataSignatureVerification, SamlError> {
     let doc = dom::parse_with_limits(xml, limits)?;
     ensure_metadata_signature_transforms_preserve_descriptor(&doc.root)?;
-    verify_metadata_signature_coverage_with_limits(xml, trusted_certificates, limits)
+    verify_metadata_signature_coverage_with_limits(
+        xml,
+        trusted_certificates,
+        limits,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+    )
 }
 
-/// Verify metadata signature cryptography and signed-root coverage.
+/// Verify metadata signature cryptography and signed-root coverage under
+/// `profile`.
 ///
-/// The caller has already enforced the metadata signature profile.
+/// The caller has already enforced the metadata signature shape.
 ///
 /// # Errors
 ///
 /// Returns [`SamlError`] when XML parsing, certificate loading, cryptographic
-/// verification, or signed-root coverage checks fail.
+/// verification, the algorithms `profile` allows, or signed-root coverage
+/// checks fail.
 pub(crate) fn verify_metadata_signature_coverage_with_limits(
     xml: &str,
     trusted_certificates: &[String],
     limits: XmlLimits,
+    profile: XmlSignatureProfile,
 ) -> Result<MetadataSignatureVerification, SamlError> {
     let (verified, signed_entity_descriptor_xml) =
-        verify_signature_with_limits(xml, trusted_certificates, limits)?;
+        verify_first_signature_with_profile(xml, trusted_certificates, limits, profile)?;
     if !verified {
         return Ok(MetadataSignatureVerification::unverified());
     }
