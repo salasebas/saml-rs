@@ -3,15 +3,15 @@
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
-    capture_idp_issuance_window, generate_id, BindingContext, CustomTagReplacement, EntitySetting,
-    User,
+    capture_idp_issuance_window, format_saml_utc_date_time, generate_id, BindingContext,
+    CustomTagReplacement, EntitySetting, User,
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
-    NameIdPolicy, RequestedAuthnContext, SamlInstant, SessionIndex, Status, TopLevelStatusCode,
+    NameIdPolicy, RequestedAuthnContext, SessionIndex, Status, TopLevelStatusCode,
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
@@ -19,7 +19,8 @@ use crate::template::{
     validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
     LOGIN_RESPONSE_TEMPLATE,
 };
-use crate::xml::{parse_generated_saml_utc_date_time, OutboundNameIdQualifiers};
+use crate::validator::offset_datetime_from_system_time;
+use crate::xml::OutboundNameIdQualifiers;
 
 mod artifact;
 mod login_response;
@@ -60,7 +61,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) status: Option<&'a Status>,
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
-    pub(crate) authn_instant: Option<&'a SamlInstant>,
+    pub(crate) authn_instant: Option<SystemTime>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
@@ -86,7 +87,7 @@ struct LoginResponseRendering<'a> {
     status: Option<&'a Status>,
     typed_attributes: &'a [Attribute],
     authn_context: Option<&'a AuthnContextReference>,
-    authn_instant: Option<&'a SamlInstant>,
+    authn_instant: Option<SystemTime>,
     requested_authn_context: Option<&'a RequestedAuthnContext>,
     requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
@@ -273,8 +274,8 @@ impl IdentityProvider {
             }
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
             let authn_instant = match rendering.authn_instant {
-                Some(instant) => supplied_authn_instant(instant, &window.issue_instant)?,
-                None => window.issue_instant.as_str(),
+                Some(authenticated) => written_authn_instant(authenticated, &window.issue_instant)?,
+                None => window.issue_instant.clone(),
             };
             let id = generate_id();
             let assertion_id = generate_id();
@@ -305,7 +306,7 @@ impl IdentityProvider {
                 in_response_to,
                 authn_statement: rendering.web_browser_sso_producer.follows().then_some(
                     login_response::AuthnStatementXml {
-                        authn_instant,
+                        authn_instant: &authn_instant,
                         session_index: session_index.as_ref().map(SessionIndex::as_str),
                         authn_context: &authn_context,
                     },
@@ -757,27 +758,28 @@ impl IdentityProvider {
     }
 }
 
-fn supplied_authn_instant<'a>(
-    instant: &'a SamlInstant,
+fn written_authn_instant(
+    authenticated: SystemTime,
     issue_instant: &str,
-) -> Result<&'a str, SamlError> {
-    let invalid = || {
-        SamlError::Invalid(format!(
-            "AuthnInstant {} is not a UTC xs:dateTime without a leap second",
-            instant.as_str()
-        ))
-    };
-    let normalized = parse_generated_saml_utc_date_time(instant.as_str()).ok_or_else(invalid)?;
-    let authenticated = OffsetDateTime::parse(normalized, &Rfc3339).map_err(|_| invalid())?;
+) -> Result<String, SamlError> {
+    let out_of_range =
+        || SamlError::Invalid("AuthnInstant is outside the supported SAML time range".into());
+    let authenticated = offset_datetime_from_system_time(authenticated)
+        .ok()
+        .filter(|instant| instant.year() >= 1)
+        .ok_or_else(out_of_range)?
+        .replace_nanosecond(0)
+        .map_err(|_| out_of_range())?;
+    let written = format_saml_utc_date_time(authenticated);
     let issued = OffsetDateTime::parse(issue_instant, &Rfc3339).map_err(|_| {
         SamlError::Invalid(format!("IssueInstant {issue_instant} cannot be compared"))
     })?;
     if authenticated > issued {
         return Err(SamlError::Invalid(format!(
-            "AuthnInstant {normalized} is later than the response IssueInstant {issue_instant}"
+            "AuthnInstant {written} is later than the response IssueInstant {issue_instant}"
         )));
     }
-    Ok(normalized)
+    Ok(written)
 }
 
 #[cfg(any(

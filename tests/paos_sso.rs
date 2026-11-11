@@ -9,7 +9,7 @@
     feature = "crypto-fips"
 ))]
 
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use saml_rs::constants::status_code::AUTH_FAILED;
 use saml_rs::xml::dom::{parse, Node};
@@ -17,7 +17,7 @@ use saml_rs::{
     AcsEndpoint, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContextReference,
     EndpointUrl, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpValidationPolicy,
     MetadataTrustPolicy, NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest,
-    PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml, SamlError, SamlInstant,
+    PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml, SamlError,
     SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
 };
@@ -489,7 +489,7 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
 fn caller_authentication_instant_is_checked_and_written() -> Result<(), Box<dyn std::error::Error>>
 {
     const AUTHENTICATED: &str = "2026-01-01T08:00:00Z";
-    const AFTER_ISSUANCE: &str = "9999-12-31T23:59:59Z";
+    let authenticated = SystemTime::UNIX_EPOCH + Duration::from_secs(1_767_254_400);
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
@@ -506,7 +506,7 @@ fn caller_authentication_instant_is_checked_and_written() -> Result<(), Box<dyn 
         &sp_descriptor,
         &received,
         subject(),
-        RespondPaosSso::default().authn_instant(SamlInstant::try_new(AUTHENTICATED)?),
+        RespondPaosSso::default().authn_instant(authenticated),
     )?;
     assert!(answered
         .envelope()
@@ -516,10 +516,10 @@ fn caller_authentication_instant_is_checked_and_written() -> Result<(), Box<dyn 
         &sp_descriptor,
         &received,
         subject(),
-        RespondPaosSso::default().authn_instant(SamlInstant::try_new(AFTER_ISSUANCE)?),
+        RespondPaosSso::default().authn_instant(SystemTime::now() + Duration::from_secs(3600)),
     );
     assert!(
-        matches!(&later, Err(SamlError::Invalid(message)) if message.contains(AFTER_ISSUANCE)),
+        matches!(&later, Err(SamlError::Invalid(message)) if message.contains("later than the response IssueInstant")),
         "{later:?}"
     );
     Ok(())

@@ -1,7 +1,8 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
-use crate::model::{Attributes, AuthnContextReference, RelayStateParam, SamlInstant, Status};
+use crate::model::{Attributes, AuthnContextReference, RelayStateParam, Status};
 use crate::sp::WebBrowserSsoProducer;
+use std::time::SystemTime;
 
 pub use crate::model::{ForceAuthn, IsPassive};
 
@@ -102,7 +103,7 @@ pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) status: Option<Status>,
     pub(super) attributes: Attributes,
     pub(super) authn_context: Option<AuthnContextReference>,
-    pub(super) authn_instant: Option<SamlInstant>,
+    pub(super) authn_instant: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,15 +207,15 @@ impl<Delivery> RespondSso<Delivery> {
     /// Set the `AuthnInstant` of the assertion's `AuthnStatement`.
     ///
     /// Pass the time at which the subject actually authenticated, such as the
-    /// start of a reused identity provider session. Omitting it writes the
-    /// assertion `IssueInstant`. An error response writes no assertion.
+    /// start of a reused identity provider session. It is written in UTC,
+    /// rounded down to the second. Omitting it writes the assertion
+    /// `IssueInstant`. An error response writes no assertion.
     ///
-    /// The response is rejected when the instant is not a UTC `xs:dateTime`
-    /// ending in `Z`, is a leap second, or is later than the response
-    /// `IssueInstant`, and when
+    /// The response is rejected when the written instant is later than the
+    /// response `IssueInstant` or before year 1, and when
     /// [`Self::apply_web_browser_sso_generation_rules`] is not selected, since
     /// no `AuthnStatement` is written then.
-    pub fn authn_instant(mut self, authn_instant: SamlInstant) -> Self {
+    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
         self.authn_instant = Some(authn_instant);
         self
     }

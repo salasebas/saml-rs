@@ -13,8 +13,8 @@ use crate::flow::HttpRequest;
 use crate::idp::PaosSsoResponseInput;
 use crate::model::{
     Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
-    OutstandingLogout, RelayStateParam, SamlInstant, SamlValidationContext, SessionIndex,
-    SsoResponse, SsoSession, Status, Subject, TopLevelStatusCode,
+    OutstandingLogout, RelayStateParam, SamlValidationContext, SessionIndex, SsoResponse,
+    SsoSession, Status, Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
 use crate::xml::OutboundNameIdQualifiers;
@@ -169,7 +169,7 @@ impl StartPaosSso {
 pub struct RespondPaosSso {
     attributes: Attributes,
     authn_context: Option<AuthnContextReference>,
-    authn_instant: Option<SamlInstant>,
+    authn_instant: Option<SystemTime>,
 }
 
 impl RespondPaosSso {
@@ -198,7 +198,7 @@ impl RespondPaosSso {
     /// It is written, and checked against the response `IssueInstant`, as
     /// [`crate::RespondSso::authn_instant`] does. Omitting it writes the
     /// assertion `IssueInstant`.
-    pub fn authn_instant(mut self, authn_instant: SamlInstant) -> Self {
+    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
         self.authn_instant = Some(authn_instant);
         self
     }
@@ -699,8 +699,8 @@ impl Saml<Idp> {
     /// a login response template, names a basic attribute that is not an XML
     /// name, or has a `NameFormat` that is not an absolute URI reference, the
     /// authentication context does not meet an exact `RequestedAuthnContext`,
-    /// [`RespondPaosSso::authn_instant`] is not a UTC instant without a leap
-    /// second or is later than the response `IssueInstant`, the `subject` `SPNameQualifier` is not the one the request's
+    /// [`RespondPaosSso::authn_instant`] is later than the response
+    /// `IssueInstant`, the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
     /// `unspecified` or `encrypted`, or the response cannot be signed. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
@@ -784,7 +784,7 @@ impl Saml<Idp> {
             status: status.as_ref(),
             attributes: options.attributes.as_slice(),
             authn_context: options.authn_context.as_ref(),
-            authn_instant: options.authn_instant.as_ref(),
+            authn_instant: options.authn_instant,
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
         };
