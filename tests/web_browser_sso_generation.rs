@@ -17,9 +17,9 @@ use saml_rs::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
     Credentials, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
     MetadataTrustPolicy, NameId, NameIdCreationPolicy, NameIdFormat, Outbound, PrivateKeyPem,
-    ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Status, Subject,
-    SubjectConfirmation, SubordinateStatusCode,
+    ReplayPolicy, RespondSso, Saml, SamlError, SamlInstant, SamlValidationContext, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Status,
+    Subject, SubjectConfirmation, SubordinateStatusCode,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{XmlEncryptionPolicy, XmlPolicy};
@@ -226,6 +226,68 @@ fn typed_sso_response_carries_profile_authentication_statement(
     assert_eq!(
         session.in_response_to().map(|id| id.as_str()),
         Some(received.message().id().as_str())
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_sso_response_writes_the_caller_authentication_instant(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const AUTHENTICATED: &str = "2026-01-01T08:00:00Z";
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let respond = |authn_instant: &str| -> Result<_, Box<dyn std::error::Error>> {
+        Ok(idp.respond_sso(
+            &sp_descriptor,
+            &received,
+            subject(),
+            RespondSso::post()
+                .apply_web_browser_sso_generation_rules()
+                .authn_instant(SamlInstant::try_new(authn_instant)?),
+        ))
+    };
+
+    let response = respond(AUTHENTICATED)??;
+    assert!(response_xml(&response)?.contains(&format!("AuthnInstant=\"{AUTHENTICATED}\"")));
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    assert_eq!(
+        session.authn_session().authn_instant(),
+        Some(&SamlInstant::try_new(AUTHENTICATED)?)
+    );
+
+    for rejected in [
+        "9999-12-31T23:59:59Z",
+        "2016-12-31T23:59:60Z",
+        "2026-01-01T09:00:00+01:00",
+    ] {
+        let response = respond(rejected)?;
+        assert!(
+            matches!(&response, Err(SamlError::Invalid(message)) if message.contains(rejected)),
+            "{rejected}: {response:?}"
+        );
+    }
+
+    let without_rules = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondSso::post().authn_instant(SamlInstant::try_new(AUTHENTICATED)?),
+    );
+    assert!(
+        matches!(&without_rules, Err(SamlError::Invalid(message)) if message.contains("Web Browser SSO generation rules")),
+        "{without_rules:?}"
     );
     Ok(())
 }

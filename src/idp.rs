@@ -11,7 +11,7 @@ use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
-    NameIdPolicy, RequestedAuthnContext, SessionIndex, Status, TopLevelStatusCode,
+    NameIdPolicy, RequestedAuthnContext, SamlInstant, SessionIndex, Status, TopLevelStatusCode,
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
@@ -19,7 +19,7 @@ use crate::template::{
     validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
     LOGIN_RESPONSE_TEMPLATE,
 };
-use crate::xml::OutboundNameIdQualifiers;
+use crate::xml::{parse_generated_saml_utc_date_time, OutboundNameIdQualifiers};
 
 mod artifact;
 mod login_response;
@@ -31,6 +31,7 @@ use login_response::{
 };
 pub(crate) use paos::PaosSsoResponseInput;
 use std::time::SystemTime;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// Optional inputs for [`IdentityProvider::create_login_response`].
 #[derive(Default)]
@@ -59,6 +60,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) status: Option<&'a Status>,
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
+    pub(crate) authn_instant: Option<&'a SamlInstant>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
@@ -84,6 +86,7 @@ struct LoginResponseRendering<'a> {
     status: Option<&'a Status>,
     typed_attributes: &'a [Attribute],
     authn_context: Option<&'a AuthnContextReference>,
+    authn_instant: Option<&'a SamlInstant>,
     requested_authn_context: Option<&'a RequestedAuthnContext>,
     requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
@@ -220,9 +223,11 @@ impl IdentityProvider {
                 "response attributes cannot be combined with a login response template".into(),
             ));
         }
-        if rendering.authn_context.is_some() && !rendering.web_browser_sso_producer.follows() {
+        if (rendering.authn_context.is_some() || rendering.authn_instant.is_some())
+            && !rendering.web_browser_sso_producer.follows()
+        {
             return Err(SamlError::Invalid(
-                "an authentication context is written only under Web Browser SSO generation rules"
+                "an authentication context or instant is written only under Web Browser SSO generation rules"
                     .into(),
             ));
         }
@@ -267,6 +272,10 @@ impl IdentityProvider {
                 }
             }
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
+            let authn_instant = match rendering.authn_instant {
+                Some(instant) => supplied_authn_instant(instant, &window.issue_instant)?,
+                None => window.issue_instant.as_str(),
+            };
             let id = generate_id();
             let assertion_id = generate_id();
             let audience = sp.metadata.get_entity_id().unwrap_or_default().to_string();
@@ -296,7 +305,7 @@ impl IdentityProvider {
                 in_response_to,
                 authn_statement: rendering.web_browser_sso_producer.follows().then_some(
                     login_response::AuthnStatementXml {
-                        authn_instant: &window.issue_instant,
+                        authn_instant,
                         session_index: session_index.as_ref().map(SessionIndex::as_str),
                         authn_context: &authn_context,
                     },
@@ -464,6 +473,7 @@ impl IdentityProvider {
                 status: overrides.status,
                 typed_attributes: overrides.typed_attributes,
                 authn_context: overrides.authn_context,
+                authn_instant: overrides.authn_instant,
                 requested_authn_context: overrides.requested_authn_context,
                 requested_name_id_policy: overrides.requested_name_id_policy,
             },
@@ -745,6 +755,29 @@ impl IdentityProvider {
             request,
         )
     }
+}
+
+fn supplied_authn_instant<'a>(
+    instant: &'a SamlInstant,
+    issue_instant: &str,
+) -> Result<&'a str, SamlError> {
+    let invalid = || {
+        SamlError::Invalid(format!(
+            "AuthnInstant {} is not a UTC xs:dateTime without a leap second",
+            instant.as_str()
+        ))
+    };
+    let normalized = parse_generated_saml_utc_date_time(instant.as_str()).ok_or_else(invalid)?;
+    let authenticated = OffsetDateTime::parse(normalized, &Rfc3339).map_err(|_| invalid())?;
+    let issued = OffsetDateTime::parse(issue_instant, &Rfc3339).map_err(|_| {
+        SamlError::Invalid(format!("IssueInstant {issue_instant} cannot be compared"))
+    })?;
+    if authenticated > issued {
+        return Err(SamlError::Invalid(format!(
+            "AuthnInstant {normalized} is later than the response IssueInstant {issue_instant}"
+        )));
+    }
+    Ok(normalized)
 }
 
 #[cfg(any(

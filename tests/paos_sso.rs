@@ -17,7 +17,7 @@ use saml_rs::{
     AcsEndpoint, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContextReference,
     EndpointUrl, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpValidationPolicy,
     MetadataTrustPolicy, NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest,
-    PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml, SamlError,
+    PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml, SamlError, SamlInstant,
     SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
 };
@@ -482,6 +482,46 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
     assert!(answered.envelope().contains(&format!(
         "<saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef>"
     )));
+    Ok(())
+}
+
+#[test]
+fn caller_authentication_instant_is_checked_and_written() -> Result<(), Box<dyn std::error::Error>>
+{
+    const AUTHENTICATED: &str = "2026-01-01T08:00:00Z";
+    const AFTER_ISSUANCE: &str = "9999-12-31T23:59:59Z";
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    )?;
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default().authn_instant(SamlInstant::try_new(AUTHENTICATED)?),
+    )?;
+    assert!(answered
+        .envelope()
+        .contains(&format!("AuthnInstant=\"{AUTHENTICATED}\"")));
+
+    let later = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default().authn_instant(SamlInstant::try_new(AFTER_ISSUANCE)?),
+    );
+    assert!(
+        matches!(&later, Err(SamlError::Invalid(message)) if message.contains(AFTER_ISSUANCE)),
+        "{later:?}"
+    );
     Ok(())
 }
 
