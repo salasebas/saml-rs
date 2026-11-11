@@ -63,9 +63,10 @@ fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<S
 /// `flow` with the `<EncryptedID>` of its `<LogoutRequest>` replaced by the
 /// `<NameID>` it carries, decrypted with the local decryption key.
 ///
-/// A request without an `<EncryptedID>`, an unauthenticated request, and a
-/// receiver without a decryption key return `flow` unchanged, so the
-/// `<EncryptedID>` stays unread.
+/// A request without an `<EncryptedID>`, an unauthenticated request, a
+/// receiver without a decryption key, and an `<EncryptedID>` that no
+/// decryption key decrypts return `flow` unchanged, so the `<EncryptedID>`
+/// stays unread.
 pub(super) fn decrypt_encrypted_id(
     flow: FlowResult,
     setting: &EntitySetting,
@@ -85,7 +86,9 @@ pub(super) fn decrypt_encrypted_id(
     if !carries_encrypted_id {
         return Ok(flow);
     }
-    let saml_content = decrypt(&flow.saml_content, key_pem, setting)?;
+    let Some(saml_content) = decrypt(&flow.saml_content, key_pem, setting)? else {
+        return Ok(flow);
+    };
     crate::context::is_valid_xml_with_limits(&saml_content, setting.xml_limits)?;
     crate::xml::validate_protocol_profile(
         &saml_content,
@@ -109,7 +112,7 @@ pub(super) fn decrypt_encrypted_id(
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
-fn decrypt(xml: &str, key_pem: &str, setting: &EntitySetting) -> Result<String, SamlError> {
+fn decrypt(xml: &str, key_pem: &str, setting: &EntitySetting) -> Result<Option<String>, SamlError> {
     use crate::crypto::enc::{decrypt_logout_request_encrypted_id, AssertionDecryptionOptions};
 
     let keys = crate::crypto::keys::load_decryption_keys(
@@ -132,7 +135,7 @@ fn decrypt(xml: &str, key_pem: &str, setting: &EntitySetting) -> Result<String, 
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 )))]
-fn decrypt(_xml: &str, _key_pem: &str, _setting: &EntitySetting) -> Result<String, SamlError> {
+fn decrypt(_: &str, _: &str, _: &EntitySetting) -> Result<Option<String>, SamlError> {
     Err(SamlError::Unsupported(
         "XML decryption requires a crypto provider feature".into(),
     ))

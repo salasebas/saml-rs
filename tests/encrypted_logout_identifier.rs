@@ -12,6 +12,7 @@
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use saml_rs::constants::status_code;
 use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, DecryptionCredential,
@@ -20,7 +21,8 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem,
     Received, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
     SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, StartSlo, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
+    SsoResponse, StartSlo, StartSso, Status, Subject, SubordinateStatusCode, XmlEncryptionPolicy,
+    XmlPolicy,
 };
 use url::Url;
 
@@ -406,6 +408,69 @@ fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certific
             request_input(&sent.outbound, LogoutBinding::Post)?,
         )?;
         assert_eq!(received.message().name_id(), Some(&principal()));
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let published = idp_with_credentials(
+        LogoutPolicy::recommended(),
+        XmlEncryptionPolicy::default(),
+        Credentials {
+            encryption_certificate: Some(CertificatePem::new(NEXT_CERT)),
+            ..credentials()
+        },
+    )?;
+    let parties = Parties {
+        idp: idp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
+        ..parties_with(
+            sp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
+            published,
+        )?
+    };
+    let unknown_principal =
+        Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal());
+    for binding in BINDINGS {
+        let options = start_options(binding)
+            .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
+        let sent = start(&parties, Initiator::Sp, options)?;
+        assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));
+
+        let received = receive(
+            &parties,
+            Initiator::Sp,
+            request_input(&sent.outbound, binding)?,
+        )?;
+        assert_eq!(received.message().name_id(), None, "{binding:?}");
+        assert_eq!(
+            received.message().session_indexes(),
+            &[SessionIndex::try_new("_session")?],
+            "{binding:?}"
+        );
+
+        let response = parties.idp.respond_slo(
+            &parties.sp_descriptor,
+            &received,
+            respond_options(binding).status(unknown_principal.clone()),
+        )?;
+        match parties.sp.finish_slo(
+            &parties.idp_descriptor,
+            &sent.pending,
+            response_input(&response, binding)?,
+            validation(),
+        ) {
+            Err(SamlError::StatusNotSuccess { top, second }) => {
+                assert_eq!(top, status_code::REQUESTER, "{binding:?}");
+                assert_eq!(
+                    second.as_deref(),
+                    Some(status_code::UNKNOWN_PRINCIPAL),
+                    "{binding:?}"
+                );
+            }
+            other => return Err(format!("{binding:?}: unexpected {other:?}").into()),
+        }
     }
     Ok(())
 }
