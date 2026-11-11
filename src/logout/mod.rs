@@ -15,8 +15,8 @@ pub use creation::{
     create_logout_response_with_id,
 };
 pub(crate) use creation::{
-    create_logout_request_with_session_indexes, create_logout_response_with_status,
-    LogoutRequestSessionIndexes, LogoutRequestValidation,
+    create_logout_request_for_subject_inner, create_logout_response_inner, LogoutRequestInput,
+    LogoutRequestValidation, LogoutResponseInput,
 };
 pub(crate) use encrypted_id::decrypt_encrypted_id;
 pub use parsing::{
@@ -25,4 +25,5 @@ pub use parsing::{
 pub(crate) use parsing::{
     parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
 };
+pub(crate) use rendering::LogoutRequestSubject;
 pub(crate) use signing::sign_browser_message;

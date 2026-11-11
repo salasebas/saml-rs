@@ -737,9 +737,9 @@ impl TryFrom<&SpConfig> for EntitySetting {
         setting.want_encrypted_cbc_response_signed =
             encrypted_cbc_response_signature_required(config.validation.responses);
         setting.want_logout_request_signed =
-            logout_signature_required(config.validation.logout.requests)?;
+            logout_signature_required(config.validation.logout.requests);
         setting.want_logout_response_signed =
-            logout_signature_required(config.validation.logout.responses)?;
+            logout_signature_required(config.validation.logout.responses);
         Ok(setting)
     }
 }
@@ -765,9 +765,9 @@ impl TryFrom<&IdpConfig> for EntitySetting {
             verify_present_authn_request_signature(config.validation.authn_requests);
         setting.xml_signatures = config.validation.xml_signatures;
         setting.want_logout_request_signed =
-            logout_signature_required(config.validation.logout.requests)?;
+            logout_signature_required(config.validation.logout.requests);
         setting.want_logout_response_signed =
-            logout_signature_required(config.validation.logout.responses)?;
+            logout_signature_required(config.validation.logout.responses);
         Ok(setting)
     }
 }

@@ -1,4 +1,4 @@
-use crate::constants::{namespace, ParserType};
+use crate::constants::{name_id_format, namespace, ParserType};
 use crate::error::SamlError;
 use crate::xml::dom::XmlLimits;
 use crate::xml::parse_saml_utc_date_time;
@@ -163,14 +163,17 @@ fn validate_closed_unqualified_attributes(
     )
 }
 
+fn attribute_value<'a>(values: &'a [(Vec<u8>, String)], name: &[u8]) -> Option<&'a str> {
+    values
+        .iter()
+        .find_map(|(candidate, value)| (candidate == name).then_some(value.as_str()))
+}
+
 fn require_version_2(
     values: &[(Vec<u8>, String)],
     element: &BytesStart<'_>,
 ) -> Result<(), SamlError> {
-    let version = values
-        .iter()
-        .find_map(|(name, value)| (name == b"Version").then_some(value.as_str()));
-    if version != Some("2.0") {
+    if attribute_value(values, b"Version") != Some("2.0") {
         return Err(profile_error(format!(
             "{} Version must be 2.0",
             element_label(element),
@@ -183,15 +186,12 @@ fn require_issue_instant(
     values: &[(Vec<u8>, String)],
     element: &BytesStart<'_>,
 ) -> Result<(), SamlError> {
-    let issue_instant = values
-        .iter()
-        .find_map(|(name, value)| (name == b"IssueInstant").then_some(value.as_str()))
-        .ok_or_else(|| {
-            profile_error(format!(
-                "{} is missing required unqualified attribute IssueInstant",
-                element_label(element),
-            ))
-        })?;
+    let issue_instant = attribute_value(values, b"IssueInstant").ok_or_else(|| {
+        profile_error(format!(
+            "{} is missing required unqualified attribute IssueInstant",
+            element_label(element),
+        ))
+    })?;
     if parse_saml_utc_date_time(issue_instant).is_none() {
         return Err(profile_error(format!(
             "{} IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z",
@@ -206,9 +206,7 @@ fn require_optional_saml_utc_date_time(
     element: &BytesStart<'_>,
     attribute: &[u8],
 ) -> Result<(), SamlError> {
-    let value = values
-        .iter()
-        .find_map(|(name, value)| (name == attribute).then_some(value.as_str()));
+    let value = attribute_value(values, attribute);
     if value.is_some_and(|value| parse_saml_utc_date_time(value).is_none()) {
         return Err(profile_error(format!(
             "{} {} must use the SAML-conformant UTC xs:dateTime form ending in Z",
@@ -217,6 +215,120 @@ fn require_optional_saml_utc_date_time(
         )));
     }
     Ok(())
+}
+
+fn validate_outbound_entity_issuer(
+    reader: &NsReader<&[u8]>,
+    element: &BytesStart<'_>,
+    message: &str,
+) -> Result<(), SamlError> {
+    let attributes = validate_closed_unqualified_attributes(
+        reader,
+        element,
+        &[
+            b"Format",
+            b"NameQualifier",
+            b"SPNameQualifier",
+            b"SPProvidedID",
+        ],
+        &[],
+    )?;
+    if let Some(format) = attribute_value(&attributes, b"Format") {
+        if format != name_id_format::ENTITY {
+            return Err(profile_error(format!(
+                "{message} Issuer Format must be omitted or use the entity identifier format",
+            )));
+        }
+    }
+    if [
+        b"NameQualifier".as_slice(),
+        b"SPNameQualifier",
+        b"SPProvidedID",
+    ]
+    .iter()
+    .any(|name| attribute_value(&attributes, name).is_some())
+    {
+        return Err(profile_error(format!(
+            "entity-format {message} Issuer must omit NameQualifier, SPNameQualifier, and SPProvidedID",
+        )));
+    }
+    Ok(())
+}
+
+fn validate_outbound_stream<E, S: Default>(
+    xml: &str,
+    message: &str,
+    mut start: impl FnMut(
+        &NsReader<&[u8]>,
+        &BytesStart<'_>,
+        NamespaceKind,
+        &mut [E],
+        &mut S,
+    ) -> Result<E, SamlError>,
+    finish: impl Fn(&E, &S) -> Result<(), SamlError>,
+    is_structural: impl Fn(&E) -> bool,
+) -> Result<S, SamlError> {
+    let text_error = || {
+        profile_error(format!(
+            "structural {message} elements may contain only whitespace text"
+        ))
+    };
+    let is_whitespace = |text: &[u8]| {
+        text.iter()
+            .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+    };
+    let mut reader = NsReader::from_str(xml);
+    let mut stack = Vec::new();
+    let mut state = S::default();
+    loop {
+        let (resolved, event) = reader
+            .read_resolved_event()
+            .map_err(|error| SamlError::Xml(error.to_string()))?;
+        let element_namespace = classify_namespace(resolved);
+        let in_structural = stack.last().is_some_and(&is_structural);
+        match event {
+            Event::Start(element) => {
+                let current = start(&reader, &element, element_namespace, &mut stack, &mut state)?;
+                stack.push(current);
+            }
+            Event::Empty(element) => {
+                let current = start(&reader, &element, element_namespace, &mut stack, &mut state)?;
+                finish(&current, &state)?;
+            }
+            Event::End(_) => {
+                let current = stack
+                    .pop()
+                    .ok_or_else(|| SamlError::Xml("unexpected closing element".into()))?;
+                finish(&current, &state)?;
+            }
+            Event::Text(text) => {
+                if in_structural && !is_whitespace(text.as_bytes()) {
+                    return Err(text_error());
+                }
+            }
+            Event::CData(text) => {
+                if in_structural && !is_whitespace(text.as_bytes()) {
+                    return Err(text_error());
+                }
+            }
+            Event::GeneralRef(reference) => {
+                if in_structural
+                    && !matches!(
+                        reference
+                            .resolve_char_ref()
+                            .map_err(|error| SamlError::Xml(error.to_string()))?,
+                        Some(' ' | '\t' | '\r' | '\n')
+                    )
+                {
+                    return Err(text_error());
+                }
+            }
+            Event::DocType(_) => return Err(SamlError::Xml("DOCTYPE is not allowed".into())),
+            Event::Eof => break,
+            Event::Decl(_) | Event::Comment(_) | Event::PI(_) => {}
+        }
+    }
+    Ok(state)
 }
 
 fn root_consumed_attributes(parser_type: ParserType) -> &'static [&'static [u8]] {
@@ -602,5 +714,109 @@ mod tests {
             ParserType::SamlRequest,
             limits,
         )));
+    }
+
+    fn logout_request_xml(issuer_attributes: &str, root_text: &str) -> String {
+        format!(
+            "<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" \
+             xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_request\" \
+             Version=\"2.0\" IssueInstant=\"2026-01-01T00:00:00Z\" \
+             Destination=\"https://idp.example.com/slo\">\
+             <saml:Issuer{issuer_attributes}>https://sp.example.com/metadata</saml:Issuer>\
+             {root_text}<saml:NameID>user</saml:NameID></samlp:LogoutRequest>"
+        )
+    }
+
+    fn logout_response_xml(issuer_attributes: &str, root_text: &str) -> String {
+        format!(
+            "<samlp:LogoutResponse xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" \
+             xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_response\" \
+             Version=\"2.0\" IssueInstant=\"2026-01-01T00:00:00Z\">\
+             <saml:Issuer{issuer_attributes}>https://idp.example.com/metadata</saml:Issuer>\
+             {root_text}<samlp:Status><samlp:StatusCode \
+             Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/></samlp:Status>\
+             </samlp:LogoutResponse>"
+        )
+    }
+
+    fn validate_request(xml: &str) -> Result<(), SamlError> {
+        validate_logout_request_outbound(
+            xml,
+            &OutboundLogoutRequestExpectation {
+                id: "_request",
+                issue_instant: "2026-01-01T00:00:00Z",
+                destination: "https://idp.example.com/slo",
+                issuer: "https://sp.example.com/metadata",
+                expiration: OutboundLogoutExpiration::Optional,
+                name_id: "user",
+                name_id_format: None,
+                name_id_qualifiers: OutboundNameIdQualifiers::default(),
+                session_indexes: &[],
+            },
+            OutboundLogoutRequestValidation::BeforeSigning,
+        )
+        .map(drop)
+    }
+
+    fn validate_response(xml: &str) -> Result<(), SamlError> {
+        validate_logout_response_outbound(
+            xml,
+            "_response",
+            None,
+            "https://idp.example.com/metadata",
+            None,
+            OutboundLogoutValidation::BeforeSigning {
+                destination_required: false,
+            },
+        )
+        .map(drop)
+    }
+
+    #[test]
+    fn outbound_logout_profile_errors_name_their_message() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let other_format = r#" Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent""#;
+        let qualified = r#" NameQualifier="https://example.com""#;
+        let cases = [
+            (
+                validate_request(&logout_request_xml(other_format, "")),
+                "LogoutRequest Issuer Format must be omitted or use the entity identifier format",
+            ),
+            (
+                validate_request(&logout_request_xml(qualified, "")),
+                "entity-format LogoutRequest Issuer must omit NameQualifier, SPNameQualifier, and SPProvidedID",
+            ),
+            (
+                validate_request(&logout_request_xml("", "text")),
+                "structural LogoutRequest elements may contain only whitespace text",
+            ),
+            (
+                validate_request(&logout_request_xml("", "&#120;")),
+                "structural LogoutRequest elements may contain only whitespace text",
+            ),
+            (
+                validate_response(&logout_response_xml(other_format, "")),
+                "LogoutResponse Issuer Format must be omitted or use the entity identifier format",
+            ),
+            (
+                validate_response(&logout_response_xml(qualified, "")),
+                "entity-format LogoutResponse Issuer must omit NameQualifier, SPNameQualifier, and SPProvidedID",
+            ),
+            (
+                validate_response(&logout_response_xml("", "<![CDATA[text]]>")),
+                "structural LogoutResponse elements may contain only whitespace text",
+            ),
+            (
+                validate_response(&logout_response_xml("", "&#120;")),
+                "structural LogoutResponse elements may contain only whitespace text",
+            ),
+        ];
+        for (result, expected) in cases {
+            match result {
+                Err(SamlError::ProtocolProfile(message)) if message == expected => {}
+                other => return Err(format!("expected {expected:?}, got {other:?}").into()),
+            }
+        }
+        Ok(())
     }
 }
