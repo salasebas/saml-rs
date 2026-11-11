@@ -200,7 +200,9 @@ pub(crate) fn assertion_replays(xml: &str) -> Result<Vec<AssertionReplayId>, Sam
         .filter_map(|assertion| {
             Some(AssertionReplayId {
                 id: assertion.attr("ID")?.to_string(),
-                bearer_not_on_or_after: latest_bearer_not_on_or_after(assertion),
+                bearer_not_on_or_after: latest_bearer_not_on_or_after(subject_confirmations(
+                    assertion,
+                )),
             })
         })
         .collect())
@@ -218,26 +220,30 @@ pub(crate) fn assertion_ids(xml: &str) -> Result<Vec<String>, SamlError> {
         .collect())
 }
 
-fn node_has_bearer(assertion: &Node) -> bool {
+fn subject_confirmations(assertion: &Node) -> impl Iterator<Item = &Node> {
     assertion
         .children
         .iter()
         .filter(|child| child.local_name == "Subject")
         .flat_map(|subject| subject.children.iter())
         .filter(|child| child.local_name == "SubjectConfirmation")
+}
+
+fn node_has_bearer(assertion: &Node) -> bool {
+    subject_confirmations(assertion)
         .any(|confirmation| confirmation.attr("Method") == Some(BEARER_SUBJECT_CONFIRMATION_METHOD))
 }
 
-fn latest_bearer_not_on_or_after(assertion: &Node) -> Option<String> {
+/// Latest bearer `SubjectConfirmationData@NotOnOrAfter` of `confirmations`.
+///
+/// The latest value that parses as an instant wins. An unparsed value is
+/// returned only when no bearer value parses.
+pub(crate) fn latest_bearer_not_on_or_after<'a>(
+    confirmations: impl IntoIterator<Item = &'a Node>,
+) -> Option<String> {
     let mut latest: Option<(OffsetDateTime, String)> = None;
     let mut unparsed = None;
-    for confirmation in assertion
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Subject")
-        .flat_map(|subject| subject.children.iter())
-        .filter(|child| child.local_name == "SubjectConfirmation")
-    {
+    for confirmation in confirmations {
         if confirmation.attr("Method") != Some(BEARER_SUBJECT_CONFIRMATION_METHOD) {
             continue;
         }
