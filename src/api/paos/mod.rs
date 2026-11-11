@@ -709,8 +709,11 @@ impl Saml<Idp> {
     /// [`RespondPaosSso::authn_instant`] is later than the response
     /// `IssueInstant` or before year 1, the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
-    /// `unspecified` or `encrypted`, or the response cannot be signed. Returns
-    /// [`SamlError::Unsupported`] when `subject` has confirmations.
+    /// `unspecified` or `encrypted`, the `subject` `NameId` does not strongly
+    /// match the request's `Subject` (see
+    /// [`RequestedSubject`](crate::RequestedSubject)), or the response cannot
+    /// be signed. Returns [`SamlError::Unsupported`] when `subject` has
+    /// confirmations.
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,
@@ -794,6 +797,7 @@ impl Saml<Idp> {
             authn_instant: options.authn_instant,
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
+            requested_subject: request.message().requested_subject(),
         };
         let issued = self
             .raw_identity_provider()
