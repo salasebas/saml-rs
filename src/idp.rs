@@ -705,7 +705,9 @@ impl IdentityProvider {
     /// required binding parameters, the SAML payload cannot be base64/DEFLATE
     /// decoded, XML parsing or extraction fails, the status is invalid for the
     /// parser, the SP issuer does not match metadata, or AuthnRequest signature
-    /// validation fails when this IdP metadata requires signed requests.
+    /// validation fails when this IdP metadata requires signed requests, or
+    /// when the SP metadata sets `AuthnRequestsSigned` under
+    /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent).
     /// Signature failures include missing signatures, untrusted SP signing
     /// certificates, invalid detached signatures, and XML signature validation
     /// errors.
