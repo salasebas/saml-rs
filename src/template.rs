@@ -334,7 +334,9 @@ pub struct LoginResponseTemplate {
 /// Build an `<AttributeStatement>` from `attributes`.
 ///
 /// Each attribute's value becomes a new `{attr<Tag>}` placeholder to be filled
-/// later by [`replace_tags_by_value`].
+/// later by [`replace_tags_by_value`]. The other attribute fields are
+/// XML-escaped, and each `{` in them is written as the character reference
+/// `&#123;`, so no placeholder pass substitutes inside them.
 pub fn attribute_statement_builder(
     attributes: &[LoginResponseAttribute],
     attribute_template: &str,
@@ -344,11 +346,13 @@ pub fn attribute_statement_builder(
         .iter()
         .map(|a| {
             let value_placeholder = format!("{{{}}}", tagging("attr", &a.value_tag));
-            let name = xml_escape(&a.name);
-            let name_format = xml_escape(&a.name_format);
-            let value_xmlns_xs = xml_escape(a.value_xmlns_xs.as_deref().unwrap_or(DEFAULT_XS));
-            let value_xmlns_xsi = xml_escape(a.value_xmlns_xsi.as_deref().unwrap_or(DEFAULT_XSI));
-            let value_xsi_type = xml_escape(&a.value_xsi_type);
+            let name = escape_literal_template_text(&a.name);
+            let name_format = escape_literal_template_text(&a.name_format);
+            let value_xmlns_xs =
+                escape_literal_template_text(a.value_xmlns_xs.as_deref().unwrap_or(DEFAULT_XS));
+            let value_xmlns_xsi =
+                escape_literal_template_text(a.value_xmlns_xsi.as_deref().unwrap_or(DEFAULT_XSI));
+            let value_xsi_type = escape_literal_template_text(&a.value_xsi_type);
             attribute_template
                 .replacen("{Name}", &name, 1)
                 .replacen("{NameFormat}", &name_format, 1)
@@ -359,6 +363,10 @@ pub fn attribute_statement_builder(
         })
         .collect();
     attribute_statement_template.replacen("{Attributes}", &attrs, 1)
+}
+
+fn escape_literal_template_text(value: &str) -> String {
+    xml_escape(value).replace('{', "&#123;")
 }
 
 pub(crate) fn write_login_response_attribute_statement(
