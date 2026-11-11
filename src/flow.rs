@@ -742,7 +742,6 @@ fn verify_and_prepare(
                 .iter()
                 .any(|decrypted| Some(decrypted.as_str()) == assertion.as_deref());
             if consumed_was_decrypted {
-                verified_xml_signatures.retain(|signature| signature.response_covered);
                 for signature in &mut verified_xml_signatures {
                     signature.assertion_directly_covered = false;
                 }
