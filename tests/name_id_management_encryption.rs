@@ -9,20 +9,23 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
-use std::time::SystemTime;
+use std::collections::HashSet;
+use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{append_signature, build_redirect_octet};
 use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserType};
 use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
+use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, BrowserInput, CertificatePem, Credentials, DecryptionCredential, EndpointUrl,
     EntityId, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MessageConfidentiality,
-    MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
-    NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
-    ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement, Saml, SamlError,
-    SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartNameIdManagement,
+    ManageNameIdRequest, ManageNameIdRequestAgePolicy, ManageNameIdResponse, ManageNameIdService,
+    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
+    NameIdFormat, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
+    ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayCache, ReplayKey, ReplayPolicy,
+    RespondNameIdManagement, Saml, SamlError, SamlValidationContext, SoapChannel,
+    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartNameIdManagement,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -462,6 +465,68 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
         other => return Err(format!("expected Requester/UnknownPrincipal, got {other:?}").into()),
     }
     Ok(())
+}
+
+#[derive(Default)]
+struct MemoryReplayCache {
+    seen: HashSet<String>,
+}
+
+impl ReplayCache for MemoryReplayCache {
+    fn check_and_store(
+        &mut self,
+        key: ReplayKey,
+        _expires_at: SystemTime,
+    ) -> Result<(), SamlError> {
+        let cache_key = key.cache_key();
+        if !self.seen.insert(cache_key.clone()) {
+            return Err(SamlError::ReplayDetected { key: cache_key });
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() -> TestResult {
+    // The service provider publishes a certificate whose key it does not hold.
+    let sp = sp_publishing(IDP_ENCRYPTION_CERT)?;
+    let idp = idp()?;
+    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        encrypted(),
+    )?;
+    let receive = |now: SystemTime, cache: &mut MemoryReplayCache| {
+        sp.receive_name_id_management_redirect(
+            &idp_peer,
+            request_input(&started.outbound)?,
+            ReceiveNameIdManagement::redirect(),
+            SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache))
+                .with_replay_retention(Duration::from_secs(300))
+                .with_manage_name_id_request_age(ManageNameIdRequestAgePolicy::Bounded {
+                    max_age: Duration::from_secs(60),
+                }),
+        )
+    };
+
+    let mut cache = MemoryReplayCache::default();
+    let ReceivedNameIdManagement::Refused(_) = receive(SystemTime::now(), &mut cache)? else {
+        return Err("an identifier that does not decrypt was not refused".into());
+    };
+    match receive(SystemTime::now(), &mut cache) {
+        Err(SamlError::ReplayDetected { .. }) => {}
+        other => return Err(format!("expected ReplayDetected, got {other:?}").into()),
+    }
+
+    let stale = SystemTime::now() + Duration::from_secs(60 * 60);
+    match receive(stale, &mut MemoryReplayCache::default()) {
+        Err(SamlError::TimeWindowInvalid {
+            field: TimeWindowField::ManageNameIdRequestIssueInstant,
+        }) => Ok(()),
+        other => Err(format!("expected a request age error, got {other:?}").into()),
+    }
 }
 
 #[test]

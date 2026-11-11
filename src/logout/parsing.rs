@@ -12,7 +12,7 @@ use crate::flow::{
 use crate::metadata::Metadata;
 use std::time::SystemTime;
 
-use super::encrypted_id::{decrypt_encrypted_id, LogoutRequestAuthentication};
+use super::encrypted_id::LogoutRequestAuthentication;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogoutFlowValidation<'a> {
@@ -170,22 +170,18 @@ pub fn parse_logout_request(
     .0)
 }
 
-/// Typed `LogoutRequest` parsing. An `<EncryptedID>` in an authenticated
-/// request is decrypted with the local decryption key.
+/// Typed `LogoutRequest` parsing. The returned authentication selects
+/// whether [`super::decrypt_encrypted_id`] decrypts an `<EncryptedID>`.
 pub(crate) fn parse_logout_request_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
     receipt: LogoutReceipt,
     request: &HttpRequest,
     validation: LogoutFlowValidation<'_>,
-) -> Result<FlowResult, SamlError> {
+) -> Result<(FlowResult, LogoutRequestAuthentication), SamlError> {
     let (flow, signature_verified) =
         parse_logout_request_inner(self_setting, from_meta, receipt, request, validation)?;
-    decrypt_encrypted_id(
-        flow,
-        self_setting,
-        receipt.authentication(signature_verified),
-    )
+    Ok((flow, receipt.authentication(signature_verified)))
 }
 
 /// The flow result and whether a signature authenticated the message.

@@ -6,11 +6,12 @@ use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
 use crate::metadata::Metadata;
+use crate::model::LogoutRequest;
 
 /// Whether a received `<LogoutRequest>` is authenticated. Only an
 /// authenticated request has its `<EncryptedID>` decrypted.
 #[derive(Debug, Clone, Copy)]
-pub(super) enum LogoutRequestAuthentication {
+pub(crate) enum LogoutRequestAuthentication {
     Authenticated,
     Unauthenticated,
 }
@@ -60,23 +61,24 @@ fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<S
     ))
 }
 
-/// `flow` with the `<EncryptedID>` of its `<LogoutRequest>` replaced by the
-/// `<NameID>` it carries, decrypted with the local decryption key.
+/// `request` with the `<EncryptedID>` of its `<LogoutRequest>` replaced by
+/// the `<NameID>` it carries, decrypted with the local decryption key.
 ///
 /// A request without an `<EncryptedID>`, an unauthenticated request, a
 /// receiver without a decryption key, and an `<EncryptedID>` that no
-/// decryption key decrypts return `flow` unchanged, so the `<EncryptedID>`
+/// decryption key decrypts return `request` unchanged, so the `<EncryptedID>`
 /// stays unread.
-pub(super) fn decrypt_encrypted_id(
-    flow: FlowResult,
+pub(crate) fn decrypt_encrypted_id(
+    request: LogoutRequest,
     setting: &EntitySetting,
     authentication: LogoutRequestAuthentication,
-) -> Result<FlowResult, SamlError> {
+) -> Result<LogoutRequest, SamlError> {
     let key_pem = match (authentication, setting.enc_private_key.as_deref()) {
         (LogoutRequestAuthentication::Authenticated, Some(key_pem)) => key_pem,
         (LogoutRequestAuthentication::Unauthenticated, _)
-        | (LogoutRequestAuthentication::Authenticated, None) => return Ok(flow),
+        | (LogoutRequestAuthentication::Authenticated, None) => return Ok(request),
     };
+    let flow = request.raw_flow();
     let document = crate::xml::dom::parse_with_limits(&flow.saml_content, setting.xml_limits)?;
     let carries_encrypted_id = document
         .root
@@ -84,10 +86,10 @@ pub(super) fn decrypt_encrypted_id(
         .iter()
         .any(|child| child.local_name == "EncryptedID");
     if !carries_encrypted_id {
-        return Ok(flow);
+        return Ok(request);
     }
     let Some(saml_content) = decrypt(&flow.saml_content, key_pem, setting)? else {
-        return Ok(flow);
+        return Ok(request);
     };
     crate::context::is_valid_xml_with_limits(&saml_content, setting.xml_limits)?;
     crate::xml::validate_protocol_profile(
@@ -100,10 +102,10 @@ pub(super) fn decrypt_encrypted_id(
         &crate::xml::fields::logout_request_fields(),
         setting.xml_limits,
     )?;
-    Ok(FlowResult {
+    LogoutRequest::try_from(FlowResult {
         saml_content,
         extract,
-        sig_alg: flow.sig_alg,
+        sig_alg: flow.sig_alg.clone(),
     })
 }
 

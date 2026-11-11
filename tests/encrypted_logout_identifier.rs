@@ -9,7 +9,8 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
-use std::time::SystemTime;
+use std::collections::HashSet;
+use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{base64_decode, deflate_raw_decode};
 use saml_rs::constants::status_code;
@@ -19,10 +20,10 @@ use saml_rs::{
     EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
     LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
     MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem,
-    Received, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
-    SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, StartSlo, StartSso, Status, Subject, SubordinateStatusCode, XmlEncryptionPolicy,
-    XmlPolicy,
+    Received, ReplayCache, ReplayKey, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError,
+    SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, SsoResponse, StartSlo, StartSso, Status, Subject, SubordinateStatusCode,
+    XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -633,5 +634,66 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     ) {
         Err(SamlError::AssertionMatchesOutstandingLogout) => Ok(()),
         other => Err(format!("unexpected {:?}", other.err()).into()),
+    }
+}
+
+#[derive(Default)]
+struct MemoryReplayCache {
+    seen: HashSet<String>,
+}
+
+impl ReplayCache for MemoryReplayCache {
+    fn check_and_store(
+        &mut self,
+        key: ReplayKey,
+        _expires_at: SystemTime,
+    ) -> Result<(), SamlError> {
+        let cache_key = key.cache_key();
+        if !self.seen.insert(cache_key.clone()) {
+            return Err(SamlError::ReplayDetected { key: cache_key });
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    // Any attempt to decrypt fails, because this decryption key does not load.
+    let unloadable_key = idp_with_credentials(
+        LogoutPolicy::recommended(),
+        XmlEncryptionPolicy::default(),
+        Credentials {
+            decryption_key: Some(PrivateKeyPem::new("not a private key")),
+            ..credentials()
+        },
+    )?;
+    let options =
+        StartSlo::post().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
+    let sent = start(&parties, Initiator::Sp, options)?;
+    let mut cache = MemoryReplayCache::default();
+    let received = parties.idp.receive_slo(
+        &parties.sp_descriptor,
+        request_input(&sent.outbound, LogoutBinding::Post)?,
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache))
+            .with_replay_retention(Duration::from_secs(300)),
+    )?;
+    assert_eq!(received.message().name_id(), Some(&principal()));
+
+    match unloadable_key.receive_slo(
+        &parties.sp_descriptor,
+        request_input(&sent.outbound, LogoutBinding::Post)?,
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache))
+            .with_replay_retention(Duration::from_secs(300)),
+    ) {
+        Err(SamlError::ReplayDetected { key }) => {
+            assert_eq!(
+                key,
+                format!("logout_request_id:{}", sent.outbound.id().as_str())
+            );
+            Ok(())
+        }
+        other => Err(format!("expected ReplayDetected, got {:?}", other.err()).into()),
     }
 }
