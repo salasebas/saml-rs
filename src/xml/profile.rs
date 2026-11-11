@@ -217,7 +217,6 @@ fn require_optional_saml_utc_date_time(
     Ok(())
 }
 
-/// Checks the entity-format `<Issuer>` of an outbound `message`.
 fn validate_outbound_entity_issuer(
     reader: &NsReader<&[u8]>,
     element: &BytesStart<'_>,
@@ -256,11 +255,6 @@ fn validate_outbound_entity_issuer(
     Ok(())
 }
 
-/// Walks the elements of an outbound `message`.
-///
-/// `start` checks each element against its parent on the stack and returns
-/// the element's stack entry. `finish` runs when the element closes.
-/// Elements for which `is_structural` holds may contain only whitespace text.
 fn validate_outbound_stream<E, S: Default>(
     xml: &str,
     message: &str,

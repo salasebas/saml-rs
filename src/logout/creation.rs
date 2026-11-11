@@ -347,7 +347,6 @@ pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) want_signed: bool,
     pub(crate) message_id: Option<&'a str>,
-    /// A logout-response template rejects a subordinate code.
     pub(crate) status: &'a Status,
 }
 
