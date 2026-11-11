@@ -45,13 +45,16 @@ fn response_request(xml: &str) -> HttpRequest {
     )])
 }
 
-fn parse_response_at(xml: &str, validation: &SamlValidationContext<'_>) -> Result<(), SamlError> {
+fn parse_response_at(
+    xml: &str,
+    validation: &SamlValidationContext<'_>,
+) -> Result<FlowResult, SamlError> {
     let mut options = FlowOptions::default();
     options.binding = Some(Binding::Post);
     options.parser_type = Some(ParserType::SamlResponse);
     options.now = Some(validation.now());
     options.clock_drifts = validation.clock_skew().as_millis();
-    flow(&options, &response_request(xml)).map(|_| ())
+    flow(&options, &response_request(xml))
 }
 
 fn xml_with_late_subject_and_session() -> String {
@@ -910,6 +913,37 @@ fn typed_validation_context_replay_expiration_at_now_fails_closed(
         }
         other => Err(format!("expected ReplayExpiration failure, got {other:?}").into()),
     }
+}
+
+#[test]
+fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_policy(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let xml = RESPONSE.replace(
+        "</saml:SubjectConfirmation>",
+        "</saml:SubjectConfirmation><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData NotOnOrAfter=\"2024-01-18T06:21:48\"/></saml:SubjectConfirmation>",
+    );
+    let mut validation = SamlValidationContext::new(
+        instant("2020-01-01T00:00:00Z")?,
+        ReplayPolicy::DisabledForCompatibility,
+    )
+    .with_clock_skew(ClockSkew::strict());
+    let session = SsoSession::try_from(parse_response_at(&xml, &validation)?)?;
+    session.check_and_store_replay(&mut validation)?;
+
+    let mut cache = MemoryReplayCache::default();
+    let mut validation = SamlValidationContext::new(
+        instant("2020-01-01T00:00:00Z")?,
+        ReplayPolicy::RequireCache(&mut cache),
+    )
+    .with_clock_skew(ClockSkew::strict());
+    session.check_and_store_replay(&mut validation)?;
+    assert_eq!(
+        cache
+            .seen
+            .get("assertion_id:_d71a3a8e9fcc45c9e9d248ef7049393fc8f04e5f75"),
+        Some(&instant("2024-01-18T06:21:48Z")?)
+    );
+    Ok(())
 }
 
 #[test]

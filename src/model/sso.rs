@@ -11,14 +11,14 @@ use super::{
     earliest_authn_session_expiration, LogoutSubject, RelayStateParam, ReplayKey, ReplayPolicy,
     SamlValidationContext,
 };
+use crate::assertion_acceptance::latest_bearer_not_on_or_after;
 use crate::config::EntityId;
 use crate::error::{SamlError, TimeWindowField};
 use crate::raw::FlowResult;
-use crate::xml::{extract_with_limits, parse_saml_utc_date_time, ExtractorField, XmlLimits};
+use crate::xml::{dom, parse_saml_utc_date_time, XmlLimits};
 use std::time::SystemTime;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
-const BEARER_SUBJECT_CONFIRMATION_METHOD: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
 
 /// Parsed SSO response envelope.
@@ -368,12 +368,14 @@ impl SsoSession {
     /// called only after signature, issuer, audience, destination, recipient,
     /// `InResponseTo`, and time validation have already passed.
     ///
-    /// The bearer assertion identifier is kept until
-    /// `SubjectConfirmationData@NotOnOrAfter` plus skew. An earlier
-    /// `Conditions` or `AuthnStatement` instant does not shorten it. The
-    /// Response identifier still expires at the earliest bound. Every direct
-    /// assertion identifier is stored. Another assertion uses its own bearer
-    /// `NotOnOrAfter` when that attribute is present.
+    /// The bearer assertion identifier is kept until the latest bearer
+    /// `SubjectConfirmationData@NotOnOrAfter` plus skew. A value that does not
+    /// parse as an instant counts only when no other bearer value does. An
+    /// earlier `Conditions` or `AuthnStatement` instant does not shorten it.
+    /// The Response identifier still expires at the earliest bound. Every
+    /// direct assertion identifier is stored. Another assertion uses its own
+    /// bearer `NotOnOrAfter`, chosen the same way, when that attribute is
+    /// present.
     ///
     /// # Errors
     ///
@@ -484,32 +486,18 @@ impl SsoSession {
     }
 
     fn bearer_subject_confirmation_expires_at(&self) -> Result<Option<OffsetDateTime>, SamlError> {
-        let fields = [
-            ExtractorField::new("subjectConfirmation", &["SubjectConfirmation"]).attrs(&["Method"]),
-            ExtractorField::new(
-                "subjectConfirmationData",
-                &["SubjectConfirmation", "SubjectConfirmationData"],
-            )
-            .attrs(&["NotOnOrAfter"]),
-        ];
-        let mut expires_at = None;
-        for confirmation in self.subject.confirmations() {
-            let extracted =
-                extract_with_limits(confirmation.raw_xml(), &fields, XmlLimits::default())?;
-            if extracted.get_str("subjectConfirmation") != Some(BEARER_SUBJECT_CONFIRMATION_METHOD)
-            {
-                continue;
-            }
-            let Some(not_on_or_after) = extracted.get_str("subjectConfirmationData") else {
-                continue;
-            };
-            let candidate = parse_replay_expiration(not_on_or_after)?;
-            match expires_at {
-                Some(current) if current >= candidate => {}
-                Some(_) | None => expires_at = Some(candidate),
-            }
-        }
-        Ok(expires_at)
+        let confirmations = self
+            .subject
+            .confirmations()
+            .iter()
+            .map(|confirmation| {
+                dom::parse_fragment_with_limits(confirmation.raw_xml(), XmlLimits::default())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        latest_bearer_not_on_or_after(confirmations.iter().map(|document| &document.root))
+            .as_deref()
+            .map(parse_replay_expiration)
+            .transpose()
     }
 }
 
