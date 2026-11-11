@@ -83,7 +83,7 @@ impl DeliveredArtifact {
     ///
     /// Returns [`SamlError::Invalid`] when `SAMLart` is missing or repeated,
     /// is not a type 0x0004 artifact, or `RelayState` is repeated or longer
-    /// than 80 bytes.
+    /// than [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES).
     pub fn from_query(raw_query: &str) -> Result<Self, SamlError> {
         let pairs: Vec<(String, String)> =
             url::form_urlencoded::parse(raw_query.trim_start_matches('?').as_bytes())
@@ -104,7 +104,7 @@ impl DeliveredArtifact {
     ///
     /// Returns [`SamlError::Invalid`] when `SAMLart` is missing or repeated,
     /// is not a type 0x0004 artifact, or `RelayState` is repeated or longer
-    /// than 80 bytes.
+    /// than [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES).
     pub fn from_form(fields: &[FormField]) -> Result<Self, SamlError> {
         Self::from_pairs(fields.iter().map(|field| (field.name(), field.value())))
     }
@@ -127,7 +127,7 @@ impl DeliveredArtifact {
         let relay_state = single_value(pairs, url_params::RELAY_STATE)?;
         Ok(Self {
             artifact: Artifact::try_from_encoded(artifact)?,
-            relay_state: RelayStateParam::try_from_option(relay_state)?,
+            relay_state: RelayStateParam::received(relay_state.map(str::to_string))?,
         })
     }
 }

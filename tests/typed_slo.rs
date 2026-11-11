@@ -39,6 +39,7 @@ use saml_rs::{
     RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel,
     SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession,
     StartSlo, Status, Subject, SubordinateStatusCode, TemplatePolicy,
+    MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -3075,6 +3076,78 @@ fn typed_facade_respond_slo_echoes_the_received_relay_state_exactly(
         assert_eq!(RelayStateParam::try_from_option(echoed)?, relay_state);
     }
     Ok(())
+}
+
+#[test]
+fn typed_facade_slo_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let long = "s".repeat(200);
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
+    let mut request_fields = post_fields(&started.outbound)?;
+    request_fields.push(FormField::new("RelayState", long.as_str()));
+
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::post(request_fields),
+        validation(),
+    )?;
+    assert_eq!(received.relay_state().as_deref(), Some(long.as_str()));
+
+    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    assert_eq!(
+        response.post_form()?.value("RelayState"),
+        Some(long.as_str())
+    );
+
+    let completed = sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
+        validation(),
+    )?;
+    assert_eq!(completed.relay_state().as_deref(), Some(long.as_str()));
+    Ok(())
+}
+
+#[test]
+fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let too_long = "t".repeat(MAX_RECEIVED_RELAY_STATE_BYTES + 1);
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
+    let mut request_fields = post_fields(&started.outbound)?;
+    request_fields.push(FormField::new("RelayState", too_long.as_str()));
+    match idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::post(request_fields),
+        validation(),
+    ) {
+        Err(SamlError::Invalid(message)) if message.contains("receive limit") => {}
+        other => {
+            return Err(format!("expected the RelayState receive limit, got {other:?}").into())
+        }
+    }
+
+    let received = idp.receive_slo(
+        &sp_descriptor,
+        BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?),
+        validation(),
+    )?;
+    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let mut response_fields = post_fields(&response)?;
+    response_fields.push(FormField::new("RelayState", too_long));
+    match sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<LogoutResponse>::post(response_fields),
+        validation(),
+    ) {
+        Err(SamlError::Invalid(message)) if message.contains("receive limit") => Ok(()),
+        other => Err(format!("expected the RelayState receive limit, got {other:?}").into()),
+    }
 }
 
 #[test]

@@ -25,7 +25,7 @@ use saml_rs::{
     Received, RelayStateParam, ReplayPolicy, ResolvedProtocolMessage, RespondSso, Saml, SamlError,
     SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint, SsoResponse,
     SsoResponseBinding, SsoSession, StartSso, Status, Subject, SubordinateStatusCode,
-    TransformAlgorithm,
+    TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{IdpConfigBuilder, SloEndpoint, XmlEncryptionPolicy, XmlPolicy};
@@ -342,19 +342,51 @@ fn a_relay_state_the_service_provider_did_not_send_is_rejected(
 }
 
 #[test]
-fn a_relay_state_longer_than_80_bytes_is_not_delivered() -> Result<(), Box<dyn std::error::Error>> {
+fn a_received_relay_state_up_to_the_receive_limit_travels_with_the_artifact(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let long = "r".repeat(200);
+    let started = parties.sp.start_sso(
+        &parties.idp_metadata,
+        StartSso::redirect().response_binding(SsoResponseBinding::Artifact),
+    )?;
+    let url = Url::parse(started.outbound.redirect_url()?)?;
+    let query = format!("{}&RelayState={long}", url.query().ok_or("missing query")?);
+    let request = parties.idp.receive_sso(
+        &parties.sp_metadata,
+        BrowserInput::<AuthnRequest>::redirect(query),
+        validation(),
+    )?;
+
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let response = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        subject(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    )?;
+    let delivered = delivered_by(&response)?;
+    assert_eq!(delivered.relay_state().as_deref(), Some(long.as_str()));
+
+    let session = resolve_and_finish(&parties, &started.pending, delivered, &mut issued)?;
+    assert_eq!(session.relay_state().as_deref(), Some(long.as_str()));
+    Ok(())
+}
+
+#[test]
+fn a_relay_state_above_the_receive_limit_is_not_delivered() -> Result<(), Box<dyn std::error::Error>>
+{
     let query = |relay_state: String| {
         format!(
             "SAMLart=AAQAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJyg%3D&RelayState={relay_state}"
         )
     };
-    let delivered = DeliveredArtifact::from_query(&query("r".repeat(80)))?;
-    assert_eq!(
-        delivered.relay_state().as_deref(),
-        Some("r".repeat(80).as_str())
-    );
+    let longest = "r".repeat(MAX_RECEIVED_RELAY_STATE_BYTES);
+    let delivered = DeliveredArtifact::from_query(&query(longest.clone()))?;
+    assert_eq!(delivered.relay_state().as_deref(), Some(longest.as_str()));
     assert!(matches!(
-        DeliveredArtifact::from_query(&query("r".repeat(81))),
+        DeliveredArtifact::from_query(&query("r".repeat(MAX_RECEIVED_RELAY_STATE_BYTES + 1))),
         Err(SamlError::Invalid(_))
     ));
     Ok(())

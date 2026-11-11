@@ -291,14 +291,14 @@ pub(super) fn relay_state_from_input<Message>(
             let value = url::form_urlencoded::parse(raw_query.trim_start_matches('?').as_bytes())
                 .find(|(name, _)| name == "RelayState")
                 .map(|(_, value)| value.into_owned());
-            RelayStateParam::try_from_option(value)
+            RelayStateParam::received(value)
         }
         BrowserInput::Post { fields, .. } | BrowserInput::SimpleSignPost { fields, .. } => {
             let value = fields
                 .iter()
                 .find(|field| field.name() == "RelayState")
                 .map(|field| field.value().to_string());
-            RelayStateParam::try_from_option(value)
+            RelayStateParam::received(value)
         }
         BrowserInput::Artifact { delivered, .. } => Ok(delivered.relay_state().clone()),
         BrowserInput::Soap { .. } => Ok(RelayStateParam::absent()),

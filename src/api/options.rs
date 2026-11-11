@@ -277,7 +277,10 @@ impl<Delivery> RespondSso<Delivery> {
     /// Set exact RelayState state for the response.
     ///
     /// When omitted for a response to a received request, the received
-    /// RelayState is echoed. Pass [`RelayStateParam::absent`] to suppress echo.
+    /// RelayState is echoed unchanged, up to
+    /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES).
+    /// Pass [`RelayStateParam::absent`] to suppress echo. A value set here
+    /// must not exceed [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES).
     pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
         self.relay_state = Some(relay_state);
         self

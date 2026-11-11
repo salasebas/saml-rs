@@ -234,7 +234,7 @@ impl Outbound<SsoResponse> {
         let relay_state = raw_context
             .relay_state
             .clone()
-            .map(RelayState::try_new)
+            .map(RelayState::received)
             .transpose()?;
         let action = match encoding {
             ArtifactEncoding::Url => {
@@ -266,7 +266,12 @@ impl TryFrom<BindingContext> for Outbound<AuthnRequest> {
     type Error = SamlError;
 
     fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
-        outbound_from_context(raw_context, true, MessageField::Request)
+        outbound_from_context(
+            raw_context,
+            true,
+            MessageField::Request,
+            RelayState::try_new,
+        )
     }
 }
 
@@ -274,7 +279,25 @@ impl TryFrom<BindingContext> for Outbound<SsoResponse> {
     type Error = SamlError;
 
     fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
-        outbound_from_context(raw_context, false, MessageField::Response)
+        outbound_from_context(
+            raw_context,
+            false,
+            MessageField::Response,
+            RelayState::try_new,
+        )
+    }
+}
+
+impl Outbound<SsoResponse> {
+    pub(crate) fn echoing_received_relay_state(
+        raw_context: BindingContext,
+    ) -> Result<Self, SamlError> {
+        outbound_from_context(
+            raw_context,
+            false,
+            MessageField::Response,
+            RelayState::received,
+        )
     }
 }
 
@@ -288,7 +311,12 @@ impl TryFrom<BindingContext> for Outbound<LogoutRequest> {
             let request = SoapProtocolMessage::request(endpoint, &raw_context.context)?;
             return soap_outbound(raw_context, OutboundAction::SoapRequest(request));
         }
-        outbound_from_context(raw_context, true, MessageField::Request)
+        outbound_from_context(
+            raw_context,
+            true,
+            MessageField::Request,
+            RelayState::try_new,
+        )
     }
 }
 
@@ -296,12 +324,27 @@ impl TryFrom<BindingContext> for Outbound<LogoutResponse> {
     type Error = SamlError;
 
     fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+        Self::logout_response(raw_context, RelayState::try_new)
+    }
+}
+
+impl Outbound<LogoutResponse> {
+    pub(crate) fn echoing_received_relay_state(
+        raw_context: BindingContext,
+    ) -> Result<Self, SamlError> {
+        Self::logout_response(raw_context, RelayState::received)
+    }
+
+    fn logout_response(
+        raw_context: BindingContext,
+        relay_state: RelayStateConstructor,
+    ) -> Result<Self, SamlError> {
         if raw_context.binding == Binding::Soap {
             validate_context_message_kind(&raw_context, MessageField::Response)?;
             let response = SoapResponse::new(&raw_context.context)?;
             return soap_outbound(raw_context, OutboundAction::SoapResponse(response));
         }
-        outbound_from_context(raw_context, true, MessageField::Response)
+        outbound_from_context(raw_context, true, MessageField::Response, relay_state)
     }
 }
 
@@ -329,7 +372,12 @@ impl TryFrom<BindingContext> for Outbound<ManageNameIdRequest> {
     type Error = SamlError;
 
     fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
-        outbound_from_context(raw_context, true, MessageField::Request)
+        outbound_from_context(
+            raw_context,
+            true,
+            MessageField::Request,
+            RelayState::try_new,
+        )
     }
 }
 
@@ -337,21 +385,42 @@ impl TryFrom<BindingContext> for Outbound<ManageNameIdResponse> {
     type Error = SamlError;
 
     fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
-        outbound_from_context(raw_context, true, MessageField::Response)
+        outbound_from_context(
+            raw_context,
+            true,
+            MessageField::Response,
+            RelayState::try_new,
+        )
     }
 }
+
+impl Outbound<ManageNameIdResponse> {
+    pub(crate) fn echoing_received_relay_state(
+        raw_context: BindingContext,
+    ) -> Result<Self, SamlError> {
+        outbound_from_context(
+            raw_context,
+            true,
+            MessageField::Response,
+            RelayState::received,
+        )
+    }
+}
+
+type RelayStateConstructor = fn(String) -> Result<RelayState, SamlError>;
 
 fn outbound_from_context<Message>(
     raw_context: BindingContext,
     allow_redirect: bool,
     expected_message: MessageField,
+    relay_state: RelayStateConstructor,
 ) -> Result<Outbound<Message>, SamlError> {
     validate_context_message_kind(&raw_context, expected_message)?;
     let id = MessageId::try_new(raw_context.id.clone())?;
     let relay_state = raw_context
         .relay_state
         .clone()
-        .map(RelayState::try_new)
+        .map(relay_state)
         .transpose()?;
     match raw_context.binding {
         Binding::Redirect => {
