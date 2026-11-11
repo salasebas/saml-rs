@@ -91,9 +91,11 @@ mapping is not implemented.
 | Protocol response roots that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | XML signature generation | `src/crypto/sign.rs` |
 | Algorithm variants and `AlgorithmPolicy` | `src/config/algorithms.rs`, `src/config/policies.rs` |
-| `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`, and `NewEncryptedID` | `src/crypto/enc.rs` |
+| `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`, and `NewEncryptedID` encryption | `src/crypto/enc/encrypt.rs` |
+| `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`, and `NewEncryptedID` decryption | `src/crypto/enc/decrypt.rs` |
+| Encrypted element kinds and their selection | `src/crypto/enc.rs` |
 | Decryption of a verified response's encrypted children | `src/flow.rs`, `src/encrypted_elements.rs` |
-| `EncryptedID` in the requested `Subject` of a received `AuthnRequest` | `src/api/requested_subject.rs`, `src/crypto/enc.rs` |
+| `EncryptedID` in the requested `Subject` of a received `AuthnRequest` | `src/api/requested_subject.rs`, `src/crypto/enc/decrypt.rs` |
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |
 | Peer descriptors | `src/config/descriptors.rs` |
@@ -108,7 +110,7 @@ mapping is not implemented.
 | Parsing | `src/logout/parsing.rs` |
 | Rendering | `src/logout/rendering.rs` |
 | Signing | `src/logout/signing.rs` |
-| `EncryptedID` in place of the `LogoutRequest` `NameID` | `src/logout/encrypted_id.rs`, `src/crypto/enc.rs` |
+| `EncryptedID` in place of the `LogoutRequest` `NameID` | `src/logout/encrypted_id.rs`, `src/crypto/enc/encrypt.rs`, `src/crypto/enc/decrypt.rs` |
 
 Logout is the directory `src/logout/`.
 
