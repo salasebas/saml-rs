@@ -328,6 +328,22 @@ pub(super) fn ensure_entity_id(expected: &EntityId, actual: &EntityId) -> Result
     ))
 }
 
+pub(super) fn ensure_https_endpoint(
+    endpoint: &str,
+    profile: &str,
+    service: &str,
+    policy_option: &str,
+) -> Result<(), SamlError> {
+    let url = url::Url::parse(endpoint)
+        .map_err(|error| Error::Invalid(format!("{service} location is not a URL: {error}")))?;
+    if url.scheme() == "https" {
+        return Ok(());
+    }
+    Err(Error::ProtocolProfile(format!(
+        "{profile} sends the user agent to an https {service} unless {policy_option} is selected"
+    )))
+}
+
 pub(super) fn ensure_sso_response_binding(
     actual: Binding,
     expected: SsoResponseBinding,

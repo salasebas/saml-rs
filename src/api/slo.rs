@@ -17,8 +17,8 @@ use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
-    ensure_entity_id, ensure_relay_state, input_binding, raw_idp_descriptor, raw_sp_descriptor,
-    relay_state_from_input,
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding, raw_idp_descriptor,
+    raw_sp_descriptor, relay_state_from_input,
 };
 use super::{Idp, LogoutSigning, RespondSlo, Saml, SamlError, Sp, StartSlo};
 
@@ -747,7 +747,12 @@ fn enforce_participant_https(
         return Ok(());
     }
     let destination = peer_logout_endpoint(peer_metadata, binding.as_binding(), direction)?;
-    require_https_logout_endpoint(&destination)
+    ensure_https_endpoint(
+        &destination,
+        "Single Logout",
+        "SingleLogoutService",
+        "allow_http_single_logout",
+    )
 }
 
 fn peer_logout_endpoint(
@@ -762,20 +767,6 @@ fn peer_logout_endpoint(
         }
     };
     endpoint.ok_or_else(|| Error::MissingMetadata("SingleLogoutService".into()))
-}
-
-fn require_https_logout_endpoint(endpoint: &str) -> Result<(), SamlError> {
-    let url = url::Url::parse(endpoint).map_err(|error| {
-        Error::Invalid(format!(
-            "SingleLogoutService location is not a URL: {error}"
-        ))
-    })?;
-    if url.scheme() == "https" {
-        return Ok(());
-    }
-    Err(Error::ProtocolProfile(
-        "Single Logout sends the user agent to an https SingleLogoutService unless allow_http_single_logout is selected".into(),
-    ))
 }
 
 fn logout_request_signing(setting: &EntitySetting, signing: LogoutSigning) -> bool {
