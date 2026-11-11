@@ -321,12 +321,12 @@ impl ServiceProvider {
         options: &LoginRequestOptions<'_>,
         producer: WebBrowserSsoProducer,
     ) -> Result<BindingContext, SamlError> {
-        if self.metadata.is_authn_request_signed() != idp.metadata.is_want_authn_requests_signed() {
-            return Err(SamlError::Invalid(format!(
-                "ERR_METADATA_CONFLICT_REQUEST_SIGNED_FLAG: SP AuthnRequestsSigned={} but IdP WantAuthnRequestsSigned={}",
-                self.metadata.is_authn_request_signed(),
-                idp.metadata.is_want_authn_requests_signed()
-            )));
+        if idp.metadata.is_want_authn_requests_signed() && !self.metadata.is_authn_request_signed()
+        {
+            return Err(SamlError::Invalid(
+                "ERR_METADATA_CONFLICT_REQUEST_SIGNED_FLAG: SP AuthnRequestsSigned=false but IdP WantAuthnRequestsSigned=true"
+                    .into(),
+            ));
         }
         let destination = idp
             .metadata
