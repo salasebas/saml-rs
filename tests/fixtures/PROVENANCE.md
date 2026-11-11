@@ -90,6 +90,22 @@ audit above. They were generated with OpenSSL `4.1.0`:
 The certificate SHA-256 fingerprint is
 `B6:95:E0:D1:5C:B7:AC:E1:A4:0E:0D:6B:55:4D:74:6C:B8:01:1C:05:81:DB:12:F3:84:B1:18:93:7F:61:51:6A`.
 
+## Re-issued SP certificate fixture
+
+`key/sp/cert.unencrypted.pkcs8.reissued.cer` is a test-only self-signed
+certificate for the key in `key/sp/privkey.unencrypted.pkcs8.pem`, with the
+subject of `key/sp/cert.unencrypted.pkcs8.cer` and serial 1. It stands for a
+certificate re-issued without key rotation in `tests/signature_key_info.rs`.
+It was generated with OpenSSL `4.1.0`:
+`req -new -x509 -key key/sp/privkey.unencrypted.pkcs8.pem -sha256 -days 36500 -set_serial 1`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `key/sp/cert.unencrypted.pkcs8.reissued.cer` | `648011c07f1c534a2f6ef83366bcc5fc822da0bb4ce5fc6eb151bb829d76e54a` |
+
+The certificate SHA-256 fingerprint is
+`78:BC:C4:72:37:9A:F4:66:06:87:7E:8C:77:35:7D:CD:C1:6D:0E:43:02:F3:8C:11:52:9B:DE:B9:C3:44:D7:51`.
+
 ## External SLO HTTP-Redirect fixtures
 
 The fixtures under `tests/fixtures/interop/` are immutable interoperability

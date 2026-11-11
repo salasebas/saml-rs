@@ -8,6 +8,7 @@
 
 use std::time::SystemTime;
 
+use saml_rs::error::SignatureVerificationReason;
 use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, IdpConfig,
@@ -113,7 +114,12 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
         &signed_with_sp_role_key,
     )?;
     assert!(
-        matches!(rejected, Err(SamlError::CertificateMismatch)),
+        matches!(
+            rejected,
+            Err(SamlError::SignatureVerification {
+                reason: SignatureVerificationReason::XmlSignature
+            })
+        ),
         "{rejected:?}"
     );
     Ok(())
@@ -231,7 +237,12 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
             &signed_with_saml11_role_key,
         )?;
         assert!(
-            matches!(rejected, Err(SamlError::CertificateMismatch)),
+            matches!(
+                rejected,
+                Err(SamlError::SignatureVerification {
+                    reason: SignatureVerificationReason::XmlSignature
+                })
+            ),
             "{rejected:?}"
         );
     }
@@ -303,7 +314,12 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
             validation(),
         );
         assert!(
-            matches!(rejected, Err(SamlError::CertificateMismatch)),
+            matches!(
+                rejected,
+                Err(SamlError::SignatureVerification {
+                    reason: SignatureVerificationReason::XmlSignature
+                })
+            ),
             "{rejected:?}"
         );
     }

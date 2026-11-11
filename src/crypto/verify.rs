@@ -19,7 +19,6 @@ use crate::assertion_acceptance::consumed_assertion;
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
-use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node, XmlLimits};
 use bergshamra::core::ns as bergshamra_ns;
 use bergshamra::dsig::verify::{verify_all_document_with_source, verify_document_with_source};
@@ -693,21 +692,6 @@ pub(crate) fn has_xml_signature_with_limits(
     Ok(has_saml_xml_signature(&doc.root))
 }
 
-/// First `<X509Certificate>` text found inside a candidate `<Signature>` (the
-/// cert the sender embedded in the message), if any.
-fn inline_signature_cert(signatures: &[&Node]) -> Option<String> {
-    fn descendant_cert(node: &Node) -> Option<String> {
-        if node.local_name == "X509Certificate" && !node.text.is_empty() {
-            return Some(node.text.clone());
-        }
-        node.children.iter().find_map(descendant_cert)
-    }
-
-    signatures
-        .iter()
-        .find_map(|signature| descendant_cert(signature))
-}
-
 /// Verify the XML-DSig signature(s) of `xml` against `metadata_certs`.
 ///
 /// Returns `(verified, signed_content)`:
@@ -775,29 +759,8 @@ fn metadata_verification_context(
         .with_insecure(true))
 }
 
-fn reject_unpinned_inline_certificate(
-    signatures: &[&Node],
-    metadata_certs: &[String],
-) -> Result<(), SamlError> {
-    // If the message embeds a certificate, it must be one declared in metadata
-    // (rolling-cert safety). Verification itself still uses only the metadata
-    // certs.
-    let Some(inline) = inline_signature_cert(signatures) else {
-        return Ok(());
-    };
-    let inline = normalize_cert_string(&inline);
-    if !metadata_certs.is_empty()
-        && !metadata_certs
-            .iter()
-            .any(|certificate| normalize_cert_string(certificate) == inline)
-    {
-        return Err(SamlError::CertificateMismatch);
-    }
-    Ok(())
-}
-
-/// Run the wrapping, duplicate-ID, reference, and inline-certificate checks
-/// shared by [`verify_first_signature_with_profile`] and
+/// Run the wrapping, duplicate-ID, and reference checks shared by
+/// [`verify_first_signature_with_profile`] and
 /// [`verify_signatures_detailed_with_profile`], then load the metadata
 /// certificates.
 ///
@@ -825,7 +788,6 @@ fn prepare_signature_verification(
         return Ok(None);
     }
     preflight_saml_reference_uris(&signature_candidates)?;
-    reject_unpinned_inline_certificate(&signature_candidates, metadata_certs)?;
     super::provider::ensure_crypto_provider_initialized()?;
     let context = metadata_verification_context(metadata_certs, hmac_secret, profile)?;
     Ok(Some(PreparedSignatureVerification {
@@ -2030,16 +1992,6 @@ mod tests {
             other => {
                 Err(format!("expected uncovered AuthnRequest rejection, got {other:?}").into())
             }
-        }
-    }
-
-    #[test]
-    fn rejects_wrong_certificate() -> Result<(), Box<dyn std::error::Error>> {
-        // RESPONSE_SIGNED embeds the IdP cert; verifying against the SP cert
-        // trips the inline-vs-metadata mismatch guard.
-        match verify_signature(RESPONSE_SIGNED, &[SP_CERT.to_string()]) {
-            Err(SamlError::CertificateMismatch) => Ok(()),
-            other => Err(format!("expected CertificateMismatch, got {other:?}").into()),
         }
     }
 
