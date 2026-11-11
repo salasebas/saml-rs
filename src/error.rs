@@ -308,8 +308,8 @@ pub enum SamlError {
     NoTrustedCertificate,
     /// Certificate embedded in the message does not match configured metadata.
     ///
-    /// Signature verification does not return it: a signature verifies when a
-    /// trusted key verifies it, whatever certificate its `KeyInfo` carries.
+    /// The crate does not return it: a signature verifies when a trusted key
+    /// verifies it, whatever certificate its `KeyInfo` carries.
     #[error("certificate mismatch")]
     CertificateMismatch,
 
