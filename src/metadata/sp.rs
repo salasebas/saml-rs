@@ -76,7 +76,7 @@ impl SpMetadata {
                 "manageNameIDService",
                 &["EntityDescriptor", "SPSSODescriptor", "ManageNameIDService"],
             )
-            .attrs(&["Binding", "Location", "ResponseLocation"]),
+            .with_context(),
             ExtractorField::new(
                 "assertionConsumerService",
                 &[
@@ -108,13 +108,16 @@ impl SpMetadata {
         .and_then(Value::as_str)
         .ok_or_else(|| SamlError::MissingMetadata("SPSSODescriptor".into()))?;
         let saml2_assertion_consumer_services = saml2_role_acs(first_saml2_role, limits)?;
-        if let Some(fragments) = inner.meta.get("assertionConsumerService") {
-            let endpoints = super::endpoints::parse_endpoint_fragments(
-                fragments,
-                &["Binding", "Location", "isDefault", "index"],
-            )?;
-            inner.meta.insert("assertionConsumerService", endpoints);
-        }
+        super::endpoints::read_endpoints(
+            &mut inner.meta,
+            "manageNameIDService",
+            &["Binding", "Location", "ResponseLocation"],
+        )?;
+        super::endpoints::read_endpoints(
+            &mut inner.meta,
+            "assertionConsumerService",
+            &["Binding", "Location", "isDefault", "index"],
+        )?;
         Ok(Self {
             inner,
             saml2_assertion_consumer_services,

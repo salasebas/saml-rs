@@ -85,7 +85,7 @@ impl IdpMetadata {
                     "SingleSignOnService",
                 ],
             )
-            .attrs(&["Binding", "Location"]),
+            .with_context(),
             ExtractorField::new(
                 "artifactResolutionService",
                 &[
@@ -94,7 +94,7 @@ impl IdpMetadata {
                     "ArtifactResolutionService",
                 ],
             )
-            .attrs(&["Binding", "Location", "index"]),
+            .with_context(),
             ExtractorField::new(
                 "manageNameIDService",
                 &[
@@ -103,16 +103,30 @@ impl IdpMetadata {
                     "ManageNameIDService",
                 ],
             )
-            .attrs(&["Binding", "Location", "ResponseLocation"]),
+            .with_context(),
         ];
-        Ok(Self {
-            inner: Metadata::parse_role_with_limits(
-                xml,
-                super::SsoDescriptorRole::IdentityProvider,
-                extra,
-                limits,
-            )?,
-        })
+        let mut inner = Metadata::parse_role_with_limits(
+            xml,
+            super::SsoDescriptorRole::IdentityProvider,
+            extra,
+            limits,
+        )?;
+        super::endpoints::read_endpoints(
+            &mut inner.meta,
+            "singleSignOnService",
+            &["Binding", "Location"],
+        )?;
+        super::endpoints::read_endpoints(
+            &mut inner.meta,
+            "artifactResolutionService",
+            &["Binding", "Location", "index"],
+        )?;
+        super::endpoints::read_endpoints(
+            &mut inner.meta,
+            "manageNameIDService",
+            &["Binding", "Location", "ResponseLocation"],
+        )?;
+        Ok(Self { inner })
     }
 
     /// `WantAuthnRequestsSigned` flag.
