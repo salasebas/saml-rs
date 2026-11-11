@@ -609,6 +609,29 @@ mod tests {
     }
 
     #[test]
+    fn authn_requests_signed_is_read_from_every_saml2_sp_role(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for (second, expected) in [("AuthnRequestsSigned=\"true\"", true), ("", false)] {
+            let xml = format!(
+                r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com">
+  <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/acs" index="0"/>
+  </SPSSODescriptor>
+  <SPSSODescriptor {second} protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/acs2" index="1"/>
+  </SPSSODescriptor>
+</EntityDescriptor>"#
+            );
+            assert_eq!(
+                SpMetadata::from_xml(&xml)?.is_authn_request_signed(),
+                expected,
+                "{second:?}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn parses_sp_metadata() -> Result<(), Box<dyn std::error::Error>> {
         let sp = SpMetadata::from_xml(SPMETA)?;
         assert_eq!(sp.get_entity_id(), Some("https://sp.example.org/metadata"));
