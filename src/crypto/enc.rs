@@ -735,6 +735,9 @@ pub(crate) fn decrypt_assertion_elements(
 /// Replace the `<EncryptedID>` of the `<LogoutRequest>` in `xml` with the
 /// `<NameID>` it carries, decrypted with one of `enc_keys`.
 ///
+/// Returns `None` when no key in `enc_keys` decrypts the `<EncryptedID>`
+/// under `options`.
+///
 /// # Errors
 ///
 /// Returns [`SamlError::ProtocolProfile`] unless the request carries exactly
@@ -745,7 +748,7 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
     enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
-) -> Result<String, SamlError> {
+) -> Result<Option<String>, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
@@ -759,17 +762,20 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
             "LogoutRequest requires one BaseID, NameID, or EncryptedID".into(),
         ));
     };
-    let replacement = decrypted_element(
-        &document,
-        *encrypted_id,
-        LOGOUT_REQUEST_ENCRYPTED_ID,
+    let kind = LOGOUT_REQUEST_ENCRYPTED_ID;
+    let peer_keys = require_encrypted_element_children(&document, *encrypted_id, kind)?;
+    let Ok(decrypted) = decrypt_with_keys(
+        &encrypted_wrapper(&document, *encrypted_id)?,
         enc_keys,
         options,
-        limits,
-    )?;
+    ) else {
+        return Ok(None);
+    };
+    let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
+    let replacement = (node_range(&document, *encrypted_id)?, plaintext.to_string());
     let decrypted = splice(xml, vec![replacement]);
     limits.check_input_bytes(decrypted.len())?;
-    Ok(decrypted)
+    Ok(Some(decrypted))
 }
 
 /// The source range of the encrypted `element` and the plaintext it carries.
@@ -782,13 +788,18 @@ fn decrypted_element(
     limits: XmlLimits,
 ) -> Result<(Range<usize>, String), SamlError> {
     let peer_keys = require_encrypted_element_children(document, element, kind)?;
-    // The whole wrapper is decrypted so that an `EncryptedKey` beside
-    // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
-    let wrapper = String::from_utf8(namespace_complete(document, element)?)
-        .map_err(|error| SamlError::Xml(error.to_string()))?;
-    let decrypted = decrypt_with_keys(&wrapper, enc_keys, options)?;
+    let decrypted = decrypt_with_keys(&encrypted_wrapper(document, element)?, enc_keys, options)?;
     let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
     Ok((node_range(document, element)?, plaintext.to_string()))
+}
+
+/// The encrypted `element` with the namespace declarations it uses, for
+/// decryption.
+fn encrypted_wrapper(document: &XmlDocument<'_>, element: NodeId) -> Result<String, SamlError> {
+    // The whole wrapper is decrypted so that an `EncryptedKey` beside
+    // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
+    String::from_utf8(namespace_complete(document, element)?)
+        .map_err(|error| SamlError::Xml(error.to_string()))
 }
 
 /// `EncryptedElementType`: one `EncryptedData`, then any `EncryptedKey`.
@@ -1182,7 +1193,8 @@ mod tests {
             &[key],
             AssertionDecryptionOptions::default(),
             XmlLimits::default(),
-        )?;
+        )?
+        .ok_or("EncryptedID did not decrypt")?;
         assert!(decrypted.contains(">alice</n:NameID>"), "{decrypted}");
         Ok(())
     }
