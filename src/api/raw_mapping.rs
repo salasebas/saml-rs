@@ -309,7 +309,7 @@ pub(super) fn ensure_relay_state(
     expected: &RelayStateParam,
     actual: &RelayStateParam,
 ) -> Result<(), SamlError> {
-    if expected == actual {
+    if *expected == RelayStateParam::Absent || expected == actual {
         return Ok(());
     }
     Err(Error::RelayStateMismatch {

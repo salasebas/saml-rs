@@ -100,9 +100,9 @@ Rules:
   `IdpDescriptor`.
 - `finish_sso` must check the inbound binding against the pending expected
   response binding.
-- `finish_sso` must match RelayState exactly: absent, present empty, and
-  present value are distinct. If pending expects absent and the inbound message
-  carries RelayState, fail unless the samlify-port Compatibility preset permits it.
+- `finish_sso` must match the RelayState the request carried exactly: present
+  empty and present value are distinct. If the request carried none, accept
+  any inbound RelayState and report it on `SsoSession::relay_state`.
 - `finish_sso` must use caller-owned `now`, clock skew, and replay policy.
 - `finish_sso` must not accept unsolicited responses.
 - `finish_sso_with_outstanding_logout` applies a caller-supplied outstanding

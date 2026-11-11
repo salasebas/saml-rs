@@ -162,9 +162,9 @@ pub enum RelayStateParam {
 }
 ```
 
-For SP-initiated SSO/SLO, if pending state expects `Absent` and the inbound
-message carries any RelayState, fail with `RelayStateMismatch` unless the
-samlify-port Compatibility preset permits the extra parameter.
+For SP-initiated SSO/SLO, if pending state carries RelayState and the inbound
+message does not carry the same value, fail with `RelayStateMismatch`. If
+pending state expects `Absent`, accept any inbound RelayState.
 
 ## Validation Order For SP SSO Response
 

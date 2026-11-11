@@ -5,7 +5,7 @@ use super::extract::{
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::status::{Status, SubordinateStatusCode, TopLevelStatusCode};
 use super::subject::NameId;
-use super::EndpointUrl;
+use super::{EndpointUrl, RelayStateParam};
 use crate::config::EntityId;
 use crate::error::SamlError;
 use crate::raw::FlowResult;
@@ -299,6 +299,7 @@ fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstan
 pub struct LogoutCompleted {
     peer_entity_id: EntityId,
     response: Option<LogoutResponse>,
+    relay_state: RelayStateParam,
 }
 
 impl PartialEq for LogoutCompleted {
@@ -315,6 +316,7 @@ impl LogoutCompleted {
         Self {
             peer_entity_id,
             response: None,
+            relay_state: RelayStateParam::Absent,
         }
     }
 
@@ -323,7 +325,13 @@ impl LogoutCompleted {
         Self {
             peer_entity_id,
             response: Some(response),
+            relay_state: RelayStateParam::Absent,
         }
+    }
+
+    pub(crate) fn with_relay_state(mut self, relay_state: RelayStateParam) -> Self {
+        self.relay_state = relay_state;
+        self
     }
 
     /// Peer entity ID involved in the completed logout.
@@ -334,6 +342,16 @@ impl LogoutCompleted {
     /// Validated LogoutResponse, when this completion came from a front-channel response.
     pub fn response(&self) -> Option<&LogoutResponse> {
         self.response.as_ref()
+    }
+
+    /// RelayState received with the LogoutResponse.
+    ///
+    /// When the request carried RelayState, this is the same value. When it
+    /// carried none, this is whatever the responder supplied, which the caller
+    /// interprets by prior agreement. [`Self::new`] and [`Self::from_response`]
+    /// report [`RelayStateParam::Absent`].
+    pub fn relay_state(&self) -> &RelayStateParam {
+        &self.relay_state
     }
 
     /// Top-level SAML status URI of the completed logout response.

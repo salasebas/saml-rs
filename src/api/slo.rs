@@ -678,7 +678,8 @@ fn finish_slo_impl(
 ) -> Result<LogoutCompleted, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer_entity_id)?;
     let binding = logout_response_binding(input_binding(&input), pending.request_binding())?;
-    ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
+    let relay_state = relay_state_from_input(&input)?;
+    ensure_relay_state(pending.relay_state(), &relay_state)?;
     // A SOAP response returns on this party's own HTTP exchange, so no local
     // endpoint received it.
     let expected_recipient = match binding {
@@ -710,10 +711,10 @@ fn finish_slo_impl(
     let response = LogoutResponse::try_from(flow)?;
     validation
         .check_and_store_message_replay(ReplayKey::LogoutResponseId(response.id().clone()))?;
-    Ok(LogoutCompleted::from_response(
-        peer_entity_id.clone(),
-        response,
-    ))
+    Ok(
+        LogoutCompleted::from_response(peer_entity_id.clone(), response)
+            .with_relay_state(relay_state),
+    )
 }
 
 #[derive(Debug, Clone, Copy)]

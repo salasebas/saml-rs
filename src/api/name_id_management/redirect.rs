@@ -6,7 +6,9 @@ use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
 use crate::metadata::{EndpointDirection, Metadata};
-use crate::model::{MessageId, NameId, Received, ReplayKey, SamlValidationContext, Status};
+use crate::model::{
+    MessageId, NameId, Received, RelayStateParam, ReplayKey, SamlValidationContext, Status,
+};
 use crate::name_id_management::redirect::{
     create_request, create_response, parse_request, parse_response, request_from_flow,
     response_id_from_flow, InboundValidation, ParsedRequest,
@@ -174,7 +176,9 @@ impl Saml<Sp> {
     /// Read the identity provider's `ManageNameIDResponse` to a request this
     /// service provider sent over HTTP-Redirect.
     ///
-    /// `Ok` means the identity provider applied the change.
+    /// `Ok` means the identity provider applied the change. It carries the
+    /// RelayState received with the response: the value the request carried,
+    /// or, when it carried none, whatever the identity provider supplied.
     ///
     /// # Errors
     ///
@@ -182,15 +186,15 @@ impl Saml<Sp> {
     /// status codes when it did not apply the change. That status is read
     /// only after the signature, issuer, `InResponseTo`, and `Destination`
     /// checks pass. Returns another [`SamlError`] when the response does not
-    /// answer `pending`, its RelayState differs, or any of those checks or
-    /// replay validation fails.
+    /// answer `pending`, its RelayState differs from one the request carried,
+    /// or any of those checks or replay validation fails.
     pub fn finish_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
         pending: &PendingManageNameIdRequest,
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
-    ) -> Result<(), SamlError> {
+    ) -> Result<RelayStateParam, SamlError> {
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         finish(
             self.local(),
@@ -372,7 +376,9 @@ impl Saml<Idp> {
     /// Read the service provider's `ManageNameIDResponse` to a request this
     /// identity provider sent over HTTP-Redirect.
     ///
-    /// `Ok` means the service provider applied the change.
+    /// `Ok` means the service provider applied the change. It carries the
+    /// RelayState received with the response, as on
+    /// [`Saml::<Sp>::finish_name_id_management_redirect`].
     ///
     /// # Errors
     ///
@@ -385,7 +391,7 @@ impl Saml<Idp> {
         pending: &PendingManageNameIdRequest,
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
-    ) -> Result<(), SamlError> {
+    ) -> Result<RelayStateParam, SamlError> {
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         finish(
             self.local(),
@@ -608,10 +614,11 @@ fn finish(
     pending: &PendingManageNameIdRequest,
     input: BrowserInput<ManageNameIdResponse>,
     mut validation: SamlValidationContext<'_>,
-) -> Result<(), SamlError> {
+) -> Result<RelayStateParam, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;
     require_redirect_input(&input)?;
-    ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
+    let relay_state = relay_state_from_input(&input)?;
+    ensure_relay_state(pending.relay_state(), &relay_state)?;
     let locations = local_locations(local.metadata, EndpointDirection::Response)?;
     let expected_recipient = validation.resolve_recipient_endpoint(&locations)?;
     let request = HttpRequest::try_from(input)?;
@@ -629,7 +636,8 @@ fn finish(
     )?;
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdResponseId(
         response_id_from_flow(&flow, local.setting.xml_limits)?,
-    ))
+    ))?;
+    Ok(relay_state)
 }
 
 fn require_redirect_input<Message>(input: &BrowserInput<Message>) -> Result<(), SamlError> {
