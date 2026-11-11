@@ -5,6 +5,7 @@
 //! canonicalisation concerns — verification is delegated to bergshamra).
 
 use crate::error::SamlError;
+use crate::xml::name::is_ncname;
 use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::{BytesRef, BytesStart, Event};
 use quick_xml::name::{
@@ -172,6 +173,39 @@ fn check_xml_chars(text: &str) -> Result<(), SamlError> {
     }
 }
 
+fn check_qname(name: &str) -> Result<(), SamlError> {
+    if name.splitn(2, ':').all(is_ncname) {
+        Ok(())
+    } else {
+        Err(SamlError::Xml(format!(
+            "`{name}` is not a qualified XML name"
+        )))
+    }
+}
+
+fn check_attribute_separation(attributes: &str) -> Result<(), SamlError> {
+    let mut open_quote = None;
+    let mut after_value = false;
+    for ch in attributes.chars() {
+        if after_value && !is_xml_whitespace_char(ch) {
+            return Err(SamlError::Xml(
+                "attributes must be separated by whitespace".into(),
+            ));
+        }
+        after_value = false;
+        match open_quote {
+            Some(quote) if ch == quote => {
+                open_quote = None;
+                after_value = true;
+            }
+            Some(_) => {}
+            None if matches!(ch, '"' | '\'') => open_quote = Some(ch),
+            None => {}
+        }
+    }
+    Ok(())
+}
+
 fn check_prefix_declared(resolved: &ResolveResult<'_>, mode: ParseMode) -> Result<(), SamlError> {
     match (resolved, mode) {
         (ResolveResult::Unknown(prefix), ParseMode::Document | ParseMode::Roots) => Err(
@@ -203,6 +237,11 @@ fn bind_namespace(
             "namespace `{namespace}` cannot be the default namespace"
         )));
     }
+    if let (PrefixDeclaration::Named(prefix), "") = (declaration, namespace) {
+        return Err(SamlError::Xml(format!(
+            "namespace prefix `{prefix}` cannot be undeclared"
+        )));
+    }
     resolver
         .add(declaration, Namespace(namespace))
         .map_err(namespace_error)
@@ -219,6 +258,8 @@ fn read_element(
         .checked_add(1)
         .ok_or_else(|| namespace_error(NamespaceError::TooDeeplyNested(usize::from(u16::MAX))))?;
     resolver.set_level(level);
+    check_qname(e.name().into_inner())?;
+    check_attribute_separation(e.attributes_raw())?;
     let attrs = read_attrs(e, resolver, limits)?;
 
     let (namespace, local_name) = resolver.resolve_element(e.name());
@@ -263,6 +304,7 @@ fn read_attrs<'a>(
             ));
         }
         let attr = attr.map_err(|err| SamlError::Xml(err.to_string()))?;
+        check_qname(attr.key.into_inner())?;
         if attr.value.contains('<') {
             return Err(SamlError::Xml(
                 "`<` is not allowed in an attribute value".into(),
@@ -309,9 +351,12 @@ enum ParseMode {
     Fragment,
 }
 
+fn is_xml_whitespace_char(ch: char) -> bool {
+    matches!(ch, ' ' | '\t' | '\r' | '\n')
+}
+
 fn is_xml_whitespace(text: &str) -> bool {
-    text.bytes()
-        .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
+    text.chars().all(is_xml_whitespace_char)
 }
 
 fn reject_non_document_content(mode: ParseMode) -> Result<(), SamlError> {
@@ -451,6 +496,9 @@ fn parse_roots_inner(
                 }
             }
             Event::Text(e) => {
+                if e.contains("]]>") {
+                    return Err(SamlError::Xml("`]]>` is not allowed in text".into()));
+                }
                 if let Some(top) = stack.last_mut() {
                     checked_append_text(&mut top.text, &e.xml10_content(), limits)?;
                 } else if !is_xml_whitespace(e.as_ref()) {
@@ -480,6 +528,17 @@ fn parse_roots_inner(
                 return Err(SamlError::Xml(
                     "xml-stylesheet processing instructions are not allowed".into(),
                 ));
+            }
+            Event::Decl(_) if before != 0 => {
+                return Err(SamlError::Xml(
+                    "an XML declaration is allowed only at the start of the input".into(),
+                ));
+            }
+            Event::PI(instruction) if instruction.target().eq_ignore_ascii_case("xml") => {
+                return Err(SamlError::Xml(format!(
+                    "processing instruction target `{}` is reserved",
+                    instruction.target()
+                )));
             }
             Event::Eof => match stack.last() {
                 Some(node) => {
@@ -664,6 +723,25 @@ mod tests {
     }
 
     #[test]
+    fn parse_rejects_remaining_well_formedness_errors() {
+        for xml in [
+            "<a>]]></a>",
+            "<a x=\"1\"y=\"2\"/>",
+            "<1a/>",
+            "<a 1x=\"v\"/>",
+            "<a\u{A0}x=\"1\"/>",
+            "<a><?xml version=\"1.0\"?></a>",
+            "<?XML version=\"1.0\"?><a/>",
+            "<a:b:c xmlns:a=\"u\"/>",
+            "<a xmlns:p=\"\"/>",
+        ] {
+            let result = parse(xml);
+
+            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+        }
+    }
+
+    #[test]
     fn parse_rejects_undeclared_namespace_prefix() {
         for xml in [
             "<p:Root/>",
@@ -766,6 +844,10 @@ mod tests {
             "<saml:Assertion>\u{1}</saml:Assertion>",
             "<saml:Assertion/><saml:Assertion/>",
             "<saml:Assertion a:ID=\"1\" a:ID=\"2\"/>",
+            "<saml:Assertion>]]></saml:Assertion>",
+            "<saml:Assertion:x/>",
+            "<saml:Assertion ID=\"1\"Version=\"2.0\"/>",
+            "<saml:Assertion xmlns:p=\"\"/>",
         ] {
             let result = parse_fragment_with_limits(xml, XmlLimits::default());
 
