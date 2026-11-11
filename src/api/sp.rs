@@ -90,15 +90,11 @@ impl ResponseParseInput {
     fn options<'a>(
         &self,
         validation: &SamlValidationContext<'_>,
-        expected_recipient: Option<&'a str>,
+        expected_recipient: &'a str,
     ) -> LoginResponseParseOptions<'a> {
-        let options =
-            LoginResponseParseOptions::at(validation.now(), validation.clock_skew().as_millis())
-                .with_signed_destination(self.signed_destination);
-        match expected_recipient {
-            Some(expected_recipient) => options.with_expected_recipient(expected_recipient),
-            None => options,
-        }
+        LoginResponseParseOptions::at(validation.now(), validation.clock_skew().as_millis())
+            .with_signed_destination(self.signed_destination)
+            .with_expected_recipient(expected_recipient)
     }
 }
 
@@ -369,7 +365,7 @@ impl Saml<Sp> {
                 parse.binding,
                 &parse.request,
                 pending.request_id().as_str(),
-                parse.options(validation, Some(pending.acs().location().as_str())),
+                parse.options(validation, pending.acs().location().as_str()),
             )?;
         session_from_verified_flow(flow, relay_state)
     }
@@ -384,16 +380,13 @@ impl Saml<Sp> {
         let binding = SsoResponseBinding::try_from(input_binding(&input))?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let metadata = &self.raw_service_provider().metadata;
-        let expected_recipient = match (validation.recipient_endpoint(), binding) {
-            (Some(_), _) => Some(validation.resolve_recipient_endpoint(
+        let expected_recipient = match validation.recipient_endpoint() {
+            Some(_) => validation.resolve_recipient_endpoint(
                 &metadata.assertion_consumer_service_locations(binding.as_binding()),
-            )?),
-            (None, SsoResponseBinding::Artifact) => Some(
-                metadata
-                    .get_assertion_consumer_service(Binding::Artifact)
-                    .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
-            ),
-            (None, SsoResponseBinding::Post | SsoResponseBinding::SimpleSign) => None,
+            )?,
+            None => metadata
+                .get_assertion_consumer_service(binding.as_binding())
+                .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let parse = ResponseParseInput::try_new(idp, input)?;
         let flow = self
@@ -402,7 +395,7 @@ impl Saml<Sp> {
                 &raw_idp,
                 parse.binding,
                 &parse.request,
-                parse.options(validation, expected_recipient.as_deref()),
+                parse.options(validation, &expected_recipient),
             )?;
         session_from_verified_flow(flow, relay_state)
     }
