@@ -605,7 +605,7 @@ fn response_outbound(
         },
         relay_state,
     )?;
-    Outbound::<ManageNameIdResponse>::try_from(context)
+    Outbound::<ManageNameIdResponse>::echoing_received_relay_state(context)
 }
 
 fn finish(

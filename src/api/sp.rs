@@ -304,9 +304,11 @@ impl Saml<Sp> {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the browser binding is not valid for SSO
-    /// responses, `RelayState` exceeds 80 bytes, the IdP metadata cannot be
-    /// parsed or trusted, XML parsing or signature verification fails,
-    /// destination, recipient, audience, condition, or time validation fails,
+    /// responses, `RelayState` exceeds
+    /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
+    /// the IdP metadata cannot be parsed or trusted, XML parsing or signature
+    /// verification fails, destination, recipient, audience, condition, or
+    /// time validation fails,
     /// the assertions do not share one issuer and one principal, or replay
     /// validation returns `ReplayDetected` or `TimeWindowInvalid`. Returns
     /// [`SamlError::InResponseToMismatch`] when the response or a bearer

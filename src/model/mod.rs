@@ -34,7 +34,9 @@ pub use identifiers::{AssertionId, MessageId, SamlInstant, SessionIndex};
 pub use logout::{LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject};
 pub use outstanding_logout::OutstandingLogout;
 pub use received::Received;
-pub use relay::{RelayState, RelayStateParam, MAX_RELAY_STATE_BYTES};
+pub use relay::{
+    RelayState, RelayStateParam, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+};
 pub use session::AuthnSession;
 pub use sso::{
     Assertion, SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage,

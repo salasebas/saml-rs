@@ -256,12 +256,19 @@ impl Saml<Idp> {
             idp_setting.is_assertion_encrypted,
             &idp_setting.data_encryption_algorithm,
         );
-        let relay_state = options.relay_state.unwrap_or_else(|| {
-            request.map_or_else(RelayStateParam::absent, |request| {
-                request.relay_state().clone()
-            })
-        });
-        relay_state.validate()?;
+        let relay_state = match options.relay_state {
+            Some(relay_state) => {
+                relay_state.validate()?;
+                relay_state
+            }
+            None => {
+                let echoed = request.map_or_else(RelayStateParam::absent, |request| {
+                    request.relay_state().clone()
+                });
+                echoed.validate_echoed()?;
+                echoed
+            }
+        };
         let mut raw_sp = match &options.delivery {
             ResponseTransport::Browser => {
                 raw_sp_for_browser_response(sp, idp_setting, SystemTime::now())?
@@ -314,7 +321,7 @@ impl Saml<Idp> {
                         },
                         overrides(explicit_acs.as_deref()),
                     )?;
-                return Outbound::<SsoResponse>::try_from(issued.context)
+                return Outbound::<SsoResponse>::echoing_received_relay_state(issued.context)
                     .map(|outbound| outbound.with_session_index(issued.session_index));
             }
             ResponseTransport::Artifact(delivery, issued) => (delivery, issued),

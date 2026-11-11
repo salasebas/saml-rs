@@ -24,10 +24,10 @@ use saml_rs::{
     ManageNameIdRequestAgePolicy, ManageNameIdResponse, ManageNameIdService, MetadataTrustPolicy,
     NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound, Pending,
     PendingManageNameIdRequest, PrivateKeyPem, ReceiveNameIdManagement, Received,
-    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayStateParam, ReplayCache,
-    ReplayKey, ReplayPolicy, RespondNameIdManagement, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
-    SubordinateStatusCode,
+    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayState, RelayStateParam,
+    ReplayCache, ReplayKey, ReplayPolicy, RespondNameIdManagement, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -403,6 +403,59 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
 
         assert_eq!(relay_state, expected);
     }
+    Ok(())
+}
+
+#[test]
+fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResult {
+    let sp = sp()?;
+    let idp = idp()?;
+    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let key = load_private_key(PRIVKEY, None)?;
+    let long = "n".repeat(200);
+    let started = sp.start_name_id_management_redirect(
+        &idp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::redirect(),
+    )?;
+    let octet = build_redirect_octet(
+        ParserType::ManageNameIdRequest,
+        &redirect_message_xml(&started.outbound)?,
+        Some(&long),
+        RSA_SHA256,
+    )?;
+    let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+    let url = append_signature(IDP_MANAGE, &octet, &signature);
+    let (_, query) = url
+        .split_once('?')
+        .ok_or("redirect URL is missing a query")?;
+
+    let request = request(idp.receive_name_id_management_redirect(
+        &sp_peer,
+        BrowserInput::<ManageNameIdRequest>::redirect(query),
+        ReceiveNameIdManagement::redirect(),
+        validation(),
+    )?)?;
+    assert_eq!(request.relay_state().as_deref(), Some(long.as_str()));
+
+    let response = idp.respond_name_id_management_redirect(
+        &sp_peer,
+        &request,
+        RespondNameIdManagement::redirect(),
+    )?;
+    assert_eq!(
+        response.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
+
+    let relay_state = sp.finish_name_id_management_redirect(
+        &idp_peer,
+        &started.pending,
+        response_input(&response)?,
+        validation(),
+    )?;
+    assert_eq!(relay_state.as_deref(), Some(long.as_str()));
     Ok(())
 }
 

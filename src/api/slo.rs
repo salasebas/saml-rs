@@ -650,7 +650,7 @@ fn respond_slo_impl(
         )?;
     }
     let relay_state = request.relay_state();
-    relay_state.validate()?;
+    relay_state.validate_echoed()?;
     let status = options.status.clone().unwrap_or_else(Status::success);
     let context = create_logout_response_with_status(
         local_setting,
@@ -665,7 +665,7 @@ fn respond_slo_impl(
         None,
         &status,
     )?;
-    Outbound::<LogoutResponse>::try_from(context)
+    Outbound::<LogoutResponse>::echoing_received_relay_state(context)
 }
 
 fn finish_slo_impl(

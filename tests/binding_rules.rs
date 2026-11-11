@@ -1,9 +1,11 @@
 //! Typed HTTP-Redirect and HTTP-POST-SimpleSign binding rules.
 //!
-//! Bindings §3.4.3 and §3.5.3, and HTTP-POST-SimpleSign CD-04 §2.3, prohibit a
-//! RelayState longer than 80 bytes. Bindings §3.4.4.1 requires HTTP-Redirect to
-//! remove a protocol XML signature before DEFLATE and to verify the detached
-//! signature over parameters in a fixed order. CD-04 §2.5 and §2.6 require
+//! Bindings §3.4.3 and §3.5.3, and HTTP-POST-SimpleSign CD-04 §2.3, prohibit
+//! the entity creating a message from sending a RelayState longer than 80
+//! bytes, and require a responder to return the exact RelayState it received.
+//! Bindings §3.4.4.1 requires HTTP-Redirect to remove a protocol XML signature
+//! before DEFLATE and to verify the detached signature over parameters in a
+//! fixed order. CD-04 §2.5 and §2.6 require
 //! SimpleSign to sign the raw XML octets, including RelayState when present.
 #![cfg(any(
     feature = "crypto-rustcrypto",
@@ -18,9 +20,9 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, Credentials, EntityId,
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
-    PrivateKeyPem, RelayStateParam, ReplayPolicy, RespondSso, Saml, SamlError,
+    PrivateKeyPem, RelayState, RelayStateParam, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    StartSso, Subject, TemplatePolicy, MAX_RELAY_STATE_BYTES,
+    StartSso, Subject, TemplatePolicy, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 use url::Url;
 
@@ -161,11 +163,45 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
 
     let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::recommended())?;
-    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    sp.start_sso(
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(
         &idp_descriptor,
         StartSso::redirect().relay_state(relay_state),
     )?;
+
+    let query = started
+        .outbound
+        .redirect_url()?
+        .split_once('?')
+        .ok_or("missing query")?
+        .1
+        .replace(&"a".repeat(MAX_RELAY_STATE_BYTES), &"a".repeat(200));
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::redirect(query),
+        validation(),
+    )?;
+    let reused = received.relay_state().clone();
+    match idp.initiate_sso(
+        &sp_descriptor,
+        subject(),
+        RespondSso::post().relay_state(reused.clone()),
+    ) {
+        Err(SamlError::Invalid(message)) if message.contains("80") => {}
+        other => {
+            return Err(
+                format!("expected the 80-byte RelayState prohibition, got {other:?}").into(),
+            )
+        }
+    }
+    match sp.start_sso(&idp_descriptor, StartSso::post().relay_state(reused)) {
+        Err(SamlError::Invalid(message)) if message.contains("80") => {}
+        other => {
+            return Err(
+                format!("expected the 80-byte RelayState prohibition, got {other:?}").into(),
+            )
+        }
+    }
 
     let templates = TemplatePolicy {
         relay_state: "b".repeat(MAX_RELAY_STATE_BYTES + 1),
@@ -180,48 +216,97 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn typed_receive_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn std::error::Error>>
-{
-    let sp = sp_with(signing_sp_validation(), TemplatePolicy::default())?;
-    let idp = idp_with(signed_authn_request_idp_validation())?;
+fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let long = "c".repeat(200);
+    let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::recommended())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
-    let mut query = started
+    let request_query = |relay_state: &str| -> Result<String, Box<dyn std::error::Error>> {
+        let query = started
+            .outbound
+            .redirect_url()?
+            .split_once('?')
+            .ok_or("missing query")?
+            .1;
+        Ok(format!("{query}&RelayState={relay_state}"))
+    };
+
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::redirect(request_query(&long)?),
+        validation(),
+    )?;
+    assert_eq!(received.relay_state().as_deref(), Some(long.as_str()));
+
+    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    assert_eq!(
+        response.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
+    let response_fields = response.post_form()?.fields().to_vec();
+    assert_eq!(
+        response.post_form()?.value("RelayState"),
+        Some(long.as_str())
+    );
+
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(response_fields),
+        validation(),
+    )?;
+    assert_eq!(session.relay_state().as_deref(), Some(long.as_str()));
+
+    let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let mut fields = unsolicited.post_form()?.fields().to_vec();
+    fields.push(FormField::new("RelayState", long.as_str()));
+    let session = sp.accept_unsolicited_sso(
+        &idp_descriptor,
+        BrowserInput::<SsoResponse>::post(fields),
+        validation(),
+    )?;
+    assert_eq!(session.relay_state().as_deref(), Some(long.as_str()));
+    Ok(())
+}
+
+#[test]
+fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let too_long = "d".repeat(MAX_RECEIVED_RELAY_STATE_BYTES + 1);
+    let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let query = started
         .outbound
         .redirect_url()?
         .split_once('?')
         .ok_or("missing query")?
-        .1
-        .to_string();
-    query.push_str("&RelayState=");
-    query.push_str(&"c".repeat(MAX_RELAY_STATE_BYTES + 1));
+        .1;
 
     match idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(query),
+        BrowserInput::<AuthnRequest>::redirect(format!("{query}&RelayState={too_long}")),
         validation(),
     ) {
-        Err(SamlError::Invalid(message)) if message.contains("80") => {}
+        Err(SamlError::Invalid(message)) if message.contains("receive limit") => {}
         other => {
-            return Err(
-                format!("expected the 80-byte RelayState prohibition, got {other:?}").into(),
-            )
+            return Err(format!("expected the RelayState receive limit, got {other:?}").into())
         }
     }
 
     let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
     let mut fields = response.post_form()?.fields().to_vec();
-    fields.push(FormField::new(
-        "RelayState",
-        "d".repeat(MAX_RELAY_STATE_BYTES + 1),
-    ));
+    fields.push(FormField::new("RelayState", too_long));
     match sp.accept_unsolicited_sso(
         &idp_descriptor,
         BrowserInput::<SsoResponse>::post(fields),
         validation(),
     ) {
-        Err(SamlError::Invalid(message)) if message.contains("80") => Ok(()),
-        other => Err(format!("expected the 80-byte RelayState prohibition, got {other:?}").into()),
+        Err(SamlError::Invalid(message)) if message.contains("receive limit") => Ok(()),
+        other => Err(format!("expected the RelayState receive limit, got {other:?}").into()),
     }
 }
 
