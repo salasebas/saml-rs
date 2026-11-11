@@ -1,4 +1,5 @@
 use super::*;
+use crate::constants::name_id_format;
 
 const DESTINATION: &str = "https://sp.example.com/slo";
 const ISSUER: &str = "https://idp.example.com/metadata";

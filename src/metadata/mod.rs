@@ -354,11 +354,7 @@ impl Metadata {
     /// Logout requests are sent to this URL. Logout responses use
     /// [`Self::get_single_logout_response_service`].
     pub fn get_single_logout_service(&self, binding: Binding) -> Option<String> {
-        first_published_location(
-            self.meta.get("singleLogoutService"),
-            binding,
-            EndpointDirection::Request,
-        )
+        self.single_logout_service_location(binding, EndpointDirection::Request)
     }
 
     /// `SingleLogoutService` URL where logout responses are sent for `binding`.
@@ -366,35 +362,27 @@ impl Metadata {
     /// Each endpoint for `binding` offers its non-empty `ResponseLocation`, or
     /// else its non-empty `Location`. This is the first such URL.
     pub fn get_single_logout_response_service(&self, binding: Binding) -> Option<String> {
-        first_published_location(
-            self.meta.get("singleLogoutService"),
-            binding,
-            EndpointDirection::Response,
-        )
+        self.single_logout_service_location(binding, EndpointDirection::Response)
     }
 
-    /// Every request `Location` published on `SingleLogoutService` for `binding`.
-    pub(crate) fn single_logout_service_locations(&self, binding: Binding) -> Vec<String> {
-        published_locations_for_binding(
-            self.meta.get("singleLogoutService"),
-            binding,
-            EndpointDirection::Request,
-        )
+    /// First location published on `SingleLogoutService` for `binding` and
+    /// message direction.
+    pub(crate) fn single_logout_service_location(
+        &self,
+        binding: Binding,
+        direction: EndpointDirection,
+    ) -> Option<String> {
+        first_published_location(self.meta.get("singleLogoutService"), binding, direction)
     }
 
-    /// Every response location published on `SingleLogoutService` for `binding`.
-    pub(crate) fn single_logout_response_service_locations(&self, binding: Binding) -> Vec<String> {
-        published_locations_for_binding(
-            self.meta.get("singleLogoutService"),
-            binding,
-            EndpointDirection::Response,
-        )
-    }
-
-    /// Every `Location` published on a SOAP `ManageNameIDService` of this
-    /// role, in document order.
-    pub(crate) fn soap_manage_name_id_service_locations(&self) -> Vec<String> {
-        self.manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request)
+    /// Every location published on `SingleLogoutService` for `binding` and
+    /// message direction, in document order.
+    pub(crate) fn single_logout_service_locations(
+        &self,
+        binding: Binding,
+        direction: EndpointDirection,
+    ) -> Vec<String> {
+        published_locations_for_binding(self.meta.get("singleLogoutService"), binding, direction)
     }
 
     /// Every location published on a `ManageNameIDService` of this role for
@@ -673,14 +661,14 @@ mod tests {
             Some("https://sp.example.com/slo/b")
         );
         assert_eq!(
-            metadata.single_logout_service_locations(Binding::Post),
+            metadata.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec![
                 "https://sp.example.com/slo/a".to_string(),
                 "https://sp.example.com/slo/c".to_string(),
             ]
         );
         assert_eq!(
-            metadata.single_logout_response_service_locations(Binding::Post),
+            metadata.single_logout_service_locations(Binding::Post, EndpointDirection::Response),
             vec![
                 "https://sp.example.com/slo/b".to_string(),
                 "https://sp.example.com/slo/c".to_string(),
@@ -711,11 +699,11 @@ mod tests {
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
         assert_eq!(
-            idp.single_logout_service_locations(Binding::Post),
+            idp.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec!["https://dual.example.com/idp/slo".to_string()]
         );
         assert_eq!(
-            idp.single_logout_response_service_locations(Binding::Post),
+            idp.single_logout_service_locations(Binding::Post, EndpointDirection::Response),
             vec!["https://dual.example.com/idp/slo/response".to_string()]
         );
         assert_eq!(idp.get_support_bindings(), vec![Binding::Post]);
@@ -731,7 +719,7 @@ mod tests {
             Some("https://dual.example.com/sp/slo/response")
         );
         assert_eq!(
-            sp.single_logout_service_locations(Binding::Post),
+            sp.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec!["https://dual.example.com/sp/slo".to_string()]
         );
         assert_eq!(
@@ -741,7 +729,7 @@ mod tests {
 
         let any_role = Metadata::parse(xml, Vec::new())?;
         assert_eq!(
-            any_role.single_logout_service_locations(Binding::Post),
+            any_role.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec![
                 "https://dual.example.com/idp/slo".to_string(),
                 "https://dual.example.com/sp/slo".to_string(),

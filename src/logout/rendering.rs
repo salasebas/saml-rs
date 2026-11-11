@@ -15,10 +15,10 @@ pub(super) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
         .unwrap_or_default()
 }
 
-pub(super) struct LogoutRequestSubject<'a> {
-    pub(super) name_id: &'a str,
-    pub(super) qualifiers: OutboundNameIdQualifiers<'a>,
-    pub(super) session_indexes: Vec<&'a str>,
+pub(crate) struct LogoutRequestSubject<'a> {
+    pub(crate) name_id: &'a str,
+    pub(crate) qualifiers: OutboundNameIdQualifiers<'a>,
+    pub(crate) session_indexes: Vec<&'a str>,
 }
 
 pub(super) struct LogoutRequestTimeAttributes<'a> {

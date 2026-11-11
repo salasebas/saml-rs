@@ -4,11 +4,11 @@ use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::error::SamlError as Error;
 use crate::logout::{
-    create_logout_request_with_session_indexes, create_logout_response_with_status,
-    decrypt_encrypted_id, parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation,
-    LogoutReceipt, LogoutRequestSessionIndexes, LogoutRequestValidation,
+    create_logout_request_for_subject_inner, create_logout_response_inner, decrypt_encrypted_id,
+    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
+    LogoutRequestInput, LogoutRequestSubject, LogoutRequestValidation, LogoutResponseInput,
 };
-use crate::metadata::Metadata;
+use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
     LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, ReplayKey,
     SamlInstant, SamlValidationContext, Status,
@@ -499,7 +499,7 @@ fn start_slo_impl(
             options.binding,
             follows_rules,
             options.allows_http(),
-            LogoutMessageDirection::Request,
+            EndpointDirection::Request,
         )?;
     }
     let (issue_instant, not_on_or_after, request_validation) = match role {
@@ -534,21 +534,25 @@ fn start_slo_impl(
             .name_id_format
             .or_else(|| local_setting.default_name_id_format().map(str::to_string)),
     };
-    let created = create_logout_request_with_session_indexes(LogoutRequestSessionIndexes {
-        init_setting: local_setting,
-        init_meta: local_metadata,
-        target_meta: peer_metadata,
-        binding: options.binding.as_binding(),
+    let request_subject = LogoutRequestSubject {
         name_id: &subject.name_id,
-        name_id_format: name_id_format.as_deref(),
-        name_id_qualifiers: OutboundNameIdQualifiers {
+        qualifiers: OutboundNameIdQualifiers {
             name_qualifier: subject.name_qualifier.as_deref(),
             sp_name_qualifier: subject.sp_name_qualifier.as_deref(),
             sp_provided_id: subject.sp_provided_id.as_deref(),
         },
-        session_indexes: &subject.session_indexes,
+        session_indexes: subject.session_indexes.iter().map(String::as_str).collect(),
+    };
+    let created = create_logout_request_for_subject_inner(LogoutRequestInput {
+        init_setting: local_setting,
+        init_meta: local_metadata,
+        target_meta: peer_metadata,
+        binding: options.binding.as_binding(),
+        subject: &request_subject,
         relay_state: options.relay_state.as_deref(),
         want_signed,
+        message_id: None,
+        name_id_format: name_id_format.as_deref(),
         issue_instant: &issue_instant,
         not_on_or_after: not_on_or_after.as_deref(),
         validation: request_validation,
@@ -600,7 +604,7 @@ fn receive_slo_impl(
     let expected_recipient = logout_recipient_endpoint(
         local_metadata,
         binding,
-        LogoutMessageDirection::Request,
+        EndpointDirection::Request,
         &validation,
     )?;
     let receipt = LogoutReceipt::of_input(&input)?;
@@ -647,25 +651,25 @@ fn respond_slo_impl(
             options.binding,
             options.follows_generation_rules(),
             options.allows_http(),
-            LogoutMessageDirection::Response,
+            EndpointDirection::Response,
         )?;
     }
     let relay_state = request.relay_state();
     relay_state.validate_echoed()?;
     let status = options.status.clone().unwrap_or_else(Status::success);
-    let context = create_logout_response_with_status(
-        local_setting,
-        local_metadata,
-        peer_metadata,
-        options.binding.as_binding(),
-        Some(request.message().id().as_str()),
-        relay_state.as_deref(),
+    let context = create_logout_response_inner(LogoutResponseInput {
+        init_setting: local_setting,
+        init_meta: local_metadata,
+        target_meta: peer_metadata,
+        binding: options.binding.as_binding(),
+        in_response_to: Some(request.message().id().as_str()),
+        relay_state: relay_state.as_deref(),
         // SAML Profiles 2.0 §§4.4.3.4 and 4.4.4.2 require front-channel
         // LogoutResponses to authenticate the responder and protect integrity.
-        true,
-        None,
-        &status,
-    )?;
+        want_signed: true,
+        message_id: None,
+        status: &status,
+    })?;
     Outbound::<LogoutResponse>::echoing_received_relay_state(context)
 }
 
@@ -690,7 +694,7 @@ fn finish_slo_impl(
             Some(logout_recipient_endpoint(
                 local_metadata,
                 binding,
-                LogoutMessageDirection::Response,
+                EndpointDirection::Response,
                 &validation,
             )?)
         }
@@ -725,19 +729,13 @@ enum LogoutResponseTransport {
     SessionAuthority,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum LogoutMessageDirection {
-    Request,
-    Response,
-}
-
 /// The `https` check covers the exchanges that pass through the user agent.
 fn enforce_participant_https(
     peer_metadata: &Metadata,
     binding: LogoutBinding,
     follows_rules: bool,
     allow_http: bool,
-    direction: LogoutMessageDirection,
+    direction: EndpointDirection,
 ) -> Result<(), SamlError> {
     match binding {
         LogoutBinding::Soap => return Ok(()),
@@ -758,15 +756,11 @@ fn enforce_participant_https(
 fn peer_logout_endpoint(
     peer_metadata: &Metadata,
     binding: Binding,
-    direction: LogoutMessageDirection,
+    direction: EndpointDirection,
 ) -> Result<String, SamlError> {
-    let endpoint = match direction {
-        LogoutMessageDirection::Request => peer_metadata.get_single_logout_service(binding),
-        LogoutMessageDirection::Response => {
-            peer_metadata.get_single_logout_response_service(binding)
-        }
-    };
-    endpoint.ok_or_else(|| Error::MissingMetadata("SingleLogoutService".into()))
+    peer_metadata
+        .single_logout_service_location(binding, direction)
+        .ok_or_else(|| Error::MissingMetadata("SingleLogoutService".into()))
 }
 
 fn logout_request_signing(setting: &EntitySetting, signing: LogoutSigning) -> bool {
@@ -803,17 +797,10 @@ fn logout_response_binding(
 fn logout_recipient_endpoint(
     local_metadata: &Metadata,
     binding: LogoutBinding,
-    direction: LogoutMessageDirection,
+    direction: EndpointDirection,
     validation: &SamlValidationContext<'_>,
 ) -> Result<String, SamlError> {
-    let locations = match direction {
-        LogoutMessageDirection::Request => {
-            local_metadata.single_logout_service_locations(binding.as_binding())
-        }
-        LogoutMessageDirection::Response => {
-            local_metadata.single_logout_response_service_locations(binding.as_binding())
-        }
-    };
+    let locations = local_metadata.single_logout_service_locations(binding.as_binding(), direction);
     if locations.is_empty() {
         return Err(Error::MissingMetadata("SingleLogoutService".into()));
     }

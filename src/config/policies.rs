@@ -1,7 +1,6 @@
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
 use crate::constants::MessageSignatureOrder;
 use crate::entity::SignatureConfig;
-use crate::error::SamlError;
 use crate::template::LoginResponseTemplate;
 use crate::xml::XmlLimits;
 
@@ -60,7 +59,7 @@ pub enum ResponseSignaturePolicy {
 /// It applies to an embedded XML signature that authenticates the accepted
 /// message and to the detached `SigAlg` of an HTTP-Redirect or
 /// HTTP-POST-SimpleSign message. A signature outside the profile is rejected
-/// with [`SamlError::AlgorithmUnsupported`].
+/// with [`SamlError::AlgorithmUnsupported`](crate::SamlError::AlgorithmUnsupported).
 ///
 /// Recommended uses [`Self::ExcludeWeakAlgorithms`]. [`Self::StrictRsaSha2`] is
 /// library hardening. Selecting it does not require a signature directly on the
@@ -83,11 +82,11 @@ pub enum XmlSignatureProfile {
     /// than 2048 bits.
     ///
     /// A signature method or digest outside the profile is rejected with
-    /// [`SamlError::AlgorithmUnsupported`]. A shorter RSA certificate is not
+    /// [`SamlError::AlgorithmUnsupported`](crate::SamlError::AlgorithmUnsupported). A shorter RSA certificate is not
     /// used to verify, and a message only it could verify is rejected.
     ///
     /// A signature that authenticates the accepted message and contains a
-    /// `ds:Object` is rejected with [`SamlError::SignedReferenceMismatch`].
+    /// `ds:Object` is rejected with [`SamlError::SignedReferenceMismatch`](crate::SamlError::SignedReferenceMismatch).
     ExcludeWeakAlgorithms,
     /// Accept every algorithm, RSA key size, and same-document reference shape
     /// supported by the selected cryptographic provider, and a `ds:Object` in
@@ -706,10 +705,10 @@ pub(super) fn encrypted_cbc_response_signature_required(policy: ResponseSignatur
     matches!(policy, ResponseSignaturePolicy::RequireForEncryptedCbc)
 }
 
-pub(super) fn logout_signature_required(policy: LogoutSignaturePolicy) -> Result<bool, SamlError> {
+pub(super) fn logout_signature_required(policy: LogoutSignaturePolicy) -> bool {
     match policy {
-        LogoutSignaturePolicy::RequireSigned => Ok(true),
-        LogoutSignaturePolicy::AllowUnsignedForCompatibility => Ok(false),
+        LogoutSignaturePolicy::RequireSigned => true,
+        LogoutSignaturePolicy::AllowUnsignedForCompatibility => false,
     }
 }
 pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {

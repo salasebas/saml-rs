@@ -8,7 +8,6 @@ use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, valida
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
-    OutboundNameIdQualifiers,
 };
 
 use super::bindings::unsigned_context;
@@ -98,26 +97,6 @@ pub(crate) struct CreatedLogoutRequest {
     pub(crate) not_on_or_after: Option<String>,
 }
 
-pub(crate) struct LogoutRequestSessionIndexes<'a> {
-    pub(crate) init_setting: &'a EntitySetting,
-    pub(crate) init_meta: &'a Metadata,
-    pub(crate) target_meta: &'a Metadata,
-    pub(crate) binding: Binding,
-    pub(crate) name_id: &'a str,
-    /// `<NameID>` `Format`. `None` omits the attribute.
-    pub(crate) name_id_format: Option<&'a str>,
-    pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
-    pub(crate) session_indexes: &'a [String],
-    pub(crate) relay_state: Option<&'a str>,
-    pub(crate) want_signed: bool,
-    pub(crate) issue_instant: &'a str,
-    pub(crate) not_on_or_after: Option<&'a str>,
-    pub(crate) validation: LogoutRequestValidation,
-    /// `EncryptIdentifiers` sends the `<NameID>` as an `<EncryptedID>` for the
-    /// peer's encryption key.
-    pub(crate) name_id_encryption: IdentifierEncryptionPolicy,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LogoutRequestValidation {
     Compatibility,
@@ -126,65 +105,26 @@ pub(crate) enum LogoutRequestValidation {
     SessionAuthority,
 }
 
-pub(crate) fn create_logout_request_with_session_indexes(
-    input: LogoutRequestSessionIndexes<'_>,
-) -> Result<CreatedLogoutRequest, SamlError> {
-    let LogoutRequestSessionIndexes {
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        name_id,
-        name_id_format,
-        name_id_qualifiers,
-        session_indexes,
-        relay_state,
-        want_signed,
-        issue_instant,
-        not_on_or_after,
-        validation,
-        name_id_encryption,
-    } = input;
-
-    let subject = LogoutRequestSubject {
-        name_id,
-        qualifiers: name_id_qualifiers,
-        session_indexes: session_indexes.iter().map(String::as_str).collect(),
-    };
-    create_logout_request_for_subject_inner(LogoutRequestInput {
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        subject: &subject,
-        relay_state,
-        want_signed,
-        message_id: None,
-        name_id_format,
-        issue_instant,
-        not_on_or_after,
-        validation,
-        name_id_encryption,
-    })
+pub(crate) struct LogoutRequestInput<'a> {
+    pub(crate) init_setting: &'a EntitySetting,
+    pub(crate) init_meta: &'a Metadata,
+    pub(crate) target_meta: &'a Metadata,
+    pub(crate) binding: Binding,
+    pub(crate) subject: &'a LogoutRequestSubject<'a>,
+    pub(crate) relay_state: Option<&'a str>,
+    pub(crate) want_signed: bool,
+    pub(crate) message_id: Option<&'a str>,
+    /// `<NameID>` `Format`. `None` omits the attribute.
+    pub(crate) name_id_format: Option<&'a str>,
+    pub(crate) issue_instant: &'a str,
+    pub(crate) not_on_or_after: Option<&'a str>,
+    pub(crate) validation: LogoutRequestValidation,
+    /// `EncryptIdentifiers` sends the `<NameID>` as an `<EncryptedID>` for the
+    /// peer's encryption key.
+    pub(crate) name_id_encryption: IdentifierEncryptionPolicy,
 }
 
-struct LogoutRequestInput<'a> {
-    init_setting: &'a EntitySetting,
-    init_meta: &'a Metadata,
-    target_meta: &'a Metadata,
-    binding: Binding,
-    subject: &'a LogoutRequestSubject<'a>,
-    relay_state: Option<&'a str>,
-    want_signed: bool,
-    message_id: Option<&'a str>,
-    name_id_format: Option<&'a str>,
-    issue_instant: &'a str,
-    not_on_or_after: Option<&'a str>,
-    validation: LogoutRequestValidation,
-    name_id_encryption: IdentifierEncryptionPolicy,
-}
-
-fn create_logout_request_for_subject_inner(
+pub(crate) fn create_logout_request_for_subject_inner(
     input: LogoutRequestInput<'_>,
 ) -> Result<CreatedLogoutRequest, SamlError> {
     let LogoutRequestInput {
@@ -398,16 +338,17 @@ pub fn create_logout_response(
     )
 }
 
-struct LogoutResponseInput<'a> {
-    init_setting: &'a EntitySetting,
-    init_meta: &'a Metadata,
-    target_meta: &'a Metadata,
-    binding: Binding,
-    in_response_to: Option<&'a str>,
-    relay_state: Option<&'a str>,
-    want_signed: bool,
-    message_id: Option<&'a str>,
-    status: &'a Status,
+pub(crate) struct LogoutResponseInput<'a> {
+    pub(crate) init_setting: &'a EntitySetting,
+    pub(crate) init_meta: &'a Metadata,
+    pub(crate) target_meta: &'a Metadata,
+    pub(crate) binding: Binding,
+    pub(crate) in_response_to: Option<&'a str>,
+    pub(crate) relay_state: Option<&'a str>,
+    pub(crate) want_signed: bool,
+    pub(crate) message_id: Option<&'a str>,
+    /// A logout-response template rejects a subordinate code.
+    pub(crate) status: &'a Status,
 }
 
 /// Like [`create_logout_response`] but uses `message_id` when provided.
@@ -428,38 +369,6 @@ pub fn create_logout_response_with_id(
     message_id: Option<&str>,
 ) -> Result<BindingContext, SamlError> {
     reject_raw_soap(binding)?;
-    let status = Status::success();
-    create_logout_response_with_status(
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        in_response_to,
-        relay_state,
-        want_signed,
-        message_id,
-        &status,
-    )
-}
-
-/// Like [`create_logout_response_with_id`], with the caller-supplied status.
-///
-/// # Errors
-///
-/// Returns the same errors as [`create_logout_response`]. A logout-response
-/// template rejects a subordinate code.
-#[allow(clippy::too_many_arguments)] // internal path adds the caller-supplied status
-pub(crate) fn create_logout_response_with_status(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    in_response_to: Option<&str>,
-    relay_state: Option<&str>,
-    want_signed: bool,
-    message_id: Option<&str>,
-    status: &Status,
-) -> Result<BindingContext, SamlError> {
     create_logout_response_inner(LogoutResponseInput {
         init_setting,
         init_meta,
@@ -469,11 +378,11 @@ pub(crate) fn create_logout_response_with_status(
         relay_state,
         want_signed,
         message_id,
-        status,
+        status: &Status::success(),
     })
 }
 
-fn create_logout_response_inner(
+pub(crate) fn create_logout_response_inner(
     input: LogoutResponseInput<'_>,
 ) -> Result<BindingContext, SamlError> {
     let LogoutResponseInput {

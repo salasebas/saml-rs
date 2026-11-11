@@ -1,14 +1,15 @@
 use super::{
-    classify_namespace, element_label, profile_error, require_version_2,
-    validate_closed_unqualified_attributes, NamespaceKind,
+    attribute_value, element_label, profile_error, require_version_2,
+    validate_closed_unqualified_attributes, validate_outbound_entity_issuer,
+    validate_outbound_stream, NamespaceKind,
 };
-use crate::constants::{name_id_format, namespace, status_code};
+use crate::constants::{namespace, status_code};
 use crate::error::SamlError;
 use crate::xml::any_uri::is_absolute_uri_reference;
 use crate::xml::dom::{parse_with_limits, Document, XmlLimits};
 use crate::xml::name::is_ncname;
 use crate::xml::parse_generated_saml_utc_date_time;
-use quick_xml::events::{BytesRef, BytesStart, Event};
+use quick_xml::events::BytesStart;
 use quick_xml::NsReader;
 use url::Url;
 
@@ -83,12 +84,6 @@ impl OutboundLogoutValidation {
     fn root_signature_allowed(self) -> bool {
         matches!(self, Self::AfterEmbeddedSigning)
     }
-}
-
-fn attribute_value<'a>(values: &'a [(Vec<u8>, String)], name: &[u8]) -> Option<&'a str> {
-    values
-        .iter()
-        .find_map(|(candidate, value)| (candidate == name).then_some(value.as_str()))
 }
 
 fn require_generated_issue_instant(
@@ -202,47 +197,6 @@ fn validate_outbound_logout_root(
     Ok(())
 }
 
-fn validate_outbound_issuer(
-    reader: &NsReader<&[u8]>,
-    element: &BytesStart<'_>,
-    element_namespace: NamespaceKind,
-) -> Result<(), SamlError> {
-    if element_namespace != NamespaceKind::Assertion {
-        return Err(profile_error("Issuer has an invalid namespace"));
-    }
-    let attributes = validate_closed_unqualified_attributes(
-        reader,
-        element,
-        &[
-            b"Format",
-            b"NameQualifier",
-            b"SPNameQualifier",
-            b"SPProvidedID",
-        ],
-        &[],
-    )?;
-    if let Some(format) = attribute_value(&attributes, b"Format") {
-        if format != name_id_format::ENTITY {
-            return Err(profile_error(
-                "LogoutResponse Issuer Format must be omitted or use the entity identifier format",
-            ));
-        }
-    }
-    if [
-        b"NameQualifier".as_slice(),
-        b"SPNameQualifier".as_slice(),
-        b"SPProvidedID".as_slice(),
-    ]
-    .iter()
-    .any(|name| attribute_value(&attributes, name).is_some())
-    {
-        return Err(profile_error(
-            "entity-format LogoutResponse Issuer must omit NameQualifier, SPNameQualifier, and SPProvidedID",
-        ));
-    }
-    Ok(())
-}
-
 fn is_absolute_url(value: &str) -> bool {
     !value.is_empty() && !value.chars().any(char::is_whitespace) && Url::parse(value).is_ok()
 }
@@ -300,7 +254,7 @@ fn validate_outbound_root_child(
     let local = element.local_name();
     match (local.into_inner().as_bytes(), element_namespace, &state.root_stage) {
         (b"Issuer", NamespaceKind::Assertion, RootStage::ExpectIssuer) => {
-            validate_outbound_issuer(reader, element, element_namespace)?;
+            validate_outbound_entity_issuer(reader, element, "LogoutResponse")?;
             state.root_stage = RootStage::AfterIssuer;
             Ok(OutboundLogoutElement::Issuer)
         }
@@ -465,111 +419,15 @@ fn finish_outbound_logout_element(
     }
 }
 
-fn validate_structural_text(
-    parent: Option<&OutboundLogoutElement>,
-    text: &[u8],
-) -> Result<(), SamlError> {
-    if is_structural_element(parent)
-        && !text
-            .iter()
-            .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
-    {
-        return Err(profile_error(
-            "structural LogoutResponse elements may contain only whitespace text",
-        ));
-    }
-    Ok(())
-}
-
-fn is_structural_element(parent: Option<&OutboundLogoutElement>) -> bool {
+fn is_structural_element(element: &OutboundLogoutElement) -> bool {
     matches!(
-        parent,
-        Some(
-            OutboundLogoutElement::Root
-                | OutboundLogoutElement::Status
-                | OutboundLogoutElement::StatusCode { .. }
-                | OutboundLogoutElement::Extensions { .. }
-                | OutboundLogoutElement::StatusDetail
-        )
+        element,
+        OutboundLogoutElement::Root
+            | OutboundLogoutElement::Status
+            | OutboundLogoutElement::StatusCode { .. }
+            | OutboundLogoutElement::Extensions { .. }
+            | OutboundLogoutElement::StatusDetail
     )
-}
-
-fn validate_structural_reference(
-    parent: Option<&OutboundLogoutElement>,
-    reference: &BytesRef<'_>,
-) -> Result<(), SamlError> {
-    if is_structural_element(parent)
-        && !matches!(
-            reference
-                .resolve_char_ref()
-                .map_err(|error| SamlError::Xml(error.to_string()))?,
-            Some(' ' | '\t' | '\r' | '\n')
-        )
-    {
-        return Err(profile_error(
-            "structural LogoutResponse elements may contain only whitespace text",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_outbound_logout_stream(
-    xml: &str,
-    expectation: &OutboundLogoutExpectation<'_>,
-) -> Result<OutboundLogoutState, SamlError> {
-    let mut reader = NsReader::from_str(xml);
-    let mut stack = Vec::new();
-    let mut state = OutboundLogoutState::default();
-
-    loop {
-        let (resolved, event) = reader
-            .read_resolved_event()
-            .map_err(|error| SamlError::Xml(error.to_string()))?;
-        let element_namespace = classify_namespace(resolved);
-        match event {
-            Event::Start(element) => {
-                let current = validate_outbound_logout_start(
-                    &reader,
-                    &element,
-                    element_namespace,
-                    &mut stack,
-                    expectation,
-                    &mut state,
-                )?;
-                stack.push(current);
-            }
-            Event::Empty(element) => {
-                let current = validate_outbound_logout_start(
-                    &reader,
-                    &element,
-                    element_namespace,
-                    &mut stack,
-                    expectation,
-                    &mut state,
-                )?;
-                finish_outbound_logout_element(&current, &state)?;
-            }
-            Event::End(_) => {
-                let current = stack
-                    .pop()
-                    .ok_or_else(|| SamlError::Xml("unexpected closing element".into()))?;
-                finish_outbound_logout_element(&current, &state)?;
-            }
-            Event::Text(text) => {
-                validate_structural_text(stack.last(), text.as_bytes())?;
-            }
-            Event::CData(text) => {
-                validate_structural_text(stack.last(), text.as_bytes())?;
-            }
-            Event::GeneralRef(reference) => {
-                validate_structural_reference(stack.last(), &reference)?;
-            }
-            Event::DocType(_) => return Err(SamlError::Xml("DOCTYPE is not allowed".into())),
-            Event::Eof => break,
-            Event::Decl(_) | Event::Comment(_) | Event::PI(_) => {}
-        }
-    }
-    Ok(state)
 }
 
 pub(crate) fn validate_logout_response_outbound(
@@ -588,7 +446,22 @@ pub(crate) fn validate_logout_response_outbound(
         in_response_to: expected_in_response_to,
         validation,
     };
-    let state = validate_outbound_logout_stream(xml, &expectation)?;
+    let state = validate_outbound_stream(
+        xml,
+        "LogoutResponse",
+        |reader, element, element_namespace, stack, state| {
+            validate_outbound_logout_start(
+                reader,
+                element,
+                element_namespace,
+                stack,
+                &expectation,
+                state,
+            )
+        },
+        finish_outbound_logout_element,
+        is_structural_element,
+    )?;
 
     let issuer = document.root.children.first().ok_or_else(|| {
         profile_error("LogoutResponse must contain an Issuer before all other children")

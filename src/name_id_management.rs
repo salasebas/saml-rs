@@ -6,10 +6,10 @@
 use std::sync::Arc;
 
 use crate::config::{EntityId, IdentifierEncryptionPolicy, SpDescriptor};
-use crate::constants::{namespace, status_code};
+use crate::constants::{namespace, status_code, Binding};
 use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
-use crate::metadata::Metadata;
+use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
     name_id_format_from_uri, EndpointUrl, MessageId, NameId, Received, ReplayKey, SamlInstant,
     SamlValidationContext, Status, SubordinateStatusCode,
@@ -244,7 +244,7 @@ pub(crate) fn start(
     let sp_entity_id = service_provider.entity_id().as_str();
     let destination = service_provider
         .metadata()
-        .soap_manage_name_id_service_locations()
+        .manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request)
         .into_iter()
         .next()
         .ok_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into()))?;
@@ -554,7 +554,8 @@ fn require_peer_issuer(element: &SamlElement, expected: &str) -> Result<(), Saml
 }
 
 fn local_services(metadata: &Metadata) -> Result<Vec<String>, SamlError> {
-    let locations = metadata.soap_manage_name_id_service_locations();
+    let locations =
+        metadata.manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request);
     if locations.is_empty() {
         return Err(SamlError::MissingMetadata("ManageNameIDService".into()));
     }
