@@ -1193,9 +1193,11 @@ mod tests {
             &[key],
             AssertionDecryptionOptions::default(),
             XmlLimits::default(),
-        )?
-        .ok_or("EncryptedID did not decrypt")?;
-        assert!(decrypted.contains(">alice</n:NameID>"), "{decrypted}");
+        );
+        assert!(
+            matches!(&decrypted, Ok(Some(xml)) if xml.contains(">alice</n:NameID>")),
+            "{decrypted:?}"
+        );
         Ok(())
     }
 

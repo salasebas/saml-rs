@@ -135,11 +135,7 @@ fn decrypt(xml: &str, key_pem: &str, setting: &EntitySetting) -> Result<Option<S
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 )))]
-fn decrypt(
-    _xml: &str,
-    _key_pem: &str,
-    _setting: &EntitySetting,
-) -> Result<Option<String>, SamlError> {
+fn decrypt(_: &str, _: &str, _: &EntitySetting) -> Result<Option<String>, SamlError> {
     Err(SamlError::Unsupported(
         "XML decryption requires a crypto provider feature".into(),
     ))
