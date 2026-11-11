@@ -1,6 +1,7 @@
 //! Checks on a login `<Response>` whose status is not `Success`, run before
 //! that status is reported.
 
+use super::response_issuer::validate_response_issuer;
 use super::{
     signature_is_present, validate_in_response_to, validate_message_destination,
     verify_and_prepare, verify_detached, AssertionSignatureRequirement, FlowOptions, HttpRequest,
@@ -8,7 +9,6 @@ use super::{
 };
 use crate::constants::{Binding, ParserType};
 use crate::error::SamlError;
-use crate::util::Value;
 use crate::xml::{extract_with_limits, fields};
 
 pub(super) fn validate_error_response(
@@ -20,11 +20,11 @@ pub(super) fn validate_error_response(
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
     let message_authenticated = verify_present_signature(opts, request, binding, xml)?;
+    if let Some(expected) = opts.from_issuer {
+        validate_response_issuer(expected, xml, opts.xml_limits)?;
+    }
     let extracted =
         extract_with_limits(xml, &fields::login_error_response_fields(), opts.xml_limits)?;
-    if let Some(expected) = opts.from_issuer {
-        validate_issuer(expected, extracted.get("issuer"))?;
-    }
     validate_in_response_to(&extracted, opts.expected_in_response_to)?;
     validate_message_destination(
         ParserType::SamlResponse,
@@ -33,15 +33,6 @@ pub(super) fn validate_error_response(
         message_authenticated,
         signed_destination,
     )
-}
-
-fn validate_issuer(expected: &str, issuer: Option<&Value>) -> Result<(), SamlError> {
-    match issuer {
-        None | Some(Value::Null) => Ok(()),
-        Some(Value::Str(actual)) if actual == expected => Ok(()),
-        Some(Value::Str(actual)) => Err(SamlError::issuer_mismatch(expected, Some(actual))),
-        Some(Value::Array(_) | Value::Object(_)) => Err(SamlError::issuer_mismatch(expected, None)),
-    }
 }
 
 fn verify_present_signature(

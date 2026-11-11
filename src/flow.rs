@@ -30,6 +30,7 @@ use std::time::SystemTime;
 use time::OffsetDateTime;
 
 mod error_response;
+mod response_issuer;
 
 /// Decoded HTTP request inputs for a binding.
 #[derive(Debug, Default, Clone)]
@@ -974,6 +975,9 @@ fn validate_context(
             let actual = extracted.get_str("issuer");
             if actual != Some(expected) {
                 return Err(SamlError::issuer_mismatch(expected, actual));
+            }
+            if parser_type == ParserType::SamlResponse {
+                response_issuer::validate_response_issuer(expected, saml_content, opts.xml_limits)?;
             }
         }
     }
