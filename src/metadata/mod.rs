@@ -53,8 +53,8 @@ pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     }
 }
 
-/// The range of `xml` that metadata fields are extracted from, and its
-/// document element.
+/// The range of `xml` that metadata fields are extracted from, and the
+/// `EntityDescriptor` it holds.
 fn entity_descriptor_xml<'n>(
     xml: &str,
     roots: &'n [dom::Node],
