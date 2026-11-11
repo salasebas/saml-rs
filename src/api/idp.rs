@@ -43,7 +43,10 @@ impl Saml<Idp> {
     ///
     /// Returns [`SamlError`] when browser input or relay state is invalid, the
     /// request binding is unsupported, SP metadata cannot be parsed, XML
-    /// parsing or signature/trust validation fails, the request destination
+    /// parsing or signature/trust validation fails, the request is unsigned
+    /// while the SP metadata sets `AuthnRequestsSigned` under
+    /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent),
+    /// the request destination
     /// does not match the receiving `SingleSignOnService` location for the
     /// binding, the receiving URL is unpublished, multiple local endpoints
     /// have no explicit receiving URL,

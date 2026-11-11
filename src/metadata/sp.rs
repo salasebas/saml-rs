@@ -137,13 +137,16 @@ impl SpMetadata {
 
     /// `AuthnRequestsSigned` flag.
     ///
-    /// `true` and `1` are true. An absent attribute or another value is false.
+    /// True when any SAML 2.0 `SPSSODescriptor` sets it. `true` and `1` are
+    /// true. An absent attribute or another value is false.
     pub fn is_authn_request_signed(&self) -> bool {
-        crate::xml::xs_boolean(
-            self.inner
-                .meta
-                .get_str("spSSODescriptor.authnRequestsSigned"),
-        ) == Some(true)
+        self.inner
+            .meta
+            .get("spSSODescriptor")
+            .map(as_object_list)
+            .unwrap_or_default()
+            .into_iter()
+            .any(|role| crate::xml::xs_boolean(role.get_str("authnRequestsSigned")) == Some(true))
     }
 
     /// Default `AssertionConsumerService` location for `binding`.

@@ -705,7 +705,9 @@ impl IdentityProvider {
     /// required binding parameters, the SAML payload cannot be base64/DEFLATE
     /// decoded, XML parsing or extraction fails, the status is invalid for the
     /// parser, the SP issuer does not match metadata, or AuthnRequest signature
-    /// validation fails when this IdP metadata requires signed requests.
+    /// validation fails when this IdP metadata requires signed requests, or
+    /// when the SP metadata sets `AuthnRequestsSigned` under
+    /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent).
     /// Signature failures include missing signatures, untrusted SP signing
     /// certificates, invalid detached signatures, and XML signature validation
     /// errors.
@@ -742,11 +744,14 @@ impl IdentityProvider {
         let signing_certs = sp
             .metadata
             .x509_certificates(crate::constants::CertUse::Signing);
+        let sp_declares_signed_requests = self.setting.verify_authn_request_signature_if_present
+            && sp.metadata.is_authn_request_signed();
         crate::flow::flow_with_authentication(
             &FlowOptions {
                 binding: Some(binding),
                 parser_type: Some(ParserType::SamlRequest),
-                check_signature: self.metadata.is_want_authn_requests_signed(),
+                check_signature: self.metadata.is_want_authn_requests_signed()
+                    || sp_declares_signed_requests,
                 verify_signature_if_present: self.setting.verify_authn_request_signature_if_present,
                 require_audience_restriction: true,
                 xml_signatures: self.setting.xml_signatures,

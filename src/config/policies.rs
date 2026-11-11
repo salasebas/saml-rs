@@ -109,7 +109,8 @@ pub enum AuthnRequestSigningPolicy {
 ///
 /// [`Self::RequireSigned`] is optional and stays off.
 /// [`Self::AllowUnsignedVerifyIfPresent`] verifies a signature that is present
-/// and still accepts an unsigned request.
+/// and accepts an unsigned request unless the service provider's metadata sets
+/// `AuthnRequestsSigned`.
 /// [`Self::AllowUnsignedForCompatibility`] does not verify a present signature.
 /// The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
@@ -117,7 +118,9 @@ pub enum AuthnRequestSigningPolicy {
 pub enum AuthnRequestValidationPolicy {
     /// Reject unsigned AuthnRequests.
     RequireSigned,
-    /// Accept an unsigned AuthnRequest and verify a signature that is present.
+    /// Verify a signature that is present, and accept an unsigned AuthnRequest
+    /// from a service provider whose metadata does not set
+    /// `AuthnRequestsSigned`.
     AllowUnsignedVerifyIfPresent,
     /// Accept unsigned AuthnRequests without verifying a signature that is present.
     #[default]
@@ -264,8 +267,9 @@ pub struct IdpValidationPolicy {
 impl IdpValidationPolicy {
     /// Validation preset for claimed Web Browser SSO and Single Logout features.
     ///
-    /// An inbound `AuthnRequest` may be unsigned. A signature that is present
-    /// is verified under [`XmlSignatureProfile::ExcludeWeakAlgorithms`].
+    /// An inbound `AuthnRequest` may be unsigned unless the service provider's
+    /// metadata sets `AuthnRequestsSigned`. A signature that is present is
+    /// verified under [`XmlSignatureProfile::ExcludeWeakAlgorithms`].
     /// Logout requests and responses require a signature.
     pub fn recommended() -> Self {
         Self {
