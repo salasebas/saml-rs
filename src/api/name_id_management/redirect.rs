@@ -21,8 +21,8 @@ use crate::name_id_management::{
 use std::time::SystemTime;
 
 use super::super::raw_mapping::{
-    ensure_entity_id, ensure_relay_state, input_binding, raw_idp_descriptor, raw_sp_descriptor,
-    relay_state_from_input,
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding, raw_idp_descriptor,
+    raw_sp_descriptor, relay_state_from_input,
 };
 use super::super::{
     Idp, ReceiveNameIdManagement, RespondNameIdManagement, Saml, SamlError, Sp,
@@ -456,7 +456,12 @@ fn start(
     local_locations(local.metadata, EndpointDirection::Response)?;
     let destination = peer_location(&peer, EndpointDirection::Request)?;
     if !options.allows_http() {
-        require_https(&destination)?;
+        ensure_https_endpoint(
+            &destination,
+            "name identifier management",
+            "ManageNameIDService",
+            "allow_http_name_id_management",
+        )?;
     }
     let issuer = local.entity_id()?;
     let (idp_entity_id, sp_entity_id) = match local.requester {
@@ -589,7 +594,12 @@ fn response_outbound(
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
     let destination = peer_location(peer, EndpointDirection::Response)?;
     if !allows_http {
-        require_https(&destination)?;
+        ensure_https_endpoint(
+            &destination,
+            "name identifier management",
+            "ManageNameIDService",
+            "allow_http_name_id_management",
+        )?;
     }
     let context = create_response(
         local.setting,
@@ -665,18 +675,4 @@ fn local_locations(
         return Err(Error::MissingMetadata("ManageNameIDService".into()));
     }
     Ok(locations)
-}
-
-fn require_https(endpoint: &str) -> Result<(), SamlError> {
-    let url = url::Url::parse(endpoint).map_err(|error| {
-        Error::Invalid(format!(
-            "ManageNameIDService location is not a URL: {error}"
-        ))
-    })?;
-    if url.scheme() == "https" {
-        return Ok(());
-    }
-    Err(Error::ProtocolProfile(
-        "name identifier management sends the user agent to an https ManageNameIDService unless allow_http_name_id_management is selected".into(),
-    ))
 }
