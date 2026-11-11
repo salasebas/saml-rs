@@ -127,6 +127,9 @@ impl BrowserInput<AuthnRequest> {
     pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
         simple_sign_body_input(raw_body)
     }
+    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
+        http_request_from_input(self, true, MessageField::Request, limits)
+    }
 }
 
 impl BrowserInput<SsoResponse> {
@@ -158,6 +161,10 @@ impl BrowserInput<SsoResponse> {
     /// Parse a raw `application/x-www-form-urlencoded` SimpleSign body.
     pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
         simple_sign_body_input(raw_body)
+    }
+
+    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
+        http_request_from_input(self, false, MessageField::Response, limits)
     }
 }
 
@@ -267,7 +274,7 @@ impl TryFrom<BrowserInput<AuthnRequest>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<AuthnRequest>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, true, MessageField::Request)
+        value.into_http_request(XmlLimits::default())
     }
 }
 
@@ -275,7 +282,7 @@ impl TryFrom<BrowserInput<SsoResponse>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<SsoResponse>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, false, MessageField::Response)
+        value.into_http_request(XmlLimits::default())
     }
 }
 
@@ -299,7 +306,7 @@ impl TryFrom<BrowserInput<ManageNameIdRequest>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<ManageNameIdRequest>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, true, MessageField::Request)
+        http_request_from_input(value, true, MessageField::Request, XmlLimits::default())
     }
 }
 
@@ -307,7 +314,7 @@ impl TryFrom<BrowserInput<ManageNameIdResponse>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<ManageNameIdResponse>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, true, MessageField::Response)
+        http_request_from_input(value, true, MessageField::Response, XmlLimits::default())
     }
 }
 
@@ -348,7 +355,7 @@ fn logout_http_request<Message>(
 ) -> Result<HttpRequest, SamlError> {
     match value {
         BrowserInput::Soap { envelope, .. } => soap_request(&envelope, expected_message, limits),
-        other => http_request_from_input(other, true, expected_message),
+        other => http_request_from_input(other, true, expected_message, limits),
     }
 }
 
@@ -379,6 +386,7 @@ fn http_request_from_input<Message>(
     value: BrowserInput<Message>,
     allow_redirect: bool,
     expected_message: MessageField,
+    limits: XmlLimits,
 ) -> Result<HttpRequest, SamlError> {
     match value {
         BrowserInput::Redirect { raw_query, .. } => {
@@ -406,7 +414,7 @@ fn http_request_from_input<Message>(
             if fields.is_empty() {
                 fields = parse_form_fields(&raw_body);
             }
-            let octet_string = simplesign_octet_from_fields(&fields, expected_message)?;
+            let octet_string = simplesign_octet_from_fields(&fields, expected_message, limits)?;
             let mut request = HttpRequest::post(fields_to_pairs(fields));
             request.octet_string = Some(octet_string);
             Ok(request)
@@ -557,14 +565,12 @@ fn validate_form_message_kind(
 fn simplesign_octet_from_fields(
     fields: &[FormField],
     expected_message: MessageField,
+    limits: XmlLimits,
 ) -> Result<String, SamlError> {
     let message_name = expected_message.param_name();
     let encoded = validate_form_message_kind(fields, expected_message)?;
-    let raw_xml = String::from_utf8(base64_decode_with_limit(
-        encoded,
-        XmlLimits::default().max_bytes,
-    )?)
-    .map_err(|err| SamlError::Xml(err.to_string()))?;
+    let raw_xml = String::from_utf8(base64_decode_with_limit(encoded, limits.max_bytes)?)
+        .map_err(|err| SamlError::Xml(err.to_string()))?;
     let sig_alg = field_value(fields, url_params::SIG_ALG)?.ok_or(SamlError::MissingSigAlg)?;
     let relay_state = field_value(fields, url_params::RELAY_STATE)?;
     Ok(build_simplesign_octet(

@@ -4,7 +4,6 @@ use crate::config::SpDescriptor;
 use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::error::SamlError as Error;
-use crate::flow::HttpRequest;
 use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
     AuthnRequest, Received, RelayStateParam, ReplayKey, SamlValidationContext, SsoResponse, Subject,
@@ -88,7 +87,7 @@ impl Saml<Idp> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoRequestBinding::try_from(input_binding(&input))?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
-        let request = HttpRequest::try_from(input)?;
+        let request = input.into_http_request(self.raw_identity_provider().setting.xml_limits)?;
         let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
             &raw_sp,
             binding.as_binding(),
