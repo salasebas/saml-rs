@@ -4,6 +4,7 @@ mod endpoints;
 pub mod generate;
 pub mod idp;
 mod lifetime;
+mod role;
 pub mod sp;
 mod validity;
 mod write;
@@ -23,6 +24,8 @@ pub use lifetime::MetadataLifetime;
 pub use sp::SpMetadata;
 pub(crate) use validity::MetadataValidity;
 
+use role::SsoDescriptorRole;
+
 use std::collections::HashSet;
 
 use crate::constants::{Binding, CertUse};
@@ -38,38 +41,6 @@ fn base_fields() -> Vec<ExtractorField> {
             &["EntityDescriptor", "~SSODescriptor", "NameIDFormat"],
         ),
     ]
-}
-
-/// The SSO role descriptor whose `KeyDescriptor` and `SingleLogoutService`
-/// elements are read.
-#[derive(Clone, Copy)]
-enum SsoDescriptorRole {
-    Any,
-    ServiceProvider,
-    IdentityProvider,
-}
-
-impl SsoDescriptorRole {
-    fn fields(self) -> Vec<ExtractorField> {
-        let descriptor = match self {
-            Self::Any => "~SSODescriptor",
-            Self::ServiceProvider => "SPSSODescriptor",
-            Self::IdentityProvider => "IDPSSODescriptor",
-        };
-        vec![ExtractorField::new(
-            "singleLogoutService",
-            &["EntityDescriptor", descriptor, "SingleLogoutService"],
-        )
-        .with_context()]
-    }
-
-    fn is_descriptor(self, local_name: &str) -> bool {
-        match self {
-            Self::Any => local_name.contains("SSODescriptor"),
-            Self::ServiceProvider => local_name == "SPSSODescriptor",
-            Self::IdentityProvider => local_name == "IDPSSODescriptor",
-        }
-    }
 }
 
 /// Normalise a "single object or array of objects" value into a node list.
@@ -103,6 +74,22 @@ fn entity_descriptor_xml<'a, 'n>(
     }
 }
 
+fn role_xml(xml: &str, entity: &dom::Node, descriptors: &[&dom::Node]) -> String {
+    let mut role_xml = String::with_capacity(entity.end - entity.start);
+    let mut copied = entity.start;
+    for unread in entity.children.iter().filter(|child| {
+        role::is_sso_descriptor(child)
+            && !descriptors
+                .iter()
+                .any(|descriptor| std::ptr::eq(*descriptor, *child))
+    }) {
+        role_xml.push_str(&xml[copied..unread.start]);
+        copied = unread.end;
+    }
+    role_xml.push_str(&xml[copied..entity.end]);
+    role_xml
+}
+
 fn collect_entity_descriptors<'a>(node: &'a dom::Node, found: &mut Vec<&'a dom::Node>) {
     if node.local_name == "EntityDescriptor" {
         found.push(node);
@@ -123,15 +110,10 @@ struct KeyCertificates {
 }
 
 impl KeyCertificates {
-    fn from_entity(entity: &dom::Node, role: SsoDescriptorRole) -> Self {
+    fn from_descriptors(descriptors: &[&dom::Node]) -> Self {
         let mut certificates = Self::default();
-        if entity.local_name != "EntityDescriptor" {
-            return certificates;
-        }
-        let key_descriptors = entity
-            .children
+        let key_descriptors = descriptors
             .iter()
-            .filter(|descriptor| role.is_descriptor(&descriptor.local_name))
             .flat_map(|descriptor| &descriptor.children)
             .filter(|child| child.local_name == "KeyDescriptor");
         for key_descriptor in key_descriptors {
@@ -255,7 +237,7 @@ impl Metadata {
     ///
     /// `KeyDescriptor` certificates and `SingleLogoutService` endpoints are
     /// read from every SSO role descriptor of the entity. [`SpMetadata`] and
-    /// [`IdpMetadata`] read only their own role's.
+    /// [`IdpMetadata`] read only their own role's SAML 2.0 descriptors.
     ///
     /// # Errors
     ///
@@ -287,11 +269,18 @@ impl Metadata {
             ));
         }
 
+        let (extraction_xml, entity) = entity_descriptor_xml(xml, &roots)?;
+        let descriptors = role.descriptors(xml, entity, limits)?;
+        let role_xml = entity.map(|entity| role_xml(xml, entity, &descriptors));
+
         let mut fields = base_fields();
         fields.extend(role.fields());
         fields.extend(extra);
-        let (extraction_xml, entity) = entity_descriptor_xml(xml, &roots)?;
-        let mut meta = extract_with_limits(extraction_xml, &fields, limits)?;
+        let mut meta = extract_with_limits(
+            role_xml.as_deref().unwrap_or(extraction_xml),
+            &fields,
+            limits,
+        )?;
         if let Some(fragments) = meta.get("singleLogoutService") {
             let endpoints = endpoints::parse_endpoint_fragments(
                 fragments,
@@ -300,15 +289,11 @@ impl Metadata {
             meta.insert("singleLogoutService", endpoints);
         }
 
-        let key_certificates = entity
-            .map(|entity| KeyCertificates::from_entity(entity, role))
-            .unwrap_or_default();
-
         Ok(Self {
             xml: xml.to_string(),
             meta,
-            key_certificates,
-            valid_until_bounds: validity::valid_until_bounds(&roots, role),
+            key_certificates: KeyCertificates::from_descriptors(&descriptors),
+            valid_until_bounds: validity::valid_until_bounds(&roots, &descriptors),
         })
     }
 

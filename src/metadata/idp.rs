@@ -46,20 +46,30 @@ pub struct IdpMetadata {
 impl IdpMetadata {
     /// Parse IdP metadata XML.
     ///
+    /// Keys, flags, and endpoints are read from the entity's `IDPSSODescriptor`
+    /// elements in the SAML metadata namespace whose
+    /// `protocolSupportEnumeration` lists `urn:oasis:names:tc:SAML:2.0:protocol`.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, parser resource limits, or
-    /// IdP-specific metadata extraction fails.
+    /// Returns [`SamlError::MissingMetadata`] when the entity has no such
+    /// `IDPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
+    /// limits, or IdP-specific metadata extraction fails.
     pub fn from_xml(xml: &str) -> Result<Self, SamlError> {
         Self::from_xml_with_limits(xml, XmlLimits::default())
     }
 
     /// Parse IdP metadata XML with explicit XML parser resource limits.
     ///
+    /// Keys, flags, and endpoints are read from the entity's `IDPSSODescriptor`
+    /// elements in the SAML metadata namespace whose
+    /// `protocolSupportEnumeration` lists `urn:oasis:names:tc:SAML:2.0:protocol`.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, parser resource limits, or
-    /// IdP-specific metadata extraction fails.
+    /// Returns [`SamlError::MissingMetadata`] when the entity has no such
+    /// `IDPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
+    /// limits, or IdP-specific metadata extraction fails.
     pub fn from_xml_with_limits(xml: &str, limits: XmlLimits) -> Result<Self, SamlError> {
         let extra = vec![
             ExtractorField::new(

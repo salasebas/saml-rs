@@ -212,7 +212,10 @@ Every committed fixture belongs to one of these groups. Each fixture has one
 canonical path; tests and unit tests load it from that path.
 
 - `tests/fixtures/misc/**` - historical samlify XML request, response, and
-  metadata cases.
+  metadata cases. `misc/spmeta.xml` and `misc/sp_metadata_98.xml` bind the
+  metadata namespace as the default namespace of their root
+  `EntityDescriptor`. Upstream binds it to an `md` prefix that no element
+  uses, which leaves their role descriptors outside the metadata namespace.
 - `tests/fixtures/key/idp/**` and `tests/fixtures/key/sp/**` - historical
   samlify IdP and SP test certificates and keys. `key/idp/README.md` maps each
   IdP private key to its certificate.
