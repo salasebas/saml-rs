@@ -549,9 +549,9 @@ fn recommended_service_provider_does_not_verify_with_a_1024_bit_rsa_key(
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 #[test]
-fn selected_dsa_sha1_signs_the_response() -> Result<(), Box<dyn std::error::Error>> {
-    let peers = peers(
-        rsa(AlgorithmPolicy::default()),
+fn selected_dsa_sha1_signs_the_authn_request_and_the_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dsa_sha1 = || {
         signed_with(
             AlgorithmPolicy {
                 signature: SignatureAlgorithm::DsaSha1,
@@ -559,11 +559,12 @@ fn selected_dsa_sha1_signs_the_response() -> Result<(), Box<dyn std::error::Erro
             },
             DSA_KEY,
             DSA_CERT,
-        ),
-        XmlPolicy::default(),
-    )?;
+        )
+    };
+    let peers = peers(dsa_sha1(), dsa_sha1(), XmlPolicy::default())?;
     let exchange = signed_redirect_request_then_post_response(&peers)?;
 
+    assert_eq!(exchange.redirect_sig_alg, signature_algorithm::DSA_SHA1);
     assert_eq!(
         algorithm_attributes(&exchange.response_xml, "SignatureMethod"),
         [signature_algorithm::DSA_SHA1]
