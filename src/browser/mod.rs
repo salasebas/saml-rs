@@ -16,6 +16,7 @@ pub use bindings::{LogoutBinding, NameIdManagementBinding, SsoRequestBinding, Ss
 pub use endpoints::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 pub use forms::{FormField, PostForm};
 pub use input::BrowserInput;
+pub(crate) use input::{field_value, parse_form_fields};
 pub use outbound::Outbound;
 pub use pending::{
     Pending, PendingAuthnRequest, PendingLogoutRequest, PendingManageNameIdRequest,

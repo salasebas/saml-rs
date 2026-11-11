@@ -509,7 +509,7 @@ fn parse_form_pairs(raw: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-fn parse_form_fields(raw: &str) -> Vec<FormField> {
+pub(crate) fn parse_form_fields(raw: &str) -> Vec<FormField> {
     parse_form_pairs(raw)
         .into_iter()
         .map(|(name, value)| FormField::new(name, value))
@@ -520,7 +520,10 @@ fn fields_to_pairs(fields: Vec<FormField>) -> Vec<(String, String)> {
     fields.into_iter().map(FormField::into_pair).collect()
 }
 
-fn field_value<'a>(fields: &'a [FormField], name: &str) -> Result<Option<&'a str>, SamlError> {
+pub(crate) fn field_value<'a>(
+    fields: &'a [FormField],
+    name: &str,
+) -> Result<Option<&'a str>, SamlError> {
     let mut values = fields
         .iter()
         .filter(|field| field.name() == name)

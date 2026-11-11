@@ -310,6 +310,85 @@ fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
     }
 }
 
+fn expect_ambiguous_relay_state<T: std::fmt::Debug>(
+    entry_point: &str,
+    result: Result<T, SamlError>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match result {
+        Err(SamlError::Invalid(message)) if message == "ambiguous form field" => Ok(()),
+        other => Err(format!(
+            "expected {entry_point} to refuse a repeated RelayState, got {other:?}"
+        )
+        .into()),
+    }
+}
+
+#[test]
+fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+
+    let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
+    let mut request_fields = started.outbound.post_form()?.fields().to_vec();
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(request_fields.clone()),
+        validation(),
+    )?;
+    request_fields.push(FormField::new("RelayState", "https://evil.example/"));
+    expect_ambiguous_relay_state(
+        "receive_sso over HTTP-POST",
+        idp.receive_sso(
+            &sp_descriptor,
+            BrowserInput::<AuthnRequest>::post(request_fields),
+            validation(),
+        ),
+    )?;
+
+    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let mut response_fields = response.post_form()?.fields().to_vec();
+    response_fields.push(FormField::new("RelayState", "https://evil.example/"));
+    expect_ambiguous_relay_state(
+        "finish_sso",
+        sp.finish_sso(
+            &idp_descriptor,
+            &started.pending,
+            BrowserInput::<SsoResponse>::post(response_fields),
+            validation(),
+        ),
+    )?;
+
+    let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let mut unsolicited_fields = unsolicited.post_form()?.fields().to_vec();
+    unsolicited_fields.push(FormField::new("RelayState", "a"));
+    unsolicited_fields.push(FormField::new("RelayState", "b"));
+    expect_ambiguous_relay_state(
+        "accept_unsolicited_sso",
+        sp.accept_unsolicited_sso(
+            &idp_descriptor,
+            BrowserInput::<SsoResponse>::post(unsolicited_fields),
+            validation(),
+        ),
+    )?;
+
+    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let request_url = started.outbound.redirect_url()?;
+    let query = request_url.split_once('?').ok_or("missing query")?.1;
+    for repeated in ["RelayState=a&RelayState=b", "RelayState=a&Rel%61yState=b"] {
+        expect_ambiguous_relay_state(
+            "receive_sso over unsigned HTTP-Redirect",
+            idp.receive_sso(
+                &sp_descriptor,
+                BrowserInput::<AuthnRequest>::redirect(format!("{query}&{repeated}")),
+                validation(),
+            ),
+        )?;
+    }
+    Ok(())
+}
+
 #[test]
 fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
 ) -> Result<(), Box<dyn std::error::Error>> {

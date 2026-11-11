@@ -3151,6 +3151,64 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
 }
 
 #[test]
+fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(sp_config()?)?;
+    let idp = Saml::idp(idp_config_with_validation(
+        IdpValidationPolicy::compatibility(),
+    )?)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(
+        &idp_descriptor,
+        subject()?,
+        start_unsigned_slo_for_binding(LogoutBinding::Redirect),
+    )?;
+    let request_url = started.outbound.redirect_url()?;
+    let request_query = request_url.split_once('?').ok_or("missing query")?.1;
+    let response_url = saml_rs::binding::build_redirect_url(
+        SP_SLO_REDIRECT,
+        ParserType::LogoutResponse,
+        &logout_response_xml(
+            "_repeated_relay_state",
+            IDP_ENTITY_ID,
+            started.pending.id().as_str(),
+            None,
+        ),
+        None,
+    )?;
+    let response_query = response_url.split_once('?').ok_or("missing query")?.1;
+
+    for repeated in ["RelayState=a&RelayState=b", "RelayState=a&Rel%61yState=b"] {
+        match idp.receive_slo(
+            &sp_descriptor,
+            BrowserInput::<LogoutRequest>::redirect(format!("{request_query}&{repeated}")),
+            validation(),
+        ) {
+            Err(SamlError::Invalid(message)) if message == "ambiguous form field" => {}
+            other => {
+                return Err(
+                    format!("expected receive_slo to refuse {repeated}, got {other:?}").into(),
+                )
+            }
+        }
+        match sp.finish_slo(
+            &idp_descriptor,
+            &started.pending,
+            BrowserInput::<LogoutResponse>::redirect(format!("{response_query}&{repeated}")),
+            validation(),
+        ) {
+            Err(SamlError::Invalid(message)) if message == "ambiguous form field" => {}
+            other => {
+                return Err(
+                    format!("expected finish_slo to refuse {repeated}, got {other:?}").into(),
+                )
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_facade_rejects_custom_logout_response_in_response_to_mismatch(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(sp_config()?)?;
