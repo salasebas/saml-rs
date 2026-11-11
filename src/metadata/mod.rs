@@ -323,7 +323,8 @@ impl Metadata {
         self.meta.get_str("entityID")
     }
 
-    /// Declared `<NameIDFormat>` values.
+    /// `<NameIDFormat>` values of the SSO role descriptors read, in document
+    /// order.
     pub fn get_name_id_format(&self) -> Vec<String> {
         match self.meta.get("nameIDFormat") {
             Some(Value::Array(items)) => items
