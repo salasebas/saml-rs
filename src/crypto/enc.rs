@@ -206,32 +206,32 @@ pub(crate) fn decrypt_assertions_with_limits(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<(String, Vec<String>), SamlError> {
-    super::provider::ensure_crypto_provider_initialized()?;
-    dom::parse_with_limits(xml, limits)?;
-    let document = parse_xml_document(xml)?;
-    let encrypted = root_children(&document, namespace::ASSERTION, "EncryptedAssertion")?;
-    if encrypted.is_empty() {
-        return Err(undefined_encrypted_assertion());
-    }
-    let replacements = encrypted
-        .into_iter()
-        .map(|element| {
-            decrypted_element(
-                &document,
-                element,
-                ENCRYPTED_ASSERTION,
-                enc_keys,
-                options,
-                limits,
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let assertions = replacements
-        .iter()
-        .map(|(_, assertion)| assertion.clone())
-        .collect();
-    let response = splice(xml, replacements);
-    limits.check_input_bytes(response.len())?;
+    let mut assertions = Vec::new();
+    let response = decrypt_selected(xml, limits, |document| {
+        let encrypted = root_children(document, namespace::ASSERTION, "EncryptedAssertion")?;
+        if encrypted.is_empty() {
+            return Ok(None);
+        }
+        let replacements = encrypted
+            .into_iter()
+            .map(|element| {
+                decrypted_element(
+                    document,
+                    element,
+                    ENCRYPTED_ASSERTION,
+                    enc_keys,
+                    options,
+                    limits,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        assertions = replacements
+            .iter()
+            .map(|(_, assertion)| assertion.clone())
+            .collect();
+        Ok(Some(replacements))
+    })?
+    .ok_or_else(undefined_encrypted_assertion)?;
     Ok((response, assertions))
 }
 
@@ -444,22 +444,15 @@ pub(crate) fn encrypt_assertion_elements(
     key_alg: &str,
     selection: AssertionElementEncryption,
 ) -> Result<String, SamlError> {
-    super::provider::ensure_crypto_provider_initialized()?;
-    let document = parse_xml_document(xml)?;
-    let mut replacements = Vec::new();
-    for kind in selected_kinds(selection) {
-        for element in assertion_elements(&document, kind.parent, kind.plaintext)? {
-            replacements.push(encrypted_element(
-                &document,
-                element,
-                kind,
-                encrypt_cert,
-                data_alg,
-                key_alg,
-            )?);
+    encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
+        let mut selected = Vec::new();
+        for kind in selected_kinds(selection) {
+            for element in assertion_elements(document, kind.parent, kind.plaintext)? {
+                selected.push((element, kind));
+            }
         }
-    }
-    Ok(splice(xml, replacements))
+        Ok(selected)
+    })
 }
 
 /// Replace the `<NameID>` of the `<LogoutRequest>` in `xml` with an
@@ -471,22 +464,35 @@ pub(crate) fn encrypt_logout_request_name_id(
     data_alg: &str,
     key_alg: &str,
 ) -> Result<String, SamlError> {
+    encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
+        let [name_id] = root_children(document, namespace::ASSERTION, "NameID")?[..] else {
+            return Err(SamlError::ProtocolProfile(
+                "LogoutRequest must carry one NameID to encrypt".into(),
+            ));
+        };
+        Ok(vec![(name_id, LOGOUT_REQUEST_ENCRYPTED_ID)])
+    })
+}
+
+/// `xml` with each `(element, kind)` that `select` picks from its document
+/// replaced by the `kind.encrypted` form of `element` for the holder of
+/// `encrypt_cert`.
+fn encrypt_selected(
+    xml: &str,
+    encrypt_cert: &str,
+    data_alg: &str,
+    key_alg: &str,
+    select: impl FnOnce(&XmlDocument<'_>) -> Result<Vec<(NodeId, EncryptedElementKind)>, SamlError>,
+) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     let document = parse_xml_document(xml)?;
-    let [name_id] = root_children(&document, namespace::ASSERTION, "NameID")?[..] else {
-        return Err(SamlError::ProtocolProfile(
-            "LogoutRequest must carry one NameID to encrypt".into(),
-        ));
-    };
-    let replacement = encrypted_element(
-        &document,
-        name_id,
-        LOGOUT_REQUEST_ENCRYPTED_ID,
-        encrypt_cert,
-        data_alg,
-        key_alg,
-    )?;
-    Ok(splice(xml, vec![replacement]))
+    let replacements = select(&document)?
+        .into_iter()
+        .map(|(element, kind)| {
+            encrypted_element(&document, element, kind, encrypt_cert, data_alg, key_alg)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(splice(xml, replacements))
 }
 
 /// The source range of `element` and the `kind.encrypted` wrapper that
@@ -536,22 +542,15 @@ pub(crate) fn encrypt_root_children(
     data_alg: &str,
     key_alg: &str,
 ) -> Result<String, SamlError> {
-    super::provider::ensure_crypto_provider_initialized()?;
-    let document = parse_xml_document(xml)?;
-    let mut replacements = Vec::new();
-    for kind in kinds {
-        for element in root_children(&document, kind.namespace, kind.plaintext)? {
-            replacements.push(encrypted_element(
-                &document,
-                element,
-                *kind,
-                encrypt_cert,
-                data_alg,
-                key_alg,
-            )?);
+    encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
+        let mut selected = Vec::new();
+        for kind in kinds {
+            for element in root_children(document, kind.namespace, kind.plaintext)? {
+                selected.push((element, *kind));
+            }
         }
-    }
-    Ok(splice(xml, replacements))
+        Ok(selected)
+    })
 }
 
 /// Replace the one `kind.encrypted` child of the document element of `xml`
@@ -569,19 +568,16 @@ pub(crate) fn decrypt_root_child(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
-    super::provider::ensure_crypto_provider_initialized()?;
-    dom::parse_with_limits(xml, limits)?;
-    let document = parse_xml_document(xml)?;
-    let [element] = root_children(&document, kind.namespace, kind.encrypted)?[..] else {
-        return Err(SamlError::ProtocolProfile(format!(
-            "{} requires one {}",
-            kind.parent, kind.encrypted
-        )));
-    };
-    let replacement = decrypted_element(&document, element, kind, enc_keys, options, limits)?;
-    let decrypted = splice(xml, vec![replacement]);
-    limits.check_input_bytes(decrypted.len())?;
-    Ok(decrypted)
+    decrypt_selected(xml, limits, |document| {
+        let [element] = root_children(document, kind.namespace, kind.encrypted)?[..] else {
+            return Ok(None);
+        };
+        let replacement = decrypted_element(document, element, kind, enc_keys, options, limits)?;
+        Ok(Some(vec![replacement]))
+    })?
+    .ok_or_else(|| {
+        SamlError::ProtocolProfile(format!("{} requires one {}", kind.parent, kind.encrypted))
+    })
 }
 
 /// Whether a verified signature covers a received request.
@@ -612,39 +608,36 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
     limits: XmlLimits,
     authentication: RequestAuthentication,
 ) -> Result<Option<String>, SamlError> {
-    super::provider::ensure_crypto_provider_initialized()?;
-    dom::parse_with_limits(xml, limits)?;
-    let document = parse_xml_document(xml)?;
-    let [subject] = root_children(&document, namespace::ASSERTION, "Subject")?[..] else {
-        return Ok(None);
-    };
-    let encrypted_ids: Vec<NodeId> =
-        assertion_children(&document, subject, "EncryptedID").collect();
-    let [encrypted_id] = encrypted_ids[..] else {
-        return Ok(None);
-    };
-    match authentication {
-        RequestAuthentication::Authenticated => {}
-        RequestAuthentication::Unauthenticated => {
-            if !uses_gcm(&document, encrypted_id) {
-                return Ok(None);
+    decrypt_selected(xml, limits, |document| {
+        let [subject] = root_children(document, namespace::ASSERTION, "Subject")?[..] else {
+            return Ok(None);
+        };
+        let encrypted_ids: Vec<NodeId> =
+            assertion_children(document, subject, "EncryptedID").collect();
+        let [encrypted_id] = encrypted_ids[..] else {
+            return Ok(None);
+        };
+        match authentication {
+            RequestAuthentication::Authenticated => {}
+            RequestAuthentication::Unauthenticated => {
+                if !uses_gcm(document, encrypted_id) {
+                    return Ok(None);
+                }
             }
         }
-    }
-    let enc_keys = super::keys::load_decryption_keys(key_pem, key_pass, additional)?;
-    let Ok(replacement) = decrypted_element(
-        &document,
-        encrypted_id,
-        ENCRYPTED_ID,
-        &enc_keys,
-        options,
-        limits,
-    ) else {
-        return Ok(None);
-    };
-    let decrypted = splice(xml, vec![replacement]);
-    limits.check_input_bytes(decrypted.len())?;
-    Ok(Some(decrypted))
+        let enc_keys = super::keys::load_decryption_keys(key_pem, key_pass, additional)?;
+        let Ok(replacement) = decrypted_element(
+            document,
+            encrypted_id,
+            ENCRYPTED_ID,
+            &enc_keys,
+            options,
+            limits,
+        ) else {
+            return Ok(None);
+        };
+        Ok(Some(vec![replacement]))
+    })
 }
 
 /// Whether the `EncryptedData` of `encrypted` names an AES-GCM
@@ -704,32 +697,30 @@ pub(crate) fn decrypt_assertion_elements(
     selection: AssertionElementEncryption,
     received: ReceivedEncryptedElements,
 ) -> Result<String, SamlError> {
-    super::provider::ensure_crypto_provider_initialized()?;
-    dom::parse_with_limits(xml, limits)?;
-    let document = parse_xml_document(xml)?;
-    let selected = selected_kinds(selection);
-    let decrypted = match received {
-        ReceivedEncryptedElements::DecryptReceived => vec![ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE],
-        ReceivedEncryptedElements::DecryptSelected => selected.clone(),
-    };
-    for kind in &selected {
-        if !assertion_elements(&document, kind.parent, kind.plaintext)?.is_empty() {
-            return Err(SamlError::EncryptionRequired {
-                element: kind.plaintext,
-            });
+    let decrypted = decrypt_selected(xml, limits, |document| {
+        let selected = selected_kinds(selection);
+        let decrypted = match received {
+            ReceivedEncryptedElements::DecryptReceived => vec![ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE],
+            ReceivedEncryptedElements::DecryptSelected => selected.clone(),
+        };
+        for kind in &selected {
+            if !assertion_elements(document, kind.parent, kind.plaintext)?.is_empty() {
+                return Err(SamlError::EncryptionRequired {
+                    element: kind.plaintext,
+                });
+            }
         }
-    }
-    let mut replacements = Vec::new();
-    for kind in decrypted {
-        for element in assertion_elements(&document, kind.parent, kind.encrypted)? {
-            replacements.push(decrypted_element(
-                &document, element, kind, enc_keys, options, limits,
-            )?);
+        let mut replacements = Vec::new();
+        for kind in decrypted {
+            for element in assertion_elements(document, kind.parent, kind.encrypted)? {
+                replacements.push(decrypted_element(
+                    document, element, kind, enc_keys, options, limits,
+                )?);
+            }
         }
-    }
-    let decrypted = splice(xml, replacements);
-    limits.check_input_bytes(decrypted.len())?;
-    Ok(decrypted)
+        Ok((!replacements.is_empty()).then_some(replacements))
+    })?;
+    Ok(decrypted.unwrap_or_else(|| xml.to_owned()))
 }
 
 /// Replace the `<EncryptedID>` of the `<LogoutRequest>` in `xml` with the
@@ -749,31 +740,50 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<Option<String>, SamlError> {
+    decrypt_selected(xml, limits, |document| {
+        let mut identifiers = Vec::new();
+        for name in ["BaseID", "NameID", "EncryptedID"] {
+            identifiers.extend(root_children(document, namespace::ASSERTION, name)?);
+        }
+        let encrypted_ids = root_children(document, namespace::ASSERTION, "EncryptedID")?;
+        let ([_], [encrypted_id]) = (&identifiers[..], &encrypted_ids[..]) else {
+            return Err(SamlError::ProtocolProfile(
+                "LogoutRequest requires one BaseID, NameID, or EncryptedID".into(),
+            ));
+        };
+        let kind = LOGOUT_REQUEST_ENCRYPTED_ID;
+        let peer_keys = require_encrypted_element_children(document, *encrypted_id, kind)?;
+        let Ok(decrypted) = decrypt_with_keys(
+            &encrypted_wrapper(document, *encrypted_id)?,
+            enc_keys,
+            options,
+        ) else {
+            return Ok(None);
+        };
+        let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
+        Ok(Some(vec![(
+            node_range(document, *encrypted_id)?,
+            plaintext.to_string(),
+        )]))
+    })
+}
+
+/// `xml` with each `(range, plaintext)` that `decrypt` returns from its
+/// document spliced in, or `None` when `decrypt` decrypts nothing. `xml` is
+/// parsed under `limits` before `decrypt` reads it, and the result must stay
+/// within `limits.max_bytes`.
+fn decrypt_selected(
+    xml: &str,
+    limits: XmlLimits,
+    decrypt: impl FnOnce(&XmlDocument<'_>) -> Result<Option<Vec<(Range<usize>, String)>>, SamlError>,
+) -> Result<Option<String>, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
-    let mut identifiers = Vec::new();
-    for name in ["BaseID", "NameID", "EncryptedID"] {
-        identifiers.extend(root_children(&document, namespace::ASSERTION, name)?);
-    }
-    let encrypted_ids = root_children(&document, namespace::ASSERTION, "EncryptedID")?;
-    let ([_], [encrypted_id]) = (&identifiers[..], &encrypted_ids[..]) else {
-        return Err(SamlError::ProtocolProfile(
-            "LogoutRequest requires one BaseID, NameID, or EncryptedID".into(),
-        ));
-    };
-    let kind = LOGOUT_REQUEST_ENCRYPTED_ID;
-    let peer_keys = require_encrypted_element_children(&document, *encrypted_id, kind)?;
-    let Ok(decrypted) = decrypt_with_keys(
-        &encrypted_wrapper(&document, *encrypted_id)?,
-        enc_keys,
-        options,
-    ) else {
+    let Some(replacements) = decrypt(&document)? else {
         return Ok(None);
     };
-    let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
-    let replacement = (node_range(&document, *encrypted_id)?, plaintext.to_string());
-    let decrypted = splice(xml, vec![replacement]);
+    let decrypted = splice(xml, replacements);
     limits.check_input_bytes(decrypted.len())?;
     Ok(Some(decrypted))
 }
@@ -901,18 +911,36 @@ mod tests {
 
     #[test]
     fn encrypt_then_decrypt_round_trip() -> Result<(), Box<dyn std::error::Error>> {
+        let start = RESPONSE
+            .find("<saml:Assertion ")
+            .ok_or("missing assertion")?;
+        let end_tag = "</saml:Assertion>";
+        let end = RESPONSE.find(end_tag).ok_or("missing assertion end")? + end_tag.len();
+        let standalone = RESPONSE[start..end].replacen(
+            "<saml:Assertion ",
+            r#"<saml:Assertion xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" "#,
+            1,
+        );
+
         let encrypted = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
-        assert!(encrypted.contains("EncryptedAssertion"));
-        assert!(encrypted.contains("EncryptedData"));
-        assert!(!encrypted.contains("<saml:Assertion"));
+        let encrypted_data = only_encrypted_data(&encrypted)?;
+        assert_eq!(
+            encrypted.replacen(encrypted_data, "", 1),
+            format!(
+                r#"{}<saml:EncryptedAssertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"></saml:EncryptedAssertion>{}"#,
+                &RESPONSE[..start],
+                &RESPONSE[end..]
+            )
+        );
 
         let key = load_private_key(SP_PRIVKEY, None)?;
         let (response, assertion) =
             decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
-        assert!(assertion.contains("Assertion"));
-        assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
-        assert!(response.contains("Assertion"));
-        assert!(!response.contains("EncryptedAssertion"));
+        assert_eq!(assertion, standalone);
+        assert_eq!(
+            response,
+            format!("{}{standalone}{}", &RESPONSE[..start], &RESPONSE[end..])
+        );
         Ok(())
     }
 
