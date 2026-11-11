@@ -7,6 +7,7 @@ use crate::model::{
     SsoSession, VerifiedXmlSignature,
 };
 use crate::sp::{LoginRequestOptions, LoginResponseParseOptions, ServiceProvider};
+use crate::xml::XmlLimits;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
@@ -43,7 +44,11 @@ struct ResponseParseInput {
 impl ResponseParseInput {
     /// An artifact input is accepted only when `idp` returned the message
     /// for the delivered artifact. Its XML is parsed as an HTTP-POST response.
-    fn try_new(idp: &IdpDescriptor, input: BrowserInput<SsoResponse>) -> Result<Self, SamlError> {
+    fn try_new(
+        idp: &IdpDescriptor,
+        input: BrowserInput<SsoResponse>,
+        limits: XmlLimits,
+    ) -> Result<Self, SamlError> {
         let (delivered, resolved) = match input {
             BrowserInput::Artifact {
                 delivered,
@@ -56,7 +61,7 @@ impl ResponseParseInput {
             | BrowserInput::SimpleSignPost { .. } => {
                 return Ok(Self {
                     binding: input_binding(&input),
-                    request: HttpRequest::try_from(input)?,
+                    request: input.into_http_request(limits)?,
                     signed_destination: SignedMessageDestination::Required,
                 });
             }
@@ -357,7 +362,11 @@ impl Saml<Sp> {
         let relay_state = relay_state_from_input(&input)?;
         ensure_relay_state(pending.relay_state(), &relay_state)?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        let parse = ResponseParseInput::try_new(idp, input)?;
+        let parse = ResponseParseInput::try_new(
+            idp,
+            input,
+            self.raw_service_provider().setting.xml_limits,
+        )?;
         let flow = self
             .raw_service_provider()
             .parse_login_response_with_request_id_at(
@@ -388,7 +397,11 @@ impl Saml<Sp> {
                 .get_assertion_consumer_service(binding.as_binding())
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
-        let parse = ResponseParseInput::try_new(idp, input)?;
+        let parse = ResponseParseInput::try_new(
+            idp,
+            input,
+            self.raw_service_provider().setting.xml_limits,
+        )?;
         let flow = self
             .raw_service_provider()
             .parse_unsolicited_login_response_at(
