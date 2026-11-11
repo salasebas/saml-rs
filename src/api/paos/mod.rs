@@ -606,7 +606,7 @@ impl Saml<Sp> {
         let parsed = self
             .raw_service_provider()
             .parse_login_response_with_request_id_at(
-                &raw_idp,
+                raw_idp,
                 crate::constants::Binding::Post,
                 &request,
                 pending.request_id().as_str(),
@@ -658,7 +658,7 @@ impl Saml<Idp> {
             crate::binding::base64_encode(body.element_xml.as_bytes()),
         )]);
         let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
-            &raw_sp,
+            raw_sp,
             crate::constants::Binding::Post,
             &http,
             validation.now(),
@@ -757,7 +757,7 @@ impl Saml<Idp> {
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = assertion_consumer_for_request(sp, request.message())?;
-        let mut raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
+        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let sign_encrypted_cbc = {
             let setting = &self.raw_identity_provider().setting;
             super::options::RespondSso::post().should_sign_response(
@@ -765,7 +765,6 @@ impl Saml<Idp> {
                 &setting.data_encryption_algorithm,
             )
         };
-        raw_sp.setting.want_message_signed = sign_encrypted_cbc;
         let name_id_format = subject.as_ref().and_then(|subject| {
             subject
                 .name_id()
@@ -777,7 +776,7 @@ impl Saml<Idp> {
             None => User::new(""),
         };
         let input = PaosSsoResponseInput {
-            sp: &raw_sp,
+            sp: raw_sp,
             acs: acs.as_str(),
             in_response_to: request.message().id().as_str(),
             user: &user,
@@ -798,6 +797,7 @@ impl Saml<Idp> {
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
             requested_subject: request.message().requested_subject(),
+            want_message_signed: sign_encrypted_cbc,
         };
         let issued = self
             .raw_identity_provider()

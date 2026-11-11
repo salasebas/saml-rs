@@ -65,6 +65,8 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
     pub(crate) requested_subject: Option<&'a RequestedSubject>,
+    pub(crate) want_message_signed: Option<bool>,
+    pub(crate) transformation_algorithms: Option<&'a [String]>,
 }
 
 pub(crate) struct RenderedLoginResponse {
@@ -497,8 +499,13 @@ impl IdentityProvider {
             sp,
             binding,
             &rendered.xml,
-            options.encrypt_then_sign,
             error_response,
+            overrides
+                .want_message_signed
+                .unwrap_or(sp.setting.want_message_signed),
+            overrides
+                .transformation_algorithms
+                .unwrap_or(&sp.setting.transformation_algorithms),
         )?;
         let relay = options.relay_state.map(str::to_string);
         let (context, signature, sig_alg) =
@@ -591,8 +598,9 @@ impl IdentityProvider {
         sp: &ServiceProvider,
         binding: Binding,
         raw: &str,
-        _encrypt_then_sign: bool,
         error_response: bool,
+        want_message_signed: bool,
+        transforms: &[String],
     ) -> Result<String, SamlError> {
         use crate::crypto::{
             enc::encrypt_assertion_elements, encrypt_assertion, SigningCredential,
@@ -610,7 +618,7 @@ impl IdentityProvider {
                     &xml,
                     true,
                     sig_alg,
-                    &sp.setting.transformation_algorithms,
+                    transforms,
                     self.setting.signature_config.as_ref(),
                 )?;
             }
@@ -621,7 +629,7 @@ impl IdentityProvider {
         // POST embeds an XML-DSig message signature; redirect/SimpleSign use a
         // detached query signature added later in `bind_response`.
         let sign_message =
-            binding == Binding::Post && (sp.setting.want_message_signed || !want_assertions_signed);
+            binding == Binding::Post && (want_message_signed || !want_assertions_signed);
 
         // step: encrypt identifiers and attributes -> sign assertion -> (encrypt) -> sign message
         let element_encryption = self.setting.assertion_element_encryption;
@@ -635,13 +643,7 @@ impl IdentityProvider {
             )?;
         }
         if want_assertions_signed {
-            xml = credential.sign_xml(
-                &xml,
-                false,
-                sig_alg,
-                &sp.setting.transformation_algorithms,
-                None,
-            )?;
+            xml = credential.sign_xml(&xml, false, sig_alg, transforms, None)?;
         }
         // Sign-then-encrypt of a sub-element would invalidate an outer message
         // signature, so when encrypting we always sign the message *after*
@@ -651,7 +653,7 @@ impl IdentityProvider {
                 &xml,
                 true,
                 sig_alg,
-                &sp.setting.transformation_algorithms,
+                transforms,
                 self.setting.signature_config.as_ref(),
             )?;
         }
@@ -669,7 +671,7 @@ impl IdentityProvider {
                 &xml,
                 true,
                 sig_alg,
-                &sp.setting.transformation_algorithms,
+                transforms,
                 self.setting.signature_config.as_ref(),
             )?;
         }
@@ -686,8 +688,9 @@ impl IdentityProvider {
         _sp: &ServiceProvider,
         _binding: Binding,
         _raw: &str,
-        _encrypt_then_sign: bool,
         _error_response: bool,
+        _want_message_signed: bool,
+        _transforms: &[String],
     ) -> Result<String, SamlError> {
         Err(SamlError::Unsupported(
             "createLoginResponse requires a crypto provider feature".into(),

@@ -3,9 +3,12 @@ use std::collections::HashSet;
 use std::time::SystemTime;
 
 use crate::browser::{AcsEndpoint, NameIdManagementBinding, SloEndpoint, SsoEndpoint};
+use crate::entity::EntitySetting;
 use crate::error::SamlError;
+use crate::idp::IdentityProvider;
 use crate::metadata::{IdpMetadata, MetadataLifetime, MetadataValidity, SpMetadata};
 use crate::model::EndpointUrl;
+use crate::sp::ServiceProvider;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 
 const MAX_ENTITY_ID_CHARACTERS: usize = 1024;
@@ -318,11 +321,9 @@ impl IdpMetadataConfig {
 #[derive(Debug, Clone)]
 pub struct IdpDescriptor {
     entity_id: EntityId,
-    metadata_xml: String,
-    metadata: IdpMetadata,
+    provider: IdentityProvider,
     validity: MetadataValidity,
     trust: AppliedMetadataTrust,
-    hmac_secret: Option<HmacSecret>,
 }
 
 impl IdpDescriptor {
@@ -347,11 +348,9 @@ impl IdpDescriptor {
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
-            metadata_xml: xml.to_string(),
-            metadata,
+            provider: IdentityProvider::from_parsed_metadata(metadata, EntitySetting::default()),
             validity,
             trust,
-            hmac_secret: None,
         })
     }
 
@@ -372,11 +371,9 @@ impl IdpDescriptor {
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id,
-            metadata_xml: xml.to_string(),
-            metadata,
+            provider: IdentityProvider::from_parsed_metadata(metadata, EntitySetting::default()),
             validity,
             trust,
-            hmac_secret: None,
         })
     }
 
@@ -387,16 +384,20 @@ impl IdpDescriptor {
 
     /// Original metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        &self.metadata_xml
+        self.provider.metadata.get_metadata()
     }
 
     /// Parsed IdP metadata.
     pub fn metadata(&self) -> &IdpMetadata {
-        &self.metadata
+        &self.provider.metadata
     }
 
     pub(crate) fn ensure_valid_at(&self, now: SystemTime) -> Result<(), SamlError> {
         self.validity.ensure_valid_at(now)
+    }
+
+    pub(crate) fn provider(&self) -> &IdentityProvider {
+        &self.provider
     }
 
     /// Verify this identity provider's HMAC signatures with `secret`.
@@ -404,12 +405,8 @@ impl IdpDescriptor {
     /// Use it when the peer signs with [`crate::SignatureAlgorithm::HmacSha1`].
     /// Its metadata certificates still verify its other signatures.
     pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
-        self.hmac_secret = Some(secret);
+        self.provider.setting.hmac_secret = Some(secret);
         self
-    }
-
-    pub(crate) fn hmac_secret(&self) -> Option<&HmacSecret> {
-        self.hmac_secret.as_ref()
     }
 
     /// Whether this descriptor was verified with pinned signing certificates.
@@ -440,11 +437,9 @@ impl IdpDescriptor {
 #[derive(Debug, Clone)]
 pub struct SpDescriptor {
     entity_id: EntityId,
-    metadata_xml: String,
-    metadata: SpMetadata,
+    provider: ServiceProvider,
     validity: MetadataValidity,
     trust: AppliedMetadataTrust,
-    hmac_secret: Option<HmacSecret>,
 }
 
 impl SpDescriptor {
@@ -469,11 +464,9 @@ impl SpDescriptor {
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
-            metadata_xml: xml.to_string(),
-            metadata,
+            provider: ServiceProvider::from_parsed_metadata(metadata, EntitySetting::default()),
             validity,
             trust,
-            hmac_secret: None,
         })
     }
 
@@ -494,11 +487,9 @@ impl SpDescriptor {
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id,
-            metadata_xml: xml.to_string(),
-            metadata,
+            provider: ServiceProvider::from_parsed_metadata(metadata, EntitySetting::default()),
             validity,
             trust,
-            hmac_secret: None,
         })
     }
 
@@ -509,16 +500,20 @@ impl SpDescriptor {
 
     /// Original metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        &self.metadata_xml
+        self.provider.metadata.get_metadata()
     }
 
     /// Parsed SP metadata.
     pub fn metadata(&self) -> &SpMetadata {
-        &self.metadata
+        &self.provider.metadata
     }
 
     pub(crate) fn ensure_valid_at(&self, now: SystemTime) -> Result<(), SamlError> {
         self.validity.ensure_valid_at(now)
+    }
+
+    pub(crate) fn provider(&self) -> &ServiceProvider {
+        &self.provider
     }
 
     /// Verify this service provider's HMAC signatures with `secret`.
@@ -526,12 +521,8 @@ impl SpDescriptor {
     /// Use it when the peer signs with [`crate::SignatureAlgorithm::HmacSha1`].
     /// Its metadata certificates still verify its other signatures.
     pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
-        self.hmac_secret = Some(secret);
+        self.provider.setting.hmac_secret = Some(secret);
         self
-    }
-
-    pub(crate) fn hmac_secret(&self) -> Option<&HmacSecret> {
-        self.hmac_secret.as_ref()
     }
 
     /// Whether this descriptor was verified with pinned signing certificates.

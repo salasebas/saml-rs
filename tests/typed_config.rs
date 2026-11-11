@@ -407,6 +407,26 @@ fn typed_config_descriptors_import_a_peer_entity_id_that_is_not_a_uri(
 }
 
 #[test]
+fn typed_config_descriptors_return_the_imported_metadata_xml_unchanged(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp_metadata = IDP_METADATA.replace('\n', "\r\n");
+    let sp_metadata = SP_METADATA.replace('\n', "\r\n");
+
+    let idp = IdpDescriptor::from_metadata_xml(
+        &idp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let sp = SpDescriptor::from_metadata_xml(
+        &sp_metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+
+    assert_eq!(idp.metadata_xml(), idp_metadata);
+    assert_eq!(sp.metadata_xml(), sp_metadata);
+    Ok(())
+}
+
+#[test]
 fn typed_config_sp_descriptor_rejects_empty_expected_entity_id() {
     let result = SpDescriptor::from_metadata_xml_for(
         EntityId::new(""),
