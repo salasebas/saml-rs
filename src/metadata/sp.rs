@@ -101,7 +101,13 @@ impl SpMetadata {
                 .unwrap_or_default(),
             Value::Null | Value::Str(_) | Value::Array(_) => Value::Null,
         };
-        let saml2_assertion_consumer_services = saml2_role_acs(&role_context, limits)?;
+        let first_saml2_role = match &role_context {
+            Value::Array(roles) => roles.first(),
+            Value::Null | Value::Str(_) | Value::Object(_) => Some(&role_context),
+        }
+        .and_then(Value::as_str)
+        .ok_or_else(|| SamlError::MissingMetadata("SPSSODescriptor".into()))?;
+        let saml2_assertion_consumer_services = saml2_role_acs(first_saml2_role, limits)?;
         if let Some(fragments) = inner.meta.get("assertionConsumerService") {
             let endpoints = super::endpoints::parse_endpoint_fragments(
                 fragments,
@@ -245,26 +251,13 @@ impl SpMetadata {
     }
 }
 
-fn saml2_role_acs(role_context: &Value, limits: XmlLimits) -> Result<Value, SamlError> {
-    let role = match role_context {
-        Value::Str(role) => role,
-        Value::Array(roles) => match roles.first() {
-            Some(Value::Str(role)) => role,
-            Some(Value::Null | Value::Object(_) | Value::Array(_)) | None => {
-                return Ok(Value::Null)
-            }
-        },
-        Value::Null | Value::Object(_) => return Ok(Value::Null),
-    };
-    let extracted = extract_with_limits(
-        role,
-        &[ExtractorField::new(
-            "assertionConsumerService",
-            &["SPSSODescriptor", "AssertionConsumerService"],
-        )
-        .with_context()],
-        limits,
-    )?;
+fn saml2_role_acs(role: &str, limits: XmlLimits) -> Result<Value, SamlError> {
+    let field = ExtractorField::new(
+        "assertionConsumerService",
+        &["SPSSODescriptor", "AssertionConsumerService"],
+    )
+    .with_context();
+    let extracted = extract_with_limits(role, &[field], limits)?;
     super::endpoints::parse_endpoint_fragments(
         extracted
             .get("assertionConsumerService")
