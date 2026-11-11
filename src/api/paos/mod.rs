@@ -700,7 +700,7 @@ impl Saml<Idp> {
     /// name, or has a `NameFormat` that is not an absolute URI reference, the
     /// authentication context does not meet an exact `RequestedAuthnContext`,
     /// [`RespondPaosSso::authn_instant`] is later than the response
-    /// `IssueInstant`, the `subject` `SPNameQualifier` is not the one the request's
+    /// `IssueInstant` or before year 1, the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
     /// `unspecified` or `encrypted`, or the response cannot be signed. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.

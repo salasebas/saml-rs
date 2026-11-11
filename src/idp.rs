@@ -4,7 +4,7 @@ use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
     capture_idp_issuance_window, format_saml_utc_date_time, generate_id, BindingContext,
-    CustomTagReplacement, EntitySetting, User,
+    CustomTagReplacement, EntitySetting, IdpIssuanceWindow, User,
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
@@ -32,7 +32,6 @@ use login_response::{
 };
 pub(crate) use paos::PaosSsoResponseInput;
 use std::time::SystemTime;
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// Optional inputs for [`IdentityProvider::create_login_response`].
 #[derive(Default)]
@@ -274,7 +273,7 @@ impl IdentityProvider {
             }
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
             let authn_instant = match rendering.authn_instant {
-                Some(authenticated) => written_authn_instant(authenticated, &window.issue_instant)?,
+                Some(authenticated) => written_authn_instant(authenticated, &window)?,
                 None => window.issue_instant.clone(),
             };
             let id = generate_id();
@@ -760,23 +759,19 @@ impl IdentityProvider {
 
 fn written_authn_instant(
     authenticated: SystemTime,
-    issue_instant: &str,
+    window: &IdpIssuanceWindow,
 ) -> Result<String, SamlError> {
-    let out_of_range =
-        || SamlError::Invalid("AuthnInstant is outside the supported SAML time range".into());
     let authenticated = offset_datetime_from_system_time(authenticated)
         .ok()
         .filter(|instant| instant.year() >= 1)
-        .ok_or_else(out_of_range)?
-        .replace_nanosecond(0)
-        .map_err(|_| out_of_range())?;
+        .ok_or_else(|| {
+            SamlError::Invalid("AuthnInstant is outside the supported SAML time range".into())
+        })?;
     let written = format_saml_utc_date_time(authenticated);
-    let issued = OffsetDateTime::parse(issue_instant, &Rfc3339).map_err(|_| {
-        SamlError::Invalid(format!("IssueInstant {issue_instant} cannot be compared"))
-    })?;
-    if authenticated > issued {
+    if authenticated > window.issued_at {
         return Err(SamlError::Invalid(format!(
-            "AuthnInstant {written} is later than the response IssueInstant {issue_instant}"
+            "AuthnInstant {written} is later than the response IssueInstant {}",
+            window.issue_instant
         )));
     }
     Ok(written)

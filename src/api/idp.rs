@@ -153,8 +153,8 @@ impl Saml<Idp> {
     /// characters, the NameID format is not an absolute URI reference,
     /// [`RespondSso::authn_context`] is set without producer rules or does not
     /// meet an exact `RequestedAuthnContext`, [`RespondSso::authn_instant`] is
-    /// set without producer rules or is later than the response `IssueInstant`,
-    /// producer rules are selected and
+    /// set without producer rules, is later than the response `IssueInstant`,
+    /// or is before year 1, producer rules are selected and
     /// the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
     /// `unspecified` or `encrypted`, or response creation fails. Returns
@@ -190,8 +190,8 @@ impl Saml<Idp> {
     /// name, a `subject` `NameId` with `NameQualifier`, `SPNameQualifier`, or
     /// `SPProvidedID` is combined with a login response template,
     /// [`RespondSso::authn_context`] is set without producer rules,
-    /// [`RespondSso::authn_instant`] is set without producer rules or is later
-    /// than the response `IssueInstant`, the
+    /// [`RespondSso::authn_instant`] is set without producer rules, is later
+    /// than the response `IssueInstant`, or is before year 1, the
     /// persistent or transient `NameID` of `subject` is longer than 256
     /// characters, or response creation fails. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
