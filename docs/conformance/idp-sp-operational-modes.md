@@ -6,9 +6,11 @@ Each row names the obligated actor, the level for each column, and one
 disposition. The rules of a claimed feature are on the record it links to.
 
 The IdP operational mode and the SP operational mode are not claimed. Every
-Table 2 `MUST` cell of the IdP and SP columns has a claimed feature. One
-§3.4 limit remains: the unsigned CBC `AuthnRequest` subject that the identity
-provider leaves unread by library policy. This page is the inventory, not the claim.
+Table 2 `MUST` cell of the IdP and SP columns has a claimed feature. Two
+limits remain: the unsigned CBC `AuthnRequest` subject that the identity
+provider leaves unread by library policy under §3.4, and the HTTP Redirect
+rows, which are claimed for the default build only. This page is the
+inventory, not the claim.
 
 Normative text is Conformance Requirements, as corrected by Approved
 Errata 05. E11 relabels the name identifier management rows. E25 adds the
@@ -54,7 +56,7 @@ and the attribute profiles are in
 | SAML URI Binding | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. In [Extended, authority, and requester modes](extended-and-authority-modes.md) |
 
 The HTTP Redirect rows are claimed for the default build. Bindings §3.4.4.1
-rule 5 makes DSAwithSHA1 and RSAwithSHA1 mandatory for the HTTP-Redirect
+signature rule 5 makes DSAwithSHA1 and RSAwithSHA1 mandatory for the HTTP-Redirect
 `SigAlg`, and `crypto-aws-lc`, `crypto-fips`, and RustCrypto without
 `crypto-legacy-algorithms` do not meet it. A verifier that selects
 `XmlSignatureProfile::StrictRsaSha2` does not meet it either. The
@@ -126,7 +128,7 @@ has the rules, including what each backend supports.
 | Obligation | Actor | Disposition |
 | --- | --- | --- |
 | §4.1 SHA-1 digest, HMAC-SHA1, Canonical XML 1.0 without comments, enveloped-signature transform, and RSAwithSHA1 | Signer and verifier: both roles | Claimed feature. Generated only when selected |
-| §4.1 DSAwithSHA1, recommended. Bindings §3.4.4.1 rule 5 makes DSAwithSHA1 and RSAwithSHA1 mandatory for the HTTP-Redirect `SigAlg` | Signer and verifier: both roles, and on HTTP-Redirect each endpoint that signs or verifies a message | Claimed feature on the default build. Generated only when selected, on the same SHA-1 rule. `crypto-aws-lc`, `crypto-fips`, and RustCrypto without `crypto-legacy-algorithms` do not sign or verify DSA-SHA1. AWS-LC and FIPS do not sign RSA-SHA1, and FIPS does not verify it. Those builds do not meet the HTTP-Redirect rule |
+| §4.1 DSAwithSHA1, recommended. Bindings §3.4.4.1 signature rule 5 makes DSAwithSHA1 and RSAwithSHA1 mandatory for the HTTP-Redirect `SigAlg` | Signer and verifier: both roles, and on HTTP-Redirect each endpoint that signs or verifies a message | Claimed feature on the default build. Generated only when selected, on the same SHA-1 rule. `crypto-aws-lc`, `crypto-fips`, and RustCrypto without `crypto-legacy-algorithms` do not sign or verify DSA-SHA1. AWS-LC and FIPS do not sign RSA-SHA1, and FIPS does not verify it. Those builds do not meet the HTTP-Redirect rule |
 | §4.2 Triple DES, AES-128, AES-256, RSA-v1.5, and RSA-OAEP | Encrypter and decrypter: both roles | Claimed feature. Triple DES and RSA-v1.5 are generated only when selected. RSA-v1.5 is decrypted only when selected |
 
 ## TLS
