@@ -2,6 +2,7 @@
 
 use std::ops::Range;
 
+use quick_xml::escape::unescape;
 use quick_xml::events::Event;
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
@@ -59,7 +60,7 @@ pub(crate) fn parse_saml_with_limits(
     limits: XmlLimits,
 ) -> Result<SamlElement, SamlError> {
     let document = dom::parse_with_limits(xml, limits)?;
-    let mut elements = resolved_elements(xml)?;
+    let mut elements = resolved_elements(xml, limits)?;
     annotate(&document.root, xml.len(), &mut elements)
 }
 
@@ -158,8 +159,14 @@ fn annotate(
     })
 }
 
-fn resolved_elements(xml: &str) -> Result<std::vec::IntoIter<ResolvedElement>, SamlError> {
+fn resolved_elements(
+    xml: &str,
+    limits: XmlLimits,
+) -> Result<std::vec::IntoIter<ResolvedElement>, SamlError> {
     let mut reader = NsReader::from_str(xml);
+    reader
+        .resolver_mut()
+        .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut buf = Vec::new();
     let mut names = Vec::new();
     loop {
@@ -168,7 +175,9 @@ fn resolved_elements(xml: &str) -> Result<std::vec::IntoIter<ResolvedElement>, S
                 let (namespace, local_name) = reader.resolver().resolve_element(element.name());
                 let local_name = local_name.as_ref().to_string();
                 let namespace = match namespace {
-                    ResolveResult::Bound(Namespace(uri)) => uri.to_string(),
+                    ResolveResult::Bound(Namespace(uri)) => unescape(uri)
+                        .map_err(|err| SamlError::Xml(err.to_string()))?
+                        .into_owned(),
                     ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
                 };
                 let mut unqualified_attributes = Vec::new();

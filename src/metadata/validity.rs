@@ -5,7 +5,6 @@ use std::time::SystemTime;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-use super::SsoDescriptorRole;
 use crate::error::{SamlError, TimeWindowField};
 use crate::validator::offset_datetime_from_system_time;
 use crate::xml::{dom, parse_timezoned_date_time};
@@ -47,25 +46,24 @@ fn metadata_valid_until() -> SamlError {
     }
 }
 
-pub(super) fn valid_until_bounds(roots: &[dom::Node], role: SsoDescriptorRole) -> Vec<String> {
+pub(super) fn valid_until_bounds(roots: &[dom::Node], descriptors: &[&dom::Node]) -> Vec<String> {
     roots
         .iter()
-        .find_map(|root| entity_bounds(root, role))
+        .find_map(|root| entity_bounds(root, descriptors))
         .unwrap_or_default()
 }
 
-fn entity_bounds(node: &dom::Node, role: SsoDescriptorRole) -> Option<Vec<String>> {
+fn entity_bounds(node: &dom::Node, descriptors: &[&dom::Node]) -> Option<Vec<String>> {
     let mut bounds: Vec<String> = if node.local_name == "EntityDescriptor" {
-        node.children
+        descriptors
             .iter()
-            .filter(|descriptor| role.is_descriptor(&descriptor.local_name))
             .filter_map(|descriptor| descriptor.attr("validUntil"))
             .map(str::to_string)
             .collect()
     } else {
         node.children
             .iter()
-            .find_map(|child| entity_bounds(child, role))?
+            .find_map(|child| entity_bounds(child, descriptors))?
     };
     if matches!(
         node.local_name.as_str(),

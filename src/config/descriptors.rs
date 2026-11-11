@@ -331,7 +331,8 @@ impl IdpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent
-    /// or unexpected, the requested trust policy cannot be satisfied, or a
+    /// or unexpected, the entity has no `IDPSSODescriptor` that lists the SAML 2.0
+    /// protocol, the requested trust policy cannot be satisfied, or a
     /// `validUntil` is not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml_for(
         expected_entity_id: EntityId,
@@ -361,8 +362,9 @@ impl IdpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent,
-    /// the requested trust policy cannot be satisfied, or a `validUntil` is
-    /// not an `xs:dateTime` with a timezone.
+    /// the entity has no `IDPSSODescriptor` that lists the SAML 2.0 protocol, the
+    /// requested trust policy cannot be satisfied, or a `validUntil` is not an
+    /// `xs:dateTime` with a timezone.
     pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
         let metadata = IdpMetadata::from_xml(xml)?;
         let entity_id = EntityId::from_peer(metadata_entity_id(&metadata)?)?;
@@ -451,7 +453,8 @@ impl SpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent
-    /// or unexpected, the requested trust policy cannot be satisfied, or a
+    /// or unexpected, the entity has no `SPSSODescriptor` that lists the SAML 2.0
+    /// protocol, the requested trust policy cannot be satisfied, or a
     /// `validUntil` is not an `xs:dateTime` with a timezone.
     pub fn from_metadata_xml_for(
         expected_entity_id: EntityId,
@@ -481,8 +484,9 @@ impl SpDescriptor {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent,
-    /// the requested trust policy cannot be satisfied, or a `validUntil` is
-    /// not an `xs:dateTime` with a timezone.
+    /// the entity has no `SPSSODescriptor` that lists the SAML 2.0 protocol, the
+    /// requested trust policy cannot be satisfied, or a `validUntil` is not an
+    /// `xs:dateTime` with a timezone.
     pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
         let metadata = SpMetadata::from_xml(xml)?;
         let entity_id = EntityId::from_peer(metadata_entity_id(&metadata)?)?;

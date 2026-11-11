@@ -1,4 +1,5 @@
-//! Keys come from the metadata role descriptor of the role a message is from.
+//! Keys, flags, and endpoints come from the SAML 2.0 metadata role descriptor
+//! of the role a message is from.
 #![cfg(any(
     feature = "crypto-rustcrypto",
     feature = "crypto-aws-lc",
@@ -114,6 +115,339 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
     assert!(
         matches!(rejected, Err(SamlError::CertificateMismatch)),
         "{rejected:?}"
+    );
+    Ok(())
+}
+
+const SAML2_PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
+const SAML11_PROTOCOL: &str = "urn:oasis:names:tc:SAML:1.1:protocol";
+const SAML11_IDP_SSO: &str = "https://idp.example.com/saml11/sso";
+const SAML11_SP_ACS: &str = "https://sp.example.com/saml11/acs";
+const SAML11_NAME_ID_FORMAT: &str = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified";
+const EXPIRED: &str = "2001-01-01T00:00:00Z";
+
+fn signing_key_descriptor(certificate: &str) -> String {
+    format!(
+        r#"<KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>"#,
+        normalize_cert_string(certificate)
+    )
+}
+
+fn saml11_idp_role(certificate: &str) -> String {
+    format!(
+        r#"<IDPSSODescriptor protocolSupportEnumeration="{SAML11_PROTOCOL}" WantAuthnRequestsSigned="true" validUntil="{EXPIRED}">{}<ArtifactResolutionService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp.example.com/saml11/artifact" index="0"/><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/saml11/slo"/><NameIDFormat>{SAML11_NAME_ID_FORMAT}</NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SAML11_IDP_SSO}"/></IDPSSODescriptor>"#,
+        signing_key_descriptor(certificate)
+    )
+}
+
+fn saml11_sp_role(certificate: &str) -> String {
+    format!(
+        r#"<SPSSODescriptor protocolSupportEnumeration="{SAML11_PROTOCOL}" AuthnRequestsSigned="false" WantAssertionsSigned="true" validUntil="{EXPIRED}">{}<NameIDFormat>{SAML11_NAME_ID_FORMAT}</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SAML11_SP_ACS}" index="0"/></SPSSODescriptor>"#,
+        signing_key_descriptor(certificate)
+    )
+}
+
+fn with_role_in_both_orders(metadata: &str, descriptor: &str, role: &str) -> [String; 2] {
+    let opening = format!("<{descriptor}");
+    [
+        metadata.replacen(&opening, &format!("{role}{opening}"), 1),
+        metadata.replace("</EntityDescriptor>", &format!("{role}</EntityDescriptor>")),
+    ]
+}
+
+fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
+    Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
+            .credentials(credentials(key, cert))
+            .validation(SpValidationPolicy {
+                authn_requests: saml_rs::AuthnRequestSigningPolicy::Sign,
+                ..SpValidationPolicy::recommended()
+            })
+            .build()?,
+    )
+}
+
+#[test]
+fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dyn std::error::Error>>
+{
+    let sp = Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
+            .credentials(credentials(SP_ROLE_KEY, SP_ROLE_CERT))
+            .validation(SpValidationPolicy::recommended())
+            .build()?,
+    )?;
+    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        sp.metadata_xml(),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let identity_provider = idp_signing_with(IDP_ROLE_KEY, IDP_ROLE_CERT)?;
+    let signed_with_saml11_role_key = idp_signing_with(SP_ROLE_KEY, SP_ROLE_CERT)?;
+
+    for metadata in with_role_in_both_orders(
+        identity_provider.metadata_xml(),
+        "IDPSSODescriptor",
+        &saml11_idp_role(SP_ROLE_CERT),
+    ) {
+        let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            &metadata,
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        )?;
+        let idp_metadata = idp_descriptor.metadata();
+        assert_eq!(
+            (
+                idp_metadata.x509_certificates(saml_rs::constants::CertUse::Signing),
+                idp_metadata.is_want_authn_requests_signed(),
+                idp_metadata
+                    .get_single_sign_on_service(saml_rs::constants::Binding::Post)
+                    .as_deref(),
+                idp_metadata.artifact_resolution_services()?.len(),
+                idp_metadata.get_single_logout_service(saml_rs::constants::Binding::Post),
+                idp_metadata.get_name_id_format(),
+            ),
+            (
+                vec![normalize_cert_string(IDP_ROLE_CERT)],
+                false,
+                Some(IDP_SSO),
+                0,
+                None,
+                Vec::<String>::new(),
+            ),
+            "{metadata}"
+        );
+
+        let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+        assert_eq!(started.outbound.post_form()?.action().as_str(), IDP_SSO);
+
+        let session = sso_response_from(&sp, &sp_descriptor, &idp_descriptor, &identity_provider)??;
+        assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
+        let rejected = sso_response_from(
+            &sp,
+            &sp_descriptor,
+            &idp_descriptor,
+            &signed_with_saml11_role_key,
+        )?;
+        assert!(
+            matches!(rejected, Err(SamlError::CertificateMismatch)),
+            "{rejected:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn authn_request_signed_with_a_saml11_role_key_is_rejected(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_signing_authn_requests(SP_ROLE_KEY, SP_ROLE_CERT)?;
+    let signed_with_saml11_role_key = sp_signing_authn_requests(IDP_ROLE_KEY, IDP_ROLE_CERT)?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO)?)
+            .credentials(credentials(IDP_ROLE_KEY, IDP_ROLE_CERT))
+            .validation(IdpValidationPolicy {
+                authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
+                ..IdpValidationPolicy::recommended()
+            })
+            .build()?,
+    )?;
+    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        idp.metadata_xml(),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+
+    for metadata in with_role_in_both_orders(
+        sp.metadata_xml(),
+        "SPSSODescriptor",
+        &saml11_sp_role(IDP_ROLE_CERT),
+    ) {
+        let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            &metadata,
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        )?;
+        let sp_metadata = sp_descriptor.metadata();
+        assert_eq!(
+            (
+                sp_metadata.x509_certificates(saml_rs::constants::CertUse::Signing),
+                sp_metadata.is_authn_request_signed(),
+                sp_metadata.is_want_assertions_signed(),
+                sp_metadata
+                    .get_assertion_consumer_service(saml_rs::constants::Binding::Post)
+                    .as_deref(),
+                sp_metadata.get_name_id_format(),
+            ),
+            (
+                vec![normalize_cert_string(SP_ROLE_CERT)],
+                true,
+                false,
+                Some(SP_ACS),
+                vec![saml_rs::constants::name_id_format::EMAIL_ADDRESS.to_string()],
+            ),
+            "{metadata}"
+        );
+
+        let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+        idp.receive_sso(
+            &sp_descriptor,
+            BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+            validation(),
+        )?;
+        let forged = signed_with_saml11_role_key.start_sso(&idp_descriptor, StartSso::post())?;
+        let rejected = idp.receive_sso(
+            &sp_descriptor,
+            BrowserInput::<AuthnRequest>::post(forged.outbound.post_form()?.fields().to_vec()),
+            validation(),
+        );
+        assert!(
+            matches!(rejected, Err(SamlError::CertificateMismatch)),
+            "{rejected:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp_metadata = idp_signing_with(IDP_ROLE_KEY, IDP_ROLE_CERT)?
+        .metadata_xml()
+        .to_string();
+    let sp_metadata = sp_signing_authn_requests(SP_ROLE_KEY, SP_ROLE_CERT)?
+        .metadata_xml()
+        .to_string();
+    let saml2 = format!(r#"protocolSupportEnumeration="{SAML2_PROTOCOL}""#);
+    for protocols in [SAML11_PROTOCOL, "urn:oasis:names:tc:SAML:2.0:protocolx", ""] {
+        let listed = format!(r#"protocolSupportEnumeration="{protocols}""#);
+        let idp = IdpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            &idp_metadata.replace(&saml2, &listed),
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        );
+        assert!(
+            matches!(&idp, Err(SamlError::MissingMetadata(role)) if role == "IDPSSODescriptor"),
+            "{protocols}: {idp:?}"
+        );
+        let sp = SpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            &sp_metadata.replace(&saml2, &listed),
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        );
+        assert!(
+            matches!(&sp, Err(SamlError::MissingMetadata(role)) if role == "SPSSODescriptor"),
+            "{protocols}: {sp:?}"
+        );
+    }
+
+    let foreign_namespace = idp_metadata.replacen(
+        "<IDPSSODescriptor",
+        r#"<IDPSSODescriptor xmlns="urn:example:not-metadata""#,
+        1,
+    );
+    let foreign = IdpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &foreign_namespace,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    );
+    assert!(
+        matches!(&foreign, Err(SamlError::MissingMetadata(role)) if role == "IDPSSODescriptor"),
+        "{foreign:?}"
+    );
+
+    let listed_with_saml11 =
+        format!("protocolSupportEnumeration=\"{SAML11_PROTOCOL}&#x9;&#xA;{SAML2_PROTOCOL}&#xD;\"");
+    let idp = IdpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &idp_metadata.replace(&saml2, &listed_with_saml11),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    assert_eq!(
+        idp.metadata()
+            .get_single_sign_on_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(IDP_SSO)
+    );
+    let sp = SpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &sp_metadata.replace(&saml2, &listed_with_saml11),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    assert_eq!(
+        sp.metadata()
+            .get_assertion_consumer_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(SP_ACS)
+    );
+    Ok(())
+}
+
+#[test]
+fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata_namespace = r#"xmlns="urn:oasis:names:tc:SAML:2.0:metadata""#;
+    let referenced_namespace = r#"xmlns="urn:oasis:names:tc:SAML:2.0:metadat&#x61;""#;
+    let many_namespaces: String = (0..129)
+        .map(|index| format!(r#" xmlns:n{index}="urn:example:{index}""#))
+        .collect();
+    let idp_metadata = idp_signing_with(IDP_ROLE_KEY, IDP_ROLE_CERT)?
+        .metadata_xml()
+        .to_string();
+    let sp_metadata = sp_signing_authn_requests(SP_ROLE_KEY, SP_ROLE_CERT)?
+        .metadata_xml()
+        .to_string();
+
+    let idp = IdpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &idp_metadata.replace(metadata_namespace, referenced_namespace),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    assert_eq!(
+        idp.metadata()
+            .get_single_sign_on_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(IDP_SSO)
+    );
+    let sp = SpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &sp_metadata.replace(metadata_namespace, referenced_namespace),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    assert_eq!(
+        sp.metadata()
+            .get_assertion_consumer_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(SP_ACS)
+    );
+
+    let unbounded = saml_rs::xml::XmlLimits::unbounded();
+    let idp = saml_rs::metadata::IdpMetadata::from_xml_with_limits(
+        &idp_metadata.replacen(
+            "<EntityDescriptor",
+            &format!("<EntityDescriptor{many_namespaces}"),
+            1,
+        ),
+        unbounded,
+    )?;
+    assert_eq!(
+        idp.get_single_sign_on_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(IDP_SSO)
+    );
+    let sp = saml_rs::metadata::SpMetadata::from_xml_with_limits(
+        &sp_metadata.replacen(
+            "<EntityDescriptor",
+            &format!("<EntityDescriptor{many_namespaces}"),
+            1,
+        ),
+        unbounded,
+    )?;
+    assert_eq!(
+        sp.get_assertion_consumer_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(SP_ACS)
     );
     Ok(())
 }

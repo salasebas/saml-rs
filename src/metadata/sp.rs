@@ -42,20 +42,30 @@ pub struct SpMetadata {
 impl SpMetadata {
     /// Parse SP metadata XML.
     ///
+    /// Keys, flags, and endpoints are read from the entity's `SPSSODescriptor`
+    /// elements in the SAML metadata namespace whose
+    /// `protocolSupportEnumeration` lists `urn:oasis:names:tc:SAML:2.0:protocol`.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, parser resource limits, or
-    /// SP-specific metadata extraction fails.
+    /// Returns [`SamlError::MissingMetadata`] when the entity has no such
+    /// `SPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
+    /// limits, or SP-specific metadata extraction fails.
     pub fn from_xml(xml: &str) -> Result<Self, SamlError> {
         Self::from_xml_with_limits(xml, XmlLimits::default())
     }
 
     /// Parse SP metadata XML with explicit XML parser resource limits.
     ///
+    /// Keys, flags, and endpoints are read from the entity's `SPSSODescriptor`
+    /// elements in the SAML metadata namespace whose
+    /// `protocolSupportEnumeration` lists `urn:oasis:names:tc:SAML:2.0:protocol`.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, parser resource limits, or
-    /// SP-specific metadata extraction fails.
+    /// Returns [`SamlError::MissingMetadata`] when the entity has no such
+    /// `SPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
+    /// limits, or SP-specific metadata extraction fails.
     pub fn from_xml_with_limits(xml: &str, limits: XmlLimits) -> Result<Self, SamlError> {
         let extra = vec![
             ExtractorField::new("spSSODescriptor", &["EntityDescriptor", "SPSSODescriptor"])
@@ -236,44 +246,31 @@ impl SpMetadata {
 }
 
 fn saml2_role_acs(role_context: &Value, limits: XmlLimits) -> Result<Value, SamlError> {
-    let roles = match role_context {
-        Value::Str(_) => std::slice::from_ref(role_context),
-        Value::Array(roles) => roles.as_slice(),
+    let role = match role_context {
+        Value::Str(role) => role,
+        Value::Array(roles) => match roles.first() {
+            Some(Value::Str(role)) => role,
+            Some(Value::Null | Value::Object(_) | Value::Array(_)) | None => {
+                return Ok(Value::Null)
+            }
+        },
         Value::Null | Value::Object(_) => return Ok(Value::Null),
     };
-    for role in roles {
-        let attributes =
-            super::endpoints::parse_endpoint_fragments(role, &["protocolSupportEnumeration"])?;
-        if !attributes
-            .get_str("protocolSupportEnumeration")
-            .is_some_and(|protocols| {
-                protocols
-                    .split(' ')
-                    .any(|protocol| protocol == "urn:oasis:names:tc:SAML:2.0:protocol")
-            })
-        {
-            continue;
-        }
-        let Some(xml) = role.as_str() else {
-            continue;
-        };
-        let extracted = extract_with_limits(
-            xml,
-            &[ExtractorField::new(
-                "assertionConsumerService",
-                &["SPSSODescriptor", "AssertionConsumerService"],
-            )
-            .with_context()],
-            limits,
-        )?;
-        return super::endpoints::parse_endpoint_fragments(
-            extracted
-                .get("assertionConsumerService")
-                .unwrap_or(&Value::Null),
-            &["Binding", "Location", "isDefault", "index"],
-        );
-    }
-    Ok(Value::Null)
+    let extracted = extract_with_limits(
+        role,
+        &[ExtractorField::new(
+            "assertionConsumerService",
+            &["SPSSODescriptor", "AssertionConsumerService"],
+        )
+        .with_context()],
+        limits,
+    )?;
+    super::endpoints::parse_endpoint_fragments(
+        extracted
+            .get("assertionConsumerService")
+            .unwrap_or(&Value::Null),
+        &["Binding", "Location", "isDefault", "index"],
+    )
 }
 
 fn acs_metadata_endpoint_from_value(value: &crate::util::Value) -> Option<AcsMetadataEndpoint> {
