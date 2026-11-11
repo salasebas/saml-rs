@@ -228,6 +228,16 @@ impl SpMetadata {
         .map(|endpoint| endpoint.location)
     }
 
+    /// Every `AssertionConsumerService` location published for `binding`, in
+    /// metadata order.
+    pub(crate) fn assertion_consumer_service_locations(&self, binding: Binding) -> Vec<String> {
+        self.assertion_consumer_service_endpoints()
+            .into_iter()
+            .filter(|endpoint| endpoint.binding == binding)
+            .map(|endpoint| endpoint.location)
+            .collect()
+    }
+
     /// Whether metadata contains `location` for `binding`.
     pub(crate) fn has_assertion_consumer_service(&self, binding: Binding, location: &str) -> bool {
         self.assertion_consumer_service_endpoints()
