@@ -20,6 +20,7 @@ use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::transform_algorithm;
 use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
 use crate::xml::dom::{self, Node, XmlLimits};
+use crate::xml::signature_placement::saml_signature_candidates;
 use bergshamra::core::ns as bergshamra_ns;
 use bergshamra::dsig::verify::{verify_all_document_with_source, verify_document_with_source};
 use bergshamra::xml::{uppsala, Document as BergshamraDocument, NodeId as BergshamraNodeId};
@@ -35,14 +36,6 @@ fn children_named<'a>(node: &'a Node, name: &str) -> Vec<&'a Node> {
 
 fn has_child(node: &Node, name: &str) -> bool {
     node.children.iter().any(|c| c.local_name == name)
-}
-
-fn saml_signature_candidates(root: &Node) -> Vec<&Node> {
-    let mut signatures = children_named(root, "Signature");
-    for assertion in children_named(root, "Assertion") {
-        signatures.extend(children_named(assertion, "Signature"));
-    }
-    signatures
 }
 
 fn has_descendant(node: &Node, names: &[&str]) -> bool {
@@ -172,10 +165,6 @@ fn id_target_matches_node(targets: &[VerifiedTarget], node: &Node) -> bool {
     })
 }
 
-fn response_is_covered(targets: &[VerifiedTarget], root: &Node) -> bool {
-    target_matches_node(targets, root)
-}
-
 fn verified_content_not_covered() -> SamlError {
     SamlError::SignedReferenceMismatch
 }
@@ -234,13 +223,9 @@ fn ensure_metadata_signature_transforms_preserve_descriptor(root: &Node) -> Resu
     Ok(())
 }
 
-fn verified_root_content(
-    root: &Node,
-    xml: &str,
-    targets: &[VerifiedTarget],
-) -> Result<String, SamlError> {
+fn covered_root<'a>(root: &'a Node, targets: &[VerifiedTarget]) -> Result<&'a Node, SamlError> {
     if target_matches_node(targets, root) {
-        return Ok(xml[root.start..root.end].to_string());
+        return Ok(root);
     }
     Err(verified_content_not_covered())
 }
@@ -250,23 +235,26 @@ fn verified_root_content(
 fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool {
     let assertions = children_named(root, "Assertion");
     !assertions.is_empty()
-        && (response_is_covered(targets, root)
+        && (target_matches_node(targets, root)
             || assertions
                 .iter()
                 .all(|assertion| id_target_matches_node(targets, assertion)))
 }
 
-/// Return the source of the content covered by a verified reference: the first
-/// bearer `<Assertion>`, a consumed root element, or the whole protocol
+/// The element covered by a verified reference that a caller consumes: the
+/// first bearer `<Assertion>`, a consumed root element, or the whole protocol
 /// response when assertions are encrypted.
-fn verified_content(
-    root: &Node,
-    xml: &str,
+///
+/// `Ok(Some(_))` is also the strict-profile gate for signatures that
+/// authenticate a message without becoming SSO evidence, including
+/// `LogoutRequest` and `LogoutResponse`.
+fn covered_content<'a>(
+    root: &'a Node,
     targets: &[VerifiedTarget],
     protocol_response: bool,
-) -> Result<Option<String>, SamlError> {
+) -> Result<Option<&'a Node>, SamlError> {
     if root.local_name == "Assertion" {
-        return verified_root_content(root, xml, targets).map(Some);
+        return covered_root(root, targets).map(Some);
     }
     if protocol_response {
         let assertions = children_named(root, "Assertion");
@@ -277,70 +265,34 @@ fn verified_content(
                 }
                 return Err(verified_content_not_covered());
             }
-            return Ok(
-                consumed_assertion(root).map(|chosen| xml[chosen.start..chosen.end].to_string())
-            );
+            return Ok(consumed_assertion(root));
         }
         if has_child(root, "EncryptedAssertion") {
-            if response_is_covered(targets, root) {
-                return Ok(Some(xml[root.start..root.end].to_string()));
-            }
-            return Err(verified_content_not_covered());
+            return covered_root(root, targets).map(Some);
         }
     }
     if matches!(
         root.local_name.as_str(),
-        "EntityDescriptor" | "EntitiesDescriptor"
+        "EntityDescriptor"
+            | "EntitiesDescriptor"
+            | "AuthnRequest"
+            | "LogoutRequest"
+            | "LogoutResponse"
     ) {
-        if target_matches_node(targets, root) {
-            return Ok(Some(xml[root.start..root.end].to_string()));
-        }
-        return Err(verified_content_not_covered());
-    }
-    if matches!(
-        root.local_name.as_str(),
-        "AuthnRequest" | "LogoutRequest" | "LogoutResponse"
-    ) {
-        return verified_root_content(root, xml, targets).map(Some);
+        return covered_root(root, targets).map(Some);
     }
     Ok(None)
 }
 
-/// Whether `targets` satisfy the same coverage [`verified_content`] accepts.
-///
-/// This is the strict-profile gate for signatures that authenticate a message
-/// without becoming SSO evidence, including `LogoutRequest` and
-/// `LogoutResponse`. Keep the branches aligned with [`verified_content`].
-fn verified_targets_cover_accepted_content(
+/// Return the source of the [`covered_content`] of `root`.
+fn verified_content(
     root: &Node,
+    xml: &str,
     targets: &[VerifiedTarget],
     protocol_response: bool,
-) -> bool {
-    if root.local_name == "Assertion" {
-        return target_matches_node(targets, root);
-    }
-    if protocol_response {
-        let assertions = children_named(root, "Assertion");
-        if !assertions.is_empty() {
-            return response_assertions_covered(root, targets);
-        }
-        if has_child(root, "EncryptedAssertion") {
-            return response_is_covered(targets, root);
-        }
-    }
-    if matches!(
-        root.local_name.as_str(),
-        "EntityDescriptor" | "EntitiesDescriptor"
-    ) {
-        return target_matches_node(targets, root);
-    }
-    if matches!(
-        root.local_name.as_str(),
-        "AuthnRequest" | "LogoutRequest" | "LogoutResponse"
-    ) {
-        return target_matches_node(targets, root);
-    }
-    false
+) -> Result<Option<String>, SamlError> {
+    Ok(covered_content(root, targets, protocol_response)?
+        .map(|node| xml[node.start..node.end].to_string()))
 }
 
 fn assertion_is_directly_covered(
@@ -942,14 +894,13 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                 )?;
                 // SSO evidence does not include LogoutRequest or
                 // LogoutResponse coverage. A protocol Response can
-                // also be evidence when `verified_content` returns
-                // no XML. Enforce the profile for either case.
+                // also be evidence when `covered_content` returns
+                // no element. Enforce the profile for either case.
                 if signature.is_some()
                     || references_cover_direct_assertion(&document, &references)
-                    || verified_targets_cover_accepted_content(
-                        root,
-                        &signature_targets,
-                        protocol_response,
+                    || matches!(
+                        covered_content(root, &signature_targets, protocol_response),
+                        Ok(Some(_))
                     )
                 {
                     enforce_profile_on_verified_signature(&document, signature_node, profile)?;
@@ -963,7 +914,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     if first_signature_verified && !targets.is_empty() {
         let assertion_directly_covered =
             assertion_is_directly_covered(root, &targets, protocol_response);
-        let response_covered = protocol_response && response_is_covered(&targets, root);
+        let response_covered = protocol_response && target_matches_node(&targets, root);
         return Ok(SignatureVerification {
             verified: true,
             signed_content: verified_content(root, xml, &targets, protocol_response)?,

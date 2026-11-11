@@ -87,6 +87,7 @@ mapping is not implemented.
 | Behaviour | File |
 | --- | --- |
 | XML signature verification | `src/crypto/verify.rs` |
+| Placement of embedded SAML signatures | `src/xml/signature_placement.rs` |
 | Algorithms and RSA key sizes each `XmlSignatureProfile` accepts | `src/crypto/signature_profile.rs` |
 | Protocol response roots that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | XML signature generation | `src/crypto/sign.rs` |
