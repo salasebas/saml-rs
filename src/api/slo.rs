@@ -89,8 +89,9 @@ impl Saml<Sp> {
     ///
     /// An `<EncryptedID>` is decrypted with the configured decryption key and
     /// returned as the request `NameID`. It stays unread, and the request has
-    /// no `NameID`, when no decryption key is configured or when neither a
-    /// verified signature nor an authenticated SOAP channel covers it.
+    /// no `NameID`, when no decryption key is configured, when no configured
+    /// decryption key decrypts it, or when neither a verified signature nor an
+    /// authenticated SOAP channel covers it.
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
