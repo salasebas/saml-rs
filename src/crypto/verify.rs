@@ -814,7 +814,7 @@ fn verify_first_signature_with_profile(
 }
 
 /// Reject a `Response` or `Assertion` whose signature in a SAML signature
-/// position does not verify, when `profile` rejects one (Profiles §4.1.4.3).
+/// position does not verify, when `profile` rejects one.
 fn reject_present_signature_that_does_not_verify(
     prepared: &PreparedSignatureVerification,
     profile: XmlSignatureProfile,

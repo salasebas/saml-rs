@@ -4,8 +4,8 @@
 use super::response_issuer::validate_response_issuer;
 use super::{
     signature_is_present, validate_in_response_to, validate_message_destination,
-    verify_and_prepare, verify_detached, AssertionSignatureRequirement, FlowOptions, HttpRequest,
-    ResponseSignatureRequirement, SignedMessageDestination,
+    verify_and_prepare, verify_detached, verify_present_signatures, AssertionSignatureRequirement,
+    FlowOptions, HttpRequest, ResponseSignatureRequirement, SignedMessageDestination,
 };
 use crate::constants::{Binding, ParserType};
 use crate::error::SamlError;
@@ -49,6 +49,7 @@ fn verify_present_signature(
     match binding {
         Binding::Redirect | Binding::SimpleSign => {
             verify_detached(binding, ParserType::SamlResponse, request, opts, xml)?;
+            verify_present_signatures(xml, opts)?;
             Ok(true)
         }
         Binding::Post | Binding::Artifact | Binding::Soap => Ok(verify_and_prepare(

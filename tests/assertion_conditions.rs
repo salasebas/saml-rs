@@ -988,8 +988,6 @@ fn is_xml_signature_failure(error: &SamlError) -> bool {
     )
 }
 
-/// Profiles §4.1.4.3, as replaced by Errata 05 E26: the service provider
-/// verifies any signature present on the response or its assertions.
 #[test]
 fn an_assertion_signature_that_does_not_verify_rejects_a_signed_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
