@@ -13,7 +13,7 @@ use std::time::SystemTime;
 
 use super::raw_mapping::{
     default_response_target, ensure_entity_id, input_binding, raw_sp_descriptor,
-    raw_sp_for_browser_response, relay_state_from_input, response_target, user_from_subject,
+    relay_state_from_input, response_target, user_from_subject,
 };
 use super::requested_subject::decrypt_requested_subject;
 use super::{Idp, RespondSso, Saml, SamlError};
@@ -89,7 +89,7 @@ impl Saml<Idp> {
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let request = input.into_http_request(self.raw_identity_provider().setting.xml_limits)?;
         let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
-            &raw_sp,
+            raw_sp,
             binding.as_binding(),
             &request,
             validation.now(),
@@ -271,16 +271,14 @@ impl Saml<Idp> {
                 echoed
             }
         };
-        let mut raw_sp = match &options.delivery {
-            ResponseTransport::Browser => {
-                raw_sp_for_browser_response(sp, idp_setting, SystemTime::now())?
-            }
-            ResponseTransport::Artifact(..) => raw_sp_descriptor(sp, SystemTime::now())?,
+        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
+        let transformation_algorithms = match &options.delivery {
+            ResponseTransport::Browser => Some(idp_setting.transformation_algorithms.as_slice()),
+            ResponseTransport::Artifact(..) => None,
         };
-        raw_sp.setting.want_message_signed = sign_response;
         let (binding, explicit_acs) = match request {
-            Some(request) => response_target(&raw_sp, request.message(), options.binding)?,
-            None => default_response_target(&raw_sp, options.binding)?,
+            Some(request) => response_target(raw_sp, request.message(), options.binding)?,
+            None => default_response_target(raw_sp, options.binding)?,
         };
         let name_id_format = subject
             .name_id()
@@ -307,13 +305,15 @@ impl Saml<Idp> {
             requested_name_id_policy: request
                 .and_then(|request| request.message().name_id_policy()),
             requested_subject: request.and_then(|request| request.message().requested_subject()),
+            want_message_signed: Some(sign_response),
+            transformation_algorithms,
         };
         let (delivery, issued) = match options.delivery {
             ResponseTransport::Browser => {
                 let issued = self
                     .raw_identity_provider()
                     .create_login_response_with_overrides(
-                        &raw_sp,
+                        raw_sp,
                         binding.as_binding(),
                         &user,
                         &LoginResponseOptions {
@@ -337,7 +337,7 @@ impl Saml<Idp> {
                 .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let rendered = self.raw_identity_provider().render_artifact_sso_response(
-            &raw_sp,
+            raw_sp,
             &user,
             in_response_to,
             overrides(Some(acs.as_str())),

@@ -27,6 +27,7 @@ pub(crate) struct PaosSsoResponseInput<'a> {
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
     pub(crate) requested_subject: Option<&'a RequestedSubject>,
+    pub(crate) want_message_signed: bool,
 }
 
 impl IdentityProvider {
@@ -62,6 +63,8 @@ impl IdentityProvider {
                 requested_authn_context: input.requested_authn_context,
                 requested_name_id_policy: input.requested_name_id_policy,
                 requested_subject: input.requested_subject,
+                want_message_signed: Some(input.want_message_signed),
+                transformation_algorithms: None,
             },
         )?;
         let xml = crate::binding::base64_decode(&issued.context.context)?;

@@ -193,7 +193,7 @@ impl Saml<Sp> {
             ..Default::default()
         };
         let context = self.raw_service_provider().create_typed_login_request(
-            &raw_idp,
+            raw_idp,
             options.binding.as_binding(),
             &raw_options,
             options.web_browser_sso_producer,
@@ -370,7 +370,7 @@ impl Saml<Sp> {
         let flow = self
             .raw_service_provider()
             .parse_login_response_with_request_id_at(
-                &raw_idp,
+                raw_idp,
                 parse.binding,
                 &parse.request,
                 pending.request_id().as_str(),
@@ -405,7 +405,7 @@ impl Saml<Sp> {
         let flow = self
             .raw_service_provider()
             .parse_unsolicited_login_response_at(
-                &raw_idp,
+                raw_idp,
                 parse.binding,
                 &parse.request,
                 parse.options(validation, &expected_recipient),
