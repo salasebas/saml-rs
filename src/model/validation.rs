@@ -276,12 +276,14 @@ impl<'a> SamlValidationContext<'a> {
         self
     }
 
-    /// Set the actual receiving URL for `receive_sso`, `receive_slo`, or `finish_slo`.
+    /// Set the actual receiving URL for `receive_sso`, `accept_unsolicited_sso`,
+    /// `receive_slo`, or `finish_slo`.
     ///
     /// Supply the URL from the HTTP handler, never from the message's
     /// `Destination`. It must be published for the incoming binding and
-    /// message direction. When omitted, these methods infer a unique
-    /// published URL and reject ambiguous metadata.
+    /// message direction. When omitted, `accept_unsolicited_sso` expects the
+    /// default assertion consumer for the incoming binding, and the other
+    /// methods infer a unique published URL and reject ambiguous metadata.
     pub fn with_recipient_endpoint(mut self, endpoint: EndpointUrl) -> Self {
         self.recipient_endpoint = Some(endpoint);
         self

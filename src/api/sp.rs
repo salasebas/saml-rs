@@ -90,15 +90,11 @@ impl ResponseParseInput {
     fn options<'a>(
         &self,
         validation: &SamlValidationContext<'_>,
-        expected_recipient: Option<&'a str>,
+        expected_recipient: &'a str,
     ) -> LoginResponseParseOptions<'a> {
-        let options =
-            LoginResponseParseOptions::at(validation.now(), validation.clock_skew().as_millis())
-                .with_signed_destination(self.signed_destination);
-        match expected_recipient {
-            Some(expected_recipient) => options.with_expected_recipient(expected_recipient),
-            None => options,
-        }
+        LoginResponseParseOptions::at(validation.now(), validation.clock_skew().as_millis())
+            .with_signed_destination(self.signed_destination)
+            .with_expected_recipient(expected_recipient)
     }
 }
 
@@ -298,8 +294,12 @@ impl Saml<Sp> {
     /// [`Self::accept_unsolicited_sso_with_outstanding_logout`] to reject a
     /// later assertion that matches one.
     ///
-    /// A [`BrowserInput::artifact`] response must name this service
-    /// provider's default HTTP-Artifact assertion consumer as its recipient.
+    /// A present `Destination` and the bearer `Recipient` must name the
+    /// assertion consumer that received the response. Supply that URL with
+    /// [`SamlValidationContext::with_recipient_endpoint`]; it must be published
+    /// for the incoming binding. When omitted, the expected URL is this service
+    /// provider's default assertion consumer for the incoming binding, and the
+    /// default HTTP-Artifact consumer for a [`BrowserInput::artifact`] response.
     ///
     /// # Errors
     ///
@@ -316,7 +316,8 @@ impl Saml<Sp> {
     /// an empty one. A status other than `Success` returns
     /// [`SamlError::StatusNotSuccess`] once a present signature verifies and
     /// the issuer and destination checks pass. An error response does not need
-    /// a signature.
+    /// a signature. Returns [`SamlError::Invalid`] when the supplied recipient
+    /// endpoint is not an assertion consumer published for the incoming binding.
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,
@@ -364,7 +365,7 @@ impl Saml<Sp> {
                 parse.binding,
                 &parse.request,
                 pending.request_id().as_str(),
-                parse.options(validation, Some(pending.acs().location().as_str())),
+                parse.options(validation, pending.acs().location().as_str()),
             )?;
         session_from_verified_flow(flow, relay_state)
     }
@@ -378,14 +379,14 @@ impl Saml<Sp> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input_binding(&input))?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        let artifact_consumer = match binding {
-            SsoResponseBinding::Artifact => Some(
-                self.raw_service_provider()
-                    .metadata
-                    .get_assertion_consumer_service(Binding::Artifact)
-                    .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
-            ),
-            SsoResponseBinding::Post | SsoResponseBinding::SimpleSign => None,
+        let metadata = &self.raw_service_provider().metadata;
+        let expected_recipient = match validation.recipient_endpoint() {
+            Some(_) => validation.resolve_recipient_endpoint(
+                &metadata.assertion_consumer_service_locations(binding.as_binding()),
+            )?,
+            None => metadata
+                .get_assertion_consumer_service(binding.as_binding())
+                .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let parse = ResponseParseInput::try_new(idp, input)?;
         let flow = self
@@ -394,7 +395,7 @@ impl Saml<Sp> {
                 &raw_idp,
                 parse.binding,
                 &parse.request,
-                parse.options(validation, artifact_consumer.as_deref()),
+                parse.options(validation, &expected_recipient),
             )?;
         session_from_verified_flow(flow, relay_state)
     }
