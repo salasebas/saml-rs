@@ -452,14 +452,14 @@ fn parse_roots_inner(
             }
             Event::Text(e) => {
                 if let Some(top) = stack.last_mut() {
-                    checked_append_text(&mut top.text, e.as_ref(), limits)?;
+                    checked_append_text(&mut top.text, &e.xml10_content(), limits)?;
                 } else if !is_xml_whitespace(e.as_ref()) {
                     reject_non_document_content(mode)?;
                 }
             }
             Event::CData(e) => {
                 if let Some(top) = stack.last_mut() {
-                    checked_append_text(&mut top.text, e.as_ref(), limits)?;
+                    checked_append_text(&mut top.text, &e.xml10_content(), limits)?;
                 } else {
                     reject_non_document_content(mode)?;
                 }
@@ -523,6 +523,42 @@ mod tests {
 
         assert_eq!(doc.root.attr("value"), Some("one & two"));
         assert_eq!(doc.root.children[0].text, "three < four");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_normalizes_literal_line_endings_in_text_and_cdata() -> Result<(), SamlError> {
+        let cases = [
+            ("<a>x\ny</a>", "x\ny"),
+            ("<a>x\r\ny</a>", "x\ny"),
+            ("<a>x\ry</a>", "x\ny"),
+            ("<a>x\r\r\ny</a>", "x\n\ny"),
+            ("<a><![CDATA[x\r\ny\rz]]></a>", "x\ny\nz"),
+            ("<a>x\r<![CDATA[\ny]]></a>", "x\n\ny"),
+            ("<a><![CDATA[x\r]]>\ny</a>", "x\n\ny"),
+            ("<a>x\r<!---->\ny</a>", "x\n\ny"),
+            ("<a>x\r&amp;\ny</a>", "x\n&\ny"),
+            ("<a>x&#xD;y</a>", "x\ry"),
+            ("<a>x&#xD;\ny</a>", "x\r\ny"),
+            ("<a>x&#xD;\r\ny</a>", "x\r\ny"),
+            ("<a>x\r&#xA;y</a>", "x\n\ny"),
+        ];
+        for (xml, text) in cases {
+            assert_eq!(parse(xml)?.root.text, text, "{xml:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn line_ending_normalization_keeps_source_offsets() -> Result<(), SamlError> {
+        let xml = "<a>\r\n<b>x\r\ny</b>\r\n</a>";
+
+        let doc = parse(xml)?;
+
+        let child = &doc.root.children[0];
+        assert_eq!(&xml[child.start..child.end], "<b>x\r\ny</b>");
+        assert_eq!(child.text, "x\ny");
+        assert_eq!(&xml[doc.root.start..doc.root.end], xml);
         Ok(())
     }
 
