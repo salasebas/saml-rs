@@ -1016,6 +1016,110 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
 }
 
 #[test]
+fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receive_subject = |subject: &str, policy: &str| {
+        receive(
+            IdpValidationPolicy::recommended(),
+            StartSso::post(),
+            |xml| {
+                replace_name_id_policy(
+                    xml,
+                    &format!("<saml:Subject>{subject}</saml:Subject>{policy}"),
+                )
+            },
+        )
+    };
+    let respond = |receipt: &Receipt, name_id: NameId, options: RespondSso| {
+        receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            Subject::new(name_id, Vec::new()),
+            options,
+        )
+    };
+    let rules = || RespondSso::post().apply_web_browser_sso_generation_rules();
+    let persistent = |value: &str| NameId::new(value, Some(NameIdFormat::Persistent));
+    let is_refused = |result: &Result<Outbound<saml_rs::SsoResponse>, SamlError>| matches!(result, Err(SamlError::Invalid(message)) if message.contains("requested Subject"));
+
+    let receipt = receive_subject(
+        &format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>"),
+        &format!("<samlp:NameIDPolicy Format=\"{EMAIL_FORMAT}\"/>"),
+    )?;
+    for issued in [
+        persistent("bob"),
+        NameId::new("alice", None),
+        NameId::with_qualifiers(
+            "alice",
+            Some(NameIdFormat::Persistent),
+            None,
+            Some(SP_ENTITY_ID.to_string()),
+            None,
+        ),
+    ] {
+        let refused = respond(&receipt, issued.clone(), rules());
+        assert!(is_refused(&refused), "{issued:?}: {refused:?}");
+    }
+    let answered = respond(&receipt, persistent("alice"), rules());
+    assert!(answered.is_ok(), "{answered:?}");
+    let policy_format = respond(
+        &receipt,
+        NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress)),
+        rules(),
+    );
+    assert!(policy_format.is_ok(), "{policy_format:?}");
+    let error = respond(
+        &receipt,
+        persistent("bob"),
+        rules().status(
+            Status::responder().with_subordinate(SubordinateStatusCode::try_new(
+                saml_rs::constants::status_code::UNKNOWN_PRINCIPAL,
+            )?),
+        ),
+    );
+    assert!(error.is_ok(), "{error:?}");
+    let compatibility = respond(&receipt, persistent("bob"), RespondSso::post());
+    assert!(compatibility.is_ok(), "{compatibility:?}");
+
+    let without_policy_format = receive_subject(
+        &format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>"),
+        "<samlp:NameIDPolicy AllowCreate=\"false\"/>",
+    )?;
+    let other_format = respond(
+        &without_policy_format,
+        NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress)),
+        rules(),
+    );
+    assert!(is_refused(&other_format), "{other_format:?}");
+
+    let omitted_format = receive_subject(
+        "<saml:NameID>alice</saml:NameID>",
+        "<samlp:NameIDPolicy AllowCreate=\"false\"/>",
+    )?;
+    let unspecified = respond(
+        &omitted_format,
+        NameId::new(
+            "alice",
+            Some(NameIdFormat::Custom(UNSPECIFIED_FORMAT.to_string())),
+        ),
+        rules(),
+    );
+    assert!(unspecified.is_ok(), "{unspecified:?}");
+
+    for subject in [
+        "<saml:BaseID>opaque</saml:BaseID>",
+        "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"/></saml:EncryptedID>",
+    ] {
+        let receipt = receive_subject(subject, "")?;
+        let refused = respond(&receipt, persistent("alice"), rules());
+        assert!(is_refused(&refused), "{subject}: {refused:?}");
+        let error = respond(&receipt, persistent("alice"), rules().status(Status::responder()));
+        assert!(error.is_ok(), "{subject}: {error:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn authn_context_reference_requires_an_absolute_uri() {
     assert!(matches!(
         AuthnContextReference::class("Smartcard"),

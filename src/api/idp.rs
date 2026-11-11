@@ -157,8 +157,11 @@ impl Saml<Idp> {
     /// or is before year 1, producer rules are selected and
     /// the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
-    /// `unspecified` or `encrypted`, or response creation fails. Returns
-    /// [`SamlError::Unsupported`] when `subject` has confirmations.
+    /// `unspecified` or `encrypted`, producer rules are selected and a success
+    /// response's `subject` `NameId` does not strongly match the request's
+    /// `Subject` (see [`RequestedSubject`](crate::RequestedSubject)), or
+    /// response creation fails. Returns [`SamlError::Unsupported`] when
+    /// `subject` has confirmations.
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
@@ -304,6 +307,7 @@ impl Saml<Idp> {
                 .and_then(|request| request.message().requested_authn_context()),
             requested_name_id_policy: request
                 .and_then(|request| request.message().name_id_policy()),
+            requested_subject: request.and_then(|request| request.message().requested_subject()),
         };
         let (delivery, issued) = match options.delivery {
             ResponseTransport::Browser => {

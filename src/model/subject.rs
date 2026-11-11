@@ -3,6 +3,7 @@ use crate::constants::name_id_format;
 use crate::entity::generate_id;
 use crate::error::SamlError;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
+use crate::xml::OutboundNameIdQualifiers;
 
 use super::extract::name_id_format_from_uri;
 
@@ -354,8 +355,16 @@ impl Subject {
 
 /// Subject requested by an `<AuthnRequest>` (Core §3.4.1).
 ///
-/// The identity provider decides whether an assertion subject strongly matches
-/// (Core §3.4.1.4, §3.3.4, Errata 05 E75). This library does not compare them.
+/// Under `RespondSso::apply_web_browser_sso_generation_rules`, and always in
+/// `respond_paos_sso`, a success response returns [`SamlError::Invalid`]
+/// unless the issued `NameId` has the requested `<NameID>` value, `Format`,
+/// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. An omitted
+/// `Format` is `unspecified`. A `NameId` in the `NameIDPolicy` `Format` is
+/// issued when that format differs from the requested one; the caller
+/// decides that it names the same principal. A requested `<BaseID>`, or an
+/// `<EncryptedID>` that was not decrypted, has no success response there. A
+/// principal that is not the requested subject is answered with an error
+/// status. `<SubjectConfirmation>` elements are not compared.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestedSubject {
     identifier: RequestedSubjectIdentifier,
@@ -413,4 +422,59 @@ impl RequestedSubject {
     pub fn confirmations(&self) -> &[SubjectConfirmation] {
         &self.confirmations
     }
+
+    pub(crate) fn ensure_strongly_matched_by(
+        &self,
+        value: &str,
+        format: Option<&str>,
+        qualifiers: OutboundNameIdQualifiers<'_>,
+        policy: Option<&NameIdPolicy>,
+    ) -> Result<(), SamlError> {
+        let requested = match &self.identifier {
+            RequestedSubjectIdentifier::NoIdentifier => return Ok(()),
+            RequestedSubjectIdentifier::NameId(requested) => requested,
+            RequestedSubjectIdentifier::BaseId => {
+                return Err(SamlError::Invalid(
+                    "the requested Subject has a BaseID, which an issued NameID cannot strongly match; answer with an error status"
+                        .into(),
+                ))
+            }
+            RequestedSubjectIdentifier::EncryptedId => {
+                return Err(SamlError::Invalid(
+                    "the requested Subject has an EncryptedID that was not decrypted, so the issued NameID cannot be matched to it; answer with an error status"
+                        .into(),
+                ))
+            }
+        };
+        let issued_format = name_id_format_in_effect(format);
+        let requested_format =
+            name_id_format_in_effect(requested.format().map(NameIdFormat::as_uri));
+        let policy_format = policy
+            .and_then(NameIdPolicy::format)
+            .map(|policy_format| collapse_whitespace(policy_format.as_uri()));
+        if issued_format != requested_format
+            && policy_format.as_deref() == Some(issued_format.as_str())
+        {
+            return Ok(());
+        }
+        if requested.value() == value
+            && requested_format == issued_format
+            && requested.name_qualifier() == qualifiers.name_qualifier
+            && requested.sp_name_qualifier() == qualifiers.sp_name_qualifier
+            && requested.sp_provided_id() == qualifiers.sp_provided_id
+        {
+            return Ok(());
+        }
+        Err(SamlError::Invalid(
+            "the issued NameID does not strongly match the NameID of the requested Subject; issue that identifier or answer with an error status"
+                .into(),
+        ))
+    }
+}
+
+fn name_id_format_in_effect(format: Option<&str>) -> String {
+    format.map_or_else(
+        || name_id_format::UNSPECIFIED.to_string(),
+        collapse_whitespace,
+    )
 }

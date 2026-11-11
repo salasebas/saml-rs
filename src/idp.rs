@@ -11,7 +11,8 @@ use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
-    NameIdPolicy, RequestedAuthnContext, SessionIndex, Status, TopLevelStatusCode,
+    NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
+    TopLevelStatusCode,
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
@@ -63,6 +64,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) authn_instant: Option<SystemTime>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
+    pub(crate) requested_subject: Option<&'a RequestedSubject>,
 }
 
 pub(crate) struct RenderedLoginResponse {
@@ -89,6 +91,7 @@ struct LoginResponseRendering<'a> {
     authn_instant: Option<SystemTime>,
     requested_authn_context: Option<&'a RequestedAuthnContext>,
     requested_name_id_policy: Option<&'a NameIdPolicy>,
+    requested_subject: Option<&'a RequestedSubject>,
 }
 
 /// A SAML 2.0 Identity Provider: runtime [`EntitySetting`] plus parsed [`IdpMetadata`].
@@ -269,6 +272,14 @@ impl IdentityProvider {
                 }
                 if let Some(policy) = rendering.requested_name_id_policy {
                     policy.ensure_sp_name_qualifier_met_by(qualifiers.sp_name_qualifier)?;
+                }
+                if let Some(requested) = rendering.requested_subject {
+                    requested.ensure_strongly_matched_by(
+                        &user.name_id,
+                        name_id_format,
+                        qualifiers,
+                        rendering.requested_name_id_policy,
+                    )?;
                 }
             }
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
@@ -476,6 +487,7 @@ impl IdentityProvider {
                 authn_instant: overrides.authn_instant,
                 requested_authn_context: overrides.requested_authn_context,
                 requested_name_id_policy: overrides.requested_name_id_policy,
+                requested_subject: overrides.requested_subject,
             },
         )?;
         let error_response = overrides

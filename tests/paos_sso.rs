@@ -579,6 +579,54 @@ fn requested_sp_name_qualifier_is_checked_and_written() -> Result<(), Box<dyn st
 }
 
 #[test]
+fn requested_subject_is_the_only_subject_issued() -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let requested = idp_request.replace(
+        "<samlp:NameIDPolicy ",
+        &format!(
+            "<saml:Subject><saml:NameID Format=\"{}\">alice@example.com</saml:NameID></saml:Subject><samlp:NameIDPolicy ",
+            NameIdFormat::EmailAddress.as_uri()
+        ),
+    );
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(requested, IDP_SOAP)?,
+        validation(),
+    )?;
+    let other = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        Subject::new(
+            NameId::new("bob@example.com", Some(NameIdFormat::EmailAddress)),
+            Vec::new(),
+        ),
+        RespondPaosSso::default(),
+    );
+    assert!(
+        matches!(&other, Err(SamlError::Invalid(message)) if message.contains("requested Subject")),
+        "{other:?}"
+    );
+
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default(),
+    )?;
+    assert!(answered.envelope().contains(&format!(
+        "<saml:NameID Format=\"{}\">alice@example.com</saml:NameID>",
+        NameIdFormat::EmailAddress.as_uri()
+    )));
+    Ok(())
+}
+
+#[test]
 fn response_name_id_format_that_is_not_an_absolute_uri_is_not_sent(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
