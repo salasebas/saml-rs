@@ -10,6 +10,7 @@ pub(crate) mod name;
 mod profile;
 pub(crate) mod protocol_element;
 mod schema_value;
+pub(crate) mod signature_placement;
 pub(crate) mod write;
 
 pub(crate) use date_time::{

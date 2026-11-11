@@ -23,6 +23,7 @@ use crate::error::SignatureVerificationReason;
 use crate::model::RelayStateParam;
 use crate::util::Value;
 use crate::validator::{check_status_with_limits, logout_request_not_on_or_after_deadline};
+use crate::xml::signature_placement::saml_signature_candidates;
 use crate::xml::{
     extract_with_limits, fields, validate_protocol_profile, ExtractorField, XmlLimits,
 };
@@ -1058,22 +1059,7 @@ fn signature_is_present(
         return Ok(true);
     }
     let document = crate::xml::dom::parse_with_limits(xml, limits)?;
-    Ok(protocol_signature_candidate(&document.root))
-}
-
-/// Same placement as embedded-signature verification: a `Signature` child of
-/// the protocol root, or of an `Assertion` child of that root.
-fn protocol_signature_candidate(root: &crate::xml::dom::Node) -> bool {
-    root.children
-        .iter()
-        .any(|child| child.local_name == "Signature")
-        || root.children.iter().any(|child| {
-            child.local_name == "Assertion"
-                && child
-                    .children
-                    .iter()
-                    .any(|nested| nested.local_name == "Signature")
-        })
+    Ok(!saml_signature_candidates(&document.root).is_empty())
 }
 
 fn flow_inner(
