@@ -75,8 +75,8 @@ pub enum XmlSignatureProfile {
     /// element, when present, must belong to the XML-DSig namespace and use
     /// enveloped-signature or exclusive canonicalization.
     ///
-    /// An RSA key shorter than 2048 bits does not verify, as under
-    /// [`Self::ExcludeWeakAlgorithms`].
+    /// An RSA key shorter than 2048 bits does not verify, and a `ds:Object` in
+    /// the signature is rejected, as under [`Self::ExcludeWeakAlgorithms`].
     StrictRsaSha2,
     /// Accept every algorithm the selected cryptographic provider supports,
     /// except MD5 and RIPEMD-160 signatures and digests and RSA keys shorter
@@ -85,9 +85,13 @@ pub enum XmlSignatureProfile {
     /// A signature method or digest outside the profile is rejected with
     /// [`SamlError::AlgorithmUnsupported`]. A shorter RSA certificate is not
     /// used to verify, and a message only it could verify is rejected.
+    ///
+    /// A signature that authenticates the accepted message and contains a
+    /// `ds:Object` is rejected with [`SamlError::SignedReferenceMismatch`].
     ExcludeWeakAlgorithms,
     /// Accept every algorithm, RSA key size, and same-document reference shape
-    /// supported by the selected cryptographic provider.
+    /// supported by the selected cryptographic provider, and a `ds:Object` in
+    /// the signature.
     #[default]
     AllowProviderSupportedForCompatibility,
 }

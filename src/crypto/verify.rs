@@ -578,12 +578,25 @@ fn enforce_profile_on_verified_signature(
 ) -> Result<(), SamlError> {
     match profile {
         XmlSignatureProfile::StrictRsaSha2 => {
+            reject_signature_object(document, signature_node)?;
             enforce_strict_profile_on_verified_signature(document, signature_node)
         }
         XmlSignatureProfile::ExcludeWeakAlgorithms => {
+            reject_signature_object(document, signature_node)?;
             enforce_algorithms_on_verified_signature(document, signature_node, profile)
         }
         XmlSignatureProfile::AllowProviderSupportedForCompatibility => Ok(()),
+    }
+}
+
+fn reject_signature_object(
+    document: &BergshamraDocument<'_>,
+    signature_node: BergshamraNodeId,
+) -> Result<(), SamlError> {
+    if dsig_children(document, signature_node, bergshamra_ns::node::OBJECT).is_empty() {
+        Ok(())
+    } else {
+        Err(SamlError::SignedReferenceMismatch)
     }
 }
 
