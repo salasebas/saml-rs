@@ -146,13 +146,14 @@ fn metadata_signature_unsigned_metadata_returns_unverified(
 }
 
 #[test]
-fn metadata_signature_rejects_wrong_pinned_certificate() -> Result<(), Box<dyn std::error::Error>> {
+fn metadata_signature_does_not_verify_with_a_certificate_outside_the_trust_anchors(
+) -> Result<(), Box<dyn std::error::Error>> {
     let signed = sign_root_metadata(idp_metadata_xml())?;
+    let verification = verify_metadata_signature_detailed(&signed, &[WRONG_CERT.to_string()])?;
 
-    match verify_metadata_signature_detailed(&signed, &[WRONG_CERT.to_string()]) {
-        Err(SamlError::CertificateMismatch) => Ok(()),
-        other => Err(format!("expected CertificateMismatch, got {other:?}").into()),
-    }
+    assert!(!verification.verified());
+    assert_eq!(verification.signed_entity_descriptor_xml(), None);
+    Ok(())
 }
 
 #[test]

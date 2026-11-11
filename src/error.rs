@@ -307,6 +307,9 @@ pub enum SamlError {
     #[error("no trusted certificate could be selected for verification")]
     NoTrustedCertificate,
     /// Certificate embedded in the message does not match configured metadata.
+    ///
+    /// Signature verification does not return it: a signature verifies when a
+    /// trusted key verifies it, whatever certificate its `KeyInfo` carries.
     #[error("certificate mismatch")]
     CertificateMismatch,
 
