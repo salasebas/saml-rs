@@ -222,9 +222,9 @@ Rules:
 - Accept a response to a front-channel request over any front-channel binding,
   and a response to a SOAP request over SOAP only. Resolve the local
   `Destination` for the binding the response arrived on.
-- Match RelayState exactly: absent, present empty, and present value are
-  distinct. If pending expects absent and the inbound message carries
-  RelayState, fail unless the samlify-port Compatibility preset permits it.
+- Match the RelayState the request carried exactly: present empty and present
+  value are distinct. If the request carried none, accept any inbound
+  RelayState and report it on `LogoutCompleted::relay_state`.
 - Use `SamlValidationContext` for inbound signed, timed, or replay-sensitive
   logout response validation.
 - Apply the same binding-aware local `Destination` validation as

@@ -1217,6 +1217,7 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
     )?;
 
     assert_eq!(completed.peer_entity_id().as_str(), IDP_ENTITY_ID);
+    assert_eq!(completed.relay_state(), exchange.pending.relay_state());
     assert_eq!(
         completed.status(),
         Some(saml_rs::constants::status_code::SUCCESS)
@@ -3019,32 +3020,34 @@ fn typed_facade_rejects_a_slo_response_that_dropped_the_relay_state(
 }
 
 #[test]
-fn typed_facade_rejects_unexpected_slo_relay_state() -> Result<(), Box<dyn std::error::Error>> {
+fn typed_facade_accepts_slo_relay_state_the_responder_adds_to_a_request_without_one(
+) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
-    let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
-    let mut response_fields = post_fields(&response)?;
-    response_fields.push(FormField::new("RelayState", "unexpected"));
+    for (added, expected) in [
+        (
+            "added",
+            RelayStateParam::try_from_option(Some("added".to_string()))?,
+        ),
+        ("", RelayStateParam::PresentEmpty),
+    ] {
+        let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
+        let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+        let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
+        let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+        let mut response_fields = post_fields(&response)?;
+        response_fields.push(FormField::new("RelayState", added));
 
-    match sp.finish_slo(
-        &idp_descriptor,
-        &started.pending,
-        BrowserInput::<LogoutResponse>::post(response_fields),
-        validation(),
-    ) {
-        Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(expected, RelayStateParam::Absent);
-            assert_eq!(
-                actual,
-                RelayStateParam::try_from_option(Some("unexpected".to_string()))?
-            );
-            Ok(())
-        }
-        other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
+        let completed = sp.finish_slo(
+            &idp_descriptor,
+            &started.pending,
+            BrowserInput::<LogoutResponse>::post(response_fields),
+            validation(),
+        )?;
+
+        assert_eq!(completed.relay_state(), &expected);
     }
+    Ok(())
 }
 
 #[test]

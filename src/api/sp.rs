@@ -3,8 +3,8 @@ use crate::config::IdpDescriptor;
 use crate::constants::Binding;
 use crate::flow::{FlowResultWithSignatureEvidence, HttpRequest, SignedMessageDestination};
 use crate::model::{
-    AuthnRequest, OutstandingLogout, SamlValidationContext, SsoResponse, SsoSession,
-    VerifiedXmlSignature,
+    AuthnRequest, OutstandingLogout, RelayStateParam, SamlValidationContext, SsoResponse,
+    SsoSession, VerifiedXmlSignature,
 };
 use crate::sp::{LoginRequestOptions, LoginResponseParseOptions, ServiceProvider};
 use std::time::SystemTime;
@@ -17,6 +17,7 @@ use super::{ForceAuthn, Saml, SamlError, Sp, StartSso};
 
 pub(super) fn session_from_verified_flow(
     result: FlowResultWithSignatureEvidence,
+    relay_state: RelayStateParam,
 ) -> Result<SsoSession, SamlError> {
     let (flow, evidence) = result.into_parts();
     let verified_xml_signatures = evidence
@@ -29,7 +30,7 @@ pub(super) fn session_from_verified_flow(
             )
         })
         .collect();
-    SsoSession::try_from_with_verified_xml_signatures(flow, verified_xml_signatures)
+    SsoSession::try_from_with_verified_xml_signatures(flow, verified_xml_signatures, relay_state)
 }
 
 /// Raw parse input for a typed SSO response.
@@ -350,7 +351,8 @@ impl Saml<Sp> {
     ) -> Result<SsoSession, SamlError> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         ensure_sso_response_binding(input_binding(&input), pending.response_binding())?;
-        ensure_relay_state(pending.relay_state(), &relay_state_from_input(&input)?)?;
+        let relay_state = relay_state_from_input(&input)?;
+        ensure_relay_state(pending.relay_state(), &relay_state)?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let parse = ResponseParseInput::try_new(idp, input)?;
         let flow = self
@@ -362,7 +364,7 @@ impl Saml<Sp> {
                 pending.request_id().as_str(),
                 parse.options(validation, Some(pending.acs().location().as_str())),
             )?;
-        session_from_verified_flow(flow)
+        session_from_verified_flow(flow, relay_state)
     }
 
     fn parsed_unsolicited_session(
@@ -371,7 +373,7 @@ impl Saml<Sp> {
         input: BrowserInput<SsoResponse>,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
-        relay_state_from_input(&input)?;
+        let relay_state = relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input_binding(&input))?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let artifact_consumer = match binding {
@@ -392,6 +394,6 @@ impl Saml<Sp> {
                 &parse.request,
                 parse.options(validation, artifact_consumer.as_deref()),
             )?;
-        session_from_verified_flow(flow)
+        session_from_verified_flow(flow, relay_state)
     }
 }

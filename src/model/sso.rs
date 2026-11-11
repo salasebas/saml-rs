@@ -8,7 +8,7 @@ use super::identifiers::{AssertionId, MessageId, SamlInstant};
 use super::session::{AuthnSession, EMPTY_AUTHN_SESSION};
 use super::subject::{NameId, Subject};
 use super::{
-    earliest_authn_session_expiration, LogoutSubject, ReplayKey, ReplayPolicy,
+    earliest_authn_session_expiration, LogoutSubject, RelayStateParam, ReplayKey, ReplayPolicy,
     SamlValidationContext,
 };
 use crate::config::EntityId;
@@ -176,6 +176,7 @@ pub struct SsoSession {
     assertion_issue_instant: SamlInstant,
     issuer: EntityId,
     in_response_to: Option<MessageId>,
+    relay_state: RelayStateParam,
     subject: Subject,
     attributes: Attributes,
     authn_sessions: Vec<AuthnSession>,
@@ -216,6 +217,16 @@ impl SsoSession {
     /// InResponseTo, when present.
     pub fn in_response_to(&self) -> Option<&MessageId> {
         self.in_response_to.as_ref()
+    }
+
+    /// RelayState received with the response.
+    ///
+    /// When the request carried RelayState, this is the same value. When it
+    /// carried none, this is whatever the identity provider supplied, which
+    /// the caller interprets by prior agreement. A session built with
+    /// [`TryFrom<FlowResult>`] reports [`RelayStateParam::Absent`].
+    pub fn relay_state(&self) -> &RelayStateParam {
+        &self.relay_state
     }
 
     /// Subject.
@@ -542,7 +553,7 @@ impl TryFrom<FlowResult> for SsoSession {
     type Error = SamlError;
 
     fn try_from(raw_flow: FlowResult) -> Result<Self, Self::Error> {
-        Self::try_from_with_verified_xml_signatures(raw_flow, Vec::new())
+        Self::try_from_with_verified_xml_signatures(raw_flow, Vec::new(), RelayStateParam::Absent)
     }
 }
 
@@ -550,6 +561,7 @@ impl SsoSession {
     pub(crate) fn try_from_with_verified_xml_signatures(
         raw_flow: FlowResult,
         verified_xml_signatures: Vec<VerifiedXmlSignature>,
+        relay_state: RelayStateParam,
     ) -> Result<Self, SamlError> {
         let response_id = MessageId::try_new(required_str(&raw_flow.extract, "response.id")?)?;
         let response_issue_instant =
@@ -587,6 +599,7 @@ impl SsoSession {
             assertion_issue_instant,
             issuer,
             in_response_to,
+            relay_state,
             subject,
             attributes,
             authn_sessions,

@@ -298,12 +298,13 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
             Some("manage")
         );
 
-        idp.finish_name_id_management_redirect(
+        let relay_state_received = idp.finish_name_id_management_redirect(
             &sp_peer,
             &restored(&started.pending)?,
             response_input(&response)?,
             validation(),
         )?;
+        assert_eq!(relay_state_received, relay_state);
     }
     Ok(())
 }
@@ -350,6 +351,57 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
             response_input(&response)?,
             validation(),
         )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -> TestResult {
+    let sp = sp()?;
+    let idp = idp()?;
+    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let key = load_private_key(PRIVKEY, None)?;
+    for (added, expected) in [
+        ("added", RelayStateParam::try_from_option(Some("added"))?),
+        ("", RelayStateParam::PresentEmpty),
+    ] {
+        let started = sp.start_name_id_management_redirect(
+            &idp_peer,
+            &alice(),
+            &NameIdChange::Terminate,
+            StartNameIdManagement::redirect(),
+        )?;
+        let request = request(idp.receive_name_id_management_redirect(
+            &sp_peer,
+            request_input(&started.outbound)?,
+            ReceiveNameIdManagement::redirect(),
+            validation(),
+        )?)?;
+        let response = idp.respond_name_id_management_redirect(
+            &sp_peer,
+            &request,
+            RespondNameIdManagement::redirect(),
+        )?;
+        let octet = build_redirect_octet(
+            ParserType::ManageNameIdResponse,
+            &redirect_message_xml(&response)?,
+            Some(added),
+            RSA_SHA256,
+        )?;
+        let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+        let url = append_signature(SP_MANAGE, &octet, &signature);
+        let (_, query) = url
+            .split_once('?')
+            .ok_or("redirect URL is missing a query")?;
+
+        let relay_state = sp.finish_name_id_management_redirect(
+            &idp_peer,
+            &started.pending,
+            BrowserInput::<ManageNameIdResponse>::redirect(query),
+            validation(),
+        )?;
+
+        assert_eq!(relay_state, expected);
     }
     Ok(())
 }

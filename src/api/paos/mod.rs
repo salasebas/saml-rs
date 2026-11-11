@@ -599,10 +599,8 @@ impl Saml<Sp> {
                 .with_expected_recipient(pending.acs_url().as_str()),
             )?;
         // The expected value is compared after the response signature verifies.
-        if pending.relay_state() != &RelayStateParam::absent() {
-            super::raw_mapping::ensure_relay_state(pending.relay_state(), &body.relay_state)?;
-        }
-        super::sp::session_from_verified_flow(parsed)
+        super::raw_mapping::ensure_relay_state(pending.relay_state(), &body.relay_state)?;
+        super::sp::session_from_verified_flow(parsed, body.relay_state)
     }
 }
 

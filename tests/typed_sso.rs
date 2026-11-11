@@ -1189,6 +1189,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
         session.in_response_to(),
         Some(exchange.pending.request_id())
     );
+    assert_eq!(session.relay_state(), exchange.pending.relay_state());
     assert_eq!(
         session.response_issue_instant(),
         session.assertion_issue_instant()
@@ -1830,30 +1831,27 @@ fn typed_facade_rejects_relay_state_mismatch() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-fn typed_facade_rejects_unexpected_relay_state() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = start_receive_respond_with(
-        StartSso::post(),
-        RespondSso::post().relay_state(RelayStateParam::try_from_option(Some(
-            "unexpected".to_string(),
-        ))?),
-    )?;
+fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for added in [
+        RelayStateParam::try_from_option(Some("added".to_string()))?,
+        RelayStateParam::PresentEmpty,
+    ] {
+        let exchange = start_receive_respond_with(
+            StartSso::post(),
+            RespondSso::post().relay_state(added.clone()),
+        )?;
 
-    match exchange.sp.finish_sso(
-        &exchange.idp_descriptor,
-        &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
-        validation(),
-    ) {
-        Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(expected, RelayStateParam::Absent);
-            assert_eq!(
-                actual,
-                RelayStateParam::try_from_option(Some("unexpected".to_string()))?
-            );
-            Ok(())
-        }
-        other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
+        let session = exchange.sp.finish_sso(
+            &exchange.idp_descriptor,
+            &exchange.pending,
+            BrowserInput::<SsoResponse>::post(exchange.response_fields),
+            validation(),
+        )?;
+
+        assert_eq!(session.relay_state(), &added);
     }
+    Ok(())
 }
 
 #[test]
