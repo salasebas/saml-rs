@@ -355,8 +355,6 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
     Ok(())
 }
 
-/// Bindings §3.4.3: when the request carried no RelayState, the responder
-/// MAY include one.
 #[test]
 fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -> TestResult {
     let sp = sp()?;

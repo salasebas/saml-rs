@@ -178,7 +178,8 @@ order explicit:
 5. Check issuer.
 6. Check destination and recipient.
 7. Check `InResponseTo` against `Pending<AuthnRequest>`.
-8. Check RelayState exactly, including absent versus present empty.
+8. Check RelayState exactly when the request carried it, including present
+   empty versus present value.
 9. Check assertion conditions time window using caller-owned `now`.
 10. Check audience.
 11. Check bearer subject confirmation.

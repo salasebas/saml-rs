@@ -1830,8 +1830,6 @@ fn typed_facade_rejects_relay_state_mismatch() -> Result<(), Box<dyn std::error:
     }
 }
 
-/// Bindings §3.5.3: when the request carried no RelayState, the responder
-/// MAY include one.
 #[test]
 fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
 ) -> Result<(), Box<dyn std::error::Error>> {

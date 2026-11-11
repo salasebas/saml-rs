@@ -3019,8 +3019,6 @@ fn typed_facade_rejects_a_slo_response_that_dropped_the_relay_state(
     }
 }
 
-/// Bindings §3.5.3: when the request carried no RelayState, the responder
-/// MAY include one.
 #[test]
 fn typed_facade_accepts_slo_relay_state_the_responder_adds_to_a_request_without_one(
 ) -> Result<(), Box<dyn std::error::Error>> {
