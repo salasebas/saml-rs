@@ -643,7 +643,10 @@ impl Saml<Idp> {
     ///
     /// Returns [`SamlError`] when the envelope is not one AuthnRequest, a SOAP
     /// header entry sets `mustUnderstand`, the issuer or destination does not
-    /// match, or signature, time, or replay checks fail.
+    /// match, the request is unsigned while the SP metadata sets
+    /// `AuthnRequestsSigned` under
+    /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent),
+    /// or signature, time, or replay checks fail.
     pub fn receive_paos_sso(
         &self,
         sp: &SpDescriptor,
