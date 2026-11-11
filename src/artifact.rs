@@ -413,7 +413,7 @@ impl ArtifactResolution {
     /// does not contain the protocol message, or the message is a `Response`
     /// and the dereference is not [`ArtifactDereference::web_browser_sso`].
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
-        let body = read_soap_body(response_envelope, self.xml_limits)?;
+        let body = read_soap_body(response_envelope, self.xml_limits, &[])?;
         if body.local_name != "ArtifactResponse" || body.namespace != namespace::PROTOCOL {
             return Err(SamlError::ProtocolProfile(
                 "SOAP body must be an ArtifactResponse".into(),
@@ -605,7 +605,7 @@ pub(crate) fn answer(
         .get_entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();
-    let body = read_soap_body(request_envelope, xml_limits)?;
+    let body = read_soap_body(request_envelope, xml_limits, &[])?;
     if body.local_name != "ArtifactResolve" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be an ArtifactResolve".into(),

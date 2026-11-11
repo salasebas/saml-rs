@@ -193,7 +193,7 @@ impl StartedNameIdManagement {
     /// not a `ManageNameIDResponse` from that service provider for this
     /// request.
     pub fn finish(&self, response_envelope: &str) -> Result<(), SamlError> {
-        let body = read_soap_body(response_envelope, self.xml_limits)?;
+        let body = read_soap_body(response_envelope, self.xml_limits, &[])?;
         if body.local_name != "ManageNameIDResponse" || body.namespace != namespace::PROTOCOL {
             return Err(SamlError::ProtocolProfile(
                 "SOAP body must be a ManageNameIDResponse".into(),
@@ -287,7 +287,7 @@ pub(crate) fn receive(
 ) -> Result<ReceivedNameIdManagement, SamlError> {
     let locations = local_services(idp.metadata)?;
     require_channel(channel)?;
-    let body = read_soap_body(request_envelope, idp.setting.xml_limits)?;
+    let body = read_soap_body(request_envelope, idp.setting.xml_limits, &[])?;
     if body.local_name != "ManageNameIDRequest" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be a ManageNameIDRequest".into(),
