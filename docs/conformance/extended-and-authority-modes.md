@@ -9,8 +9,9 @@ names the level for each column and one disposition.
 None of these modes is claimed. Table 3 extends a mode in
 [IdP and SP operational modes](idp-sp-operational-modes.md) with two more
 `MUST` rows. Every authority column of Table 4 has `MUST` for Request for
-Assertion by Identifier and for the SAML URI Binding, which are excluded, so
-no authority mode can be claimed. Every SAML Requester cell is `OPTIONAL`.
+Assertion by Identifier and for the SAML URI Binding, which are not
+implemented, so no authority mode can be claimed. Every SAML Requester cell is
+`OPTIONAL`.
 This page is the inventory, not the claim.
 
 Normative text is Conformance Requirements, as corrected by Approved
@@ -25,12 +26,15 @@ A disposition is one of:
 - **Not implemented, off**: an `OPTIONAL` cell this crate does not implement.
 - **Exclusion**: not implemented, and no ticket. The row gives the reason.
 
-An exchange excluded as "not implemented elsewhere" has no implementation in
+An exchange excluded as "mode not claimed" is needed only by a mode that is
+not claimed. Conformance Requirements §1 states features for implementations
+that claim conformance, so a mode that is not claimed carries no obligation.
 Shibboleth IdP 5, Shibboleth SP 4, SimpleSAMLphp, Keycloak, crewjam/saml,
-python3-saml, ruby-saml, node-saml, samlify, or Sustainsys.Saml2. Some of them
-define its schema types only. The mode that needs it is not claimed.
-Conformance Requirements §1 states features for implementations that claim
-conformance, so a mode that is not claimed carries no obligation.
+python3-saml, ruby-saml, node-saml, samlify, and Sustainsys.Saml2 do not
+implement the exchange, and some of them define its schema types only.
+pysaml2 does implement most of these exchanges: it sends and answers
+`<AuthnQuery>` and `<NameIDMappingRequest>`, sends `<AuthzDecisionQuery>`, and
+serves an assertion by identifier over the SAML URI Binding.
 
 ## Extended IdP and SP
 
@@ -39,7 +43,7 @@ Table 3. An extended mode is an IdP or SP mode of Table 2 plus both rows.
 | Feature | IdP Extended | SP Extended | Disposition |
 | --- | --- | --- | --- |
 | Identity Provider proxy (Core §3.4.1.5) | `MUST` | `MUST` | Open issue: [#277](https://github.com/salasebas/saml-rs/issues/277). The identity provider accepts a request that carries `<Scoping>` and never proxies, which Core §3.4.1.5.1 leaves to local policy. An application that proxies cannot yet read the received `ProxyCount`, `<IDPList>`, and `<RequesterID>`, or write them on its own `<AuthnRequest>` |
-| Name identifier mapping, SOAP (Core §3.8, Profiles §7) | `MUST` | `MUST` | Exclusion, not implemented elsewhere. No `<NameIDMappingRequest>` or `<NameIDMappingResponse>` is generated or processed |
+| Name identifier mapping, SOAP (Core §3.8, Profiles §7) | `MUST` | `MUST` | Exclusion, mode not claimed. No `<NameIDMappingRequest>` or `<NameIDMappingResponse>` is generated or processed |
 
 ## SAML authorities and requester
 
@@ -48,11 +52,11 @@ Assertion Query/Request profile (Profiles §6) over the SOAP binding.
 
 | Feature | Authentication Authority | Attribute Authority | Authorization Decision Authority | Requester | Disposition |
 | --- | --- | --- | --- | --- | --- |
-| Authentication Query, SOAP (Core §3.3.2.2) | `MUST` | N/A | N/A | `OPTIONAL` | Exclusion, not implemented elsewhere. No `<AuthnQuery>` is generated or answered |
+| Authentication Query, SOAP (Core §3.3.2.2) | `MUST` | N/A | N/A | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthnQuery>` is generated or answered |
 | Attribute Query, SOAP (Core §3.3.2.3) | N/A | `MUST` | N/A | `OPTIONAL` | Open issue: [#278](https://github.com/salasebas/saml-rs/issues/278). Shibboleth IdP 5 answers it, and Shibboleth SP 4 and crewjam/saml send it |
-| Authorization Decision Query, SOAP (Core §3.3.2.4) | N/A | N/A | `MUST` | `OPTIONAL` | Exclusion, not implemented elsewhere. No `<AuthzDecisionQuery>` is generated or answered |
-| Request for Assertion by Identifier, SOAP (Core §3.3.1) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, not implemented elsewhere. No `<AssertionIDRequest>` is generated or answered. The same feature is the `OPTIONAL` IdP row of Table 2 (Errata 05 E29). SimpleSAMLphp and crewjam/saml read and write `<md:AssertionIDRequestService>` in metadata only |
-| SAML URI Binding (Bindings §3.7) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, not implemented elsewhere. No assertion is served by URI reference |
+| Authorization Decision Query, SOAP (Core §3.3.2.4) | N/A | N/A | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthzDecisionQuery>` is generated or answered |
+| Request for Assertion by Identifier, SOAP (Core §3.3.1) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AssertionIDRequest>` is generated or answered. The same feature is the `OPTIONAL` IdP row of Table 2 (Errata 05 E29). SimpleSAMLphp and crewjam/saml read and write `<md:AssertionIDRequestService>` in metadata only |
+| SAML URI Binding (Bindings §3.7) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No assertion is served by URI reference |
 | Metadata Structures | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. As the Table 2 row of the same name |
 | Metadata Interoperation | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. As the Table 2 row of the same name |
 
