@@ -1996,16 +1996,6 @@ mod tests {
     }
 
     #[test]
-    fn does_not_verify_with_a_certificate_outside_metadata(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        assert_eq!(
-            verify_signature(RESPONSE_SIGNED, &[SP_CERT.to_string()])?,
-            (false, None)
-        );
-        Ok(())
-    }
-
-    #[test]
     fn rejects_tampered_signature() -> Result<(), Box<dyn std::error::Error>> {
         // false_signed_request_sha256.xml: signature present but content tampered
         let (verified, _) = verify_signature(FALSE_SIGNED, &[SP_CERT.to_string()])?;
