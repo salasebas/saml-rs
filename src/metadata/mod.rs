@@ -27,6 +27,7 @@ pub(crate) use validity::MetadataValidity;
 use role::SsoDescriptorRole;
 
 use std::collections::HashSet;
+use std::ops::Range;
 
 use crate::constants::{Binding, CertUse};
 use crate::error::SamlError;
@@ -52,21 +53,22 @@ pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
     }
 }
 
-/// The XML that metadata fields are extracted from, and its document element.
-fn entity_descriptor_xml<'a, 'n>(
-    xml: &'a str,
+/// The range of `xml` that metadata fields are extracted from, and its
+/// document element.
+fn entity_descriptor_xml<'n>(
+    xml: &str,
     roots: &'n [dom::Node],
-) -> Result<(&'a str, Option<&'n dom::Node>), SamlError> {
+) -> Result<(Range<usize>, Option<&'n dom::Node>), SamlError> {
     let [root] = roots else {
-        return Ok((xml, None));
+        return Ok((0..xml.len(), None));
     };
     if root.local_name != "EntitiesDescriptor" {
-        return Ok((xml, Some(root)));
+        return Ok((0..xml.len(), Some(root)));
     }
     let mut entities = Vec::new();
     collect_entity_descriptors(root, &mut entities);
     match entities.as_slice() {
-        [entity] => Ok((&xml[entity.start..entity.end], Some(*entity))),
+        [entity] => Ok((entity.start..entity.end, Some(*entity))),
         [] => Err(SamlError::MissingMetadata("EntityDescriptor".into())),
         _ => Err(SamlError::Xml(
             "ERR_MULTIPLE_METADATA_ENTITYDESCRIPTOR".into(),
@@ -74,10 +76,18 @@ fn entity_descriptor_xml<'a, 'n>(
     }
 }
 
-fn role_xml(xml: &str, entity: &dom::Node, descriptors: &[&dom::Node]) -> String {
-    let mut role_xml = String::with_capacity(entity.end - entity.start);
-    let mut copied = entity.start;
-    for unread in entity.children.iter().filter(|child| {
+fn role_xml(
+    xml: &str,
+    extraction: Range<usize>,
+    entity: Option<&dom::Node>,
+    descriptors: &[&dom::Node],
+) -> String {
+    let mut role_xml = String::with_capacity(extraction.len());
+    let mut copied = extraction.start;
+    let children = entity
+        .map(|entity| entity.children.as_slice())
+        .unwrap_or_default();
+    for unread in children.iter().filter(|child| {
         role::is_sso_descriptor(child)
             && !descriptors
                 .iter()
@@ -86,7 +96,7 @@ fn role_xml(xml: &str, entity: &dom::Node, descriptors: &[&dom::Node]) -> String
         role_xml.push_str(&xml[copied..unread.start]);
         copied = unread.end;
     }
-    role_xml.push_str(&xml[copied..entity.end]);
+    role_xml.push_str(&xml[copied..extraction.end]);
     role_xml
 }
 
@@ -269,15 +279,14 @@ impl Metadata {
             ));
         }
 
-        let (extraction_xml, entity) = entity_descriptor_xml(xml, &roots)?;
+        let (extraction, entity) = entity_descriptor_xml(xml, &roots)?;
         let descriptors = role.descriptors(xml, entity, limits)?;
-        let role_xml = entity.map(|entity| role_xml(xml, entity, &descriptors));
 
         let mut fields = base_fields();
         fields.extend(role.fields());
         fields.extend(extra);
         let mut meta = extract_with_limits(
-            role_xml.as_deref().unwrap_or(extraction_xml),
+            &role_xml(xml, extraction, entity, &descriptors),
             &fields,
             limits,
         )?;
@@ -517,6 +526,24 @@ mod tests {
     #[test]
     fn rejects_multiple_entity_descriptors() {
         assert!(Metadata::parse(MULTIPLE, Vec::new()).is_err());
+    }
+
+    #[test]
+    fn rejects_content_outside_the_document_element() {
+        let entity = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://dual.example.com"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/idp/sso"/></IDPSSODescriptor><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://dual.example.com/sp/acs" index="0"/></SPSSODescriptor></EntityDescriptor>"#;
+        for xml in [
+            format!("{entity}junk"),
+            format!("junk{entity}"),
+            format!("{entity}<![CDATA[x]]>"),
+            format!("{entity}&amp;"),
+        ] {
+            assert!(
+                matches!(Metadata::parse(&xml, Vec::new()), Err(SamlError::Xml(_))),
+                "{xml}"
+            );
+            assert!(IdpMetadata::from_xml(&xml).is_err(), "{xml}");
+            assert!(SpMetadata::from_xml(&xml).is_err(), "{xml}");
+        }
     }
 
     #[test]
