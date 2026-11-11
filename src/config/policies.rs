@@ -74,8 +74,10 @@ pub enum XmlSignatureProfile {
     /// element, when present, must belong to the XML-DSig namespace and use
     /// enveloped-signature or exclusive canonicalization.
     ///
-    /// An RSA key shorter than 2048 bits does not verify, and a `ds:Object` in
-    /// the signature is rejected, as under [`Self::ExcludeWeakAlgorithms`].
+    /// An RSA key shorter than 2048 bits does not verify, a `ds:Object` in
+    /// the signature is rejected, and so is a signature present on a
+    /// `Response` or its assertions that does not verify, as under
+    /// [`Self::ExcludeWeakAlgorithms`].
     StrictRsaSha2,
     /// Accept every algorithm the selected cryptographic provider supports,
     /// except MD5 and RIPEMD-160 signatures and digests and RSA keys shorter
@@ -87,10 +89,22 @@ pub enum XmlSignatureProfile {
     ///
     /// A signature that authenticates the accepted message and contains a
     /// `ds:Object` is rejected with [`SamlError::SignedReferenceMismatch`](crate::SamlError::SignedReferenceMismatch).
+    ///
+    /// A received SSO `Response` is rejected with
+    /// [`SamlError::SignatureVerification`](crate::SamlError::SignatureVerification)
+    /// when a signature on the `Response` or on one of its assertions,
+    /// decrypted ones included, does not verify, even when another signature
+    /// authenticates it. On HTTP-Redirect and HTTP-POST-SimpleSign these
+    /// embedded signatures are verified as well as the detached one.
     ExcludeWeakAlgorithms,
     /// Accept every algorithm, RSA key size, and same-document reference shape
     /// supported by the selected cryptographic provider, and a `ds:Object` in
     /// the signature.
+    ///
+    /// A signature on a `Response` or an assertion that does not verify is
+    /// ignored when the first signature of the message verifies, and
+    /// HTTP-Redirect and HTTP-POST-SimpleSign verify only the detached
+    /// signature unless the Assertion must be signed.
     #[default]
     AllowProviderSupportedForCompatibility,
 }

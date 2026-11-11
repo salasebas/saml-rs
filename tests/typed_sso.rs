@@ -2147,6 +2147,32 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
                 reason,
                 SignatureVerificationReason::DetachedMessageSignature
             );
+        }
+        other => return Err(format!("expected SignatureVerification, got {other:?}").into()),
+    }
+
+    let key = load_private_key(PRIVKEY, None)?;
+    let xml = corrupt_signature_value(&construct_saml_signature(
+        &response_xml_from_fields(&exchange.response_fields)?,
+        true,
+        &key,
+        CERT,
+        RSA_SHA256,
+        &[],
+        None,
+    )?)?;
+    let octet = format!("SAMLResponse={xml}&SigAlg={RSA_SHA256}");
+    let embedded_signature_corrupted = vec![
+        FormField::new("SAMLResponse", base64_encode(xml.as_bytes())),
+        FormField::new("SigAlg", RSA_SHA256),
+        FormField::new(
+            "Signature",
+            construct_message_signature(&octet, &key, RSA_SHA256)?,
+        ),
+    ];
+    match finish(embedded_signature_corrupted) {
+        Err(SamlError::SignatureVerification { reason }) => {
+            assert_eq!(reason, SignatureVerificationReason::XmlSignature);
             Ok(())
         }
         other => Err(format!("expected SignatureVerification, got {other:?}").into()),

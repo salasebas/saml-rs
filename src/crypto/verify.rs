@@ -14,6 +14,7 @@ use super::keys::{load_certificate, load_hmac_secret};
 use super::response_root::root_uses_protocol_response_rules;
 use super::signature_profile::{
     allows_digest_method, allows_signature_method, check_verification_key,
+    rejects_present_signature_that_does_not_verify,
 };
 use crate::assertion_acceptance::consumed_assertion;
 use crate::config::{HmacSecret, XmlSignatureProfile};
@@ -812,6 +813,74 @@ fn verify_first_signature_with_profile(
     }
 }
 
+/// Reject a `Response` or `Assertion` whose signature in a SAML signature
+/// position does not verify, when `profile` rejects one.
+fn reject_present_signature_that_does_not_verify(
+    prepared: &PreparedSignatureVerification,
+    profile: XmlSignatureProfile,
+    document: &BergshamraDocument<'_>,
+    results: &[VerifyResult],
+) -> Result<(), SamlError> {
+    let root = &prepared.dom.root;
+    let response_or_assertion = root.local_name == "Assertion"
+        || (prepared.protocol_response && root.local_name == "Response");
+    if !response_or_assertion || !rejects_present_signature_that_does_not_verify(profile) {
+        return Ok(());
+    }
+    let placed: Vec<usize> = saml_signature_candidates(root)
+        .into_iter()
+        .map(|signature| signature.start)
+        .collect();
+    // `verify_all_document_with_source` returns one result per `ds:Signature`
+    // element, in document order.
+    let signatures = document
+        .descendants(document.root())
+        .into_iter()
+        .filter(|node| {
+            document.element(*node).is_some_and(|element| {
+                element.matches_name_ns(bergshamra_ns::DSIG, bergshamra_ns::node::SIGNATURE)
+            })
+        });
+    let placed_signature_does_not_verify = signatures.zip(results).any(|(signature, result)| {
+        matches!(result, VerifyResult::Invalid { .. })
+            && document
+                .node_range(signature)
+                .is_some_and(|range| placed.contains(&range.start))
+    });
+    if placed_signature_does_not_verify {
+        return Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature,
+        });
+    }
+    Ok(())
+}
+
+/// Reject a `Response` or `Assertion` whose signature in a SAML signature
+/// position does not verify, when `profile` rejects one. The coverage of the
+/// accepted content is not checked.
+pub(crate) fn verify_present_signatures(
+    xml: &str,
+    metadata_certs: &[String],
+    hmac_secret: Option<&HmacSecret>,
+    limits: XmlLimits,
+    profile: XmlSignatureProfile,
+) -> Result<(), SamlError> {
+    if !rejects_present_signature_that_does_not_verify(profile)
+        || !has_xml_signature_with_limits(xml, limits)?
+    {
+        return Ok(());
+    }
+    let Some(prepared) =
+        prepare_signature_verification(xml, metadata_certs, hmac_secret, limits, profile)?
+    else {
+        return Ok(());
+    };
+    let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
+        .map_err(|error| SamlError::Crypto(error.to_string()))?;
+    reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SignatureVerification {
     verified: bool,
@@ -874,6 +943,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
         .map_err(|error| SamlError::Crypto(error.to_string()))?;
+    reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)?;
     let first_signature_verified = matches!(results.first(), Some(VerifyResult::Valid { .. }));
     let mut targets = Vec::new();
     let mut verified_embedded_signatures = Vec::new();
@@ -1751,27 +1821,42 @@ mod tests {
     }
 
     #[test]
-    fn strict_profile_accepts_verified_assertion_beside_nonconforming_extra_signature(
+    fn extra_response_signature_that_does_not_verify_is_ignored_only_by_the_compatibility_profile(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let extra = format!(
             "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"/><ds:SignatureMethod Algorithm=\"http://www.w3.org/2000/09/xmldsig#rsa-sha1\"/><ds:Reference URI=\"#_response\"><ds:DigestMethod Algorithm=\"http://www.w3.org/2000/09/xmldsig#sha1\"/><ds:DigestValue>AAAA</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>AAAA</ds:SignatureValue></ds:Signature>",
             dsig = namespace::DSIG,
         );
         let signed = assertion_signed_response_with_extra_signature(&extra)?;
-        let result = verify_signatures_detailed_with_profile(
-            &signed,
-            &[SP_SIGNING_CERT.to_string()],
-            None,
-            XmlLimits::default(),
-            XmlSignatureProfile::StrictRsaSha2,
-        )?;
+        let verify_under = |profile| {
+            verify_signatures_detailed_with_profile(
+                &signed,
+                &[SP_SIGNING_CERT.to_string()],
+                None,
+                XmlLimits::default(),
+                profile,
+            )
+        };
 
-        let [signature] = result.verified_embedded_signatures() else {
+        let compatible = verify_under(XmlSignatureProfile::AllowProviderSupportedForCompatibility)?;
+        let [signature] = compatible.verified_embedded_signatures() else {
             return Err("expected only the trusted Assertion signature".into());
         };
-        assert!(result.verified() && result.assertion_directly_covered());
+        assert!(compatible.verified() && compatible.assertion_directly_covered());
         assert_eq!(signature.algorithm_uri(), RSA_SHA256);
         assert!(signature.assertion_directly_covered() && !signature.response_covered());
+
+        for profile in [
+            XmlSignatureProfile::ExcludeWeakAlgorithms,
+            XmlSignatureProfile::StrictRsaSha2,
+        ] {
+            assert!(matches!(
+                verify_under(profile),
+                Err(SamlError::SignatureVerification {
+                    reason: SignatureVerificationReason::XmlSignature
+                })
+            ));
+        }
         Ok(())
     }
 

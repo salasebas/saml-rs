@@ -34,6 +34,15 @@ pub(crate) fn allows_signature_method(profile: XmlSignatureProfile, uri: &str) -
     }
 }
 
+/// Whether `profile` rejects a `Response` or `Assertion` that carries a
+/// signature in a SAML signature position that does not verify.
+pub(crate) fn rejects_present_signature_that_does_not_verify(profile: XmlSignatureProfile) -> bool {
+    match profile {
+        XmlSignatureProfile::StrictRsaSha2 | XmlSignatureProfile::ExcludeWeakAlgorithms => true,
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility => false,
+    }
+}
+
 /// Whether `profile` accepts the XML-DSig `DigestMethod` URI of a reference.
 pub(crate) fn allows_digest_method(profile: XmlSignatureProfile, uri: &str) -> bool {
     match profile {
