@@ -1187,3 +1187,103 @@ fn assertion_matching_an_outstanding_logout_is_rejected() -> Result<(), Box<dyn 
     ));
     Ok(())
 }
+
+const WSSE_SECURITY_HEADER: &str = "<wsse:Security xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" SOAP-ENV:mustUnderstand=\"1\"/>";
+
+#[test]
+fn identity_provider_refuses_a_header_it_must_understand_and_does_not_process(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?,
+    )?;
+    let sp_soap = started.http_response.envelope();
+    let document = parse(sp_soap)?;
+    let authn = body_element(sp_soap, &document.root, "AuthnRequest")?;
+    let idp_request = soap_envelope(WSSE_SECURITY_HEADER, &authn);
+    let error = match idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    ) {
+        Err(error) => error,
+        Ok(_) => return Err("an unprocessed mustUnderstand header is refused".into()),
+    };
+    assert!(matches!(error, SamlError::Xml(_)), "{error:?}");
+    Ok(())
+}
+
+#[test]
+fn service_provider_refuses_a_header_it_must_understand_and_does_not_process(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?,
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    )?;
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default(),
+    )?;
+    let document = parse(answered.envelope())?;
+    let response = body_element(answered.envelope(), &document.root, "Response")?;
+    let sp_request = soap_envelope(WSSE_SECURITY_HEADER, &response);
+    let error = match sp.finish_paos_sso(
+        &idp_descriptor,
+        &started.pending,
+        &PaosSsoResponse::from_envelope(sp_request)?,
+        validation(),
+    ) {
+        Err(error) => error,
+        Ok(_) => return Err("an unprocessed mustUnderstand header is refused".into()),
+    };
+    assert!(matches!(error, SamlError::Xml(_)), "{error:?}");
+    Ok(())
+}
+
+#[test]
+fn service_provider_processes_relay_state_and_paos_response_headers(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?
+            .relay_state(RelayStateParam::try_from_option(Some("state".to_string()))?),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    )?;
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default(),
+    )?;
+    let document = parse(answered.envelope())?;
+    let response = body_element(answered.envelope(), &document.root, "Response")?;
+    let paos_response = "<paos:Response xmlns:paos=\"urn:liberty:paos:2003-08\" SOAP-ENV:mustUnderstand=\"1\" SOAP-ENV:actor=\"http://schemas.xmlsoap.org/soap/actor/next\"/>";
+    let headers = format!("{paos_response}{}", relay_state_header("state"));
+    let session = sp.finish_paos_sso(
+        &idp_descriptor,
+        &started.pending,
+        &PaosSsoResponse::from_envelope(soap_envelope(&headers, &response))?,
+        validation(),
+    )?;
+    assert_eq!(session.name_id().value(), "alice@example.com");
+    Ok(())
+}

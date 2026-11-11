@@ -358,7 +358,7 @@ fn soap_request(
     expected_message: MessageField,
     limits: XmlLimits,
 ) -> Result<HttpRequest, SamlError> {
-    let body = read_soap_body(envelope, limits)?;
+    let body = read_soap_body(envelope, limits, &[])?;
     Ok(HttpRequest::post(vec![(
         expected_message.param_name().to_string(),
         base64_encode(body.xml.as_bytes()),

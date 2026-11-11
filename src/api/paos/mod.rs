@@ -26,6 +26,7 @@ use super::{Idp, Saml, SamlError, Sp};
 use protocol::{
     idp_to_ecp_envelope, parse_client_headers, read_soap_body, soap_fault_envelope,
     sp_to_ecp_envelope, IdpToEcp, SpToEcp, E54_PAOS_HEADER, PAOS_MEDIA_TYPE, SOAP_MEDIA_TYPE,
+    SP_UNDERSTOOD_HEADERS,
 };
 
 /// HTTP headers an enhanced client sends when it can carry this login.
@@ -547,8 +548,9 @@ impl Saml<Sp> {
     ///
     /// Returns [`SamlError`] when the response does not match the pending
     /// login, including issuer, relay state, destination, recipient, or
-    /// `InResponseTo`, or when signature, audience, condition, time, or status
-    /// checks fail.
+    /// `InResponseTo`, when signature, audience, condition, time, or status
+    /// checks fail, or when a SOAP header entry other than `ecp:RelayState` or
+    /// `paos:Response` sets `mustUnderstand`.
     pub fn finish_paos_sso(
         &self,
         idp: &IdpDescriptor,
@@ -590,7 +592,12 @@ impl Saml<Sp> {
     ) -> Result<SsoSession, SamlError> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         let limits = self.raw_service_provider().setting.xml_limits;
-        let body = read_soap_body(&response.envelope, "Response", limits)?;
+        let body = read_soap_body(
+            &response.envelope,
+            "Response",
+            limits,
+            SP_UNDERSTOOD_HEADERS,
+        )?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let request = HttpRequest::post(vec![(
             "SAMLResponse".into(),
@@ -634,9 +641,9 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the envelope is not one AuthnRequest, the
-    /// issuer or destination does not match, or signature, time, or replay
-    /// checks fail.
+    /// Returns [`SamlError`] when the envelope is not one AuthnRequest, a SOAP
+    /// header entry sets `mustUnderstand`, the issuer or destination does not
+    /// match, or signature, time, or replay checks fail.
     pub fn receive_paos_sso(
         &self,
         sp: &SpDescriptor,
@@ -644,7 +651,7 @@ impl Saml<Idp> {
         validation: SamlValidationContext<'_>,
     ) -> Result<crate::model::Received<AuthnRequest>, SamlError> {
         let limits = self.raw_identity_provider().setting.xml_limits;
-        let body = read_soap_body(&request.envelope, "AuthnRequest", limits)?;
+        let body = read_soap_body(&request.envelope, "AuthnRequest", limits, &[])?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let http = HttpRequest::post(vec![(
             "SAMLRequest".into(),
