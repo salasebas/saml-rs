@@ -383,3 +383,71 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
     );
     Ok(())
 }
+
+#[test]
+fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata_namespace = r#"xmlns="urn:oasis:names:tc:SAML:2.0:metadata""#;
+    let referenced_namespace = r#"xmlns="urn:oasis:names:tc:SAML:2.0:metadat&#x61;""#;
+    let many_namespaces: String = (0..129)
+        .map(|index| format!(r#" xmlns:n{index}="urn:example:{index}""#))
+        .collect();
+    let idp_metadata = idp_signing_with(IDP_ROLE_KEY, IDP_ROLE_CERT)?
+        .metadata_xml()
+        .to_string();
+    let sp_metadata = sp_signing_authn_requests(SP_ROLE_KEY, SP_ROLE_CERT)?
+        .metadata_xml()
+        .to_string();
+
+    let idp = IdpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &idp_metadata.replace(metadata_namespace, referenced_namespace),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    assert_eq!(
+        idp.metadata()
+            .get_single_sign_on_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(IDP_SSO)
+    );
+    let sp = SpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &sp_metadata.replace(metadata_namespace, referenced_namespace),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    assert_eq!(
+        sp.metadata()
+            .get_assertion_consumer_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(SP_ACS)
+    );
+
+    let unbounded = saml_rs::xml::XmlLimits::unbounded();
+    let idp = saml_rs::metadata::IdpMetadata::from_xml_with_limits(
+        &idp_metadata.replacen(
+            "<EntityDescriptor",
+            &format!("<EntityDescriptor{many_namespaces}"),
+            1,
+        ),
+        unbounded,
+    )?;
+    assert_eq!(
+        idp.get_single_sign_on_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(IDP_SSO)
+    );
+    let sp = saml_rs::metadata::SpMetadata::from_xml_with_limits(
+        &sp_metadata.replacen(
+            "<EntityDescriptor",
+            &format!("<EntityDescriptor{many_namespaces}"),
+            1,
+        ),
+        unbounded,
+    )?;
+    assert_eq!(
+        sp.get_assertion_consumer_service(saml_rs::constants::Binding::Post)
+            .as_deref(),
+        Some(SP_ACS)
+    );
+    Ok(())
+}
