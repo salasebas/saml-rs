@@ -298,8 +298,8 @@ impl Saml<Sp> {
     /// [`Self::accept_unsolicited_sso_with_outstanding_logout`] to reject a
     /// later assertion that matches one.
     ///
-    /// The response must name the assertion consumer that received it as its
-    /// `Destination` and bearer `Recipient`. Supply that URL with
+    /// A present `Destination` and the bearer `Recipient` must name the
+    /// assertion consumer that received the response. Supply that URL with
     /// [`SamlValidationContext::with_recipient_endpoint`]; it must be published
     /// for the incoming binding. When omitted, the expected URL is this service
     /// provider's default assertion consumer for the incoming binding, and the
