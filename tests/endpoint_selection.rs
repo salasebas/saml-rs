@@ -204,10 +204,14 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{FIRST_ACS}" index="0"/></SPSSODescriptor>"#
     );
     let saml1_role = r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:1.1:protocol"><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:1.0:profiles:browser-post" Location="https://sp.example.com/saml1/acs" index="0" isDefault="true"/></SPSSODescriptor>"#;
+    let second_saml2_role = format!(
+        r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{DEFAULT_ACS}" index="1" isDefault="true"/></SPSSODescriptor>"#
+    );
     for roles in [
         saml2_role.clone(),
         format!("{saml2_role}{saml1_role}"),
         format!("{saml1_role}{saml2_role}"),
+        format!("{saml2_role}{second_saml2_role}"),
     ] {
         let metadata = format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{SP_ENTITY_ID}">{roles}</EntityDescriptor>"#

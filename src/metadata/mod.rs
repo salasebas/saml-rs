@@ -539,22 +539,29 @@ mod tests {
             format!("junk{entity}"),
             format!("{entity}<![CDATA[x]]>"),
             format!("{entity}&amp;"),
+            format!("{entity}<Extra/>"),
+            format!("<Extra/>{entity}"),
         ] {
             assert!(
                 matches!(Metadata::parse(&xml, Vec::new()), Err(SamlError::Xml(_))),
                 "{xml}"
             );
-            assert!(IdpMetadata::from_xml(&xml).is_err(), "{xml}");
-            assert!(SpMetadata::from_xml(&xml).is_err(), "{xml}");
+            assert!(
+                matches!(IdpMetadata::from_xml(&xml), Err(SamlError::Xml(_))),
+                "{xml}"
+            );
+            assert!(
+                matches!(SpMetadata::from_xml(&xml), Err(SamlError::Xml(_))),
+                "{xml}"
+            );
         }
     }
 
     #[test]
     fn reads_extra_fields_under_a_root_that_is_not_an_entity() -> Result<(), SamlError> {
-        let metadata = Metadata::parse(
-            r#"<Foo><SPSSODescriptor><X a="1"/></SPSSODescriptor></Foo>"#,
-            vec![ExtractorField::new("x", &["Foo", "SPSSODescriptor", "X"]).attrs(&["a"])],
-        )?;
+        let xml = r#"<Foo><SPSSODescriptor><X a="1"/></SPSSODescriptor></Foo>"#;
+        let field = ExtractorField::new("x", &["Foo", "SPSSODescriptor", "X"]).attrs(&["a"]);
+        let metadata = Metadata::parse(xml, vec![field])?;
         assert_eq!(metadata.meta.get_str("x"), Some("1"));
         Ok(())
     }

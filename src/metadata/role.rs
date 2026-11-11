@@ -42,9 +42,10 @@ impl SsoDescriptorRole {
             Self::ServiceProvider => "SPSSODescriptor",
             Self::IdentityProvider => "IDPSSODescriptor",
         };
+        let document = protocol_element::parse_saml_with_limits(xml, limits)?;
         let selected: Vec<&dom::Node> = match entity {
             Some(entity) => {
-                let namespaced = namespaced_element(xml, entity, limits)?;
+                let namespaced = namespaced_element(document, entity)?;
                 entity
                     .children
                     .iter()
@@ -79,11 +80,9 @@ fn lists_saml2(descriptor: &SamlElement) -> bool {
 }
 
 fn namespaced_element(
-    xml: &str,
+    mut element: SamlElement,
     entity: &dom::Node,
-    limits: XmlLimits,
 ) -> Result<SamlElement, SamlError> {
-    let mut element = protocol_element::parse_saml_with_limits(xml, limits)?;
     while element.span != (entity.start..entity.end) {
         let child = element
             .children

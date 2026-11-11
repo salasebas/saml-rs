@@ -342,6 +342,20 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
         );
     }
 
+    let idp_outside_an_entity = saml_rs::metadata::IdpMetadata::from_xml(
+        &idp_metadata.replace("EntityDescriptor", "Entity"),
+    );
+    assert!(
+        matches!(&idp_outside_an_entity, Err(SamlError::MissingMetadata(role)) if role == "IDPSSODescriptor"),
+        "{idp_outside_an_entity:?}"
+    );
+    let sp_outside_an_entity =
+        saml_rs::metadata::SpMetadata::from_xml(&sp_metadata.replace("EntityDescriptor", "Entity"));
+    assert!(
+        matches!(&sp_outside_an_entity, Err(SamlError::MissingMetadata(role)) if role == "SPSSODescriptor"),
+        "{sp_outside_an_entity:?}"
+    );
+
     let foreign_namespace = idp_metadata.replacen(
         "<IDPSSODescriptor",
         r#"<IDPSSODescriptor xmlns="urn:example:not-metadata""#,
