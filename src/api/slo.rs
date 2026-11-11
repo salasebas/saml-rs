@@ -5,8 +5,8 @@ use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::error::SamlError as Error;
 use crate::logout::{
     create_logout_request_with_session_indexes, create_logout_response_with_status,
-    parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
-    LogoutRequestSessionIndexes, LogoutRequestValidation,
+    decrypt_encrypted_id, parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation,
+    LogoutReceipt, LogoutRequestSessionIndexes, LogoutRequestValidation,
 };
 use crate::metadata::Metadata;
 use crate::model::{
@@ -605,7 +605,7 @@ fn receive_slo_impl(
     )?;
     let receipt = LogoutReceipt::of_input(&input)?;
     let request = input.into_http_request(local_setting.xml_limits)?;
-    let flow = parse_logout_request_at(
+    let (flow, authentication) = parse_logout_request_at(
         local_setting,
         peer.metadata,
         receipt,
@@ -627,6 +627,7 @@ fn receive_slo_impl(
         ReplayKey::LogoutRequestId(logout.id().clone()),
         replay_deadline,
     )?;
+    let logout = decrypt_encrypted_id(logout, local_setting, authentication)?;
     Ok(Received::new(logout).with_relay_state(relay_state))
 }
 

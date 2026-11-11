@@ -514,22 +514,19 @@ fn receive(
             clock_drifts: validation.clock_skew().as_millis(),
         },
     )?;
-    let (issue_instant, parsed) = request_from_flow(&flow, local.setting)?;
-    let (id, issuer) = match &parsed {
-        ParsedRequest::Plain(message) => (message.id().clone(), message.issuer().clone()),
-        ParsedRequest::Refused { id, issuer, .. } => (id.clone(), issuer.clone()),
-    };
-    ensure_entity_id(&issuer, peer.entity_id)?;
-    validation.check_manage_name_id_request_issue_instant(&issue_instant)?;
-    validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequestId(id.clone()))?;
-    match parsed {
+    let request = request_from_flow(&flow, local.setting)?;
+    ensure_entity_id(&request.issuer, peer.entity_id)?;
+    validation.check_manage_name_id_request_issue_instant(&request.issue_instant)?;
+    validation
+        .check_and_store_message_replay(ReplayKey::ManageNameIdRequestId(request.id.clone()))?;
+    let id = request.id.clone();
+    match request.decrypt(&flow, local.setting) {
         ParsedRequest::Plain(message) => Ok(ReceivedNameIdManagement::Request(Box::new(
             Received::new(message).with_relay_state(relay_state),
         ))),
         ParsedRequest::Refused {
             reason,
             decryption_error,
-            ..
         } => refuse(
             local,
             &peer,

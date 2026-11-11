@@ -187,6 +187,7 @@ fn parse_unsigned_logout_request_at(
         &logout_request_request(issue_instant, not_on_or_after),
         LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_drifts, None),
     )
+    .map(|(flow, _)| flow)
 }
 
 fn unix_time(seconds: u64) -> Result<SystemTime, Box<dyn std::error::Error>> {

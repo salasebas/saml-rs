@@ -18,6 +18,7 @@ pub(crate) use creation::{
     create_logout_request_with_session_indexes, create_logout_response_with_status,
     LogoutRequestSessionIndexes, LogoutRequestValidation,
 };
+pub(crate) use encrypted_id::decrypt_encrypted_id;
 pub use parsing::{
     parse_logout_request, parse_logout_response, parse_logout_response_without_request_id,
 };
