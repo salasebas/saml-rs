@@ -614,6 +614,84 @@ fn login_response_attribute_metadata_escapes_xml_markup_before_signing() -> Test
 }
 
 #[test]
+fn login_response_attribute_metadata_placeholders_are_written_literally() -> TestResult {
+    const BASIC: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:basic";
+    let attribute = |name: &str, name_format: &str, value_tag: &str| LoginResponseAttribute {
+        name: name.into(),
+        name_format: name_format.into(),
+        value_xsi_type: "xs:string".into(),
+        value_tag: value_tag.into(),
+        value_xmlns_xs: None,
+        value_xmlns_xsi: None,
+    };
+
+    let mut setting = signing();
+    setting.login_response_template = Some(LoginResponseTemplate {
+        context: Some(LOGIN_RESPONSE_TEMPLATE.into()),
+        attributes: vec![
+            attribute("role{NameFormat}", BASIC, "user.role"),
+            attribute("{Value}", BASIC, "user.email"),
+            attribute("{NameID}", "urn:example:{attrUserRole}", "user.role"),
+        ],
+    });
+    let idp = idp(setting)?;
+    let sp = sp()?;
+    let user = User {
+        name_id: "subject@example.com".into(),
+        attributes: vec![
+            ("user.role".into(), "admin".into()),
+            ("user.email".into(), "user@example.com".into()),
+        ],
+        session_index: None,
+    };
+
+    let ctx = idp.create_login_response(
+        &sp,
+        Binding::Post,
+        &user,
+        &LoginResponseOptions {
+            in_response_to: Some("_req1"),
+            ..Default::default()
+        },
+    )?;
+    let xml = decode_binding_context(&ctx.context)?;
+
+    let roots = parse_roots(&xml)?;
+    let response = roots.first().ok_or("missing response root")?;
+    let assertion = direct_children(response, "Assertion")
+        .next()
+        .ok_or("missing assertion")?;
+    let statement = direct_children(assertion, "AttributeStatement")
+        .next()
+        .ok_or("missing attribute statement")?;
+    let rendered: Vec<(Option<&str>, Option<&str>, Vec<&str>)> =
+        direct_children(statement, "Attribute")
+            .map(|attribute| {
+                (
+                    attribute.attr("Name"),
+                    attribute.attr("NameFormat"),
+                    direct_children(attribute, "AttributeValue")
+                        .map(|value| value.text.as_str())
+                        .collect(),
+                )
+            })
+            .collect();
+    assert_eq!(
+        rendered,
+        vec![
+            (Some("role{NameFormat}"), Some(BASIC), vec!["admin"]),
+            (Some("{Value}"), Some(BASIC), vec!["user@example.com"]),
+            (
+                Some("{NameID}"),
+                Some("urn:example:{attrUserRole}"),
+                vec!["admin"]
+            ),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn logout_request_name_id_escapes_xml_markup_before_signing() -> TestResult {
     let idp = idp(signing())?;
     let sp = sp()?;
