@@ -466,13 +466,6 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
     Ok(())
 }
 
-fn proxy_metadata(roles: [&str; 2]) -> String {
-    let [first, second] = roles;
-    format!(
-        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://proxy.example.com/metadata">{first}{second}</EntityDescriptor>"#
-    )
-}
-
 #[test]
 fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -487,14 +480,11 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
     let sp_role = format!(
         r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>{TRANSIENT}</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
     );
-    let idp_role = format!(
-        r#"<IDPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}">{}<NameIDFormat>{PERSISTENT}</NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/sso"/></IDPSSODescriptor>"#,
+    let idp_only = format!(
+        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://proxy.example.com/metadata"><IDPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}">{}<NameIDFormat>{PERSISTENT}</NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#,
         signing_key_descriptor(IDP_ROLE_CERT)
     );
-    for metadata in [
-        proxy_metadata([&sp_role, &idp_role]),
-        proxy_metadata([&idp_role, &sp_role]),
-    ] {
+    for metadata in with_role_in_both_orders(&idp_only, "IDPSSODescriptor", &sp_role) {
         assert_eq!(
             (
                 IdpMetadata::from_xml(&metadata)?.get_name_id_format(),
