@@ -293,13 +293,11 @@ impl Metadata {
             &fields,
             limits,
         )?;
-        if let Some(fragments) = meta.get("singleLogoutService") {
-            let endpoints = endpoints::parse_endpoint_fragments(
-                fragments,
-                &["Binding", "Location", "ResponseLocation"],
-            )?;
-            meta.insert("singleLogoutService", endpoints);
-        }
+        endpoints::read_endpoints(
+            &mut meta,
+            "singleLogoutService",
+            &["Binding", "Location", "ResponseLocation"],
+        )?;
 
         Ok(Self {
             xml: xml.to_string(),
@@ -905,6 +903,68 @@ mod tests {
         );
         assert_eq!(idp.get_single_logout_service(Binding::Redirect), None);
         assert_eq!(idp.get_support_bindings(), vec![Binding::Post]);
+        Ok(())
+    }
+
+    #[test]
+    fn every_endpoint_collapses_binding_and_location_whitespace(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let post = r#"Binding=" urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST
+ ""#;
+        let redirect = r#"Binding=" urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect ""#;
+        let soap = r#"Binding=" urn:oasis:names:tc:SAML:2.0:bindings:SOAP ""#;
+        let idp = IdpMetadata::from_xml(&format!(
+            r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <ArtifactResolutionService {soap} Location=" https://idp.example.com/ars " index=" 0 "/>
+    <SingleLogoutService {post} Location=" https://idp.example.com/slo "/>
+    <ManageNameIDService {redirect} Location=" https://idp.example.com/mnid " ResponseLocation=" https://idp.example.com/mnid/response "/>
+    <SingleSignOnService {post} Location=" https://idp.example.com/sso "/>
+  </IDPSSODescriptor>
+</EntityDescriptor>"#
+        ))?;
+        assert_eq!(
+            idp.get_single_logout_service(Binding::Post).as_deref(),
+            Some("https://idp.example.com/slo")
+        );
+        assert_eq!(
+            idp.get_single_sign_on_service(Binding::Post).as_deref(),
+            Some("https://idp.example.com/sso")
+        );
+        let artifact_resolution = idp.artifact_resolution_services()?;
+        assert_eq!(artifact_resolution.len(), 1);
+        assert_eq!(artifact_resolution[0].index(), 0);
+        assert!(artifact_resolution[0].is_soap());
+        assert_eq!(
+            artifact_resolution[0].location(),
+            "https://idp.example.com/ars"
+        );
+        assert_eq!(
+            idp.manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Response),
+            vec!["https://idp.example.com/mnid/response".to_string()]
+        );
+
+        let sp = SpMetadata::from_xml(&format!(
+            r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com">
+  <SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <SingleLogoutService {post} Location=" https://sp.example.com/slo "/>
+    <ManageNameIDService {redirect} Location=" https://sp.example.com/mnid "/>
+    <AssertionConsumerService {post} Location=" https://sp.example.com/acs " index="0"/>
+  </SPSSODescriptor>
+</EntityDescriptor>"#
+        ))?;
+        assert_eq!(
+            sp.get_single_logout_service(Binding::Post).as_deref(),
+            Some("https://sp.example.com/slo")
+        );
+        assert_eq!(
+            sp.get_assertion_consumer_service(Binding::Post).as_deref(),
+            Some("https://sp.example.com/acs")
+        );
+        assert_eq!(
+            sp.manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Request),
+            vec!["https://sp.example.com/mnid".to_string()]
+        );
         Ok(())
     }
 }
