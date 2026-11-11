@@ -660,6 +660,27 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
     Ok(())
 }
 
+#[test]
+fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_requests(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy {
+        authn_requests: AuthnRequestSigningPolicy::Sign,
+        ..SpValidationPolicy::recommended()
+    })?;
+    let idp = idp_with(IdpValidationPolicy::recommended(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let url = Url::parse(started.outbound.redirect_url()?)?;
+    assert!(url.query_pairs().any(|(key, _)| key == "Signature"));
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::redirect(url.query().unwrap_or_default()),
+        validation(),
+    )?;
+    assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
+    Ok(())
+}
+
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(

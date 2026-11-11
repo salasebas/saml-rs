@@ -299,29 +299,45 @@ fn flow_conformance_login_request_post_default() -> Result<(), Box<dyn std::erro
     login_request_round_trip(Binding::Post)
 }
 
-// ----- signed/unsigned mismatch (4-6) -----
+// ----- AuthnRequest signing flags (4-6) -----
 
-fn mismatch(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    // SP signs requests, IdP does not require it.
+fn signing_sp_against_idp_without_requirement(
+    binding: Binding,
+) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_config(&sp_config(true, false, false), signing())?;
-    let idp = idp(false);
-    match sp.create_login_request(&idp, binding, None) {
+    let ctx = sp.create_login_request(&idp(false), binding, None)?;
+    let request = match binding {
+        Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
+        Binding::Redirect => redirect_request(&ctx.context)?,
+        Binding::SimpleSign => simplesign_request("SAMLRequest", &ctx)?,
+        Binding::Artifact | Binding::Soap => return Err("unsupported binding".into()),
+    };
+    let parsed = idp(true).parse_login_request(&sp, binding, &request)?;
+    assert_eq!(parsed.extract.get_str("request.id"), Some(ctx.id.as_str()));
+    Ok(())
+}
+
+#[test]
+fn flow_conformance_signing_sp_without_idp_requirement_post(
+) -> Result<(), Box<dyn std::error::Error>> {
+    signing_sp_against_idp_without_requirement(Binding::Post)
+}
+#[test]
+fn flow_conformance_signing_sp_without_idp_requirement_redirect(
+) -> Result<(), Box<dyn std::error::Error>> {
+    signing_sp_against_idp_without_requirement(Binding::Redirect)
+}
+#[test]
+fn flow_conformance_signing_sp_without_idp_requirement_simplesign(
+) -> Result<(), Box<dyn std::error::Error>> {
+    signing_sp_against_idp_without_requirement(Binding::SimpleSign)
+}
+#[test]
+fn flow_conformance_unsigned_sp_against_requiring_idp() -> Result<(), Box<dyn std::error::Error>> {
+    match sp(false, false).create_login_request(&idp(true), Binding::Redirect, None) {
         Err(SamlError::Invalid(m)) if m.contains("CONFLICT") => Ok(()),
         other => Err(format!("expected conflict, got {other:?}").into()),
     }
-}
-
-#[test]
-fn flow_conformance_mismatch_post() -> Result<(), Box<dyn std::error::Error>> {
-    mismatch(Binding::Post)
-}
-#[test]
-fn flow_conformance_mismatch_redirect() -> Result<(), Box<dyn std::error::Error>> {
-    mismatch(Binding::Redirect)
-}
-#[test]
-fn flow_conformance_mismatch_simplesign() -> Result<(), Box<dyn std::error::Error>> {
-    mismatch(Binding::SimpleSign)
 }
 
 // ----- create login request with custom template (7,10,11) -----
