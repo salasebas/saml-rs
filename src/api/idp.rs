@@ -152,7 +152,9 @@ impl Saml<Idp> {
     /// persistent or transient `NameID` of `subject` is longer than 256
     /// characters, the NameID format is not an absolute URI reference,
     /// [`RespondSso::authn_context`] is set without producer rules or does not
-    /// meet an exact `RequestedAuthnContext`, producer rules are selected and
+    /// meet an exact `RequestedAuthnContext`, [`RespondSso::authn_instant`] is
+    /// set without producer rules, is later than the response `IssueInstant`,
+    /// or is before year 1, producer rules are selected and
     /// the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
     /// `unspecified` or `encrypted`, or response creation fails. Returns
@@ -187,7 +189,9 @@ impl Saml<Idp> {
     /// login response template or names a basic attribute that is not an XML
     /// name, a `subject` `NameId` with `NameQualifier`, `SPNameQualifier`, or
     /// `SPProvidedID` is combined with a login response template,
-    /// [`RespondSso::authn_context`] is set without producer rules, the
+    /// [`RespondSso::authn_context`] is set without producer rules,
+    /// [`RespondSso::authn_instant`] is set without producer rules, is later
+    /// than the response `IssueInstant`, or is before year 1, the
     /// persistent or transient `NameID` of `subject` is longer than 256
     /// characters, or response creation fails. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
@@ -288,6 +292,7 @@ impl Saml<Idp> {
             status: options.status.as_ref(),
             typed_attributes: options.attributes.as_slice(),
             authn_context: options.authn_context.as_ref(),
+            authn_instant: options.authn_instant,
             requested_authn_context: request
                 .and_then(|request| request.message().requested_authn_context()),
             requested_name_id_policy: request

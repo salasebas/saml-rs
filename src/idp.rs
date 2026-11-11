@@ -3,8 +3,8 @@
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
-    capture_idp_issuance_window, generate_id, BindingContext, CustomTagReplacement, EntitySetting,
-    User,
+    capture_idp_issuance_window, format_saml_utc_date_time, generate_id, BindingContext,
+    CustomTagReplacement, EntitySetting, IdpIssuanceWindow, User,
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
@@ -19,6 +19,7 @@ use crate::template::{
     validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
     LOGIN_RESPONSE_TEMPLATE,
 };
+use crate::validator::offset_datetime_from_system_time;
 use crate::xml::OutboundNameIdQualifiers;
 
 mod artifact;
@@ -59,6 +60,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) status: Option<&'a Status>,
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
+    pub(crate) authn_instant: Option<SystemTime>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
@@ -84,6 +86,7 @@ struct LoginResponseRendering<'a> {
     status: Option<&'a Status>,
     typed_attributes: &'a [Attribute],
     authn_context: Option<&'a AuthnContextReference>,
+    authn_instant: Option<SystemTime>,
     requested_authn_context: Option<&'a RequestedAuthnContext>,
     requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
@@ -220,9 +223,11 @@ impl IdentityProvider {
                 "response attributes cannot be combined with a login response template".into(),
             ));
         }
-        if rendering.authn_context.is_some() && !rendering.web_browser_sso_producer.follows() {
+        if (rendering.authn_context.is_some() || rendering.authn_instant.is_some())
+            && !rendering.web_browser_sso_producer.follows()
+        {
             return Err(SamlError::Invalid(
-                "an authentication context is written only under Web Browser SSO generation rules"
+                "an authentication context or instant is written only under Web Browser SSO generation rules"
                     .into(),
             ));
         }
@@ -267,6 +272,10 @@ impl IdentityProvider {
                 }
             }
             let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
+            let authn_instant = match rendering.authn_instant {
+                Some(authenticated) => written_authn_instant(authenticated, &window)?,
+                None => window.issue_instant.clone(),
+            };
             let id = generate_id();
             let assertion_id = generate_id();
             let audience = sp.metadata.get_entity_id().unwrap_or_default().to_string();
@@ -296,7 +305,7 @@ impl IdentityProvider {
                 in_response_to,
                 authn_statement: rendering.web_browser_sso_producer.follows().then_some(
                     login_response::AuthnStatementXml {
-                        authn_instant: &window.issue_instant,
+                        authn_instant: &authn_instant,
                         session_index: session_index.as_ref().map(SessionIndex::as_str),
                         authn_context: &authn_context,
                     },
@@ -464,6 +473,7 @@ impl IdentityProvider {
                 status: overrides.status,
                 typed_attributes: overrides.typed_attributes,
                 authn_context: overrides.authn_context,
+                authn_instant: overrides.authn_instant,
                 requested_authn_context: overrides.requested_authn_context,
                 requested_name_id_policy: overrides.requested_name_id_policy,
             },
@@ -745,6 +755,26 @@ impl IdentityProvider {
             request,
         )
     }
+}
+
+fn written_authn_instant(
+    authenticated: SystemTime,
+    window: &IdpIssuanceWindow,
+) -> Result<String, SamlError> {
+    let authenticated = offset_datetime_from_system_time(authenticated)
+        .ok()
+        .filter(|instant| instant.year() >= 1)
+        .ok_or_else(|| {
+            SamlError::Invalid("AuthnInstant is outside the supported SAML time range".into())
+        })?;
+    let written = format_saml_utc_date_time(authenticated);
+    if authenticated > window.issued_at {
+        return Err(SamlError::Invalid(format!(
+            "AuthnInstant {written} is later than the response IssueInstant {}",
+            window.issue_instant
+        )));
+    }
+    Ok(written)
 }
 
 #[cfg(any(

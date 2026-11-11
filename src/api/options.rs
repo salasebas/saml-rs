@@ -2,6 +2,7 @@ use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResp
 use crate::config::IdentifierEncryptionPolicy;
 use crate::model::{Attributes, AuthnContextReference, RelayStateParam, Status};
 use crate::sp::WebBrowserSsoProducer;
+use std::time::SystemTime;
 
 pub use crate::model::{ForceAuthn, IsPassive};
 
@@ -102,6 +103,7 @@ pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) status: Option<Status>,
     pub(super) attributes: Attributes,
     pub(super) authn_context: Option<AuthnContextReference>,
+    pub(super) authn_instant: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,6 +134,7 @@ impl RespondSso {
             status: None,
             attributes: Attributes::default(),
             authn_context: None,
+            authn_instant: None,
         }
     }
 }
@@ -162,6 +165,7 @@ impl<Delivery> RespondSso<Delivery> {
             status: self.status,
             attributes: self.attributes,
             authn_context: self.authn_context,
+            authn_instant: self.authn_instant,
         }
     }
 
@@ -197,6 +201,22 @@ impl<Delivery> RespondSso<Delivery> {
     /// [`crate::SubordinateStatusCode::no_authn_context`].
     pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
         self.authn_context = Some(authn_context);
+        self
+    }
+
+    /// Set the `AuthnInstant` of the assertion's `AuthnStatement`.
+    ///
+    /// Pass the time at which the subject actually authenticated, such as the
+    /// start of a reused identity provider session. It is written in UTC,
+    /// rounded down to the second. Omitting it writes the assertion
+    /// `IssueInstant`. An error response writes no assertion.
+    ///
+    /// The response is rejected when the written instant is later than the
+    /// response `IssueInstant` or before year 1, and when
+    /// [`Self::apply_web_browser_sso_generation_rules`] is not selected, since
+    /// no `AuthnStatement` is written then.
+    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
+        self.authn_instant = Some(authn_instant);
         self
     }
 
@@ -237,8 +257,9 @@ impl<Delivery> RespondSso<Delivery> {
     /// [`RespondSso::post`], [`RespondSso::simple_sign`], and
     /// [`RespondSso::artifact`] leave this off. When enabled, a
     /// successful response carries an authentication statement whose
-    /// `AuthnInstant` is the assertion `IssueInstant` and whose
-    /// `AuthnContext` is [`Self::authn_context`]. Without it, the
+    /// `AuthnInstant` is [`Self::authn_instant`], or the assertion
+    /// `IssueInstant` when it is omitted, and whose `AuthnContext` is
+    /// [`Self::authn_context`]. Without it, the
     /// `AuthnContextClassRef` is
     /// `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified`. That class means
     /// the authentication mechanism was not recorded. It is not evidence of a

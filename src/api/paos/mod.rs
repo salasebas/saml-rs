@@ -12,9 +12,9 @@ use crate::entity::User;
 use crate::flow::HttpRequest;
 use crate::idp::PaosSsoResponseInput;
 use crate::model::{
-    Attribute, Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive,
-    MessageId, OutstandingLogout, RelayStateParam, SamlValidationContext, SessionIndex,
-    SsoResponse, SsoSession, Status, Subject, TopLevelStatusCode,
+    Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
+    OutstandingLogout, RelayStateParam, SamlValidationContext, SessionIndex, SsoResponse,
+    SsoSession, Status, Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
 use crate::xml::OutboundNameIdQualifiers;
@@ -169,6 +169,7 @@ impl StartPaosSso {
 pub struct RespondPaosSso {
     attributes: Attributes,
     authn_context: Option<AuthnContextReference>,
+    authn_instant: Option<SystemTime>,
 }
 
 impl RespondPaosSso {
@@ -189,6 +190,16 @@ impl RespondPaosSso {
     /// context can be met, answer with [`Saml::reject_paos_sso`].
     pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
         self.authn_context = Some(authn_context);
+        self
+    }
+
+    /// Set the `AuthnInstant` of the assertion's `AuthnStatement`.
+    ///
+    /// It is written, and checked against the response `IssueInstant`, as
+    /// [`crate::RespondSso::authn_instant`] does. Omitting it writes the
+    /// assertion `IssueInstant`.
+    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
+        self.authn_instant = Some(authn_instant);
         self
     }
 }
@@ -688,7 +699,8 @@ impl Saml<Idp> {
     /// a login response template, names a basic attribute that is not an XML
     /// name, or has a `NameFormat` that is not an absolute URI reference, the
     /// authentication context does not meet an exact `RequestedAuthnContext`,
-    /// the `subject` `SPNameQualifier` is not the one the request's
+    /// [`RespondPaosSso::authn_instant`] is later than the response
+    /// `IssueInstant` or before year 1, the `subject` `SPNameQualifier` is not the one the request's
     /// `NameIDPolicy` asks for with a SAML-defined format other than
     /// `unspecified` or `encrypted`, or the response cannot be signed. Returns
     /// [`SamlError::Unsupported`] when `subject` has confirmations.
@@ -699,14 +711,7 @@ impl Saml<Idp> {
         subject: Subject,
         options: RespondPaosSso,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
-        self.issue_paos_sso(
-            sp,
-            request,
-            Some(subject),
-            None,
-            options.attributes.as_slice(),
-            options.authn_context.as_ref(),
-        )
+        self.issue_paos_sso(sp, request, Some(subject), None, &options)
     }
 
     /// End a PAOS login with a SAML error status and no assertion.
@@ -729,7 +734,7 @@ impl Saml<Idp> {
                 "reject_paos_sso requires an error status".into(),
             ));
         }
-        self.issue_paos_sso(sp, request, None, Some(status), &[], None)
+        self.issue_paos_sso(sp, request, None, Some(status), &RespondPaosSso::default())
     }
 
     fn issue_paos_sso(
@@ -738,8 +743,7 @@ impl Saml<Idp> {
         request: &crate::model::Received<AuthnRequest>,
         subject: Option<Subject>,
         status: Option<Status>,
-        attributes: &[Attribute],
-        authn_context: Option<&AuthnContextReference>,
+        options: &RespondPaosSso,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = assertion_consumer_for_request(sp, request.message())?;
@@ -778,8 +782,9 @@ impl Saml<Idp> {
             ),
             issuance_lifetime: self.0.issuance_lifetime,
             status: status.as_ref(),
-            attributes,
-            authn_context,
+            attributes: options.attributes.as_slice(),
+            authn_context: options.authn_context.as_ref(),
+            authn_instant: options.authn_instant,
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
         };

@@ -21,6 +21,7 @@ pub(crate) struct PaosSsoResponseInput<'a> {
     pub(crate) status: Option<&'a Status>,
     pub(crate) attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
+    pub(crate) authn_instant: Option<std::time::SystemTime>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
 }
@@ -54,6 +55,7 @@ impl IdentityProvider {
                 status: input.status,
                 typed_attributes: input.attributes,
                 authn_context: input.authn_context,
+                authn_instant: input.authn_instant,
                 requested_authn_context: input.requested_authn_context,
                 requested_name_id_policy: input.requested_name_id_policy,
             },

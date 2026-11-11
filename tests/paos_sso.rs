@@ -9,7 +9,7 @@
     feature = "crypto-fips"
 ))]
 
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use saml_rs::constants::status_code::AUTH_FAILED;
 use saml_rs::xml::dom::{parse, Node};
@@ -482,6 +482,46 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
     assert!(answered.envelope().contains(&format!(
         "<saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef>"
     )));
+    Ok(())
+}
+
+#[test]
+fn caller_authentication_instant_is_checked_and_written() -> Result<(), Box<dyn std::error::Error>>
+{
+    const AUTHENTICATED: &str = "2026-01-01T08:00:00Z";
+    let authenticated = SystemTime::UNIX_EPOCH + Duration::from_secs(1_767_254_400);
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        PaosClientRequest::headers_checked_by_caller(),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+    )?;
+    let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &PaosAuthnRequest::from_envelope(idp_request, IDP_SOAP)?,
+        validation(),
+    )?;
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default().authn_instant(authenticated),
+    )?;
+    assert!(answered
+        .envelope()
+        .contains(&format!("AuthnInstant=\"{AUTHENTICATED}\"")));
+
+    let later = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondPaosSso::default().authn_instant(SystemTime::now() + Duration::from_secs(3600)),
+    );
+    assert!(
+        matches!(&later, Err(SamlError::Invalid(message)) if message.contains("later than the response IssueInstant")),
+        "{later:?}"
+    );
     Ok(())
 }
 

@@ -422,6 +422,7 @@ pub fn iso8601_offset(seconds: i64) -> String {
 
 #[derive(Debug, Clone)]
 pub(crate) struct IdpIssuanceWindow {
+    pub(crate) issued_at: time::OffsetDateTime,
     pub(crate) issue_instant: String,
     pub(crate) expiration: String,
 }
@@ -437,6 +438,7 @@ pub(crate) fn capture_idp_issuance_window(
         })?;
     let preserve_subseconds = lifetime.subsec_nanoseconds() != 0;
     Ok(IdpIssuanceWindow {
+        issued_at: issue_instant,
         issue_instant: format_idp_issuance_instant(issue_instant, preserve_subseconds),
         expiration: format_idp_issuance_instant(expiration, preserve_subseconds),
     })
