@@ -1,10 +1,12 @@
-use crate::browser::{AcsEndpoint, BrowserInput, SsoResponseBinding};
+use crate::browser::{
+    field_value, parse_form_fields, AcsEndpoint, BrowserInput, SsoResponseBinding,
+};
 use crate::config::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials, EntityId,
     HmacSecret, IdpConfig, IdpDescriptor, ManageNameIdService, NameIdFormat, SpConfig,
     SpDescriptor,
 };
-use crate::constants::Binding;
+use crate::constants::{url_params, Binding};
 use crate::entity::{EntitySetting, User};
 use crate::error::SamlError as Error;
 use crate::idp::IdentityProvider;
@@ -288,17 +290,15 @@ pub(super) fn relay_state_from_input<Message>(
 ) -> Result<RelayStateParam, SamlError> {
     match input {
         BrowserInput::Redirect { raw_query, .. } => {
-            let value = url::form_urlencoded::parse(raw_query.trim_start_matches('?').as_bytes())
-                .find(|(name, _)| name == "RelayState")
-                .map(|(_, value)| value.into_owned());
-            RelayStateParam::received(value)
+            let params = parse_form_fields(raw_query.trim_start_matches('?'));
+            RelayStateParam::received(
+                field_value(&params, url_params::RELAY_STATE)?.map(str::to_string),
+            )
         }
         BrowserInput::Post { fields, .. } | BrowserInput::SimpleSignPost { fields, .. } => {
-            let value = fields
-                .iter()
-                .find(|field| field.name() == "RelayState")
-                .map(|field| field.value().to_string());
-            RelayStateParam::received(value)
+            RelayStateParam::received(
+                field_value(fields, url_params::RELAY_STATE)?.map(str::to_string),
+            )
         }
         BrowserInput::Artifact { delivered, .. } => Ok(delivered.relay_state().clone()),
         BrowserInput::Soap { .. } => Ok(RelayStateParam::absent()),
