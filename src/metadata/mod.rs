@@ -63,7 +63,10 @@ fn entity_descriptor_xml<'n>(
         return Ok((0..xml.len(), None));
     };
     if root.local_name != "EntitiesDescriptor" {
-        return Ok((0..xml.len(), Some(root)));
+        return Ok((
+            0..xml.len(),
+            Some(root).filter(|root| root.local_name == "EntityDescriptor"),
+        ));
     }
     let mut entities = Vec::new();
     collect_entity_descriptors(root, &mut entities);
@@ -544,6 +547,16 @@ mod tests {
             assert!(IdpMetadata::from_xml(&xml).is_err(), "{xml}");
             assert!(SpMetadata::from_xml(&xml).is_err(), "{xml}");
         }
+    }
+
+    #[test]
+    fn reads_extra_fields_under_a_root_that_is_not_an_entity() -> Result<(), SamlError> {
+        let metadata = Metadata::parse(
+            r#"<Foo><SPSSODescriptor><X a="1"/></SPSSODescriptor></Foo>"#,
+            vec![ExtractorField::new("x", &["Foo", "SPSSODescriptor", "X"]).attrs(&["a"])],
+        )?;
+        assert_eq!(metadata.meta.get_str("x"), Some("1"));
+        Ok(())
     }
 
     #[test]

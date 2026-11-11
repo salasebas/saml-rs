@@ -31,7 +31,6 @@ impl SsoDescriptorRole {
         entity: Option<&'a dom::Node>,
         limits: XmlLimits,
     ) -> Result<Vec<&'a dom::Node>, SamlError> {
-        let entity = entity.filter(|entity| entity.local_name == "EntityDescriptor");
         let local_name = match self {
             Self::Any => {
                 return Ok(entity
