@@ -470,10 +470,6 @@ fn is_external_reference(uri: &str) -> bool {
     !uri.is_empty() && !uri.starts_with('#')
 }
 
-fn has_saml_xml_signature(root: &Node) -> bool {
-    !saml_signature_candidates(root).is_empty()
-}
-
 fn preflight_saml_reference_uris(signatures: &[&Node]) -> Result<(), SamlError> {
     for signature in signatures {
         for signed_info in children_named(signature, "SignedInfo") {
@@ -650,14 +646,6 @@ fn enforce_strict_profile_on_verified_signature(
     Ok(())
 }
 
-pub(crate) fn has_xml_signature_with_limits(
-    xml: &str,
-    limits: XmlLimits,
-) -> Result<bool, SamlError> {
-    let doc = dom::parse_with_limits(xml, limits)?;
-    Ok(has_saml_xml_signature(&doc.root))
-}
-
 /// Verify the XML-DSig signature(s) of `xml` against `metadata_certs`.
 ///
 /// Returns `(verified, signed_content)`:
@@ -733,12 +721,11 @@ fn metadata_verification_context(
 /// Returns `None` when the document carries no SAML signature.
 fn prepare_signature_verification(
     xml: &str,
+    dom: dom::Document,
     metadata_certs: &[String],
     hmac_secret: Option<&HmacSecret>,
-    limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<Option<PreparedSignatureVerification>, SamlError> {
-    let dom = dom::parse_with_limits(xml, limits)?;
     let protocol_response = root_uses_protocol_response_rules(xml)?;
     if protocol_response && wrapping_detected(&dom.root) {
         return Err(SamlError::PotentialWrappingAttack);
@@ -788,8 +775,13 @@ fn verify_first_signature_with_profile(
     limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<(bool, Option<String>), SamlError> {
-    let Some(prepared) =
-        prepare_signature_verification(xml, metadata_certs, None, limits, profile)?
+    let Some(prepared) = prepare_signature_verification(
+        xml,
+        dom::parse_with_limits(xml, limits)?,
+        metadata_certs,
+        None,
+        profile,
+    )?
     else {
         return Ok((false, None));
     };
@@ -865,13 +857,15 @@ pub(crate) fn verify_present_signatures(
     limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<(), SamlError> {
-    if !rejects_present_signature_that_does_not_verify(profile)
-        || !has_xml_signature_with_limits(xml, limits)?
-    {
+    if !rejects_present_signature_that_does_not_verify(profile) {
+        return Ok(());
+    }
+    let dom = dom::parse_with_limits(xml, limits)?;
+    if saml_signature_candidates(&dom.root).is_empty() {
         return Ok(());
     }
     let Some(prepared) =
-        prepare_signature_verification(xml, metadata_certs, hmac_secret, limits, profile)?
+        prepare_signature_verification(xml, dom, metadata_certs, hmac_secret, profile)?
     else {
         return Ok(());
     };
@@ -883,6 +877,7 @@ pub(crate) fn verify_present_signatures(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SignatureVerification {
+    signature_present: bool,
     verified: bool,
     signed_content: Option<String>,
     assertion_directly_covered: bool,
@@ -891,14 +886,19 @@ pub(crate) struct SignatureVerification {
 }
 
 impl SignatureVerification {
-    fn unverified() -> Self {
+    fn unverified(signature_present: bool) -> Self {
         Self {
+            signature_present,
             verified: false,
             signed_content: None,
             assertion_directly_covered: false,
             response_covered: false,
             verified_embedded_signatures: Vec::new(),
         }
+    }
+
+    pub(crate) fn signature_present(&self) -> bool {
+        self.signature_present
     }
 
     pub(crate) fn verified(&self) -> bool {
@@ -929,10 +929,15 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<SignatureVerification, SamlError> {
-    let Some(prepared) =
-        prepare_signature_verification(xml, metadata_certs, hmac_secret, limits, profile)?
+    let Some(prepared) = prepare_signature_verification(
+        xml,
+        dom::parse_with_limits(xml, limits)?,
+        metadata_certs,
+        hmac_secret,
+        profile,
+    )?
     else {
-        return Ok(SignatureVerification::unverified());
+        return Ok(SignatureVerification::unverified(false));
     };
     let root = &prepared.dom.root;
     let protocol_response = prepared.protocol_response;
@@ -986,6 +991,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
             assertion_is_directly_covered(root, &targets, protocol_response);
         let response_covered = protocol_response && target_matches_node(&targets, root);
         return Ok(SignatureVerification {
+            signature_present: true,
             verified: true,
             signed_content: verified_content(root, xml, &targets, protocol_response)?,
             assertion_directly_covered,
@@ -993,7 +999,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
             verified_embedded_signatures,
         });
     }
-    Ok(SignatureVerification::unverified())
+    Ok(SignatureVerification::unverified(true))
 }
 
 /// Detailed metadata signature verification result.

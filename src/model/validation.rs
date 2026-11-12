@@ -513,7 +513,9 @@ fn negative_millis_magnitude(millis: i64) -> Duration {
     }
 }
 
-fn system_time_from_offset_datetime(deadline: OffsetDateTime) -> Result<SystemTime, SamlError> {
+pub(super) fn system_time_from_offset_datetime(
+    deadline: OffsetDateTime,
+) -> Result<SystemTime, SamlError> {
     let since_epoch = deadline - OffsetDateTime::UNIX_EPOCH;
     let converted = if since_epoch.is_negative() {
         SystemTime::UNIX_EPOCH.checked_sub(since_epoch.unsigned_abs())

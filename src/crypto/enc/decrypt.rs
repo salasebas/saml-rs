@@ -273,11 +273,7 @@ fn uses_gcm(document: &XmlDocument<'_>, encrypted: NodeId) -> bool {
 
 /// Whether an assertion in `xml` carries an `<EncryptedID>` in its `<Subject>`
 /// or an `<EncryptedAttribute>` in an `<AttributeStatement>`.
-pub(crate) fn carries_encrypted_assertion_elements(
-    xml: &str,
-    limits: XmlLimits,
-) -> Result<bool, SamlError> {
-    dom::parse_with_limits(xml, limits)?;
+pub(crate) fn carries_encrypted_assertion_elements(xml: &str) -> Result<bool, SamlError> {
     let document = parse_xml_document(xml)?;
     for kind in [ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE] {
         if !assertion_elements(&document, kind.parent, kind.encrypted)?.is_empty() {

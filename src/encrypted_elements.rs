@@ -46,11 +46,8 @@ pub(crate) fn require_one_assertion_unless_message_authenticated(
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
-pub(crate) fn carries_encrypted_elements(
-    saml_content: &str,
-    limits: XmlLimits,
-) -> Result<bool, SamlError> {
-    crate::crypto::enc::carries_encrypted_assertion_elements(saml_content, limits)
+pub(crate) fn carries_encrypted_elements(saml_content: &str) -> Result<bool, SamlError> {
+    crate::crypto::enc::carries_encrypted_assertion_elements(saml_content)
 }
 
 #[cfg(not(any(
@@ -58,10 +55,7 @@ pub(crate) fn carries_encrypted_elements(
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 )))]
-pub(crate) fn carries_encrypted_elements(
-    _saml_content: &str,
-    _limits: XmlLimits,
-) -> Result<bool, SamlError> {
+pub(crate) fn carries_encrypted_elements(_saml_content: &str) -> Result<bool, SamlError> {
     Ok(false)
 }
 
@@ -174,7 +168,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
     ))
 }
 
-/// The key that decrypts each `<EncryptedAssertion>` of `xml`. A selected
+/// The key that decrypts each `<EncryptedAssertion>` child of `root`. A selected
 /// `decrypt_key` requires one. A typed service provider also decrypts one it
 /// did not select.
 #[cfg(any(
@@ -183,29 +177,27 @@ pub(crate) fn decrypt_verified_assertion_elements(
     feature = "crypto-fips"
 ))]
 pub(crate) fn encrypted_assertion_key<'a>(
-    xml: &str,
+    root: &crate::xml::dom::Node,
     parser_type: ParserType,
     opts: &FlowOptions<'a>,
-) -> Result<Option<&'a str>, SamlError> {
+) -> Option<&'a str> {
     if opts.decrypt_key.is_some() {
-        return Ok(opts.decrypt_key);
+        return opts.decrypt_key;
     }
     match (opts.received_encrypted_elements, parser_type) {
         (ReceivedEncryptedElements::DecryptReceived, ParserType::SamlResponse) => {
-            let document = crate::xml::dom::parse_with_limits(xml, opts.xml_limits)?;
-            let carries_encrypted_assertion = document
-                .root
+            let carries_encrypted_assertion = root
                 .children
                 .iter()
                 .any(|child| child.local_name == "EncryptedAssertion");
             if carries_encrypted_assertion {
-                Ok(opts.element_decrypt_key)
+                opts.element_decrypt_key
             } else {
-                Ok(None)
+                None
             }
         }
         (ReceivedEncryptedElements::DecryptReceived, _)
-        | (ReceivedEncryptedElements::DecryptSelected, _) => Ok(None),
+        | (ReceivedEncryptedElements::DecryptSelected, _) => None,
     }
 }
 
@@ -219,6 +211,7 @@ pub(crate) fn encrypted_assertion_key<'a>(
 ))]
 pub(crate) fn decrypt_detached_signed_assertions(
     xml: &str,
+    root: &crate::xml::dom::Node,
     parser_type: ParserType,
     opts: &FlowOptions<'_>,
 ) -> Result<Option<(String, Vec<String>)>, SamlError> {
@@ -229,7 +222,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
 
     let key_pem = match opts.received_encrypted_elements {
         ReceivedEncryptedElements::DecryptReceived => {
-            encrypted_assertion_key(xml, parser_type, opts)?
+            encrypted_assertion_key(root, parser_type, opts)
         }
         ReceivedEncryptedElements::DecryptSelected => None,
     };
@@ -256,6 +249,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
 )))]
 pub(crate) fn decrypt_detached_signed_assertions(
     _xml: &str,
+    _root: &crate::xml::dom::Node,
     _parser_type: ParserType,
     _opts: &FlowOptions<'_>,
 ) -> Result<Option<(String, Vec<String>)>, SamlError> {
