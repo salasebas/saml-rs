@@ -21,7 +21,7 @@ pub(crate) fn sign_browser_message(
     relay: Option<&str>,
     parser_type: ParserType,
 ) -> Result<(String, Option<String>, Option<String>), SamlError> {
-    use crate::binding::{append_signature, build_redirect_octet};
+    use crate::binding::sign_detached_message;
     use crate::constants::transform_algorithm;
     use crate::crypto::SigningCredential;
 
@@ -43,11 +43,15 @@ pub(crate) fn sign_browser_message(
         )
     };
     match binding {
-        Binding::Redirect => {
-            let octet = build_redirect_octet(parser_type, xml, relay, sig_alg)?;
-            let sig = credential.sign_detached(&octet, sig_alg)?;
-            Ok((append_signature(destination, &octet, &sig), None, None))
-        }
+        Binding::Redirect | Binding::SimpleSign => sign_detached_message(
+            &credential,
+            binding,
+            xml,
+            destination,
+            relay,
+            parser_type,
+            sig_alg,
+        ),
         Binding::Post => Ok((
             base64_encode(embedded_signature(&setting.transformation_algorithms)?.as_bytes()),
             None,
@@ -61,20 +65,6 @@ pub(crate) fn sign_browser_message(
             None,
             None,
         )),
-        Binding::SimpleSign => {
-            let octet = crate::binding::build_simplesign_octet(
-                parser_type.query_param(),
-                xml,
-                relay,
-                sig_alg,
-            );
-            let sig = credential.sign_detached(&octet, sig_alg)?;
-            Ok((
-                base64_encode(xml.as_bytes()),
-                Some(sig),
-                Some(sig_alg.clone()),
-            ))
-        }
         Binding::Artifact => Err(SamlError::UnsupportedBinding {
             binding: Binding::Artifact,
         }),
