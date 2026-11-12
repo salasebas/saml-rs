@@ -1,7 +1,6 @@
 use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
 use crate::browser::{ArtifactDelivery, BrowserInput, Outbound, SsoRequestBinding};
 use crate::config::SpDescriptor;
-use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::error::SamlError as Error;
 use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
@@ -12,10 +11,10 @@ use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
-    default_response_target, ensure_entity_id, input_binding, raw_sp_descriptor,
-    relay_state_from_input, response_target, user_from_subject,
+    ensure_entity_id, input_binding, raw_sp_descriptor, relay_state_from_input, user_from_subject,
 };
 use super::requested_subject::decrypt_requested_subject;
+use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
 use super::{Idp, RespondSso, Saml, SamlError};
 
 /// Where an issued response goes.
@@ -279,18 +278,20 @@ impl Saml<Idp> {
             ResponseTransport::Browser => Some(idp_setting.transformation_algorithms.as_slice()),
             ResponseTransport::Artifact(..) => None,
         };
-        let (binding, explicit_acs) = match request {
-            Some(request) => response_target(raw_sp, request.message(), options.binding)?,
-            None => default_response_target(raw_sp, options.binding)?,
-        };
+        let binding = options.binding;
+        let acs = resolve_response_acs(
+            &raw_sp.metadata,
+            request.map(Received::message),
+            ResponseAcsBindings::Browser(binding),
+        )?;
         let name_id_format = subject
             .name_id()
             .format()
             .map(|format| format.as_uri().to_string());
         let user = user_from_subject(&subject)?;
         let in_response_to = request.map(|request| request.message().id().as_str());
-        let overrides = |acs| LoginResponseOverrides {
-            acs,
+        let overrides = LoginResponseOverrides {
+            acs: Some(&acs),
             name_id_format: name_id_format.as_deref(),
             name_id_qualifiers: OutboundNameIdQualifiers {
                 name_qualifier: subject.name_id().name_qualifier(),
@@ -325,25 +326,18 @@ impl Saml<Idp> {
                             encrypt_then_sign: false,
                             custom: None,
                         },
-                        overrides(explicit_acs.as_deref()),
+                        overrides,
                     )?;
                 return Outbound::<SsoResponse>::echoing_received_relay_state(issued.context)
                     .map(|outbound| outbound.with_session_index(issued.session_index));
             }
             ResponseTransport::Artifact(delivery, issued) => (delivery, issued),
         };
-        let acs = match explicit_acs {
-            Some(acs) => acs,
-            None => raw_sp
-                .metadata
-                .get_assertion_consumer_service(Binding::Artifact)
-                .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?,
-        };
         let rendered = self.raw_identity_provider().render_artifact_sso_response(
             raw_sp,
             &user,
             in_response_to,
-            overrides(Some(acs.as_str())),
+            overrides,
         )?;
         let artifact = artifact::issue(
             &self.raw_identity_provider().metadata,
