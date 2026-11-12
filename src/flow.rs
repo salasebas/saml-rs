@@ -1,12 +1,18 @@
 //! Inbound message flow: decode, validate XML/status, verify signatures,
 //! optionally decrypt, extract fields, and validate issuer/time constraints.
 
+use crate::assertion_acceptance::first_login_assertion_xml;
 use crate::binding::{
     base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
 use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{Binding, ParserType};
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
 use crate::context::is_valid_xml_with_limits;
 use crate::error::SamlError;
 #[cfg(any(
@@ -255,6 +261,7 @@ impl VerifiedXmlSignatureEvidence {
 ))]
 #[derive(Debug)]
 struct EmbeddedSignatureEvidence {
+    signature_present: bool,
     verified: bool,
     verified_node: Option<String>,
     assertion_directly_covered: bool,
@@ -352,10 +359,6 @@ fn decode_message(
     };
     xml_limits.check_input_bytes(bytes.len())?;
     String::from_utf8(bytes).map_err(|e| SamlError::Xml(e.to_string()))
-}
-
-fn assertion_shortcut(xml: &str, limits: XmlLimits) -> Result<Option<String>, SamlError> {
-    crate::assertion_acceptance::first_login_assertion_xml(xml, limits)
 }
 
 #[cfg(any(
@@ -562,6 +565,7 @@ fn verify_embedded_signature(
         })
         .collect();
     Ok(EmbeddedSignatureEvidence {
+        signature_present: verification.signature_present(),
         verified: verification.verified(),
         assertion_directly_covered: verification.assertion_directly_covered(),
         response_covered: verification.response_covered(),
@@ -614,11 +618,9 @@ fn verify_decrypted_assertions(
         .position(|assertion| Some(assertion.as_str()) == consumed_assertion);
     let mut verified_xml_signatures = Vec::new();
     for (index, assertion) in assertions.iter().enumerate() {
-        let signature_present =
-            crate::crypto::verify::has_xml_signature_with_limits(assertion, opts.xml_limits)?;
         let evidence = verify_embedded_signature(assertion, opts)?;
         if !evidence.verified {
-            return Err(required_xml_signature_failed(signature_present));
+            return Err(required_xml_signature_failed(evidence.signature_present));
         }
         require_direct_assertion_coverage(
             AssertionSignatureRequirement::Direct,
@@ -666,11 +668,8 @@ fn require_response_coverage(
     feature = "crypto-aws-lc",
     feature = "crypto-fips"
 ))]
-fn response_uses_cbc_encrypted_assertion(xml: &str, limits: XmlLimits) -> Result<bool, SamlError> {
-    let document = crate::xml::dom::parse_with_limits(xml, limits)?;
-    Ok(document
-        .root
-        .children
+fn response_uses_cbc_encrypted_assertion(root: &crate::xml::dom::Node) -> bool {
+    root.children
         .iter()
         .filter(|child| child.local_name == "EncryptedAssertion")
         .filter_map(|encrypted_assertion| {
@@ -686,7 +685,7 @@ fn response_uses_cbc_encrypted_assertion(xml: &str, limits: XmlLimits) -> Result
                 .find(|child| child.local_name == "EncryptionMethod")
         })
         .filter_map(|encryption_method| encryption_method.attr("Algorithm"))
-        .any(crate::constants::is_xml_encryption_cbc_algorithm))
+        .any(crate::constants::is_xml_encryption_cbc_algorithm)
 }
 
 #[cfg(any(
@@ -696,15 +695,14 @@ fn response_uses_cbc_encrypted_assertion(xml: &str, limits: XmlLimits) -> Result
 ))]
 fn response_signature_is_required(
     requirement: ResponseSignatureRequirement,
-    xml: &str,
-    limits: XmlLimits,
-) -> Result<bool, SamlError> {
+    root: &crate::xml::dom::Node,
+) -> bool {
     match requirement {
-        ResponseSignatureRequirement::Optional => Ok(false),
+        ResponseSignatureRequirement::Optional => false,
         ResponseSignatureRequirement::RequiredForEncryptedCbc => {
-            response_uses_cbc_encrypted_assertion(xml, limits)
+            response_uses_cbc_encrypted_assertion(root)
         }
-        ResponseSignatureRequirement::Required => Ok(true),
+        ResponseSignatureRequirement::Required => true,
     }
 }
 
@@ -716,7 +714,8 @@ fn response_signature_is_required(
     feature = "crypto-fips"
 ))]
 fn verify_and_prepare(
-    xml: &str,
+    xml: String,
+    root: &crate::xml::dom::Node,
     parser_type: ParserType,
     opts: &FlowOptions<'_>,
     assertion_signature: AssertionSignatureRequirement,
@@ -725,20 +724,17 @@ fn verify_and_prepare(
     use crate::crypto::{
         enc::{decrypt_assertions_with_limits, AssertionDecryptionOptions},
         keys::load_decryption_keys,
-        verify::has_xml_signature_with_limits,
     };
 
-    let signature_present = has_xml_signature_with_limits(xml, opts.xml_limits)?;
-    let evidence = verify_embedded_signature(xml, opts)?;
-    let response_signature_required =
-        response_signature_is_required(response_signature, xml, opts.xml_limits)?;
+    let evidence = verify_embedded_signature(&xml, opts)?;
+    let response_signature_required = response_signature_is_required(response_signature, root);
     if response_signature_required {
         if !evidence.verified {
-            return Err(required_xml_signature_failed(signature_present));
+            return Err(required_xml_signature_failed(evidence.signature_present));
         }
         require_response_coverage(response_signature_required, evidence.response_covered)?;
     }
-    let decrypt_key = crate::encrypted_elements::encrypted_assertion_key(xml, parser_type, opts)?;
+    let decrypt_key = crate::encrypted_elements::encrypted_assertion_key(root, parser_type, opts);
     let decrypt_required = decrypt_key.is_some();
     let decrypt_options = AssertionDecryptionOptions {
         allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
@@ -754,7 +750,11 @@ fn verify_and_prepare(
     if decrypt_required && evidence.verified && parser_type == ParserType::SamlResponse {
         if let Some(node) = evidence.verified_node.as_deref() {
             // signed-then-encrypted
-            let signed_content = if evidence.response_covered { xml } else { node };
+            let signed_content = if evidence.response_covered {
+                &xml
+            } else {
+                node
+            };
             let (content, assertions) = decrypt_assertions_with_limits(
                 signed_content,
                 &load_keys()?,
@@ -763,7 +763,7 @@ fn verify_and_prepare(
             )?;
             is_valid_xml_with_limits(&content, opts.xml_limits)?;
             validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-            let assertion = assertion_shortcut(&content, opts.xml_limits)?;
+            let assertion = first_login_assertion_xml(&content, opts.xml_limits)?;
             let mut verified_xml_signatures = evidence.verified_xml_signatures.clone();
             let consumed_was_decrypted = assertions
                 .iter()
@@ -774,12 +774,10 @@ fn verify_and_prepare(
                 }
             }
             if assertion_signature == AssertionSignatureRequirement::Direct {
-                let carries_plaintext_assertion =
-                    crate::xml::dom::parse_with_limits(xml, opts.xml_limits)?
-                        .root
-                        .children
-                        .iter()
-                        .any(|child| child.local_name == "Assertion");
+                let carries_plaintext_assertion = root
+                    .children
+                    .iter()
+                    .any(|child| child.local_name == "Assertion");
                 if carries_plaintext_assertion {
                     require_direct_assertion_coverage(
                         assertion_signature,
@@ -807,13 +805,12 @@ fn verify_and_prepare(
     if decrypt_required && !evidence.verified {
         // encrypted-then-signed: decrypt first, then verify the result.
         let (content, _) =
-            decrypt_assertions_with_limits(xml, &load_keys()?, decrypt_options, opts.xml_limits)?;
+            decrypt_assertions_with_limits(&xml, &load_keys()?, decrypt_options, opts.xml_limits)?;
         is_valid_xml_with_limits(&content, opts.xml_limits)?;
         validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-        let signature_present = has_xml_signature_with_limits(&content, opts.xml_limits)?;
         let re_evidence = verify_embedded_signature(&content, opts)?;
         if !re_evidence.verified {
-            return Err(required_xml_signature_failed(signature_present));
+            return Err(required_xml_signature_failed(re_evidence.signature_present));
         }
         require_direct_assertion_coverage(
             assertion_signature,
@@ -850,13 +847,13 @@ fn verify_and_prepare(
             });
         }
         return Ok(PreparedMessage {
-            saml_content: xml.to_string(),
+            saml_content: xml,
             assertion: evidence.verified_node,
             message_authenticated: evidence.response_covered,
             verified_xml_signatures: evidence.verified_xml_signatures,
         });
     }
-    Err(required_xml_signature_failed(signature_present))
+    Err(required_xml_signature_failed(evidence.signature_present))
 }
 
 #[cfg(not(any(
@@ -865,7 +862,8 @@ fn verify_and_prepare(
     feature = "crypto-fips"
 )))]
 fn verify_and_prepare(
-    _xml: &str,
+    _xml: String,
+    _root: &crate::xml::dom::Node,
     _parser_type: ParserType,
     _opts: &FlowOptions<'_>,
     _assertion_signature: AssertionSignatureRequirement,
@@ -1012,24 +1010,13 @@ fn validate_context(
     message_authenticated: bool,
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
-    let should_validate_issuer = matches!(
-        parser_type,
-        ParserType::SamlRequest
-            | ParserType::SamlResponse
-            | ParserType::LogoutRequest
-            | ParserType::LogoutResponse
-            | ParserType::ManageNameIdRequest
-            | ParserType::ManageNameIdResponse
-    );
-    if should_validate_issuer {
-        if let Some(expected) = opts.from_issuer {
-            let actual = extracted.get_str("issuer");
-            if actual != Some(expected) {
-                return Err(SamlError::issuer_mismatch(expected, actual));
-            }
-            if parser_type == ParserType::SamlResponse {
-                response_issuer::validate_response_issuer(expected, saml_content, opts.xml_limits)?;
-            }
+    if let Some(expected) = opts.from_issuer {
+        let actual = extracted.get_str("issuer");
+        if actual != Some(expected) {
+            return Err(SamlError::issuer_mismatch(expected, actual));
+        }
+        if parser_type == ParserType::SamlResponse {
+            response_issuer::validate_response_issuer(expected, saml_content, opts.xml_limits)?;
         }
     }
     let is_response = matches!(
@@ -1060,7 +1047,15 @@ fn validate_context(
             opts.clock_drifts.1,
         )?;
     }
-    check_status_with_limits(saml_content, parser_type, opts.xml_limits)
+    match parser_type {
+        ParserType::LogoutResponse | ParserType::ManageNameIdResponse => {
+            check_status_with_limits(saml_content, parser_type, opts.xml_limits)
+        }
+        ParserType::SamlResponse
+        | ParserType::SamlRequest
+        | ParserType::LogoutRequest
+        | ParserType::ManageNameIdRequest => Ok(()),
+    }
 }
 
 fn validate_in_response_to(extracted: &Value, expected: Option<&str>) -> Result<(), SamlError> {
@@ -1077,19 +1072,14 @@ fn validate_in_response_to(extracted: &Value, expected: Option<&str>) -> Result<
 fn signature_is_present(
     binding: Binding,
     request: &HttpRequest,
-    xml: &str,
-    limits: XmlLimits,
-) -> Result<bool, SamlError> {
+    root: &crate::xml::dom::Node,
+) -> bool {
     let detached = match binding {
         Binding::Redirect => request.query.iter().any(|(name, _)| name == "Signature"),
         Binding::SimpleSign => request.body.iter().any(|(name, _)| name == "Signature"),
         Binding::Post | Binding::Artifact | Binding::Soap => false,
     };
-    if detached {
-        return Ok(true);
-    }
-    let document = crate::xml::dom::parse_with_limits(xml, limits)?;
-    Ok(!saml_signature_candidates(&document.root).is_empty())
+    detached || !saml_signature_candidates(root).is_empty()
 }
 
 fn flow_inner(
@@ -1114,7 +1104,7 @@ fn flow_inner(
         opts.redirect_inflate_max_bytes,
         opts.xml_limits,
     )?;
-    is_valid_xml_with_limits(&xml, opts.xml_limits)?;
+    let document = crate::context::validated_document_with_limits(&xml, opts.xml_limits)?;
     validate_protocol_profile(&xml, parser_type, opts.xml_limits)?;
     if parser_type == ParserType::SamlResponse {
         if let Err(status) = check_status_with_limits(&xml, parser_type, opts.xml_limits) {
@@ -1123,6 +1113,7 @@ fn flow_inner(
                 request,
                 binding,
                 &xml,
+                &document.root,
                 expected_recipient,
                 signed_destination,
             )?;
@@ -1132,7 +1123,7 @@ fn flow_inner(
 
     let verify_signature = opts.check_signature
         || (opts.verify_signature_if_present
-            && signature_is_present(binding, request, &xml, opts.xml_limits)?);
+            && signature_is_present(binding, request, &document.root));
     let (saml_content, assertion, sig_alg, message_authenticated, verified_xml_signatures) =
         if verify_signature {
             match binding {
@@ -1142,7 +1133,8 @@ fn flow_inner(
                         && assertion_signature == AssertionSignatureRequirement::Direct
                     {
                         verify_and_prepare(
-                            &xml,
+                            xml,
+                            &document.root,
                             parser_type,
                             opts,
                             assertion_signature,
@@ -1155,6 +1147,7 @@ fn flow_inner(
                         if let Some((saml_content, assertions)) =
                             crate::encrypted_elements::decrypt_detached_signed_assertions(
                                 &xml,
+                                &document.root,
                                 parser_type,
                                 opts,
                             )?
@@ -1163,14 +1156,17 @@ fn flow_inner(
                                 verify_present_signatures(decrypted, opts)?;
                             }
                             PreparedMessage {
-                                assertion: assertion_shortcut(&saml_content, opts.xml_limits)?,
+                                assertion: first_login_assertion_xml(
+                                    &saml_content,
+                                    opts.xml_limits,
+                                )?,
                                 saml_content,
                                 message_authenticated: false,
                                 verified_xml_signatures: Vec::new(),
                             }
                         } else {
                             let assertion = if parser_type == ParserType::SamlResponse {
-                                assertion_shortcut(&xml, opts.xml_limits)?
+                                first_login_assertion_xml(&xml, opts.xml_limits)?
                             } else {
                                 None
                             };
@@ -1192,7 +1188,8 @@ fn flow_inner(
                 }
                 _ => {
                     let prepared = verify_and_prepare(
-                        &xml,
+                        xml,
+                        &document.root,
                         parser_type,
                         opts,
                         assertion_signature,
@@ -1209,21 +1206,19 @@ fn flow_inner(
             }
         } else {
             let assertion = if parser_type == ParserType::SamlResponse {
-                assertion_shortcut(&xml, opts.xml_limits)?
+                first_login_assertion_xml(&xml, opts.xml_limits)?
             } else {
                 None
             };
             (xml, assertion, None, false, Vec::new())
         };
+    drop(document);
     let decrypt_elements = parser_type == ParserType::SamlResponse
         && (opts.assertion_elements.is_selected()
             || (verify_signature
                 && opts.received_encrypted_elements == ReceivedEncryptedElements::DecryptReceived
                 && opts.element_decrypt_key.is_some()
-                && crate::encrypted_elements::carries_encrypted_elements(
-                    &saml_content,
-                    opts.xml_limits,
-                )?));
+                && crate::encrypted_elements::carries_encrypted_elements(&saml_content)?));
     let (saml_content, assertion) = match (decrypt_elements, verify_signature) {
         (true, true) => {
             let key_pem = opts

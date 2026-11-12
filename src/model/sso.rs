@@ -7,6 +7,7 @@ use super::extract::{
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
 use super::session::{AuthnSession, EMPTY_AUTHN_SESSION};
 use super::subject::{NameId, Subject};
+use super::validation::system_time_from_offset_datetime;
 use super::{
     earliest_authn_session_expiration, LogoutSubject, RelayStateParam, ReplayKey, ReplayPolicy,
     SamlValidationContext,
@@ -16,7 +17,6 @@ use crate::config::EntityId;
 use crate::error::{SamlError, TimeWindowField};
 use crate::raw::FlowResult;
 use crate::xml::{dom, parse_saml_utc_date_time, XmlLimits};
-use std::time::SystemTime;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
@@ -396,12 +396,12 @@ impl SsoSession {
             ReplayPolicy::RequireCache(cache) => {
                 let replays =
                     crate::assertion_acceptance::assertion_replays(&self.raw_flow.saml_content)?;
-                let response_expires = system_time_from_offset(replay_deadline(
+                let response_expires = system_time_from_offset_datetime(replay_deadline(
                     self.earliest_replay_instant()?,
                     validation_now,
                     not_on_or_after_skew_ms,
                 )?)?;
-                let assertion_expires = system_time_from_offset(replay_deadline(
+                let assertion_expires = system_time_from_offset_datetime(replay_deadline(
                     self.assertion_replay_instant()?,
                     validation_now,
                     not_on_or_after_skew_ms,
@@ -419,7 +419,7 @@ impl SsoSession {
                         continue;
                     }
                     let expires_at = match replay.bearer_not_on_or_after {
-                        Some(instant) => system_time_from_offset(replay_deadline(
+                        Some(instant) => system_time_from_offset_datetime(replay_deadline(
                             parse_replay_expiration(&instant)?,
                             validation_now,
                             not_on_or_after_skew_ms,
@@ -517,18 +517,6 @@ fn replay_deadline(
         });
     }
     Ok(expires_at)
-}
-
-fn system_time_from_offset(expires_at: OffsetDateTime) -> Result<SystemTime, SamlError> {
-    let since_epoch = expires_at - OffsetDateTime::UNIX_EPOCH;
-    let converted = if since_epoch.is_negative() {
-        SystemTime::UNIX_EPOCH.checked_sub(since_epoch.unsigned_abs())
-    } else {
-        SystemTime::UNIX_EPOCH.checked_add(since_epoch.unsigned_abs())
-    };
-    converted.ok_or(SamlError::TimeWindowInvalid {
-        field: REPLAY_EXPIRATION_FIELD,
-    })
 }
 
 fn parse_replay_expiration(value: &str) -> Result<OffsetDateTime, SamlError> {

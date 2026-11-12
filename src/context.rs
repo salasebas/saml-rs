@@ -27,14 +27,20 @@ pub fn is_valid_xml(xml: &str) -> Result<(), SamlError> {
 
 /// Validate XML with explicit parser resource limits.
 pub fn is_valid_xml_with_limits(xml: &str, limits: XmlLimits) -> Result<(), SamlError> {
-    // Baseline: hardened parse rejects DOCTYPE / malformed structure.
-    crate::xml::dom::parse_with_limits(xml, limits)?;
+    validated_document_with_limits(xml, limits).map(|_| ())
+}
+
+pub(crate) fn validated_document_with_limits(
+    xml: &str,
+    limits: XmlLimits,
+) -> Result<crate::xml::dom::Document, SamlError> {
+    let document = crate::xml::dom::parse_with_limits(xml, limits)?;
     if let Ok(guard) = SCHEMA_VALIDATOR.read() {
         if let Some(validate) = *guard {
             validate(xml).map_err(SamlError::Invalid)?;
         }
     }
-    Ok(())
+    Ok(document)
 }
 
 #[cfg(test)]

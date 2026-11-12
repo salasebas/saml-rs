@@ -16,10 +16,11 @@ pub(super) fn validate_error_response(
     request: &HttpRequest,
     binding: Binding,
     xml: &str,
+    root: &crate::xml::dom::Node,
     expected_recipient: Option<&str>,
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
-    let message_authenticated = verify_present_signature(opts, request, binding, xml)?;
+    let message_authenticated = verify_present_signature(opts, request, binding, xml, root)?;
     if let Some(expected) = opts.from_issuer {
         validate_response_issuer(expected, xml, opts.xml_limits)?;
     }
@@ -40,9 +41,10 @@ fn verify_present_signature(
     request: &HttpRequest,
     binding: Binding,
     xml: &str,
+    root: &crate::xml::dom::Node,
 ) -> Result<bool, SamlError> {
     let verify = (opts.check_signature || opts.verify_signature_if_present)
-        && signature_is_present(binding, request, xml, opts.xml_limits)?;
+        && signature_is_present(binding, request, root);
     if !verify {
         return Ok(false);
     }
@@ -53,7 +55,8 @@ fn verify_present_signature(
             Ok(true)
         }
         Binding::Post | Binding::Artifact | Binding::Soap => Ok(verify_and_prepare(
-            xml,
+            xml.to_string(),
+            root,
             ParserType::SamlResponse,
             opts,
             AssertionSignatureRequirement::Compatible,
