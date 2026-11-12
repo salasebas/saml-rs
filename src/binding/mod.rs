@@ -6,6 +6,19 @@ mod encoding;
 mod escape;
 mod post_form;
 mod redirect;
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+mod signing;
+
+#[cfg(any(
+    feature = "crypto-rustcrypto",
+    feature = "crypto-aws-lc",
+    feature = "crypto-fips"
+))]
+pub(crate) use signing::sign_detached_message;
 
 pub use deflate::{
     deflate_raw_decode, deflate_raw_decode_with_limit, deflate_raw_encode,

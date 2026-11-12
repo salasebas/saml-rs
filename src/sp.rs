@@ -460,7 +460,7 @@ impl ServiceProvider {
         relay_state: Option<String>,
         id: String,
     ) -> Result<BindingContext, SamlError> {
-        use crate::binding::{append_signature, build_redirect_octet};
+        use crate::binding::sign_detached_message;
         use crate::crypto::SigningCredential;
 
         let credential = SigningCredential::from_setting(&self.setting)?;
@@ -468,16 +468,15 @@ impl ServiceProvider {
         let sig_alg = &self.setting.request_signature_algorithm;
 
         let (context, signature, sig_alg_out) = match binding {
-            Binding::Redirect => {
-                let octet = build_redirect_octet(
-                    ParserType::SamlRequest,
-                    xml,
-                    relay_state.as_deref(),
-                    sig_alg,
-                )?;
-                let sig = credential.sign_detached(&octet, sig_alg)?;
-                (append_signature(&destination, &octet, &sig), None, None)
-            }
+            Binding::Redirect | Binding::SimpleSign => sign_detached_message(
+                &credential,
+                binding,
+                xml,
+                &destination,
+                relay_state.as_deref(),
+                ParserType::SamlRequest,
+                sig_alg,
+            )?,
             Binding::Post => {
                 let signed = credential.sign_xml(
                     xml,
@@ -487,20 +486,6 @@ impl ServiceProvider {
                     self.setting.signature_config.as_ref(),
                 )?;
                 (base64_encode(signed.as_bytes()), None, None)
-            }
-            Binding::SimpleSign => {
-                let octet = crate::binding::build_simplesign_octet(
-                    ParserType::SamlRequest.query_param(),
-                    xml,
-                    relay_state.as_deref(),
-                    sig_alg,
-                );
-                let sig = credential.sign_detached(&octet, sig_alg)?;
-                (
-                    base64_encode(xml.as_bytes()),
-                    Some(sig),
-                    Some(sig_alg.clone()),
-                )
             }
             Binding::Artifact | Binding::Soap => {
                 return Err(SamlError::UnsupportedBinding { binding });

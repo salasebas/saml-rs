@@ -538,34 +538,23 @@ impl IdentityProvider {
         acs: &str,
         relay_state: Option<&str>,
     ) -> Result<(String, Option<String>, Option<String>), SamlError> {
-        use crate::binding::{append_signature, base64_encode, build_redirect_octet};
+        use crate::binding::{base64_encode, sign_detached_message};
         use crate::crypto::SigningCredential;
 
         match binding {
             Binding::Post => Ok((base64_encode(xml.as_bytes()), None, None)),
-            Binding::Redirect => {
+            Binding::Redirect | Binding::SimpleSign => {
                 let sig_alg = &self.setting.request_signature_algorithm;
                 let credential = SigningCredential::from_setting(&self.setting)?;
-                let octet =
-                    build_redirect_octet(ParserType::SamlResponse, xml, relay_state, sig_alg)?;
-                let sig = credential.sign_detached(&octet, sig_alg)?;
-                Ok((append_signature(acs, &octet, &sig), None, None))
-            }
-            Binding::SimpleSign => {
-                let sig_alg = &self.setting.request_signature_algorithm;
-                let credential = SigningCredential::from_setting(&self.setting)?;
-                let octet = crate::binding::build_simplesign_octet(
-                    ParserType::SamlResponse.query_param(),
+                sign_detached_message(
+                    &credential,
+                    binding,
                     xml,
+                    acs,
                     relay_state,
+                    ParserType::SamlResponse,
                     sig_alg,
-                );
-                let sig = credential.sign_detached(&octet, sig_alg)?;
-                Ok((
-                    base64_encode(xml.as_bytes()),
-                    Some(sig),
-                    Some(sig_alg.clone()),
-                ))
+                )
             }
             Binding::Artifact | Binding::Soap => Err(SamlError::UnsupportedBinding { binding }),
         }
