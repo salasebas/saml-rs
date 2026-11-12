@@ -13,7 +13,7 @@ use crate::metadata::{
     ArtifactResolutionEndpoint, IdpMetadataConfig as RawIdpMetadataConfig,
     SpMetadataConfig as RawSpMetadataConfig,
 };
-use crate::model::{AuthnRequest, RelayStateParam, Subject};
+use crate::model::{RelayStateParam, Subject};
 use crate::sp::ServiceProvider;
 use std::time::SystemTime;
 
@@ -178,77 +178,6 @@ pub(super) fn selected_acs(
         crate::model::EndpointUrl::try_new(endpoint.location)?,
     )
     .with_default_flag(endpoint.is_default))
-}
-
-pub(super) fn response_target(
-    sp: &ServiceProvider,
-    request: &AuthnRequest,
-    selected_binding: SsoResponseBinding,
-) -> Result<(SsoResponseBinding, Option<String>), SamlError> {
-    if request.acs_url().is_some() && request.acs_index().is_some() {
-        return Err(Error::Invalid(
-            "AuthnRequest must not specify both ACS URL and ACS index".into(),
-        ));
-    }
-    if let Some(protocol_binding) = request.protocol_binding() {
-        if protocol_binding != selected_binding {
-            return Err(Error::Invalid(
-                "response binding conflicts with AuthnRequest ProtocolBinding".into(),
-            ));
-        }
-    }
-    let binding = request.protocol_binding().unwrap_or(selected_binding);
-
-    if let Some(acs_url) = request.acs_url() {
-        if !sp
-            .metadata
-            .has_assertion_consumer_service(binding.as_binding(), acs_url.as_str())
-        {
-            return Err(Error::destination_mismatch(
-                acs_url.as_str(),
-                sp.metadata
-                    .get_assertion_consumer_service(binding.as_binding())
-                    .as_deref(),
-            ));
-        }
-        return Ok((binding, Some(acs_url.as_str().to_string())));
-    }
-
-    if let Some(index) = request.acs_index() {
-        let endpoint = sp
-            .metadata
-            .get_assertion_consumer_service_by_index(index)?
-            .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?;
-        let indexed_binding = SsoResponseBinding::try_from(endpoint.binding)?;
-        if indexed_binding != binding {
-            return Err(Error::Invalid(
-                "response binding conflicts with AuthnRequest ACS index".into(),
-            ));
-        }
-        return Ok((binding, Some(endpoint.location)));
-    }
-
-    if request.protocol_binding().is_none() {
-        return default_response_target(sp, binding);
-    }
-
-    Ok((binding, None))
-}
-
-pub(super) fn default_response_target(
-    sp: &ServiceProvider,
-    selected_binding: SsoResponseBinding,
-) -> Result<(SsoResponseBinding, Option<String>), SamlError> {
-    let endpoint = sp
-        .metadata
-        .get_default_assertion_consumer_service_endpoint()?
-        .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?;
-    if endpoint.binding != selected_binding.as_binding() {
-        return Err(Error::Invalid(
-            "response binding conflicts with default AssertionConsumerService".into(),
-        ));
-    }
-    Ok((selected_binding, Some(endpoint.location)))
 }
 
 pub(super) fn input_binding<Message>(input: &BrowserInput<Message>) -> Binding {

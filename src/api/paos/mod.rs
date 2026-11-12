@@ -22,6 +22,7 @@ use crate::xml::OutboundNameIdQualifiers;
 use super::raw_mapping::{
     ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor, user_from_subject,
 };
+use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
 use super::{Idp, Saml, SamlError, Sp};
 use protocol::{
     idp_to_ecp_envelope, parse_client_headers, read_soap_body, soap_fault_envelope,
@@ -759,7 +760,11 @@ impl Saml<Idp> {
         options: &RespondPaosSso,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
-        let acs = assertion_consumer_for_request(sp, request.message())?;
+        let acs = EndpointUrl::try_new(resolve_response_acs(
+            sp.metadata(),
+            Some(request.message()),
+            ResponseAcsBindings::Paos,
+        )?)?;
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let sign_encrypted_cbc = {
             let setting = &self.raw_identity_provider().setting;
@@ -844,41 +849,4 @@ fn assertion_consumer_url(
         .default_assertion_consumer_location()
         .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
     EndpointUrl::try_new(location)
-}
-
-fn assertion_consumer_for_request(
-    sp: &SpDescriptor,
-    request: &AuthnRequest,
-) -> Result<EndpointUrl, SamlError> {
-    if request.acs_url().is_some() && request.acs_index().is_some() {
-        return Err(SamlError::Invalid(
-            "AuthnRequest must not specify both an assertion consumer URL and an index".into(),
-        ));
-    }
-    if let Some(url) = request.acs_url() {
-        let published = sp.metadata().assertion_consumer_locations();
-        if published.iter().any(|location| location == url.as_str()) {
-            return Ok(url.clone());
-        }
-        return Err(SamlError::Invalid(
-            "AuthnRequest AssertionConsumerServiceURL is not published for HTTP-POST or HTTP-POST-SimpleSign in service provider metadata"
-                .into(),
-        ));
-    }
-    let endpoint = match request.acs_index() {
-        Some(index) => sp
-            .metadata()
-            .get_assertion_consumer_service_by_index(index)?,
-        None => sp
-            .metadata()
-            .get_default_assertion_consumer_service_endpoint()?,
-    }
-    .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
-    if !endpoint.accepts_posted_response() {
-        return Err(SamlError::Invalid(
-            "AuthnRequest AssertionConsumerServiceIndex, or the default assertion consumer when the request names none, is not HTTP-POST or HTTP-POST-SimpleSign in service provider metadata"
-                .into(),
-        ));
-    }
-    EndpointUrl::try_new(endpoint.location)
 }

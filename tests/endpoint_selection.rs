@@ -9,10 +9,11 @@ use std::time::SystemTime;
 
 use saml_rs::binding::base64_encode;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EndpointUrl, EntityId,
-    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
-    PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, Subject,
+    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, BrowserInput,
+    CertificatePem, Credentials, EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, IssuedArtifacts, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
+    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, SsoResponseBinding, StartSso, Subject,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -232,6 +233,93 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
         let unsolicited = idp.initiate_sso(&descriptor, subject(), RespondSso::post())?;
         assert_eq!(unsolicited.post_form()?.action().as_str(), FIRST_ACS);
+    }
+    Ok(())
+}
+
+#[test]
+fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_FIRST)?)
+            .artifact_resolution_service(ArtifactResolutionService::new(
+                0,
+                EndpointUrl::try_new("https://idp.example.com/artifact")?,
+            ))
+            .credentials(credentials())
+            .validation(IdpValidationPolicy::compatibility())
+            .build()?,
+    )?;
+    for binding in [
+        SsoResponseBinding::Post,
+        SsoResponseBinding::SimpleSign,
+        SsoResponseBinding::Artifact,
+    ] {
+        let global_binding = match binding {
+            SsoResponseBinding::Post => SsoResponseBinding::SimpleSign,
+            SsoResponseBinding::SimpleSign | SsoResponseBinding::Artifact => {
+                SsoResponseBinding::Post
+            }
+        };
+        let sp = Saml::sp(
+            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+                .acs_endpoint(
+                    AcsEndpoint::new(global_binding, EndpointUrl::try_new(DEFAULT_ACS)?)
+                        .with_index(0)
+                        .mark_default(),
+                )
+                .acs_endpoint(
+                    AcsEndpoint::new(binding, EndpointUrl::try_new(FIRST_ACS)?).with_index(1),
+                )
+                .credentials(credentials())
+                .validation(SpValidationPolicy::compatibility())
+                .build()?,
+        )?;
+        let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+        let xml = authn_request(IDP_SSO_FIRST).replace(
+            " Version=",
+            &format!(
+                " ProtocolBinding=\"{}\" Version=",
+                binding.as_binding().urn()
+            ),
+        );
+        let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
+        assert_eq!(request.message().acs_url(), None);
+        assert_eq!(request.message().acs_index(), None);
+        assert_eq!(request.message().protocol_binding(), Some(binding));
+        match binding {
+            SsoResponseBinding::Post | SsoResponseBinding::SimpleSign => {
+                let options = if binding == SsoResponseBinding::Post {
+                    RespondSso::post()
+                } else {
+                    RespondSso::simple_sign()
+                };
+                let response = idp.respond_sso(&sp_descriptor, &request, subject(), options)?;
+                assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
+                let raw_response = idp.raw_identity_provider().create_login_response(
+                    sp.raw_service_provider(),
+                    binding.as_binding(),
+                    &saml_rs::entity::User::new("alice@example.com"),
+                    &saml_rs::idp::LoginResponseOptions::default(),
+                )?;
+                assert_eq!(raw_response.entity_endpoint, FIRST_ACS);
+            }
+            SsoResponseBinding::Artifact => {
+                let mut issued = IssuedArtifacts::expire_after(std::time::Duration::from_secs(60));
+                let response = idp.respond_sso_artifact(
+                    &sp_descriptor,
+                    &request,
+                    subject(),
+                    RespondSso::artifact(ArtifactDelivery::redirect(0)),
+                    &mut issued,
+                )?;
+                assert_eq!(
+                    url::Url::parse(response.redirect_url()?)?.path(),
+                    "/acs/first"
+                );
+            }
+        }
     }
     Ok(())
 }
