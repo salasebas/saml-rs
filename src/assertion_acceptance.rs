@@ -11,13 +11,16 @@ use crate::model::{authn_statement_not_on_or_after_values, earliest_authn_sessio
 use crate::util::Value;
 use crate::validator::{conditions_time_bounds, verify_time_at};
 use crate::xml::dom::{self, Node};
-use crate::xml::{extract_with_limits, fields, ExtractorField, XmlLimits};
+use crate::xml::{extract_with_limits, fields, XmlLimits};
 use quick_xml::events::Event;
 use quick_xml::reader::NsReader;
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 
 const BEARER_SUBJECT_CONFIRMATION_METHOD: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ElementNamespace {
@@ -69,15 +72,14 @@ pub(crate) fn accept_response_assertions(
             &fields::login_response_fields(assertion_xml),
             opts.xml_limits,
         )?;
-        if extracted_has_bearer(&extracted, opts.xml_limits)? {
+        if node_has_bearer(assertion) {
             saw_bearer = true;
-            validate_subject_confirmation(&extracted, opts, expected_recipient)?;
-            validate_audience(assertion_xml, opts)?;
+            validate_subject_confirmation(assertion, opts, expected_recipient)?;
+            validate_audience(assertion, opts)?;
             validate_assertion_time(&extracted, opts)?;
-        } else if confirmation_error.is_none() && !subject_confirmation_xmls(&extracted).is_empty()
+        } else if confirmation_error.is_none() && subject_confirmations(assertion).next().is_some()
         {
-            if let Err(error) = validate_subject_confirmation(&extracted, opts, expected_recipient)
-            {
+            if let Err(error) = validate_subject_confirmation(assertion, opts, expected_recipient) {
                 confirmation_error = Some(error);
             }
         }
@@ -123,26 +125,14 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
     rule: UnsolicitedInResponseTo,
 ) -> Result<(), SamlError> {
     let document = dom::parse_with_limits(response_xml, limits)?;
-    let fields = [
-        ExtractorField::new("subjectConfirmation", &["SubjectConfirmation"]).attrs(&["Method"]),
-        ExtractorField::new(
-            "subjectConfirmationData",
-            &["SubjectConfirmation", "SubjectConfirmationData"],
-        )
-        .attrs(&["InResponseTo"]),
-    ];
     for assertion in direct_assertions(&document.root) {
-        let assertion_xml = &response_xml[assertion.start..assertion.end];
-        let extracted = extract_with_limits(
-            assertion_xml,
-            &fields::login_response_fields(assertion_xml),
-            limits,
-        )?;
-        for confirmation_xml in subject_confirmation_xmls(&extracted) {
-            let confirmation = extract_with_limits(confirmation_xml, &fields, limits)?;
-            let is_bearer = confirmation.get_str("subjectConfirmation")
-                == Some(BEARER_SUBJECT_CONFIRMATION_METHOD);
-            let request_id = confirmation.get_str("subjectConfirmationData");
+        for confirmation in subject_confirmations(assertion) {
+            let is_bearer = confirmation.attr("Method") == Some(BEARER_SUBJECT_CONFIRMATION_METHOD);
+            let request_id = confirmation
+                .children
+                .iter()
+                .filter(|child| child.local_name == "SubjectConfirmationData")
+                .find_map(|data| data.attr("InResponseTo"));
             if is_bearer && request_id.is_some_and(|actual| rule.rejects(actual)) {
                 return Err(SamlError::in_response_to_mismatch(None, request_id));
             }
@@ -453,95 +443,43 @@ fn understood_condition(local: &str) -> bool {
     )
 }
 
-fn extracted_has_bearer(extracted: &Value, limits: XmlLimits) -> Result<bool, SamlError> {
-    for confirmation_xml in subject_confirmation_xmls(extracted) {
-        let fields = [
-            ExtractorField::new("subjectConfirmation", &["SubjectConfirmation"]).attrs(&["Method"]),
-        ];
-        let confirmation = extract_with_limits(confirmation_xml, &fields, limits)?;
-        if confirmation.get_str("subjectConfirmation") == Some(BEARER_SUBJECT_CONFIRMATION_METHOD) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-fn audience_restriction_contains(
-    audience_restriction: &str,
-    expected: &str,
-    limits: XmlLimits,
-) -> Result<bool, SamlError> {
-    let field = ExtractorField::new("audience", &["AudienceRestriction", "Audience"]);
-    let extracted =
-        extract_with_limits(audience_restriction, std::slice::from_ref(&field), limits)?;
-    Ok(match extracted.get("audience") {
-        Some(Value::Str(audience)) => audience == expected,
-        Some(Value::Array(audiences)) => audiences
-            .iter()
-            .any(|audience| audience.as_str() == Some(expected)),
-        _ => false,
-    })
-}
-
 enum AudienceCheck {
     Satisfied,
     Absent,
     Rejected,
 }
 
-fn audience_restrictions_contain(
-    assertion: &str,
-    expected: &str,
-    limits: XmlLimits,
-) -> Result<AudienceCheck, SamlError> {
-    let field = ExtractorField::new(
-        "audienceRestriction",
-        &["Assertion", "Conditions", "AudienceRestriction"],
-    )
-    .with_context();
-    let extracted = extract_with_limits(assertion, std::slice::from_ref(&field), limits)?;
-
-    match extracted.get("audienceRestriction") {
-        Some(Value::Str(audience_restriction)) => {
-            if audience_restriction_contains(audience_restriction, expected, limits)? {
-                Ok(AudienceCheck::Satisfied)
-            } else {
-                Ok(AudienceCheck::Rejected)
-            }
+fn audience_restrictions_contain(assertion: &Node, expected: &str) -> AudienceCheck {
+    let mut result = AudienceCheck::Absent;
+    for restriction in assertion
+        .children
+        .iter()
+        .filter(|child| child.local_name == "Conditions")
+        .flat_map(|conditions| conditions.children.iter())
+        .filter(|child| child.local_name == "AudienceRestriction")
+    {
+        if !restriction
+            .children
+            .iter()
+            .any(|child| child.local_name == "Audience" && child.text == expected)
+        {
+            return AudienceCheck::Rejected;
         }
-        Some(Value::Array(audience_restrictions)) if !audience_restrictions.is_empty() => {
-            for audience_restriction in audience_restrictions {
-                let Some(audience_restriction) = audience_restriction.as_str() else {
-                    return Ok(AudienceCheck::Rejected);
-                };
-                if !audience_restriction_contains(audience_restriction, expected, limits)? {
-                    return Ok(AudienceCheck::Rejected);
-                }
-            }
-            Ok(AudienceCheck::Satisfied)
-        }
-        _ => Ok(AudienceCheck::Absent),
+        result = AudienceCheck::Satisfied;
     }
+    result
 }
 
-fn validate_audience(assertion_xml: &str, opts: &FlowOptions<'_>) -> Result<(), SamlError> {
+fn validate_audience(assertion: &Node, opts: &FlowOptions<'_>) -> Result<(), SamlError> {
     let Some(expected) = opts.expected_audience else {
         return Ok(());
     };
-    match audience_restrictions_contain(assertion_xml, expected, opts.xml_limits)? {
+    match audience_restrictions_contain(assertion, expected) {
         AudienceCheck::Satisfied => Ok(()),
         AudienceCheck::Absent if !opts.require_audience_restriction => Ok(()),
         AudienceCheck::Absent | AudienceCheck::Rejected => Err(SamlError::AudienceMismatch {
             expected: expected.to_string(),
         }),
-    }
-}
-
-fn subject_confirmation_xmls(extracted: &Value) -> Vec<&str> {
-    match extracted.get("subjectConfirmation") {
-        Some(Value::Str(xml)) => vec![xml.as_str()],
-        Some(Value::Array(items)) => items.iter().filter_map(Value::as_str).collect(),
-        _ => Vec::new(),
     }
 }
 
@@ -552,33 +490,28 @@ enum SubjectConfirmationCheck {
 }
 
 fn check_bearer_subject_confirmation(
-    xml: &str,
+    confirmation: &Node,
     opts: &FlowOptions<'_>,
     expected_recipient: Option<&str>,
 ) -> Result<SubjectConfirmationCheck, SamlError> {
-    let fields = [
-        ExtractorField::new("subjectConfirmation", &["SubjectConfirmation"]).attrs(&["Method"]),
-        ExtractorField::new(
-            "subjectConfirmationData",
-            &["SubjectConfirmation", "SubjectConfirmationData"],
-        )
-        .attrs(&["NotBefore", "NotOnOrAfter", "Recipient", "InResponseTo"]),
-    ];
-    let extracted = extract_with_limits(xml, &fields, opts.xml_limits)?;
-
-    if extracted.get_str("subjectConfirmation") != Some(BEARER_SUBJECT_CONFIRMATION_METHOD) {
+    if confirmation.attr("Method") != Some(BEARER_SUBJECT_CONFIRMATION_METHOD) {
         return Ok(SubjectConfirmationCheck::Invalid(
             SubjectConfirmationReason::InvalidMethod,
         ));
     }
 
-    let Some(not_on_or_after) = extracted.get_str("subjectConfirmationData.notOnOrAfter") else {
+    let mut data = confirmation
+        .children
+        .iter()
+        .filter(|child| child.local_name == "SubjectConfirmationData");
+    let data = data.next().filter(|_| data.next().is_none());
+    let Some(not_on_or_after) = data.and_then(|data| data.attr("NotOnOrAfter")) else {
         return Ok(SubjectConfirmationCheck::Invalid(
             SubjectConfirmationReason::MissingNotOnOrAfter,
         ));
     };
     if !verify_time_at(
-        extracted.get_str("subjectConfirmationData.notBefore"),
+        data.and_then(|data| data.attr("NotBefore")),
         Some(not_on_or_after),
         opts.clock_drifts,
         opts.validation_now()?,
@@ -589,7 +522,7 @@ fn check_bearer_subject_confirmation(
     }
 
     if let Some(expected) = expected_recipient {
-        if extracted.get_str("subjectConfirmationData.recipient") != Some(expected) {
+        if data.and_then(|data| data.attr("Recipient")) != Some(expected) {
             return Ok(SubjectConfirmationCheck::Invalid(
                 SubjectConfirmationReason::RecipientMismatch,
             ));
@@ -597,7 +530,7 @@ fn check_bearer_subject_confirmation(
     }
 
     if let Some(expected) = opts.expected_in_response_to {
-        if extracted.get_str("subjectConfirmationData.inResponseTo") != Some(expected) {
+        if data.and_then(|data| data.attr("InResponseTo")) != Some(expected) {
             return Ok(SubjectConfirmationCheck::Invalid(
                 SubjectConfirmationReason::InResponseToMismatch,
             ));
@@ -608,13 +541,13 @@ fn check_bearer_subject_confirmation(
 }
 
 fn validate_subject_confirmation(
-    extracted: &Value,
+    assertion: &Node,
     opts: &FlowOptions<'_>,
     expected_recipient: Option<&str>,
 ) -> Result<(), SamlError> {
     let mut reason = None;
-    for xml in subject_confirmation_xmls(extracted) {
-        match check_bearer_subject_confirmation(xml, opts, expected_recipient)? {
+    for confirmation in subject_confirmations(assertion) {
+        match check_bearer_subject_confirmation(confirmation, opts, expected_recipient)? {
             SubjectConfirmationCheck::Valid => return Ok(()),
             SubjectConfirmationCheck::Invalid(current) => reason = Some(current),
         }
