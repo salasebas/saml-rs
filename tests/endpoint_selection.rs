@@ -325,6 +325,58 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
 }
 
 #[test]
+fn conflicting_request_acs_selectors_are_not_answered() -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with_default_acs()?;
+    let idp = idp_with_sso(&[IDP_SSO_FIRST])?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    for (selector, options, expected) in [
+        (
+            format!(
+                " AssertionConsumerServiceURL=\"{DEFAULT_ACS}\" AssertionConsumerServiceIndex=\"0\""
+            ),
+            RespondSso::post(),
+            "AuthnRequest must not specify both ACS URL and ACS index",
+        ),
+        (
+            " AssertionConsumerServiceIndex=\"0\"".to_string(),
+            RespondSso::simple_sign(),
+            "response binding conflicts with AuthnRequest ACS index",
+        ),
+    ] {
+        let xml =
+            authn_request(IDP_SSO_FIRST).replace(" Version=", &format!("{selector} Version="));
+        let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
+        match idp.respond_sso(&sp_descriptor, &request, subject(), options) {
+            Err(SamlError::Invalid(message)) => assert_eq!(message, expected),
+            other => return Err(format!("expected Invalid({expected}), got {other:?}").into()),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_response_is_not_sent_to_an_unpublished_request_acs() -> Result<(), Box<dyn std::error::Error>>
+{
+    let sp = sp_with_default_acs()?;
+    let idp = idp_with_sso(&[IDP_SSO_FIRST])?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let unpublished = "https://sp.example.com/acs/unpublished";
+    let xml = authn_request(IDP_SSO_FIRST).replace(
+        " Version=",
+        &format!(" AssertionConsumerServiceURL=\"{unpublished}\" Version="),
+    );
+    let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
+    match idp.respond_sso(&sp_descriptor, &request, subject(), RespondSso::post()) {
+        Err(SamlError::DestinationMismatch { expected, actual }) => {
+            assert_eq!(expected, unpublished);
+            assert_eq!(actual.as_deref(), Some(DEFAULT_ACS));
+        }
+        other => return Err(format!("expected DestinationMismatch, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
 fn sso_destination_matches_the_actual_published_receiving_endpoint(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with_default_acs()?;
