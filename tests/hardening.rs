@@ -584,6 +584,53 @@ fn hardening_subject_confirmation_request_id_must_match() -> Result<(), Box<dyn 
     )
 }
 
+fn resigned_response_request(xml: &str) -> Result<HttpRequest, SamlError> {
+    let document = saml_rs::xml::dom::parse(xml)?;
+    let signature = document
+        .root
+        .children
+        .iter()
+        .filter(|child| child.local_name == "Assertion")
+        .flat_map(|assertion| &assertion.children)
+        .find(|child| child.local_name == "Signature")
+        .ok_or_else(|| SamlError::Xml("missing assertion signature".into()))?;
+    let mut xml = xml.to_string();
+    xml.replace_range(signature.start..signature.end, "");
+    let key = saml_rs::crypto::keys::load_private_key(PRIVKEY, None)?;
+    let signed =
+        saml_rs::crypto::construct_saml_signature(&xml, false, &key, CERT, RSA_SHA256, &[], None)?;
+    Ok(HttpRequest::post(vec![(
+        "SAMLResponse".into(),
+        saml_rs::binding::base64_encode(signed.as_bytes()),
+    )]))
+}
+
+#[test]
+fn hardening_duplicate_confirmation_data_keeps_the_missing_expiry_error(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with("https://sp.example.com/metadata", signing());
+    let xml = String::from_utf8(base64_decode(&response_for(&sp))?)?;
+    let xml = xml
+        .replacen(
+            "</saml:SubjectConfirmation>",
+            "<saml:SubjectConfirmationData/></saml:SubjectConfirmation>",
+            1,
+        )
+        .replace(
+            "<saml:Audience>https://sp.example.com/metadata</saml:Audience>",
+            "<saml:Audience>https://other.example/metadata</saml:Audience>",
+        );
+    assert_subject_confirmation_reason(
+        sp.parse_login_response_with_request_id(
+            &idp(),
+            Binding::Post,
+            &resigned_response_request(&xml)?,
+            "_req1",
+        ),
+        SubjectConfirmationReason::MissingNotOnOrAfter,
+    )
+}
+
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn hardening_sign_then_encrypt_message_auto_resolves() -> Result<(), Box<dyn std::error::Error>> {
