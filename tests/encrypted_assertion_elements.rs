@@ -14,6 +14,14 @@ use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::constants::CertUse;
+use saml_rs::constants::{
+    data_encryption_algorithm::AES_256, key_encryption_algorithm::RSA_OAEP_MGF1P,
+    signature_algorithm::RSA_SHA256,
+};
+use saml_rs::crypto::{
+    construct_saml_signature, encrypt_assertion,
+    keys::{load_certificate, load_private_key},
+};
 use saml_rs::metadata::{IdpMetadata, SpMetadata};
 use saml_rs::util::normalize_cert_string;
 use saml_rs::{
@@ -37,6 +45,183 @@ const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
+
+#[derive(Clone, Copy, Debug)]
+enum TextLocation {
+    Assertion,
+    SignedAssertion,
+    Identifier,
+}
+
+fn encrypted_text_session(
+    text: &str,
+    expected_value: &str,
+    location: TextLocation,
+) -> Result<Result<SsoSession, SamlError>, Box<dyn std::error::Error>> {
+    let sp = sp_with(
+        XmlEncryptionPolicy::default(),
+        SpValidationPolicy {
+            assertions: match location {
+                TextLocation::SignedAssertion => AssertionSignaturePolicy::RequireSigned,
+                TextLocation::Assertion | TextLocation::Identifier => {
+                    AssertionSignaturePolicy::AllowUnsignedForCompatibility
+                }
+            },
+            ..sp_validation()
+        },
+    )?;
+    let idp = idp(XmlEncryptionPolicy::default())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        Subject::new(alice(), Vec::new()),
+        RespondSso::post(),
+    )?;
+    let mut xml = response_xml(&response)?;
+    while let Some(start) = xml.find("<ds:Signature") {
+        let end = xml[start..]
+            .find("</ds:Signature>")
+            .ok_or("missing signature end")?
+            + start
+            + "</ds:Signature>".len();
+        xml.replace_range(start..end, "");
+    }
+    let start = xml.find("<saml:NameID ").ok_or("missing NameID")?;
+    let end = xml[start..]
+        .find("</saml:NameID>")
+        .ok_or("missing NameID end")?
+        + start
+        + "</saml:NameID>".len();
+    let name_id = format!(
+        "<saml:NameID xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">{text}</saml:NameID>"
+    );
+    let replacement = match location {
+        TextLocation::Identifier => {
+            let template = format!(
+                "<xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\" Type=\"http://www.w3.org/2001/04/xmlenc#Element\"><xenc:EncryptionMethod Algorithm=\"{AES_256}\"/><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{RSA_OAEP_MGF1P}\"/><xenc:CipherData><xenc:CipherValue/></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue/></xenc:CipherData></xenc:EncryptedData>"
+            );
+            let mut manager = bergshamra::KeysManager::new();
+            manager.add_key(load_certificate(CERT)?);
+            let encrypted = bergshamra::encrypt(
+                &bergshamra::EncContext::new(manager),
+                &template,
+                name_id.as_bytes(),
+            )?;
+            format!("<saml:EncryptedID>{encrypted}</saml:EncryptedID>")
+        }
+        TextLocation::Assertion | TextLocation::SignedAssertion => name_id,
+    };
+    xml.replace_range(start..end, &replacement);
+    let key = load_private_key(PRIVKEY, None)?;
+    if matches!(location, TextLocation::SignedAssertion) {
+        xml = construct_saml_signature(&xml, false, &key, CERT, RSA_SHA256, &[], None)?;
+        let control = sp.finish_sso(
+            &idp_descriptor,
+            &started.pending,
+            BrowserInput::<SsoResponse>::post(vec![FormField::new(
+                "SAMLResponse",
+                base64_encode(xml.as_bytes()),
+            )]),
+            validation(),
+        )?;
+        assert_eq!(control.name_id().value(), expected_value);
+    }
+    if matches!(
+        location,
+        TextLocation::Assertion | TextLocation::SignedAssertion
+    ) {
+        xml = encrypt_assertion(&xml, CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
+    }
+    xml = construct_saml_signature(&xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+    Ok(sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(vec![FormField::new(
+            "SAMLResponse",
+            base64_encode(xml.as_bytes()),
+        )]),
+        validation(),
+    ))
+}
+
+fn decrypted_text_values(
+    location: TextLocation,
+) -> Result<Vec<Result<String, String>>, Box<dyn std::error::Error>> {
+    [
+        ("<![CDATA[<b></b>]]>", "<b></b>"),
+        ("<![CDATA[x <b /> y]]>", "x <b /> y"),
+        ("alice>", "alice>"),
+    ]
+    .into_iter()
+    .map(|(text, expected_value)| {
+        Ok(encrypted_text_session(text, expected_value, location)?
+            .map(|session| session.name_id().value().to_string())
+            .map_err(|error| error.to_string()))
+    })
+    .collect()
+}
+
+#[test]
+#[ignore = "#405: requires bergshamra to preserve decrypted XML plaintext"]
+fn decrypted_assertion_preserves_xml_text() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        decrypted_text_values(TextLocation::Assertion)?,
+        vec![
+            Ok("<b></b>".into()),
+            Ok("x <b /> y".into()),
+            Ok("alice>".into())
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+#[ignore = "#405: requires bergshamra to preserve decrypted XML plaintext"]
+fn decrypted_identifier_preserves_xml_text() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        decrypted_text_values(TextLocation::Identifier)?,
+        vec![
+            Ok("<b></b>".into()),
+            Ok("x <b /> y".into()),
+            Ok("alice>".into())
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+#[ignore = "#405: requires bergshamra to preserve decrypted XML plaintext"]
+fn signed_then_encrypted_assertion_preserves_xml_text() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        decrypted_text_values(TextLocation::SignedAssertion)?,
+        vec![
+            Ok("<b></b>".into()),
+            Ok("x <b /> y".into()),
+            Ok("alice>".into())
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn encrypted_text_control_reaches_the_service_provider() -> Result<(), Box<dyn std::error::Error>> {
+    for location in [
+        TextLocation::Assertion,
+        TextLocation::SignedAssertion,
+        TextLocation::Identifier,
+    ] {
+        let session = encrypted_text_session("alice", "alice", location)??;
+        assert_eq!(session.name_id().value(), "alice", "{location:?}");
+    }
+    Ok(())
+}
 
 fn credentials() -> Credentials {
     Credentials {
