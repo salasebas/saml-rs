@@ -32,6 +32,10 @@ impl<'a> KeyTransport<'a> {
             parameters: setting
                 .rsa_oaep_parameters
                 .as_ref()
+                .filter(|_| {
+                    setting.key_encryption_algorithm
+                        == crate::constants::key_encryption_algorithm::RSA_OAEP
+                })
                 .map(|(digest, mgf)| (digest.as_uri(), mgf.as_uri())),
         }
     }

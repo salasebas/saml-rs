@@ -164,15 +164,26 @@ pub enum DataEncryptionAlgorithm {
     #[deprecated]
     TripleDes,
     Aes128Gcm,
+    Aes256Gcm,
     Custom(String),
 }
 
 pub enum KeyEncryptionAlgorithm {
     RsaOaepMgf1p,
+    RsaOaep {
+        digest: DigestAlgorithm,
+        mgf: MaskGenerationFunction,
+    },
     Rsa15ForCompatibility,
     #[deprecated]
     Rsa15,
     Custom(String),
+}
+
+pub enum MaskGenerationFunction {
+    Mgf1Sha256,
+    Mgf1Sha384,
+    Mgf1Sha512,
 }
 ```
 
