@@ -1,5 +1,5 @@
 use crate::browser::{BrowserInput, LogoutBinding, Outbound, PendingLogoutRequest, Started};
-use crate::config::{EntityId, HmacSecret, IdpDescriptor, NameIdFormat, SpDescriptor};
+use crate::config::{IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::error::SamlError as Error;
@@ -17,8 +17,8 @@ use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding, raw_idp_descriptor,
-    raw_sp_descriptor, relay_state_from_input,
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding,
+    relay_state_from_input, RawPeer,
 };
 use super::{Idp, LogoutSigning, RespondSlo, Saml, SamlError, Sp, StartSlo};
 
@@ -61,12 +61,11 @@ impl Saml<Sp> {
         subject: LogoutSubject,
         options: StartSlo,
     ) -> Result<Started<LogoutRequest>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
+        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         start_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
-            idp.entity_id(),
-            &raw_idp.metadata,
+            peer,
             subject,
             options,
             StartSloRole::SessionParticipant,
@@ -98,11 +97,11 @@ impl Saml<Sp> {
         input: BrowserInput<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
+        let peer = RawPeer::from_idp(idp, validation.now())?;
         receive_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
-            SloPeer::from_metadata_and_setting(&raw_idp.metadata, &raw_idp.setting),
+            peer,
             input,
             validation,
         )
@@ -130,12 +129,11 @@ impl Saml<Sp> {
         request: &Received<LogoutRequest>,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
+        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         respond_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
-            idp.entity_id(),
-            &raw_idp.metadata,
+            peer,
             request,
             options,
             LogoutResponseTransport::SessionParticipant,
@@ -202,12 +200,11 @@ impl Saml<Sp> {
         input: BrowserInput<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
+        let peer = RawPeer::from_idp(idp, validation.now())?;
         finish_slo_impl(
             &self.raw_service_provider().setting,
             &self.raw_service_provider().metadata,
-            idp.entity_id(),
-            SloPeer::from_metadata_and_setting(&raw_idp.metadata, &raw_idp.setting),
+            peer,
             pending,
             input,
             validation,
@@ -269,12 +266,11 @@ impl Saml<Idp> {
         subject: LogoutSubject,
         options: StartSlo,
     ) -> Result<Started<LogoutRequest>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
+        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         start_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
-            sp.entity_id(),
-            &raw_sp.metadata,
+            peer,
             subject,
             options,
             StartSloRole::SessionAuthority {
@@ -330,11 +326,11 @@ impl Saml<Idp> {
         input: BrowserInput<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
+        let peer = RawPeer::from_sp(sp, validation.now())?;
         receive_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
-            SloPeer::from_metadata_and_setting(&raw_sp.metadata, &raw_sp.setting),
+            peer,
             input,
             validation,
         )
@@ -376,12 +372,11 @@ impl Saml<Idp> {
         request: &Received<LogoutRequest>,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
+        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         respond_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
-            sp.entity_id(),
-            &raw_sp.metadata,
+            peer,
             request,
             options,
             LogoutResponseTransport::SessionAuthority,
@@ -448,12 +443,11 @@ impl Saml<Idp> {
         input: BrowserInput<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
+        let peer = RawPeer::from_sp(sp, validation.now())?;
         finish_slo_impl(
             &self.raw_identity_provider().setting,
             &self.raw_identity_provider().metadata,
-            sp.entity_id(),
-            SloPeer::from_metadata_and_setting(&raw_sp.metadata, &raw_sp.setting),
+            peer,
             pending,
             input,
             validation,
@@ -470,8 +464,7 @@ enum StartSloRole {
 fn start_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer_entity_id: &EntityId,
-    peer_metadata: &Metadata,
+    peer: RawPeer<'_>,
     subject: LogoutSubject,
     options: StartSlo,
     role: StartSloRole,
@@ -485,7 +478,7 @@ fn start_slo_impl(
     }
     if matches!(role, StartSloRole::SessionParticipant) {
         enforce_participant_https(
-            peer_metadata,
+            peer.metadata,
             options.binding,
             follows_rules,
             options.allows_http(),
@@ -538,7 +531,7 @@ fn start_slo_impl(
     let created = create_logout_request_for_subject_inner(LogoutRequestInput {
         init_setting: local_setting,
         init_meta: local_metadata,
-        target_meta: peer_metadata,
+        target_meta: peer.metadata,
         binding: options.binding.as_binding(),
         subject: &request_subject,
         relay_state: options.relay_state.as_deref(),
@@ -555,7 +548,7 @@ fn start_slo_impl(
         outbound.id().clone(),
         options.relay_state,
         options.binding,
-        peer_entity_id.clone(),
+        peer.entity_id.clone(),
     )?;
     if matches!(role, StartSloRole::SessionAuthority { .. }) {
         pending = pending.with_issue_instant(SamlInstant::try_new(created.issue_instant)?);
@@ -569,25 +562,10 @@ fn start_slo_impl(
     Ok(Started { pending, outbound })
 }
 
-#[derive(Clone, Copy)]
-struct SloPeer<'a> {
-    metadata: &'a Metadata,
-    hmac_secret: Option<&'a HmacSecret>,
-}
-
-impl<'a> SloPeer<'a> {
-    fn from_metadata_and_setting(metadata: &'a Metadata, setting: &'a EntitySetting) -> Self {
-        Self {
-            metadata,
-            hmac_secret: setting.hmac_secret.as_ref(),
-        }
-    }
-}
-
 fn receive_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer: SloPeer<'_>,
+    peer: RawPeer<'_>,
     input: BrowserInput<LogoutRequest>,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
@@ -630,16 +608,15 @@ fn receive_slo_impl(
 fn respond_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer_entity_id: &EntityId,
-    peer_metadata: &Metadata,
+    peer: RawPeer<'_>,
     request: &Received<LogoutRequest>,
     options: RespondSlo,
     transport: LogoutResponseTransport,
 ) -> Result<Outbound<LogoutResponse>, SamlError> {
-    ensure_entity_id(request.message().issuer(), peer_entity_id)?;
+    ensure_entity_id(request.message().issuer(), peer.entity_id)?;
     if matches!(transport, LogoutResponseTransport::SessionParticipant) {
         enforce_participant_https(
-            peer_metadata,
+            peer.metadata,
             options.binding,
             options.follows_generation_rules(),
             options.allows_http(),
@@ -652,7 +629,7 @@ fn respond_slo_impl(
     let context = create_logout_response_inner(LogoutResponseInput {
         init_setting: local_setting,
         init_meta: local_metadata,
-        target_meta: peer_metadata,
+        target_meta: peer.metadata,
         binding: options.binding.as_binding(),
         in_response_to: Some(request.message().id().as_str()),
         relay_state: relay_state.as_deref(),
@@ -668,13 +645,12 @@ fn respond_slo_impl(
 fn finish_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
-    peer_entity_id: &EntityId,
-    peer: SloPeer<'_>,
+    peer: RawPeer<'_>,
     pending: &PendingLogoutRequest,
     input: BrowserInput<LogoutResponse>,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<LogoutCompleted, SamlError> {
-    ensure_entity_id(pending.peer_entity_id(), peer_entity_id)?;
+    ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;
     let binding = logout_response_binding(input_binding(&input), pending.request_binding())?;
     let relay_state = relay_state_from_input(&input)?;
     ensure_relay_state(pending.relay_state(), &relay_state)?;
@@ -710,7 +686,7 @@ fn finish_slo_impl(
     validation
         .check_and_store_message_replay(ReplayKey::LogoutResponseId(response.id().clone()))?;
     Ok(
-        LogoutCompleted::from_response(peer_entity_id.clone(), response)
+        LogoutCompleted::from_response(peer.entity_id.clone(), response)
             .with_relay_state(relay_state),
     )
 }

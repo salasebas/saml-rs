@@ -1,7 +1,7 @@
 use crate::browser::{
     BrowserInput, NameIdManagementBinding, Outbound, PendingManageNameIdRequest, Started,
 };
-use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
+use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
@@ -21,8 +21,8 @@ use crate::name_id_management::{
 use std::time::SystemTime;
 
 use super::super::raw_mapping::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding, raw_idp_descriptor,
-    raw_sp_descriptor, relay_state_from_input,
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding,
+    relay_state_from_input, RawPeer,
 };
 use super::super::{
     Idp, ReceiveNameIdManagement, RespondNameIdManagement, Saml, SamlError, Sp,
@@ -90,14 +90,8 @@ impl Saml<Sp> {
         change: &NameIdChange,
         options: StartNameIdManagement,
     ) -> Result<Started<ManageNameIdRequest>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
-        start(
-            self.local(),
-            Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
-            name_id,
-            change,
-            options,
-        )
+        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        start(self.local(), peer, name_id, change, options)
     }
 
     /// Read an identity provider's `ManageNameIDRequest` sent over
@@ -134,14 +128,8 @@ impl Saml<Sp> {
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        receive(
-            self.local(),
-            Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
-            input,
-            options,
-            validation,
-        )
+        let peer = RawPeer::from_idp(idp, validation.now())?;
+        receive(self.local(), peer, input, options, validation)
     }
 
     /// Answer a received `ManageNameIDRequest` over HTTP-Redirect.
@@ -164,13 +152,8 @@ impl Saml<Sp> {
         request: &Received<ManageNameIdRequest>,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
-        respond(
-            self.local(),
-            Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
-            request,
-            options,
-        )
+        let peer = RawPeer::from_idp(idp, SystemTime::now())?;
+        respond(self.local(), peer, request, options)
     }
 
     /// Read the identity provider's `ManageNameIDResponse` to a request this
@@ -195,14 +178,8 @@ impl Saml<Sp> {
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<RelayStateParam, SamlError> {
-        let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        finish(
-            self.local(),
-            Peer::new(idp.entity_id(), &raw_idp.metadata, &raw_idp.setting),
-            pending,
-            input,
-            validation,
-        )
+        let peer = RawPeer::from_idp(idp, validation.now())?;
+        finish(self.local(), peer, pending, input, validation)
     }
 
     fn local(&self) -> Local<'_> {
@@ -271,14 +248,8 @@ impl Saml<Idp> {
         change: &NameIdChange,
         options: StartNameIdManagement,
     ) -> Result<Started<ManageNameIdRequest>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
-        start(
-            self.local(),
-            Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
-            name_id,
-            change,
-            options,
-        )
+        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        start(self.local(), peer, name_id, change, options)
     }
 
     /// Read a service provider's `ManageNameIDRequest` sent over
@@ -339,14 +310,8 @@ impl Saml<Idp> {
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
-        receive(
-            self.local(),
-            Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
-            input,
-            options,
-            validation,
-        )
+        let peer = RawPeer::from_sp(sp, validation.now())?;
+        receive(self.local(), peer, input, options, validation)
     }
 
     /// Answer a received `ManageNameIDRequest` over HTTP-Redirect.
@@ -364,13 +329,8 @@ impl Saml<Idp> {
         request: &Received<ManageNameIdRequest>,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
-        respond(
-            self.local(),
-            Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
-            request,
-            options,
-        )
+        let peer = RawPeer::from_sp(sp, SystemTime::now())?;
+        respond(self.local(), peer, request, options)
     }
 
     /// Read the service provider's `ManageNameIDResponse` to a request this
@@ -392,14 +352,8 @@ impl Saml<Idp> {
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<RelayStateParam, SamlError> {
-        let raw_sp = raw_sp_descriptor(sp, validation.now())?;
-        finish(
-            self.local(),
-            Peer::new(sp.entity_id(), &raw_sp.metadata, &raw_sp.setting),
-            pending,
-            input,
-            validation,
-        )
+        let peer = RawPeer::from_sp(sp, validation.now())?;
+        finish(self.local(), peer, pending, input, validation)
     }
 
     fn local(&self) -> Local<'_> {
@@ -429,25 +383,9 @@ impl Local<'_> {
     }
 }
 
-struct Peer<'a> {
-    entity_id: &'a EntityId,
-    metadata: &'a Metadata,
-    hmac_secret: Option<&'a HmacSecret>,
-}
-
-impl<'a> Peer<'a> {
-    fn new(entity_id: &'a EntityId, metadata: &'a Metadata, setting: &'a EntitySetting) -> Self {
-        Self {
-            entity_id,
-            metadata,
-            hmac_secret: setting.hmac_secret.as_ref(),
-        }
-    }
-}
-
 fn start(
     local: Local<'_>,
-    peer: Peer<'_>,
+    peer: RawPeer<'_>,
     name_id: &NameId,
     change: &NameIdChange,
     options: StartNameIdManagement,
@@ -498,7 +436,7 @@ fn start(
 
 fn receive(
     local: Local<'_>,
-    peer: Peer<'_>,
+    peer: RawPeer<'_>,
     input: BrowserInput<ManageNameIdRequest>,
     options: ReceiveNameIdManagement,
     mut validation: SamlValidationContext<'_>,
@@ -546,7 +484,7 @@ fn receive(
 
 fn refuse(
     local: Local<'_>,
-    peer: &Peer<'_>,
+    peer: &RawPeer<'_>,
     in_response_to: &MessageId,
     relay_state: Option<&str>,
     reason: NameIdManagementRefusal,
@@ -568,7 +506,7 @@ fn refuse(
 
 fn respond(
     local: Local<'_>,
-    peer: Peer<'_>,
+    peer: RawPeer<'_>,
     request: &Received<ManageNameIdRequest>,
     options: RespondNameIdManagement,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
@@ -586,7 +524,7 @@ fn respond(
 
 fn response_outbound(
     local: Local<'_>,
-    peer: &Peer<'_>,
+    peer: &RawPeer<'_>,
     in_response_to: &str,
     status: &Status,
     relay_state: Option<&str>,
@@ -617,7 +555,7 @@ fn response_outbound(
 
 fn finish(
     local: Local<'_>,
-    peer: Peer<'_>,
+    peer: RawPeer<'_>,
     pending: &PendingManageNameIdRequest,
     input: BrowserInput<ManageNameIdResponse>,
     mut validation: SamlValidationContext<'_>,
@@ -655,7 +593,7 @@ fn require_redirect_input<Message>(input: &BrowserInput<Message>) -> Result<(), 
     Err(Error::UnsupportedBinding { binding })
 }
 
-fn peer_location(peer: &Peer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {
+fn peer_location(peer: &RawPeer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {
     peer.metadata
         .manage_name_id_service_locations(NameIdManagementBinding::Redirect.as_binding(), direction)
         .into_iter()

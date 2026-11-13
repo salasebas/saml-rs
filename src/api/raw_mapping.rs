@@ -3,14 +3,15 @@ use crate::browser::{
 };
 use crate::config::{
     name_id_format_uris, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem,
-    Credentials, EntityId, IdpConfig, IdpDescriptor, ManageNameIdService, SpConfig, SpDescriptor,
+    Credentials, EntityId, HmacSecret, IdpConfig, IdpDescriptor, ManageNameIdService, SpConfig,
+    SpDescriptor,
 };
 use crate::constants::{url_params, Binding};
 use crate::entity::User;
 use crate::error::SamlError as Error;
 use crate::idp::IdentityProvider;
 use crate::metadata::{
-    ArtifactResolutionEndpoint, IdpMetadataConfig as RawIdpMetadataConfig,
+    ArtifactResolutionEndpoint, IdpMetadataConfig as RawIdpMetadataConfig, Metadata,
     SpMetadataConfig as RawSpMetadataConfig,
 };
 use crate::model::{RelayStateParam, Subject};
@@ -133,6 +134,33 @@ pub(super) fn raw_sp_descriptor(
 ) -> Result<&ServiceProvider, SamlError> {
     sp.ensure_valid_at(now)?;
     Ok(sp.provider())
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct RawPeer<'a> {
+    pub(super) entity_id: &'a EntityId,
+    pub(super) metadata: &'a Metadata,
+    pub(super) hmac_secret: Option<&'a HmacSecret>,
+}
+
+impl<'a> RawPeer<'a> {
+    pub(super) fn from_idp(idp: &'a IdpDescriptor, now: SystemTime) -> Result<Self, SamlError> {
+        let raw = raw_idp_descriptor(idp, now)?;
+        Ok(Self {
+            entity_id: idp.entity_id(),
+            metadata: &raw.metadata,
+            hmac_secret: raw.setting.hmac_secret.as_ref(),
+        })
+    }
+
+    pub(super) fn from_sp(sp: &'a SpDescriptor, now: SystemTime) -> Result<Self, SamlError> {
+        let raw = raw_sp_descriptor(sp, now)?;
+        Ok(Self {
+            entity_id: sp.entity_id(),
+            metadata: &raw.metadata,
+            hmac_secret: raw.setting.hmac_secret.as_ref(),
+        })
+    }
 }
 
 pub(super) fn selected_acs(
