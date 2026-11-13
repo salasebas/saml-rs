@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine;
+use sha1::{Digest, Sha1};
 
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::constants::{namespace, status_code};
@@ -529,7 +530,7 @@ pub(crate) fn issue(
         .get_entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?;
     let _service = soap_service(metadata, endpoint_index)?;
-    let source_id = sha1(entity_id.as_bytes());
+    let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(entity_id.as_bytes()).into();
     let encoded = encode_artifact(endpoint_index, source_id, message_handle());
     if issued.entries.contains_key(&encoded) {
         return Err(SamlError::Invalid(
@@ -559,7 +560,8 @@ pub(crate) fn resolve(
 ) -> Result<ArtifactResolution, SamlError> {
     require_channel(dereference.channel, dereference.web_browser_sso)?;
     let idp_entity_id = identity_provider.entity_id().as_str();
-    if artifact.source_id != sha1(idp_entity_id.as_bytes()) {
+    let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(idp_entity_id.as_bytes()).into();
+    if artifact.source_id != source_id {
         return Err(SamlError::issuer_mismatch(idp_entity_id, None));
     }
     let service = soap_service(identity_provider.metadata(), artifact.endpoint_index())?;
@@ -624,7 +626,8 @@ pub(crate) fn answer(
     let Ok(artifact) = Artifact::try_from_encoded(&request.artifact) else {
         return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
     };
-    if artifact.source_id != sha1(entity_id.as_bytes()) {
+    let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(entity_id.as_bytes()).into();
+    if artifact.source_id != source_id {
         return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
     }
     let message_xml = {
@@ -847,98 +850,9 @@ fn protocol_payload(response: &SamlElement) -> Result<Option<&SamlElement>, Saml
     Ok(payload)
 }
 
-fn sha1(input: &[u8]) -> [u8; 20] {
-    let mut hash = [
-        0x6745_2301_u32,
-        0xEFCD_AB89,
-        0x98BA_DCFE,
-        0x1032_5476,
-        0xC3D2_E1F0,
-    ];
-    let bit_len = (input.len() as u64).wrapping_mul(8);
-    let mut data = Vec::with_capacity(input.len() + 72);
-    data.extend_from_slice(input);
-    data.push(0x80);
-    while data.len() % 64 != 56 {
-        data.push(0);
-    }
-    data.extend_from_slice(&bit_len.to_be_bytes());
-    for chunk in data.as_chunks::<64>().0 {
-        let mut words = [0u32; 80];
-        for (index, word) in words.iter_mut().enumerate().take(16) {
-            let start = index * 4;
-            *word = u32::from_be_bytes([
-                chunk[start],
-                chunk[start + 1],
-                chunk[start + 2],
-                chunk[start + 3],
-            ]);
-        }
-        for index in 16..80 {
-            words[index] =
-                (words[index - 3] ^ words[index - 8] ^ words[index - 14] ^ words[index - 16])
-                    .rotate_left(1);
-        }
-        let (mut a, mut b, mut c, mut d, mut e) = (hash[0], hash[1], hash[2], hash[3], hash[4]);
-        for (index, word) in words.iter().enumerate() {
-            let (f, constant) = match index {
-                0..=19 => ((b & c) | ((!b) & d), 0x5A82_7999),
-                20..=39 => (b ^ c ^ d, 0x6ED9_EBA1),
-                40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1B_BCDC),
-                _ => (b ^ c ^ d, 0xCA62_C1D6),
-            };
-            let temp = a
-                .rotate_left(5)
-                .wrapping_add(f)
-                .wrapping_add(e)
-                .wrapping_add(constant)
-                .wrapping_add(*word);
-            e = d;
-            d = c;
-            c = b.rotate_left(30);
-            b = a;
-            a = temp;
-        }
-        hash[0] = hash[0].wrapping_add(a);
-        hash[1] = hash[1].wrapping_add(b);
-        hash[2] = hash[2].wrapping_add(c);
-        hash[3] = hash[3].wrapping_add(d);
-        hash[4] = hash[4].wrapping_add(e);
-    }
-    let mut out = [0u8; 20];
-    for (index, value) in hash.iter().enumerate() {
-        out[index * 4..index * 4 + 4].copy_from_slice(&value.to_be_bytes());
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn sha1_matches_the_nist_abc_vector() {
-        let digest = sha1(b"abc");
-        assert_eq!(hex(&digest), "a9993e364706816aba3e25717850c26c9cd0d89d");
-    }
-
-    #[test]
-    fn sha1_matches_the_empty_vector() {
-        let digest = sha1(b"");
-        assert_eq!(hex(&digest), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
-    }
-
-    #[test]
-    fn sha1_matches_the_two_block_nist_vector() {
-        let digest = sha1(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
-        assert_eq!(hex(&digest), "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
-    }
-
-    #[test]
-    fn sha1_matches_the_quick_brown_fox_vector() {
-        let digest = sha1(b"The quick brown fox jumps over the lazy dog");
-        assert_eq!(hex(&digest), "2fd4e1c67a2d28fced849ee1bb76e7391b93eb12");
-    }
 
     #[test]
     fn single_use_blocks_an_artifact_only_for_the_period() -> Result<(), Box<dyn std::error::Error>>
@@ -980,15 +894,5 @@ mod tests {
         issued.insert("new".into(), entry(start + lifetime));
         assert_eq!(issued.entries.keys().collect::<Vec<_>>(), ["new"]);
         assert_eq!(issued.oldest_first.len(), 1);
-    }
-
-    fn hex(bytes: &[u8]) -> String {
-        const DIGITS: &[u8; 16] = b"0123456789abcdef";
-        let mut out = String::with_capacity(bytes.len() * 2);
-        for byte in bytes {
-            out.push(DIGITS[(byte >> 4) as usize] as char);
-            out.push(DIGITS[(byte & 0x0f) as usize] as char);
-        }
-        out
     }
 }
