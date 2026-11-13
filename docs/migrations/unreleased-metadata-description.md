@@ -20,6 +20,4 @@ When you populate the new fields, generation validates organization
 cardinality, XML Schema language tags, `mailto:` email URIs, absolute
 organization and error URIs, and XML characters. Invalid inputs return
 `SamlError::Invalid`. Leaving the fields empty preserves existing output and
-validation. Import acceptance is unchanged. The new `organization()` and
-`contacts()` accessors return an error when an imported description cannot be
-represented, as documented on each method.
+validation.
