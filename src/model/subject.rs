@@ -168,6 +168,16 @@ impl NameId {
     }
 }
 
+impl<'a> From<&'a NameId> for OutboundNameIdQualifiers<'a> {
+    fn from(name_id: &'a NameId) -> Self {
+        Self {
+            name_qualifier: name_id.name_qualifier(),
+            sp_name_qualifier: name_id.sp_name_qualifier(),
+            sp_provided_id: name_id.sp_provided_id(),
+        }
+    }
+}
+
 /// AuthnRequest NameIDPolicy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIdPolicy {

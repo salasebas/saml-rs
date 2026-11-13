@@ -1,6 +1,6 @@
 use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
 use crate::browser::{ArtifactDelivery, BrowserInput, Outbound, SsoRequestBinding};
-use crate::config::SpDescriptor;
+use crate::config::{NameIdFormat, SpDescriptor};
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::error::SamlError as Error;
 use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
@@ -284,20 +284,14 @@ impl Saml<Idp> {
             request.map(Received::message),
             ResponseAcsBindings::Browser(binding),
         )?;
-        let name_id_format = subject
-            .name_id()
-            .format()
-            .map(|format| format.as_uri().to_string());
+        let name_id = subject.name_id();
+        let name_id_format = name_id.format().map(NameIdFormat::as_uri);
         let user = user_from_subject(&subject)?;
         let in_response_to = request.map(|request| request.message().id().as_str());
         let overrides = LoginResponseOverrides {
             acs: Some(&acs),
-            name_id_format: name_id_format.as_deref(),
-            name_id_qualifiers: OutboundNameIdQualifiers {
-                name_qualifier: subject.name_id().name_qualifier(),
-                sp_name_qualifier: subject.name_id().sp_name_qualifier(),
-                sp_provided_id: subject.name_id().sp_provided_id(),
-            },
+            name_id_format,
+            name_id_qualifiers: OutboundNameIdQualifiers::from(name_id),
             issuance_lifetime: Some(self.0.issuance_lifetime),
             web_browser_sso_producer: options.web_browser_sso_producer,
             status: options.status.as_ref(),

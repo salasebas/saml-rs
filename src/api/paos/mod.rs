@@ -7,7 +7,7 @@ mod protocol;
 use std::marker::PhantomData;
 use std::time::SystemTime;
 
-use crate::config::{EntityId, IdpDescriptor, SpDescriptor};
+use crate::config::{EntityId, IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::entity::User;
 use crate::flow::HttpRequest;
 use crate::idp::PaosSsoResponseInput;
@@ -773,12 +773,10 @@ impl Saml<Idp> {
                 &setting.data_encryption_algorithm,
             )
         };
-        let name_id_format = subject.as_ref().and_then(|subject| {
-            subject
-                .name_id()
-                .format()
-                .map(|format| format.as_uri().to_string())
-        });
+        let name_id_format = subject
+            .as_ref()
+            .and_then(|subject| subject.name_id().format())
+            .map(NameIdFormat::as_uri);
         let user = match &subject {
             Some(subject) => user_from_subject(subject)?,
             None => User::new(""),
@@ -788,15 +786,12 @@ impl Saml<Idp> {
             acs: acs.as_str(),
             in_response_to: request.message().id().as_str(),
             user: &user,
-            name_id_format: name_id_format.as_deref(),
-            name_id_qualifiers: subject.as_ref().map_or_else(
-                OutboundNameIdQualifiers::default,
-                |subject| OutboundNameIdQualifiers {
-                    name_qualifier: subject.name_id().name_qualifier(),
-                    sp_name_qualifier: subject.name_id().sp_name_qualifier(),
-                    sp_provided_id: subject.name_id().sp_provided_id(),
-                },
-            ),
+            name_id_format,
+            name_id_qualifiers: subject
+                .as_ref()
+                .map_or_else(OutboundNameIdQualifiers::default, |subject| {
+                    OutboundNameIdQualifiers::from(subject.name_id())
+                }),
             issuance_lifetime: self.0.issuance_lifetime,
             status: status.as_ref(),
             attributes: options.attributes.as_slice(),
