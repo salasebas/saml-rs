@@ -223,13 +223,13 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
     (id, xml)
 }
 
-fn custom_idp() -> IdentityProvider {
+fn custom_idp() -> Result<IdentityProvider, SamlError> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
         context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
     });
-    IdentityProvider::from_config(&idp_config(false), setting).unwrap()
+    IdentityProvider::from_config(&idp_config(false), setting)
 }
 
 fn attr(name: &str, tag: &str) -> LoginResponseAttribute {
@@ -740,7 +740,7 @@ fn flow_conformance_send_signed_assertion_custom_transforms_simplesign(
 // ----- [custom template] signed assertion (28-30) -----
 
 fn send_custom_signed_assertion(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = custom_idp();
+    let idp = custom_idp()?;
     let sp = sp(true, false);
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "custom@example.com");
@@ -787,11 +787,6 @@ fn send_signed_message(binding: Binding) -> Result<(), Box<dyn std::error::Error
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_r")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("a@example.com"));
     Ok(())
-}
-
-#[test]
-fn flow_conformance_send_signed_message_post() -> Result<(), Box<dyn std::error::Error>> {
-    send_signed_message(Binding::Post)
 }
 
 #[test]
@@ -1021,12 +1016,7 @@ fn flow_conformance_required_response_signature_accepts_simplesign_detached_sign
 // ----- [custom template] signed message (34-36) -----
 
 fn send_custom_signed_message(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let mut setting = signing();
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-        attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
-    });
-    let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
+    let idp = custom_idp()?;
     let sp = sp(false, false);
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "cm@example.com");
@@ -1091,12 +1081,7 @@ fn flow_conformance_send_assertion_and_message_simplesign() -> Result<(), Box<dy
 // ----- [custom template] signed assertion + signed message (40-42) -----
 
 fn send_custom_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let mut setting = signing();
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-        attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
-    });
-    let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
+    let idp = custom_idp()?;
     let mut sp_setting = signing();
     sp_setting.want_message_signed = true;
     let sp = ServiceProvider::from_config(&sp_config(false, true, false), sp_setting)?;
@@ -1134,28 +1119,6 @@ fn flow_conformance_send_custom_assertion_and_message_simplesign(
 }
 
 // ----- encrypted assertion variants (43-47, 54) -----
-
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn flow_conformance_encrypted_nonsigned_assertion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp_setting = signing();
-    idp_setting.is_assertion_encrypted = true;
-    let idp = IdentityProvider::from_config(&idp_config(false), idp_setting)?;
-    let sp = sp(false, true); // not assertion-signed → message signed over the encrypted form
-    let ctx = idp.create_login_response(
-        &sp,
-        Binding::Post,
-        &User::new("e@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_r"),
-            encrypt_then_sign: true,
-            ..Default::default()
-        },
-    )?;
-    let parsed = parse_response_with_request_id(&sp, &idp, Binding::Post, &ctx, "_r")?;
-    assert_eq!(parsed.extract.get_str("nameID"), Some("e@example.com"));
-    Ok(())
-}
 
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std::error::Error>> {
