@@ -28,17 +28,6 @@ use bergshamra::xml::{uppsala, Document as BergshamraDocument, NodeId as Bergsha
 use bergshamra::{DsigContext, KeysManager, VerifiedReference, VerifyResult};
 use std::collections::HashSet;
 
-fn children_named<'a>(node: &'a Node, name: &str) -> Vec<&'a Node> {
-    node.children
-        .iter()
-        .filter(|c| c.local_name == name)
-        .collect()
-}
-
-fn has_child(node: &Node, name: &str) -> bool {
-    node.children.iter().any(|c| c.local_name == name)
-}
-
 fn has_descendant(node: &Node, names: &[&str]) -> bool {
     node.children
         .iter()
@@ -47,10 +36,10 @@ fn has_descendant(node: &Node, names: &[&str]) -> bool {
 
 /// XSW guard: `Response/Assertion/Subject/SubjectConfirmation/SubjectConfirmationData//(Assertion|Signature)`.
 fn wrapping_detected(root: &Node) -> bool {
-    for assertion in children_named(root, "Assertion") {
-        for subject in children_named(assertion, "Subject") {
-            for sc in children_named(subject, "SubjectConfirmation") {
-                for scd in children_named(sc, "SubjectConfirmationData") {
+    for assertion in root.children_named("Assertion") {
+        for subject in assertion.children_named("Subject") {
+            for sc in subject.children_named("SubjectConfirmation") {
+                for scd in sc.children_named("SubjectConfirmationData") {
                     if has_descendant(scd, &["Assertion", "Signature"]) {
                         return true;
                     }
@@ -192,8 +181,8 @@ fn metadata_signature_transform_allowed(algorithm: &str) -> bool {
 fn ensure_metadata_reference_transforms_preserve_descriptor(
     reference: &Node,
 ) -> Result<(), SamlError> {
-    for transforms in children_named(reference, "Transforms") {
-        for transform in children_named(transforms, "Transform") {
+    for transforms in reference.children_named("Transforms") {
+        for transform in transforms.children_named("Transform") {
             if transform
                 .attr("Algorithm")
                 .is_some_and(metadata_signature_transform_allowed)
@@ -214,9 +203,9 @@ fn ensure_metadata_signature_transforms_preserve_descriptor(root: &Node) -> Resu
         return Ok(());
     }
 
-    for signature in children_named(root, "Signature") {
-        for signed_info in children_named(signature, "SignedInfo") {
-            for reference in children_named(signed_info, "Reference") {
+    for signature in root.children_named("Signature") {
+        for signed_info in signature.children_named("SignedInfo") {
+            for reference in signed_info.children_named("Reference") {
                 ensure_metadata_reference_transforms_preserve_descriptor(reference)?;
             }
         }
@@ -234,7 +223,7 @@ fn covered_root<'a>(root: &'a Node, targets: &[VerifiedTarget]) -> Result<&'a No
 /// The response signature covers every assertion, or every assertion is signed.
 /// An unsigned sibling is rejected.
 fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool {
-    let assertions = children_named(root, "Assertion");
+    let assertions: Vec<_> = root.children_named("Assertion").collect();
     !assertions.is_empty()
         && (target_matches_node(targets, root)
             || assertions
@@ -258,7 +247,7 @@ fn covered_content<'a>(
         return covered_root(root, targets).map(Some);
     }
     if protocol_response {
-        let assertions = children_named(root, "Assertion");
+        let assertions: Vec<_> = root.children_named("Assertion").collect();
         if !assertions.is_empty() {
             if !response_assertions_covered(root, targets) {
                 if assertions.len() > 1 {
@@ -268,7 +257,7 @@ fn covered_content<'a>(
             }
             return Ok(consumed_assertion(root));
         }
-        if has_child(root, "EncryptedAssertion") {
+        if root.child_named("EncryptedAssertion").is_some() {
             return covered_root(root, targets).map(Some);
         }
     }
@@ -305,7 +294,7 @@ fn assertion_is_directly_covered(
         return target_matches_node(targets, root);
     }
     if protocol_response {
-        let assertions = children_named(root, "Assertion");
+        let assertions: Vec<_> = root.children_named("Assertion").collect();
         return !assertions.is_empty()
             && assertions
                 .iter()
@@ -472,8 +461,8 @@ fn is_external_reference(uri: &str) -> bool {
 
 fn preflight_saml_reference_uris(signatures: &[&Node]) -> Result<(), SamlError> {
     for signature in signatures {
-        for signed_info in children_named(signature, "SignedInfo") {
-            for reference in children_named(signed_info, "Reference") {
+        for signed_info in signature.children_named("SignedInfo") {
+            for reference in signed_info.children_named("Reference") {
                 verified_target_from_uri(reference.attr("URI").unwrap_or_default())?;
             }
         }

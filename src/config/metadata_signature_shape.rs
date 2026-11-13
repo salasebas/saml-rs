@@ -41,7 +41,7 @@ pub(super) fn ensure_import_signature_shape(
         return Err(SamlError::SignedReferenceMismatch);
     }
     let signature = signatures[0];
-    let direct_signatures = children_named(root, "Signature");
+    let direct_signatures: Vec<_> = root.children_named("Signature").collect();
     if direct_signatures.len() != 1 || direct_signatures[0].start != signature.start {
         return Err(SamlError::SignedReferenceMismatch);
     }
@@ -118,16 +118,16 @@ fn collect_signatures<'a>(node: &'a Node, found: &mut Vec<&'a Node>) {
 }
 
 fn signature_references(signature: &Node) -> Vec<&Node> {
-    children_named(signature, "SignedInfo")
-        .into_iter()
-        .flat_map(|signed_info| children_named(signed_info, "Reference"))
+    signature
+        .children_named("SignedInfo")
+        .flat_map(|signed_info| signed_info.children_named("Reference"))
         .collect()
 }
 
 fn transform_algorithms(reference: &Node) -> Result<Vec<&str>, SamlError> {
     let mut algorithms = Vec::new();
-    for transforms in children_named(reference, "Transforms") {
-        for transform in children_named(transforms, "Transform") {
+    for transforms in reference.children_named("Transforms") {
+        for transform in transforms.children_named("Transform") {
             match transform.attr("Algorithm") {
                 Some(algorithm) if !algorithm.is_empty() => algorithms.push(algorithm),
                 _ => return Err(SamlError::SignedReferenceMismatch),
@@ -135,13 +135,6 @@ fn transform_algorithms(reference: &Node) -> Result<Vec<&str>, SamlError> {
         }
     }
     Ok(algorithms)
-}
-
-fn children_named<'a>(node: &'a Node, name: &str) -> Vec<&'a Node> {
-    node.children
-        .iter()
-        .filter(|child| child.local_name == name)
-        .collect()
 }
 
 fn contains_local_name(node: &Node, name: &str) -> bool {

@@ -126,9 +126,10 @@ impl KeyCertificates {
             .flat_map(|descriptor| &descriptor.children)
             .filter(|child| child.local_name == "KeyDescriptor");
         for key_descriptor in key_descriptors {
-            let x509_certificates: Vec<String> = children_named(key_descriptor, "KeyInfo")
-                .flat_map(|key_info| children_named(key_info, "X509Data"))
-                .flat_map(|x509_data| children_named(x509_data, "X509Certificate"))
+            let x509_certificates: Vec<String> = key_descriptor
+                .children_named("KeyInfo")
+                .flat_map(|key_info| key_info.children_named("X509Data"))
+                .flat_map(|x509_data| x509_data.children_named("X509Certificate"))
                 .map(|certificate| certificate.text.clone())
                 .collect();
             match key_descriptor.attr("use") {
@@ -156,15 +157,6 @@ impl KeyCertificates {
             CertUse::Encryption => &self.encryption,
         }
     }
-}
-
-fn children_named<'a>(
-    node: &'a dom::Node,
-    local_name: &'a str,
-) -> impl Iterator<Item = &'a dom::Node> {
-    node.children
-        .iter()
-        .filter(move |child| child.local_name == local_name)
 }
 
 #[derive(Clone, Copy)]

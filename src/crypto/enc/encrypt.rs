@@ -13,14 +13,10 @@ use crate::constants::namespace;
 use crate::crypto::keys::load_certificate;
 use crate::crypto::xml_syntax::validate_crypto_xml_prefix;
 use crate::error::SamlError;
-use crate::xml::dom::{self, Node};
+use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
 use bergshamra::xml::{Document as XmlDocument, NodeId};
 use bergshamra::{encrypt, EncContext, KeysManager};
-
-fn child<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-    node.children.iter().find(|c| c.local_name == name)
-}
 
 /// `<xenc:EncryptedData>` of type `Element` that carries `plaintext` for the
 /// holder of `encrypt_cert`.
@@ -62,7 +58,9 @@ pub fn encrypt_assertion(
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
     validate_crypto_xml_prefix("EncryptedAssertion", tag_prefix)?;
     let doc = dom::parse(xml)?;
-    let assertion = child(&doc.root, "Assertion")
+    let assertion = doc
+        .root
+        .child_named("Assertion")
         .ok_or_else(|| SamlError::MissingMetadata("Assertion to encrypt".into()))?;
     let assertion_xml = standalone_element(xml, assertion.start, assertion.end)?;
     let encrypted_data =
