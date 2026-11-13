@@ -8,15 +8,12 @@ mod common;
 
 use common::signing_credentials;
 
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use saml_rs::{
     AcsEndpoint, AuthnRequest, AuthnSession, BrowserInput, ClockSkew, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    OutstandingLogout, PendingAuthnRequest, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, MetadataTrustPolicy,
+    NameId, NameIdFormat, OutstandingLogout, PendingAuthnRequest, RelayStateParam, ReplayPolicy,
     RespondSso, Saml, SamlError, SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
     Subject,
@@ -27,22 +24,6 @@ const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO: &str = "https://idp.example.com/sso";
-
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashMap<String, SystemTime>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if self.seen.contains_key(&cache_key) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        self.seen.insert(cache_key, expires_at);
-        Ok(())
-    }
-}
 
 fn principal() -> NameId {
     NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress))
@@ -437,7 +418,7 @@ fn rejected_outstanding_logout_still_records_the_bearer_assertion(
     let now = unix_seconds()? + 2;
     let accepted = finish(&issued, now, ClockSkew::strict(), None)?;
     let outstanding = logout(principal(), vec![session_index(&accepted)?], now + 120)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH);
     let validation =
         SamlValidationContext::new(system_time_at(now)?, ReplayPolicy::RequireCache(&mut cache));
     match issued.sp.finish_sso_with_outstanding_logout(

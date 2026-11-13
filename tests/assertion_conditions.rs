@@ -3,12 +3,16 @@
 
 mod common;
 
+#[path = "common/replay_cache.rs"]
+mod replay_cache;
+
+use replay_cache::RecordingReplayCache;
+
 use common::signing_credentials;
 
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{Credentials, PrivateKeyPem};
 
-use std::collections::HashMap;
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
@@ -21,9 +25,9 @@ use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, BrowserInput, EntityId, FormField,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, ReplayCache, ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
+    PendingAuthnRequest, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
+    Subject, VerifiedXmlSignatureCoverage,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -44,22 +48,6 @@ struct Exchange {
 
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
-}
-
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashMap<String, SystemTime>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if self.seen.contains_key(&cache_key) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        self.seen.insert(cache_key, expires_at);
-        Ok(())
-    }
 }
 
 fn subject() -> Subject {
@@ -884,7 +872,7 @@ fn replay_stores_every_assertion_identifier() -> Result<(), Box<dyn std::error::
     let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
     let original = response_xml(&exchange.response_fields)?;
     let xml = resigned(&duplicate_assertion(&original, "_second_assertion")?)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     accept_with(
         &exchange,
         &xml,
@@ -1110,7 +1098,7 @@ mod encrypted_assertions {
         let exchange = post_exchange(SpValidationPolicy::recommended())?;
         let plaintext = two_assertions(&exchange)?;
         let xml = both_encrypted_then_response_signed(&plaintext)?;
-        let mut cache = MemoryReplayCache::default();
+        let mut cache = RecordingReplayCache::default();
         let session = accept_with(
             &exchange,
             &xml,
@@ -1373,7 +1361,7 @@ mod encrypted_assertions {
             .into_iter()
             .chain(both_orders(&inherited_prefix)?)
         {
-            let mut cache = MemoryReplayCache::default();
+            let mut cache = RecordingReplayCache::default();
             let session = accept_with(
                 &exchange,
                 &resign_response(&unsigned)?,

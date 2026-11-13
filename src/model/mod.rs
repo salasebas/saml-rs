@@ -12,6 +12,7 @@ mod logout;
 mod outstanding_logout;
 mod received;
 mod relay;
+mod replay_cache;
 mod session;
 mod sso;
 mod status;
@@ -37,6 +38,7 @@ pub use received::Received;
 pub use relay::{
     RelayState, RelayStateParam, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
+pub use replay_cache::InMemoryReplayCache;
 pub use session::AuthnSession;
 pub use sso::{
     Assertion, SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage,

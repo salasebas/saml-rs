@@ -9,7 +9,6 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
-use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{append_signature, build_redirect_octet};
@@ -19,10 +18,10 @@ use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, BrowserInput, CertificatePem, Credentials, DecryptionCredential, EndpointUrl,
     EntityId, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    ManageNameIdRequest, ManageNameIdRequestAgePolicy, ManageNameIdResponse, ManageNameIdService,
-    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
-    NameIdFormat, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
-    ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayCache, ReplayKey, ReplayPolicy,
+    InMemoryReplayCache, ManageNameIdRequest, ManageNameIdRequestAgePolicy, ManageNameIdResponse,
+    ManageNameIdService, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
+    NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound, PartyAuthentication,
+    PrivateKeyPem, ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy,
     RespondNameIdManagement, Saml, SamlError, SamlValidationContext, SoapChannel,
     SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartNameIdManagement,
@@ -467,25 +466,6 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
     Ok(())
 }
 
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashSet<String>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(
-        &mut self,
-        key: ReplayKey,
-        _expires_at: SystemTime,
-    ) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if !self.seen.insert(cache_key.clone()) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        Ok(())
-    }
-}
-
 #[test]
 fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() -> TestResult {
     // The service provider publishes a certificate whose key it does not hold.
@@ -498,7 +478,7 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
         &NameIdChange::Terminate,
         encrypted(),
     )?;
-    let receive = |now: SystemTime, cache: &mut MemoryReplayCache| {
+    let receive = |now: SystemTime, cache: &mut InMemoryReplayCache| {
         sp.receive_name_id_management_redirect(
             &idp_peer,
             request_input(&started.outbound)?,
@@ -511,7 +491,7 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
         )
     };
 
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH);
     let ReceivedNameIdManagement::Refused(_) = receive(SystemTime::now(), &mut cache)? else {
         return Err("an identifier that does not decrypt was not refused".into());
     };
@@ -521,7 +501,10 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
     }
 
     let stale = SystemTime::now() + Duration::from_secs(60 * 60);
-    match receive(stale, &mut MemoryReplayCache::default()) {
+    match receive(
+        stale,
+        &mut InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH),
+    ) {
         Err(SamlError::TimeWindowInvalid {
             field: TimeWindowField::ManageNameIdRequestIssueInstant,
         }) => Ok(()),

@@ -80,7 +80,12 @@ Three choices in this example matter in production:
   [metadata trust](https://docs.rs/saml-rs/latest/saml_rs/#metadata-trust).
 - **Replay cache.** HTTP-POST bearer assertions must not be replayed
   ([Profiles §4.1.4.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)).
-  Implement
+  Use
+  [`InMemoryReplayCache`](https://docs.rs/saml-rs/latest/saml_rs/model/struct.InMemoryReplayCache.html)
+  for a single process, shared across request handlers with a `Mutex`.
+  It expires entries and supports a limit that refuses new keys when full.
+  Its state is lost on restart. For multiple processes or protection across
+  restarts, implement
   [`ReplayCache`](https://docs.rs/saml-rs/latest/saml_rs/model/trait.ReplayCache.html)
   on storage that every ACS process shares. See
   [replay](docs/conformance/metadata-and-replay.md#replay).

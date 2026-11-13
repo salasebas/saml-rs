@@ -136,44 +136,18 @@ impl ReplayKey {
 /// Implementations should atomically reject duplicate keys and return
 /// [`SamlError::ReplayDetected`] for duplicate SAML messages.
 ///
+/// Use [`super::InMemoryReplayCache`] for a single process. Multiple processes
+/// or protection across restarts require shared durable storage.
+///
 /// # Examples
 ///
-/// This is a minimal in-memory example for a single process. Applications
-/// should use shared durable storage when multiple processes handle SAML
-/// responses.
-///
 /// ```
-/// use std::{collections::HashMap, time::{Duration, SystemTime}};
+/// use std::time::{Duration, SystemTime};
+/// use saml_rs::{InMemoryReplayCache, ReplayPolicy, SamlValidationContext};
 ///
-/// use saml_rs::{
-///     ReplayCache, ReplayKey, ReplayPolicy, SamlError, SamlValidationContext,
-/// };
-///
-/// #[derive(Default)]
-/// struct MinimalReplayCache {
-///     seen: HashMap<String, SystemTime>,
-/// }
-///
-/// impl ReplayCache for MinimalReplayCache {
-///     fn check_and_store(
-///         &mut self,
-///         key: ReplayKey,
-///         expires_at: SystemTime,
-///     ) -> Result<(), SamlError> {
-///         let cache_key = key.cache_key();
-///         if self.seen.contains_key(&cache_key) {
-///             return Err(SamlError::ReplayDetected { key: cache_key });
-///         }
-///         self.seen.insert(cache_key, expires_at);
-///         Ok(())
-///     }
-/// }
-///
-/// let now = SystemTime::now();
-/// let mut cache = MinimalReplayCache::default();
+/// let mut cache = InMemoryReplayCache::new().with_max_entries(10_000);
 /// let validation = SamlValidationContext::new(
-///     now,
-///     ReplayPolicy::RequireCache(&mut cache),
+///     SystemTime::now(), ReplayPolicy::RequireCache(&mut cache),
 /// )
 /// .with_replay_retention(Duration::from_secs(5 * 60));
 /// # let _ = validation;
