@@ -1,17 +1,18 @@
 # Use a direct SHA-1 dependency for artifact SourceID
 
-Status: proposed. Maintainer outcome: pending.
+Status: accepted. Maintainer outcome: implementation plan approved on 2026-11-13.
 
-Issue [#523](https://github.com/salasebas/saml-rs/issues/523) requires an explicit
-maintainer decision. The recommendation below is ready for that decision, but
-neither this proposal nor closing the issue approves a dependency. Implementation
+The maintainer explicitly approved the dependency, API, and feature plan below
+in the task conversation on 2026-11-13. This records the decision required by
+issue [#523](https://github.com/salasebas/saml-rs/issues/523). Implementation
 belongs to [#524](https://github.com/salasebas/saml-rs/issues/524). This change
-adds documentation only.
+adds documentation only. Closing #523 alone is not dependency approval; the
+recorded outcome authorizes this scoped implementation plan.
 
-## Proposed decision
+## Decision
 
 Replace the manual SHA-1 in `src/artifact.rs` with RustCrypto's `sha1` crate in
-#524. The proposed manifest entry is unconditional:
+#524. The approved manifest entry is unconditional:
 
 ```toml
 sha1 = { version = "0.11.0", default-features = false }
@@ -34,9 +35,9 @@ and graph audit, not a build on Rust 1.88.
 
 | Option | Decision rationale |
 | --- | --- |
-| Direct `sha1` 0.11.0, defaults off | Recommended. Deletes the local hash implementation, its four implementation-vector tests, and their unused `hex` helper while keeping SourceID available without a crypto provider. Adds a direct dependency and expands three feature configurations described below. |
+| Direct `sha1` 0.11.0, defaults off | Selected. Deletes the local hash implementation, its four implementation-vector tests, and their unused `hex` helper while keeping SourceID available without a crypto provider. Adds a direct dependency and expands three feature configurations described below. |
 | Existing `bergshamra::crypto::digest::digest(uri, input)` | Available in Bergshamra 0.12.0 and returns `Result<Vec<u8>, Error>`. Its SHA-1 URI mapping is unconditional, not gated by `legacy-algorithms`. It dispatches to Kryptering 0.7.1, which requires provider initialization and support. Bergshamra is absent with no provider, and Kryptering's FIPS policy rejects SHA-1 digests. Reusing it would change availability and errors. |
-| Keep the local SHA-1 implementation | Adds no dependencies and preserves every feature graph. Retains the 64-line primitive and four vector tests that a maintained crate can own. This remains the fallback until a maintainer approves a replacement. |
+| Keep the local SHA-1 implementation | Adds no dependencies and preserves every feature graph. Retains the 64-line primitive and four vector tests that a maintained crate can own. Rejected in favor of the maintained dependency. |
 
 The existing abstraction and its limits come from the pinned
 [Bergshamra digest implementation](https://github.com/kushaldas/bergshamra/blob/v0.12.0/crates/bergshamra-crypto/src/digest.rs),
@@ -72,7 +73,7 @@ This deliberately adds a RustCrypto SHA-1 implementation outside the selected
 XML crypto provider, including in FIPS builds. SourceID is a non-security
 issuer identifier. The existing manual hash already runs outside that provider.
 XML-DSig, XML-Enc, and detached signatures stay delegated to Bergshamra with
-unchanged provider policy. This proposal makes no FIPS certification or
+unchanged provider policy. This decision makes no FIPS certification or
 validation claim for the hash, library, binary, or deployment. Deployments
 that restrict all digest implementations to a validated module must assess
 this dependency explicitly. Graph resolution does not prove provider runtime
@@ -93,14 +94,14 @@ not require receivers to reject every value other than an entity ID's hash.
 clarifies the permitted artifact formats and leaves the hash recommendation
 unchanged. SourceID is a binary binding field, so no XML schema rule changes.
 
-The proposed implementation preserves the existing issuer bytes and raw
+The approved implementation preserves the existing issuer bytes and raw
 20-byte SHA-1 result. It introduces no receiver rejection, SHA-256 replacement,
 new error, or public API change. SHA-1 remains unsuitable for security-critical
 hashing, as the crate's documentation warns.
 
-## Conditional implementation in #524
+## Approved implementation plan for #524
 
-After explicit maintainer approval, add the proposed dependency, replace the
+In #524, add the approved dependency, replace the
 local hash with the crate API, and remove the four local vector tests and their
 now-unused `hex` test helper.
 Retain `artifact_source_id_is_the_sha1_of_the_issuer_entity_id` in
@@ -110,9 +111,10 @@ and artifact support without a crypto provider.
 
 Run focused artifact unit, `artifact_resolution`, and `artifact_sso` tests,
 formatting, Clippy, the no-default-features check, applicable doctests and
-rustdoc checks, and the Linux provider matrix required by #524. No full suite
-or provider builds ran for this documentation-only decision. If the maintainer
-rejects this proposal, close #524 without implementation as its issue requires.
+rustdoc checks, and the Linux provider matrix required by #524. Local checks
+for this documentation-only decision did not run the full suite or provider
+builds. This PR's CI validates the existing manifest and implementation;
+it does not validate the future #524 implementation.
 
 ## Audit commands
 
