@@ -66,6 +66,7 @@ pub enum ResponseSignaturePolicy {
 /// Assertion. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum XmlSignatureProfile {
     /// Require RSA-SHA256/384/512.
     ///

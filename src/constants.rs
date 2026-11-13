@@ -7,6 +7,7 @@
 ///
 /// Combines full binding URNs and short binding keywords in one type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Binding {
     /// HTTP-Redirect binding.
     Redirect,
@@ -348,6 +349,7 @@ impl MessageSignatureOrder {
 
 /// SAML message parser type (`ParserType`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ParserType {
     /// `<AuthnRequest>`.
     SamlRequest,

@@ -331,6 +331,7 @@ impl ArtifactUses {
 
 /// Why an understood `ArtifactResolve` did not include the protocol message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ArtifactWithheld {
     /// No outstanding artifact matched, including one already resolved or
     /// past its lifetime.

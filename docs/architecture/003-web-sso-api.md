@@ -230,6 +230,7 @@ Rules:
 ## Browser Transport Types
 
 ```rust
+#[non_exhaustive]
 pub enum BrowserInput<Message> {
     Redirect {
         raw_query: String,

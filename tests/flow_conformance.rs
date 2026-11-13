@@ -101,7 +101,7 @@ fn response_request(binding: Binding, ctx: &BindingContext) -> Result<HttpReques
         Binding::Post => HttpRequest::post(vec![("SAMLResponse".into(), ctx.context.clone())]),
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::SimpleSign => simplesign_request("SAMLResponse", ctx)?,
-        Binding::Artifact | Binding::Soap => return Err(SamlError::UndefinedBinding),
+        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 
@@ -306,7 +306,7 @@ fn signing_sp_against_idp_without_requirement(
         Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::SimpleSign => simplesign_request("SAMLRequest", &ctx)?,
-        Binding::Artifact | Binding::Soap => return Err("unsupported binding".into()),
+        _ => return Err("unsupported binding".into()),
     };
     let parsed = idp(true).parse_login_request(&sp, binding, &request)?;
     assert_eq!(parsed.extract.get_str("request.id"), Some(ctx.id.as_str()));
@@ -971,9 +971,7 @@ fn required_response_signature_accepts_detached_without_embedded_signature(
     let params = match binding {
         Binding::Redirect => &request.query,
         Binding::SimpleSign => &request.body,
-        Binding::Post | Binding::Artifact | Binding::Soap => {
-            return Err("expected detached binding".into())
-        }
+        _ => return Err("expected detached binding".into()),
     };
     let encoded = params
         .iter()
@@ -984,9 +982,7 @@ fn required_response_signature_accepts_detached_without_embedded_signature(
     let xml = match binding {
         Binding::Redirect => deflate_raw_decode(&decoded)?,
         Binding::SimpleSign => decoded,
-        Binding::Post | Binding::Artifact | Binding::Soap => {
-            return Err("expected detached binding".into())
-        }
+        _ => return Err("expected detached binding".into()),
     };
     let xml = String::from_utf8(xml)?;
     if xml.contains("<ds:Signature") {
@@ -1263,7 +1259,7 @@ fn logout_request_to_http(
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
         Binding::SimpleSign => simplesign_request("SAMLRequest", ctx)?,
-        Binding::Artifact | Binding::Soap => return Err(SamlError::UndefinedBinding),
+        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 
@@ -1275,7 +1271,7 @@ fn logout_response_to_http(
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::Post => HttpRequest::post(vec![("SAMLResponse".into(), ctx.context.clone())]),
         Binding::SimpleSign => simplesign_request("SAMLResponse", ctx)?,
-        Binding::Artifact | Binding::Soap => return Err(SamlError::UndefinedBinding),
+        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 

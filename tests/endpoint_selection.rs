@@ -250,6 +250,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
             SsoResponseBinding::SimpleSign | SsoResponseBinding::Artifact => {
                 SsoResponseBinding::Post
             }
+            _ => return Err("unsupported response binding".into()),
         };
         let sp = Saml::sp(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
@@ -308,6 +309,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                     "/acs/first"
                 );
             }
+            _ => return Err("unsupported response binding".into()),
         }
     }
     Ok(())

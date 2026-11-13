@@ -121,7 +121,7 @@ fn authn_request_xml(
         Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(
             &outbound.raw_context().context,
         )?)?),
-        Binding::Artifact | Binding::Soap => Err("binding is unsupported".into()),
+        _ => Err("binding is unsupported".into()),
     }
 }
 

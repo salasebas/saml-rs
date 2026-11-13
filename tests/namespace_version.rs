@@ -59,13 +59,13 @@ fn parse_flow_with_binding(
     let encoded = match binding {
         Binding::Redirect => base64_encode(&deflate_raw_encode(xml.as_bytes())?),
         Binding::Post | Binding::SimpleSign => base64_encode(xml.as_bytes()),
-        Binding::Artifact | Binding::Soap => return Err(SamlError::UnsupportedBinding { binding }),
+        _ => return Err(SamlError::UnsupportedBinding { binding }),
     };
     let parameter = (parser_type.query_param().to_string(), encoded);
     let request = match binding {
         Binding::Redirect => HttpRequest::redirect(vec![parameter]),
         Binding::Post | Binding::SimpleSign => HttpRequest::post(vec![parameter]),
-        Binding::Artifact | Binding::Soap => return Err(SamlError::UnsupportedBinding { binding }),
+        _ => return Err(SamlError::UnsupportedBinding { binding }),
     };
     let mut options = FlowOptions::default();
     options.binding = Some(binding);
