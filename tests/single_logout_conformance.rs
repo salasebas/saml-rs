@@ -1,16 +1,19 @@
 //! Compatibility is the legacy permissive preset.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::{
-    AcsEndpoint, BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, LogoutPolicy, LogoutRequest, LogoutResponse,
-    LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
-    PendingLogoutRequest, PrivateKeyPem, ReplayPolicy, RespondSlo, Saml, SamlError,
-    SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSlo,
+    AcsEndpoint, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning,
+    LogoutSubject, MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy,
+    RespondSlo, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -21,17 +24,6 @@ const SP_SLO_HTTP: &str = "http://sp.example.com/slo/post";
 const IDP_SSO: &str = "https://idp.example.com/sso/post";
 const IDP_SLO_HTTPS: &str = "https://idp.example.com/slo/post";
 const IDP_SLO_HTTP: &str = "http://idp.example.com/slo/post";
-
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
 
 fn slo_accept_policy() -> LogoutPolicy {
     LogoutPolicy {
@@ -57,7 +49,7 @@ fn sp(slo: &str, policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlEr
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
             .slo_endpoint(SloEndpoint::post(slo)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(policy)
             .build()?,
     )
@@ -68,7 +60,7 @@ fn idp(slo: &str, policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, Sam
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO)?)
             .slo_endpoint(SloEndpoint::post(slo)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(policy)
             .build()?,
     )

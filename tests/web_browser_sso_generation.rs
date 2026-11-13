@@ -2,6 +2,10 @@
 //! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 and is not that preset.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{base64_decode, deflate_raw_decode};
@@ -10,15 +14,15 @@ use saml_rs::raw::{Binding, HttpRequest};
 use saml_rs::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
-    Credentials, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    MetadataTrustPolicy, NameId, NameIdCreationPolicy, NameIdFormat, Outbound, PrivateKeyPem,
-    ReplayPolicy, RespondSso, Saml, SamlError, SamlInstant, SamlValidationContext, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Status,
-    Subject, SubjectConfirmation, SubordinateStatusCode,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, ForceAuthn,
+    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
+    NameIdCreationPolicy, NameIdFormat, Outbound, ReplayPolicy, RespondSso, Saml, SamlError,
+    SamlInstant, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, SsoResponse, StartSso, Status, Subject, SubjectConfirmation,
+    SubordinateStatusCode,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{XmlEncryptionPolicy, XmlPolicy};
+use saml_rs::{CertificatePem, Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -29,16 +33,10 @@ const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const IDP_SLO: &str = "https://idp.example.com/slo";
 const UNSPECIFIED_AUTHN_CONTEXT: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
 
+#[cfg(not(feature = "crypto-fips"))]
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+#[cfg(not(feature = "crypto-fips"))]
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
 
 fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
@@ -68,7 +66,7 @@ fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlErro
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(validation)
             .build()?,
     )
@@ -81,7 +79,7 @@ fn idp_with(
     let mut builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(validation);
     if single_logout {
         builder = builder.slo_endpoint(SloEndpoint::redirect(IDP_SLO)?);
@@ -392,7 +390,7 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
     let sp = sp_with(signing_sp_validation())?;
     let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .build()?;
     idp_config.templates.login_response_template = Some(LoginResponseTemplate {
@@ -488,7 +486,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
 
     let mut template_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .build()?;
     template_config.templates.login_response_template = Some(LoginResponseTemplate {
@@ -510,7 +508,7 @@ fn typed_sso_assertion_name_id_keeps_the_configured_format(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
             .name_id_format(NameIdFormat::EmailAddress)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(signed_authn_request_idp_validation())
             .build()?,
     )?;
@@ -579,7 +577,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
             .slo_endpoint(SloEndpoint::soap(IDP_SLO)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(signed_authn_request_idp_validation())
             .build()?,
     )?;
@@ -652,7 +650,7 @@ fn typed_transient_name_id_omits_allow_create_under_producer_rules(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
             .name_id_format(NameIdFormat::Transient)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(validation)
             .build()?,
     )?;
@@ -746,7 +744,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let encrypted_credentials = Credentials {
         encryption_certificate: Some(CertificatePem::new(CERT)),
         decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        ..credentials()
+        ..signing_credentials()
     };
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
@@ -759,7 +757,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(signed_authn_request_idp_validation())
             .xml(encryption)
             .build()?,
@@ -833,7 +831,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(SpValidationPolicy::compatibility())
         .build()?;
     config.templates.login_request_template = Some("<samlp:AuthnRequest/>".to_string());
@@ -851,7 +849,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
     let sp = sp_with(signing_sp_validation())?;
     let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .build()?;
     idp_config.templates.login_response_template = Some(LoginResponseTemplate {
@@ -1103,7 +1101,7 @@ fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dy
     let sp = sp_with(signing_sp_validation())?;
     let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .build()?;
     idp_config.templates.login_response_template = Some(LoginResponseTemplate {
@@ -1136,7 +1134,7 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
             .acs_endpoint(
                 AcsEndpoint::simple_sign("https://sp.example.com/acs/simple-sign")?.mark_default(),
             )
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(signing_sp_validation())
             .build()?,
     )?;
@@ -1170,7 +1168,7 @@ fn typed_error_response_stays_plaintext_when_assertion_encryption_is_on(
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(signed_authn_request_idp_validation())
             .xml(encryption)
             .build()?,

@@ -8,6 +8,10 @@
 //! not reject it for missing one of them.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
@@ -22,11 +26,11 @@ use saml_rs::template::{
 };
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
-    Attributes, AudienceValidationPolicy, AuthnRequest, BrowserInput, CertificatePem, Credentials,
-    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
-    NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy, RequestedSubjectIdentifier,
-    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponse, SsoSession, StartSso, Status, Subject, TemplatePolicy,
+    Attributes, AudienceValidationPolicy, AuthnRequest, BrowserInput, EntityId, FormField,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
+    Outbound, ReplayPolicy, RequestedSubjectIdentifier, RespondSso, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
+    SsoSession, StartSso, Status, Subject, TemplatePolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -40,17 +44,6 @@ const BASIC: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:basic";
 const DEPLOYMENT_FORMAT: &str = "https://example.com/attribute-name-format";
 const MAIL_OID: &str = "urn:oid:0.9.2342.19200300.100.1.3";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
-
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
 }
@@ -59,7 +52,7 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy {
                 assertions: AssertionSignaturePolicy::RequireSigned,
                 audience: AudienceValidationPolicy::Validate,
@@ -73,7 +66,7 @@ fn idp_with(templates: TemplatePolicy) -> Result<Saml<saml_rs::Idp>, SamlError> 
     Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .templates(templates)
             .build()?,
@@ -826,7 +819,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .name_id_format(NameIdFormat::Persistent)
             .build()?,
@@ -843,7 +836,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     let templated = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .name_id_format(NameIdFormat::Persistent)
             .templates(TemplatePolicy {
@@ -1125,14 +1118,14 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
         expect_name_id_format_error(Saml::sp(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
                 .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
-                .credentials(credentials())
+                .credentials(signing_credentials())
                 .name_id_format(custom.clone())
                 .build()?,
         ))?;
         expect_name_id_format_error(Saml::idp(
             IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
                 .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-                .credentials(credentials())
+                .credentials(signing_credentials())
                 .name_id_format(custom)
                 .build()?,
         ))?;

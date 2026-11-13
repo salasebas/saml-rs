@@ -7,14 +7,18 @@
 //! that marks `/acs/b` default, so its unsolicited responses go there.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::{Duration, SystemTime};
 
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService, ArtifactUses,
-    BrowserInput, CertificatePem, Credentials, DeliveredArtifact, EndpointUrl, EntityId, Idp,
-    IdpConfig, IdpDescriptor, IssuedArtifacts, MetadataTrustPolicy, NameId, PrivateKeyPem,
-    ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig,
-    SpDescriptor, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, Subject,
+    BrowserInput, DeliveredArtifact, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor,
+    IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError,
+    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint, SsoResponse,
+    SsoResponseBinding, SsoSession, Subject,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -28,17 +32,6 @@ const BINDINGS: [SsoResponseBinding; 3] = [
     SsoResponseBinding::SimpleSign,
     SsoResponseBinding::Artifact,
 ];
-
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
 
 /// The binding of the consumer published at [`OTHER_BINDING`].
 fn other_binding(binding: SsoResponseBinding) -> SsoResponseBinding {
@@ -65,7 +58,7 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
     Saml::sp(
         builder
             .acs_endpoint(other)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .build()?,
     )
 }
@@ -78,7 +71,7 @@ fn idp() -> Result<Saml<Idp>, SamlError> {
                 0,
                 EndpointUrl::try_new("https://idp.example.com/artifact")?,
             ))
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .build()?,
     )
 }
