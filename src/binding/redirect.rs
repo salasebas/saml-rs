@@ -82,10 +82,7 @@ pub fn build_redirect_octet(
     let xml = redirect_message_xml(xml, true)?;
     let deflated = deflate_raw_encode(xml.as_bytes())?;
     let encoded = base64_encode(&deflated);
-    let mut octet = format!("{}={}", parser_type.query_param(), url_encode(&encoded));
-    if let Some(state) = relay_state {
-        octet.push_str(&format!("&RelayState={}", url_encode(state)));
-    }
+    let mut octet = redirect_binding_query(parser_type.query_param(), &encoded, relay_state);
     octet.push_str(&format!("&SigAlg={}", url_encode(sig_alg)));
     Ok(octet)
 }
@@ -287,6 +284,33 @@ mod tests {
             .find(|(k, _)| k == "RelayState")
             .map(|(_, v)| v.into_owned());
         assert_eq!(relay.as_deref(), Some("state 1"));
+        Ok(())
+    }
+
+    #[test]
+    fn redirect_octet_preserves_encoded_bytes_and_parameter_order(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for (parser_type, param) in [
+            (ParserType::SamlRequest, "SAMLRequest"),
+            (ParserType::SamlResponse, "SAMLResponse"),
+        ] {
+            for (relay_state, relay_query) in [
+                (None, ""),
+                (Some(""), "&RelayState="),
+                (Some("a b+c/&=%"), "&RelayState=a+b%2Bc%2F%26%3D%25"),
+            ] {
+                let octet = build_redirect_octet(
+                    parser_type,
+                    "<samlp:AuthnRequest/>",
+                    relay_state,
+                    "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+                )?;
+                assert_eq!(
+                    octet,
+                    format!("{param}=sylOzM0psHIsLcnIC0otLE0tLtG3AwA%3D{relay_query}&SigAlg=http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha256")
+                );
+            }
+        }
         Ok(())
     }
 
