@@ -2,6 +2,7 @@ use core::marker::PhantomData;
 
 use super::artifact::ArtifactEncoding;
 use super::forms::{FormField, PostForm};
+use super::MessageField;
 use crate::artifact::Artifact;
 use crate::binding::append_redirect_query;
 use crate::constants::url_params;
@@ -22,28 +23,6 @@ enum OutboundAction {
     SimpleSignPost(PostForm),
     SoapRequest(SoapRequest),
     SoapResponse(SoapResponse),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MessageField {
-    Request,
-    Response,
-}
-
-impl MessageField {
-    fn param_name(self) -> &'static str {
-        match self {
-            Self::Request => url_params::SAML_REQUEST,
-            Self::Response => url_params::SAML_RESPONSE,
-        }
-    }
-
-    fn opposite_param_name(self) -> &'static str {
-        match self {
-            Self::Request => url_params::SAML_RESPONSE,
-            Self::Response => url_params::SAML_REQUEST,
-        }
-    }
 }
 
 /// Typed outbound browser action, or the SOAP message of a back-channel
