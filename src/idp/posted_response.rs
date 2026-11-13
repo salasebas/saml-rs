@@ -1,4 +1,4 @@
-//! Response rendering for a Web Browser SSO response stored for an artifact.
+//! Posted response rendering for SSO responses carried in SOAP.
 
 use super::{
     IdentityProvider, LoginResponseOptions, LoginResponseOverrides, RenderedLoginResponse,
@@ -9,12 +9,12 @@ use crate::error::SamlError;
 use crate::sp::ServiceProvider;
 
 impl IdentityProvider {
-    /// SAML `Response` to store for an HTTP-Artifact.
+    /// SAML `Response` XML for PAOS or HTTP-Artifact delivery.
     ///
     /// The XML is the HTTP-POST response for the assertion consumer in
     /// `overrides`, including its signature. A status other than top-level
     /// success omits assertions.
-    pub(crate) fn render_artifact_sso_response(
+    pub(crate) fn render_posted_sso_response(
         &self,
         sp: &ServiceProvider,
         user: &User,

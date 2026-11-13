@@ -16,7 +16,7 @@ is in [`docs/architecture/`](architecture/README.md).
 | IdP `issue_artifact`, `answer_artifact_resolve`; SP `resolve_artifact` | `src/api/artifact.rs`, `src/artifact.rs` |
 | IdP `respond_sso_artifact`, `initiate_sso_artifact` | `src/api/artifact.rs`, `src/api/idp.rs` |
 | `ArtifactDelivery`, `DeliveredArtifact` | `src/browser/artifact.rs` |
-| Raw response rendering for an artifact | `src/idp/artifact.rs` |
+| Raw response rendering for an artifact | `src/idp/posted_response.rs` |
 | SOAP 1.1 envelope, `SoapRequest`, `SoapResponse` | `src/soap.rs` |
 | Single Logout over SOAP: `StartSlo::soap`, `BrowserInput::soap`, `Outbound::soap_request` and `soap_response` | `src/api/slo.rs`, `src/browser/input.rs`, `src/browser/outbound.rs` |
 
@@ -33,7 +33,7 @@ is in [`docs/architecture/`](architecture/README.md).
 | IdP `receive_paos_sso`, `respond_paos_sso`, `reject_paos_sso`, `paos_soap_fault` | `src/api/paos/mod.rs` |
 | PAOS header and SOAP envelopes | `src/api/paos/protocol.rs` |
 | Raw PAOS AuthnRequest rendering | `src/sp/paos.rs` |
-| Raw PAOS response rendering | `src/idp/paos.rs` |
+| Raw PAOS response rendering | `src/idp/posted_response.rs` |
 
 The enhanced-client role is not a facade. The IdP and SP operational modes
 stay unclaimed.

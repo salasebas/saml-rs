@@ -23,15 +23,13 @@ use crate::template::{
 use crate::validator::offset_datetime_from_system_time;
 use crate::xml::OutboundNameIdQualifiers;
 
-mod artifact;
 mod login_response;
-mod paos;
+mod posted_response;
 
 use login_response::{
     render_default_login_response, render_error_login_response, ErrorLoginResponseXml,
     LoginResponseXml,
 };
-pub(crate) use paos::PaosSsoResponseInput;
 use std::time::SystemTime;
 
 /// Optional inputs for [`IdentityProvider::create_login_response`].
@@ -431,7 +429,7 @@ impl IdentityProvider {
         user: &User,
         options: &LoginResponseOptions<'_>,
     ) -> Result<BindingContext, SamlError> {
-        self.create_login_response_inner(
+        self.create_login_response_with_overrides(
             sp,
             binding,
             user,
@@ -442,17 +440,6 @@ impl IdentityProvider {
     }
 
     pub(crate) fn create_login_response_with_overrides(
-        &self,
-        sp: &ServiceProvider,
-        binding: Binding,
-        user: &User,
-        options: &LoginResponseOptions<'_>,
-        overrides: LoginResponseOverrides<'_>,
-    ) -> Result<IssuedLoginResponse, SamlError> {
-        self.create_login_response_inner(sp, binding, user, options, overrides)
-    }
-
-    fn create_login_response_inner(
         &self,
         sp: &ServiceProvider,
         binding: Binding,
