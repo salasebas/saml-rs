@@ -7,6 +7,10 @@
 //! deployment still performs HTTP and TLS.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::{Duration, SystemTime};
 
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
@@ -15,16 +19,18 @@ use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService,
-    ArtifactUses, AuthnRequest, BrowserInput, CertificatePem, Credentials, DeliveredArtifact,
-    EndpointUrl, EntityId, FormField, Idp, IdpConfig, IdpDescriptor, IssuedArtifacts,
-    IssuedMessage, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, PrivateKeyPem,
-    Received, RelayStateParam, ReplayPolicy, ResolvedProtocolMessage, RespondSso, Saml, SamlError,
-    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint, SsoResponse,
-    SsoResponseBinding, SsoSession, StartSso, Status, Subject, SubordinateStatusCode,
-    TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
+    ArtifactUses, AuthnRequest, BrowserInput, DeliveredArtifact, EndpointUrl, EntityId, FormField,
+    Idp, IdpConfig, IdpDescriptor, IssuedArtifacts, IssuedMessage, MetadataTrustPolicy, NameId,
+    Outbound, PendingAuthnRequest, Received, RelayStateParam, ReplayPolicy,
+    ResolvedProtocolMessage, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp,
+    SpConfig, SpDescriptor, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
+    Status, Subject, SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{IdpConfigBuilder, SloEndpoint, XmlEncryptionPolicy, XmlPolicy};
+use saml_rs::{
+    CertificatePem, Credentials, IdpConfigBuilder, PrivateKeyPem, SloEndpoint, XmlEncryptionPolicy,
+    XmlPolicy,
+};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -46,14 +52,6 @@ struct Parties {
     sp: Saml<Sp>,
     idp_metadata: IdpDescriptor,
     sp_metadata: SpDescriptor,
-}
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
 }
 
 fn parties() -> Result<Parties, SamlError> {
@@ -90,7 +88,7 @@ fn parties_with_consumers(
                 0,
                 EndpointUrl::try_new(RESOLUTION_URL)?,
             ))
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .algorithms(algorithms)
             .build()?,
     )?;
@@ -98,7 +96,7 @@ fn parties_with_consumers(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(post)
             .acs_endpoint(artifact)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .build()?,
     )?;
     let idp_metadata = IdpDescriptor::from_metadata_xml(
@@ -762,7 +760,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
                 0,
                 EndpointUrl::try_new("https://other-idp.example.com/artifact")?,
             ))
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .build()?,
     )?;
     let other_metadata = IdpDescriptor::from_metadata_xml(
@@ -887,7 +885,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
                     .with_index(2)
                     .mark_default(),
             )
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .build()?,
     )?;
     let sp_metadata = SpDescriptor::from_metadata_xml(
@@ -1026,7 +1024,7 @@ fn encrypted_assertion_parties(
                 0,
                 EndpointUrl::try_new(RESOLUTION_URL)?,
             ))
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .xml(encryption())
             .build()?,
     )?;
@@ -1036,7 +1034,7 @@ fn encrypted_assertion_parties(
             .credentials(Credentials {
                 encryption_certificate: Some(CertificatePem::new(CERT)),
                 decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-                ..credentials()
+                ..signing_credentials()
             })
             .xml(encryption())
             .build()?,

@@ -1,10 +1,13 @@
 #![cfg(crypto)]
+
+mod common;
+
+use common::signing_credentials;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, CertificatePem, Credentials, EntityId, IdpConfig, IdpConfigBuilder,
-    IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutSubject, MetadataTrustPolicy, NameId,
-    Outbound, PendingAuthnRequest, PendingLogoutRequest, PendingSnapshot, PrivateKeyPem, Saml,
-    SamlError, SloEndpoint, SpConfig, SpConfigBuilder, SpValidationPolicy, SsoEndpoint, StartSlo,
-    StartSso, Started,
+    AcsEndpoint, AuthnRequest, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor,
+    IdpValidationPolicy, LogoutRequest, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
+    PendingAuthnRequest, PendingLogoutRequest, PendingSnapshot, Saml, SamlError, SloEndpoint,
+    SpConfig, SpConfigBuilder, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, Started,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -14,24 +17,13 @@ const SP_SLO_POST: &str = "https://sp.example.com/slo/post";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SLO_POST: &str = "https://idp.example.com/slo/post";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
 fn assert_send_sync<T: Send + Sync>() {}
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
 
 fn sp_config() -> Result<SpConfig, SamlError> {
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
         .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended())
         .build()
 }
@@ -40,7 +32,7 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
     IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(IdpValidationPolicy::recommended())
         .build()
 }

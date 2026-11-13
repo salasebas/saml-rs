@@ -4,15 +4,18 @@
 //! SAML Metadata §2.4.4 as amended by Errata 05 E7.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::xml::dom::parse;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, BrowserInput, CertificatePem,
-    Credentials, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
-    Outbound, PaosAuthnRequest, PaosClientRequest, PrivateKeyPem, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
-    StartSso,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, BrowserInput, EntityId, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, Outbound, PaosAuthnRequest,
+    PaosClientRequest, ReplayPolicy, Saml, SamlError, SamlValidationContext, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
 };
 use url::Url;
 
@@ -24,17 +27,6 @@ const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const IDP_SOAP: &str = "https://idp.example.com/sso/soap";
 const SOAP_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
-
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
 }
@@ -43,7 +35,7 @@ fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<Saml<saml_rs::Sp>, Sa
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy {
                 authn_requests,
                 ..SpValidationPolicy::recommended()
@@ -57,7 +49,7 @@ fn idp(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError>
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
             .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(validation)
             .build()?,
     )

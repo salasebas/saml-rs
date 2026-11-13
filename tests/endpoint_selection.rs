@@ -1,15 +1,19 @@
 //! Default ACS selection and every published SSO location.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::binding::base64_encode;
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, BrowserInput,
-    CertificatePem, Credentials, EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, IssuedArtifacts, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
-    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponseBinding, StartSso, Subject,
+    EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoResponseBinding, StartSso, Subject,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -18,17 +22,6 @@ const FIRST_ACS: &str = "https://sp.example.com/acs/first";
 const DEFAULT_ACS: &str = "https://sp.example.com/acs/default";
 const IDP_SSO_FIRST: &str = "https://idp.example.com/sso/first";
 const IDP_SSO_SECOND: &str = "https://idp.example.com/sso/second";
-
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
 
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
@@ -43,7 +36,7 @@ fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(FIRST_ACS)?.with_index(0))
             .acs_endpoint(AcsEndpoint::post(DEFAULT_ACS)?.with_index(1).mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy::compatibility())
             .build()?,
     )
@@ -56,7 +49,7 @@ fn idp_with_sso(urls: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlError> {
     }
     Saml::idp(
         builder
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::compatibility())
             .build()?,
     )
@@ -131,7 +124,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
                     .with_index(1)
                     .mark_default(),
             )
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy::compatibility())
             .build()?,
     )?;
@@ -243,7 +236,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                 0,
                 EndpointUrl::try_new("https://idp.example.com/artifact")?,
             ))
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::compatibility())
             .build()?,
     )?;
@@ -268,7 +261,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                 .acs_endpoint(
                     AcsEndpoint::new(binding, EndpointUrl::try_new(FIRST_ACS)?).with_index(1),
                 )
-                .credentials(credentials())
+                .credentials(signing_credentials())
                 .validation(SpValidationPolicy::compatibility())
                 .build()?,
         )?;

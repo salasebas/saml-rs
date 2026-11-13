@@ -4,18 +4,22 @@
 //! while that request is still before NotOnOrAfter.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::{
     collections::HashMap,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnSession, BrowserInput, CertificatePem, ClockSkew, Credentials,
-    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
-    NameId, NameIdFormat, OutstandingLogout, PendingAuthnRequest, PrivateKeyPem, RelayStateParam,
-    ReplayCache, ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError, SamlInstant,
-    SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponse, SsoSession, StartSso, Subject,
+    AcsEndpoint, AuthnRequest, AuthnSession, BrowserInput, ClockSkew, EntityId, FormField,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
+    OutstandingLogout, PendingAuthnRequest, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy,
+    RespondSso, Saml, SamlError, SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
+    Subject,
 };
 use time::OffsetDateTime;
 
@@ -23,9 +27,6 @@ const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO: &str = "https://idp.example.com/sso";
-
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 #[derive(Default)]
 struct MemoryReplayCache {
@@ -40,14 +41,6 @@ impl ReplayCache for MemoryReplayCache {
         }
         self.seen.insert(cache_key, expires_at);
         Ok(())
-    }
-}
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
     }
 }
 
@@ -70,13 +63,13 @@ fn issued_sso() -> Result<IssuedSso, Box<dyn std::error::Error>> {
 fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Error>> {
     let sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended())
         .build()?;
     let idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO)?)
         .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(IdpValidationPolicy::recommended())
         .build()?;
     let sp = Saml::sp(sp_config)?;

@@ -1,17 +1,20 @@
 //! Typed SSO comparison of a success `<Response>` `<Issuer>` with the identity provider.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoSession, StartSso, Subject,
+    AcsEndpoint, AuthnRequest, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy,
+    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, SsoResponse, SsoSession, StartSso, Subject,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -37,14 +40,6 @@ enum Delivery {
     Unsolicited,
 }
 
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
-
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
 }
@@ -61,14 +56,14 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,
     )?;
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
     )?;

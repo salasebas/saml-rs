@@ -1,14 +1,18 @@
 //! respond_slo issuer checks and SLO endpoint locations.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::binding::base64_encode;
 use saml_rs::{
-    BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, LogoutRequest, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId,
-    PrivateKeyPem, ReplayPolicy, RespondSlo, Saml, SamlError, SamlValidationContext, SessionIndex,
-    SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo,
+    BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    LogoutRequest, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
+    RespondSlo, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -23,17 +27,6 @@ const IDP_SLO_SECOND: &str = "https://idp.example.com/slo/second";
 const IDP_SLO_REQUEST: &str = "https://idp.example.com/slo/request";
 const IDP_SLO_RESPONSE: &str = "https://idp.example.com/slo/response";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
-
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
 }
@@ -43,7 +36,7 @@ fn sp(validation_policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlEr
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(saml_rs::AcsEndpoint::post(SP_ACS)?)
             .slo_endpoint(SloEndpoint::post(SP_SLO)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(validation_policy)
             .build()?,
     )
@@ -60,7 +53,7 @@ fn idp(
     }
     Saml::idp(
         builder
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(validation_policy)
             .build()?,
     )
@@ -210,7 +203,7 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
             .acs_endpoint(saml_rs::AcsEndpoint::post(SP_ACS)?)
             .slo_endpoint(SloEndpoint::post(SP_SLO)?)
             .slo_endpoint(SloEndpoint::post(SP_SLO_RESPONSE)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .build()?,
     )?;
     let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;

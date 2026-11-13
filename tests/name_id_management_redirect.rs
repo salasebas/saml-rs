@@ -5,6 +5,13 @@
 //! Errata 05 E8, E12, E14, and E55.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
+#[cfg(feature = "crypto-rustcrypto")]
+use saml_rs::Credentials;
+
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
@@ -15,15 +22,14 @@ use saml_rs::constants::{
 use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, BrowserInput, CertificatePem, ClockSkew, Credentials, EndpointUrl, EntityId,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, ManageNameIdRequest,
-    ManageNameIdRequestAgePolicy, ManageNameIdResponse, ManageNameIdService, MetadataTrustPolicy,
-    NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound, Pending,
-    PendingManageNameIdRequest, PrivateKeyPem, ReceiveNameIdManagement, Received,
-    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayState, RelayStateParam,
-    ReplayCache, ReplayKey, ReplayPolicy, RespondNameIdManagement, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartNameIdManagement, Status, SubordinateStatusCode,
+    AcsEndpoint, BrowserInput, ClockSkew, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, ManageNameIdRequest, ManageNameIdRequestAgePolicy, ManageNameIdResponse,
+    ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
+    NameIdManagementRefusal, Outbound, Pending, PendingManageNameIdRequest,
+    ReceiveNameIdManagement, Received, ReceivedNameIdManagement, ReceivedNameIdManagementRedirect,
+    RelayState, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy, RespondNameIdManagement,
+    Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -37,20 +43,11 @@ const IDP_SSO: &str = "https://idp.example.com/sso";
 const IDP_MANAGE: &str = "https://idp.example.com/manage-name-id";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
 
 fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
     let mut builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended());
     for endpoint in endpoints {
         builder = builder.manage_name_id_service(ManageNameIdService::redirect(
@@ -70,7 +67,7 @@ fn idp_with_formats(formats: &[NameIdFormat]) -> Result<Saml<saml_rs::Idp>, Saml
         .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
             IDP_MANAGE,
         )?))
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(IdpValidationPolicy::recommended());
     for format in formats {
         builder = builder.name_id_format(format.clone());
@@ -1115,7 +1112,7 @@ fn a_service_provider_does_not_publish_a_soap_endpoint() -> TestResult {
     let config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
         .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(SP_MANAGE)?))
-        .credentials(credentials())
+        .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended())
         .build();
 
@@ -1149,7 +1146,7 @@ fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
             .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
                 IDP_MANAGE,
             )?))
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
     )?;
@@ -1358,7 +1355,7 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
             .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
                 SP_MANAGE,
             )?))
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .xml(saml_rs::XmlPolicy {
                 limits,
                 ..saml_rs::XmlPolicy::default()

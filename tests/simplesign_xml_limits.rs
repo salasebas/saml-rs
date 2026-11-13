@@ -1,6 +1,10 @@
 //! HTTP-POST-SimpleSign messages are decoded under the configured XML limits.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
@@ -8,12 +12,11 @@ use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
 use saml_rs::xml::{dom::DEFAULT_XML_MAX_BYTES, XmlLimits};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
-    Credentials, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest,
-    LogoutSubject, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding, StartSlo, StartSso, Subject,
-    XmlPolicy,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, FormField,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutSubject,
+    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
+    SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoResponse, SsoResponseBinding, StartSlo, StartSso, Subject, XmlPolicy,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -21,7 +24,6 @@ type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 const CONFIGURED_MAX_BYTES: usize = 2 * 1024 * 1024;
 const PADDING_ABOVE_DEFAULT_LIMIT: usize = DEFAULT_XML_MAX_BYTES + 1;
@@ -32,14 +34,6 @@ struct Parties {
     idp: Saml<saml_rs::Idp>,
     sp_descriptor: SpDescriptor,
     idp_descriptor: IdpDescriptor,
-}
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
 }
 
 fn raised_xml_policy() -> XmlPolicy {
@@ -62,7 +56,7 @@ fn parties() -> TestResult<Parties> {
             .slo_endpoint(SloEndpoint::simple_sign(
                 "https://sp.example.com/slo/simple",
             )?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy {
                 assertions: AssertionSignaturePolicy::RequireSigned,
                 authn_requests: AuthnRequestSigningPolicy::Sign,
@@ -80,7 +74,7 @@ fn parties() -> TestResult<Parties> {
             .slo_endpoint(SloEndpoint::simple_sign(
                 "https://idp.example.com/slo/simple",
             )?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy {
                 authn_requests: AuthnRequestValidationPolicy::RequireSigned,
                 ..IdpValidationPolicy::recommended()

@@ -5,6 +5,10 @@
 //! application. Their presence does not reject the request.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
 use std::time::SystemTime;
 
 use saml_rs::binding::{base64_decode, base64_encode};
@@ -12,11 +16,11 @@ use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, BrowserInput,
-    CertificatePem, Credentials, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, IsPassive, MetadataTrustPolicy, NameId, NameIdFormat, NameIdPolicy,
-    Outbound, PrivateKeyPem, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
-    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSso, Status, Subject, SubordinateStatusCode,
+    EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, IsPassive,
+    MetadataTrustPolicy, NameId, NameIdFormat, NameIdPolicy, Outbound, Received, ReplayPolicy,
+    RequestedSubject, RequestedSubjectIdentifier, RespondSso, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
+    Status, Subject, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -35,17 +39,6 @@ const UNSPECIFIED: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
 const AFFILIATION: &str = "https://affiliation.example.com";
 const DECLARATION: &str = "https://idp.example.com/authn-context/hardware-token";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
-}
-
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
 }
@@ -54,7 +47,7 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,
     )
@@ -64,7 +57,7 @@ fn idp(validation_policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, Sam
     Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(validation_policy)
             .build()?,
     )

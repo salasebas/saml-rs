@@ -1,6 +1,13 @@
 //! Typed SSO acceptance of assertion conditions and every assertion in a response.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
+
+#[cfg(not(feature = "crypto-fips"))]
+use saml_rs::{Credentials, PrivateKeyPem};
+
 use std::collections::HashMap;
 use std::time::SystemTime;
 
@@ -12,11 +19,11 @@ use saml_rs::crypto::{
 };
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, BrowserInput, CertificatePem, Credentials,
-    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
-    NameId, Outbound, PendingAuthnRequest, PrivateKeyPem, ReplayCache, ReplayKey, ReplayPolicy,
-    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponse, SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
+    AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, BrowserInput, EntityId, FormField,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
+    PendingAuthnRequest, ReplayCache, ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
+    SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -33,14 +40,6 @@ struct Exchange {
     idp_descriptor: IdpDescriptor,
     pending: Option<PendingAuthnRequest>,
     response_fields: Vec<FormField>,
-}
-
-fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
 }
 
 fn validation() -> SamlValidationContext<'static> {
@@ -95,14 +94,14 @@ fn exchange_for(
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(sp_validation)
             .build()?,
     )?;
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
     )?;
@@ -369,14 +368,14 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
             .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default())
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,
     )?;
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
+            .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
     )?;
@@ -1054,7 +1053,7 @@ mod encrypted_assertions {
                 .acs_endpoint(acs)
                 .credentials(Credentials {
                     decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-                    ..credentials()
+                    ..signing_credentials()
                 })
                 .validation(validation)
                 .build()?,
