@@ -13,6 +13,7 @@ compatible additions.
 - [How to upgrade from 0.5 to 0.6](0.5-to-0.6.md)
 - [How to upgrade from 0.6 to 0.7](0.6-to-0.7.md)
 - [How to upgrade from 0.7 to 0.8](0.7-to-0.8.md)
+- [Replace collection helpers (unreleased)](unreleased-public-api-simplification.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).

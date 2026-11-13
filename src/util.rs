@@ -103,42 +103,6 @@ pub fn normalize_pem_string(pem: &str) -> String {
     strip_pem(pem, "RSA PRIVATE KEY")
 }
 
-/// A single value or a list of values.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OneOrMany<T> {
-    /// Exactly one value.
-    One(T),
-    /// Zero or more values.
-    Many(Vec<T>),
-}
-
-impl<T> OneOrMany<T> {
-    /// Collapse into a `Vec`.
-    pub fn into_vec(self) -> Vec<T> {
-        match self {
-            OneOrMany::One(v) => vec![v],
-            OneOrMany::Many(v) => v,
-        }
-    }
-}
-
-/// Normalise an optional single-or-many value into a `Vec`.
-pub fn cast_array_opt<T>(value: Option<OneOrMany<T>>) -> Vec<T> {
-    value.map(OneOrMany::into_vec).unwrap_or_default()
-}
-
-/// True when the slice is non-empty.
-pub fn is_non_empty_array<T>(items: &[T]) -> bool {
-    !items.is_empty()
-}
-
-/// Verify that every value in `field` equals `meta_field`.
-///
-/// Empty input is treated as a mismatch.
-pub fn verify_fields(field: &[String], meta_field: &str) -> bool {
-    !field.is_empty() && field.iter().all(|f| f == meta_field)
-}
-
 /// De-duplicate strings, preserving first-seen order.
 pub fn uniq<I, S>(items: I) -> Vec<String>
 where
@@ -154,11 +118,6 @@ where
         }
     }
     unique
-}
-
-/// Last element of a slice.
-pub fn last<T>(items: &[T]) -> Option<&T> {
-    items.last()
 }
 
 /// camelCase an identifier, matching the npm `camelcase` defaults for the
@@ -266,30 +225,8 @@ mod tests {
     }
 
     #[test]
-    fn cast_array_opt_modes() {
-        assert_eq!(cast_array_opt::<i32>(None), Vec::<i32>::new());
-        assert_eq!(cast_array_opt(Some(OneOrMany::One(1))), vec![1]);
-        assert_eq!(
-            cast_array_opt(Some(OneOrMany::Many(vec![1, 2]))),
-            vec![1, 2]
-        );
-    }
-
-    #[test]
-    fn uniq_and_last() {
+    fn uniq_preserves_first_seen_order() {
         assert_eq!(uniq(["a", "b", "a", "c"]), vec!["a", "b", "c"]);
-        assert_eq!(last(&[1, 2, 3]), Some(&3));
-        assert_eq!(last::<i32>(&[]), None);
-        assert!(is_non_empty_array(&[0]));
-        assert!(!is_non_empty_array::<i32>(&[]));
-    }
-
-    #[test]
-    fn verify_fields_all_match_non_empty() {
-        assert!(verify_fields(&["a".to_string()], "a"));
-        assert!(verify_fields(&["a".to_string(), "a".to_string()], "a"));
-        assert!(!verify_fields(&["a".to_string(), "b".to_string()], "a"));
-        assert!(!verify_fields(&[], "a"));
     }
 
     #[test]
