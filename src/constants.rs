@@ -245,6 +245,8 @@ pub mod data_encryption_algorithm {
     pub const TRIPLE_DES: &str = "http://www.w3.org/2001/04/xmlenc#tripledes-cbc";
     /// AES-128-GCM.
     pub const AES_128_GCM: &str = "http://www.w3.org/2009/xmlenc11#aes128-gcm";
+    /// AES-256-GCM.
+    pub const AES_256_GCM: &str = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
 }
 
 /// AES-GCM, the XML Encryption 1.1 block encryption that authenticates
@@ -255,7 +257,7 @@ pub(crate) fn is_xml_encryption_gcm_algorithm(algorithm: &str) -> bool {
         algorithm,
         data_encryption_algorithm::AES_128_GCM
             | "http://www.w3.org/2009/xmlenc11#aes192-gcm"
-            | "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+            | data_encryption_algorithm::AES_256_GCM
     )
 }
 
@@ -272,6 +274,8 @@ pub(crate) fn is_xml_encryption_cbc_algorithm(algorithm: &str) -> bool {
 pub mod key_encryption_algorithm {
     /// RSA-OAEP-MGF1P.
     pub const RSA_OAEP_MGF1P: &str = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p";
+    /// XML Encryption 1.1 RSA-OAEP.
+    pub const RSA_OAEP: &str = "http://www.w3.org/2009/xmlenc11#rsa-oaep";
     /// RSA 1.5.
     pub const RSA_1_5: &str = "http://www.w3.org/2001/04/xmlenc#rsa-1_5";
 }

@@ -12,11 +12,39 @@ use crate::config::AssertionElementEncryption;
 use crate::constants::namespace;
 use crate::crypto::keys::load_certificate;
 use crate::crypto::xml_syntax::validate_crypto_xml_prefix;
+use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
 use bergshamra::xml::{Document as XmlDocument, NodeId};
 use bergshamra::{encrypt, EncContext, KeysManager};
+
+#[derive(Clone, Copy)]
+pub(crate) struct KeyTransport<'a> {
+    uri: &'a str,
+    parameters: Option<(&'a str, &'a str)>,
+}
+
+impl<'a> KeyTransport<'a> {
+    pub(crate) fn from_setting(setting: &'a EntitySetting) -> Self {
+        Self {
+            uri: &setting.key_encryption_algorithm,
+            parameters: setting
+                .rsa_oaep_parameters
+                .as_ref()
+                .map(|(digest, mgf)| (digest.as_uri(), mgf.as_uri())),
+        }
+    }
+}
+
+impl<'a> From<&'a str> for KeyTransport<'a> {
+    fn from(uri: &'a str) -> Self {
+        Self {
+            uri,
+            parameters: None,
+        }
+    }
+}
 
 /// `<xenc:EncryptedData>` of type `Element` that carries `plaintext` for the
 /// holder of `encrypt_cert`.
@@ -24,12 +52,19 @@ pub(super) fn encrypted_data_xml(
     plaintext: &[u8],
     encrypt_cert: &str,
     data_alg: &str,
-    key_alg: &str,
+    key_alg: KeyTransport<'_>,
 ) -> Result<String, SamlError> {
     let data_alg = xml_escape(data_alg);
-    let key_alg = xml_escape(key_alg);
+    let parameters = match key_alg.parameters {
+        Some((digest, mgf)) => format!(
+            "<ds:DigestMethod Algorithm=\"{}\"/><xenc11:MGF xmlns:xenc11=\"http://www.w3.org/2009/xmlenc11#\" Algorithm=\"{}\"/>",
+            xml_escape(digest), xml_escape(mgf),
+        ),
+        None => String::new(),
+    };
+    let key_alg = xml_escape(key_alg.uri);
     let template = format!(
-        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\"/><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
+        "<xenc:EncryptedData xmlns:xenc=\"{enc}\" Type=\"{enc}Element\"><xenc:EncryptionMethod Algorithm=\"{data_alg}\"/><ds:KeyInfo xmlns:ds=\"{dsig}\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{key_alg}\">{parameters}</xenc:EncryptionMethod><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue></xenc:CipherValue></xenc:CipherData></xenc:EncryptedData>",
         enc = ENC,
         dsig = namespace::DSIG,
     );
@@ -53,6 +88,16 @@ pub fn encrypt_assertion(
     encrypt_cert: &str,
     data_alg: &str,
     key_alg: &str,
+    tag_prefix: &str,
+) -> Result<String, SamlError> {
+    encrypt_assertion_with_key_transport(xml, encrypt_cert, data_alg, key_alg.into(), tag_prefix)
+}
+
+pub(crate) fn encrypt_assertion_with_key_transport(
+    xml: &str,
+    encrypt_cert: &str,
+    data_alg: &str,
+    key_alg: KeyTransport<'_>,
     tag_prefix: &str,
 ) -> Result<String, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
@@ -101,7 +146,7 @@ pub(crate) fn encrypt_assertion_elements(
     xml: &str,
     encrypt_cert: &str,
     data_alg: &str,
-    key_alg: &str,
+    key_alg: KeyTransport<'_>,
     selection: AssertionElementEncryption,
 ) -> Result<String, SamlError> {
     encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
@@ -122,7 +167,7 @@ pub(crate) fn encrypt_logout_request_name_id(
     xml: &str,
     encrypt_cert: &str,
     data_alg: &str,
-    key_alg: &str,
+    key_alg: KeyTransport<'_>,
 ) -> Result<String, SamlError> {
     encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
         let [name_id] = root_children(document, namespace::ASSERTION, "NameID")?[..] else {
@@ -141,7 +186,7 @@ fn encrypt_selected(
     xml: &str,
     encrypt_cert: &str,
     data_alg: &str,
-    key_alg: &str,
+    key_alg: KeyTransport<'_>,
     select: impl FnOnce(&XmlDocument<'_>) -> Result<Vec<(NodeId, EncryptedElementKind)>, SamlError>,
 ) -> Result<String, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
@@ -165,7 +210,7 @@ fn encrypted_element(
     kind: EncryptedElementKind,
     encrypt_cert: &str,
     data_alg: &str,
-    key_alg: &str,
+    key_alg: KeyTransport<'_>,
 ) -> Result<(Range<usize>, String), SamlError> {
     let plaintext = namespace_complete(document, element)?;
     let encrypted_data = encrypted_data_xml(&plaintext, encrypt_cert, data_alg, key_alg)?;
@@ -200,7 +245,7 @@ pub(crate) fn encrypt_root_children(
     kinds: &[EncryptedElementKind],
     encrypt_cert: &str,
     data_alg: &str,
-    key_alg: &str,
+    key_alg: KeyTransport<'_>,
 ) -> Result<String, SamlError> {
     encrypt_selected(xml, encrypt_cert, data_alg, key_alg, |document| {
         let mut selected = Vec::new();

@@ -567,7 +567,8 @@ impl IdentityProvider {
         transforms: &[String],
     ) -> Result<String, SamlError> {
         use crate::crypto::{
-            enc::encrypt_assertion_elements, encrypt_assertion, SigningCredential,
+            enc::{encrypt_assertion_elements, encrypt_assertion_with_key_transport, KeyTransport},
+            SigningCredential,
         };
 
         let credential = SigningCredential::from_setting(&self.setting)?;
@@ -602,7 +603,7 @@ impl IdentityProvider {
                 &xml,
                 &sp_encryption_certificate(sp)?,
                 &self.setting.data_encryption_algorithm,
-                &self.setting.key_encryption_algorithm,
+                KeyTransport::from_setting(&self.setting),
                 element_encryption,
             )?;
         }
@@ -622,11 +623,11 @@ impl IdentityProvider {
             )?;
         }
         if self.setting.is_assertion_encrypted {
-            xml = encrypt_assertion(
+            xml = encrypt_assertion_with_key_transport(
                 &xml,
                 &sp_encryption_certificate(sp)?,
                 &self.setting.data_encryption_algorithm,
-                &self.setting.key_encryption_algorithm,
+                KeyTransport::from_setting(&self.setting),
                 &self.setting.tag_prefix_encrypted_assertion,
             )?;
         }

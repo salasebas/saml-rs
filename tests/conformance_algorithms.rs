@@ -6,8 +6,6 @@ use saml_rs::binding::base64_decode;
 use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
-#[cfg(not(feature = "crypto-fips"))]
-use saml_rs::XmlEncryptionPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequest, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
@@ -17,8 +15,10 @@ use saml_rs::{
     SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSlo, StartSso, Subject,
     TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
-#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
-use saml_rs::{DataEncryptionAlgorithm, KeyEncryptionAlgorithm};
+use saml_rs::{
+    Attribute, AttributeValue, Attributes, DataEncryptionAlgorithm, DigestAlgorithm,
+    KeyEncryptionAlgorithm, MaskGenerationFunction, XmlEncryptionPolicy,
+};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::{HmacSecret, SignatureAlgorithm};
 use url::Url;
@@ -161,6 +161,7 @@ struct Exchange {
 
 fn signed_redirect_request_then_post_response(
     peers: &Peers,
+    options: RespondSso,
 ) -> Result<Exchange, Box<dyn std::error::Error>> {
     let started = peers
         .sp
@@ -180,10 +181,9 @@ fn signed_redirect_request_then_post_response(
         validation(),
     )?;
     let subject = Subject::new(NameId::new("alice@example.com", None), Vec::new());
-    let response =
-        peers
-            .idp
-            .respond_sso(&peers.sp_descriptor, &received, subject, RespondSso::post())?;
+    let response = peers
+        .idp
+        .respond_sso(&peers.sp_descriptor, &received, subject, options)?;
     let fields = post_fields(&response)?;
     let encoded = fields
         .iter()
@@ -224,6 +224,113 @@ fn verified_algorithms(session: &SsoSession) -> Vec<&str> {
         .collect()
 }
 
+#[test]
+fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn std::error::Error>>
+{
+    for (encryption, wrapper) in [
+        (
+            XmlEncryptionPolicy::encrypt_assertions(),
+            "EncryptedAssertion",
+        ),
+        (XmlEncryptionPolicy::encrypt_ids(), "EncryptedID"),
+        (
+            XmlEncryptionPolicy::encrypt_attributes(),
+            "EncryptedAttribute",
+        ),
+    ] {
+        for (digest, mgf) in [
+            (DigestAlgorithm::Sha256, MaskGenerationFunction::Mgf1Sha256),
+            (DigestAlgorithm::Sha384, MaskGenerationFunction::Mgf1Sha384),
+            (DigestAlgorithm::Sha512, MaskGenerationFunction::Mgf1Sha512),
+            #[cfg(feature = "crypto-rustcrypto")]
+            (DigestAlgorithm::Sha256, MaskGenerationFunction::Mgf1Sha384),
+        ] {
+            let peers = peers(
+                rsa(AlgorithmPolicy::default()),
+                rsa(AlgorithmPolicy {
+                    data_encryption: DataEncryptionAlgorithm::Aes256Gcm,
+                    key_encryption: KeyEncryptionAlgorithm::RsaOaep {
+                        digest: digest.clone(),
+                        mgf,
+                    },
+                    ..AlgorithmPolicy::default()
+                }),
+                XmlPolicy {
+                    encryption,
+                    ..XmlPolicy::default()
+                },
+            )?;
+            let attributes = Attributes::new(vec![Attribute::new(
+                "mail",
+                None,
+                vec![AttributeValue::new("alice@example.com")],
+            )]);
+            let exchange = signed_redirect_request_then_post_response(
+                &peers,
+                RespondSso::post().attributes(attributes.clone()),
+            )?;
+            assert!(exchange.response_xml.contains(&format!("<saml:{wrapper}")));
+            assert_eq!(exchange.session.attributes(), &attributes);
+            let document = bergshamra::xml::uppsala::parse(&exchange.response_xml)?;
+            let methods: Vec<_> = document
+                .descendants(document.root())
+                .into_iter()
+                .filter(|&node| {
+                    document.element(node).is_some_and(|element| {
+                        element.matches_name_ns(
+                            "http://www.w3.org/2001/04/xmlenc#",
+                            "EncryptionMethod",
+                        )
+                    })
+                })
+                .collect();
+            assert_eq!(methods.len(), 2);
+            assert_eq!(
+                document
+                    .element(methods[0])
+                    .ok_or("missing data method")?
+                    .get_attribute("Algorithm"),
+                Some("http://www.w3.org/2009/xmlenc11#aes256-gcm")
+            );
+            assert_eq!(
+                document
+                    .element(methods[1])
+                    .ok_or("missing key method")?
+                    .get_attribute("Algorithm"),
+                Some("http://www.w3.org/2009/xmlenc11#rsa-oaep")
+            );
+            let parameters: Vec<_> = document
+                .children(methods[1])
+                .into_iter()
+                .filter_map(|node| document.element(node))
+                .map(|element| {
+                    (
+                        element.name.namespace_uri.as_deref(),
+                        &*element.name.local_name,
+                        element.get_attribute("Algorithm"),
+                    )
+                })
+                .collect();
+            assert_eq!(
+                parameters,
+                vec![
+                    (
+                        Some("http://www.w3.org/2000/09/xmldsig#"),
+                        "DigestMethod",
+                        Some(digest.as_uri())
+                    ),
+                    (
+                        Some("http://www.w3.org/2009/xmlenc11#"),
+                        "MGF",
+                        Some(mgf.as_uri())
+                    ),
+                ]
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn recommended_generation_uses_rsa_sha256_aes256_and_rsa_oaep(
@@ -233,7 +340,7 @@ fn recommended_generation_uses_rsa_sha256_aes256_and_rsa_oaep(
         rsa(AlgorithmPolicy::default()),
         encrypted_assertions(),
     )?;
-    let exchange = signed_redirect_request_then_post_response(&peers)?;
+    let exchange = signed_redirect_request_then_post_response(&peers, RespondSso::post())?;
 
     assert_eq!(exchange.redirect_sig_alg, signature_algorithm::RSA_SHA256);
     assert_eq!(
@@ -283,7 +390,7 @@ fn selected_rsa_sha1_signs_the_authn_request_and_the_response(
         ..AlgorithmPolicy::default()
     };
     let peers = peers(rsa(rsa_sha1()), rsa(rsa_sha1()), XmlPolicy::default())?;
-    let exchange = signed_redirect_request_then_post_response(&peers)?;
+    let exchange = signed_redirect_request_then_post_response(&peers, RespondSso::post())?;
 
     assert_eq!(exchange.redirect_sig_alg, signature_algorithm::RSA_SHA1);
     assert_eq!(
@@ -522,7 +629,7 @@ fn recommended_service_provider_does_not_verify_with_a_1024_bit_rsa_key(
         rsa_1024(),
         XmlPolicy::default(),
     )?;
-    let error = signed_redirect_request_then_post_response(&recommended)
+    let error = signed_redirect_request_then_post_response(&recommended, RespondSso::post())
         .err()
         .ok_or("accepted a response signed with a 1024-bit RSA key")?;
     assert!(
@@ -539,7 +646,7 @@ fn recommended_service_provider_does_not_verify_with_a_1024_bit_rsa_key(
         XmlSignatureProfile::AllowProviderSupportedForCompatibility,
         IdpValidationPolicy::recommended().xml_signatures,
     )?;
-    signed_redirect_request_then_post_response(&compatible)?;
+    signed_redirect_request_then_post_response(&compatible, RespondSso::post())?;
     Ok(())
 }
 
@@ -558,7 +665,7 @@ fn selected_dsa_sha1_signs_the_authn_request_and_the_response(
         )
     };
     let peers = peers(dsa_sha1(), dsa_sha1(), XmlPolicy::default())?;
-    let exchange = signed_redirect_request_then_post_response(&peers)?;
+    let exchange = signed_redirect_request_then_post_response(&peers, RespondSso::post())?;
 
     assert_eq!(exchange.redirect_sig_alg, signature_algorithm::DSA_SHA1);
     assert_eq!(
@@ -589,7 +696,7 @@ fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn s
         }),
         XmlPolicy::default(),
     )?;
-    let exchange = signed_redirect_request_then_post_response(&peers)?;
+    let exchange = signed_redirect_request_then_post_response(&peers, RespondSso::post())?;
 
     assert_eq!(exchange.redirect_sig_alg, signature_algorithm::RSA_SHA256);
 
@@ -660,7 +767,7 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
                     ..XmlPolicy::default()
                 },
             )?;
-            let exchange = signed_redirect_request_then_post_response(&peers)?;
+            let exchange = signed_redirect_request_then_post_response(&peers, RespondSso::post())?;
 
             assert_eq!(
                 algorithm_attributes(&exchange.response_xml, "EncryptionMethod"),
@@ -690,7 +797,7 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
                 ..XmlPolicy::default()
             },
         )?;
-        let refused = signed_redirect_request_then_post_response(&default)
+        let refused = signed_redirect_request_then_post_response(&default, RespondSso::post())
             .err()
             .ok_or("RSA-v1.5 accepted without the opt-in")?;
         assert!(
@@ -709,7 +816,7 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
                 ..XmlPolicy::default()
             },
         )?;
-        let exchange = signed_redirect_request_then_post_response(&selected)?;
+        let exchange = signed_redirect_request_then_post_response(&selected, RespondSso::post())?;
         assert!(exchange
             .response_xml
             .contains(saml_rs::constants::key_encryption_algorithm::RSA_1_5));
@@ -763,7 +870,7 @@ fn hmac_sha1_peers(
 #[test]
 fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std::error::Error>> {
     let peers = hmac_sha1_peers(Some(SP_HMAC_SECRET), Some(IDP_HMAC_SECRET))?;
-    let exchange = signed_redirect_request_then_post_response(&peers)?;
+    let exchange = signed_redirect_request_then_post_response(&peers, RespondSso::post())?;
 
     assert_eq!(exchange.redirect_sig_alg, signature_algorithm::HMAC_SHA1);
     assert_eq!(
@@ -840,7 +947,7 @@ fn hmac_sha1_signature_needs_the_signers_secret() -> Result<(), Box<dyn std::err
     ];
     for (sp_secret_at_idp, idp_secret_at_sp, expected) in cases {
         let peers = hmac_sha1_peers(sp_secret_at_idp, idp_secret_at_sp)?;
-        let error = match signed_redirect_request_then_post_response(&peers) {
+        let error = match signed_redirect_request_then_post_response(&peers, RespondSso::post()) {
             Ok(_) => return Err("verified without the signer's secret".into()),
             Err(error) => error,
         };

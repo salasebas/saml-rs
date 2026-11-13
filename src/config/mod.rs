@@ -4,14 +4,15 @@ mod algorithms;
 mod builders;
 mod credentials;
 mod descriptors;
+mod encryption;
 mod metadata_signature_shape;
 mod metadata_trust;
 mod policies;
 
 pub(crate) use algorithms::name_id_format_uris;
 pub use algorithms::{
-    DataEncryptionAlgorithm, DigestAlgorithm, KeyEncryptionAlgorithm, NameIdFormat,
-    SignatureAlgorithm, TransformAlgorithm,
+    DataEncryptionAlgorithm, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,
+    NameIdFormat, SignatureAlgorithm, TransformAlgorithm,
 };
 pub(crate) use builders::validated_idp_issuance_lifetime;
 pub use builders::{IdpConfig, IdpConfigBuilder, SpConfig, SpConfigBuilder};

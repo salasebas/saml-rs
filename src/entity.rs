@@ -5,7 +5,7 @@ use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
-use crate::config::{DecryptionCredential, HmacSecret};
+use crate::config::{DecryptionCredential, DigestAlgorithm, HmacSecret, MaskGenerationFunction};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
     MessageSignatureOrder,
@@ -27,6 +27,7 @@ pub struct EntitySetting {
     pub data_encryption_algorithm: String,
     /// Key encryption algorithm URI.
     pub key_encryption_algorithm: String,
+    pub(crate) rsa_oaep_parameters: Option<(DigestAlgorithm, MaskGenerationFunction)>,
     /// Sign-then-encrypt vs encrypt-then-sign.
     pub message_signing_order: MessageSignatureOrder,
     /// `AllowCreate` for the NameIDPolicy.
@@ -171,6 +172,7 @@ impl fmt::Debug for EntitySetting {
             )
             .field("data_encryption_algorithm", &self.data_encryption_algorithm)
             .field("key_encryption_algorithm", &self.key_encryption_algorithm)
+            .field("rsa_oaep_parameters", &self.rsa_oaep_parameters)
             .field("message_signing_order", &self.message_signing_order)
             .field("allow_create", &self.allow_create)
             .field("is_assertion_encrypted", &self.is_assertion_encrypted)
@@ -308,6 +310,7 @@ impl Default for EntitySetting {
             request_signature_algorithm: signature_algorithm::RSA_SHA256.to_string(),
             data_encryption_algorithm: data_encryption_algorithm::AES_256.to_string(),
             key_encryption_algorithm: key_encryption_algorithm::RSA_OAEP_MGF1P.to_string(),
+            rsa_oaep_parameters: None,
             message_signing_order: MessageSignatureOrder::SignThenEncrypt,
             allow_create: false,
             is_assertion_encrypted: false,

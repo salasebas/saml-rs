@@ -441,10 +441,10 @@ pub use config::{
     DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm, EntityId, HmacSecret,
     IdentifierEncryptionPolicy, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig,
     IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy,
-    ManageNameIdService, MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase,
-    PrivateKeyPem, ResponseSignaturePolicy, SignatureAlgorithm, SpConfig, SpConfigBuilder,
-    SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy, TransformAlgorithm,
-    XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
+    ManageNameIdService, MaskGenerationFunction, MetadataTrustPolicy, NameIdCreationPolicy,
+    NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy, SignatureAlgorithm, SpConfig,
+    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
+    TransformAlgorithm, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(crypto)]
 pub use crypto::{

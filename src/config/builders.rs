@@ -525,6 +525,7 @@ fn validate_common_credentials(credentials: &Credentials) -> Result<(), SamlErro
 
 fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
     validate_sp_crypto_support(config)?;
+    super::encryption::validate_algorithms(&config.algorithms)?;
     validate_common_credentials(&config.credentials)?;
     if matches!(
         config.validation.authn_requests,
@@ -541,6 +542,7 @@ fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
 fn validate_idp_policy(config: &IdpConfig) -> Result<(), SamlError> {
     validated_idp_issuance_lifetime(config.issuance_lifetime)?;
     validate_idp_crypto_support(config)?;
+    super::encryption::validate_algorithms(&config.algorithms)?;
     validate_common_credentials(&config.credentials)
 }
 
@@ -656,6 +658,13 @@ fn apply_common_settings(
     setting.request_signature_algorithm = algorithms.signature.as_uri().to_string();
     setting.data_encryption_algorithm = algorithms.data_encryption.as_uri().to_string();
     setting.key_encryption_algorithm = algorithms.key_encryption.as_uri().to_string();
+    setting.rsa_oaep_parameters = if let super::KeyEncryptionAlgorithm::RsaOaep { digest, mgf } =
+        &algorithms.key_encryption
+    {
+        Some((digest.clone(), *mgf))
+    } else {
+        None
+    };
     setting.message_signing_order = algorithms.message_signing_order;
     setting.is_assertion_encrypted = matches!(
         xml.encryption.assertions,
