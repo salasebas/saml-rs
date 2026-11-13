@@ -133,6 +133,16 @@ pub struct Credentials {
     pub signing_key_passphrase: Option<Passphrase>,
     /// Signing certificate.
     pub signing_certificate: Option<CertificatePem>,
+    /// More signing certificates, published in metadata after [`Self::signing_certificate`].
+    ///
+    /// Each certificate gets its own signing `KeyDescriptor`, in list order.
+    /// Signing still uses only [`Self::signing_key`] and [`Self::signing_certificate`].
+    /// To roll over the signing key, publish the next certificate here and wait
+    /// until every peer has refreshed this entity's metadata. Then switch
+    /// [`Self::signing_key`] and [`Self::signing_certificate`] to the new pair
+    /// and keep the old certificate here during the overlap. Drop the old
+    /// certificate when peers no longer need to verify messages signed with it.
+    pub additional_signing_certificates: Vec<CertificatePem>,
     /// Secret for [`crate::SignatureAlgorithm::HmacSha1`].
     ///
     /// Messages are signed with it instead of [`Self::signing_key`] when that

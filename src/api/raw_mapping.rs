@@ -2,9 +2,8 @@ use crate::browser::{
     field_value, parse_form_fields, AcsEndpoint, BrowserInput, SsoResponseBinding,
 };
 use crate::config::{
-    name_id_format_uris, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem,
-    Credentials, EntityId, HmacSecret, IdpConfig, IdpDescriptor, ManageNameIdService, SpConfig,
-    SpDescriptor,
+    name_id_format_uris, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, Credentials,
+    EntityId, HmacSecret, IdpConfig, IdpDescriptor, ManageNameIdService, SpConfig, SpDescriptor,
 };
 use crate::constants::{url_params, Binding};
 use crate::entity::User;
@@ -23,7 +22,7 @@ use super::SamlError;
 pub(super) fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
     RawSpMetadataConfig {
         entity_id: config.entity_id.as_str().to_string(),
-        signing_certs: certificates(&config.credentials.signing_certificate),
+        signing_certs: signing_certificates(&config.credentials),
         encrypt_certs: encryption_certificates(&config.credentials),
         authn_requests_signed: matches!(
             config.validation.authn_requests,
@@ -60,7 +59,7 @@ pub(super) fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
 pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfig {
     RawIdpMetadataConfig {
         entity_id: config.entity_id.as_str().to_string(),
-        signing_certs: certificates(&config.credentials.signing_certificate),
+        signing_certs: signing_certificates(&config.credentials),
         encrypt_certs: encryption_certificates(&config.credentials),
         want_authn_requests_signed: matches!(
             config.validation.authn_requests,
@@ -99,11 +98,13 @@ pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfi
     }
 }
 
-fn certificates(certificate: &Option<CertificatePem>) -> Vec<String> {
-    certificate
-        .as_ref()
-        .map(|certificate| vec![certificate.as_str().to_string()])
-        .unwrap_or_default()
+fn signing_certificates(credentials: &Credentials) -> Vec<String> {
+    credentials
+        .signing_certificate
+        .iter()
+        .chain(&credentials.additional_signing_certificates)
+        .map(|certificate| certificate.as_str().to_string())
+        .collect()
 }
 
 fn encryption_certificates(credentials: &Credentials) -> Vec<String> {

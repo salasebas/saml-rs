@@ -171,6 +171,93 @@ fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>,
 }
 
 #[test]
+fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_switch(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut rolling = credentials(SP_ROLE_KEY, SP_ROLE_CERT);
+    rolling.additional_signing_certificates = vec![CertificatePem::new(IDP_ROLE_CERT)];
+    let mut sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+        .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
+        .credentials(rolling.clone())
+        .validation(SpValidationPolicy {
+            authn_requests: saml_rs::AuthnRequestSigningPolicy::Sign,
+            ..SpValidationPolicy::recommended()
+        })
+        .build()?;
+    let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+        .sso_endpoint(SsoEndpoint::post(IDP_SSO)?)
+        .credentials(rolling)
+        .validation(IdpValidationPolicy {
+            authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
+            ..IdpValidationPolicy::recommended()
+        })
+        .build()?;
+    let published_sp = Saml::sp(sp_config.clone())?;
+    let published_idp = Saml::idp(idp_config.clone())?;
+    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        published_sp.metadata_xml(),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        published_idp.metadata_xml(),
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
+
+    for (key, current, overlap) in [
+        (SP_ROLE_KEY, SP_ROLE_CERT, IDP_ROLE_CERT),
+        (IDP_ROLE_KEY, IDP_ROLE_CERT, SP_ROLE_CERT),
+    ] {
+        let mut rolling = credentials(key, current);
+        rolling.additional_signing_certificates = vec![CertificatePem::new(overlap)];
+        sp_config.credentials = rolling.clone();
+        idp_config.credentials = rolling;
+        let sp = Saml::sp(sp_config.clone())?;
+        let idp = Saml::idp(idp_config.clone())?;
+
+        for metadata in [sp.metadata_xml(), idp.metadata_xml()] {
+            let document = saml_rs::xml::dom::parse(metadata)?;
+            let descriptors: Vec<_> = document
+                .root
+                .children
+                .iter()
+                .flat_map(|role| &role.children)
+                .filter(|node| node.local_name == "KeyDescriptor")
+                .collect();
+            assert_eq!(descriptors.len(), 2);
+            for (descriptor, expected) in descriptors.iter().zip([current, overlap]) {
+                assert_eq!(descriptor.attr("use"), Some("signing"));
+                let certificates: Vec<_> = descriptor
+                    .children
+                    .iter()
+                    .flat_map(|key_info| &key_info.children)
+                    .flat_map(|x509_data| &x509_data.children)
+                    .filter(|node| node.local_name == "X509Certificate")
+                    .map(|node| node.text.as_str())
+                    .collect();
+                assert_eq!(certificates, [normalize_cert_string(expected)]);
+            }
+        }
+
+        let session = sso_response_from(&sp, &sp_descriptor, &idp_descriptor, &idp)??;
+        assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
+
+        let current_sp = SpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            sp_signing_authn_requests(key, current)?.metadata_xml(),
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        )?;
+        let current_idp = IdpDescriptor::from_metadata_xml_for(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            idp_signing_with(key, current)?.metadata_xml(),
+            MetadataTrustPolicy::UnsignedForCompatibility,
+        )?;
+        sso_response_from(&sp, &current_sp, &current_idp, &idp)??;
+    }
+    Ok(())
+}
+
+#[test]
 fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dyn std::error::Error>>
 {
     let sp = Saml::sp(
