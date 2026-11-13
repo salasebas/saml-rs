@@ -386,34 +386,16 @@ fn validate_root(
             element_label(element),
         )));
     }
-    let required: &[&[u8]] = match parser_type {
-        ParserType::SamlRequest => &[b"ID", b"Version", b"IssueInstant"],
-        ParserType::SamlResponse => &[b"ID", b"Version", b"IssueInstant"],
-        ParserType::LogoutRequest => &[b"ID", b"Version", b"IssueInstant"],
-        ParserType::LogoutResponse => &[b"ID", b"Version", b"IssueInstant"],
-        ParserType::ManageNameIdRequest => &[b"ID", b"Version", b"IssueInstant"],
-        ParserType::ManageNameIdResponse => &[b"ID", b"Version", b"IssueInstant"],
-    };
     let attributes = validate_unqualified_attributes(
         reader,
         element,
         root_consumed_attributes(parser_type),
-        required,
+        &[b"ID", b"Version", b"IssueInstant"],
     )?;
     if parser_type != ParserType::ManageNameIdRequest {
         require_version_2(&attributes, element)?;
     }
-    if matches!(
-        parser_type,
-        ParserType::SamlRequest
-            | ParserType::SamlResponse
-            | ParserType::LogoutRequest
-            | ParserType::LogoutResponse
-            | ParserType::ManageNameIdRequest
-            | ParserType::ManageNameIdResponse
-    ) {
-        require_issue_instant(&attributes, element)?;
-    }
+    require_issue_instant(&attributes, element)?;
     if parser_type == ParserType::LogoutRequest {
         require_optional_saml_utc_date_time(&attributes, element, b"NotOnOrAfter")?;
     }
