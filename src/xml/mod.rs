@@ -24,3 +24,10 @@ pub(crate) use profile::{
     OutboundLogoutValidation, OutboundNameIdQualifiers,
 };
 pub(crate) use schema_value::{xs_boolean, xs_unsigned_short};
+
+pub(crate) fn is_xml_char(character: char) -> bool {
+    matches!(
+        character,
+        '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..
+    )
+}

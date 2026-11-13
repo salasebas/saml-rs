@@ -5,6 +5,7 @@
 //! canonicalisation concerns — verification is delegated to bergshamra).
 
 use crate::error::SamlError;
+use crate::xml::is_xml_char;
 use crate::xml::name::is_ncname;
 use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::{BytesRef, BytesStart, Event};
@@ -178,10 +179,6 @@ fn checked_append_text(
     }
     target.push_str(text);
     Ok(())
-}
-
-fn is_xml_char(ch: char) -> bool {
-    matches!(ch, '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..)
 }
 
 fn check_xml_chars(text: &str) -> Result<(), SamlError> {
