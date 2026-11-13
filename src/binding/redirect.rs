@@ -126,14 +126,14 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
                 return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
             }
             RedirectTag::Start { protocol_signature } => {
-                count_element(&mut nodes, limits)?;
+                limits.count_element(&mut nodes)?;
                 if depth == 1 && protocol_signature {
                     open_signature = Some(element_start(xml, end)?);
                 }
-                depth = checked_depth(depth, limits)?;
+                depth = limits.checked_depth(depth)?;
             }
             RedirectTag::Empty { protocol_signature } => {
-                count_element(&mut nodes, limits)?;
+                limits.count_element(&mut nodes)?;
                 if depth == 1 && protocol_signature {
                     let start = element_start(xml, end)?;
                     spans.push((start, end));
@@ -204,30 +204,6 @@ impl RedirectTag {
             | Event::GeneralRef(_) => Self::Other,
         }
     }
-}
-
-fn count_element(nodes: &mut usize, limits: XmlLimits) -> Result<(), SamlError> {
-    *nodes = nodes
-        .checked_add(1)
-        .ok_or_else(|| xml_limit("max XML nodes", limits.max_nodes))?;
-    if *nodes > limits.max_nodes {
-        return Err(xml_limit("max XML nodes", limits.max_nodes));
-    }
-    Ok(())
-}
-
-fn checked_depth(depth: usize, limits: XmlLimits) -> Result<usize, SamlError> {
-    let depth = depth
-        .checked_add(1)
-        .ok_or_else(|| xml_limit("max XML depth", limits.max_depth))?;
-    if depth > limits.max_depth {
-        return Err(xml_limit("max XML depth", limits.max_depth));
-    }
-    Ok(depth)
-}
-
-fn xml_limit(limit: &str, max: usize) -> SamlError {
-    SamlError::Invalid(format!("ERR_XML_LIMIT_EXCEEDED: {limit} exceeded ({max})"))
 }
 
 fn element_start(xml: &str, end: usize) -> Result<usize, SamlError> {

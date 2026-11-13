@@ -69,6 +69,31 @@ impl XmlLimits {
         }
         Ok(())
     }
+
+    pub(crate) fn count_element(self, count: &mut usize) -> Result<(), SamlError> {
+        *count = count
+            .checked_add(1)
+            .ok_or_else(|| limit_exceeded("max XML nodes", self.max_nodes))?;
+        if *count > self.max_nodes {
+            return Err(limit_exceeded("max XML nodes", self.max_nodes));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_depth(self, depth: usize) -> Result<(), SamlError> {
+        if depth > self.max_depth {
+            return Err(limit_exceeded("max XML depth", self.max_depth));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn checked_depth(self, depth: usize) -> Result<usize, SamlError> {
+        let depth = depth
+            .checked_add(1)
+            .ok_or_else(|| limit_exceeded("max XML depth", self.max_depth))?;
+        self.check_depth(depth)?;
+        Ok(depth)
+    }
 }
 
 impl Default for XmlLimits {
@@ -124,23 +149,6 @@ fn local_name_str(name: QName) -> String {
 
 fn limit_exceeded(limit: &str, max: usize) -> SamlError {
     SamlError::Invalid(format!("{XML_LIMIT_EXCEEDED}: {limit} exceeded ({max})"))
-}
-
-fn checked_node_count(count: &mut usize, limits: XmlLimits) -> Result<(), SamlError> {
-    *count = count
-        .checked_add(1)
-        .ok_or_else(|| limit_exceeded("max XML nodes", limits.max_nodes))?;
-    if *count > limits.max_nodes {
-        return Err(limit_exceeded("max XML nodes", limits.max_nodes));
-    }
-    Ok(())
-}
-
-fn check_depth(depth: usize, limits: XmlLimits) -> Result<(), SamlError> {
-    if depth > limits.max_depth {
-        return Err(limit_exceeded("max XML depth", limits.max_depth));
-    }
-    Ok(())
 }
 
 fn checked_append_text(
@@ -459,8 +467,8 @@ fn parse_roots_inner(
         let after = reader.buffer_position() as usize;
         match event {
             Event::Start(e) => {
-                checked_node_count(&mut node_count, limits)?;
-                check_depth(stack.len().saturating_add(1), limits)?;
+                limits.count_element(&mut node_count)?;
+                limits.check_depth(stack.len().saturating_add(1))?;
                 let start = find_lt(bytes, before, after);
                 let (local_name, attrs) = read_element(&e, &mut resolver, limits, mode)?;
                 stack.push(Node {
@@ -473,8 +481,8 @@ fn parse_roots_inner(
                 });
             }
             Event::Empty(e) => {
-                checked_node_count(&mut node_count, limits)?;
-                check_depth(stack.len().saturating_add(1), limits)?;
+                limits.count_element(&mut node_count)?;
+                limits.check_depth(stack.len().saturating_add(1))?;
                 let start = find_lt(bytes, before, after);
                 let (local_name, attrs) = read_element(&e, &mut resolver, limits, mode)?;
                 let node = Node {
