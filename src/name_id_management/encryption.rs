@@ -77,7 +77,7 @@ fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String
         &[MANAGED_NAME_ID, NEW_ID],
         &certificate,
         &setting.data_encryption_algorithm,
-        &setting.key_encryption_algorithm,
+        crate::crypto::enc::KeyTransport::from_setting(setting),
     )
 }
 

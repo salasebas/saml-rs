@@ -4,16 +4,62 @@
 use std::{str::FromStr, time::Duration};
 
 use saml_rs::{
-    AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AudienceValidationPolicy,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
-    DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm, EntityId, EntitySetting,
-    IdpConfig, IdpMetadataConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
-    LogoutSignaturePolicy, NameIdCreationPolicy, Passphrase, PrivateKeyPem,
-    ResponseSignaturePolicy, SamlError, SignatureAlgorithm, SpConfig, SpMetadataConfig,
-    SpValidationPolicy, SsoEndpoint, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
+    AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
+    AudienceValidationPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    CertificatePem, Credentials, DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm,
+    EntityId, EntitySetting, IdpConfig, IdpMetadataConfig, IdpValidationPolicy,
+    KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy, MaskGenerationFunction,
+    NameIdCreationPolicy, Passphrase, PrivateKeyPem, ResponseSignaturePolicy, SamlError,
+    SignatureAlgorithm, SpConfig, SpMetadataConfig, SpValidationPolicy, SsoEndpoint,
+    TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(crypto)]
-use saml_rs::{AlgorithmPolicy, SloEndpoint, TemplatePolicy, XmlEncryptionPolicy};
+use saml_rs::{SloEndpoint, TemplatePolicy, XmlEncryptionPolicy};
+
+#[test]
+fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
+    let mut algorithms = vec![AlgorithmPolicy {
+        key_encryption: KeyEncryptionAlgorithm::RsaOaep {
+            digest: DigestAlgorithm::Custom("urn:test:unsupported-oaep-digest".into()),
+            mgf: MaskGenerationFunction::Mgf1Sha256,
+        },
+        ..AlgorithmPolicy::default()
+    }];
+    if cfg!(any(
+        feature = "crypto-aws-lc",
+        feature = "crypto-fips",
+        not(crypto)
+    )) {
+        algorithms.push(AlgorithmPolicy {
+            key_encryption: KeyEncryptionAlgorithm::RsaOaep {
+                digest: DigestAlgorithm::Sha256,
+                mgf: MaskGenerationFunction::Mgf1Sha384,
+            },
+            ..AlgorithmPolicy::default()
+        });
+    }
+    if cfg!(not(crypto)) {
+        algorithms.push(AlgorithmPolicy {
+            data_encryption: DataEncryptionAlgorithm::Aes256Gcm,
+            ..AlgorithmPolicy::default()
+        });
+    }
+    for algorithms in algorithms {
+        let sp = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+            .validation(SpValidationPolicy::compatibility())
+            .algorithms(algorithms.clone())
+            .build();
+        let idp = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
+            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+            .validation(IdpValidationPolicy::compatibility())
+            .algorithms(algorithms)
+            .build();
+        assert!(matches!(sp, Err(SamlError::Unsupported(_))), "{sp:?}");
+        assert!(matches!(idp, Err(SamlError::Unsupported(_))), "{idp:?}");
+    }
+    Ok(())
+}
 
 fn signing_credentials() -> Credentials {
     Credentials {

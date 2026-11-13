@@ -290,6 +290,54 @@ fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
 }
 
 #[test]
+fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dyn std::error::Error>>
+{
+    use saml_rs::constants::{key_encryption_algorithm::RSA_OAEP_MGF1P, Binding};
+    use saml_rs::crypto::{decrypt_assertion, keys::load_private_key, AssertionDecryptionOptions};
+    use saml_rs::{
+        AlgorithmPolicy, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,
+    };
+
+    let sp = sp(XmlEncryptionPolicy::encrypt_assertions())?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .credentials(credentials())
+            .xml(xml(XmlEncryptionPolicy::encrypt_assertions()))
+            .algorithms(AlgorithmPolicy {
+                key_encryption: KeyEncryptionAlgorithm::RsaOaep {
+                    digest: DigestAlgorithm::Sha256,
+                    mgf: MaskGenerationFunction::Mgf1Sha256,
+                },
+                ..AlgorithmPolicy::default()
+            })
+            .build()?,
+    )?;
+    let mut raw = idp.raw_identity_provider().clone();
+    raw.setting.key_encryption_algorithm = RSA_OAEP_MGF1P.into();
+    let response = raw.create_login_response(
+        sp.raw_service_provider(),
+        Binding::Post,
+        &saml_rs::entity::User::new("alice-persistent-id"),
+        &saml_rs::idp::LoginResponseOptions::default(),
+    )?;
+    let xml = String::from_utf8(base64_decode(&response.context)?)?;
+    let document = bergshamra::xml::uppsala::parse(&xml)?;
+    assert!(!document
+        .descendants(document.root())
+        .into_iter()
+        .any(|node| {
+            document.element(node).is_some_and(|element| {
+                element.matches_name_ns("http://www.w3.org/2009/xmlenc11#", "MGF")
+            })
+        }));
+    let key = load_private_key(PRIVKEY, None)?;
+    let (_, assertion) = decrypt_assertion(&xml, &key, AssertionDecryptionOptions::default())?;
+    assert!(assertion.contains("alice-persistent-id"));
+    Ok(())
+}
+
+#[test]
 fn metadata_publishes_each_encryption_certificate_in_order(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rolling = Credentials {

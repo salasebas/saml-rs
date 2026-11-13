@@ -107,6 +107,8 @@ pub enum DataEncryptionAlgorithm {
     TripleDes,
     /// AES-128-GCM.
     Aes128Gcm,
+    /// AES-256-GCM.
+    Aes256Gcm,
     /// Backend-specific content encryption algorithm URI.
     Custom(String),
 }
@@ -125,6 +127,7 @@ impl DataEncryptionAlgorithm {
                 data_encryption_algorithm::TRIPLE_DES
             }
             Self::Aes128Gcm => data_encryption_algorithm::AES_128_GCM,
+            Self::Aes256Gcm => data_encryption_algorithm::AES_256_GCM,
             Self::Custom(uri) => uri.as_str(),
         }
     }
@@ -139,6 +142,15 @@ pub enum KeyEncryptionAlgorithm {
     /// RSA-OAEP-MGF1P.
     #[default]
     RsaOaepMgf1p,
+    /// XML Encryption 1.1 RSA-OAEP with explicit digest and mask generation.
+    ///
+    /// Config builders reject parameters the selected provider does not support.
+    RsaOaep {
+        /// Digest used by OAEP.
+        digest: DigestAlgorithm,
+        /// Mask generation function used by OAEP.
+        mgf: MaskGenerationFunction,
+    },
     /// RSAES-PKCS1-v1_5 preserved from the samlify port.
     Rsa15ForCompatibility,
     /// Deprecated alias for [`Self::Rsa15ForCompatibility`].
@@ -157,8 +169,40 @@ impl KeyEncryptionAlgorithm {
     pub fn as_uri(&self) -> &str {
         match self {
             Self::RsaOaepMgf1p => key_encryption_algorithm::RSA_OAEP_MGF1P,
+            Self::RsaOaep { .. } => key_encryption_algorithm::RSA_OAEP,
             Self::Rsa15ForCompatibility | Self::Rsa15 => key_encryption_algorithm::RSA_1_5,
             Self::Custom(uri) => uri.as_str(),
+        }
+    }
+}
+
+/// Mask generation function for XML Encryption 1.1 RSA-OAEP.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaskGenerationFunction {
+    /// MGF1 with SHA-256.
+    Mgf1Sha256,
+    /// MGF1 with SHA-384.
+    Mgf1Sha384,
+    /// MGF1 with SHA-512.
+    Mgf1Sha512,
+}
+
+impl MaskGenerationFunction {
+    /// Return the XML Encryption 1.1 MGF algorithm URI.
+    pub fn as_uri(&self) -> &str {
+        match self {
+            Self::Mgf1Sha256 => "http://www.w3.org/2009/xmlenc11#mgf1sha256",
+            Self::Mgf1Sha384 => "http://www.w3.org/2009/xmlenc11#mgf1sha384",
+            Self::Mgf1Sha512 => "http://www.w3.org/2009/xmlenc11#mgf1sha512",
+        }
+    }
+
+    #[cfg(crypto)]
+    pub(crate) fn digest_uri(&self) -> &str {
+        match self {
+            Self::Mgf1Sha256 => digest_algorithm::SHA256,
+            Self::Mgf1Sha384 => digest_algorithm::SHA384,
+            Self::Mgf1Sha512 => digest_algorithm::SHA512,
         }
     }
 }

@@ -11,8 +11,9 @@ use saml_rs::{
 };
 use saml_rs::{
     CertificatePem, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting, HmacSecret,
-    IdpDescriptor, KeyEncryptionAlgorithm, MetadataTrustPolicy, NameIdFormat, Passphrase,
-    PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor, TransformAlgorithm,
+    IdpDescriptor, KeyEncryptionAlgorithm, MaskGenerationFunction, MetadataTrustPolicy,
+    NameIdFormat, Passphrase, PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor,
+    TransformAlgorithm,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");
@@ -133,6 +134,34 @@ fn typed_config_algorithm_enums_return_existing_uri_constants() {
         DataEncryptionAlgorithm::Aes256.as_uri(),
         data_encryption_algorithm::AES_256
     );
+    assert_eq!(
+        DataEncryptionAlgorithm::Aes256Gcm.as_uri(),
+        "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+    );
+    assert_eq!(
+        KeyEncryptionAlgorithm::RsaOaep {
+            digest: DigestAlgorithm::Sha256,
+            mgf: MaskGenerationFunction::Mgf1Sha256,
+        }
+        .as_uri(),
+        "http://www.w3.org/2009/xmlenc11#rsa-oaep"
+    );
+    for (mgf, uri) in [
+        (
+            MaskGenerationFunction::Mgf1Sha256,
+            "http://www.w3.org/2009/xmlenc11#mgf1sha256",
+        ),
+        (
+            MaskGenerationFunction::Mgf1Sha384,
+            "http://www.w3.org/2009/xmlenc11#mgf1sha384",
+        ),
+        (
+            MaskGenerationFunction::Mgf1Sha512,
+            "http://www.w3.org/2009/xmlenc11#mgf1sha512",
+        ),
+    ] {
+        assert_eq!(mgf.as_uri(), uri);
+    }
     assert_eq!(
         DataEncryptionAlgorithm::TripleDesForCompatibility.as_uri(),
         data_encryption_algorithm::TRIPLE_DES

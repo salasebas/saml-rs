@@ -23,7 +23,8 @@ pub(crate) use decrypt::{
 pub use decrypt::{decrypt_assertion, decrypt_assertion_with_limits, AssertionDecryptionOptions};
 pub use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{
-    encrypt_assertion_elements, encrypt_logout_request_name_id, encrypt_root_children,
+    encrypt_assertion_elements, encrypt_assertion_with_key_transport,
+    encrypt_logout_request_name_id, encrypt_root_children, KeyTransport,
 };
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
@@ -307,7 +308,7 @@ mod tests {
             RESPONSE,
             SP_CERT,
             AES_256,
-            RSA_OAEP_MGF1P,
+            RSA_OAEP_MGF1P.into(),
             encrypted_ids(),
         )?;
         assert!(encrypted.contains("<saml:Subject><saml:EncryptedID><xenc:EncryptedData"));
@@ -340,8 +341,12 @@ mod tests {
         plaintext: &str,
         beside: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        let encrypted_data =
-            encrypted_data_xml(plaintext.as_bytes(), SP_CERT, AES_256, RSA_OAEP_MGF1P)?;
+        let encrypted_data = encrypted_data_xml(
+            plaintext.as_bytes(),
+            SP_CERT,
+            AES_256,
+            RSA_OAEP_MGF1P.into(),
+        )?;
         let start = RESPONSE.find("<saml:NameID").ok_or("missing NameID")?;
         let end_tag = "</saml:NameID>";
         let end = RESPONSE.find(end_tag).ok_or("missing NameID end")? + end_tag.len();
@@ -463,7 +468,7 @@ mod tests {
             RESPONSE,
             SP_CERT,
             AES_256,
-            RSA_OAEP_MGF1P,
+            RSA_OAEP_MGF1P.into(),
             encrypted_ids(),
         )?;
         let encrypted_data = only_encrypted_data(&encrypted)?;
@@ -522,7 +527,8 @@ mod tests {
             r#"<n:NameID xmlns:n="urn:oasis:names:tc:SAML:2.0:assertion">alice</n:NameID>"#,
             r#"</samlp:LogoutRequest>"#,
         );
-        let encrypted = encrypt_logout_request_name_id(request, SP_CERT, AES_256, RSA_OAEP_MGF1P)?;
+        let encrypted =
+            encrypt_logout_request_name_id(request, SP_CERT, AES_256, RSA_OAEP_MGF1P.into())?;
         let document = uppsala::parse(&encrypted)?;
         if root_children(&document, namespace::ASSERTION, "EncryptedID")?.len() != 1 {
             return Err(format!("no assertion-namespace EncryptedID: {encrypted}").into());

@@ -42,7 +42,7 @@ fn encrypt(xml: &str, certificate: &str, setting: &EntitySetting) -> Result<Stri
         xml,
         certificate,
         &setting.data_encryption_algorithm,
-        &setting.key_encryption_algorithm,
+        crate::crypto::enc::KeyTransport::from_setting(setting),
     )
 }
 
