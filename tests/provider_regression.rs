@@ -80,10 +80,13 @@ fn provider_xml_encryption_round_trip_preserves_assertion() -> Result<(), Box<dy
 {
     let encrypted = encrypt_assertion(RESPONSE, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "saml")?;
     let key = load_private_key(PRIVATE_KEY, None)?;
-    let (_, assertion) =
+    let (response, assertion) =
         decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
 
     assert!(assertion.contains("Assertion"));
+    assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
+    assert!(response.contains("Assertion"));
+    assert!(!response.contains("EncryptedAssertion"));
     Ok(())
 }
 
