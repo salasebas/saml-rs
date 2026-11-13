@@ -3,6 +3,9 @@
 //! SAML Metadata §§2.3.1-2.3.2 and Approved Errata 05 E76 and E94.
 #![cfg(crypto)]
 
+mod common;
+
+use common::signing_credentials;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::error::TimeWindowField;
@@ -11,11 +14,15 @@ use saml_rs::xml::dom::parse;
 use saml_rs::{
     AcsEndpoint, ArtifactDereference, ArtifactResolutionService, ArtifactUses, AuthnRequest,
     BrowserInput, EndpointUrl, EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, IssuedArtifacts, IssuedMessage, ManageNameIdService,
-    MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, PaosClientRequest,
-    ReceivedNameIdManagement, ReplayPolicy, Saml, SamlError, SamlValidationContext, SoapChannel,
-    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
-    StartSso, Status,
+    IdpDescriptor, IdpValidationPolicy, IssuedArtifacts, IssuedMessage, LogoutBinding,
+    LogoutRequest, LogoutResponse, LogoutSubject, ManageNameIdRequest, ManageNameIdResponse,
+    ManageNameIdService, MessageId, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange,
+    NameIdFormat, NameIdManagementBinding, Outbound, PaosClientRequest, PendingLogoutRequest,
+    PendingManageNameIdRequest, ReceiveNameIdManagement, ReceivedNameIdManagement, RelayStateParam,
+    ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError, SamlValidationContext,
+    SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
+    Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -334,6 +341,296 @@ fn generated_root_carries_the_configured_lifetime() -> Result<(), Box<dyn std::e
             assert_eq!(root.local_name, "EntityDescriptor");
             assert_eq!(root.attr("validUntil"), valid_until, "{xml}");
             assert_eq!(root.attr("cacheDuration"), cache_duration, "{xml}");
+        }
+    }
+    Ok(())
+}
+
+fn browser_facades(
+    valid_until: SystemTime,
+) -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
+    let sp = Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+            .slo_endpoint(SloEndpoint::redirect("https://sp.example.com/slo")?)
+            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+                "https://sp.example.com/nameid",
+            )?))
+            .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
+            .credentials(signing_credentials())
+            .build()?,
+    )?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+            .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
+            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+                IDP_NIM_URL,
+            )?))
+            .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
+            .credentials(signing_credentials())
+            .build()?,
+    )?;
+    Ok((sp, idp))
+}
+
+fn redirect_query<Message>(outbound: &Outbound<Message>) -> Result<String, SamlError> {
+    let url = outbound.redirect_url()?;
+    let (_, query) = url
+        .split_once('?')
+        .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
+    Ok(query.to_string())
+}
+
+#[test]
+fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = browser_facades(whole_seconds_from_now(3600)?)?;
+    let current_sp = sp_descriptor(&sp)?;
+    let current_idp = idp_descriptor(&idp)?;
+    let (expired_sp, expired_idp) = browser_facades(at(Y2001))?;
+    let expired_sp = sp_descriptor(&expired_sp)?;
+    let expired_idp = idp_descriptor(&expired_idp)?;
+    let now =
+        || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
+    let name_id = NameId::new("alice", Some(NameIdFormat::EmailAddress));
+    let subject =
+        LogoutSubject::with_session_index(name_id.clone(), SessionIndex::try_new("_session")?);
+    let started = sp.start_slo(&current_idp, subject.clone(), StartSlo::redirect())?;
+    let logout = idp.receive_slo(
+        &current_sp,
+        BrowserInput::<LogoutRequest>::redirect(redirect_query(&started.outbound)?),
+        now(),
+    )?;
+    let started = sp.start_name_id_management_redirect(
+        &current_idp,
+        &name_id,
+        &NameIdChange::Terminate,
+        StartNameIdManagement::redirect(),
+    )?;
+    let ReceivedNameIdManagement::Request(manage) = idp.receive_name_id_management_redirect(
+        &current_sp,
+        BrowserInput::<ManageNameIdRequest>::redirect(redirect_query(&started.outbound)?),
+        ReceiveNameIdManagement::redirect(),
+        now(),
+    )?
+    else {
+        return Err("the name identifier management request was refused".into());
+    };
+    let results = [
+        (
+            "SP start_slo",
+            sp.start_slo(&expired_idp, subject.clone(), StartSlo::soap())
+                .map(drop),
+        ),
+        (
+            "IdP start_slo",
+            idp.start_slo(&expired_sp, subject, StartSlo::soap())
+                .map(drop),
+        ),
+        (
+            "SP respond_slo",
+            sp.respond_slo(&expired_idp, &logout, RespondSlo::soap())
+                .map(drop),
+        ),
+        (
+            "IdP respond_slo",
+            idp.respond_slo(&expired_sp, &logout, RespondSlo::soap())
+                .map(drop),
+        ),
+        (
+            "SP start_name_id_management_redirect",
+            sp.start_name_id_management_redirect(
+                &expired_idp,
+                &NameId::new("transient", Some(NameIdFormat::Transient)),
+                &NameIdChange::Terminate,
+                StartNameIdManagement::redirect(),
+            )
+            .map(drop),
+        ),
+        (
+            "IdP start_name_id_management_redirect",
+            idp.start_name_id_management_redirect(
+                &expired_sp,
+                &NameId::new("transient", Some(NameIdFormat::Transient)),
+                &NameIdChange::Terminate,
+                StartNameIdManagement::redirect(),
+            )
+            .map(drop),
+        ),
+        (
+            "SP respond_name_id_management_redirect",
+            sp.respond_name_id_management_redirect(
+                &expired_idp,
+                &manage,
+                RespondNameIdManagement::redirect(),
+            )
+            .map(drop),
+        ),
+        (
+            "IdP respond_name_id_management_redirect",
+            idp.respond_name_id_management_redirect(
+                &expired_sp,
+                &manage,
+                RespondNameIdManagement::redirect(),
+            )
+            .map(drop),
+        ),
+    ];
+    for (operation, result) in results {
+        assert!(is_valid_until_error(&result), "{operation}: {result:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let wrong_peer = EntityId::try_new("https://other.example.com/metadata")?;
+    let logout_pending = PendingLogoutRequest::try_new(
+        MessageId::try_new("_logout")?,
+        RelayStateParam::absent(),
+        LogoutBinding::Redirect,
+        wrong_peer.clone(),
+    )?;
+    let manage_pending = PendingManageNameIdRequest::try_new(
+        MessageId::try_new("_manage")?,
+        RelayStateParam::absent(),
+        NameIdManagementBinding::Redirect,
+        wrong_peer,
+    )?;
+    for valid_until in [at(Y2001), whole_seconds_from_now(3600)?] {
+        let (sp, idp) = browser_facades(valid_until)?;
+        let sp_peer = sp_descriptor(&sp)?;
+        let idp_peer = idp_descriptor(&idp)?;
+        for now in [valid_until - Duration::from_secs(1), valid_until] {
+            let validation =
+                || SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility);
+            let received_slo = [
+                (
+                    "SP receive_slo",
+                    sp.receive_slo(
+                        &idp_peer,
+                        BrowserInput::<LogoutRequest>::post(vec![]),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+                (
+                    "IdP receive_slo",
+                    idp.receive_slo(
+                        &sp_peer,
+                        BrowserInput::<LogoutRequest>::post(vec![]),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+            ];
+            for (operation, result) in received_slo {
+                if now == valid_until {
+                    assert!(is_valid_until_error(&result), "{operation}: {result:?}");
+                } else {
+                    assert!(
+                        matches!(result, Err(SamlError::MissingMetadata(ref field)) if field == "SingleLogoutService"),
+                        "{operation}: {result:?}"
+                    );
+                }
+            }
+            let received_manage = [
+                (
+                    "SP receive_name_id_management_redirect",
+                    sp.receive_name_id_management_redirect(
+                        &idp_peer,
+                        BrowserInput::Post {
+                            fields: vec![],
+                            _message: Default::default(),
+                        },
+                        ReceiveNameIdManagement::redirect(),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+                (
+                    "IdP receive_name_id_management_redirect",
+                    idp.receive_name_id_management_redirect(
+                        &sp_peer,
+                        BrowserInput::Post {
+                            fields: vec![],
+                            _message: Default::default(),
+                        },
+                        ReceiveNameIdManagement::redirect(),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+            ];
+            for (operation, result) in received_manage {
+                if now == valid_until {
+                    assert!(is_valid_until_error(&result), "{operation}: {result:?}");
+                } else {
+                    assert!(
+                        matches!(
+                            result,
+                            Err(SamlError::UnsupportedBinding {
+                                binding: Binding::Post
+                            })
+                        ),
+                        "{operation}: {result:?}"
+                    );
+                }
+            }
+            let finished = [
+                (
+                    "SP finish_slo",
+                    sp.finish_slo(
+                        &idp_peer,
+                        &logout_pending,
+                        BrowserInput::<LogoutResponse>::redirect(""),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+                (
+                    "IdP finish_slo",
+                    idp.finish_slo(
+                        &sp_peer,
+                        &logout_pending,
+                        BrowserInput::<LogoutResponse>::redirect(""),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+                (
+                    "SP finish_name_id_management_redirect",
+                    sp.finish_name_id_management_redirect(
+                        &idp_peer,
+                        &manage_pending,
+                        BrowserInput::<ManageNameIdResponse>::redirect(""),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+                (
+                    "IdP finish_name_id_management_redirect",
+                    idp.finish_name_id_management_redirect(
+                        &sp_peer,
+                        &manage_pending,
+                        BrowserInput::<ManageNameIdResponse>::redirect(""),
+                        validation(),
+                    )
+                    .map(drop),
+                ),
+            ];
+            for (operation, result) in finished {
+                if now == valid_until {
+                    assert!(is_valid_until_error(&result), "{operation}: {result:?}");
+                } else {
+                    assert!(
+                        matches!(result, Err(SamlError::IssuerMismatch { .. })),
+                        "{operation}: {result:?}"
+                    );
+                }
+            }
         }
     }
     Ok(())

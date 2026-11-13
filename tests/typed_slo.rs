@@ -3,6 +3,10 @@
 
 mod common;
 
+#[cfg(feature = "crypto-rustcrypto")]
+#[path = "typed_slo/peer_hmac.rs"]
+mod peer_hmac;
+
 use common::signing_credentials;
 
 use std::{
