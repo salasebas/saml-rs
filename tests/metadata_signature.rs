@@ -5,7 +5,7 @@ use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
 use saml_rs::crypto::keys::load_private_key;
 use saml_rs::crypto::{
-    construct_saml_signature, verify_metadata_signature_detailed,
+    construct_saml_signature, verify_metadata_signature, verify_metadata_signature_detailed,
     verify_metadata_signature_detailed_with_limits, verify_metadata_signature_with_limits,
 };
 use saml_rs::entity::{SignatureAction, SignatureConfig};
@@ -106,11 +106,41 @@ fn metadata_signature_bool_wrapper_uses_detailed_coverage() -> Result<(), Box<dy
 {
     let signed = sign_root_metadata(idp_metadata_xml())?;
 
+    assert!(verify_metadata_signature(&signed, &[CERT.to_string()])?);
     assert!(verify_metadata_signature_with_limits(
         &signed,
         &[CERT.to_string()],
         XmlLimits::default(),
     )?);
+
+    let limits = XmlLimits {
+        max_bytes: signed.len() - 1,
+        ..XmlLimits::default()
+    };
+    for result in [
+        verify_metadata_signature_with_limits(&signed, &[CERT.to_string()], limits),
+        verify_metadata_signature_detailed_with_limits(&signed, &[CERT.to_string()], limits)
+            .map(|verification| verification.verified()),
+    ] {
+        assert!(
+            matches!(result, Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
+        );
+    }
+
+    let oversized = format!(
+        "{}{}",
+        " ".repeat(saml_rs::xml::dom::DEFAULT_XML_MAX_BYTES),
+        signed
+    );
+    for result in [
+        verify_metadata_signature(&oversized, &[CERT.to_string()]),
+        verify_metadata_signature_detailed(&oversized, &[CERT.to_string()])
+            .map(|verification| verification.verified()),
+    ] {
+        assert!(
+            matches!(result, Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
+        );
+    }
     Ok(())
 }
 
@@ -119,7 +149,34 @@ fn metadata_method_detailed_default_limits_preserves_signed_descriptor(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signed = sign_root_metadata(idp_metadata_xml())?;
     let metadata = IdpMetadata::from_xml(&signed)?;
-    let verification = metadata.verify_signature_detailed(&[CERT.to_string()])?;
+    let certificates = [CERT.to_string()];
+    let verification = metadata.verify_signature_detailed(&certificates)?;
+
+    assert_eq!(
+        verification,
+        verify_metadata_signature_detailed(&signed, &certificates)?
+    );
+    assert_eq!(
+        metadata.verify_signature_detailed_with_limits(&certificates, XmlLimits::default())?,
+        verification
+    );
+    assert!(metadata.verify_signature(&certificates)?);
+    assert!(metadata.verify_signature_with_limits(&certificates, XmlLimits::default())?);
+
+    let limits = XmlLimits {
+        max_bytes: signed.len() - 1,
+        ..XmlLimits::default()
+    };
+    for result in [
+        metadata.verify_signature_with_limits(&certificates, limits),
+        metadata
+            .verify_signature_detailed_with_limits(&certificates, limits)
+            .map(|verification| verification.verified()),
+    ] {
+        assert!(
+            matches!(result, Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
+        );
+    }
 
     assert!(verification
         .signed_entity_descriptor_xml()

@@ -8,7 +8,7 @@ use crate::error::SamlError;
 use crate::metadata::lifetime::{LifetimeAttributes, MetadataLifetime};
 use crate::metadata::write::MetadataWriter;
 use crate::model::validate_name_id_format;
-use crate::util::{is_non_empty_array, normalize_cert_string};
+use crate::util::normalize_cert_string;
 
 /// Indexed `ArtifactResolutionService` location. The binding is SOAP.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,7 +147,7 @@ fn write_name_id_formats(
     formats: &[String],
     default_to_email: bool,
 ) -> Result<(), SamlError> {
-    if is_non_empty_array(formats) {
+    if !formats.is_empty() {
         for format in formats {
             validate_name_id_format(Some(format))?;
             w.text_element("NameIDFormat", format);
@@ -273,14 +273,12 @@ fn write_sp_group(
 
 fn idp_group_has_content(cfg: &IdpMetadataConfig, name: &str) -> bool {
     match name {
-        "KeyDescriptor" => {
-            is_non_empty_array(&cfg.signing_certs) || is_non_empty_array(&cfg.encrypt_certs)
-        }
-        "NameIDFormat" => is_non_empty_array(&cfg.name_id_format),
-        "SingleSignOnService" => is_non_empty_array(&cfg.single_sign_on_service),
-        "SingleLogoutService" => is_non_empty_array(&cfg.single_logout_service),
-        "ArtifactResolutionService" => is_non_empty_array(&cfg.artifact_resolution_service),
-        "ManageNameIDService" => is_non_empty_array(&cfg.manage_name_id_service),
+        "KeyDescriptor" => !cfg.signing_certs.is_empty() || !cfg.encrypt_certs.is_empty(),
+        "NameIDFormat" => !cfg.name_id_format.is_empty(),
+        "SingleSignOnService" => !cfg.single_sign_on_service.is_empty(),
+        "SingleLogoutService" => !cfg.single_logout_service.is_empty(),
+        "ArtifactResolutionService" => !cfg.artifact_resolution_service.is_empty(),
+        "ManageNameIDService" => !cfg.manage_name_id_service.is_empty(),
         _ => false,
     }
 }
@@ -451,7 +449,7 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlErro
 /// least one `SingleSignOnService` endpoint, and the errors of
 /// [`generate_idp_metadata`].
 pub fn try_generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
-    if !is_non_empty_array(&cfg.single_sign_on_service) {
+    if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
             "SingleSignOnService".to_string(),
         ));
