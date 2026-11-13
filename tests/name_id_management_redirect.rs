@@ -3,11 +3,7 @@
 //!
 //! SAML Core §3.6, Profiles §4.5, and Bindings §3.4, as corrected by Approved
 //! Errata 05 E8, E12, E14, and E55.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};

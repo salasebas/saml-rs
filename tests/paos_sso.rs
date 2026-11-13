@@ -3,11 +3,7 @@
 //! The enhanced client in this file is the test double for that role. It is
 //! not a service-provider or identity-provider facade.
 
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::{Duration, SystemTime};
 

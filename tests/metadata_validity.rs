@@ -1,11 +1,7 @@
 //! Metadata `validUntil` and `cacheDuration`.
 //!
 //! SAML Metadata §§2.3.1-2.3.2 and Approved Errata 05 E76 and E94.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::{Duration, SystemTime};
 

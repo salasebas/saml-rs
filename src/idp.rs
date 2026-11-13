@@ -526,11 +526,7 @@ impl IdentityProvider {
     }
 
     /// Wrap the finalized response XML into the per-binding transport context.
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     fn bind_response(
         &self,
         binding: Binding,
@@ -560,11 +556,7 @@ impl IdentityProvider {
         }
     }
 
-    #[cfg(not(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    )))]
+    #[cfg(not(crypto))]
     fn bind_response(
         &self,
         _binding: Binding,
@@ -577,11 +569,7 @@ impl IdentityProvider {
         ))
     }
 
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     fn finalize_login_response(
         &self,
         sp: &ServiceProvider,
@@ -667,11 +655,7 @@ impl IdentityProvider {
         Ok(xml)
     }
 
-    #[cfg(not(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    )))]
+    #[cfg(not(crypto))]
     fn finalize_login_response(
         &self,
         _sp: &ServiceProvider,
@@ -786,11 +770,7 @@ fn written_authn_instant(
     Ok(written)
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn sp_encryption_certificate(sp: &ServiceProvider) -> Result<String, SamlError> {
     sp.metadata
         .get_x509_certificate(crate::constants::CertUse::Encryption)
@@ -887,14 +867,7 @@ mod tests {
     }
 }
 
-#[cfg(all(
-    test,
-    any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    )
-))]
+#[cfg(all(test, crypto))]
 mod crypto_tests {
     use super::*;
     use crate::constants::signature_algorithm::RSA_SHA256;

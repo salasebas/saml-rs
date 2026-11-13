@@ -1,11 +1,7 @@
 //! Decryption of the `<EncryptedAssertion>`, `<EncryptedID>`, and
 //! `<EncryptedAttribute>` children of a verified login response.
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 use crate::config::ReceivedEncryptedElements;
 use crate::constants::ParserType;
 use crate::error::SamlError;
@@ -41,31 +37,19 @@ pub(crate) fn require_one_assertion_unless_message_authenticated(
 
 /// Whether an assertion of `saml_content` carries an `<EncryptedID>` or an
 /// `<EncryptedAttribute>`.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub(crate) fn carries_encrypted_elements(saml_content: &str) -> Result<bool, SamlError> {
     crate::crypto::enc::carries_encrypted_assertion_elements(saml_content)
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 pub(crate) fn carries_encrypted_elements(_saml_content: &str) -> Result<bool, SamlError> {
     Ok(false)
 }
 
 /// Decrypt the `<EncryptedID>` and `<EncryptedAttribute>` children of the
 /// verified response and of its consumed assertion.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub(crate) fn decrypt_verified_assertion_elements(
     saml_content: &str,
     assertion: Option<&str>,
@@ -104,11 +88,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
 }
 
 /// Direct `<Assertion>` children of the response root.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn direct_assertions(root: &crate::xml::dom::Node) -> impl Iterator<Item = &crate::xml::dom::Node> {
     root.children
         .iter()
@@ -117,11 +97,7 @@ fn direct_assertions(root: &crate::xml::dom::Node) -> impl Iterator<Item = &crat
 
 /// Position of the consumed `assertion` among the direct assertions of
 /// `response`, which contains its source.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn direct_assertion_position(
     response: &str,
     assertion: &str,
@@ -135,11 +111,7 @@ fn direct_assertion_position(
     position.ok_or(SamlError::SignedReferenceMismatch)
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn direct_assertion(
     response: &str,
     position: usize,
@@ -152,11 +124,7 @@ fn direct_assertion(
     Ok(response[node.start..node.end].to_string())
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 pub(crate) fn decrypt_verified_assertion_elements(
     _saml_content: &str,
     _assertion: Option<&str>,
@@ -171,11 +139,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
 /// The key that decrypts each `<EncryptedAssertion>` child of `root`. A selected
 /// `decrypt_key` requires one. A typed service provider also decrypts one it
 /// did not select.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub(crate) fn encrypted_assertion_key<'a>(
     root: &crate::xml::dom::Node,
     parser_type: ParserType,
@@ -204,11 +168,7 @@ pub(crate) fn encrypted_assertion_key<'a>(
 /// `xml`, whose detached signature verified, with each `<EncryptedAssertion>`
 /// decrypted for a typed service provider, and the decrypted assertions.
 /// `None` when no key applies, and for the raw service provider.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub(crate) fn decrypt_detached_signed_assertions(
     xml: &str,
     root: &crate::xml::dom::Node,
@@ -242,11 +202,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
     Ok(Some((content, assertions)))
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 pub(crate) fn decrypt_detached_signed_assertions(
     _xml: &str,
     _root: &crate::xml::dom::Node,

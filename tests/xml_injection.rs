@@ -1,8 +1,4 @@
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use saml_rs::binding::base64_decode;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;

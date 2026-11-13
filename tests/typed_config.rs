@@ -3,11 +3,7 @@ use saml_rs::constants::{
     signature_algorithm, transform_algorithm,
 };
 use saml_rs::flow::FlowOptions;
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 use saml_rs::{
     xml::XmlLimits, AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, Credentials, IdpConfig, IdpMetadataConfig,
@@ -200,11 +196,7 @@ fn typed_config_name_id_formats_return_existing_uri_constants() {
     );
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 #[test]
 fn typed_config_sp_config_converts_selected_settings() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = SpConfig::new(
@@ -278,11 +270,7 @@ fn typed_config_sp_config_converts_selected_settings() -> Result<(), Box<dyn std
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 #[test]
 fn typed_config_idp_config_converts_authn_request_policy() -> Result<(), Box<dyn std::error::Error>>
 {

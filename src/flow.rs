@@ -8,18 +8,10 @@ use crate::binding::{
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
 use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{Binding, ParserType};
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 use crate::context::is_valid_xml_with_limits;
 use crate::error::SamlError;
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
 use crate::util::Value;
 use crate::validator::{check_status_with_limits, logout_request_not_on_or_after_deadline};
@@ -30,20 +22,12 @@ use crate::xml::{
 use std::time::SystemTime;
 use time::OffsetDateTime;
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 mod detached;
 mod error_response;
 mod response_issuer;
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 use detached::verify_detached;
 
 /// Decoded HTTP request inputs for a binding.
@@ -261,11 +245,7 @@ impl VerifiedXmlSignatureEvidence {
     }
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 #[derive(Debug)]
 struct EmbeddedSignatureEvidence {
     signature_present: bool,
@@ -368,20 +348,12 @@ fn decode_message(
     String::from_utf8(bytes).map_err(|e| SamlError::Xml(e.to_string()))
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn verified_content_not_covered() -> SamlError {
     SamlError::SignedReferenceMismatch
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn required_xml_signature_failed(signature_present: bool) -> SamlError {
     if signature_present {
         SamlError::SignatureVerification {
@@ -392,11 +364,7 @@ fn required_xml_signature_failed(signature_present: bool) -> SamlError {
     }
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn verify_embedded_signature(
     xml: &str,
     opts: &FlowOptions<'_>,
@@ -427,11 +395,7 @@ fn verify_embedded_signature(
     })
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn verify_present_signatures(xml: &str, opts: &FlowOptions<'_>) -> Result<(), SamlError> {
     crate::crypto::verify::verify_present_signatures(
         xml,
@@ -442,11 +406,7 @@ fn verify_present_signatures(xml: &str, opts: &FlowOptions<'_>) -> Result<(), Sa
     )
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn verify_present_signatures(_xml: &str, _opts: &FlowOptions<'_>) -> Result<(), SamlError> {
     Err(SamlError::Unsupported(
         "signature verification requires a crypto provider feature".into(),
@@ -456,11 +416,7 @@ fn verify_present_signatures(_xml: &str, _opts: &FlowOptions<'_>) -> Result<(), 
 /// Verify the signature over each decrypted `<Assertion>`, which must cover
 /// that assertion directly, and return the evidence of the first decrypted
 /// assertion equal to `consumed_assertion`.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn verify_decrypted_assertions(
     assertions: &[String],
     consumed_assertion: Option<&str>,
@@ -486,11 +442,7 @@ fn verify_decrypted_assertions(
     Ok(verified_xml_signatures)
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn require_direct_assertion_coverage(
     assertion_signature: AssertionSignatureRequirement,
     assertion_directly_covered: bool,
@@ -501,11 +453,7 @@ fn require_direct_assertion_coverage(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn require_response_coverage(
     response_signature_required: bool,
     response_covered: bool,
@@ -516,11 +464,7 @@ fn require_response_coverage(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn response_uses_cbc_encrypted_assertion(root: &crate::xml::dom::Node) -> bool {
     root.children
         .iter()
@@ -541,11 +485,7 @@ fn response_uses_cbc_encrypted_assertion(root: &crate::xml::dom::Node) -> bool {
         .any(crate::constants::is_xml_encryption_cbc_algorithm)
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn response_signature_is_required(
     requirement: ResponseSignatureRequirement,
     root: &crate::xml::dom::Node,
@@ -561,11 +501,7 @@ fn response_signature_is_required(
 
 /// Verify and optionally decrypt the message, returning the authenticated
 /// `(saml_content, assertion)`. Requires a crypto provider.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn verify_and_prepare(
     xml: String,
     root: &crate::xml::dom::Node,
@@ -709,11 +645,7 @@ fn verify_and_prepare(
     Err(required_xml_signature_failed(evidence.signature_present))
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn verify_and_prepare(
     _xml: String,
     _root: &crate::xml::dom::Node,
@@ -727,11 +659,7 @@ fn verify_and_prepare(
     ))
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn verify_detached(
     _binding: Binding,
     _parser_type: ParserType,
@@ -1088,14 +1016,7 @@ pub(crate) fn flow_with_expected_recipient_and_signature_evidence(
     )
 }
 
-#[cfg(all(
-    test,
-    any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    )
-))]
+#[cfg(all(test, crypto))]
 mod tests {
     use super::*;
     use crate::constants::signature_algorithm::RSA_SHA256;

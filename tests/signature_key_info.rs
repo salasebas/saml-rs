@@ -1,10 +1,6 @@
 //! The certificate in a signature's `KeyInfo` does not decide trust: a
 //! signature verifies when a key in the peer's metadata verifies it.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

@@ -26,11 +26,7 @@ fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
     )
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
     IdentityProvider::from_config(
         &IdpMetadataConfig {
@@ -89,11 +85,7 @@ fn sp_metadata_generate_parse_round_trips() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 mod signed {
     use super::*;
     use saml_rs::constants::signature_algorithm::RSA_SHA256;

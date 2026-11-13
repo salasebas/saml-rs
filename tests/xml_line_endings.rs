@@ -4,11 +4,7 @@
 //! XML 1.0 Fifth Edition §2.11 passes a single line feed to the application
 //! for a literal carriage return and line feed pair and for a lone carriage
 //! return. The `&#xD;` character reference stays a carriage return.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

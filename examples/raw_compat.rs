@@ -6,11 +6,7 @@
 //! raw `ServiceProvider`, `IdentityProvider`, `HttpRequest`, or `FlowResult`
 //! values.
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::constants::signature_algorithm::RSA_SHA256;
     use saml_rs::raw::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
@@ -85,11 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn main() {
     eprintln!("Enable a crypto provider feature (`crypto-bergshamra` is on by default).");
 }

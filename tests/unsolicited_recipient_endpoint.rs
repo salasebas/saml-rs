@@ -5,11 +5,7 @@
 //! The service provider publishes two assertion consumers for each binding:
 //! `/acs/a`, its default, and `/acs/b`. The identity provider reads metadata
 //! that marks `/acs/b` default, so its unsolicited responses go there.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::{Duration, SystemTime};
 

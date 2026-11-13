@@ -1,9 +1,5 @@
 //! Typed SSO comparison of a success `<Response>` `<Issuer>` with the identity provider.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

@@ -1,8 +1,4 @@
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 use saml_rs::{
     AcsEndpoint, AuthnRequest, CertificatePem, Credentials, EntityId, IdpConfig, IdpConfigBuilder,
     IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutSubject, MetadataTrustPolicy, NameId,

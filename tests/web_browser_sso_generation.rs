@@ -1,10 +1,6 @@
 //! Compatibility is the legacy permissive preset.
 //! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 and is not that preset.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::{Duration, SystemTime};
 

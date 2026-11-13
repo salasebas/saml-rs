@@ -1,8 +1,4 @@
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use saml_rs::constants::data_encryption_algorithm::AES_256;
 use saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;

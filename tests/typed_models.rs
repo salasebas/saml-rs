@@ -4,11 +4,7 @@ use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
 use saml_rs::raw::{BindingContext, FlowResult};
 use saml_rs::util::Value;
 use saml_rs::xml::XmlLimits;
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 use saml_rs::{
     raw::LoginResponseOptions,
     raw::User,
@@ -22,17 +18,9 @@ use saml_rs::{
     SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
 };
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 const IDP_PRIVATE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 const IDP_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 #[test]
@@ -1607,11 +1595,7 @@ fn idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
     )
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn signing_setting() -> EntitySetting {
     let mut setting = EntitySetting::default();
     setting.private_key = Some(IDP_PRIVATE_KEY.to_string());
@@ -1619,11 +1603,7 @@ fn signing_setting() -> EntitySetting {
     setting
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn attribute(name: &str, tag: &str) -> LoginResponseAttribute {
     LoginResponseAttribute {
         name: name.to_string(),
@@ -1635,11 +1615,7 @@ fn attribute(name: &str, tag: &str) -> LoginResponseAttribute {
     }
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn idp_with_attribute_template() -> Result<IdentityProvider, SamlError> {
     let mut setting = signing_setting();
     setting.login_response_template = Some(LoginResponseTemplate {
@@ -1670,11 +1646,7 @@ fn typed_models_existing_authn_request_flow_converts_to_typed_request(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 #[test]
 fn typed_models_existing_login_response_flow_converts_to_typed_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1710,11 +1682,7 @@ fn typed_models_existing_login_response_flow_converts_to_typed_session(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 #[test]
 fn typed_models_existing_login_response_flow_preserves_multi_value_attributes(
 ) -> Result<(), Box<dyn std::error::Error>> {

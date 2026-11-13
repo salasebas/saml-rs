@@ -24,11 +24,7 @@ pub(super) fn decrypt_requested_subject(
     Ok(decrypted(&flow, setting, message_authenticated)?.unwrap_or(flow))
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn decrypted(
     flow: &FlowResult,
     setting: &EntitySetting,
@@ -79,11 +75,7 @@ fn decrypted(
     }))
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn decrypted(
     _flow: &FlowResult,
     _setting: &EntitySetting,

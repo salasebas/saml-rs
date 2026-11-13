@@ -1,9 +1,5 @@
 //! Production-hardening tests: Audience restriction and InResponseTo / anti-replay.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
 use saml_rs::binding::base64_decode;

@@ -13,6 +13,7 @@ categories = ["authentication", "web-programming"]
 include = [
     "/Cargo.toml",
     "/Cargo.lock",
+    "/build.rs",
     "/src/**",
     "/tests/**",
     "/examples/**",

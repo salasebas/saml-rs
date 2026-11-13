@@ -2,11 +2,7 @@
 //! Core §3.7.3.1 requires a session participant to apply an accepted
 //! LogoutRequest to a later assertion for the same principal and session
 //! while that request is still before NotOnOrAfter.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::{
     collections::HashMap,

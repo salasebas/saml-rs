@@ -1,10 +1,6 @@
 //! XML Signature Wrapping (XSW) attack-vector corpus. Each variant must never
 //! surface attacker-controlled content as cryptographically trusted.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
 use bergshamra::{sign, DsigContext, KeysManager};

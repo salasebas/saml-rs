@@ -178,11 +178,7 @@ fn assert_hostile_request_parses(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 #[test]
 fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -460,11 +456,7 @@ fn requested_response_binding_without_acs_returns_missing_metadata(
     }
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 mod signed {
     use super::*;
     use saml_rs::constants::signature_algorithm::RSA_SHA256;

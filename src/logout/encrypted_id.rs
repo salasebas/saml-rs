@@ -36,11 +36,7 @@ pub(super) fn encrypt_name_id_for_peer(
     }
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn encrypt(xml: &str, certificate: &str, setting: &EntitySetting) -> Result<String, SamlError> {
     crate::crypto::enc::encrypt_logout_request_name_id(
         xml,
@@ -50,11 +46,7 @@ fn encrypt(xml: &str, certificate: &str, setting: &EntitySetting) -> Result<Stri
     )
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<String, SamlError> {
     Err(SamlError::Unsupported(
         "XML encryption requires a crypto provider feature".into(),
@@ -109,11 +101,7 @@ pub(crate) fn decrypt_encrypted_id(
     })
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn decrypt(xml: &str, key_pem: &str, setting: &EntitySetting) -> Result<Option<String>, SamlError> {
     use crate::crypto::enc::{decrypt_logout_request_encrypted_id, AssertionDecryptionOptions};
 
@@ -132,11 +120,7 @@ fn decrypt(xml: &str, key_pem: &str, setting: &EntitySetting) -> Result<Option<S
     )
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn decrypt(_: &str, _: &str, _: &EntitySetting) -> Result<Option<String>, SamlError> {
     Err(SamlError::Unsupported(
         "XML decryption requires a crypto provider feature".into(),

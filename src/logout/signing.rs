@@ -1,18 +1,10 @@
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 use crate::binding::base64_encode;
 use crate::constants::{Binding, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub(crate) fn sign_browser_message(
     setting: &EntitySetting,
     binding: Binding,
@@ -71,11 +63,7 @@ pub(crate) fn sign_browser_message(
     }
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 pub(crate) fn sign_browser_message(
     _setting: &EntitySetting,
     _binding: Binding,

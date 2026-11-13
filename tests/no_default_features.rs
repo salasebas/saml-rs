@@ -1,8 +1,4 @@
-#![cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#![cfg(not(crypto))]
 
 use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode};
 use saml_rs::constants::{Binding, ParserType};
