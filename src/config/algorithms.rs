@@ -235,7 +235,7 @@ impl NameIdFormat {
     }
 }
 
-pub(super) fn name_id_format_uris(formats: &[NameIdFormat]) -> Vec<String> {
+pub(crate) fn name_id_format_uris(formats: &[NameIdFormat]) -> Vec<String> {
     formats
         .iter()
         .map(|format| format.as_uri().to_string())
