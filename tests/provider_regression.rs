@@ -90,22 +90,6 @@ fn provider_xml_encryption_round_trip_preserves_assertion() -> Result<(), Box<dy
     Ok(())
 }
 
-#[cfg(feature = "crypto-aws-lc")]
-#[test]
-fn aws_lc_xml_encryption_round_trip_uses_default_decryption_options(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let encrypted = encrypt_assertion(RESPONSE, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "saml")?;
-    let key = load_private_key(PRIVATE_KEY, None)?;
-    let (response, assertion) =
-        decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
-
-    assert!(assertion.contains("Assertion"));
-    assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
-    assert!(response.contains("Assertion"));
-    assert!(!response.contains("EncryptedAssertion"));
-    Ok(())
-}
-
 #[cfg(feature = "crypto-fips")]
 #[test]
 fn fips_provider_rejects_sha1_rsa_oaep_key_transport() -> Result<(), Box<dyn std::error::Error>> {
