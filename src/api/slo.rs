@@ -1,5 +1,5 @@
 use crate::browser::{BrowserInput, LogoutBinding, Outbound, PendingLogoutRequest, Started};
-use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
+use crate::config::{EntityId, HmacSecret, IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
 use crate::error::SamlError as Error;
@@ -11,7 +11,7 @@ use crate::logout::{
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
     LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, ReplayKey,
-    SamlInstant, SamlValidationContext, Status,
+    SamlInstant, SamlValidationContext, SessionIndex, Status,
 };
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
@@ -461,15 +461,6 @@ impl Saml<Idp> {
     }
 }
 
-struct TypedLogoutSubject {
-    name_id: String,
-    name_id_format: Option<String>,
-    name_qualifier: Option<String>,
-    sp_name_qualifier: Option<String>,
-    sp_provided_id: Option<String>,
-    session_indexes: Vec<String>,
-}
-
 #[derive(Debug, Clone, Copy)]
 enum StartSloRole {
     SessionParticipant,
@@ -486,7 +477,6 @@ fn start_slo_impl(
     role: StartSloRole,
 ) -> Result<Started<LogoutRequest>, SamlError> {
     options.relay_state.validate()?;
-    let subject = typed_logout_subject(subject);
     let follows_rules = options.follows_generation_rules();
     if follows_rules && matches!(options.signing, LogoutSigning::DoNotSignForCompatibility) {
         return Err(Error::ProtocolProfile(
@@ -526,22 +516,24 @@ fn start_slo_impl(
     } else {
         logout_request_signing(local_setting, options.signing)
     };
+    let name_id = subject.name_id();
+    let name_id_format = name_id.format().map(NameIdFormat::as_uri);
     // A session authority sends a subject without a format with the format
     // its assertions carry for that subject.
     let name_id_format = match role {
-        StartSloRole::SessionParticipant => subject.name_id_format,
-        StartSloRole::SessionAuthority { .. } => subject
-            .name_id_format
-            .or_else(|| local_setting.default_name_id_format().map(str::to_string)),
+        StartSloRole::SessionParticipant => name_id_format,
+        StartSloRole::SessionAuthority { .. } => {
+            name_id_format.or_else(|| local_setting.default_name_id_format())
+        }
     };
     let request_subject = LogoutRequestSubject {
-        name_id: &subject.name_id,
-        qualifiers: OutboundNameIdQualifiers {
-            name_qualifier: subject.name_qualifier.as_deref(),
-            sp_name_qualifier: subject.sp_name_qualifier.as_deref(),
-            sp_provided_id: subject.sp_provided_id.as_deref(),
-        },
-        session_indexes: subject.session_indexes.iter().map(String::as_str).collect(),
+        name_id: name_id.value(),
+        qualifiers: OutboundNameIdQualifiers::from(name_id),
+        session_indexes: subject
+            .session_indexes()
+            .iter()
+            .map(SessionIndex::as_str)
+            .collect(),
     };
     let created = create_logout_request_for_subject_inner(LogoutRequestInput {
         init_setting: local_setting,
@@ -552,7 +544,7 @@ fn start_slo_impl(
         relay_state: options.relay_state.as_deref(),
         want_signed,
         message_id: None,
-        name_id_format: name_id_format.as_deref(),
+        name_id_format,
         issue_instant: &issue_instant,
         not_on_or_after: not_on_or_after.as_deref(),
         validation: request_validation,
@@ -805,20 +797,4 @@ fn logout_recipient_endpoint(
         return Err(Error::MissingMetadata("SingleLogoutService".into()));
     }
     validation.resolve_recipient_endpoint(&locations)
-}
-
-fn typed_logout_subject(subject: LogoutSubject) -> TypedLogoutSubject {
-    let name_id = subject.name_id();
-    TypedLogoutSubject {
-        name_id: name_id.value().to_string(),
-        name_id_format: name_id.format().map(|format| format.as_uri().to_string()),
-        name_qualifier: name_id.name_qualifier().map(str::to_string),
-        sp_name_qualifier: name_id.sp_name_qualifier().map(str::to_string),
-        sp_provided_id: name_id.sp_provided_id().map(str::to_string),
-        session_indexes: subject
-            .session_indexes()
-            .iter()
-            .map(|session_index| session_index.as_str().to_string())
-            .collect(),
-    }
 }
