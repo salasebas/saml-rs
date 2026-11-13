@@ -79,7 +79,7 @@ fn lists_saml2(descriptor: &SamlElement) -> bool {
         })
 }
 
-fn namespaced_element(
+pub(super) fn namespaced_element(
     mut element: SamlElement,
     entity: &dom::Node,
 ) -> Result<SamlElement, SamlError> {

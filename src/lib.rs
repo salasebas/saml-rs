@@ -456,9 +456,9 @@ pub use discovery::{CommonDomainCookie, CommonDomainCookieLifetime, RememberIden
 pub use entity::EntitySetting;
 #[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::IdentityProvider`."]
 pub use idp::IdentityProvider;
-pub use metadata::MetadataLifetime;
 #[cfg(crypto)]
 pub use metadata::MetadataSignatureVerification;
+pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};
 pub use model::{
     Assertion, AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes,
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, AuthnRequest,

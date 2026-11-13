@@ -19,6 +19,13 @@ active compatibility promise. New protocol behaviour is justified in
 
 Fixture key material is test-only. It is not for use outside tests.
 
+## Organization and contact metadata
+
+`metadata/description-sp.xml` and `metadata/description-idp.xml` are hand-written
+expected outputs for `tests/metadata_description.rs`. Their structure follows
+OASIS Metadata §§2.3.2–2.4.1 and the REFEDS security contact extension. They use
+invented organization and contact details and contain no key material.
+
 ## Crypto provider matrix fixture audit
 
 `tests/provider_regression.rs` deliberately uses the matching

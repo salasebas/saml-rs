@@ -53,6 +53,9 @@ pub(super) fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
             .collect(),
         elements_order: config.metadata.elements_order.clone(),
         lifetime: config.metadata.lifetime,
+        organization: config.metadata.organization.clone(),
+        contacts: config.metadata.contacts.clone(),
+        error_url: config.metadata.error_url.clone(),
     }
 }
 
@@ -95,6 +98,9 @@ pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfi
             .collect(),
         elements_order: config.metadata.elements_order.clone(),
         lifetime: config.metadata.lifetime,
+        organization: config.metadata.organization.clone(),
+        contacts: config.metadata.contacts.clone(),
+        error_url: config.metadata.error_url.clone(),
     }
 }
 

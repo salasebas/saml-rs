@@ -1,5 +1,7 @@
 //! SAML metadata parsing and shared SP/IdP metadata accessors.
 
+pub(crate) mod description;
+mod description_read;
 mod endpoints;
 pub mod generate;
 pub mod idp;
@@ -11,6 +13,7 @@ mod write;
 
 #[cfg(crypto)]
 pub use crate::crypto::MetadataSignatureVerification;
+pub use description::{ContactPerson, ContactType, LocalizedValue, Organization};
 pub use generate::{
     generate_idp_metadata, generate_sp_metadata, try_generate_idp_metadata,
     ArtifactResolutionEndpoint, Endpoint, IdpMetadataConfig, SpMetadataConfig,
@@ -218,6 +221,7 @@ pub struct Metadata {
     pub(crate) meta: Value,
     key_certificates: KeyCertificates,
     valid_until_bounds: Vec<String>,
+    description: description_read::EntityDescription,
 }
 
 impl Metadata {
@@ -292,6 +296,7 @@ impl Metadata {
             meta,
             key_certificates: KeyCertificates::from_descriptors(&descriptors),
             valid_until_bounds: validity::valid_until_bounds(&roots, &descriptors),
+            description: description_read::EntityDescription::read(xml, entity, limits)?,
         })
     }
 
@@ -307,6 +312,26 @@ impl Metadata {
     /// `entityID`.
     pub fn get_entity_id(&self) -> Option<&str> {
         self.meta.get_str("entityID")
+    }
+
+    /// Read the entity-level organization without changing the imported XML.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for multiple organizations or a localized
+    /// value without `xml:lang`. Import itself does not reject these descriptions.
+    pub fn organization(&self) -> Result<Option<Organization>, SamlError> {
+        self.description.organization()
+    }
+
+    /// Read entity-level contacts in document order without changing the XML.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for a missing or unknown `contactType`.
+    /// Import itself does not reject these descriptions.
+    pub fn contacts(&self) -> Result<Vec<ContactPerson>, SamlError> {
+        self.description.contacts()
     }
 
     /// `<NameIDFormat>` values of the SSO role descriptors read, in document
