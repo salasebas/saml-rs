@@ -327,7 +327,7 @@ impl Saml<Idp> {
             }
             ResponseTransport::Artifact(delivery, issued) => (delivery, issued),
         };
-        let rendered = self.raw_identity_provider().render_artifact_sso_response(
+        let rendered = self.raw_identity_provider().render_posted_sso_response(
             raw_sp,
             &user,
             in_response_to,

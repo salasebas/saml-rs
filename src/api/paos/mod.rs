@@ -10,13 +10,13 @@ use std::time::SystemTime;
 use crate::config::{EntityId, IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::entity::User;
 use crate::flow::HttpRequest;
-use crate::idp::PaosSsoResponseInput;
+use crate::idp::LoginResponseOverrides;
 use crate::model::{
     Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
     OutstandingLogout, RelayStateParam, SamlValidationContext, SessionIndex, SsoResponse,
     SsoSession, Status, Subject, TopLevelStatusCode,
 };
-use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
+use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput, WebBrowserSsoProducer};
 use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
 
 use super::raw_mapping::{
@@ -781,30 +781,32 @@ impl Saml<Idp> {
             Some(subject) => user_from_subject(subject)?,
             None => User::new(""),
         };
-        let input = PaosSsoResponseInput {
-            sp: raw_sp,
-            acs: acs.as_str(),
-            in_response_to: request.message().id().as_str(),
-            user: &user,
+        let overrides = LoginResponseOverrides {
+            acs: Some(acs.as_str()),
             name_id_format,
             name_id_qualifiers: subject
                 .as_ref()
                 .map_or_else(OutboundNameIdQualifiers::default, |subject| {
                     OutboundNameIdQualifiers::from(subject.name_id())
                 }),
-            issuance_lifetime: self.0.issuance_lifetime,
+            issuance_lifetime: Some(self.0.issuance_lifetime),
+            web_browser_sso_producer: WebBrowserSsoProducer::Follow,
             status: status.as_ref(),
-            attributes: options.attributes.as_slice(),
+            typed_attributes: options.attributes.as_slice(),
             authn_context: options.authn_context.as_ref(),
             authn_instant: options.authn_instant,
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
             requested_subject: request.message().requested_subject(),
-            want_message_signed: sign_encrypted_cbc,
+            want_message_signed: Some(sign_encrypted_cbc),
+            transformation_algorithms: None,
         };
-        let issued = self
-            .raw_identity_provider()
-            .render_paos_sso_response(&input)?;
+        let issued = self.raw_identity_provider().render_posted_sso_response(
+            raw_sp,
+            &user,
+            Some(request.message().id().as_str()),
+            overrides,
+        )?;
         let envelope = idp_to_ecp_envelope(&IdpToEcp {
             assertion_consumer_service_url: acs.as_str(),
             response_xml: &issued.xml,
