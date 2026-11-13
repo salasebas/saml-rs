@@ -6,6 +6,7 @@ use core::marker::PhantomData;
 
 use super::artifact::DeliveredArtifact;
 use super::forms::FormField;
+use super::MessageField;
 use crate::artifact::ResolvedProtocolMessage;
 use crate::binding::{base64_decode_with_limit, base64_encode, build_simplesign_octet};
 use crate::constants::url_params;
@@ -15,28 +16,6 @@ use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
 use crate::raw::HttpRequest;
 use crate::soap::{read_soap_body, SoapChannel};
 use crate::xml::XmlLimits;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MessageField {
-    Request,
-    Response,
-}
-
-impl MessageField {
-    fn param_name(self) -> &'static str {
-        match self {
-            Self::Request => url_params::SAML_REQUEST,
-            Self::Response => url_params::SAML_RESPONSE,
-        }
-    }
-
-    fn opposite_param_name(self) -> &'static str {
-        match self {
-            Self::Request => url_params::SAML_RESPONSE,
-            Self::Response => url_params::SAML_REQUEST,
-        }
-    }
-}
 
 /// Typed browser input for inbound SAML messages, or the SOAP message of a
 /// back-channel exchange.

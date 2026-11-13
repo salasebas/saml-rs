@@ -22,3 +22,25 @@ pub use pending::{
     Pending, PendingAuthnRequest, PendingLogoutRequest, PendingManageNameIdRequest,
     PendingSnapshot, Started,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MessageField {
+    Request,
+    Response,
+}
+
+impl MessageField {
+    fn param_name(self) -> &'static str {
+        match self {
+            Self::Request => crate::constants::url_params::SAML_REQUEST,
+            Self::Response => crate::constants::url_params::SAML_RESPONSE,
+        }
+    }
+
+    fn opposite_param_name(self) -> &'static str {
+        match self {
+            Self::Request => crate::constants::url_params::SAML_RESPONSE,
+            Self::Response => crate::constants::url_params::SAML_REQUEST,
+        }
+    }
+}
