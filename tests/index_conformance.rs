@@ -418,36 +418,6 @@ mod crypto {
         sign_and_verify(OCTET_SHA512, RSA_SHA512)
     }
 
-    // 12-14: verify binary message signature.
-    #[cfg(feature = "crypto-rustcrypto")]
-    #[test]
-    fn verify_binary_message_rsa_sha1() -> Result<(), Box<dyn std::error::Error>> {
-        sign_and_verify(OCTET_SHA1, RSA_SHA1)
-    }
-    #[test]
-    fn verify_binary_message_rsa_sha256() -> Result<(), Box<dyn std::error::Error>> {
-        sign_and_verify(OCTET_SHA256, RSA_SHA256)
-    }
-    #[test]
-    fn verify_binary_message_rsa_sha512() -> Result<(), Box<dyn std::error::Error>> {
-        sign_and_verify(OCTET_SHA512, RSA_SHA512)
-    }
-
-    // 15-17: verify stringified message signature.
-    #[cfg(feature = "crypto-rustcrypto")]
-    #[test]
-    fn verify_stringified_message_rsa_sha1() -> Result<(), Box<dyn std::error::Error>> {
-        sign_and_verify(OCTET_SHA1, RSA_SHA1)
-    }
-    #[test]
-    fn verify_stringified_message_rsa_sha256() -> Result<(), Box<dyn std::error::Error>> {
-        sign_and_verify(OCTET_SHA256, RSA_SHA256)
-    }
-    #[test]
-    fn verify_stringified_message_rsa_sha512() -> Result<(), Box<dyn std::error::Error>> {
-        sign_and_verify(OCTET_SHA512, RSA_SHA512)
-    }
-
     // 18-20: construct an embedded signature (round-trip verify).
     fn construct_and_verify(alg: &str) -> Result<(), Box<dyn std::error::Error>> {
         let key = load_private_key(SP_PRIVKEY, None)?;
