@@ -102,6 +102,19 @@ pub struct Node {
 }
 
 impl Node {
+    /// Direct children matching a local name, in document order.
+    pub(crate) fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Self> {
+        self.children
+            .iter()
+            .filter(move |child| child.local_name == name)
+    }
+
+    /// First direct child matching a local name.
+    #[cfg(crypto)]
+    pub(crate) fn child_named(&self, name: &str) -> Option<&Self> {
+        self.children.iter().find(|child| child.local_name == name)
+    }
+
     /// Look up an attribute by local name.
     pub fn attr(&self, name: &str) -> Option<&str> {
         self.attrs

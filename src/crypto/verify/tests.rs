@@ -326,9 +326,9 @@ fn signature_over_top_level_issuer(
 fn signature_over_response_and_assertion() -> Result<String, Box<dyn std::error::Error>> {
     let document = dom::parse(RESPONSE)?;
     let response_id = node_saml_id(&document.root).ok_or("missing Response ID")?;
-    let assertion = children_named(&document.root, "Assertion")
-        .into_iter()
-        .next()
+    let assertion = document
+        .root
+        .child_named("Assertion")
         .ok_or("missing Assertion")?;
     let assertion_id = node_saml_id(assertion).ok_or("missing Assertion ID")?;
     let digest = digest_for_signature(RSA_SHA512).ok_or("unknown digest")?;
@@ -362,18 +362,18 @@ fn signature_over_response_and_assertion() -> Result<String, Box<dyn std::error:
 
 fn root_signature(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     let document = dom::parse(xml)?;
-    let signature = children_named(&document.root, "Signature")
-        .into_iter()
-        .next()
+    let signature = document
+        .root
+        .child_named("Signature")
         .ok_or("missing root Signature")?;
     Ok(xml[signature.start..signature.end].to_string())
 }
 
 fn remove_signature_key_info(signature: &str) -> Result<String, Box<dyn std::error::Error>> {
     let document = dom::parse(signature)?;
-    let key_info = children_named(&document.root, "KeyInfo")
-        .into_iter()
-        .next()
+    let key_info = document
+        .root
+        .child_named("KeyInfo")
         .ok_or("missing KeyInfo")?;
     Ok(format!(
         "{}{}",
@@ -419,9 +419,9 @@ fn response_signed_over_assertion_with_foreign_xpath() -> Result<String, Box<dyn
 {
     const XPATH_TRANSFORM: &str = "http://www.w3.org/TR/1999/REC-xpath-19991116";
     let document = dom::parse(RESPONSE)?;
-    let assertion = children_named(&document.root, "Assertion")
-        .into_iter()
-        .next()
+    let assertion = document
+        .root
+        .child_named("Assertion")
         .ok_or("missing Assertion")?;
     let assertion_id = node_saml_id(assertion).ok_or("missing Assertion ID")?;
     let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
@@ -449,9 +449,9 @@ fn response_signed_over_assertion_with(
     digest: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let document = dom::parse(RESPONSE)?;
-    let assertion = children_named(&document.root, "Assertion")
-        .into_iter()
-        .next()
+    let assertion = document
+        .root
+        .child_named("Assertion")
         .ok_or("missing Assertion")?;
     let assertion_id = node_saml_id(assertion).ok_or("missing Assertion ID")?;
     let signature = format!(
