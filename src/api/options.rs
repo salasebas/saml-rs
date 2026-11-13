@@ -1,6 +1,8 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
-use crate::model::{Attributes, AuthnContextReference, RelayStateParam, Status};
+use crate::model::{
+    Attributes, AuthnContextReference, RelayStateParam, RequestedAuthnContext, Status,
+};
 use crate::sp::WebBrowserSsoProducer;
 use std::time::SystemTime;
 
@@ -14,6 +16,9 @@ pub struct StartSso {
     pub(super) relay_state: RelayStateParam,
     pub(super) force_authn: Option<ForceAuthn>,
     pub(super) acs_index: Option<u16>,
+    pub(super) is_passive: Option<IsPassive>,
+    pub(super) provider_name: Option<String>,
+    pub(super) requested_authn_context: Option<RequestedAuthnContext>,
     pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
 }
 
@@ -40,6 +45,9 @@ impl StartSso {
             relay_state: RelayStateParam::absent(),
             force_authn: None,
             acs_index: None,
+            is_passive: None,
+            provider_name: None,
+            requested_authn_context: None,
             web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
         }
     }
@@ -59,6 +67,35 @@ impl StartSso {
     /// Set the exact `ForceAuthn` value.
     pub fn force_authn(mut self, force_authn: ForceAuthn) -> Self {
         self.force_authn = Some(force_authn);
+        self
+    }
+
+    /// Set `IsPassive`. When required, the IdP and user agent must not take
+    /// visible control of the user interface. Omitted by default.
+    ///
+    /// Requires the built-in AuthnRequest renderer.
+    #[allow(
+        clippy::wrong_self_convention,
+        reason = "the builder name is the SAML IsPassive attribute, matching StartPaosSso"
+    )]
+    pub fn is_passive(mut self, is_passive: IsPassive) -> Self {
+        self.is_passive = Some(is_passive);
+        self
+    }
+
+    /// Set the requester's human-readable `ProviderName`. Omitted by default.
+    ///
+    /// Requires the built-in AuthnRequest renderer.
+    pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
+        self.provider_name = Some(provider_name.into());
+        self
+    }
+
+    /// Request authentication contexts in preference order. Omitted by default.
+    ///
+    /// Requires the built-in AuthnRequest renderer.
+    pub fn requested_authn_context(mut self, context: RequestedAuthnContext) -> Self {
+        self.requested_authn_context = Some(context);
         self
     }
 

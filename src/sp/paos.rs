@@ -45,6 +45,8 @@ impl ServiceProvider {
             assertion_consumer_service_url: Some(input.assertion_consumer_service_url),
             assertion_consumer_service_index: None,
             is_passive: input.is_passive,
+            provider_name: None,
+            requested_authn_context: None,
             issuer: &issuer,
             name_id_format,
             allow_create,

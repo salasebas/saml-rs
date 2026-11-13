@@ -564,7 +564,8 @@ impl SsoSession {
             subject_confirmations_from_extract(&raw_flow.extract),
         );
         let attributes = attributes_from_extract(&raw_flow.extract)?;
-        let authn_sessions = authn_sessions_from_extract(&raw_flow.extract)?;
+        let authn_sessions =
+            authn_sessions_from_extract(&raw_flow.extract, &raw_flow.saml_content)?;
         let audience = entity_ids_from_value(raw_flow.extract.get("audience"))?;
         let (not_before, not_on_or_after) = conditions_instants(&raw_flow.extract)?;
         let sig_alg = raw_flow.sig_alg.clone();
