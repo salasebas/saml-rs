@@ -257,15 +257,9 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
 /// Whether the `EncryptedData` of `encrypted` names an AES-GCM
 /// `EncryptionMethod`.
 fn uses_gcm(document: &XmlDocument<'_>, encrypted: NodeId) -> bool {
-    let child = |parent: NodeId, local_name: &'static str| {
-        document.children_iter(parent).find(|child| {
-            document
-                .element(*child)
-                .is_some_and(|element| element.matches_name_ns(ENC, local_name))
-        })
-    };
-    child(encrypted, "EncryptedData")
-        .and_then(|data| child(data, "EncryptionMethod"))
+    document
+        .first_child_element_by_name_ns(encrypted, ENC, "EncryptedData")
+        .and_then(|data| document.first_child_element_by_name_ns(data, ENC, "EncryptionMethod"))
         .and_then(|method| document.element(method))
         .and_then(|method| method.get_attribute("Algorithm"))
         .is_some_and(crate::constants::is_xml_encryption_gcm_algorithm)

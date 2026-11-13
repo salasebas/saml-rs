@@ -138,14 +138,7 @@ fn root_children(
     let root = document
         .document_element()
         .ok_or_else(|| SamlError::Xml("no document element".into()))?;
-    Ok(document
-        .children_iter(root)
-        .filter(|child| {
-            document
-                .element(*child)
-                .is_some_and(|element| element.matches_name_ns(namespace, local_name))
-        })
-        .collect())
+    Ok(document.child_elements_by_name_ns(root, namespace, local_name))
 }
 
 /// Each `<Assertion>` of `xml`: the document element itself, or each

@@ -336,37 +336,24 @@ fn references_cover_direct_assertion(
         })
 }
 
-fn bergshamra_child_element(
-    document: &BergshamraDocument<'_>,
-    parent: BergshamraNodeId,
-    namespace: &str,
-    local_name: &str,
-) -> Option<BergshamraNodeId> {
-    document.children_iter(parent).find(|child| {
-        document
-            .element(*child)
-            .is_some_and(|element| element.matches_name_ns(namespace, local_name))
-    })
-}
-
 fn verified_signature_algorithm(
     document: &BergshamraDocument<'_>,
     signature_node: BergshamraNodeId,
 ) -> Result<String, SamlError> {
-    let signed_info = bergshamra_child_element(
-        document,
-        signature_node,
-        bergshamra_ns::DSIG,
-        bergshamra_ns::node::SIGNED_INFO,
-    )
-    .ok_or_else(|| SamlError::Crypto("verified signature is missing SignedInfo".into()))?;
-    let signature_method = bergshamra_child_element(
-        document,
-        signed_info,
-        bergshamra_ns::DSIG,
-        bergshamra_ns::node::SIGNATURE_METHOD,
-    )
-    .ok_or_else(|| SamlError::Crypto("verified signature is missing SignatureMethod".into()))?;
+    let signed_info = document
+        .first_child_element_by_name_ns(
+            signature_node,
+            bergshamra_ns::DSIG,
+            bergshamra_ns::node::SIGNED_INFO,
+        )
+        .ok_or_else(|| SamlError::Crypto("verified signature is missing SignedInfo".into()))?;
+    let signature_method = document
+        .first_child_element_by_name_ns(
+            signed_info,
+            bergshamra_ns::DSIG,
+            bergshamra_ns::node::SIGNATURE_METHOD,
+        )
+        .ok_or_else(|| SamlError::Crypto("verified signature is missing SignatureMethod".into()))?;
     document
         .element(signature_method)
         .and_then(|element| element.get_attribute(bergshamra_ns::attr::ALGORITHM))
@@ -481,27 +468,14 @@ fn preflight_saml_reference_uris(signatures: &[&Node]) -> Result<(), SamlError> 
     Ok(())
 }
 
-fn dsig_children(
-    document: &BergshamraDocument<'_>,
-    parent: BergshamraNodeId,
-    local_name: &str,
-) -> Vec<BergshamraNodeId> {
-    document
-        .children_iter(parent)
-        .filter(|child| {
-            document
-                .element(*child)
-                .is_some_and(|element| element.matches_name_ns(bergshamra_ns::DSIG, local_name))
-        })
-        .collect()
-}
-
 fn exactly_one_dsig_child(
     document: &BergshamraDocument<'_>,
     parent: BergshamraNodeId,
     local_name: &str,
 ) -> Option<BergshamraNodeId> {
-    let mut children = dsig_children(document, parent, local_name).into_iter();
+    let mut children = document
+        .child_elements_by_name_ns(parent, bergshamra_ns::DSIG, local_name)
+        .into_iter();
     let only = children.next()?;
     children.next().is_none().then_some(only)
 }
@@ -542,7 +516,14 @@ fn reject_signature_object(
     document: &BergshamraDocument<'_>,
     signature_node: BergshamraNodeId,
 ) -> Result<(), SamlError> {
-    if dsig_children(document, signature_node, bergshamra_ns::node::OBJECT).is_empty() {
+    if document
+        .child_elements_by_name_ns(
+            signature_node,
+            bergshamra_ns::DSIG,
+            bergshamra_ns::node::OBJECT,
+        )
+        .is_empty()
+    {
         Ok(())
     } else {
         Err(SamlError::SignedReferenceMismatch)
@@ -554,16 +535,32 @@ fn enforce_algorithms_on_verified_signature(
     signature_node: BergshamraNodeId,
     profile: XmlSignatureProfile,
 ) -> Result<(), SamlError> {
-    for signed_info in dsig_children(document, signature_node, bergshamra_ns::node::SIGNED_INFO) {
-        for method in dsig_children(document, signed_info, bergshamra_ns::node::SIGNATURE_METHOD) {
+    for signed_info in document.child_elements_by_name_ns(
+        signature_node,
+        bergshamra_ns::DSIG,
+        bergshamra_ns::node::SIGNED_INFO,
+    ) {
+        for method in document.child_elements_by_name_ns(
+            signed_info,
+            bergshamra_ns::DSIG,
+            bergshamra_ns::node::SIGNATURE_METHOD,
+        ) {
             if !dsig_algorithm(document, method)
                 .is_some_and(|algorithm| allows_signature_method(profile, algorithm))
             {
                 return Err(SamlError::AlgorithmUnsupported);
             }
         }
-        for reference in dsig_children(document, signed_info, bergshamra_ns::node::REFERENCE) {
-            for digest in dsig_children(document, reference, bergshamra_ns::node::DIGEST_METHOD) {
+        for reference in document.child_elements_by_name_ns(
+            signed_info,
+            bergshamra_ns::DSIG,
+            bergshamra_ns::node::REFERENCE,
+        ) {
+            for digest in document.child_elements_by_name_ns(
+                reference,
+                bergshamra_ns::DSIG,
+                bergshamra_ns::node::DIGEST_METHOD,
+            ) {
                 if !dsig_algorithm(document, digest)
                     .is_some_and(|algorithm| allows_digest_method(profile, algorithm))
                 {
@@ -624,7 +621,11 @@ fn enforce_strict_profile_on_verified_signature(
     }) {
         return Err(SamlError::AlgorithmUnsupported);
     }
-    for transforms in dsig_children(document, reference, bergshamra_ns::node::TRANSFORMS) {
+    for transforms in document.child_elements_by_name_ns(
+        reference,
+        bergshamra_ns::DSIG,
+        bergshamra_ns::node::TRANSFORMS,
+    ) {
         // Bergshamra executes every direct child whose local name is
         // `Transform`, including elements outside the XML-DSig namespace.
         // Reject any element it would execute, and any other element child,

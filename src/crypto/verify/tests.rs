@@ -102,13 +102,9 @@ fn preflight_signature(
     let root = document
         .document_element()
         .ok_or_else(|| SamlError::Crypto("profile fixture is missing a document element".into()))?;
-    let signature = bergshamra_child_element(
-        &document,
-        root,
-        bergshamra_ns::DSIG,
-        bergshamra_ns::node::SIGNATURE,
-    )
-    .ok_or(SamlError::SignedReferenceMismatch)?;
+    let signature = document
+        .first_child_element_by_name_ns(root, bergshamra_ns::DSIG, bergshamra_ns::node::SIGNATURE)
+        .ok_or(SamlError::SignedReferenceMismatch)?;
     enforce_strict_profile_on_verified_signature(&document, signature)
 }
 
