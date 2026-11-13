@@ -446,11 +446,7 @@ pub use config::{
     SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy, TransformAlgorithm,
     XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
 };
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub use crypto::{
     crypto_provider_info, initialize_crypto_provider, CryptoFipsStatus, CryptoProvider,
     CryptoProviderInfo,
@@ -461,11 +457,7 @@ pub use entity::EntitySetting;
 #[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::IdentityProvider`."]
 pub use idp::IdentityProvider;
 pub use metadata::MetadataLifetime;
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub use metadata::MetadataSignatureVerification;
 pub use model::{
     Assertion, AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes,

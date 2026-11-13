@@ -3,11 +3,7 @@
 //!
 //! SAML Core §3.4.1. These fields are exposed to the identity provider
 //! application. Their presence does not reject the request.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

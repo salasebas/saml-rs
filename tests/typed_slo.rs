@@ -1,9 +1,5 @@
 //! Compatibility is the legacy permissive preset.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::{
     collections::HashMap,

@@ -249,11 +249,7 @@ pub mod data_encryption_algorithm {
 
 /// AES-GCM, the XML Encryption 1.1 block encryption that authenticates
 /// its ciphertext.
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub(crate) fn is_xml_encryption_gcm_algorithm(algorithm: &str) -> bool {
     matches!(
         algorithm,

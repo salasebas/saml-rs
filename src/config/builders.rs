@@ -21,11 +21,7 @@ use super::policies::{
     AssertionEncryptionPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy,
     ReceivedEncryptedElements, SpValidationPolicy, TemplatePolicy, XmlPolicy,
 };
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 use super::policies::{
     AssertionSignaturePolicy, AuthnRequestValidationPolicy, LogoutPolicy, LogoutSignaturePolicy,
     ResponseSignaturePolicy,
@@ -546,20 +542,12 @@ fn validate_signing_credentials(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn validate_sp_crypto_support(_config: &SpConfig) -> Result<(), SamlError> {
     Ok(())
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn validate_sp_crypto_support(config: &SpConfig) -> Result<(), SamlError> {
     if sp_config_requires_crypto(config) {
         return Err(SamlError::Unsupported(
@@ -569,20 +557,12 @@ fn validate_sp_crypto_support(config: &SpConfig) -> Result<(), SamlError> {
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn validate_idp_crypto_support(_config: &IdpConfig) -> Result<(), SamlError> {
     Ok(())
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn validate_idp_crypto_support(config: &IdpConfig) -> Result<(), SamlError> {
     if idp_config_requires_crypto(config) {
         return Err(SamlError::Unsupported(
@@ -592,11 +572,7 @@ fn validate_idp_crypto_support(config: &IdpConfig) -> Result<(), SamlError> {
     Ok(())
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn sp_config_requires_crypto(config: &SpConfig) -> bool {
     matches!(
         config.validation.assertions,
@@ -611,11 +587,7 @@ fn sp_config_requires_crypto(config: &SpConfig) -> bool {
         || config.xml.encryption.selects_any_element()
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn idp_config_requires_crypto(config: &IdpConfig) -> bool {
     matches!(
         config.validation.authn_requests,
@@ -624,21 +596,13 @@ fn idp_config_requires_crypto(config: &IdpConfig) -> bool {
         || config.xml.encryption.selects_any_element()
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn logout_policy_requires_crypto(policy: LogoutPolicy) -> bool {
     logout_signature_policy_requires_crypto(policy.requests)
         || logout_signature_policy_requires_crypto(policy.responses)
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn logout_signature_policy_requires_crypto(policy: LogoutSignaturePolicy) -> bool {
     matches!(policy, LogoutSignaturePolicy::RequireSigned)
 }
@@ -772,14 +736,7 @@ impl TryFrom<&IdpConfig> for EntitySetting {
     }
 }
 
-#[cfg(all(
-    test,
-    not(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))
-))]
+#[cfg(all(test, not(crypto)))]
 mod no_crypto_tests {
     use super::{
         IdpConfig, IdpMetadataConfig, IdpValidationPolicy, SpConfig, SpMetadataConfig,

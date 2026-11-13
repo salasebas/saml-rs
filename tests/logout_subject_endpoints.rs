@@ -1,9 +1,5 @@
 //! respond_slo issuer checks and SLO endpoint locations.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

@@ -5,11 +5,7 @@
 //! artifact. The service provider reads the artifact at its assertion
 //! consumer, resolves it over SOAP, and establishes the session. The
 //! deployment still performs HTTP and TLS.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::{Duration, SystemTime};
 

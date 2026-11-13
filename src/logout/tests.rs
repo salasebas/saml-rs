@@ -373,11 +373,7 @@ fn raw_logout_request_parser_does_not_infer_actual_recipient(
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 mod signed_tests {
     use super::*;
     use crate::constants::signature_algorithm::RSA_SHA256;
@@ -1132,18 +1128,10 @@ fn default_logout_response_parsing_requires_signature() -> Result<(), Box<dyn st
     let result =
         parse_logout_response(&sp.setting, &idp.metadata, Binding::Post, &request, "_req1");
 
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     assert!(matches!(result, Err(SamlError::SignatureMissing)));
 
-    #[cfg(not(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    )))]
+    #[cfg(not(crypto))]
     assert!(matches!(result, Err(SamlError::Unsupported(_))));
 
     Ok(())

@@ -1,8 +1,4 @@
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use saml_rs::constants::Binding;
 use saml_rs::entity::{EntitySetting, User};

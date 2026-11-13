@@ -2,11 +2,7 @@
 //! whose metadata sets `AuthnRequestsSigned`.
 //!
 //! SAML Metadata §2.4.4 as amended by Errata 05 E7.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

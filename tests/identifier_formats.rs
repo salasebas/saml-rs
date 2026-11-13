@@ -6,11 +6,7 @@
 //! §3.3 and Approved Errata 05 E78 and E86. The producer rules bind the party
 //! that generates an identifier. A receiver parses a peer's identifier and does
 //! not reject it for missing one of them.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

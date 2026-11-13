@@ -1,9 +1,5 @@
 //! Typed SSO acceptance of assertion conditions and every assertion in a response.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::collections::HashMap;
 use std::time::SystemTime;

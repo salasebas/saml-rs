@@ -60,6 +60,9 @@ jobs:
         with:
           tool: nextest
       - run: cargo check -p saml-rs --no-default-features
+      - name: Check build script is packaged
+        shell: bash
+        run: cargo package --list -p saml-rs | awk '$0 == "build.rs" { found = 1 } END { exit !found }'
       - run: cargo nextest run -p saml-rs --no-default-features
       - run: cargo test -p saml-rs --doc --no-default-features
       - run: RUSTDOCFLAGS="-D warnings -D missing_docs" cargo doc -p saml-rs --lib --no-deps --no-default-features

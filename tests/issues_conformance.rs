@@ -9,11 +9,7 @@ use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{IdentityProvider, ServiceProvider};
 
 const DUMPES_ISSUER: &str = include_str!("fixtures/misc/dumpes_issuer_response.xml");
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
 const SP_META_98: &str = include_str!("fixtures/misc/sp_metadata_98.xml");
 
@@ -176,11 +172,7 @@ fn issue_86_duplicate_issuer_deduped() -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 #[test]
 fn issue_87_existence_check_for_signature() -> Result<(), Box<dyn std::error::Error>> {
     // An unsigned response verifies to false (no signature present).

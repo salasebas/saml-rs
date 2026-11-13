@@ -7,11 +7,7 @@
 //! before DEFLATE and to verify the detached signature over parameters in a
 //! fixed order. CD-04 §2.5 and §2.6 require
 //! SimpleSign to sign the raw XML octets, including RelayState when present.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

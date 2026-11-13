@@ -88,11 +88,7 @@ mod tests {
     const SP_PRIVKEY: &str =
         include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     // RustCrypto decrypts this PEM. AWS-LC and FIPS reject it.
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     const SP_PRIVKEY_ENC: &str =
         include_str!("../../tests/fixtures/key/sp/privkey.encrypted.pkcs8.pem");
     const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");

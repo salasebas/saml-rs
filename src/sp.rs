@@ -447,11 +447,7 @@ impl ServiceProvider {
         })
     }
 
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     fn signed_request_context(
         &self,
         binding: Binding,
@@ -503,11 +499,7 @@ impl ServiceProvider {
         })
     }
 
-    #[cfg(not(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    )))]
+    #[cfg(not(crypto))]
     fn signed_request_context(
         &self,
         _binding: Binding,
@@ -827,14 +819,7 @@ mod tests {
     }
 }
 
-#[cfg(all(
-    test,
-    any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    )
-))]
+#[cfg(all(test, crypto))]
 mod crypto_tests {
     use super::*;
     use crate::binding::base64_decode;

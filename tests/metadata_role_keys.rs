@@ -1,10 +1,6 @@
 //! Keys, flags, endpoints, and name identifier formats come from the SAML 2.0
 //! metadata role descriptor of the role a message is from.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

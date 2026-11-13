@@ -1,8 +1,4 @@
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use bergshamra::{sign, DsigContext, KeysManager};
 use saml_rs::constants::digest_algorithm::SHA256;

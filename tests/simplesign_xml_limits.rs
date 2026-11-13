@@ -1,9 +1,5 @@
 //! HTTP-POST-SimpleSign messages are decoded under the configured XML limits.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 
 use std::time::SystemTime;
 

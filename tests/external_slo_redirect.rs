@@ -1,8 +1,4 @@
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode, deflate_raw_encode};

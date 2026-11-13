@@ -340,11 +340,7 @@ fn building_attribute_statement_with_multiple_attributes() {
     );
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 mod crypto {
     use super::*;
     use saml_rs::constants::data_encryption_algorithm::AES_256;

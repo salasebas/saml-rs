@@ -9,11 +9,7 @@ pub mod sp;
 mod validity;
 mod write;
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 pub use crate::crypto::MetadataSignatureVerification;
 pub use generate::{
     generate_idp_metadata, generate_sp_metadata, try_generate_idp_metadata,
@@ -426,11 +422,7 @@ impl Metadata {
     /// Returns [`SamlError`] when XML parsing, certificate loading,
     /// cryptographic verification, or signed `<EntityDescriptor>` coverage
     /// checks fail.
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     pub fn verify_signature(&self, trusted_certificates: &[String]) -> Result<bool, SamlError> {
         self.verify_signature_with_limits(trusted_certificates, XmlLimits::default())
     }
@@ -442,11 +434,7 @@ impl Metadata {
     /// Returns [`SamlError`] when XML parsing, certificate loading,
     /// cryptographic verification, or signed `<EntityDescriptor>` coverage
     /// checks fail.
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     pub fn verify_signature_with_limits(
         &self,
         trusted_certificates: &[String],
@@ -467,11 +455,7 @@ impl Metadata {
     /// Returns [`SamlError`] when XML parsing, certificate loading,
     /// cryptographic verification, transform policy, or signed
     /// `<EntityDescriptor>` coverage checks fail.
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     pub fn verify_signature_detailed(
         &self,
         trusted_certificates: &[String],
@@ -487,11 +471,7 @@ impl Metadata {
     /// Returns [`SamlError`] when XML parsing, certificate loading,
     /// cryptographic verification, transform policy, or signed
     /// `<EntityDescriptor>` coverage checks fail.
-    #[cfg(any(
-        feature = "crypto-rustcrypto",
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips"
-    ))]
+    #[cfg(crypto)]
     pub fn verify_signature_detailed_with_limits(
         &self,
         trusted_certificates: &[String],

@@ -4,11 +4,7 @@
 //! auto-detect, so entities are built from config with the project's working
 //! RSA keypair. Redirect/SimpleSign responses are parsed by reconstructing the
 //! signed octet string the way the bindings produce it.
-#![cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
 use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode, deflate_raw_encode};

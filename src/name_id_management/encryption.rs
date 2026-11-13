@@ -64,11 +64,7 @@ fn decrypted(
     identifier_and_change(&parse_saml_with_limits(&request, setting.xml_limits)?)
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String, SamlError> {
     use crate::constants::CertUse;
     use crate::crypto::enc::{encrypt_root_children, MANAGED_NAME_ID, NEW_ID};
@@ -85,11 +81,7 @@ fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String
     )
 }
 
-#[cfg(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-))]
+#[cfg(crypto)]
 fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<String, SamlError> {
     use crate::crypto::enc::{
         decrypt_root_child, AssertionDecryptionOptions, MANAGED_NAME_ID, NEW_ID,
@@ -120,22 +112,14 @@ fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<
     )
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn encrypt(_xml: &str, _setting: &EntitySetting, _peer: &Metadata) -> Result<String, SamlError> {
     Err(SamlError::Unsupported(
         "XML encryption requires a crypto provider feature".into(),
     ))
 }
 
-#[cfg(not(any(
-    feature = "crypto-rustcrypto",
-    feature = "crypto-aws-lc",
-    feature = "crypto-fips"
-)))]
+#[cfg(not(crypto))]
 fn decrypt(
     _xml: &str,
     _child: EncryptedChild,
