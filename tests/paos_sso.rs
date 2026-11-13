@@ -7,15 +7,16 @@
 
 use std::time::{Duration, SystemTime};
 
-use saml_rs::constants::status_code::AUTH_FAILED;
+use saml_rs::constants::{status_code::AUTH_FAILED, transform_algorithm};
 use saml_rs::xml::dom::{parse, Node};
 use saml_rs::{
-    AcsEndpoint, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContextReference,
-    EndpointUrl, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpValidationPolicy,
-    MetadataTrustPolicy, NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest,
-    PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml, SamlError,
-    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
+    AcsEndpoint, AlgorithmPolicy, Attribute, AttributeNameFormat, AttributeValue, Attributes,
+    AuthnContextReference, EndpointUrl, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor,
+    IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat, PaosAuthnRequest,
+    PaosClientRequest, PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml,
+    SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
+    TransformAlgorithm,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -179,7 +180,15 @@ fn child<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
 
 #[test]
 fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties_with(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?).algorithms(AlgorithmPolicy {
+            signed_reference_transforms: vec![
+                TransformAlgorithm::EnvelopedSignature,
+                TransformAlgorithm::CanonicalXml,
+            ],
+            ..AlgorithmPolicy::default()
+        }),
+    )?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::from_headers(PaosClientRequest::ACCEPT, PaosClientRequest::PAOS_HEADER)?,
@@ -216,6 +225,31 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
         |header| header.name() == "Content-Type" && header.value() == "text/xml; charset=utf-8"
     ));
 
+    let document = parse(answered.envelope())?;
+    let mut transforms = &document.root;
+    for name in [
+        "Body",
+        "Response",
+        "Signature",
+        "SignedInfo",
+        "Reference",
+        "Transforms",
+    ] {
+        transforms = child(transforms, name).ok_or(name)?;
+    }
+    assert_eq!(
+        transforms
+            .children
+            .iter()
+            .map(|transform| transform.attr("Algorithm"))
+            .collect::<Vec<_>>(),
+        [
+            Some(transform_algorithm::ENVELOPED_SIGNATURE),
+            Some(transform_algorithm::EXC_C14N),
+        ],
+        "browser transforms must not leak into the SOAP-contained PAOS response"
+    );
+
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     let pending = saml_rs::PendingPaosSso::from_snapshot(started.pending.snapshot())?;
     let session = sp.finish_paos_sso(
@@ -225,6 +259,7 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
+    assert_eq!(session.verified_xml_signatures().len(), 1);
     assert_eq!(pending.acs_url(), &EndpointUrl::try_new(SP_ACS)?);
     assert_eq!(answered.session_index(), None);
     Ok(())
