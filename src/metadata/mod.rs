@@ -342,7 +342,7 @@ impl Metadata {
 
     /// First X.509 certificate declared for `use`.
     pub fn get_x509_certificate(&self, use_: CertUse) -> Option<String> {
-        self.x509_certificates(use_).into_iter().next()
+        self.key_certificates.for_use(use_).first().cloned()
     }
 
     /// First non-empty `SingleLogoutService` `Location` for `binding`.
