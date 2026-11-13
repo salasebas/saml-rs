@@ -271,18 +271,6 @@ fn write_sp_group(
     Ok(())
 }
 
-fn idp_group_has_content(cfg: &IdpMetadataConfig, name: &str) -> bool {
-    match name {
-        "KeyDescriptor" => !cfg.signing_certs.is_empty() || !cfg.encrypt_certs.is_empty(),
-        "NameIDFormat" => !cfg.name_id_format.is_empty(),
-        "SingleSignOnService" => !cfg.single_sign_on_service.is_empty(),
-        "SingleLogoutService" => !cfg.single_logout_service.is_empty(),
-        "ArtifactResolutionService" => !cfg.artifact_resolution_service.is_empty(),
-        "ManageNameIDService" => !cfg.manage_name_id_service.is_empty(),
-        _ => false,
-    }
-}
-
 fn write_idp_group(
     w: &mut MetadataWriter,
     cfg: &IdpMetadataConfig,
@@ -421,9 +409,7 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlErro
         ],
     );
     for name in &order {
-        if descriptors.contains(&name.as_str()) && idp_group_has_content(cfg, name) {
-            write_idp_group(&mut w, cfg, name)?;
-        }
+        write_idp_group(&mut w, cfg, name)?;
     }
     if is_custom_order {
         if !order.iter().any(|ordered| ordered == "SingleSignOnService") {
@@ -431,7 +417,7 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlErro
         }
     } else {
         for name in descriptors {
-            if idp_group_has_content(cfg, name) && !order.iter().any(|ordered| ordered == name) {
+            if !order.iter().any(|ordered| ordered == name) {
                 write_idp_group(&mut w, cfg, name)?;
             }
         }
