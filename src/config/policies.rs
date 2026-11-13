@@ -480,6 +480,24 @@ impl XmlEncryptionPolicy {
         }
     }
 
+    /// Return [`XmlEncryptionPolicy::default`].
+    ///
+    /// RSA-OAEP key transport decrypts with the default policy on every
+    /// provider, so this opt-in no longer changes anything.
+    #[deprecated(note = "use XmlEncryptionPolicy::default()")]
+    pub fn allow_insecure_software_rsa_key_transport_decryption() -> Self {
+        Self::default()
+    }
+
+    /// Return this policy unchanged.
+    ///
+    /// RSA-OAEP key transport decrypts with the default policy on every
+    /// provider, so this opt-in no longer changes anything.
+    #[deprecated(note = "remove the call; RSA-OAEP key transport decrypts by default")]
+    pub fn with_insecure_software_rsa_key_transport_decryption_allowed(self) -> Self {
+        self
+    }
+
     /// Return a copy whose service provider decrypts an `<EncryptedKey>` that
     /// uses RSA-v1.5 key transport.
     ///

@@ -13,6 +13,7 @@ use saml_rs::{
     CertificatePem, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting, HmacSecret,
     IdpDescriptor, KeyEncryptionAlgorithm, MetadataTrustPolicy, NameIdFormat, Passphrase,
     PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor, TransformAlgorithm,
+    XmlEncryptionPolicy,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");
@@ -166,6 +167,24 @@ fn typed_config_deprecated_algorithm_aliases_return_existing_uri_constants() {
     assert_eq!(
         KeyEncryptionAlgorithm::Rsa15.as_uri(),
         key_encryption_algorithm::RSA_1_5
+    );
+}
+
+#[test]
+#[expect(
+    deprecated,
+    reason = "pin the retired software RSA key-transport opt-in to the default policy"
+)]
+fn typed_config_deprecated_software_rsa_opt_in_keeps_the_policy() {
+    assert_eq!(
+        XmlEncryptionPolicy::allow_insecure_software_rsa_key_transport_decryption(),
+        XmlEncryptionPolicy::default()
+    );
+    let policy =
+        XmlEncryptionPolicy::encrypt_assertions().with_rsa15_key_transport_decryption_allowed();
+    assert_eq!(
+        policy.with_insecure_software_rsa_key_transport_decryption_allowed(),
+        policy
     );
 }
 
