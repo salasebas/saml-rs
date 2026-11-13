@@ -5,8 +5,9 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// Session data from one `AuthnStatement`.
 ///
-/// Each value preserves the statement's `SessionIndex`, `AuthnInstant`, and
-/// `SessionNotOnOrAfter` as one tuple. Assertions with repeated statements are
+/// Each value preserves the statement's `SessionIndex`, `AuthnInstant`,
+/// `SessionNotOnOrAfter`, `AuthnContext`, and `SubjectLocality` together.
+/// Assertions with repeated statements are
 /// represented by multiple values in document order through
 /// [`crate::SsoSession::authn_sessions`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,14 +58,12 @@ impl AuthnSession {
         }
     }
 
-    /// Attach the authentication context of this statement.
-    pub fn with_authn_context(mut self, context: AuthnContext) -> Self {
+    pub(super) fn with_authn_context(mut self, context: AuthnContext) -> Self {
         self.authn_context = Some(context);
         self
     }
 
-    /// Attach the subject locality of this statement.
-    pub fn with_subject_locality(mut self, locality: SubjectLocality) -> Self {
+    pub(super) fn with_subject_locality(mut self, locality: SubjectLocality) -> Self {
         self.subject_locality = Some(locality);
         self
     }

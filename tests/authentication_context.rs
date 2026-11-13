@@ -340,6 +340,45 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         &xml[statement.end..]
     );
     let document = parse(&edited)?;
+    let selected = document
+        .root
+        .children
+        .iter()
+        .find(|child| child.local_name == "Assertion")
+        .ok_or("missing selected assertion")?;
+    let selected_id = selected
+        .attr("ID")
+        .ok_or("missing assertion ID")?
+        .to_string();
+    let confirmation = selected
+        .children
+        .iter()
+        .find(|child| child.local_name == "Subject")
+        .and_then(|subject| {
+            subject
+                .children
+                .iter()
+                .find(|child| child.local_name == "SubjectConfirmation")
+        })
+        .ok_or("missing bearer confirmation")?;
+    let unselected = format!(
+        "{}{}",
+        &edited[selected.start..confirmation.start],
+        &edited[confirmation.end..selected.end],
+    )
+    .replacen(
+        &format!("ID=\"{selected_id}\""),
+        "ID=\"_unselected_assertion\"",
+        1,
+    )
+    .replace(MFA, "urn:example:unselected")
+    .replace("192.0.2.1", "192.0.2.99");
+    let edited = format!(
+        "{}{unselected}{}",
+        &edited[..selected.start],
+        &edited[selected.start..]
+    );
+    let document = parse(&edited)?;
     let mut unsigned = edited.clone();
     let mut signatures: Vec<_> = document
         .root
@@ -380,6 +419,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         validation(),
     )?;
     let sessions = session.authn_sessions();
+    assert_eq!(session.assertion_id().as_str(), selected_id);
     assert_eq!(sessions.len(), 3);
     assert_eq!(
         sessions
