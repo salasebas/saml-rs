@@ -189,6 +189,12 @@ pub struct SpMetadataConfig {
     /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
     /// neither.
     pub lifetime: Option<MetadataLifetime>,
+    /// Entity-level organization. `None` writes no `Organization`.
+    pub organization: Option<crate::metadata::Organization>,
+    /// Entity-level contacts, in publication order.
+    pub contacts: Vec<crate::metadata::ContactPerson>,
+    /// Error information URI on the SSO role descriptor. `None` omits it.
+    pub error_url: Option<String>,
 }
 
 impl SpMetadataConfig {
@@ -204,6 +210,9 @@ impl SpMetadataConfig {
             manage_name_id_service: Vec::new(),
             elements_order: None,
             lifetime: None,
+            organization: None,
+            contacts: Vec::new(),
+            error_url: None,
         }
     }
 
@@ -223,7 +232,8 @@ impl SpMetadataConfig {
     /// # Errors
     ///
     /// Returns [`SamlError::MissingMetadata`] when no ACS endpoint is supplied,
-    /// and [`SamlError::Unsupported`] for a SOAP `ManageNameIDService`.
+    /// [`SamlError::Unsupported`] for a SOAP `ManageNameIDService`, and
+    /// [`SamlError::Invalid`] for invalid organization, contact, or error URI inputs.
     pub fn validate(&self) -> Result<(), SamlError> {
         if self.assertion_consumer_service.is_empty() {
             return Err(SamlError::MissingMetadata(
@@ -239,6 +249,11 @@ impl SpMetadataConfig {
                 "a service provider has no SOAP name identifier management".into(),
             ));
         }
+        crate::metadata::description::validate_description(
+            self.organization.as_ref(),
+            &self.contacts,
+            self.error_url.as_deref(),
+        )?;
         Ok(())
     }
 }
@@ -261,6 +276,12 @@ pub struct IdpMetadataConfig {
     /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
     /// neither.
     pub lifetime: Option<MetadataLifetime>,
+    /// Entity-level organization. `None` writes no `Organization`.
+    pub organization: Option<crate::metadata::Organization>,
+    /// Entity-level contacts, in publication order.
+    pub contacts: Vec<crate::metadata::ContactPerson>,
+    /// Error information URI on the SSO role descriptor. `None` omits it.
+    pub error_url: Option<String>,
 }
 
 impl IdpMetadataConfig {
@@ -277,6 +298,9 @@ impl IdpMetadataConfig {
             manage_name_id_service: Vec::new(),
             elements_order: None,
             lifetime: None,
+            organization: None,
+            contacts: Vec::new(),
+            error_url: None,
         }
     }
 
@@ -295,7 +319,9 @@ impl IdpMetadataConfig {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::MissingMetadata`] when no SSO endpoint is supplied.
+    /// Returns [`SamlError::MissingMetadata`] when no SSO endpoint is supplied,
+    /// and [`SamlError::Invalid`] for duplicate artifact endpoint indexes or
+    /// invalid organization, contact, or error URI inputs.
     pub fn validate(&self) -> Result<(), SamlError> {
         if self.single_sign_on_service.is_empty() {
             return Err(SamlError::MissingMetadata("SingleSignOnService".into()));
@@ -309,6 +335,11 @@ impl IdpMetadataConfig {
                 )));
             }
         }
+        crate::metadata::description::validate_description(
+            self.organization.as_ref(),
+            &self.contacts,
+            self.error_url.as_deref(),
+        )?;
         Ok(())
     }
 }

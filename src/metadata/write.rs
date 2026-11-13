@@ -36,7 +36,16 @@ impl MetadataWriter {
     }
 
     pub(super) fn text_element(&mut self, name: &str, text: &str) {
-        self.start(name, &[]);
+        self.text_element_with_attrs(name, &[], text);
+    }
+
+    pub(super) fn text_element_with_attrs(
+        &mut self,
+        name: &str,
+        attrs: &[(&str, &str)],
+        text: &str,
+    ) {
+        self.start(name, attrs);
         self.write(Event::Text(BytesText::new(text)));
         self.end(name);
     }

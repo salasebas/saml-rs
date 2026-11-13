@@ -11,10 +11,12 @@ use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
 use crate::xml::dom::{self, Node, XmlLimits};
 
+#[derive(Debug, Clone)]
 pub(crate) struct SamlElement {
     pub(crate) local_name: String,
     pub(crate) namespace: String,
     attributes: Vec<(String, String)>,
+    qualified_attributes: Vec<(String, String, String)>,
     pub(crate) text: String,
     pub(crate) children: Vec<SamlElement>,
     /// Byte range of the element in the parsed XML.
@@ -22,6 +24,13 @@ pub(crate) struct SamlElement {
 }
 
 impl SamlElement {
+    pub(crate) fn attr_ns(&self, namespace: &str, name: &str) -> Option<&str> {
+        self.qualified_attributes
+            .iter()
+            .find(|(ns, key, _)| ns == namespace && key == name)
+            .map(|(_, _, value)| value.as_str())
+    }
+
     pub(crate) fn attr(&self, name: &str) -> Option<&str> {
         self.attributes
             .iter()
@@ -123,6 +132,7 @@ struct ResolvedElement {
     local_name: String,
     namespace: String,
     unqualified_attributes: Vec<(String, String)>,
+    qualified_attributes: Vec<(String, String, String)>,
 }
 
 fn annotate(
@@ -134,6 +144,7 @@ fn annotate(
         local_name,
         namespace,
         unqualified_attributes,
+        qualified_attributes,
     } = elements
         .next()
         .ok_or_else(|| SamlError::Xml("protocol element is missing a namespace".into()))?;
@@ -153,6 +164,7 @@ fn annotate(
         local_name,
         namespace,
         attributes: unqualified_attributes,
+        qualified_attributes,
         text: node.text.clone(),
         children,
         span: node.start..node.end,
@@ -181,21 +193,38 @@ fn resolved_elements(
                     ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
                 };
                 let mut unqualified_attributes = Vec::new();
+                let mut qualified_attributes = Vec::new();
                 for attribute in element.attributes() {
                     let attribute = attribute.map_err(|err| SamlError::Xml(err.to_string()))?;
-                    if attribute.key.prefix().is_some() || attribute.key.as_ref() == "xmlns" {
+                    if attribute.key.as_ref() == "xmlns"
+                        || attribute
+                            .key
+                            .prefix()
+                            .is_some_and(|prefix| prefix.as_ref() == "xmlns")
+                    {
                         continue;
                     }
                     let value = attribute
                         .normalized_value(quick_xml::XmlVersion::Implicit1_0)
                         .map_err(|err| SamlError::Xml(err.to_string()))?
                         .into_owned();
-                    unqualified_attributes.push((attribute.key.as_ref().to_string(), value));
+                    if attribute.key.prefix().is_some() {
+                        let (resolved, name) = reader.resolver().resolve_attribute(attribute.key);
+                        if let ResolveResult::Bound(Namespace(ns)) = resolved {
+                            let ns = unescape(ns)
+                                .map_err(|err| SamlError::Xml(err.to_string()))?
+                                .into_owned();
+                            qualified_attributes.push((ns, name.as_ref().to_string(), value));
+                        }
+                    } else {
+                        unqualified_attributes.push((attribute.key.as_ref().to_string(), value));
+                    }
                 }
                 names.push(ResolvedElement {
                     local_name,
                     namespace,
                     unqualified_attributes,
+                    qualified_attributes,
                 });
             }
             Ok(Event::DocType(_)) => {

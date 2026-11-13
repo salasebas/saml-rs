@@ -176,6 +176,24 @@ impl SpConfigBuilder {
         self
     }
 
+    /// Publish the entity-level organization.
+    pub fn organization(mut self, organization: crate::metadata::Organization) -> Self {
+        self.metadata.organization = Some(organization);
+        self
+    }
+
+    /// Append an entity-level contact.
+    pub fn contact(mut self, contact: crate::metadata::ContactPerson) -> Self {
+        self.metadata.contacts.push(contact);
+        self
+    }
+
+    /// Publish an error information URI on the SSO role descriptor.
+    pub fn error_url(mut self, error_url: impl Into<String>) -> Self {
+        self.metadata.error_url = Some(error_url.into());
+        self
+    }
+
     /// Write `validUntil`, `cacheDuration`, or both on generated metadata.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
         self.metadata.lifetime = Some(lifetime);
@@ -404,6 +422,24 @@ impl IdpConfigBuilder {
     /// Set generated metadata element ordering.
     pub fn elements_order(mut self, elements_order: Vec<String>) -> Self {
         self.metadata.elements_order = Some(elements_order);
+        self
+    }
+
+    /// Publish the entity-level organization.
+    pub fn organization(mut self, organization: crate::metadata::Organization) -> Self {
+        self.metadata.organization = Some(organization);
+        self
+    }
+
+    /// Append an entity-level contact.
+    pub fn contact(mut self, contact: crate::metadata::ContactPerson) -> Self {
+        self.metadata.contacts.push(contact);
+        self
+    }
+
+    /// Publish an error information URI on the SSO role descriptor.
+    pub fn error_url(mut self, error_url: impl Into<String>) -> Self {
+        self.metadata.error_url = Some(error_url.into());
         self
     }
 
