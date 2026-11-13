@@ -6,6 +6,8 @@
 
 use std::net::Ipv6Addr;
 
+use super::is_xml_char;
+
 /// Whether `value` is a non-empty absolute URI reference once read as an
 /// `xs:anyURI`.
 ///
@@ -29,13 +31,6 @@ pub(crate) fn collapse_whitespace(value: &str) -> String {
 
 fn is_xml_whitespace(value: char) -> bool {
     matches!(value, ' ' | '\t' | '\n' | '\r')
-}
-
-fn is_xml_char(value: char) -> bool {
-    matches!(
-        value,
-        '\t' | '\n' | '\r' | '\u{20}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..
-    )
 }
 
 /// XLink 1.0 §5.4: non-ASCII characters and the RFC 2396 §2.4.3 excluded

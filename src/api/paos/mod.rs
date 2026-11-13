@@ -17,7 +17,7 @@ use crate::model::{
     SsoSession, Status, Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput};
-use crate::xml::OutboundNameIdQualifiers;
+use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
 
 use super::raw_mapping::{
     ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor, user_from_subject,
@@ -813,14 +813,6 @@ impl Saml<Idp> {
         response.session_index = issued.session_index;
         Ok(response)
     }
-}
-
-/// Whether XML 1.0 allows `character` in a document.
-fn is_xml_char(character: char) -> bool {
-    matches!(
-        character,
-        '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..='\u{10FFFF}'
-    )
 }
 
 fn assertion_consumer_url(
