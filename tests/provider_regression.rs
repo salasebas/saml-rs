@@ -80,19 +80,6 @@ fn provider_xml_encryption_round_trip_preserves_assertion() -> Result<(), Box<dy
 {
     let encrypted = encrypt_assertion(RESPONSE, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "saml")?;
     let key = load_private_key(PRIVATE_KEY, None)?;
-    let (_, assertion) =
-        decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
-
-    assert!(assertion.contains("Assertion"));
-    Ok(())
-}
-
-#[cfg(feature = "crypto-aws-lc")]
-#[test]
-fn aws_lc_xml_encryption_round_trip_uses_default_decryption_options(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let encrypted = encrypt_assertion(RESPONSE, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "saml")?;
-    let key = load_private_key(PRIVATE_KEY, None)?;
     let (response, assertion) =
         decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
 
