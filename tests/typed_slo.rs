@@ -7,12 +7,14 @@ mod common;
 #[path = "typed_slo/peer_hmac.rs"]
 mod peer_hmac;
 
+#[path = "common/replay_cache.rs"]
+mod replay_cache;
+
+use replay_cache::RecordingReplayCache;
+
 use common::signing_credentials;
 
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{
     append_signature, base64_decode, base64_encode, build_redirect_octet, deflate_raw_decode,
@@ -39,10 +41,10 @@ use saml_rs::{
     LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
     PartyAuthentication, PendingLogoutRequest, PendingSnapshot, Received, RelayStateParam,
-    ReplayCache, ReplayKey, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError,
-    SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession, StartSlo, Status, Subject,
-    SubordinateStatusCode, TemplatePolicy, MAX_RECEIVED_RELAY_STATE_BYTES,
+    ReplayCache, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
+    SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, SsoSession, StartSlo, Status, Subject, SubordinateStatusCode,
+    TemplatePolicy, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -180,48 +182,6 @@ fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::RequireSigned,
         ..IdpValidationPolicy::recommended()
-    }
-}
-
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashMap<String, SystemTime>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if self.seen.contains_key(&cache_key) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        self.seen.insert(cache_key, expires_at);
-        Ok(())
-    }
-}
-
-struct ExpiringReplayCache {
-    now: SystemTime,
-    seen: HashMap<String, SystemTime>,
-}
-
-impl ExpiringReplayCache {
-    fn new(now: SystemTime) -> Self {
-        Self {
-            now,
-            seen: HashMap::new(),
-        }
-    }
-}
-
-impl ReplayCache for ExpiringReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        self.seen.retain(|_, deadline| self.now < *deadline);
-        let cache_key = key.cache_key();
-        if self.seen.contains_key(&cache_key) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        self.seen.insert(cache_key, expires_at);
-        Ok(())
     }
 }
 
@@ -1274,7 +1234,7 @@ fn typed_facade_receive_slo_checks_logout_request_replay() -> Result<(), Box<dyn
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let request_fields = post_fields(&started.outbound)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
 
     let received = idp.receive_slo(
         &sp_descriptor,
@@ -1302,7 +1262,7 @@ fn typed_facade_rejects_expired_signed_logout_request_before_replay_for_all_bind
 ) -> Result<(), Box<dyn std::error::Error>> {
     let template = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T12:00:00Z"));
     for binding in ALL_LOGOUT_BINDINGS {
-        let mut cache = MemoryReplayCache::default();
+        let mut cache = RecordingReplayCache::default();
         let validation = SamlValidationContext::new(
             system_time("2026-07-15T12:00:00Z")?,
             ReplayPolicy::RequireCache(&mut cache),
@@ -1432,7 +1392,7 @@ fn typed_facade_rejects_signed_logout_request_without_destination_before_replay(
                 sender_entity_id(receiver_role),
                 None,
             );
-            let mut cache = MemoryReplayCache::default();
+            let mut cache = RecordingReplayCache::default();
             match receive_crafted_logout_request(
                 &xml,
                 binding,
@@ -1503,7 +1463,7 @@ fn typed_facades_reject_mismatched_logout_request_destination_before_replay(
                 sender_entity_id(receiver_role),
                 Some("https://wrong.example/slo"),
             );
-            let mut cache = MemoryReplayCache::default();
+            let mut cache = RecordingReplayCache::default();
             match receive_crafted_logout_request(
                 &xml,
                 binding,
@@ -1582,7 +1542,7 @@ fn typed_facade_rejects_qualified_logout_request_destination(
 fn typed_facade_receive_slo_uses_not_on_or_after_deadline_without_generic_retention(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let template = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T12:01:00Z"));
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let validation = SamlValidationContext::new(
         system_time("2026-07-15T12:00:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -1625,7 +1585,15 @@ fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let request_fields = post_fields(&started.outbound)?;
     let first_now = system_time("2026-07-15T12:00:00Z")?;
-    let mut cache = ExpiringReplayCache::new(first_now);
+    let clock = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(
+        first_now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+    ));
+    let cache_clock = std::sync::Arc::clone(&clock);
+    let mut cache =
+        RecordingReplayCache::new(saml_rs::InMemoryReplayCache::with_clock(move || {
+            SystemTime::UNIX_EPOCH
+                + Duration::from_secs(cache_clock.load(std::sync::atomic::Ordering::SeqCst))
+        }));
     let skew = ClockSkew::strict().with_not_on_or_after_millis(30_000);
 
     let received = idp.receive_slo(
@@ -1640,22 +1608,30 @@ fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
         Some(&system_time("2026-07-15T12:01:30Z")?)
     );
 
-    cache.now = system_time("2026-07-15T12:01:01Z")?;
+    let now = system_time("2026-07-15T12:01:01Z")?;
+    clock.store(
+        now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+        std::sync::atomic::Ordering::SeqCst,
+    );
     match idp.receive_slo(
         &sp_descriptor,
         BrowserInput::<LogoutRequest>::post(request_fields.clone()),
-        SamlValidationContext::new(cache.now, ReplayPolicy::RequireCache(&mut cache))
+        SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
             .with_clock_skew(skew),
     ) {
         Err(SamlError::ReplayDetected { key }) => assert_eq!(key, replay_key),
         other => return Err(format!("expected skew-retained replay, got {other:?}").into()),
     }
 
-    cache.now = system_time("2026-07-15T12:01:30Z")?;
+    let now = system_time("2026-07-15T12:01:30Z")?;
+    clock.store(
+        now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+        std::sync::atomic::Ordering::SeqCst,
+    );
     match idp.receive_slo(
         &sp_descriptor,
         BrowserInput::<LogoutRequest>::post(request_fields),
-        SamlValidationContext::new(cache.now, ReplayPolicy::RequireCache(&mut cache))
+        SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
             .with_clock_skew(skew),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -1672,7 +1648,7 @@ fn typed_facade_receive_slo_requires_replay_retention_for_logout_request(
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let validation =
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache));
 
@@ -1724,7 +1700,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         validation(),
     )?;
 
-    let mut request_cache = MemoryReplayCache::default();
+    let mut request_cache = RecordingReplayCache::default();
     let received = idp.receive_slo(
         &sp_descriptor,
         BrowserInput::<LogoutRequest>::post(request_fields.clone()),
@@ -1761,7 +1737,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         validation(),
     )?;
 
-    let mut response_cache = MemoryReplayCache::default();
+    let mut response_cache = RecordingReplayCache::default();
     let completed = sp.finish_slo(
         &idp_descriptor,
         &started.pending,
@@ -1796,7 +1772,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
 fn typed_facade_finish_slo_checks_logout_response_replay() -> Result<(), Box<dyn std::error::Error>>
 {
     let exchange = sp_started_exchange()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
 
     let completed = exchange.sp.finish_slo(
         &exchange.idp_descriptor,
@@ -1884,7 +1860,7 @@ fn typed_facades_reject_signed_logout_response_without_destination_before_replay
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in ALL_LOGOUT_BINDINGS {
         for receiver_role in LOCAL_SLO_ROLES {
-            let mut cache = MemoryReplayCache::default();
+            let mut cache = RecordingReplayCache::default();
             match finish_custom_logout_response(
                 receiver_role,
                 binding,
@@ -1914,7 +1890,7 @@ fn typed_facades_reject_mismatched_logout_response_destination_before_replay(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in ALL_LOGOUT_BINDINGS {
         for receiver_role in LOCAL_SLO_ROLES {
-            let mut cache = MemoryReplayCache::default();
+            let mut cache = RecordingReplayCache::default();
             match finish_custom_logout_response(
                 receiver_role,
                 binding,
@@ -1964,7 +1940,7 @@ fn typed_facades_allow_unsigned_logout_response_without_destination_in_compatibi
 fn typed_facade_finish_slo_requires_replay_retention_for_logout_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let validation =
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache));
 

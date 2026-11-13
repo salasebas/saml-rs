@@ -7,12 +7,16 @@
 
 mod common;
 
+#[path = "common/replay_cache.rs"]
+mod replay_cache;
+
+use replay_cache::RecordingReplayCache;
+
 use common::signing_credentials;
 
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::Credentials;
 
-use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{append_signature, build_redirect_octet};
@@ -27,9 +31,9 @@ use saml_rs::{
     ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementRefusal, Outbound, Pending, PendingManageNameIdRequest,
     ReceiveNameIdManagement, Received, ReceivedNameIdManagement, ReceivedNameIdManagementRedirect,
-    RelayState, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy, RespondNameIdManagement,
-    Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
+    RelayState, RelayStateParam, ReplayCache, ReplayPolicy, RespondNameIdManagement, Saml,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -232,22 +236,6 @@ fn idp_request_xml(identifier: &str, change: &str) -> String {
         identifier = identifier,
         change = change,
     )
-}
-
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashMap<String, SystemTime>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if self.seen.contains_key(&cache_key) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        self.seen.insert(cache_key, expires_at);
-        Ok(())
-    }
 }
 
 #[test]
@@ -702,7 +690,7 @@ fn replayed_request_is_rejected() -> TestResult {
         &NameIdChange::Terminate,
         StartNameIdManagement::redirect(),
     )?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
@@ -762,7 +750,7 @@ fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_stor
         "<samlp:Terminate/>",
     );
     let other_version = xml.replace(r#"Version="2.0""#, r#"Version="2.1""#);
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
 
     for (seconds, message) in [
         (60 * 60 + 1, &xml),
@@ -779,7 +767,7 @@ fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_stor
     assert!(cache.seen.is_empty());
 
     for seconds in [0, 60 * 60] {
-        let mut cache = MemoryReplayCache::default();
+        let mut cache = RecordingReplayCache::default();
         request(sp.receive_name_id_management_redirect(
             &idp_peer,
             signed_request_input(&xml)?,

@@ -462,13 +462,14 @@ pub use metadata::MetadataSignatureVerification;
 pub use model::{
     Assertion, AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes,
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, AuthnRequest,
-    AuthnRequestAgePolicy, AuthnSession, ClockSkew, LogoutCompleted, LogoutRequest, LogoutResponse,
-    LogoutSubject, ManageNameIdRequestAgePolicy, MessageId, NameId, NameIdCreationRequest,
-    NameIdPolicy, OutstandingLogout, Received, RelayState, RelayStateParam, ReplayCache, ReplayKey,
-    ReplayPolicy, RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,
-    SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, Subject,
-    SubjectConfirmation, SubordinateStatusCode, TopLevelStatusCode, VerifiedXmlSignature,
-    VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    AuthnRequestAgePolicy, AuthnSession, ClockSkew, InMemoryReplayCache, LogoutCompleted,
+    LogoutRequest, LogoutResponse, LogoutSubject, ManageNameIdRequestAgePolicy, MessageId, NameId,
+    NameIdCreationRequest, NameIdPolicy, OutstandingLogout, Received, RelayState, RelayStateParam,
+    ReplayCache, ReplayKey, ReplayPolicy, RequestedAuthnContext, RequestedSubject,
+    RequestedSubjectIdentifier, SamlInstant, SamlValidationContext, SessionIndex, SsoResponse,
+    SsoSession, Status, Subject, SubjectConfirmation, SubordinateStatusCode, TopLevelStatusCode,
+    VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES,
+    MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
     ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementRefusal,

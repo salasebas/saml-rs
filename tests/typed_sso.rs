@@ -4,12 +4,14 @@
 
 mod common;
 
+#[path = "common/replay_cache.rs"]
+mod replay_cache;
+
+use replay_cache::RecordingReplayCache;
+
 use common::signing_credentials;
 
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{
     append_signature, base64_decode, base64_encode, build_redirect_octet, deflate_raw_decode,
@@ -32,10 +34,10 @@ use saml_rs::{
     CertificatePem, ClockSkew, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig,
     IdpDescriptor, IdpValidationPolicy, LogoutRequest, MetadataTrustPolicy, NameId, NameIdFormat,
     Outbound, PendingAuthnRequest, PendingSnapshot, Received, RelayStateParam, ReplayCache,
-    ReplayKey, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError,
-    SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding, StartSso, Status, Subject,
-    SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
+    ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext,
+    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoResponse, SsoResponseBinding, StartSso, Status, Subject, SubordinateStatusCode,
+    TemplatePolicy, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
@@ -75,22 +77,6 @@ const HOSTILE_NAME_ID_FORMAT: &str = concat!(
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashMap<String, SystemTime>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if self.seen.contains_key(&cache_key) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        self.seen.insert(cache_key, expires_at);
-        Ok(())
-    }
-}
 
 fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
@@ -743,7 +729,7 @@ fn bounded_authn_request_age(
 
 fn bounded_authn_request_age_with_cache(
     now: SystemTime,
-    cache: &mut MemoryReplayCache,
+    cache: &mut RecordingReplayCache,
 ) -> SamlValidationContext<'_> {
     SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache))
         .with_clock_skew(ClockSkew::strict())
@@ -1004,7 +990,7 @@ fn rejected_authn_request_age_does_not_occupy_a_replay_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now = authn_request_age_now()?;
     let issued = issued_authn_request_for_recommended_idp()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let stale = replace_issue_instant(&issued.xml, Some("2001-01-01T00:00:00Z"))?;
     let fresh = replace_issue_instant(&issued.xml, Some(AUTHN_REQUEST_AGE_NOW))?;
     let misdirected = stale.replace(
@@ -1042,7 +1028,7 @@ fn rejected_authn_request_age_does_not_occupy_a_replay_key(
     let replay_key = format!("authn_request_id:{}", received.message().id().as_str());
     assert!(cache.seen.contains_key(&replay_key));
 
-    let mut disabled_cache = MemoryReplayCache::default();
+    let mut disabled_cache = RecordingReplayCache::default();
     issued.idp.receive_sso(
         &issued.sp_descriptor,
         post_authn_request_input_with_xml(&stale),
@@ -1063,7 +1049,7 @@ fn signed_authn_request_age_check_does_not_replace_signature_verification(
         &authn_request_xml(&started.outbound)?,
         Some("2001-01-01T00:00:00Z"),
     )?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let validation = SamlValidationContext::new(
         authn_request_age_now()?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -1098,7 +1084,7 @@ fn typed_facade_receive_sso_checks_authn_request_replay() -> Result<(), Box<dyn 
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let request_fields = post_fields(&started.outbound)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
 
     let received = idp.receive_sso(
         &sp_descriptor,
@@ -1127,7 +1113,7 @@ fn typed_facade_receive_sso_requires_replay_retention_for_authn_request(
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let validation =
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache));
 
@@ -2230,7 +2216,7 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
 #[test]
 fn typed_facade_checks_replay_cache() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
 
     let first = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
@@ -2597,7 +2583,7 @@ fn recommended_sso_accept_does_not_store_replay_without_a_caller_cache(
         validation(),
     )?;
 
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
@@ -2642,7 +2628,7 @@ fn recommended_sso_receive_does_not_store_replay_without_a_caller_cache(
         validation(),
     )?;
 
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let received = idp.receive_sso(
         &sp_descriptor,
         BrowserInput::<AuthnRequest>::post(fields.clone()),

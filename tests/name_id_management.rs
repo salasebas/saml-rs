@@ -8,7 +8,11 @@
 //! Config helpers select `compatibility()` so they build without a crypto
 //! provider. Name identifier management does not read that preset.
 
-use std::collections::HashSet;
+#[path = "common/replay_cache.rs"]
+mod replay_cache;
+
+use replay_cache::RecordingReplayCache;
+
 use std::time::{Duration, SystemTime};
 
 use saml_rs::error::TimeWindowField;
@@ -16,8 +20,8 @@ use saml_rs::{
     AcsEndpoint, EndpointUrl, EntityId, IdentifierEncryptionPolicy, Idp, IdpConfig,
     ManageNameIdRequestAgePolicy, ManageNameIdService, MessageConfidentiality, MessageIntegrity,
     MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal,
-    PartyAuthentication, ReceivedNameIdManagement, ReplayCache, ReplayKey, ReplayPolicy, Saml,
-    SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    PartyAuthentication, ReceivedNameIdManagement, ReplayPolicy, Saml, SamlError,
+    SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, Status, SubordinateStatusCode,
 };
 
@@ -156,25 +160,6 @@ fn received_request(
         ReceivedNameIdManagement::Refused(refused) => {
             Err(format!("request was refused: {:?}", refused.reason()).into())
         }
-    }
-}
-
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashSet<String>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(
-        &mut self,
-        key: ReplayKey,
-        _expires_at: SystemTime,
-    ) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if !self.seen.insert(cache_key.clone()) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        Ok(())
     }
 }
 
@@ -763,7 +748,7 @@ fn a_replayed_request_is_rejected() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     let envelope = sp_request(&format!("{}<samlp:Terminate/>", current_name_id_xml()))?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
 
     for expected_replay in [false, true] {
         let validation =
@@ -777,7 +762,7 @@ fn a_replayed_request_is_rejected() -> TestResult {
     }
     assert!(cache
         .seen
-        .contains(&format!("manage_name_id_request_id:{SP_REQUEST_ID}")));
+        .contains_key(&format!("manage_name_id_request_id:{SP_REQUEST_ID}")));
     Ok(())
 }
 
@@ -790,7 +775,7 @@ fn a_bounded_request_age_rejects_an_old_request_before_replay_storage() -> TestR
     let max_age = Duration::from_secs(60 * 60);
 
     for (now, accepted) in [(issued, true), (issued + max_age * 2, false)] {
-        let mut cache = MemoryReplayCache::default();
+        let mut cache = RecordingReplayCache::default();
         let validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
             .with_replay_retention(Duration::from_secs(300))
             .with_manage_name_id_request_age(ManageNameIdRequestAgePolicy::Bounded { max_age });

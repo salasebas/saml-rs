@@ -1,4 +1,9 @@
 #![cfg(crypto)]
+
+#[path = "common/replay_cache.rs"]
+mod replay_cache;
+
+use replay_cache::RecordingReplayCache;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode, deflate_raw_encode};
@@ -6,9 +11,8 @@ use saml_rs::error::SignatureVerificationReason;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, BrowserInput, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    LogoutPolicy, LogoutRequest, MetadataTrustPolicy, ReplayCache, ReplayKey, ReplayPolicy, Saml,
-    SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint,
+    LogoutPolicy, LogoutRequest, MetadataTrustPolicy, ReplayCache, ReplayPolicy, Saml, SamlError,
+    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -42,18 +46,6 @@ const SIMPLESAMLPHP_QUERY: &str =
     include_str!("fixtures/interop/simplesamlphp-2.5.2/logout-request.query");
 const SIMPLESAMLPHP_METADATA: &str =
     include_str!("fixtures/interop/simplesamlphp-2.5.2/sp-metadata.xml");
-
-#[derive(Default)]
-struct RecordingReplayCache {
-    writes: Vec<(String, SystemTime)>,
-}
-
-impl ReplayCache for RecordingReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        self.writes.push((key.cache_key(), expires_at));
-        Ok(())
-    }
-}
 
 fn fixed_time(value: &str) -> Result<SystemTime, Box<dyn std::error::Error>> {
     Ok(SystemTime::from(OffsetDateTime::parse(value, &Rfc3339)?))
@@ -227,10 +219,10 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
     assert_eq!(received.relay_state().as_deref(), None);
     assert_redirect_wire(fixture_query(SHIBBOLETH_QUERY), None);
     assert_eq!(
-        cache.writes.first().map(|(key, _)| key.as_str()),
+        cache.seen.keys().next().map(String::as_str),
         Some("logout_request_id:_bf782bbc9316aebfd833c4ba368a9ee2")
     );
-    assert_eq!(cache.writes.len(), 1);
+    assert_eq!(cache.seen.len(), 1);
 
     let tampered_query = tamper_redirect_message(
         fixture_query(SHIBBOLETH_QUERY),
@@ -249,7 +241,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
             reason: SignatureVerificationReason::DetachedMessageSignature,
         })
     ));
-    assert!(tampered_cache.writes.is_empty());
+    assert!(tampered_cache.seen.is_empty());
 
     Ok(())
 }
@@ -300,10 +292,10 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
         Some("simplesamlphp-sp-state"),
     );
     assert_eq!(
-        cache.writes.first().map(|(key, _)| key.as_str()),
+        cache.seen.keys().next().map(String::as_str),
         Some("logout_request_id:_simplesamlphp-sp-redirect-logout-request")
     );
-    assert_eq!(cache.writes.len(), 1);
+    assert_eq!(cache.seen.len(), 1);
 
     let tampered_query = tamper_redirect_message(
         fixture_query(SIMPLESAMLPHP_QUERY),
@@ -322,7 +314,7 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
             reason: SignatureVerificationReason::DetachedMessageSignature,
         })
     ));
-    assert!(tampered_cache.writes.is_empty());
+    assert!(tampered_cache.seen.is_empty());
 
     Ok(())
 }

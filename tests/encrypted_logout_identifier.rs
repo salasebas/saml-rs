@@ -9,7 +9,6 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
-use std::collections::HashSet;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{base64_decode, deflate_raw_decode};
@@ -18,9 +17,9 @@ use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, DecryptionCredential,
     EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem,
-    Received, ReplayCache, ReplayKey, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError,
+    InMemoryReplayCache, LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning,
+    LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout,
+    PrivateKeyPem, Received, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError,
     SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
     SsoEndpoint, SsoResponse, StartSlo, StartSso, Status, Subject, SubordinateStatusCode,
     XmlEncryptionPolicy, XmlPolicy,
@@ -637,25 +636,6 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     }
 }
 
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashSet<String>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(
-        &mut self,
-        key: ReplayKey,
-        _expires_at: SystemTime,
-    ) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if !self.seen.insert(cache_key.clone()) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        Ok(())
-    }
-}
-
 #[test]
 fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -672,7 +652,7 @@ fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
     let options =
         StartSlo::post().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
     let sent = start(&parties, Initiator::Sp, options)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH);
     let received = parties.idp.receive_slo(
         &parties.sp_descriptor,
         request_input(&sent.outbound, LogoutBinding::Post)?,

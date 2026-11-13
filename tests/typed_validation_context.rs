@@ -1,9 +1,11 @@
 //! `ReplayPolicy::DisabledForCompatibility` preserves the raw API, which has no replay cache.
 
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
+#[path = "common/replay_cache.rs"]
+mod replay_cache;
+
+use replay_cache::RecordingReplayCache;
+
+use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::base64_encode;
 use saml_rs::constants::{Binding, ParserType};
@@ -11,28 +13,11 @@ use saml_rs::error::{SubjectConfirmationReason, TimeWindowField};
 use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest};
 use saml_rs::util::Value;
 use saml_rs::{
-    AuthnRequest, ClockSkew, ReplayCache, ReplayKey, ReplayPolicy, SamlError,
-    SamlValidationContext, SsoSession,
+    AuthnRequest, ClockSkew, ReplayPolicy, SamlError, SamlValidationContext, SsoSession,
 };
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
-
-#[derive(Default)]
-struct MemoryReplayCache {
-    seen: HashMap<String, SystemTime>,
-}
-
-impl ReplayCache for MemoryReplayCache {
-    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
-        let cache_key = key.cache_key();
-        if self.seen.contains_key(&cache_key) {
-            return Err(SamlError::ReplayDetected { key: cache_key });
-        }
-        self.seen.insert(cache_key, expires_at);
-        Ok(())
-    }
-}
 
 fn instant(value: &str) -> Result<SystemTime, time::error::Parse> {
     OffsetDateTime::parse(value, &Rfc3339).map(SystemTime::from)
@@ -580,7 +565,7 @@ fn typed_validation_context_extracts_sso_replay_keys_without_session_index(
 fn typed_validation_context_replay_cache_stores_new_keys() -> Result<(), Box<dyn std::error::Error>>
 {
     let session = sso_session()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -613,7 +598,7 @@ fn require_cache_keeps_assertion_id_until_subject_confirmation_not_on_or_after(
         ]),
     );
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -645,7 +630,7 @@ fn typed_validation_context_replay_expiration_preserves_pre_epoch_nanoseconds(
         )]),
     );
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("1969-12-31T23:59:59.123456788Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -672,7 +657,7 @@ fn typed_validation_context_out_of_range_instant_returns_error(
         .checked_add(Duration::from_secs(first_unsupported_second))
         .ok_or("platform SystemTime cannot represent the test instant")?;
     let session = sso_session()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation =
         SamlValidationContext::new(out_of_range, ReplayPolicy::RequireCache(&mut cache));
 
@@ -690,7 +675,7 @@ fn typed_validation_context_out_of_range_instant_returns_error(
 fn typed_validation_context_zero_replay_retention_fails_closed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = authn_request()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation =
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache))
             .with_replay_retention(Duration::ZERO);
@@ -708,7 +693,7 @@ fn typed_validation_context_zero_replay_retention_fails_closed(
 fn typed_validation_context_replay_retention_overflow_fails_closed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = authn_request()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation =
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache))
             .with_replay_retention(Duration::MAX);
@@ -727,7 +712,7 @@ fn typed_validation_context_duplicate_response_id_replay_returns_semantic_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = sso_session()?;
     let now = instant("2026-07-04T12:05:00Z")?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     {
         let mut validation =
             SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
@@ -750,7 +735,7 @@ fn typed_validation_context_duplicate_assertion_id_replay_returns_semantic_error
     let first = sso_session()?;
     let second = SsoSession::try_from(session_flow_with_ids("_response456", "_assertion123"))?;
     let now = instant("2026-07-04T12:05:00Z")?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     {
         let mut validation =
             SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
@@ -773,7 +758,7 @@ fn typed_validation_context_replay_expiration_uses_conditions_fallback(
     let mut flow = session_flow();
     remove_extract_keys(&mut flow, &["sessionIndex", "subjectConfirmation"]);
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -794,7 +779,7 @@ fn typed_validation_context_replay_expiration_uses_subject_confirmation_data(
     let mut flow = session_flow();
     remove_extract_keys(&mut flow, &["conditions", "sessionIndex"]);
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -815,7 +800,7 @@ fn typed_validation_context_replay_expiration_uses_session_not_on_or_after(
     let mut flow = session_flow();
     remove_extract_keys(&mut flow, &["conditions", "subjectConfirmation"]);
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -849,7 +834,7 @@ fn typed_validation_context_replay_expiration_uses_earliest_authn_statement(
         ]),
     );
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -880,7 +865,7 @@ fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_cl
         ]),
     );
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -899,7 +884,7 @@ fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_cl
 fn typed_validation_context_replay_expiration_at_now_fails_closed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = sso_session()?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T13:00:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -930,7 +915,7 @@ fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_pol
     let session = SsoSession::try_from(parse_response_at(&xml, &validation)?)?;
     session.check_and_store_replay(&mut validation)?;
 
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2020-01-01T00:00:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
@@ -974,7 +959,7 @@ fn typed_validation_context_replay_without_expiration_fails_closed(
         &["conditions", "sessionIndex", "subjectConfirmation"],
     );
     let session = SsoSession::try_from(flow)?;
-    let mut cache = MemoryReplayCache::default();
+    let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
