@@ -8,6 +8,7 @@ mod metadata_signature_shape;
 mod metadata_trust;
 mod policies;
 
+pub(crate) use algorithms::name_id_format_uris;
 pub use algorithms::{
     DataEncryptionAlgorithm, DigestAlgorithm, KeyEncryptionAlgorithm, NameIdFormat,
     SignatureAlgorithm, TransformAlgorithm,

@@ -2,8 +2,8 @@ use crate::browser::{
     field_value, parse_form_fields, AcsEndpoint, BrowserInput, SsoResponseBinding,
 };
 use crate::config::{
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials, EntityId,
-    IdpConfig, IdpDescriptor, ManageNameIdService, NameIdFormat, SpConfig, SpDescriptor,
+    name_id_format_uris, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem,
+    Credentials, EntityId, IdpConfig, IdpDescriptor, ManageNameIdService, SpConfig, SpDescriptor,
 };
 use crate::constants::{url_params, Binding};
 use crate::entity::User;
@@ -116,13 +116,6 @@ fn encryption_certificates(credentials: &Credentials) -> Vec<String> {
                 .map(|credential| &credential.certificate),
         )
         .map(|certificate| certificate.as_str().to_string())
-        .collect()
-}
-
-fn name_id_format_uris(formats: &[NameIdFormat]) -> Vec<String> {
-    formats
-        .iter()
-        .map(|format| format.as_uri().to_string())
         .collect()
 }
 
