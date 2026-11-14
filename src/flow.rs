@@ -142,6 +142,9 @@ pub struct FlowOptions<'a> {
     /// `false`, decryption returns `SamlError::Unsupported` before any key is
     /// decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
+    /// Maximum estimated decryption work per inbound message. Defaults to 16.
+    /// See [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    pub max_decryption_work: usize,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),
     /// Validation instant. `None` keeps raw compatibility behavior by reading
@@ -174,6 +177,7 @@ impl<'a> Default for FlowOptions<'a> {
             element_decrypt_key: None,
             received_encrypted_elements: ReceivedEncryptedElements::default(),
             allow_rsa15_key_transport_decryption: false,
+            max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
             clock_drifts: (0, 0),
             now: None,
             expected_audience: None,
@@ -465,37 +469,16 @@ fn require_response_coverage(
 }
 
 #[cfg(crypto)]
-fn response_uses_cbc_encrypted_assertion(root: &crate::xml::dom::Node) -> bool {
-    root.children
-        .iter()
-        .filter(|child| child.local_name == "EncryptedAssertion")
-        .filter_map(|encrypted_assertion| {
-            encrypted_assertion
-                .children
-                .iter()
-                .find(|child| child.local_name == "EncryptedData")
-        })
-        .filter_map(|encrypted_data| {
-            encrypted_data
-                .children
-                .iter()
-                .find(|child| child.local_name == "EncryptionMethod")
-        })
-        .filter_map(|encryption_method| encryption_method.attr("Algorithm"))
-        .any(crate::constants::is_xml_encryption_cbc_algorithm)
-}
-
-#[cfg(crypto)]
 fn response_signature_is_required(
     requirement: ResponseSignatureRequirement,
-    root: &crate::xml::dom::Node,
-) -> bool {
+    xml: &str,
+) -> Result<bool, SamlError> {
     match requirement {
-        ResponseSignatureRequirement::Optional => false,
+        ResponseSignatureRequirement::Optional => Ok(false),
         ResponseSignatureRequirement::RequiredForEncryptedCbc => {
-            response_uses_cbc_encrypted_assertion(root)
+            crate::crypto::enc::response_uses_cbc_encrypted_assertion(xml)
         }
-        ResponseSignatureRequirement::Required => true,
+        ResponseSignatureRequirement::Required => Ok(true),
     }
 }
 
@@ -516,7 +499,7 @@ fn verify_and_prepare(
     };
 
     let evidence = verify_embedded_signature(&xml, opts)?;
-    let response_signature_required = response_signature_is_required(response_signature, root);
+    let response_signature_required = response_signature_is_required(response_signature, &xml)?;
     if response_signature_required {
         if !evidence.verified {
             return Err(required_xml_signature_failed(evidence.signature_present));
@@ -527,6 +510,7 @@ fn verify_and_prepare(
     let decrypt_required = decrypt_key.is_some();
     let decrypt_options = AssertionDecryptionOptions {
         allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
+        max_decryption_work: opts.max_decryption_work,
     };
     let load_keys = || {
         load_decryption_keys(

@@ -45,6 +45,9 @@ pub struct EntitySetting {
     /// `<EncryptedAttribute>` that names RSA-v1.5 is rejected with
     /// `SamlError::Unsupported` before any key is decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
+    /// Maximum estimated decryption work per inbound message. Defaults to 16.
+    /// See [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    pub max_decryption_work: usize,
     /// Default RelayState.
     pub relay_state: String,
     /// SP: signs its AuthnRequests.
@@ -189,6 +192,7 @@ impl fmt::Debug for EntitySetting {
                 &self.allow_rsa15_key_transport_decryption,
             )
             .field("relay_state", &self.relay_state)
+            .field("max_decryption_work", &self.max_decryption_work)
             .field("authn_requests_signed", &self.authn_requests_signed)
             .field("want_assertions_signed", &self.want_assertions_signed)
             .field("validate_audience", &self.validate_audience)
@@ -317,6 +321,7 @@ impl Default for EntitySetting {
             assertion_element_encryption: AssertionElementEncryption::default(),
             received_encrypted_elements: ReceivedEncryptedElements::default(),
             allow_rsa15_key_transport_decryption: false,
+            max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
             relay_state: String::new(),
             authn_requests_signed: false,
             want_assertions_signed: false,

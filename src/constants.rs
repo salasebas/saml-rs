@@ -3,6 +3,14 @@
 //! String values follow the SAML and XML-DSig/XML-Enc specifications so
 //! messages and metadata interoperate.
 
+/// Default maximum estimated decryption work per inbound message.
+///
+/// Counts XML Encryption `EncryptedData`, `EncryptedKey`, and `DerivedKey`
+/// elements, multiplied by the number of configured local decryption keys.
+/// Newly revealed encrypted content shares the allowance. This estimates
+/// possible key-resolution attempts; it does not measure CPU time.
+pub const DEFAULT_MAX_DECRYPTION_WORK: usize = 16;
+
 /// Protocol binding.
 ///
 /// Combines full binding URNs and short binding keywords in one type.
@@ -266,6 +274,7 @@ pub(crate) fn is_xml_encryption_cbc_algorithm(algorithm: &str) -> bool {
     matches!(
         algorithm,
         data_encryption_algorithm::AES_128
+            | "http://www.w3.org/2001/04/xmlenc#aes192-cbc"
             | data_encryption_algorithm::AES_256
             | data_encryption_algorithm::TRIPLE_DES
     )

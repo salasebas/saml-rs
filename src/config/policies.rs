@@ -45,7 +45,11 @@ pub enum ResponseSignaturePolicy {
     AllowUnsignedEncryptedCbc,
     /// Require a signed Response when an `<EncryptedAssertion>` uses CBC.
     ///
-    /// Plaintext responses are unchanged.
+    /// Covers AES-128-CBC, AES-192-CBC, AES-256-CBC, and Triple DES. The
+    /// algorithm is read from the same XML representation as decryption.
+    /// Missing methods return [`SamlError::Crypto`](crate::SamlError::Crypto);
+    /// unknown data algorithms return [`SamlError::Unsupported`](crate::SamlError::Unsupported).
+    /// Plaintext and AES-GCM responses do not require an outer signature.
     RequireForEncryptedCbc,
     /// Require a Response signature on every response.
     ///
@@ -445,7 +449,7 @@ pub enum AttributeEncryptionPolicy {
 /// encryption.attributes = AttributeEncryptionPolicy::EncryptAttributes;
 /// # let _ = encryption;
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct XmlEncryptionPolicy {
     /// Assertion encryption behavior.
     pub assertions: AssertionEncryptionPolicy,
@@ -454,9 +458,44 @@ pub struct XmlEncryptionPolicy {
     /// `<EncryptedAttribute>` behavior for assertion attribute statements.
     pub attributes: AttributeEncryptionPolicy,
     allow_rsa15_key_transport_decryption: bool,
+    max_decryption_work: usize,
+}
+
+impl Default for XmlEncryptionPolicy {
+    fn default() -> Self {
+        Self {
+            assertions: AssertionEncryptionPolicy::default(),
+            identifiers: IdentifierEncryptionPolicy::default(),
+            attributes: AttributeEncryptionPolicy::default(),
+            allow_rsa15_key_transport_decryption: false,
+            max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
+        }
+    }
 }
 
 impl XmlEncryptionPolicy {
+    /// Set the maximum estimated decryption work per inbound message.
+    ///
+    /// Each XML Encryption `EncryptedData`, `EncryptedKey`, and `DerivedKey`
+    /// costs one unit per configured local decryption key, including rollover
+    /// keys. Revealed encrypted content shares the allowance. Unused
+    /// candidates count even when an earlier key succeeds.
+    ///
+    /// Defaults to [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK),
+    /// currently 16. Zero refuses all encrypted input. Exceeding the allowance
+    /// returns [`SamlError::Invalid`](crate::SamlError::Invalid) containing
+    /// `ERR_DECRYPTION_LIMIT_EXCEEDED`. The limit is an estimate of possible
+    /// work, not a count of actual operations or a CPU-time guarantee.
+    pub fn with_max_decryption_work(mut self, maximum: usize) -> Self {
+        self.max_decryption_work = maximum;
+        self
+    }
+
+    /// The configured maximum estimated decryption work per inbound message.
+    pub fn max_decryption_work(self) -> usize {
+        self.max_decryption_work
+    }
+
     /// Enable assertion encryption.
     pub fn encrypt_assertions() -> Self {
         Self {

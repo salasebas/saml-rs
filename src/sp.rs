@@ -649,6 +649,7 @@ impl ServiceProvider {
                 allow_rsa15_key_transport_decryption: self
                     .setting
                     .allow_rsa15_key_transport_decryption,
+                max_decryption_work: self.setting.max_decryption_work,
                 clock_drifts: options.clock_drifts,
                 now: options.now,
                 redirect_inflate_max_bytes: self.setting.redirect_inflate_max_bytes,

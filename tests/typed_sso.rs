@@ -4,6 +4,10 @@
 
 mod common;
 
+#[cfg(not(feature = "crypto-fips"))]
+#[path = "typed_sso/encryption.rs"]
+mod encryption;
+
 #[path = "common/replay_cache.rs"]
 mod replay_cache;
 
@@ -1331,35 +1335,6 @@ fn typed_sign_response_satisfies_required_response_signature(
         validation(),
     )?;
 
-    assert_eq!(session.name_id().value(), "alice@example.com");
-    Ok(())
-}
-
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(encrypted_sp_config()?)?;
-    let idp = Saml::idp(encrypted_idp_config()?)?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
-        validation(),
-    )?;
-    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
-    let fields = post_fields(&response)?;
-    let xml = response_xml_from_fields(&fields)?;
-    if !xml.contains("<ds:Signature") {
-        return Err("expected CBC-encrypted Response to carry an outer signature".into());
-    }
-
-    let session = sp.finish_sso(
-        &idp_descriptor,
-        &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())
 }
@@ -2935,64 +2910,6 @@ fn cbc_relaxation_does_not_disable_other_accept_rules() -> Result<(), Box<dyn st
         )
         .into()),
     }
-}
-
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let accepting = Saml::sp(sp_with_validation_and_xml(
-        recommended_sso_accept_validation(),
-    )?)?;
-    let relaxed = Saml::sp(sp_with_validation_and_xml(SpValidationPolicy {
-        responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
-        ..recommended_sso_accept_validation()
-    })?)?;
-    let assertion_signed = Saml::sp(sp_with_validation_and_xml(SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        ..recommended_sso_accept_validation()
-    })?)?;
-    let idp = Saml::idp(idp_with_validation_and_xml(
-        recommended_sso_accept_idp_validation(),
-    )?)?;
-    let (assertion_signed_descriptor, idp_descriptor) = descriptors(&assertion_signed, &idp)?;
-    let started = accepting.start_sso(&idp_descriptor, StartSso::post())?;
-    let received = idp.receive_sso(
-        &assertion_signed_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
-        validation(),
-    )?;
-    let response = idp.respond_sso(
-        &assertion_signed_descriptor,
-        &received,
-        subject(),
-        RespondSso::post().allow_unsigned_encrypted_cbc(),
-    )?;
-    let fields = post_fields(&response)?;
-
-    match accepting.finish_sso(
-        &idp_descriptor,
-        &started.pending,
-        BrowserInput::<SsoResponse>::post(fields.clone()),
-        validation(),
-    ) {
-        Err(SamlError::SignatureMissing) => {}
-        other => {
-            return Err(format!(
-                "expected SignatureMissing for an unsigned CBC response, got {other:?}"
-            )
-            .into());
-        }
-    }
-
-    let session = relaxed.finish_sso(
-        &idp_descriptor,
-        &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
-    Ok(())
 }
 
 #[cfg(not(feature = "crypto-fips"))]

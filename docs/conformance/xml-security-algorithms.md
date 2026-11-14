@@ -148,6 +148,37 @@ profile.
 
 ## XML Encryption
 
+The SP's `RequireForEncryptedCbc` check and the IdP's unsigned requested-subject
+GCM check read the namespace-complete canonicalized wrapper sent to bergshamra.
+They use its first XML Encryption `EncryptedData` and first child XML Encryption
+`EncryptionMethod`, and Uppsala's local-name attribute lookup. Namespace
+declarations are separate from attributes. AES-192-CBC joins AES-128-CBC,
+AES-256-CBC, and Triple DES under the relying-party recommendation in
+[Approved Errata 05 E93](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.html).
+The actor is the relying party processing CBC-encrypted assertions or their
+encrypted children; the recommendation requires integrity protection before
+decryption. Recommended implements it for inbound browser SSO with
+`RequireForEncryptedCbc`; `AllowUnsignedEncryptedCbc` explicitly relaxes it.
+Missing methods return `Crypto` and unknown assertion data algorithms return
+`Unsupported` under `RequireForEncryptedCbc`.
+
+Inbound decryption also applies the configurable library resource allowance
+`XmlEncryptionPolicy::with_max_decryption_work`, defaulting to
+`constants::DEFAULT_MAX_DECRYPTION_WORK` (16). Across the document, each
+`xenc:EncryptedData`, `xenc:EncryptedKey`, and `xenc11:DerivedKey` costs one
+unit per configured decryption key. Revealed encrypted content shares the
+allowance before subsequent decryption. Excess work returns
+`SamlError::Invalid` with `ERR_DECRYPTION_LIMIT_EXCEEDED`, including for
+signed messages and explicit CBC or RSA-v1.5 relaxations. This is library
+resource policy beyond Core's encrypted-element rules and Conformance §4.2,
+not an OASIS receiver obligation. It bounds unauthenticated key resolution
+and key-rollover retries that XML byte limits alone do not bound.
+The default is not a standard-prescribed number or a CPU-time guarantee.
+XML Encryption 1.0 [§6.4](https://www.w3.org/TR/2002/REC-xmlenc-core-20021210/Overview.html#sec-Denial)
+recommends restricting total processing resources without a numeric threshold.
+Applications may raise or lower the finite allowance; zero refuses encrypted
+input. Rate and concurrency controls remain deployment responsibilities.
+
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
 | Triple DES block encryption | Identity provider, and the service provider that decrypts | Encrypt and decrypt `EncryptedAssertion` | Mandatory to implement. Conformance §4.2. `DataEncryptionAlgorithm::TripleDesForCompatibility` selects it. The variant keeps its samlify-port name. It is a CBC mode, so the Errata 05 E93 Response signature applies. Needs `crypto-legacy-algorithms`. Not on AWS-LC or FIPS |
