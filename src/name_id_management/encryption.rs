@@ -107,6 +107,7 @@ fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<
         &keys,
         AssertionDecryptionOptions {
             allow_rsa15_key_transport_decryption: setting.allow_rsa15_key_transport_decryption,
+            max_decryption_work: setting.max_decryption_work,
         },
         setting.xml_limits,
     )

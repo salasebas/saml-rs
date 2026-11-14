@@ -184,8 +184,18 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
         key: PrivateKeyPem::new(PRIVKEY),
         passphrase: None,
     }];
-    let rollover = Saml::sp(config)?;
-    for count in [1, 15, 16] {
+    for (maximum, count, accepted) in [
+        (16, 1, true),
+        (16, 7, true),
+        (16, 8, false),
+        (32, 15, true),
+        (32, 16, false),
+        (3, 1, false),
+        (0, 1, false),
+    ] {
+        let mut configured = config.clone();
+        configured.xml.encryption = configured.xml.encryption.with_max_decryption_work(maximum);
+        let rollover = Saml::sp(configured)?;
         let crowded = xml.replacen(candidate, &candidate.repeat(count), 1);
         for variant in [crowded.clone(), resign_response(&crowded)?] {
             let result = rollover.finish_sso(
@@ -197,7 +207,7 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
                 )?),
                 validation(),
             );
-            if count <= 15 {
+            if accepted {
                 assert_eq!(result?.name_id().value(), "alice@example.com");
             } else {
                 assert!(

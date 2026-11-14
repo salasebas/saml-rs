@@ -80,14 +80,28 @@ fn encrypted_assertion_rejects_excess_key_candidates() -> TestResult {
     let candidate = &encrypted[element_range(&encrypted, ENC, "EncryptedKey")?];
     let wrong_key = &other[element_range(&other, ENC, "EncryptedKey")?];
     let key = load_private_key(KEY, None)?;
-    for wrong_keys in [0, 30, 31] {
+    assert_eq!(
+        AssertionDecryptionOptions::default().max_decryption_work,
+        16
+    );
+    for (maximum, wrong_keys, accepted) in [
+        (16, 0, true),
+        (16, 14, true),
+        (16, 15, false),
+        (32, 30, true),
+        (32, 31, false),
+        (1, 0, false),
+        (0, 0, false),
+    ] {
         let crowded = encrypted.replacen(
             candidate,
             &format!("{}{candidate}", wrong_key.repeat(wrong_keys)),
             1,
         );
-        let result = decrypt_assertion(&crowded, &key, AssertionDecryptionOptions::default());
-        if wrong_keys <= 30 {
+        let mut options = AssertionDecryptionOptions::default();
+        options.max_decryption_work = maximum;
+        let result = decrypt_assertion(&crowded, &key, options);
+        if accepted {
             assert!(result?.1.contains("<saml:Assertion"));
         } else {
             assert!(
@@ -104,10 +118,17 @@ fn encrypted_assertions_share_the_document_work_limit() -> TestResult {
     let encrypted = encrypted_response(RESPONSE)?;
     let assertion = &encrypted[element_range(&encrypted, SAML, "EncryptedAssertion")?];
     let key = load_private_key(KEY, None)?;
-    for count in [16, 17] {
+    for (maximum, count, accepted) in [
+        (16, 8, true),
+        (16, 9, false),
+        (32, 16, true),
+        (32, 17, false),
+    ] {
         let multiple = encrypted.replacen(assertion, &assertion.repeat(count), 1);
-        let result = decrypt_assertion(&multiple, &key, AssertionDecryptionOptions::default());
-        if count == 16 {
+        let mut options = AssertionDecryptionOptions::default();
+        options.max_decryption_work = maximum;
+        let result = decrypt_assertion(&multiple, &key, options);
+        if accepted {
             let (plaintext, _) = result?;
             assert_eq!(plaintext.matches("<saml:Assertion ").count(), count);
         } else {
@@ -130,7 +151,12 @@ fn revealed_encrypted_elements_share_the_outer_work_limit() -> TestResult {
         1,
     );
     let encrypted_id = encrypted_data(plaintext_id.as_bytes())?;
-    for candidates in [29, 30] {
+    for (maximum, candidates, accepted) in [
+        (16, 13, true),
+        (16, 14, false),
+        (32, 29, true),
+        (32, 30, false),
+    ] {
         let wrapped_key = &encrypted_id[element_range(&encrypted_id, ENC, "EncryptedKey")?];
         let inner = encrypted_id.replacen(wrapped_key, &wrapped_key.repeat(candidates), 1);
         let mut response = RESPONSE.to_owned();
@@ -139,8 +165,10 @@ fn revealed_encrypted_elements_share_the_outer_work_limit() -> TestResult {
             &format!("<saml:EncryptedID>{inner}</saml:EncryptedID>"),
         );
         let outer = encrypted_response(&response)?;
-        let result = decrypt_assertion(&outer, &key, AssertionDecryptionOptions::default());
-        if candidates == 29 {
+        let mut options = AssertionDecryptionOptions::default();
+        options.max_decryption_work = maximum;
+        let result = decrypt_assertion(&outer, &key, options);
+        if accepted {
             assert!(result?.1.contains("EncryptedID"));
         } else {
             assert!(

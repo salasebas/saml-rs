@@ -20,7 +20,7 @@ use bergshamra::{decrypt, EncContext, KeysManager};
 const RSA15_DECRYPTION_DISABLED: &str = "XML-Enc RSA-v1.5 key transport (http://www.w3.org/2001/04/xmlenc#rsa-1_5) is refused before decryption unless allow_rsa15_key_transport_decryption is selected";
 
 /// Options for XML-Enc assertion decryption.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub struct AssertionDecryptionOptions {
     /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport.
@@ -32,6 +32,19 @@ pub struct AssertionDecryptionOptions {
     /// attack. Set it only for a peer that cannot send RSA-OAEP. It also
     /// needs `crypto-legacy-algorithms`.
     pub allow_rsa15_key_transport_decryption: bool,
+    /// Maximum estimated decryption work per message, including revealed
+    /// encrypted content. Zero refuses encrypted input. See
+    /// [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    pub max_decryption_work: usize,
+}
+
+impl Default for AssertionDecryptionOptions {
+    fn default() -> Self {
+        Self {
+            allow_rsa15_key_transport_decryption: false,
+            max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
+        }
+    }
 }
 
 /// Decrypt the `<EncryptedData>` in `xml` with the first of `enc_keys` that
@@ -99,7 +112,7 @@ fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
 /// `<xenc:EncryptedKey>` elements, or when its plaintext is not one
 /// `<Assertion>`. Returns [`SamlError::Unsupported`] for a refused key
 /// transport, [`SamlError::Invalid`] with `ERR_DECRYPTION_LIMIT_EXCEEDED`
-/// when [`super::MAX_DECRYPTION_WORK`] is exceeded, and another
+/// when `options.max_decryption_work` is exceeded, and another
 /// [`SamlError`] when decryption fails.
 pub fn decrypt_assertion(
     xml: &str,
@@ -138,7 +151,7 @@ pub(crate) fn decrypt_assertions_with_limits(
     limits: XmlLimits,
 ) -> Result<(String, Vec<String>), SamlError> {
     let mut assertions = Vec::new();
-    let response = decrypt_selected(xml, limits, enc_keys.len(), |document| {
+    let response = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let encrypted = root_children(document, namespace::ASSERTION, "EncryptedAssertion")?;
         if encrypted.is_empty() {
             return Ok(None);
@@ -185,7 +198,7 @@ pub(crate) fn decrypt_root_child(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
-    decrypt_selected(xml, limits, enc_keys.len(), |document| {
+    decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let [element] = root_children(document, kind.namespace, kind.encrypted)?[..] else {
             return Ok(None);
         };
@@ -229,6 +242,7 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
         xml,
         limits,
         additional.len().saturating_add(1),
+        options,
         |document| {
             let [subject] = root_children(document, namespace::ASSERTION, "Subject")?[..] else {
                 return Ok(None);
@@ -306,10 +320,12 @@ pub(crate) fn decrypt_assertion_elements(
     selection: AssertionElementEncryption,
     received: ReceivedEncryptedElements,
 ) -> Result<String, SamlError> {
-    let decrypted = decrypt_selected(xml, limits, enc_keys.len(), |document| {
+    let decrypted = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let selected = selected_kinds(selection);
         let decrypted = match received {
-            ReceivedEncryptedElements::DecryptReceived => vec![ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE],
+            ReceivedEncryptedElements::DecryptReceived => {
+                vec![ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE]
+            }
             ReceivedEncryptedElements::DecryptSelected => selected.clone(),
         };
         for kind in &selected {
@@ -349,7 +365,7 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<Option<String>, SamlError> {
-    decrypt_selected(xml, limits, enc_keys.len(), |document| {
+    decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let mut identifiers = Vec::new();
         for name in ["BaseID", "NameID", "EncryptedID"] {
             identifiers.extend(root_children(document, namespace::ASSERTION, name)?);
@@ -391,17 +407,23 @@ fn decrypt_selected(
     xml: &str,
     limits: XmlLimits,
     keys: usize,
+    options: AssertionDecryptionOptions,
     decrypt: impl FnOnce(&XmlDocument<'_>) -> Result<Option<Vec<DecryptedElement>>, SamlError>,
 ) -> Result<Option<String>, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
     dom::parse_with_limits(xml, limits)?;
     let document = parse_xml_document(xml)?;
-    let mut work = work::document_work(&document, keys)?;
+    let mut work = work::document_work(&document, keys, options.max_decryption_work)?;
     let Some(replacements) = decrypt(&document)? else {
         return Ok(None);
     };
     for replacement in &replacements {
-        work = work::add_revealed_work(work, replacement.revealed_elements, keys)?;
+        work = work::add_revealed_work(
+            work,
+            replacement.revealed_elements,
+            keys,
+            options.max_decryption_work,
+        )?;
     }
     let decrypted = splice(
         xml,

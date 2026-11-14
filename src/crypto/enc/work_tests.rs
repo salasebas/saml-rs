@@ -69,7 +69,6 @@ fn other_inbound_encrypted_elements_preflight_the_document(
     let key_xml = &data[node_range(&document, key_info)?];
     let crowded = data.replacen(key_xml, &key_xml.repeat(32), 1);
     let keys = [load_private_key(KEY, None)?];
-    let options = AssertionDecryptionOptions::default();
     let limits = XmlLimits::default();
     let wrap = |root: &str, body: &str| {
         format!(
@@ -93,43 +92,50 @@ fn other_inbound_encrypted_elements_preflight_the_document(
         &format!("<saml:Subject>{encrypted_id}</saml:Subject>"),
     );
     let attribute = wrap("saml:Assertion", &format!("<saml:AttributeStatement><saml:EncryptedAttribute>{crowded}</saml:EncryptedAttribute></saml:AttributeStatement>"));
-    for result in [
-        decrypt_authn_request_encrypted_id(
-            &request,
-            KEY,
-            None,
-            &[] as &[DecryptionCredential],
-            options,
-            limits,
-            RequestAuthentication::Unauthenticated,
-        )
-        .map(|_| ()),
-        decrypt_logout_request_encrypted_id(&logout, &keys, options, limits).map(|_| ()),
-        decrypt_root_child(&manage, MANAGED_NAME_ID, &keys, options, limits).map(|_| ()),
-        decrypt_root_child(&manage, NEW_ID, &keys, options, limits).map(|_| ()),
-        decrypt_assertion_elements(
-            &assertion,
-            &keys,
-            options,
-            limits,
-            AssertionElementEncryption::default(),
-            crate::config::ReceivedEncryptedElements::DecryptReceived,
-        )
-        .map(|_| ()),
-        decrypt_assertion_elements(
-            &attribute,
-            &keys,
-            options,
-            limits,
-            AssertionElementEncryption::default(),
-            crate::config::ReceivedEncryptedElements::DecryptReceived,
-        )
-        .map(|_| ()),
-    ] {
-        assert!(
-            matches!(result, Err(SamlError::Invalid(message)) if message.contains("ERR_DECRYPTION_LIMIT_EXCEEDED")),
-            "inbound entry point did not preflight excessive work"
-        );
+    for (maximum, exceeds) in [(16, true), (1, true), (128, false)] {
+        let options = AssertionDecryptionOptions {
+            max_decryption_work: maximum,
+            ..AssertionDecryptionOptions::default()
+        };
+        for result in [
+            decrypt_authn_request_encrypted_id(
+                &request,
+                KEY,
+                None,
+                &[] as &[DecryptionCredential],
+                options,
+                limits,
+                RequestAuthentication::Unauthenticated,
+            )
+            .map(|_| ()),
+            decrypt_logout_request_encrypted_id(&logout, &keys, options, limits).map(|_| ()),
+            decrypt_root_child(&manage, MANAGED_NAME_ID, &keys, options, limits).map(|_| ()),
+            decrypt_root_child(&manage, NEW_ID, &keys, options, limits).map(|_| ()),
+            decrypt_assertion_elements(
+                &assertion,
+                &keys,
+                options,
+                limits,
+                AssertionElementEncryption::default(),
+                crate::config::ReceivedEncryptedElements::DecryptReceived,
+            )
+            .map(|_| ()),
+            decrypt_assertion_elements(
+                &attribute,
+                &keys,
+                options,
+                limits,
+                AssertionElementEncryption::default(),
+                crate::config::ReceivedEncryptedElements::DecryptReceived,
+            )
+            .map(|_| ()),
+        ] {
+            assert_eq!(
+                matches!(result, Err(SamlError::Invalid(message)) if message.contains("ERR_DECRYPTION_LIMIT_EXCEEDED")),
+                exceeds,
+                "inbound entry point did not honor the configured work allowance"
+            );
+        }
     }
     Ok(())
 }

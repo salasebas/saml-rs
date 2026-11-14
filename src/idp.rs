@@ -726,6 +726,7 @@ impl IdentityProvider {
                 element_decrypt_key: None,
                 received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
                 allow_rsa15_key_transport_decryption: false,
+                max_decryption_work: self.setting.max_decryption_work,
                 clock_drifts,
                 now,
                 redirect_inflate_max_bytes: self.setting.redirect_inflate_max_bytes,

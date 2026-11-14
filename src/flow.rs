@@ -142,6 +142,9 @@ pub struct FlowOptions<'a> {
     /// `false`, decryption returns `SamlError::Unsupported` before any key is
     /// decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
+    /// Maximum estimated decryption work per inbound message. Defaults to 16.
+    /// See [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    pub max_decryption_work: usize,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),
     /// Validation instant. `None` keeps raw compatibility behavior by reading
@@ -174,6 +177,7 @@ impl<'a> Default for FlowOptions<'a> {
             element_decrypt_key: None,
             received_encrypted_elements: ReceivedEncryptedElements::default(),
             allow_rsa15_key_transport_decryption: false,
+            max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
             clock_drifts: (0, 0),
             now: None,
             expected_audience: None,
@@ -506,6 +510,7 @@ fn verify_and_prepare(
     let decrypt_required = decrypt_key.is_some();
     let decrypt_options = AssertionDecryptionOptions {
         allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
+        max_decryption_work: opts.max_decryption_work,
     };
     let load_keys = || {
         load_decryption_keys(

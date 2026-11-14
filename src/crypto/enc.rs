@@ -19,6 +19,7 @@ use crate::error::SamlError;
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeSet};
 
+pub use crate::constants::DEFAULT_MAX_DECRYPTION_WORK;
 pub(crate) use decrypt::{
     carries_encrypted_assertion_elements, decrypt_assertion_elements,
     decrypt_assertions_with_limits, decrypt_authn_request_encrypted_id,
@@ -31,7 +32,6 @@ pub(crate) use encrypt::{
     encrypt_logout_request_name_id, encrypt_root_children, KeyTransport,
 };
 pub(crate) use policy::response_uses_cbc_encrypted_assertion;
-pub use work::MAX_DECRYPTION_WORK;
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
 

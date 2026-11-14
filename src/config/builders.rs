@@ -674,6 +674,7 @@ fn apply_common_settings(
     setting.received_encrypted_elements = ReceivedEncryptedElements::DecryptReceived;
     setting.allow_rsa15_key_transport_decryption =
         xml.encryption.allows_rsa15_key_transport_decryption();
+    setting.max_decryption_work = xml.encryption.max_decryption_work();
     setting.relay_state = templates.relay_state.clone();
     setting.name_id_format = name_id_format_uris(name_id_format);
     setting.private_key = credentials

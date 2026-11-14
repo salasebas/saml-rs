@@ -67,6 +67,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
     let keys = load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?;
     let options = AssertionDecryptionOptions {
         allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
+        max_decryption_work: opts.max_decryption_work,
     };
     let content = decrypt_assertion_elements(
         saml_content,
@@ -194,6 +195,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
         &load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?,
         AssertionDecryptionOptions {
             allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
+            max_decryption_work: opts.max_decryption_work,
         },
         opts.xml_limits,
     )?;
