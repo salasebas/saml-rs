@@ -19,7 +19,6 @@ use crate::error::SamlError;
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeSet};
 
-pub use crate::constants::DEFAULT_MAX_DECRYPTION_WORK;
 pub(crate) use decrypt::{
     carries_encrypted_assertion_elements, decrypt_assertion_elements,
     decrypt_assertions_with_limits, decrypt_authn_request_encrypted_id,
