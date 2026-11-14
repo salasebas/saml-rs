@@ -99,7 +99,7 @@ fn request_xml(outbound: &Outbound<AuthnRequest>) -> Result<String, Box<dyn std:
             deflate_raw_decode(&base64_decode(&value)?)?
         }
         Binding::Post | Binding::SimpleSign => base64_decode(&context.context)?,
-        Binding::Artifact | Binding::Soap => return Err("unexpected request binding".into()),
+        _ => return Err("unexpected request binding".into()),
     };
     Ok(String::from_utf8(bytes)?)
 }
@@ -121,7 +121,7 @@ fn request_input(
         Binding::SimpleSign => Ok(BrowserInput::<AuthnRequest>::simple_sign(
             outbound.post_form()?.fields().to_vec(),
         )),
-        Binding::Artifact | Binding::Soap => Err(SamlError::UndefinedBinding),
+        _ => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -632,7 +632,7 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
                     BrowserInput::<AuthnRequest>::simple_sign(fields)
                 }
             }
-            Binding::Artifact | Binding::Soap => return Err("unexpected request binding".into()),
+            _ => return Err("unexpected request binding".into()),
         };
         assert!(idp
             .receive_sso(&sp_descriptor, input, validation())
