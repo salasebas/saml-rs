@@ -20,6 +20,7 @@ Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, a
 - [Metadata and replay](conformance/metadata-and-replay.md) for `MetadataTrustPolicy` and `ReplayPolicy`.
 - [HTTP-Artifact response](conformance/web-browser-sso-artifact.md) for `respond_sso_artifact`, `initiate_sso_artifact`, and `finish_sso` with `BrowserInput::artifact`.
 - [Artifact resolution](conformance/artifact-resolution.md) for `issue_artifact`, `resolve_artifact`, and `answer_artifact_resolve`.
+- [XML signature processing](conformance/xml-signature-processing.md) for reference preflight and signed-content coverage in public verification and embedded-signature flows.
 - [XML Signature and XML Encryption algorithms](conformance/xml-security-algorithms.md) for `AlgorithmPolicy`, `SignatureAlgorithm`, `TransformAlgorithm`, `DataEncryptionAlgorithm`, and `KeyEncryptionAlgorithm`.
 - [Name identifier management](conformance/name-id-management.md) for `start_name_id_management`, `receive_name_id_management`, `respond_name_id_management`, and their `_redirect` counterparts with `finish_name_id_management_redirect`.
 
