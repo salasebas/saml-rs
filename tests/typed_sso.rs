@@ -1339,35 +1339,6 @@ fn typed_sign_response_satisfies_required_response_signature(
     Ok(())
 }
 
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(encrypted_sp_config()?)?;
-    let idp = Saml::idp(encrypted_idp_config()?)?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
-        validation(),
-    )?;
-    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
-    let fields = post_fields(&response)?;
-    let xml = response_xml_from_fields(&fields)?;
-    if !xml.contains("<ds:Signature") {
-        return Err("expected CBC-encrypted Response to carry an outer signature".into());
-    }
-
-    let session = sp.finish_sso(
-        &idp_descriptor,
-        &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
-    Ok(())
-}
-
 /// Move the `EncryptedKey` from the `KeyInfo` of `EncryptedData` to after
 /// `EncryptedData`, named by a `RetrievalMethod`: the SAML Core Errata 05 E43
 /// placement that OpenSAML's `Encrypter` writes by default.

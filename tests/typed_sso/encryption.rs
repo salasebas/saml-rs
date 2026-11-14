@@ -39,6 +39,37 @@ fn encrypted_exchange(
 }
 
 #[test]
+fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std::error::Error>> {
+    for algorithm in [
+        DataEncryptionAlgorithm::Aes256,
+        DataEncryptionAlgorithm::Custom("http://www.w3.org/2001/04/xmlenc#aes192-cbc".into()),
+    ] {
+        let exchange = encrypted_exchange(algorithm)?;
+        let response = exchange.idp.respond_sso(
+            &exchange.sp_descriptor,
+            &exchange.received,
+            subject(),
+            RespondSso::post(),
+        )?;
+        let fields = post_fields(&response)?;
+        let xml = response_xml_from_fields(&fields)?;
+        assert!(parse(&xml)?
+            .root
+            .children
+            .iter()
+            .any(|child| child.local_name == "Signature"));
+        let session = exchange.sp.finish_sso(
+            &exchange.idp_descriptor,
+            &exchange.pending,
+            BrowserInput::<SsoResponse>::post(fields),
+            validation(),
+        )?;
+        assert_eq!(session.name_id().value(), "alice@example.com");
+    }
+    Ok(())
+}
+
+#[test]
 fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let accepting = Saml::sp(sp_with_validation_and_xml(

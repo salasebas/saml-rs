@@ -158,7 +158,7 @@ pub(crate) fn decrypt_assertions_with_limits(
             .collect::<Result<Vec<_>, _>>()?;
         assertions = replacements
             .iter()
-            .map(|(_, assertion)| assertion.clone())
+            .map(|replacement| replacement.plaintext.clone())
             .collect();
         Ok(Some(replacements))
     })?
@@ -370,22 +370,28 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
             return Ok(None);
         };
         let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
-        Ok(Some(vec![(
-            node_range(document, *encrypted_id)?,
-            plaintext.to_string(),
-        )]))
+        Ok(Some(vec![DecryptedElement {
+            range: node_range(document, *encrypted_id)?,
+            plaintext: plaintext.to_string(),
+            revealed_elements: work::revealed_elements(&decrypted)?,
+        }]))
     })
 }
 
-/// `xml` with each `(range, plaintext)` that `decrypt` returns from its
-/// document spliced in, or `None` when `decrypt` decrypts nothing. `xml` is
-/// parsed under `limits` before `decrypt` reads it, and the result must stay
-/// within `limits.max_bytes`.
+struct DecryptedElement {
+    range: Range<usize>,
+    plaintext: String,
+    revealed_elements: usize,
+}
+
+/// `xml` with the replacements that `decrypt` returns spliced in, or `None`
+/// when `decrypt` decrypts nothing. `xml` is parsed under `limits` before
+/// `decrypt` reads it, and the result must stay within `limits.max_bytes`.
 fn decrypt_selected(
     xml: &str,
     limits: XmlLimits,
     keys: usize,
-    decrypt: impl FnOnce(&XmlDocument<'_>) -> Result<Option<Vec<(Range<usize>, String)>>, SamlError>,
+    decrypt: impl FnOnce(&XmlDocument<'_>) -> Result<Option<Vec<DecryptedElement>>, SamlError>,
 ) -> Result<Option<String>, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
     dom::parse_with_limits(xml, limits)?;
@@ -394,11 +400,16 @@ fn decrypt_selected(
     let Some(replacements) = decrypt(&document)? else {
         return Ok(None);
     };
-    for (_, plaintext) in &replacements {
-        work += work::revealed_work(plaintext, keys)?;
-        work::check_work(work)?;
+    for replacement in &replacements {
+        work = work::add_revealed_work(work, replacement.revealed_elements, keys)?;
     }
-    let decrypted = splice(xml, replacements);
+    let decrypted = splice(
+        xml,
+        replacements
+            .into_iter()
+            .map(|replacement| (replacement.range, replacement.plaintext))
+            .collect(),
+    );
     limits.check_input_bytes(decrypted.len())?;
     Ok(Some(decrypted))
 }
@@ -411,11 +422,15 @@ fn decrypted_element(
     enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
-) -> Result<(Range<usize>, String), SamlError> {
+) -> Result<DecryptedElement, SamlError> {
     let peer_keys = require_encrypted_element_children(document, element, kind)?;
     let decrypted = decrypt_with_keys(&encrypted_wrapper(document, element)?, enc_keys, options)?;
     let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
-    Ok((node_range(document, element)?, plaintext.to_string()))
+    Ok(DecryptedElement {
+        range: node_range(document, element)?,
+        plaintext: plaintext.to_string(),
+        revealed_elements: work::revealed_elements(&decrypted)?,
+    })
 }
 
 /// The encrypted `element` with the namespace declarations it uses, for

@@ -1,6 +1,6 @@
 use super::{parse_xml_document, ENC};
 use crate::error::SamlError;
-use bergshamra::xml::Document as XmlDocument;
+use bergshamra::xml::{Document as XmlDocument, NodeId};
 
 /// Maximum aggregate decryption work units accepted from one message.
 ///
@@ -17,8 +17,12 @@ use bergshamra::xml::Document as XmlDocument;
 pub const MAX_DECRYPTION_WORK: usize = 32;
 
 pub(super) fn document_work(document: &XmlDocument<'_>, keys: usize) -> Result<usize, SamlError> {
-    let elements = document
-        .descendants(document.root())
+    add_revealed_work(0, element_count(document, document.root()), keys)
+}
+
+fn element_count(document: &XmlDocument<'_>, root: NodeId) -> usize {
+    document
+        .descendants(root)
         .into_iter()
         .filter(|node| {
             document.element(*node).is_some_and(|element| {
@@ -27,21 +31,34 @@ pub(super) fn document_work(document: &XmlDocument<'_>, keys: usize) -> Result<u
                     || element.matches_name_ns("http://www.w3.org/2009/xmlenc11#", "DerivedKey")
             })
         })
-        .count();
-    let work = elements.checked_mul(keys).ok_or_else(limit_exceeded)?;
-    check_work(work)?;
-    Ok(work)
+        .count()
 }
 
-pub(super) fn revealed_work(xml: &str, keys: usize) -> Result<usize, SamlError> {
-    document_work(&parse_xml_document(xml)?, keys)
+pub(super) fn revealed_elements(wrapper: &str) -> Result<usize, SamlError> {
+    let document = parse_xml_document(wrapper)?;
+    let root = document
+        .document_element()
+        .ok_or_else(|| SamlError::Xml("no document element".into()))?;
+    let plaintext = document
+        .children_iter(root)
+        .find(|node| document.element(*node).is_some())
+        .ok_or_else(|| SamlError::Xml("no decrypted element".into()))?;
+    Ok(element_count(&document, plaintext))
 }
 
-pub(super) fn check_work(work: usize) -> Result<(), SamlError> {
+pub(super) fn add_revealed_work(
+    current: usize,
+    elements: usize,
+    keys: usize,
+) -> Result<usize, SamlError> {
+    let work = elements
+        .checked_mul(keys)
+        .and_then(|work| current.checked_add(work))
+        .ok_or_else(limit_exceeded)?;
     if work > MAX_DECRYPTION_WORK {
         return Err(limit_exceeded());
     }
-    Ok(())
+    Ok(work)
 }
 
 fn limit_exceeded() -> SamlError {

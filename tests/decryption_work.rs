@@ -41,6 +41,38 @@ fn encrypted_response(xml: &str) -> Result<String, SamlError> {
     encrypt_assertion(xml, CERT, AES_256_GCM, RSA_OAEP_MGF1P, "saml")
 }
 
+fn encrypted_data(plaintext: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
+    let template = format!(
+        "<xenc:EncryptedData xmlns:xenc=\"{ENC}\" Type=\"{ENC}Element\"><xenc:EncryptionMethod Algorithm=\"{AES_256_GCM}\"/><ds:KeyInfo xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><xenc:EncryptedKey><xenc:EncryptionMethod Algorithm=\"{RSA_OAEP_MGF1P}\"/><xenc:CipherData><xenc:CipherValue/></xenc:CipherData></xenc:EncryptedKey></ds:KeyInfo><xenc:CipherData><xenc:CipherValue/></xenc:CipherData></xenc:EncryptedData>"
+    );
+    let mut manager = bergshamra::KeysManager::new();
+    manager.add_key(load_certificate(CERT)?);
+    Ok(bergshamra::encrypt(
+        &bergshamra::EncContext::new(manager),
+        &template,
+        plaintext,
+    )?)
+}
+
+#[test]
+fn decrypted_assertion_can_inherit_namespace_prefixes() -> TestResult {
+    let encrypted = encrypted_response(RESPONSE)?;
+    let data_range = element_range(&encrypted, ENC, "EncryptedData")?;
+    let assertion = &RESPONSE[element_range(RESPONSE, SAML, "Assertion")?];
+    assert!(!assertion.contains("xmlns:saml="));
+    let data = encrypted_data(assertion.as_bytes())?;
+    let mut inherited = encrypted;
+    inherited.replace_range(data_range, &data);
+    let (response, plaintext) = decrypt_assertion(
+        &inherited,
+        &load_private_key(KEY, None)?,
+        AssertionDecryptionOptions::default(),
+    )?;
+    assert!(response.contains(assertion));
+    assert_eq!(plaintext, assertion);
+    Ok(())
+}
+
 #[test]
 fn encrypted_assertion_rejects_excess_key_candidates() -> TestResult {
     let encrypted = encrypted_response(RESPONSE)?;
@@ -90,22 +122,14 @@ fn encrypted_assertions_share_the_document_work_limit() -> TestResult {
 
 #[test]
 fn revealed_encrypted_elements_share_the_outer_work_limit() -> TestResult {
-    let encrypted = encrypted_response(RESPONSE)?;
-    let data = &encrypted[element_range(&encrypted, ENC, "EncryptedData")?];
     let name_id = element_range(RESPONSE, SAML, "NameID")?;
     let key = load_private_key(KEY, None)?;
-    let mut manager = bergshamra::KeysManager::new();
-    manager.add_key(load_certificate(CERT)?);
     let plaintext_id = RESPONSE[name_id.clone()].replacen(
         "<saml:NameID ",
         &format!("<saml:NameID xmlns:saml=\"{SAML}\" "),
         1,
     );
-    let encrypted_id = bergshamra::encrypt(
-        &bergshamra::EncContext::new(manager),
-        data,
-        plaintext_id.as_bytes(),
-    )?;
+    let encrypted_id = encrypted_data(plaintext_id.as_bytes())?;
     for candidates in [29, 30] {
         let wrapped_key = &encrypted_id[element_range(&encrypted_id, ENC, "EncryptedKey")?];
         let inner = encrypted_id.replacen(wrapped_key, &wrapped_key.repeat(candidates), 1);
