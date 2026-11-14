@@ -4,6 +4,10 @@
 
 mod decrypt;
 mod encrypt;
+mod policy;
+mod work;
+#[cfg(all(test, not(feature = "crypto-fips")))]
+mod work_tests;
 
 use std::ops::Range;
 
@@ -26,6 +30,8 @@ pub(crate) use encrypt::{
     encrypt_assertion_elements, encrypt_assertion_with_key_transport,
     encrypt_logout_request_name_id, encrypt_root_children, KeyTransport,
 };
+pub(crate) use policy::response_uses_cbc_encrypted_assertion;
+pub use work::MAX_DECRYPTION_WORK;
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
 

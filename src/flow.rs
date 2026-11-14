@@ -465,37 +465,16 @@ fn require_response_coverage(
 }
 
 #[cfg(crypto)]
-fn response_uses_cbc_encrypted_assertion(root: &crate::xml::dom::Node) -> bool {
-    root.children
-        .iter()
-        .filter(|child| child.local_name == "EncryptedAssertion")
-        .filter_map(|encrypted_assertion| {
-            encrypted_assertion
-                .children
-                .iter()
-                .find(|child| child.local_name == "EncryptedData")
-        })
-        .filter_map(|encrypted_data| {
-            encrypted_data
-                .children
-                .iter()
-                .find(|child| child.local_name == "EncryptionMethod")
-        })
-        .filter_map(|encryption_method| encryption_method.attr("Algorithm"))
-        .any(crate::constants::is_xml_encryption_cbc_algorithm)
-}
-
-#[cfg(crypto)]
 fn response_signature_is_required(
     requirement: ResponseSignatureRequirement,
-    root: &crate::xml::dom::Node,
-) -> bool {
+    xml: &str,
+) -> Result<bool, SamlError> {
     match requirement {
-        ResponseSignatureRequirement::Optional => false,
+        ResponseSignatureRequirement::Optional => Ok(false),
         ResponseSignatureRequirement::RequiredForEncryptedCbc => {
-            response_uses_cbc_encrypted_assertion(root)
+            crate::crypto::enc::response_uses_cbc_encrypted_assertion(xml)
         }
-        ResponseSignatureRequirement::Required => true,
+        ResponseSignatureRequirement::Required => Ok(true),
     }
 }
 
@@ -516,7 +495,7 @@ fn verify_and_prepare(
     };
 
     let evidence = verify_embedded_signature(&xml, opts)?;
-    let response_signature_required = response_signature_is_required(response_signature, root);
+    let response_signature_required = response_signature_is_required(response_signature, &xml)?;
     if response_signature_required {
         if !evidence.verified {
             return Err(required_xml_signature_failed(evidence.signature_present));

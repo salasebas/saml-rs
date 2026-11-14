@@ -45,7 +45,11 @@ pub enum ResponseSignaturePolicy {
     AllowUnsignedEncryptedCbc,
     /// Require a signed Response when an `<EncryptedAssertion>` uses CBC.
     ///
-    /// Plaintext responses are unchanged.
+    /// Covers AES-128-CBC, AES-192-CBC, AES-256-CBC, and Triple DES. The
+    /// algorithm is read from the same XML representation as decryption.
+    /// Missing methods return [`SamlError::Crypto`](crate::SamlError::Crypto);
+    /// unknown data algorithms return [`SamlError::Unsupported`](crate::SamlError::Unsupported).
+    /// Plaintext and AES-GCM responses do not require an outer signature.
     RequireForEncryptedCbc,
     /// Require a Response signature on every response.
     ///

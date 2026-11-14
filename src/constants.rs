@@ -266,6 +266,7 @@ pub(crate) fn is_xml_encryption_cbc_algorithm(algorithm: &str) -> bool {
     matches!(
         algorithm,
         data_encryption_algorithm::AES_128
+            | "http://www.w3.org/2001/04/xmlenc#aes192-cbc"
             | data_encryption_algorithm::AES_256
             | data_encryption_algorithm::TRIPLE_DES
     )
