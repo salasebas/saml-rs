@@ -57,15 +57,21 @@ impl AuthnContextReference {
     }
 
     fn try_new(kind: AuthnContextReferenceKind, uri: String) -> Result<Self, SamlError> {
-        if !is_absolute_uri_reference(&uri) {
+        let reference = Self::received(kind, &uri);
+        reference.ensure_absolute_uri()?;
+        Ok(reference)
+    }
+
+    pub(crate) fn ensure_absolute_uri(&self) -> Result<(), SamlError> {
+        if !is_absolute_uri_reference(&self.uri) {
             return Err(SamlError::Invalid(
                 "an authentication context reference must be an absolute URI reference".into(),
             ));
         }
-        Ok(Self::received(kind, &uri))
+        Ok(())
     }
 
-    fn received(kind: AuthnContextReferenceKind, uri: &str) -> Self {
+    pub(super) fn received(kind: AuthnContextReferenceKind, uri: &str) -> Self {
         Self {
             kind,
             uri: collapse_whitespace(uri),
@@ -99,6 +105,15 @@ pub enum AuthnContextComparison {
 }
 
 impl AuthnContextComparison {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Exact => "exact",
+            Self::Minimum => "minimum",
+            Self::Maximum => "maximum",
+            Self::Better => "better",
+        }
+    }
+
     fn from_attribute(value: &str) -> Result<Self, SamlError> {
         match value {
             "exact" => Ok(Self::Exact),
@@ -113,7 +128,7 @@ impl AuthnContextComparison {
     }
 }
 
-/// `<RequestedAuthnContext>` of a received `<AuthnRequest>`.
+/// Authentication contexts requested by a service provider.
 ///
 /// The references are in request order, most preferred first, and are all
 /// classes or all declarations. When none can be met, answer with
@@ -126,6 +141,38 @@ pub struct RequestedAuthnContext {
 }
 
 impl RequestedAuthnContext {
+    /// Request class references or declaration references, most preferred first,
+    /// with an explicit comparison.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the list is empty or mixes class
+    /// and declaration references.
+    pub fn new(
+        comparison: AuthnContextComparison,
+        references: Vec<AuthnContextReference>,
+    ) -> Result<Self, SamlError> {
+        let first = references.first().ok_or_else(|| {
+            SamlError::Invalid(
+                "RequestedAuthnContext must contain AuthnContextClassRef or AuthnContextDeclRef"
+                    .into(),
+            )
+        })?;
+        if references
+            .iter()
+            .any(|reference| reference.kind() != first.kind())
+        {
+            return Err(SamlError::Invalid(
+                "RequestedAuthnContext must not mix AuthnContextClassRef and AuthnContextDeclRef"
+                    .into(),
+            ));
+        }
+        Ok(Self {
+            comparison,
+            references,
+        })
+    }
+
     /// How the authentication context of the response is compared with
     /// [`Self::references`].
     pub fn comparison(&self) -> AuthnContextComparison {
@@ -175,25 +222,12 @@ pub(super) fn requested_authn_context_from_extract(
         .unwrap_or(AuthnContextComparison::Exact);
     let classes = reference_texts(extract, "authnContextClassRef");
     let declarations = reference_texts(extract, "authnContextDeclRef");
-    let references =
-        match (classes.is_empty(), declarations.is_empty()) {
-            (false, true) => parsed_references(AuthnContextReferenceKind::Class, &classes),
-            (true, false) => {
-                parsed_references(AuthnContextReferenceKind::Declaration, &declarations)
-            }
-            (true, true) => return Err(SamlError::Invalid(
-                "RequestedAuthnContext must contain AuthnContextClassRef or AuthnContextDeclRef"
-                    .into(),
-            )),
-            (false, false) => return Err(SamlError::Invalid(
-                "RequestedAuthnContext must not mix AuthnContextClassRef and AuthnContextDeclRef"
-                    .into(),
-            )),
-        };
-    Ok(Some(RequestedAuthnContext {
-        comparison,
-        references,
-    }))
+    let mut references = parsed_references(AuthnContextReferenceKind::Class, &classes);
+    references.extend(parsed_references(
+        AuthnContextReferenceKind::Declaration,
+        &declarations,
+    ));
+    RequestedAuthnContext::new(comparison, references).map(Some)
 }
 
 fn reference_texts<'a>(extract: &'a Value, path: &str) -> Vec<&'a str> {

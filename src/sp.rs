@@ -4,7 +4,7 @@ use crate::assertion_acceptance::{
     reject_unsolicited_bearer_in_response_to, UnsolicitedInResponseTo,
 };
 use crate::binding::{base64_encode, build_redirect_url};
-use crate::constants::{namespace, Binding, CertUse, ParserType};
+use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::{
     generate_id, now_iso8601, BindingContext, CustomTagReplacement, EntitySetting,
 };
@@ -18,10 +18,13 @@ use crate::idp::IdentityProvider;
 use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataConfig};
 use crate::model::validate_name_id_format;
 use crate::template::{replace_tags_by_optional_value, LOGIN_REQUEST_TEMPLATE};
-use crate::xml::write::XmlWriter;
 use std::time::SystemTime;
 
+mod authn_request;
 mod paos;
+
+pub(crate) use authn_request::AuthnRequestPreferences;
+use authn_request::{render_default_authn_request_xml, AllowCreateAttribute, AuthnRequestXml};
 
 pub(crate) use paos::PaosAuthnRequestInput;
 
@@ -48,25 +51,6 @@ pub struct LoginRequestOptions<'a> {
     pub assertion_consumer_service_index: Option<u16>,
     /// Expected SAML Response binding. Defaults to HTTP-POST.
     pub response_binding: Option<Binding>,
-}
-
-struct AuthnRequestXml<'a> {
-    id: &'a str,
-    issue_instant: &'a str,
-    destination: &'a str,
-    force_authn: Option<bool>,
-    protocol_binding: Option<&'a str>,
-    assertion_consumer_service_url: Option<&'a str>,
-    assertion_consumer_service_index: Option<u16>,
-    is_passive: Option<bool>,
-    issuer: &'a str,
-    name_id_format: Option<&'a str>,
-    allow_create: AllowCreateAttribute,
-}
-
-enum AllowCreateAttribute {
-    Include(bool),
-    Omit,
 }
 
 /// Whether typed Web Browser SSO generation follows producer rules.
@@ -134,64 +118,6 @@ impl<'a> LoginResponseParseOptions<'a> {
         self.expected_recipient = Some(expected_recipient);
         self
     }
-}
-
-fn render_default_authn_request_xml(input: &AuthnRequestXml<'_>) -> String {
-    let force_authn = input.force_authn.map(|value| value.to_string());
-    let is_passive = input
-        .is_passive
-        .map(|value| if value { "true" } else { "false" });
-    let assertion_consumer_service_index = input
-        .assertion_consumer_service_index
-        .map(|value| value.to_string());
-    let allow_create = match input.allow_create {
-        AllowCreateAttribute::Include(true) => Some("true"),
-        AllowCreateAttribute::Include(false) => Some("false"),
-        AllowCreateAttribute::Omit => None,
-    };
-    let mut name_id_policy_attrs = Vec::new();
-    if let Some(format) = input.name_id_format {
-        name_id_policy_attrs.push(("Format", format));
-    }
-    if let Some(allow_create) = allow_create {
-        name_id_policy_attrs.push(("AllowCreate", allow_create));
-    }
-
-    let mut attrs = Vec::with_capacity(8);
-    attrs.push(("xmlns:samlp", namespace::PROTOCOL));
-    attrs.push(("xmlns:saml", namespace::ASSERTION));
-    attrs.push(("ID", input.id));
-    attrs.push(("Version", "2.0"));
-    attrs.push(("IssueInstant", input.issue_instant));
-    attrs.push(("Destination", input.destination));
-    if let Some(force_authn) = force_authn.as_deref() {
-        attrs.push(("ForceAuthn", force_authn));
-    }
-    if let Some(is_passive) = is_passive {
-        attrs.push(("IsPassive", is_passive));
-    }
-    if let Some(protocol_binding) = input.protocol_binding {
-        attrs.push(("ProtocolBinding", protocol_binding));
-    }
-    if let Some(assertion_consumer_service_url) = input.assertion_consumer_service_url {
-        attrs.push((
-            "AssertionConsumerServiceURL",
-            assertion_consumer_service_url,
-        ));
-    }
-    if let Some(assertion_consumer_service_index) = assertion_consumer_service_index.as_deref() {
-        attrs.push((
-            "AssertionConsumerServiceIndex",
-            assertion_consumer_service_index,
-        ));
-    }
-
-    let mut writer = XmlWriter::new();
-    writer.start("samlp:AuthnRequest", &attrs);
-    writer.text_element("saml:Issuer", &[], input.issuer);
-    writer.empty("samlp:NameIDPolicy", &name_id_policy_attrs);
-    writer.end("samlp:AuthnRequest");
-    writer.finish()
 }
 
 impl ServiceProvider {
@@ -301,7 +227,13 @@ impl ServiceProvider {
         binding: Binding,
         options: &LoginRequestOptions<'_>,
     ) -> Result<BindingContext, SamlError> {
-        self.create_login_request_inner(idp, binding, options, WebBrowserSsoProducer::Compatibility)
+        self.create_login_request_inner(
+            idp,
+            binding,
+            options,
+            WebBrowserSsoProducer::Compatibility,
+            &AuthnRequestPreferences::default(),
+        )
     }
 
     pub(crate) fn create_typed_login_request(
@@ -310,8 +242,9 @@ impl ServiceProvider {
         binding: Binding,
         options: &LoginRequestOptions<'_>,
         producer: WebBrowserSsoProducer,
+        preferences: &AuthnRequestPreferences<'_>,
     ) -> Result<BindingContext, SamlError> {
-        self.create_login_request_inner(idp, binding, options, producer)
+        self.create_login_request_inner(idp, binding, options, producer, preferences)
     }
 
     fn create_login_request_inner(
@@ -320,7 +253,9 @@ impl ServiceProvider {
         binding: Binding,
         options: &LoginRequestOptions<'_>,
         producer: WebBrowserSsoProducer,
+        preferences: &AuthnRequestPreferences<'_>,
     ) -> Result<BindingContext, SamlError> {
+        preferences.validate()?;
         if idp.metadata.is_want_authn_requests_signed() && !self.metadata.is_authn_request_signed()
         {
             return Err(SamlError::Invalid(
@@ -337,6 +272,15 @@ impl ServiceProvider {
             return Err(SamlError::Invalid(
                 "Web Browser SSO generation rules require the built-in AuthnRequest renderer"
                     .into(),
+            ));
+        }
+        if custom_template.is_some()
+            && (preferences.is_passive.is_some()
+                || preferences.provider_name.is_some()
+                || preferences.requested_authn_context.is_some())
+        {
+            return Err(SamlError::Invalid(
+                "typed authentication request preferences require the built-in AuthnRequest renderer".into(),
             ));
         }
         let template = custom_template.unwrap_or(LOGIN_REQUEST_TEMPLATE);
@@ -382,7 +326,9 @@ impl ServiceProvider {
                         protocol_binding: protocol_binding.as_deref(),
                         assertion_consumer_service_url: acs_url.as_deref(),
                         assertion_consumer_service_index: options.assertion_consumer_service_index,
-                        is_passive: None,
+                        is_passive: preferences.is_passive,
+                        provider_name: preferences.provider_name,
+                        requested_authn_context: preferences.requested_authn_context,
                         issuer: &issuer,
                         name_id_format,
                         allow_create,

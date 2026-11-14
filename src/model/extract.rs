@@ -214,8 +214,11 @@ pub(crate) fn authn_statement_not_on_or_after_values(
         .collect()
 }
 
-pub(super) fn authn_sessions_from_extract(extract: &Value) -> Result<Vec<AuthnSession>, SamlError> {
-    authn_statement_values(extract)?
+pub(super) fn authn_sessions_from_extract(
+    extract: &Value,
+    saml_content: &str,
+) -> Result<Vec<AuthnSession>, SamlError> {
+    let sessions: Vec<AuthnSession> = authn_statement_values(extract)?
         .into_iter()
         .map(|statement| {
             let session_index = optional_authn_statement_str(statement, "sessionIndex")?
@@ -233,7 +236,11 @@ pub(super) fn authn_sessions_from_extract(extract: &Value) -> Result<Vec<AuthnSe
                 not_on_or_after,
             ))
         })
-        .collect()
+        .collect::<Result<_, SamlError>>()?;
+    if matches!(extract.get("authnStatement"), None | Some(Value::Null)) {
+        return Ok(sessions);
+    }
+    super::authn_details::attach_statement_details(extract, saml_content, sessions)
 }
 
 pub(super) fn entity_ids_from_value(value: Option<&Value>) -> Result<Vec<EntityId>, SamlError> {

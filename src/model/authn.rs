@@ -87,6 +87,7 @@ pub struct AuthnRequest {
     name_id_policy: Option<NameIdPolicy>,
     force_authn: Option<ForceAuthn>,
     is_passive: Option<IsPassive>,
+    provider_name: Option<String>,
     requested_subject: Option<RequestedSubject>,
     requested_authn_context: Option<RequestedAuthnContext>,
     raw_flow: FlowResult,
@@ -141,6 +142,11 @@ impl AuthnRequest {
     /// `IsPassive`, when set. See [`IsPassive`].
     pub fn is_passive(&self) -> Option<IsPassive> {
         self.is_passive
+    }
+
+    /// The requester's human-readable `ProviderName`, when present.
+    pub fn provider_name(&self) -> Option<&str> {
+        self.provider_name.as_deref()
     }
 
     /// Requested `<Subject>`, when present. See [`RequestedSubject`].
@@ -229,6 +235,10 @@ impl AuthnRequest {
             name_id_policy,
             force_authn,
             is_passive,
+            provider_name: raw_flow
+                .extract
+                .get_str("request.providerName")
+                .map(str::to_string),
             requested_subject,
             requested_authn_context,
             raw_flow,

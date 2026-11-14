@@ -5,6 +5,7 @@
 mod attributes;
 mod authn;
 mod authn_context;
+mod authn_details;
 mod endpoint;
 mod extract;
 mod identifiers;
@@ -30,6 +31,7 @@ pub use authn::{AuthnRequest, ForceAuthn, IsPassive};
 pub use authn_context::{
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, RequestedAuthnContext,
 };
+pub use authn_details::{AuthnContext, SubjectLocality};
 pub use endpoint::EndpointUrl;
 pub use identifiers::{AssertionId, MessageId, SamlInstant, SessionIndex};
 pub use logout::{LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject};

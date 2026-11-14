@@ -6,7 +6,9 @@ use crate::model::{
     AuthnRequest, OutstandingLogout, RelayStateParam, SamlValidationContext, SsoResponse,
     SsoSession, VerifiedXmlSignature,
 };
-use crate::sp::{LoginRequestOptions, LoginResponseParseOptions, ServiceProvider};
+use crate::sp::{
+    AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions, ServiceProvider,
+};
 use crate::xml::XmlLimits;
 use std::time::SystemTime;
 
@@ -136,9 +138,11 @@ impl Saml<Sp> {
     ///
     /// Returns [`SamlError`] when relay state is invalid, the IdP metadata
     /// cannot be parsed or trusted, the requested ACS is missing or conflicts
-    /// with the selected binding, producer rules are combined with a custom
-    /// AuthnRequest template, or request creation fails because required
-    /// metadata, signing keys, or supported bindings are unavailable.
+    /// with the selected binding, producer rules or the requested context,
+    /// `IsPassive`, or `ProviderName` are combined with a custom AuthnRequest
+    /// template, a requested authentication reference is not an absolute URI,
+    /// `ProviderName` contains invalid XML characters, or request creation fails
+    /// because required metadata, signing keys, or supported bindings are unavailable.
     ///
     /// # Examples
     ///
@@ -197,6 +201,11 @@ impl Saml<Sp> {
             options.binding.as_binding(),
             &raw_options,
             options.web_browser_sso_producer,
+            &AuthnRequestPreferences {
+                is_passive: options.is_passive.map(super::IsPassive::as_bool),
+                provider_name: options.provider_name.as_deref(),
+                requested_authn_context: options.requested_authn_context.as_ref(),
+            },
         )?;
         let outbound = Outbound::<AuthnRequest>::try_from(context)?;
         let pending = PendingAuthnRequest::try_new(

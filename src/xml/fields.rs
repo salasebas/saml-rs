@@ -14,6 +14,7 @@ pub fn login_request_fields() -> Vec<ExtractorField> {
             "AssertionConsumerServiceIndex",
             "ForceAuthn",
             "IsPassive",
+            "ProviderName",
         ]),
         ExtractorField::new("issuer", &["AuthnRequest", "Issuer"]),
         ExtractorField::new("nameIDPolicy", &["AuthnRequest", "NameIDPolicy"]).attrs(&[
@@ -151,6 +152,9 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
         )
         .with_context()
         .with_shortcut(assertion),
+        ExtractorField::new("authnStatement", &["Assertion", "AuthnStatement"])
+            .with_context()
+            .with_shortcut(assertion),
         ExtractorField::new("sessionIndex", &["Assertion", "AuthnStatement"])
             .attrs(&["AuthnInstant", "SessionNotOnOrAfter", "SessionIndex"])
             .with_shortcut(assertion),

@@ -12,6 +12,8 @@ is in [`docs/architecture/`](architecture/README.md).
 | IdP `receive_sso`, `respond_sso`, `initiate_sso` | `src/api/idp.rs` |
 | Assertion conditions on an accepted response | `src/assertion_acceptance.rs` |
 | `RequestedAuthnContext` of a received `AuthnRequest`, and the exact-comparison check of `RespondSso::authn_context` | `src/model/authn_context.rs`, `src/idp.rs` |
+| Requested context, passive SSO, and provider name on `StartSso` | `src/api/options.rs`, `src/sp/authn_request.rs` |
+| Accepted authentication context and subject locality per session | `src/model/authn_details.rs`, `src/model/session.rs` |
 | Typed `start_slo`, `receive_slo`, `respond_slo`, `finish_slo` | `src/api/slo.rs` |
 | IdP `issue_artifact`, `answer_artifact_resolve`; SP `resolve_artifact` | `src/api/artifact.rs`, `src/artifact.rs` |
 | IdP `respond_sso_artifact`, `initiate_sso_artifact` | `src/api/artifact.rs`, `src/api/idp.rs` |
