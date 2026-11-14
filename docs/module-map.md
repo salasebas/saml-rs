@@ -132,6 +132,7 @@ Logout is the directory `src/logout/`.
 | Artifact resolution over SOAP | [`artifact-resolution.md`](conformance/artifact-resolution.md) |
 | Name identifier management | [`name-id-management.md`](conformance/name-id-management.md) |
 | Metadata trust and replay | [`metadata-and-replay.md`](conformance/metadata-and-replay.md) |
+| Inbound XML signature processing and coverage | [`xml-signature-processing.md`](conformance/xml-signature-processing.md) |
 | XML Signature and XML Encryption algorithms | [`xml-security-algorithms.md`](conformance/xml-security-algorithms.md) |
 
 ## Compatibility crates

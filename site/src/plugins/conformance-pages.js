@@ -66,6 +66,11 @@ const pages = {
 		description:
 			'Producer rules for typed Web Browser SSO generation: service-provider `start_sso`, and identity-provider `respond_sso` and `initiate_sso`. `SpValidationPolicy::recommended`...',
 	},
+	'xml-signature-processing.md': {
+		title: 'XML signature processing',
+		description:
+			'Reference preflight and signed-content coverage in public XML verification functions and embedded-signature flows.',
+	},
 	'xml-security-algorithms.md': {
 		title: 'XML Signature and XML Encryption algorithms',
 		description:

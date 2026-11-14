@@ -28,6 +28,14 @@ use bergshamra::xml::{uppsala, Document as BergshamraDocument, NodeId as Bergsha
 use bergshamra::{DsigContext, KeysManager, VerifiedReference, VerifyResult};
 use std::collections::HashSet;
 
+mod processing;
+#[cfg(test)]
+use processing::enforce_strict_profile_on_verified_signature;
+use processing::{
+    document_signatures, enforce_profile_on_verified_signature, preflight_signature_processing,
+    SignatureSelection,
+};
+
 fn has_descendant(node: &Node, names: &[&str]) -> bool {
     node.children
         .iter()
@@ -235,17 +243,14 @@ fn response_assertions_covered(root: &Node, targets: &[VerifiedTarget]) -> bool 
 /// first bearer `<Assertion>`, a consumed root element, or the whole protocol
 /// response when assertions are encrypted.
 ///
-/// `Ok(Some(_))` is also the strict-profile gate for signatures that
+/// Successful coverage is also the strict-profile gate for signatures that
 /// authenticate a message without becoming SSO evidence, including
 /// `LogoutRequest` and `LogoutResponse`.
 fn covered_content<'a>(
     root: &'a Node,
     targets: &[VerifiedTarget],
     protocol_response: bool,
-) -> Result<Option<&'a Node>, SamlError> {
-    if root.local_name == "Assertion" {
-        return covered_root(root, targets).map(Some);
-    }
+) -> Result<&'a Node, SamlError> {
     if protocol_response {
         let assertions: Vec<_> = root.children_named("Assertion").collect();
         if !assertions.is_empty() {
@@ -255,23 +260,10 @@ fn covered_content<'a>(
                 }
                 return Err(verified_content_not_covered());
             }
-            return Ok(consumed_assertion(root));
-        }
-        if root.child_named("EncryptedAssertion").is_some() {
-            return covered_root(root, targets).map(Some);
+            return consumed_assertion(root).ok_or_else(verified_content_not_covered);
         }
     }
-    if matches!(
-        root.local_name.as_str(),
-        "EntityDescriptor"
-            | "EntitiesDescriptor"
-            | "AuthnRequest"
-            | "LogoutRequest"
-            | "LogoutResponse"
-    ) {
-        return covered_root(root, targets).map(Some);
-    }
-    Ok(None)
+    covered_root(root, targets)
 }
 
 /// Return the source of the [`covered_content`] of `root`.
@@ -280,9 +272,9 @@ fn verified_content(
     xml: &str,
     targets: &[VerifiedTarget],
     protocol_response: bool,
-) -> Result<Option<String>, SamlError> {
-    Ok(covered_content(root, targets, protocol_response)?
-        .map(|node| xml[node.start..node.end].to_string()))
+) -> Result<String, SamlError> {
+    let node = covered_content(root, targets, protocol_response)?;
+    Ok(xml[node.start..node.end].to_string())
 }
 
 fn assertion_is_directly_covered(
@@ -446,201 +438,16 @@ fn is_external_reference(uri: &str) -> bool {
     !uri.is_empty() && !uri.starts_with('#')
 }
 
-fn preflight_saml_reference_uris(signatures: &[&Node]) -> Result<(), SamlError> {
-    for signature in signatures {
-        for signed_info in signature.children_named("SignedInfo") {
-            for reference in signed_info.children_named("Reference") {
-                verified_target_from_uri(reference.attr("URI").unwrap_or_default())?;
-            }
-        }
-    }
-    Ok(())
-}
-
-fn exactly_one_dsig_child(
-    document: &BergshamraDocument<'_>,
-    parent: BergshamraNodeId,
-    local_name: &str,
-) -> Option<BergshamraNodeId> {
-    let mut children = document
-        .child_elements_by_name_ns(parent, bergshamra_ns::DSIG, local_name)
-        .into_iter();
-    let only = children.next()?;
-    children.next().is_none().then_some(only)
-}
-
-fn dsig_algorithm<'a>(
-    document: &'a BergshamraDocument<'_>,
-    node: BergshamraNodeId,
-) -> Option<&'a str> {
-    document
-        .element(node)
-        .and_then(|element| element.get_attribute(bergshamra_ns::attr::ALGORITHM))
-}
-
-/// Check one verifier-accepted signature against `profile`.
+/// Verify the first XML-DSig signature in document order against `metadata_certs`.
 ///
-/// Callers apply this only to a signature that authenticated the message or
-/// metadata document being accepted. An invalid, untrusted, or unrelated
-/// signature therefore cannot reject it.
-fn enforce_profile_on_verified_signature(
-    document: &BergshamraDocument<'_>,
-    signature_node: BergshamraNodeId,
-    profile: XmlSignatureProfile,
-) -> Result<(), SamlError> {
-    match profile {
-        XmlSignatureProfile::StrictRsaSha2 => {
-            reject_signature_object(document, signature_node)?;
-            enforce_strict_profile_on_verified_signature(document, signature_node)
-        }
-        XmlSignatureProfile::ExcludeWeakAlgorithms => {
-            reject_signature_object(document, signature_node)?;
-            enforce_algorithms_on_verified_signature(document, signature_node, profile)
-        }
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility => Ok(()),
-    }
-}
-
-fn reject_signature_object(
-    document: &BergshamraDocument<'_>,
-    signature_node: BergshamraNodeId,
-) -> Result<(), SamlError> {
-    if document
-        .child_elements_by_name_ns(
-            signature_node,
-            bergshamra_ns::DSIG,
-            bergshamra_ns::node::OBJECT,
-        )
-        .is_empty()
-    {
-        Ok(())
-    } else {
-        Err(SamlError::SignedReferenceMismatch)
-    }
-}
-
-fn enforce_algorithms_on_verified_signature(
-    document: &BergshamraDocument<'_>,
-    signature_node: BergshamraNodeId,
-    profile: XmlSignatureProfile,
-) -> Result<(), SamlError> {
-    for signed_info in document.child_elements_by_name_ns(
-        signature_node,
-        bergshamra_ns::DSIG,
-        bergshamra_ns::node::SIGNED_INFO,
-    ) {
-        for method in document.child_elements_by_name_ns(
-            signed_info,
-            bergshamra_ns::DSIG,
-            bergshamra_ns::node::SIGNATURE_METHOD,
-        ) {
-            if !dsig_algorithm(document, method)
-                .is_some_and(|algorithm| allows_signature_method(profile, algorithm))
-            {
-                return Err(SamlError::AlgorithmUnsupported);
-            }
-        }
-        for reference in document.child_elements_by_name_ns(
-            signed_info,
-            bergshamra_ns::DSIG,
-            bergshamra_ns::node::REFERENCE,
-        ) {
-            for digest in document.child_elements_by_name_ns(
-                reference,
-                bergshamra_ns::DSIG,
-                bergshamra_ns::node::DIGEST_METHOD,
-            ) {
-                if !dsig_algorithm(document, digest)
-                    .is_some_and(|algorithm| allows_digest_method(profile, algorithm))
-                {
-                    return Err(SamlError::AlgorithmUnsupported);
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-fn enforce_strict_profile_on_verified_signature(
-    document: &BergshamraDocument<'_>,
-    signature_node: BergshamraNodeId,
-) -> Result<(), SamlError> {
-    let signed_info =
-        exactly_one_dsig_child(document, signature_node, bergshamra_ns::node::SIGNED_INFO)
-            .ok_or(SamlError::SignedReferenceMismatch)?;
-    let canonicalization = exactly_one_dsig_child(
-        document,
-        signed_info,
-        bergshamra_ns::node::CANONICALIZATION_METHOD,
-    )
-    .ok_or(SamlError::AlgorithmUnsupported)?;
-    if dsig_algorithm(document, canonicalization) != Some(transform_algorithm::EXC_C14N) {
-        return Err(SamlError::AlgorithmUnsupported);
-    }
-    let signature_method =
-        exactly_one_dsig_child(document, signed_info, bergshamra_ns::node::SIGNATURE_METHOD)
-            .ok_or(SamlError::AlgorithmUnsupported)?;
-    if !dsig_algorithm(document, signature_method).is_some_and(|algorithm| {
-        allows_signature_method(XmlSignatureProfile::StrictRsaSha2, algorithm)
-    }) {
-        return Err(SamlError::AlgorithmUnsupported);
-    }
-    let reference = exactly_one_dsig_child(document, signed_info, bergshamra_ns::node::REFERENCE)
-        .ok_or(SamlError::SignedReferenceMismatch)?;
-    let Some(uri) = document
-        .element(reference)
-        .and_then(|element| element.get_attribute(bergshamra_ns::attr::URI))
-    else {
-        return Err(reference_resolution(
-            ReferenceResolutionReason::UnsupportedReferenceUri,
-        ));
-    };
-    if !uri.starts_with('#') || uri.len() == 1 || uri.starts_with("#xpointer(") {
-        return Err(reference_resolution(
-            ReferenceResolutionReason::UnsupportedReferenceUri,
-        ));
-    }
-    verified_target_from_uri(uri)?;
-
-    let digest_method =
-        exactly_one_dsig_child(document, reference, bergshamra_ns::node::DIGEST_METHOD)
-            .ok_or(SamlError::AlgorithmUnsupported)?;
-    if !dsig_algorithm(document, digest_method).is_some_and(|algorithm| {
-        allows_digest_method(XmlSignatureProfile::StrictRsaSha2, algorithm)
-    }) {
-        return Err(SamlError::AlgorithmUnsupported);
-    }
-    for transforms in document.child_elements_by_name_ns(
-        reference,
-        bergshamra_ns::DSIG,
-        bergshamra_ns::node::TRANSFORMS,
-    ) {
-        // Bergshamra executes every direct child whose local name is
-        // `Transform`, including elements outside the XML-DSig namespace.
-        // Reject any element it would execute, and any other element child,
-        // unless it is an allowed XML-DSig transform.
-        for child in document.children_iter(transforms) {
-            let Some(element) = document.element(child) else {
-                continue;
-            };
-            if !element.matches_name_ns(bergshamra_ns::DSIG, bergshamra_ns::node::TRANSFORM)
-                || !matches!(
-                    element.get_attribute(bergshamra_ns::attr::ALGORITHM),
-                    Some(transform_algorithm::ENVELOPED_SIGNATURE | transform_algorithm::EXC_C14N)
-                )
-            {
-                return Err(SamlError::AlgorithmUnsupported);
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Verify the XML-DSig signature(s) of `xml` against `metadata_certs`.
+/// Requires a signature directly under the root or a direct Assertion child.
+/// The processed signature's
+/// references must stay within this document. A verified signature must cover
+/// the root, or the direct assertions returned from a protocol response.
 ///
 /// Returns `(verified, signed_content)`:
 /// - `(false, None)` when there is no signature or it does not verify;
-/// - `(true, Some(xml))` with the signed assertion/response on success;
+/// - `(true, Some(xml))` with the signed assertion or document root on success;
 /// - `Err(PotentialWrappingAttack)` on a detected XSW attempt.
 ///
 /// # Errors
@@ -703,7 +510,7 @@ fn metadata_verification_context(
         .with_insecure(true))
 }
 
-/// Run the wrapping, duplicate-ID, and reference checks shared by
+/// Run the wrapping and duplicate-ID checks shared by
 /// [`verify_first_signature_with_profile`] and
 /// [`verify_signatures_detailed_with_profile`], then load the metadata
 /// certificates.
@@ -730,7 +537,7 @@ fn prepare_signature_verification(
     if signature_candidates.is_empty() {
         return Ok(None);
     }
-    preflight_saml_reference_uris(&signature_candidates)?;
+
     super::provider::ensure_crypto_provider_initialized()?;
     let context = metadata_verification_context(metadata_certs, hmac_secret, profile)?;
     Ok(Some(PreparedSignatureVerification {
@@ -740,7 +547,9 @@ fn prepare_signature_verification(
     }))
 }
 
-/// Verify the XML-DSig signature(s) of `xml` with explicit XML parser limits.
+/// Verify the first XML-DSig signature with explicit XML parser limits.
+///
+/// Uses the same processing and content-coverage rules as [`verify_signature`].
 ///
 /// # Errors
 ///
@@ -779,6 +588,7 @@ fn verify_first_signature_with_profile(
     let document = uppsala::parse(xml).map_err(|error| {
         SamlError::Crypto(bergshamra::Error::XmlParse(error.to_string()).to_string())
     })?;
+    preflight_signature_processing(&document, SignatureSelection::First, profile)?;
     match verify_document_with_source(&prepared.context, &document, Some(xml)) {
         Ok(VerifyResult::Valid {
             signature_node,
@@ -788,7 +598,7 @@ fn verify_first_signature_with_profile(
             enforce_profile_on_verified_signature(&document, signature_node, profile)?;
             let targets = verified_targets(&references)?;
             let content = verified_content(root, xml, &targets, prepared.protocol_response)?;
-            Ok((true, content))
+            Ok((true, Some(content)))
         }
         Ok(VerifyResult::Invalid { .. }) => Ok((false, None)),
         Err(error) => Err(SamlError::Crypto(error.to_string())),
@@ -815,14 +625,7 @@ fn reject_present_signature_that_does_not_verify(
         .collect();
     // `verify_all_document_with_source` returns one result per `ds:Signature`
     // element, in document order.
-    let signatures = document
-        .descendants(document.root())
-        .into_iter()
-        .filter(|node| {
-            document.element(*node).is_some_and(|element| {
-                element.matches_name_ns(bergshamra_ns::DSIG, bergshamra_ns::node::SIGNATURE)
-            })
-        });
+    let signatures = document_signatures(document);
     let placed_signature_does_not_verify = signatures.zip(results).any(|(signature, result)| {
         matches!(result, VerifyResult::Invalid { .. })
             && document
@@ -860,6 +663,7 @@ pub(crate) fn verify_present_signatures(
         return Ok(());
     };
     let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    preflight_signature_processing(&document, SignatureSelection::All, profile)?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
         .map_err(|error| SamlError::Crypto(error.to_string()))?;
     reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)
@@ -936,6 +740,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     // Signature nodes in the results index this DOM, so evidence is read
     // from the same document the verifier saw.
     let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    preflight_signature_processing(&document, SignatureSelection::All, profile)?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
         .map_err(|error| SamlError::Crypto(error.to_string()))?;
     reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)?;
@@ -957,16 +762,9 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                     &signature_targets,
                     consumed,
                 )?;
-                // SSO evidence does not include LogoutRequest or
-                // LogoutResponse coverage. A protocol Response can
-                // also be evidence when `covered_content` returns
-                // no element. Enforce the profile for either case.
                 if signature.is_some()
                     || references_cover_direct_assertion(&document, &references)
-                    || matches!(
-                        covered_content(root, &signature_targets, protocol_response),
-                        Ok(Some(_))
-                    )
+                    || covered_content(root, &signature_targets, protocol_response).is_ok()
                 {
                     enforce_profile_on_verified_signature(&document, signature_node, profile)?;
                 }
@@ -983,7 +781,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
         return Ok(SignatureVerification {
             signature_present: true,
             verified: true,
-            signed_content: verified_content(root, xml, &targets, protocol_response)?,
+            signed_content: Some(verified_content(root, xml, &targets, protocol_response)?),
             assertion_directly_covered,
             response_covered,
             verified_embedded_signatures,
@@ -1119,9 +917,18 @@ pub(crate) fn verify_metadata_signature_coverage_with_limits(
     if !verified {
         return Ok(MetadataSignatureVerification::unverified());
     }
-    signed_entity_descriptor_xml
-        .map(MetadataSignatureVerification::from_signed_descriptor)
-        .ok_or_else(verified_content_not_covered)
+    let signed_entity_descriptor_xml =
+        signed_entity_descriptor_xml.ok_or_else(verified_content_not_covered)?;
+    let descriptor = dom::parse_with_limits(xml, limits)?;
+    if !matches!(
+        descriptor.root.local_name.as_str(),
+        "EntityDescriptor" | "EntitiesDescriptor"
+    ) {
+        return Err(verified_content_not_covered());
+    }
+    Ok(MetadataSignatureVerification::from_signed_descriptor(
+        signed_entity_descriptor_xml,
+    ))
 }
 
 #[cfg(test)]

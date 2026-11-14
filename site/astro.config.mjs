@@ -120,6 +120,10 @@ export default defineConfig({
 									slug: 'reference/conformance/artifact-resolution',
 								},
 								{
+									label: 'XML signature processing',
+									slug: 'reference/conformance/xml-signature-processing',
+								},
+								{
 									label: 'Algorithms',
 									slug: 'reference/conformance/xml-security-algorithms',
 								},
