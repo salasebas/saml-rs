@@ -46,6 +46,7 @@ use super::policies::XmlSignatureProfile;
 /// # Ok(()) }
 /// ```
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub enum MetadataTrustPolicy<'a> {
     /// Accept unsigned metadata to preserve a samlify-port or raw import.
     ///

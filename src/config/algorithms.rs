@@ -11,6 +11,7 @@ use crate::constants::{
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SignatureAlgorithm {
     /// RSA with SHA-256.
     #[default]
@@ -56,6 +57,7 @@ impl SignatureAlgorithm {
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DigestAlgorithm {
     /// SHA-1 digest preserved from the samlify port.
     Sha1ForCompatibility,
@@ -94,6 +96,7 @@ impl DigestAlgorithm {
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DataEncryptionAlgorithm {
     /// AES-128-CBC.
     Aes128,
@@ -138,6 +141,7 @@ impl DataEncryptionAlgorithm {
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KeyEncryptionAlgorithm {
     /// RSA-OAEP-MGF1P.
     #[default]
@@ -177,7 +181,23 @@ impl KeyEncryptionAlgorithm {
 }
 
 /// Mask generation function for XML Encryption 1.1 RSA-OAEP.
+///
+/// More functions may be added. Use [`Self::as_uri`] to obtain the URI, or
+/// include a wildcard when matching outside this crate:
+///
+/// ```compile_fail,E0004
+/// use saml_rs::MaskGenerationFunction;
+///
+/// fn digest_name(mgf: MaskGenerationFunction) -> &'static str {
+///     match mgf {
+///         MaskGenerationFunction::Mgf1Sha256 => "SHA-256",
+///         MaskGenerationFunction::Mgf1Sha384 => "SHA-384",
+///         MaskGenerationFunction::Mgf1Sha512 => "SHA-512",
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MaskGenerationFunction {
     /// MGF1 with SHA-256.
     Mgf1Sha256,
@@ -212,6 +232,7 @@ impl MaskGenerationFunction {
 /// Custom URI values are forwarded to the configured crypto backend and can
 /// still fail at runtime when unsupported by that backend.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TransformAlgorithm {
     /// Enveloped-signature transform.
     EnvelopedSignature,
@@ -241,6 +262,7 @@ impl TransformAlgorithm {
 /// non-blank absolute URI reference with [`crate::SamlError::Invalid`]. A
 /// received format is reported as sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum NameIdFormat {
     /// Email address format.
     EmailAddress,

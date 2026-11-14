@@ -42,6 +42,7 @@ use crate::xml::XmlLimits;
 /// let _ = BrowserInput::<SsoResponse>::redirect("SAMLResponse=...");
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BrowserInput<Message> {
     /// HTTP-Redirect input as a raw query string.
     Redirect {

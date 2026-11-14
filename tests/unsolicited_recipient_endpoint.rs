@@ -34,11 +34,12 @@ const BINDINGS: [SsoResponseBinding; 3] = [
 ];
 
 /// The binding of the consumer published at [`OTHER_BINDING`].
-fn other_binding(binding: SsoResponseBinding) -> SsoResponseBinding {
-    match binding {
+fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, SamlError> {
+    Ok(match binding {
         SsoResponseBinding::Post => SsoResponseBinding::SimpleSign,
         SsoResponseBinding::SimpleSign | SsoResponseBinding::Artifact => SsoResponseBinding::Post,
-    }
+        _ => return Err(SamlError::UndefinedBinding),
+    })
 }
 
 /// A service provider with `/acs/a` and `/acs/b` for `binding`, the one at
@@ -53,8 +54,11 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
             endpoint
         });
     }
-    let other = AcsEndpoint::new(other_binding(binding), EndpointUrl::try_new(OTHER_BINDING)?)
-        .with_index(2);
+    let other = AcsEndpoint::new(
+        other_binding(binding)?,
+        EndpointUrl::try_new(OTHER_BINDING)?,
+    )
+    .with_index(2);
     Saml::sp(
         builder
             .acs_endpoint(other)
@@ -103,17 +107,17 @@ fn accept(
     )?;
     let input = match binding {
         SsoResponseBinding::Post | SsoResponseBinding::SimpleSign => {
-            let options = match binding {
-                SsoResponseBinding::SimpleSign => RespondSso::simple_sign(),
-                SsoResponseBinding::Post | SsoResponseBinding::Artifact => RespondSso::post(),
+            let options = if binding == SsoResponseBinding::SimpleSign {
+                RespondSso::simple_sign()
+            } else {
+                RespondSso::post()
             };
             let response = idp.initiate_sso(&sender_view, subject(), options)?;
             let fields = response.post_form()?.fields().to_vec();
-            match binding {
-                SsoResponseBinding::SimpleSign => BrowserInput::<SsoResponse>::simple_sign(fields),
-                SsoResponseBinding::Post | SsoResponseBinding::Artifact => {
-                    BrowserInput::<SsoResponse>::post(fields)
-                }
+            if binding == SsoResponseBinding::SimpleSign {
+                BrowserInput::<SsoResponse>::simple_sign(fields)
+            } else {
+                BrowserInput::<SsoResponse>::post(fields)
             }
         }
         SsoResponseBinding::Artifact => {
@@ -141,6 +145,7 @@ fn accept(
             )?;
             BrowserInput::<SsoResponse>::artifact(delivered, resolution.finish(answer.envelope())?)
         }
+        _ => return Err("unsupported response binding".into()),
     };
     Ok(receiver.accept_unsolicited_sso(&idp_descriptor, input, validation)?)
 }

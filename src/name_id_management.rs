@@ -96,6 +96,7 @@ pub enum ReceivedNameIdManagement<Response = SoapResponse> {
 
 /// Why a provider answered a `ManageNameIDRequest` without processing it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum NameIdManagementRefusal {
     /// The request `Version` is not `2.0`. The status is `VersionMismatch`.
     VersionMismatch,

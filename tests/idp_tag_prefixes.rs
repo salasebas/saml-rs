@@ -63,9 +63,7 @@ fn sp(want_assertions_signed: bool) -> Result<ServiceProvider, SamlError> {
 fn decode_post_or_simplesign(ctx: &BindingContext) -> Result<String, Box<dyn std::error::Error>> {
     match ctx.binding {
         Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(&ctx.context)?)?),
-        Binding::Redirect | Binding::Artifact | Binding::Soap => {
-            Err("expected POST or SimpleSign context".into())
-        }
+        _ => Err("expected POST or SimpleSign context".into()),
     }
 }
 
@@ -83,7 +81,7 @@ fn decode_logout_context(ctx: &BindingContext) -> Result<String, Box<dyn std::er
             )?)?)?)
         }
         Binding::Soap => Ok(ctx.context.clone()),
-        Binding::Artifact => Err("artifact binding does not render logout messages here".into()),
+        _ => Err("binding does not render logout messages here".into()),
     }
 }
 

@@ -71,14 +71,15 @@ fn typed_models_relay_state_try_from_option_rejects_overlong_values() {
     assert!(matches!(result, Err(SamlError::Invalid(_))));
 }
 
-fn binding_context(binding: Binding) -> BindingContext {
-    BindingContext {
+fn binding_context(binding: Binding) -> Result<BindingContext, SamlError> {
+    Ok(BindingContext {
         id: "_request123".to_string(),
         context: match binding {
             Binding::Redirect => "https://idp.example.com/sso?SAMLRequest=abc".to_string(),
             Binding::Post | Binding::SimpleSign => "PHNhbWxwOkF1dGhuUmVxdWVzdC8+".to_string(),
             Binding::Artifact => "artifact".to_string(),
             Binding::Soap => "<samlp:LogoutRequest/>".to_string(),
+            _ => return Err(SamlError::UndefinedBinding),
         },
         relay_state: Some("relay".to_string()),
         entity_endpoint: "https://idp.example.com/sso".to_string(),
@@ -86,17 +87,18 @@ fn binding_context(binding: Binding) -> BindingContext {
         request_type: "SAMLRequest",
         signature: None,
         sig_alg: None,
-    }
+    })
 }
 
-fn response_binding_context(binding: Binding) -> BindingContext {
-    BindingContext {
+fn response_binding_context(binding: Binding) -> Result<BindingContext, SamlError> {
+    Ok(BindingContext {
         id: "_response123".to_string(),
         context: match binding {
             Binding::Redirect => "https://sp.example.com/acs?SAMLResponse=abc".to_string(),
             Binding::Post | Binding::SimpleSign => "PHNhbWxwOlJlc3BvbnNlLz4=".to_string(),
             Binding::Artifact => "artifact".to_string(),
             Binding::Soap => "<samlp:LogoutRequest/>".to_string(),
+            _ => return Err(SamlError::UndefinedBinding),
         },
         relay_state: Some("relay".to_string()),
         entity_endpoint: "https://sp.example.com/acs".to_string(),
@@ -104,21 +106,21 @@ fn response_binding_context(binding: Binding) -> BindingContext {
         request_type: "SAMLResponse",
         signature: None,
         sig_alg: None,
-    }
+    })
 }
 
-fn signed_binding_context(binding: Binding) -> BindingContext {
-    let mut context = binding_context(binding);
+fn signed_binding_context(binding: Binding) -> Result<BindingContext, SamlError> {
+    let mut context = binding_context(binding)?;
     context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
     context.signature = Some("signature-value".to_string());
-    context
+    Ok(context)
 }
 
-fn signed_response_binding_context(binding: Binding) -> BindingContext {
-    let mut context = response_binding_context(binding);
+fn signed_response_binding_context(binding: Binding) -> Result<BindingContext, SamlError> {
+    let mut context = response_binding_context(binding)?;
     context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
     context.signature = Some("signature-value".to_string());
-    context
+    Ok(context)
 }
 
 fn assert_browser_input_invalid<Message>(input: BrowserInput<Message>)
@@ -133,7 +135,7 @@ where
 #[test]
 fn typed_models_redirect_outbound_exposes_only_redirect_url(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let outbound: Outbound<AuthnRequest> = binding_context(Binding::Redirect).try_into()?;
+    let outbound: Outbound<AuthnRequest> = binding_context(Binding::Redirect)?.try_into()?;
 
     assert_eq!(outbound.id().as_str(), "_request123");
     assert_eq!(
@@ -153,7 +155,7 @@ fn typed_models_redirect_outbound_exposes_only_redirect_url(
 
 #[test]
 fn typed_models_post_outbound_exposes_post_form() -> Result<(), Box<dyn std::error::Error>> {
-    let outbound: Outbound<AuthnRequest> = binding_context(Binding::Post).try_into()?;
+    let outbound: Outbound<AuthnRequest> = binding_context(Binding::Post)?.try_into()?;
     let form = outbound.post_form()?;
 
     assert_eq!(form.action().as_str(), "https://idp.example.com/sso");
@@ -169,20 +171,22 @@ fn typed_models_post_outbound_exposes_post_form() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-fn typed_models_post_outbound_rejects_detached_signature_fields() {
-    let mut context = binding_context(Binding::Post);
+fn typed_models_post_outbound_rejects_detached_signature_fields(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut context = binding_context(Binding::Post)?;
     context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
     context.signature = Some("signature-value".to_string());
 
     let result = Outbound::<AuthnRequest>::try_from(context);
 
     assert!(matches!(result, Err(SamlError::Invalid(_))));
+    Ok(())
 }
 
 #[test]
 fn typed_models_simplesign_outbound_preserves_signature_fields(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut context = binding_context(Binding::SimpleSign);
+    let mut context = binding_context(Binding::SimpleSign)?;
     context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
     context.signature = Some("signature-value".to_string());
 
@@ -198,35 +202,39 @@ fn typed_models_simplesign_outbound_preserves_signature_fields(
 }
 
 #[test]
-fn typed_models_simplesign_outbound_rejects_partial_signature_state() {
-    let mut context = binding_context(Binding::SimpleSign);
+fn typed_models_simplesign_outbound_rejects_partial_signature_state(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut context = binding_context(Binding::SimpleSign)?;
     context.sig_alg = Some("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256".to_string());
 
     let result = Outbound::<AuthnRequest>::try_from(context);
 
     assert!(matches!(result, Err(SamlError::Invalid(_))));
+    Ok(())
 }
 
 #[test]
-fn typed_models_artifact_outbound_is_rejected() {
-    let result = Outbound::<AuthnRequest>::try_from(binding_context(Binding::Artifact));
+fn typed_models_artifact_outbound_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let result = Outbound::<AuthnRequest>::try_from(binding_context(Binding::Artifact)?);
 
     assert!(matches!(result, Err(SamlError::UndefinedBinding)));
+    Ok(())
 }
 
 #[test]
-fn typed_models_sso_response_outbound_rejects_redirect() {
-    let result = Outbound::<SsoResponse>::try_from(response_binding_context(Binding::Redirect));
+fn typed_models_sso_response_outbound_rejects_redirect() -> Result<(), Box<dyn std::error::Error>> {
+    let result = Outbound::<SsoResponse>::try_from(response_binding_context(Binding::Redirect)?);
 
     assert!(matches!(result, Err(SamlError::UndefinedBinding)));
+    Ok(())
 }
 
 #[test]
 fn typed_models_sso_response_outbound_accepts_post_and_simplesign(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let post = Outbound::<SsoResponse>::try_from(response_binding_context(Binding::Post))?;
+    let post = Outbound::<SsoResponse>::try_from(response_binding_context(Binding::Post)?)?;
     let simple_sign =
-        Outbound::<SsoResponse>::try_from(signed_response_binding_context(Binding::SimpleSign))?;
+        Outbound::<SsoResponse>::try_from(signed_response_binding_context(Binding::SimpleSign)?)?;
 
     assert_eq!(
         post.post_form()?.value("SAMLResponse"),
@@ -240,14 +248,15 @@ fn typed_models_sso_response_outbound_accepts_post_and_simplesign(
 }
 
 #[test]
-fn typed_models_outbound_rejects_marker_message_field_mismatch() {
-    let mut authn_context = binding_context(Binding::Post);
+fn typed_models_outbound_rejects_marker_message_field_mismatch(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut authn_context = binding_context(Binding::Post)?;
     authn_context.request_type = "SAMLResponse";
-    let mut logout_request_context = binding_context(Binding::Post);
+    let mut logout_request_context = binding_context(Binding::Post)?;
     logout_request_context.request_type = "SAMLResponse";
-    let mut sso_response_context = response_binding_context(Binding::Post);
+    let mut sso_response_context = response_binding_context(Binding::Post)?;
     sso_response_context.request_type = "SAMLRequest";
-    let mut logout_response_context = response_binding_context(Binding::Post);
+    let mut logout_response_context = response_binding_context(Binding::Post)?;
     logout_response_context.request_type = "SAMLRequest";
 
     assert!(matches!(
@@ -266,13 +275,15 @@ fn typed_models_outbound_rejects_marker_message_field_mismatch() {
         Outbound::<LogoutResponse>::try_from(logout_response_context),
         Err(SamlError::Invalid(_))
     ));
+    Ok(())
 }
 
 #[test]
-fn typed_models_outbound_redirect_rejects_marker_url_field_mismatch() {
-    let mut logout_response_context = response_binding_context(Binding::Redirect);
+fn typed_models_outbound_redirect_rejects_marker_url_field_mismatch(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut logout_response_context = response_binding_context(Binding::Redirect)?;
     logout_response_context.context = "https://sp.example.com/acs?SAMLRequest=abc".to_string();
-    let mut logout_request_context = binding_context(Binding::Redirect);
+    let mut logout_request_context = binding_context(Binding::Redirect)?;
     logout_request_context.context = "https://idp.example.com/slo?SAMLResponse=abc".to_string();
 
     assert!(matches!(
@@ -283,26 +294,29 @@ fn typed_models_outbound_redirect_rejects_marker_url_field_mismatch() {
         Outbound::<LogoutRequest>::try_from(logout_request_context),
         Err(SamlError::Invalid(_))
     ));
+    Ok(())
 }
 
 #[test]
-fn typed_models_outbound_redirect_rejects_duplicate_message_field() {
-    let mut context = binding_context(Binding::Redirect);
+fn typed_models_outbound_redirect_rejects_duplicate_message_field(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut context = binding_context(Binding::Redirect)?;
     context.context = "https://idp.example.com/sso?SAMLRequest=abc&SAMLRequest=def".to_string();
 
     assert!(matches!(
         Outbound::<LogoutRequest>::try_from(context),
         Err(SamlError::Invalid(_))
     ));
+    Ok(())
 }
 
 #[test]
 fn typed_models_authn_request_outbound_accepts_browser_dispatch_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let redirect = Outbound::<AuthnRequest>::try_from(binding_context(Binding::Redirect))?;
-    let post = Outbound::<AuthnRequest>::try_from(binding_context(Binding::Post))?;
+    let redirect = Outbound::<AuthnRequest>::try_from(binding_context(Binding::Redirect)?)?;
+    let post = Outbound::<AuthnRequest>::try_from(binding_context(Binding::Post)?)?;
     let simple_sign =
-        Outbound::<AuthnRequest>::try_from(signed_binding_context(Binding::SimpleSign))?;
+        Outbound::<AuthnRequest>::try_from(signed_binding_context(Binding::SimpleSign)?)?;
 
     assert!(redirect.redirect_url().is_ok());
     assert!(post.post_form().is_ok());
@@ -314,16 +328,12 @@ fn typed_models_authn_request_outbound_accepts_browser_dispatch_bindings(
 fn typed_models_slo_outbound_accepts_logout_bindings() -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
         let request_context = match binding {
-            Binding::SimpleSign => signed_binding_context(binding),
-            Binding::Redirect | Binding::Post | Binding::Artifact | Binding::Soap => {
-                binding_context(binding)
-            }
+            Binding::SimpleSign => signed_binding_context(binding)?,
+            _ => binding_context(binding)?,
         };
         let response_context = match binding {
-            Binding::SimpleSign => signed_response_binding_context(binding),
-            Binding::Redirect | Binding::Post | Binding::Artifact | Binding::Soap => {
-                response_binding_context(binding)
-            }
+            Binding::SimpleSign => signed_response_binding_context(binding)?,
+            _ => response_binding_context(binding)?,
         };
 
         let request = Outbound::<LogoutRequest>::try_from(request_context)?;
@@ -336,10 +346,12 @@ fn typed_models_slo_outbound_accepts_logout_bindings() -> Result<(), Box<dyn std
 }
 
 #[test]
-fn typed_models_logout_response_outbound_rejects_saml_request_context() {
-    let result = Outbound::<LogoutResponse>::try_from(binding_context(Binding::Post));
+fn typed_models_logout_response_outbound_rejects_saml_request_context(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let result = Outbound::<LogoutResponse>::try_from(binding_context(Binding::Post)?);
 
     assert!(matches!(result, Err(SamlError::Invalid(_))));
+    Ok(())
 }
 
 #[test]

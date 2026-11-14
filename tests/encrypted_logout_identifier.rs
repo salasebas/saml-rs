@@ -179,22 +179,24 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
 }
 
-fn start_options(binding: LogoutBinding) -> StartSlo {
-    match binding {
+fn start_options(binding: LogoutBinding) -> Result<StartSlo, SamlError> {
+    Ok(match binding {
         LogoutBinding::Post => StartSlo::post(),
         LogoutBinding::Redirect => StartSlo::redirect(),
         LogoutBinding::SimpleSign => StartSlo::simple_sign(),
         LogoutBinding::Soap => StartSlo::soap(),
-    }
+        _ => return Err(SamlError::UndefinedBinding),
+    })
 }
 
-fn respond_options(binding: LogoutBinding) -> RespondSlo {
-    match binding {
+fn respond_options(binding: LogoutBinding) -> Result<RespondSlo, SamlError> {
+    Ok(match binding {
         LogoutBinding::Post => RespondSlo::post(),
         LogoutBinding::Redirect => RespondSlo::redirect(),
         LogoutBinding::SimpleSign => RespondSlo::simple_sign(),
         LogoutBinding::Soap => RespondSlo::soap(),
-    }
+        _ => return Err(SamlError::UndefinedBinding),
+    })
 }
 
 fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, SamlError> {
@@ -224,6 +226,7 @@ fn request_input(
         LogoutBinding::Soap => {
             BrowserInput::<LogoutRequest>::soap(outbound.soap_request()?.envelope())
         }
+        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 
@@ -242,6 +245,7 @@ fn response_input(
         LogoutBinding::Soap => {
             BrowserInput::<LogoutResponse>::soap(outbound.soap_response()?.envelope())
         }
+        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 
@@ -263,7 +267,7 @@ fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std
             Ok(String::from_utf8(base64_decode(&context.context)?)?)
         }
         Binding::Soap => Ok(context.context.clone()),
-        Binding::Artifact => Err("artifact binding is unsupported".into()),
+        _ => Err("binding is unsupported".into()),
     }
 }
 
@@ -308,7 +312,7 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
     let parties = parties()?;
     for initiator in INITIATORS {
         for binding in BINDINGS {
-            let options = start_options(binding)
+            let options = start_options(binding)?
                 .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
             let sent = start(&parties, initiator, options)?;
 
@@ -337,7 +341,7 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
                     let response = parties.idp.respond_slo(
                         &parties.sp_descriptor,
                         &received,
-                        respond_options(binding),
+                        respond_options(binding)?,
                     )?;
                     parties.sp.finish_slo(
                         &parties.idp_descriptor,
@@ -350,7 +354,7 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
                     let response = parties.sp.respond_slo(
                         &parties.idp_descriptor,
                         &received,
-                        respond_options(binding),
+                        respond_options(binding)?,
                     )?;
                     parties.idp.finish_slo(
                         &parties.sp_descriptor,
@@ -433,7 +437,7 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
     let unknown_principal =
         Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal());
     for binding in BINDINGS {
-        let options = start_options(binding)
+        let options = start_options(binding)?
             .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
         let sent = start(&parties, Initiator::Sp, options)?;
         assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));
@@ -453,7 +457,7 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
         let response = parties.idp.respond_slo(
             &parties.sp_descriptor,
             &received,
-            respond_options(binding).status(unknown_principal.clone()),
+            respond_options(binding)?.status(unknown_principal.clone()),
         )?;
         match parties.sp.finish_slo(
             &parties.idp_descriptor,
@@ -481,7 +485,7 @@ fn logout_request_name_id_stays_plaintext_unless_encryption_is_selected(
     let parties = parties()?;
     for initiator in INITIATORS {
         for binding in BINDINGS {
-            let sent = start(&parties, initiator, start_options(binding))?;
+            let sent = start(&parties, initiator, start_options(binding)?)?;
             let xml = request_xml(&sent.outbound)?;
             assert!(
                 !xml.contains("EncryptedID"),
@@ -556,7 +560,7 @@ fn unsigned_encrypted_id_stays_unread() -> Result<(), Box<dyn std::error::Error>
     )?;
     for initiator in INITIATORS {
         for binding in [LogoutBinding::Post, LogoutBinding::Redirect] {
-            let options = start_options(binding)
+            let options = start_options(binding)?
                 .signing(LogoutSigning::DoNotSignForCompatibility)
                 .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
             let sent = start(&parties, initiator, options)?;

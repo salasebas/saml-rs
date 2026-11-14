@@ -22,6 +22,7 @@ impl AttributeValue {
 /// SAML treats the name of an `<Attribute>` without `NameFormat` as
 /// [`Self::Unspecified`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AttributeNameFormat {
     /// Unspecified format. The name's interpretation is left to the deployment.
     Unspecified,

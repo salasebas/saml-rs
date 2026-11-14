@@ -7,6 +7,7 @@ use crate::error::SamlError;
 
 /// Browser SSO request bindings supported by the typed API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SsoRequestBinding {
     /// HTTP-Redirect binding.
     Redirect,
@@ -48,6 +49,7 @@ impl TryFrom<Binding> for SsoRequestBinding {
 
 /// Browser SSO response bindings supported by the typed API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SsoResponseBinding {
     /// HTTP-POST binding.
     Post,
@@ -89,6 +91,7 @@ impl TryFrom<Binding> for SsoResponseBinding {
 
 /// Single Logout bindings supported by the typed API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum LogoutBinding {
     /// HTTP-Redirect binding.
     Redirect,
@@ -136,6 +139,7 @@ impl TryFrom<Binding> for LogoutBinding {
 
 /// Name identifier management bindings supported by the typed API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum NameIdManagementBinding {
     /// HTTP-Redirect binding, for the identity provider and the service
     /// provider.

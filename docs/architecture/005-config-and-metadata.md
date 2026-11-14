@@ -137,6 +137,7 @@ Rules:
 ## Algorithm Policy
 
 ```rust
+#[non_exhaustive]
 pub enum SignatureAlgorithm {
     RsaSha256,
     RsaSha384,
@@ -147,6 +148,7 @@ pub enum SignatureAlgorithm {
     Custom(String),
 }
 
+#[non_exhaustive]
 pub enum DigestAlgorithm {
     Sha1ForCompatibility,
     #[deprecated]
@@ -157,6 +159,7 @@ pub enum DigestAlgorithm {
     Custom(String),
 }
 
+#[non_exhaustive]
 pub enum DataEncryptionAlgorithm {
     Aes128,
     Aes256,
@@ -168,6 +171,7 @@ pub enum DataEncryptionAlgorithm {
     Custom(String),
 }
 
+#[non_exhaustive]
 pub enum KeyEncryptionAlgorithm {
     RsaOaepMgf1p,
     RsaOaep {
@@ -180,6 +184,7 @@ pub enum KeyEncryptionAlgorithm {
     Custom(String),
 }
 
+#[non_exhaustive]
 pub enum MaskGenerationFunction {
     Mgf1Sha256,
     Mgf1Sha384,
@@ -337,6 +342,7 @@ explicitly accept the entity ID found in metadata.
 ## Metadata Trust
 
 ```rust
+#[non_exhaustive]
 pub enum MetadataTrustPolicy<'a> {
     RequireSignature {
         trusted_certificates: &'a [CertificatePem],

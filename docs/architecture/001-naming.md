@@ -93,18 +93,21 @@ migration window. New docs should prefer `Saml<Sp>` and `Saml<Idp>`.
 Recommended:
 
 ```rust
+#[non_exhaustive]
 pub enum SsoRequestBinding {
     Redirect,
     Post,
     SimpleSign,
 }
 
+#[non_exhaustive]
 pub enum SsoResponseBinding {
     Post,
     SimpleSign,
     Artifact,
 }
 
+#[non_exhaustive]
 pub enum LogoutBinding {
     Redirect,
     Post,
