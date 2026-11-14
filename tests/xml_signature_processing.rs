@@ -329,3 +329,25 @@ fn harmless_invalid_extension_signatures_do_not_reject_a_root_signed_error_respo
     }
     Ok(())
 }
+
+#[test]
+fn error_response_with_only_a_sibling_signature_is_rejected(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let xml = sign(&message(
+        "Response",
+        &signature("#_payload"),
+        r#"<Payload xmlns="urn:example:extension" ID="_payload">signed sibling</Payload><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Requester"/></samlp:Status>"#,
+    ))?;
+    for profile in [
+        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::ExcludeWeakAlgorithms,
+        XmlSignatureProfile::StrictRsaSha2,
+    ] {
+        let result = verify_flow(&xml, profile);
+        assert!(
+            matches!(result, Err(SamlError::SignedReferenceMismatch)),
+            "{profile:?}: {result:?}"
+        );
+    }
+    Ok(())
+}

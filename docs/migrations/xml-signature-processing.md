@@ -1,8 +1,8 @@
 # Upgrade XML signature processing and coverage
 
 This unreleased change affects callers of `crypto::verify_signature`,
-`crypto::verify_signature_with_limits`, `BergshamraBackend`, and flows that
-verify embedded XML signatures.
+`crypto::verify_signature_with_limits`, `BergshamraBackend`, metadata signature
+verification helpers, and flows that verify embedded XML signatures.
 
 ## Keep processed references within the document
 
@@ -46,6 +46,21 @@ root of the document you need to authenticate. Root-covered documents that
 previously returned no content now return their signed root.
 `BergshamraBackend` applies the same guarantee before returning `Ok(())`.
 Assertion-only signatures on SSO Response containers remain supported.
+
+Flows that verify embedded signatures apply the same root-coverage rule.
+Error and status-only Responses signed over another element now fail with
+`SamlError::SignedReferenceMismatch` instead of reaching status handling.
+For malformed successful Responses without Assertions, allow issuer-validation
+errors as well as the previous empty-Assertion error when matching flow errors.
+
+## Verify metadata roots with metadata helpers
+
+`crypto::verify_metadata_signature*` and `Metadata::verify_signature*` now
+succeed only for a covered `EntityDescriptor` or `EntitiesDescriptor` root.
+Previously, these helpers also accepted some signed non-metadata messages,
+including LogoutRequest. Passing those roots now returns
+`SamlError::SignedReferenceMismatch`. Pass a metadata descriptor to these
+helpers. Use `crypto::verify_signature` for other signed XML documents.
 
 These are library processing and coverage guarantees. They do not add general
 schema or protocol validation to the public verification functions. The exact
