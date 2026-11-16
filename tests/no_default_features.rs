@@ -199,15 +199,18 @@ fn typed_config_builders_construct_protocol_only_without_default_crypto(
         .build()?;
 
     assert_eq!(
-        sp_config.entity_id.as_str(),
+        sp_config.entity_id().as_str(),
         "https://sp.example.com/metadata"
     );
     assert_eq!(
-        idp_config.entity_id.as_str(),
+        idp_config.entity_id().as_str(),
         "https://idp.example.com/metadata"
     );
-    assert_eq!(sp_config.validation, SpValidationPolicy::compatibility());
-    assert_eq!(idp_config.validation, IdpValidationPolicy::compatibility());
+    assert_eq!(sp_config.validation(), &SpValidationPolicy::compatibility());
+    assert_eq!(
+        idp_config.validation(),
+        &IdpValidationPolicy::compatibility()
+    );
     Ok(())
 }
 

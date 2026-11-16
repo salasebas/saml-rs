@@ -41,13 +41,14 @@ const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
 fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        encryption_certificate: Some(CertificatePem::new(CERT)),
-        decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        ..Credentials::default()
-    }
+    Credentials::default()
+        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
+        .with_signing_certificate(CertificatePem::new(CERT))
+        .with_decryption(DecryptionCredential {
+            certificate: CertificatePem::new(CERT),
+            key: PrivateKeyPem::new(PRIVKEY),
+            passphrase: None,
+        })
 }
 
 fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
@@ -273,10 +274,11 @@ fn exchange_encrypted_for(
     let published = sp_with_credentials(
         XmlEncryptionPolicy::default(),
         sp_validation(),
-        Credentials {
-            encryption_certificate: Some(CertificatePem::new(encryption_cert)),
-            ..credentials()
-        },
+        credentials().with_decryption(DecryptionCredential {
+            certificate: CertificatePem::new(encryption_cert),
+            key: PrivateKeyPem::new(PRIVKEY),
+            passphrase: None,
+        }),
     )?;
     let idp = idp(encryption)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&published, &idp)?;
@@ -349,10 +351,7 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
 #[test]
 fn metadata_publishes_each_encryption_certificate_in_order(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = Credentials {
-        additional_decryption_keys: vec![next_decryption_key()],
-        ..credentials()
-    };
+    let rolling = credentials().with_additional_decryption_key(next_decryption_key());
     let sp = sp_with_credentials(
         XmlEncryptionPolicy::default(),
         sp_validation(),
@@ -391,10 +390,7 @@ fn metadata_publishes_each_encryption_certificate_in_order(
 #[test]
 fn service_provider_decrypts_elements_made_for_either_published_certificate(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = Credentials {
-        additional_decryption_keys: vec![next_decryption_key()],
-        ..credentials()
-    };
+    let rolling = credentials().with_additional_decryption_key(next_decryption_key());
     for encryption in each_encrypted_element() {
         for encryption_cert in [CERT, NEXT_CERT] {
             let exchange = exchange_encrypted_for(encryption, encryption_cert, rolling.clone())?;
@@ -414,10 +410,7 @@ fn service_provider_decrypts_elements_made_for_either_published_certificate(
 #[test]
 fn service_provider_without_the_key_keeps_the_single_key_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = Credentials {
-        additional_decryption_keys: vec![next_decryption_key()],
-        ..credentials()
-    };
+    let rolling = credentials().with_additional_decryption_key(next_decryption_key());
     for encryption in each_encrypted_element() {
         let single_key = exchange_encrypted_for(encryption, UNKNOWN_CERT, credentials())?.session;
         let both_keys = exchange_encrypted_for(encryption, UNKNOWN_CERT, rolling.clone())?.session;

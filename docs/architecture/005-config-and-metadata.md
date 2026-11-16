@@ -11,11 +11,13 @@ typed builders exist.
 
 ## Construction Style
 
-Typed config construction supports two reviewable paths:
-
-- struct literals for advanced callers that want every policy field visible;
-- manual, dependency-free builders for application setup code that wants
-  required fields checked in one place.
+`SpConfig` and `IdpConfig` are built only through their dependency-free
+builders. The fields of `SpConfig`, `IdpConfig`, `SpMetadataConfig`,
+`IdpMetadataConfig`, and `Credentials` are private, so a built config cannot
+change after `build()` validated it, and a new field is not a breaking change.
+This follows the Rust API Guidelines
+[C-STRUCT-PRIVATE](https://rust-lang.github.io/api-guidelines/future-proofing.html#c-struct-private)
+and [C-BUILDER](https://rust-lang.github.io/api-guidelines/type-safety.html#c-builder).
 
 Validated scalar values use fallible constructors for caller-provided input:
 
@@ -24,27 +26,11 @@ let entity_id = EntityId::try_new("https://sp.example.com/metadata")?;
 let acs = AcsEndpoint::post("https://sp.example.com/acs")?;
 ```
 
-Struct literals keep policy choices explicit:
-
-```rust
-let config = SpConfig {
-    entity_id,
-    metadata: SpMetadataConfig::new(vec![acs]),
-    credentials: load_sp_signing_credentials()?,
-    validation: SpValidationPolicy::recommended(),
-    algorithms: AlgorithmPolicy::default(),
-    xml: XmlPolicy::default(),
-    templates: TemplatePolicy::default(),
-};
-config.validate()?;
-```
-
-Builders keep large setup ergonomic while still returning `Result`. `Default`,
-`new`, `try_new`, and the config builders start on Recommended so typed
-construction has one preset. `recommended()` is the preset for claimed
-features and is not an implementation of SAML V2.0 as a whole.
-`compatibility()` remains the legacy permissive preset for callers leaving
-the raw API.
+Builders keep large setup ergonomic and return `Result` from `build()`.
+`Default` and the config builders start on Recommended so typed construction
+has one preset. `recommended()` is the preset for claimed features and is not
+an implementation of SAML V2.0 as a whole. `compatibility()` remains the
+legacy permissive preset for callers leaving the raw API.
 
 ```rust
 let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
@@ -59,32 +45,39 @@ let idp_config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/m
     .build()?;
 ```
 
-Typed metadata and config builders validate entity IDs, required endpoints, and
-policy requirements that are meaningful without peer context. Raw compatibility
-structs keep their existing defaults and mutation model.
+`build()` validates entity IDs, required endpoints, and policy requirements
+that are meaningful without peer context, once. `Saml::sp` and `Saml::idp`
+take the built config without validating it again. They still return
+`Result` because they generate metadata from it. Raw compatibility structs
+keep their existing defaults and mutation model.
 
 ## Config Types
 
 ```rust
 pub struct SpConfig {
-    pub entity_id: EntityId,
-    pub metadata: SpMetadataConfig,
-    pub credentials: Credentials,
-    pub validation: SpValidationPolicy,
-    pub algorithms: AlgorithmPolicy,
-    pub xml: XmlPolicy,
-    pub templates: TemplatePolicy,
+    // private: entity ID, metadata inputs, credentials, and policies
+}
+
+impl SpConfig {
+    pub fn builder(entity_id: EntityId) -> SpConfigBuilder;
+    pub fn entity_id(&self) -> &EntityId;
+    pub fn metadata(&self) -> &SpMetadataConfig;
+    pub fn credentials(&self) -> &Credentials;
+    pub fn validation(&self) -> &SpValidationPolicy;
+    pub fn algorithms(&self) -> &AlgorithmPolicy;
+    pub fn xml(&self) -> &XmlPolicy;
+    pub fn templates(&self) -> &TemplatePolicy;
 }
 
 pub struct IdpConfig {
-    pub entity_id: EntityId,
-    pub metadata: IdpMetadataConfig,
-    pub credentials: Credentials,
-    pub issuance_lifetime: std::time::Duration,
-    pub validation: IdpValidationPolicy,
-    pub algorithms: AlgorithmPolicy,
-    pub xml: XmlPolicy,
-    pub templates: TemplatePolicy,
+    // private: the same, plus the issuance lifetime
+}
+
+impl IdpConfig {
+    pub fn builder(entity_id: EntityId) -> IdpConfigBuilder;
+    pub fn issuance_lifetime(&self) -> std::time::Duration;
+    // and the same getters as SpConfig, with IdpMetadataConfig and
+    // IdpValidationPolicy
 }
 ```
 
@@ -94,26 +87,34 @@ value is retained privately by `Saml<Idp>` rather than copied into raw
 `EntitySetting`, preserving raw compatibility behaviour.
 
 Configs convert internally to today's raw `EntitySetting` when calling legacy
-implementation helpers.
+implementation helpers. The conversion is crate-private.
 
 ## Credentials
 
 ```rust
 pub struct Credentials {
-    signing_key: Option<PrivateKeyPem>,
-    signing_key_passphrase: Option<Passphrase>,
+    signing_key: Option<SigningKey>, // key and its optional passphrase
     signing_certificate: Option<CertificatePem>,
+    additional_signing_certificates: Vec<CertificatePem>,
     hmac_secret: Option<HmacSecret>,
-    encryption_certificate: Option<CertificatePem>,
-    decryption_key: Option<PrivateKeyPem>,
-    decryption_key_passphrase: Option<Passphrase>,
+    decryption: Option<DecryptionCredential>,
     additional_decryption_keys: Vec<DecryptionCredential>,
 }
 
+impl Credentials {
+    pub fn with_signing_key(self, key: PrivateKeyPem) -> Self;
+    pub fn with_encrypted_signing_key(self, key: PrivateKeyPem, passphrase: Passphrase) -> Self;
+    pub fn with_signing_certificate(self, certificate: CertificatePem) -> Self;
+    pub fn with_additional_signing_certificate(self, certificate: CertificatePem) -> Self;
+    pub fn with_hmac_secret(self, secret: HmacSecret) -> Self;
+    pub fn with_decryption(self, credential: DecryptionCredential) -> Self;
+    pub fn with_additional_decryption_key(self, credential: DecryptionCredential) -> Self;
+}
+
 pub struct DecryptionCredential {
-    certificate: CertificatePem,
-    key: PrivateKeyPem,
-    passphrase: Option<Passphrase>,
+    pub certificate: CertificatePem,
+    pub key: PrivateKeyPem,
+    pub passphrase: Option<Passphrase>,
 }
 
 pub struct PrivateKeyPem(String);
@@ -125,10 +126,10 @@ pub struct HmacSecret(Vec<u8>);
 Rules:
 
 - Secret-bearing types have redacted `Debug`.
-- Decryption tries `decryption_key`, then each of
-  `additional_decryption_keys` in order. Metadata publishes
-  `encryption_certificate`, then the certificate of each additional key, as
-  `<KeyDescriptor use="encryption">`.
+- A passphrase is accepted only together with the key it unlocks.
+- Decryption tries the `with_decryption` key, then each additional key in
+  the order added. Metadata publishes the certificate of each, in the same
+  order, as `<KeyDescriptor use="encryption">`.
 - `EntitySetting` with raw strings stays a raw-compatibility escape, not the
   primary typed config.
 

@@ -20,110 +20,100 @@ use std::time::SystemTime;
 use super::SamlError;
 
 pub(super) fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
+    let metadata = config.metadata();
     RawSpMetadataConfig {
-        entity_id: config.entity_id.as_str().to_string(),
-        signing_certs: signing_certificates(&config.credentials),
-        encrypt_certs: encryption_certificates(&config.credentials),
+        entity_id: config.entity_id().as_str().to_string(),
+        signing_certs: signing_certificates(config.credentials()),
+        encrypt_certs: encryption_certificates(config.credentials()),
         authn_requests_signed: matches!(
-            config.validation.authn_requests,
+            config.validation().authn_requests,
             AuthnRequestSigningPolicy::Sign
         ),
         want_assertions_signed: matches!(
-            config.validation.assertions,
+            config.validation().assertions,
             crate::config::AssertionSignaturePolicy::RequireSigned
         ),
-        name_id_format: name_id_format_uris(&config.metadata.name_id_format),
-        single_logout_service: config
-            .metadata
-            .single_logout_service
+        name_id_format: name_id_format_uris(metadata.name_id_format()),
+        single_logout_service: metadata
+            .single_logout_service()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
-        assertion_consumer_service: config
-            .metadata
-            .assertion_consumer_service
+        assertion_consumer_service: metadata
+            .assertion_consumer_service()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
-        manage_name_id_service: config
-            .metadata
-            .manage_name_id_service
+        manage_name_id_service: metadata
+            .manage_name_id_service()
             .iter()
             .map(ManageNameIdService::to_raw)
             .collect(),
-        elements_order: config.metadata.elements_order.clone(),
-        lifetime: config.metadata.lifetime,
-        organization: config.metadata.organization.clone(),
-        contacts: config.metadata.contacts.clone(),
-        error_url: config.metadata.error_url.clone(),
+        elements_order: metadata.elements_order().map(<[String]>::to_vec),
+        lifetime: metadata.lifetime(),
+        organization: metadata.organization().cloned(),
+        contacts: metadata.contacts().to_vec(),
+        error_url: metadata.error_url().map(str::to_string),
     }
 }
 
 pub(super) fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfig {
+    let metadata = config.metadata();
     RawIdpMetadataConfig {
-        entity_id: config.entity_id.as_str().to_string(),
-        signing_certs: signing_certificates(&config.credentials),
-        encrypt_certs: encryption_certificates(&config.credentials),
+        entity_id: config.entity_id().as_str().to_string(),
+        signing_certs: signing_certificates(config.credentials()),
+        encrypt_certs: encryption_certificates(config.credentials()),
         want_authn_requests_signed: matches!(
-            config.validation.authn_requests,
+            config.validation().authn_requests,
             AuthnRequestValidationPolicy::RequireSigned
         ),
-        name_id_format: name_id_format_uris(&config.metadata.name_id_format),
-        single_sign_on_service: config
-            .metadata
-            .single_sign_on_service
+        name_id_format: name_id_format_uris(metadata.name_id_format()),
+        single_sign_on_service: metadata
+            .single_sign_on_service()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
-        single_logout_service: config
-            .metadata
-            .single_logout_service
+        single_logout_service: metadata
+            .single_logout_service()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
-        artifact_resolution_service: config
-            .metadata
-            .artifact_resolution_service
+        artifact_resolution_service: metadata
+            .artifact_resolution_service()
             .iter()
             .map(|service| ArtifactResolutionEndpoint {
                 index: service.index(),
                 location: service.location().as_str().to_string(),
             })
             .collect(),
-        manage_name_id_service: config
-            .metadata
-            .manage_name_id_service
+        manage_name_id_service: metadata
+            .manage_name_id_service()
             .iter()
             .map(ManageNameIdService::to_raw)
             .collect(),
-        elements_order: config.metadata.elements_order.clone(),
-        lifetime: config.metadata.lifetime,
-        organization: config.metadata.organization.clone(),
-        contacts: config.metadata.contacts.clone(),
-        error_url: config.metadata.error_url.clone(),
+        elements_order: metadata.elements_order().map(<[String]>::to_vec),
+        lifetime: metadata.lifetime(),
+        organization: metadata.organization().cloned(),
+        contacts: metadata.contacts().to_vec(),
+        error_url: metadata.error_url().map(str::to_string),
     }
 }
 
 fn signing_certificates(credentials: &Credentials) -> Vec<String> {
     credentials
-        .signing_certificate
-        .iter()
-        .chain(&credentials.additional_signing_certificates)
+        .signing_certificate()
+        .into_iter()
+        .chain(credentials.additional_signing_certificates())
         .map(|certificate| certificate.as_str().to_string())
         .collect()
 }
 
 fn encryption_certificates(credentials: &Credentials) -> Vec<String> {
     credentials
-        .encryption_certificate
-        .iter()
-        .chain(
-            credentials
-                .additional_decryption_keys
-                .iter()
-                .map(|credential| &credential.certificate),
-        )
-        .map(|certificate| certificate.as_str().to_string())
+        .decryption()
+        .into_iter()
+        .chain(credentials.additional_decryption_keys())
+        .map(|credential| credential.certificate.as_str().to_string())
         .collect()
 }
 

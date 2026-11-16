@@ -195,7 +195,14 @@ fn sp_config_with_validation_and_logout_request_template(
     validation: SpValidationPolicy,
     template: Option<&str>,
 ) -> Result<SpConfig, SamlError> {
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+    sp_config_builder(validation, template)?.build()
+}
+
+fn sp_config_builder(
+    validation: SpValidationPolicy,
+    template: Option<&str>,
+) -> Result<saml_rs::SpConfigBuilder, SamlError> {
+    Ok(SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
         .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
         .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
@@ -206,8 +213,7 @@ fn sp_config_with_validation_and_logout_request_template(
         .templates(TemplatePolicy {
             logout_request_template: template.map(str::to_string),
             ..TemplatePolicy::default()
-        })
-        .build()
+        }))
 }
 
 fn sp_config_with_logout_request_template(template: &str) -> Result<SpConfig, SamlError> {
@@ -226,7 +232,14 @@ fn idp_config_with_validation_and_logout_request_template(
     validation: IdpValidationPolicy,
     template: Option<&str>,
 ) -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+    idp_config_builder(validation, template)?.build()
+}
+
+fn idp_config_builder(
+    validation: IdpValidationPolicy,
+    template: Option<&str>,
+) -> Result<saml_rs::IdpConfigBuilder, SamlError> {
+    Ok(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
         .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
@@ -237,8 +250,7 @@ fn idp_config_with_validation_and_logout_request_template(
         .templates(TemplatePolicy {
             logout_request_template: template.map(str::to_string),
             ..TemplatePolicy::default()
-        })
-        .build()
+        }))
 }
 
 fn idp_config_with_issuance(
@@ -4404,11 +4416,20 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
         max_depth: 12,
         ..saml_rs::XmlLimits::default()
     };
-    let mut sp_config = sp_config()?;
-    sp_config.xml.limits = limits;
-    let mut idp_config = idp_config()?;
-    idp_config.xml.limits = limits;
-    let (sp, idp) = (Saml::sp(sp_config)?, Saml::idp(idp_config)?);
+    let xml = saml_rs::XmlPolicy {
+        limits,
+        ..saml_rs::XmlPolicy::default()
+    };
+    let sp = Saml::sp(
+        sp_config_builder(signing_sp_validation(), None)?
+            .xml(xml)
+            .build()?,
+    )?;
+    let idp = Saml::idp(
+        idp_config_builder(signed_authn_request_idp_validation(), None)?
+            .xml(xml)
+            .build()?,
+    )?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let deep_header = "<soap:Header><a><b><c><d><e><f><g><h><i><j><k>note</k></j></i></h></g></f></e></d></c></b></a></soap:Header><soap:Body>";
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;

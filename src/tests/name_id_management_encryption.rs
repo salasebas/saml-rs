@@ -54,13 +54,14 @@ const IDP_NEXT_ENCRYPTION_CERT: &str =
     include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(SIGNING_KEY)),
-        signing_certificate: Some(CertificatePem::new(SIGNING_CERT)),
-        encryption_certificate: Some(CertificatePem::new(encryption_cert)),
-        decryption_key: Some(PrivateKeyPem::new(decryption_key)),
-        ..Credentials::default()
-    }
+    Credentials::default()
+        .with_signing_key(PrivateKeyPem::new(SIGNING_KEY))
+        .with_signing_certificate(CertificatePem::new(SIGNING_CERT))
+        .with_decryption(DecryptionCredential {
+            certificate: CertificatePem::new(encryption_cert),
+            key: PrivateKeyPem::new(decryption_key),
+            passphrase: None,
+        })
 }
 
 fn encrypted() -> StartNameIdManagement {
@@ -315,14 +316,15 @@ fn service_provider_encrypts_the_identifier_and_new_value_for_the_identity_provi
 fn identity_provider_decrypts_identifiers_made_for_either_published_certificate() -> TestResult {
     let sp = sp()?;
     let sp_peer = sp_descriptor(&sp)?;
-    let idp = idp_with(Credentials {
-        additional_decryption_keys: vec![DecryptionCredential {
-            certificate: CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
-            key: PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
-            passphrase: None,
-        }],
-        ..credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY)
-    })?;
+    let idp = idp_with(
+        credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY).with_additional_decryption_key(
+            DecryptionCredential {
+                certificate: CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
+                key: PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
+                passphrase: None,
+            },
+        ),
+    )?;
     for encryption_cert in [IDP_ENCRYPTION_CERT, IDP_NEXT_ENCRYPTION_CERT] {
         let published = idp_with(credentials(encryption_cert, IDP_DECRYPTION_KEY))?;
         let started = sp.start_name_id_management_redirect(

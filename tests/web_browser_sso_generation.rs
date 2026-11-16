@@ -25,7 +25,7 @@ use saml_rs::{
     SubordinateStatusCode,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{CertificatePem, Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
+use saml_rs::{CertificatePem, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -391,15 +391,18 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
 fn login_response_template_writes_in_response_to_only_for_a_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
-    let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+    let idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
+        .templates(saml_rs::TemplatePolicy {
+            login_response_template: Some(LoginResponseTemplate {
+                context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+                attributes: Vec::new(),
+            }),
+            ..saml_rs::TemplatePolicy::default()
+        })
         .build()?;
-    idp_config.templates.login_response_template = Some(LoginResponseTemplate {
-        context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-        attributes: Vec::new(),
-    });
     let idp = Saml::idp(idp_config)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
@@ -487,15 +490,18 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
         assert_eq!(session.name_id().format(), None);
     }
 
-    let mut template_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+    let template_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
+        .templates(saml_rs::TemplatePolicy {
+            login_response_template: Some(LoginResponseTemplate {
+                context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+                attributes: Vec::new(),
+            }),
+            ..saml_rs::TemplatePolicy::default()
+        })
         .build()?;
-    template_config.templates.login_response_template = Some(LoginResponseTemplate {
-        context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-        attributes: Vec::new(),
-    });
     let template_idp = Saml::idp(template_config)?;
     let (sp_descriptor, _) = descriptors(&sp, &template_idp)?;
     let response = template_idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
@@ -744,11 +750,12 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         encryption: XmlEncryptionPolicy::encrypt_assertions(),
         ..XmlPolicy::default()
     };
-    let encrypted_credentials = Credentials {
-        encryption_certificate: Some(CertificatePem::new(CERT)),
-        decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        ..signing_credentials()
-    };
+    let encrypted_credentials =
+        signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+            certificate: CertificatePem::new(CERT),
+            key: PrivateKeyPem::new(PRIVKEY),
+            passphrase: None,
+        });
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
@@ -832,12 +839,15 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 
 #[test]
 fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn std::error::Error>> {
-    let mut config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+    let config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::compatibility())
+        .templates(saml_rs::TemplatePolicy {
+            login_request_template: Some("<samlp:AuthnRequest/>".to_string()),
+            ..saml_rs::TemplatePolicy::default()
+        })
         .build()?;
-    config.templates.login_request_template = Some("<samlp:AuthnRequest/>".to_string());
     let sp = Saml::sp(config)?;
     let idp = idp_with(IdpValidationPolicy::compatibility(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -850,15 +860,18 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
     }
 
     let sp = sp_with(signing_sp_validation())?;
-    let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+    let idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
+        .templates(saml_rs::TemplatePolicy {
+            login_response_template: Some(LoginResponseTemplate {
+                context: Some("<samlp:Response/>".to_string()),
+                attributes: Vec::new(),
+            }),
+            ..saml_rs::TemplatePolicy::default()
+        })
         .build()?;
-    idp_config.templates.login_response_template = Some(LoginResponseTemplate {
-        context: Some("<samlp:Response/>".to_string()),
-        attributes: Vec::new(),
-    });
     let idp = Saml::idp(idp_config)?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     match idp.initiate_sso(
@@ -1102,15 +1115,18 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
 fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dyn std::error::Error>>
 {
     let sp = sp_with(signing_sp_validation())?;
-    let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+    let idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
+        .templates(saml_rs::TemplatePolicy {
+            login_response_template: Some(LoginResponseTemplate {
+                context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+                attributes: Vec::new(),
+            }),
+            ..saml_rs::TemplatePolicy::default()
+        })
         .build()?;
-    idp_config.templates.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.to_string()),
-        attributes: Vec::new(),
-    });
     let idp = Saml::idp(idp_config)?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 

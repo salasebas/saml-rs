@@ -1,25 +1,18 @@
 use std::time::Duration;
 
 use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
-use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::metadata::MetadataLifetime;
 
-use super::algorithms::{
-    name_id_format_uris, transform_algorithm_uris, NameIdFormat, SignatureAlgorithm,
-};
+use super::algorithms::{NameIdFormat, SignatureAlgorithm};
 use super::credentials::Credentials;
 use super::descriptors::{
     validate_entity_id_syntax, ArtifactResolutionService, EntityId, IdpMetadataConfig,
     ManageNameIdService, SpMetadataConfig,
 };
 use super::policies::{
-    assertion_signature_required, audience_restriction_required, audience_validation_enabled,
-    authn_request_signature_required, authn_request_signing_enabled,
-    encrypted_cbc_response_signature_required, logout_signature_required, name_id_creation_allowed,
-    response_signature_required, verify_present_authn_request_signature, AlgorithmPolicy,
-    AssertionEncryptionPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy,
-    ReceivedEncryptedElements, SpValidationPolicy, TemplatePolicy, XmlPolicy,
+    AlgorithmPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy, SpValidationPolicy,
+    TemplatePolicy, XmlPolicy,
 };
 #[cfg(not(crypto))]
 use super::policies::{
@@ -29,92 +22,76 @@ use super::policies::{
 
 /// Typed Service Provider configuration.
 ///
+/// Build it with [`SpConfig::builder`]. A built config has passed every check
+/// in [`SpConfigBuilder::build`] and cannot be changed afterwards.
+///
 /// # Examples
 ///
 /// ```
-/// use saml_rs::{AcsEndpoint, EntityId, SpConfig, SpMetadataConfig, SpValidationPolicy};
+/// use saml_rs::{AcsEndpoint, EntityId, SpConfig, SpValidationPolicy};
 ///
-/// let acs = AcsEndpoint::post("https://sp.example.com/acs")?;
-/// let config = SpConfig::new(
-///     EntityId::try_new("https://sp.example.com/metadata")?,
-///     SpMetadataConfig::new(vec![acs]),
-/// );
+/// let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+///     .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+///     .validation(SpValidationPolicy::compatibility())
+///     .build()?;
 ///
-/// assert_eq!(config.entity_id.as_str(), "https://sp.example.com/metadata");
-/// assert_eq!(config.validation, SpValidationPolicy::recommended());
+/// assert_eq!(config.entity_id().as_str(), "https://sp.example.com/metadata");
+/// assert_eq!(config.validation(), &SpValidationPolicy::compatibility());
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
 #[derive(Debug, Clone)]
 pub struct SpConfig {
-    /// Local SP entity ID.
-    pub entity_id: EntityId,
-    /// Local SP metadata inputs.
-    pub metadata: SpMetadataConfig,
-    /// Local credentials.
-    pub credentials: Credentials,
-    /// Validation and outbound signing policy.
-    pub validation: SpValidationPolicy,
-    /// Algorithm policy.
-    pub algorithms: AlgorithmPolicy,
-    /// XML parser, redirect, clock, and encryption policy.
-    pub xml: XmlPolicy,
-    /// Template and prefix policy.
-    pub templates: TemplatePolicy,
+    entity_id: EntityId,
+    metadata: SpMetadataConfig,
+    credentials: Credentials,
+    validation: SpValidationPolicy,
+    algorithms: AlgorithmPolicy,
+    xml: XmlPolicy,
+    templates: TemplatePolicy,
 }
 
 impl SpConfig {
-    /// Create SP configuration with required identity and metadata inputs.
-    ///
-    /// Validation starts on [`SpValidationPolicy::recommended`]. This
-    /// convenience constructor accepts already-validated typed inputs but does
-    /// not validate the final config. Use [`Self::try_new`] or [`Self::builder`]
-    /// for caller-provided setup.
-    pub fn new(entity_id: EntityId, metadata: SpMetadataConfig) -> Self {
-        Self {
-            entity_id,
-            metadata,
-            credentials: Credentials::default(),
-            validation: SpValidationPolicy::default(),
-            algorithms: AlgorithmPolicy::default(),
-            xml: XmlPolicy::default(),
-            templates: TemplatePolicy::default(),
-        }
-    }
-
-    /// Validate and create SP configuration on [`SpValidationPolicy::recommended`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
-    /// of at most 1024 characters, required SP metadata endpoints are missing,
-    /// or this build has no crypto provider and the Recommended preset needs
-    /// one.
-    pub fn try_new(entity_id: EntityId, metadata: SpMetadataConfig) -> Result<Self, SamlError> {
-        let config = Self::new(entity_id, metadata);
-        config.validate()?;
-        Ok(config)
-    }
-
     /// Start a dependency-free SP config builder on [`SpValidationPolicy::recommended`].
     ///
-    /// [`Self::try_new`] uses the same preset. [`SpValidationPolicy::compatibility`]
-    /// remains the legacy permissive preset.
+    /// [`SpValidationPolicy::compatibility`] remains the legacy permissive
+    /// preset.
     pub fn builder(entity_id: EntityId) -> SpConfigBuilder {
         SpConfigBuilder::new(entity_id)
     }
 
-    /// Validate required SP config fields.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
-    /// of at most 1024 characters, required SP metadata endpoints are missing,
-    /// or the selected policy requires crypto in a build without a crypto
-    /// provider.
-    pub fn validate(&self) -> Result<(), SamlError> {
-        validate_entity_id_syntax(self.entity_id.as_str())?;
-        self.metadata.validate()?;
-        validate_sp_policy(self)
+    /// Local SP entity ID.
+    pub fn entity_id(&self) -> &EntityId {
+        &self.entity_id
+    }
+
+    /// Local SP metadata inputs.
+    pub fn metadata(&self) -> &SpMetadataConfig {
+        &self.metadata
+    }
+
+    /// Local credentials.
+    pub fn credentials(&self) -> &Credentials {
+        &self.credentials
+    }
+
+    /// Validation and outbound signing policy.
+    pub fn validation(&self) -> &SpValidationPolicy {
+        &self.validation
+    }
+
+    /// Algorithm policy.
+    pub fn algorithms(&self) -> &AlgorithmPolicy {
+        &self.algorithms
+    }
+
+    /// XML parser, redirect, clock, and encryption policy.
+    pub fn xml(&self) -> &XmlPolicy {
+        &self.xml
+    }
+
+    /// Template and prefix policy.
+    pub fn templates(&self) -> &TemplatePolicy {
+        &self.templates
     }
 }
 
@@ -134,7 +111,7 @@ impl SpConfigBuilder {
     fn new(entity_id: EntityId) -> Self {
         Self {
             entity_id,
-            metadata: SpMetadataConfig::new(Vec::new()),
+            metadata: SpMetadataConfig::new(),
             credentials: Credentials::default(),
             validation: SpValidationPolicy::recommended(),
             algorithms: AlgorithmPolicy::default(),
@@ -234,10 +211,16 @@ impl SpConfigBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when required fields are missing, selected policy
-    /// needs unavailable credentials, or selected policy requires crypto in a
-    /// no-default-features build.
+    /// Returns [`SamlError`] when the entity ID is not an absolute URI
+    /// reference of at most 1024 characters, no ACS endpoint is set, a SOAP
+    /// `ManageNameIDService` is set, the organization, contacts, or error URI
+    /// are invalid, an additional decryption key has no primary one, the
+    /// selected policy needs credentials that are not set, the algorithm
+    /// policy is not supported, or the selected policy requires crypto in a
+    /// build without a crypto provider.
     pub fn build(self) -> Result<SpConfig, SamlError> {
+        validate_entity_id_syntax(self.entity_id.as_str())?;
+        self.metadata.validate()?;
         let config = SpConfig {
             entity_id: self.entity_id,
             metadata: self.metadata,
@@ -247,12 +230,15 @@ impl SpConfigBuilder {
             xml: self.xml,
             templates: self.templates,
         };
-        config.validate()?;
+        validate_sp_policy(&config)?;
         Ok(config)
     }
 }
 
 /// Typed Identity Provider configuration.
+///
+/// Build it with [`IdpConfig::builder`]. A built config has passed every check
+/// in [`IdpConfigBuilder::build`] and cannot be changed afterwards.
 ///
 /// # Examples
 ///
@@ -270,88 +256,78 @@ impl SpConfigBuilder {
 ///     .validation(IdpValidationPolicy::compatibility())
 ///     .build()?;
 ///
-/// assert_eq!(config.entity_id.as_str(), "https://idp.example.com/metadata");
+/// assert_eq!(config.entity_id().as_str(), "https://idp.example.com/metadata");
+/// assert_eq!(config.issuance_lifetime(), Duration::from_secs(10 * 60));
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
 #[derive(Debug, Clone)]
 pub struct IdpConfig {
-    /// Local IdP entity ID.
-    pub entity_id: EntityId,
-    /// Local IdP metadata inputs.
-    pub metadata: IdpMetadataConfig,
-    /// Local credentials.
-    pub credentials: Credentials,
-    /// Lifetime applied to assertions issued by this IdP and to
-    /// Session Authority LogoutRequests.
-    ///
-    /// The default is exactly five minutes. That value is saml-rs policy, not
-    /// an OASIS-mandated duration.
-    pub issuance_lifetime: Duration,
-    /// Validation policy.
-    pub validation: IdpValidationPolicy,
-    /// Algorithm policy.
-    pub algorithms: AlgorithmPolicy,
-    /// XML parser, redirect, clock, and encryption policy.
-    pub xml: XmlPolicy,
-    /// Template and prefix policy.
-    pub templates: TemplatePolicy,
+    entity_id: EntityId,
+    metadata: IdpMetadataConfig,
+    credentials: Credentials,
+    issuance_lifetime: time::Duration,
+    validation: IdpValidationPolicy,
+    algorithms: AlgorithmPolicy,
+    xml: XmlPolicy,
+    templates: TemplatePolicy,
 }
 
 impl IdpConfig {
-    /// Create IdP configuration with required identity and metadata inputs.
-    ///
-    /// This convenience constructor accepts already-validated typed inputs but
-    /// does not validate the final config. Validation starts on
-    /// [`IdpValidationPolicy::recommended`]. The issuance lifetime defaults to
-    /// exactly five minutes. Use [`Self::try_new`] or [`Self::builder`] for
-    /// caller-provided setup.
-    pub fn new(entity_id: EntityId, metadata: IdpMetadataConfig) -> Self {
-        Self {
-            entity_id,
-            metadata,
-            credentials: Credentials::default(),
-            issuance_lifetime: Duration::from_secs(300),
-            validation: IdpValidationPolicy::default(),
-            algorithms: AlgorithmPolicy::default(),
-            xml: XmlPolicy::default(),
-            templates: TemplatePolicy::default(),
-        }
-    }
-
-    /// Validate and create IdP configuration on [`IdpValidationPolicy::recommended`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
-    /// of at most 1024 characters, required IdP metadata endpoints are missing,
-    /// the issuance lifetime is zero or outside the range supported by the
-    /// internal time representation, or this build has no crypto provider and
-    /// the Recommended preset needs one.
-    pub fn try_new(entity_id: EntityId, metadata: IdpMetadataConfig) -> Result<Self, SamlError> {
-        let config = Self::new(entity_id, metadata);
-        config.validate()?;
-        Ok(config)
-    }
-
     /// Start a dependency-free IdP config builder on [`IdpValidationPolicy::recommended`]
     /// and a five-minute issuance lifetime.
     pub fn builder(entity_id: EntityId) -> IdpConfigBuilder {
         IdpConfigBuilder::new(entity_id)
     }
 
-    /// Validate required IdP config fields.
+    /// Local IdP entity ID.
+    pub fn entity_id(&self) -> &EntityId {
+        &self.entity_id
+    }
+
+    /// Local IdP metadata inputs.
+    pub fn metadata(&self) -> &IdpMetadataConfig {
+        &self.metadata
+    }
+
+    /// Local credentials.
+    pub fn credentials(&self) -> &Credentials {
+        &self.credentials
+    }
+
+    /// Lifetime applied to assertions issued by this IdP and to
+    /// Session Authority LogoutRequests.
     ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI reference
-    /// of at most 1024 characters, required IdP metadata endpoints are missing,
-    /// the issuance lifetime is zero or outside the range supported by the
-    /// internal time representation, or the selected policy requires crypto in
-    /// a build without a crypto provider.
-    pub fn validate(&self) -> Result<(), SamlError> {
-        validate_entity_id_syntax(self.entity_id.as_str())?;
-        self.metadata.validate()?;
-        validate_idp_policy(self)
+    /// The default is exactly five minutes. That value is saml-rs policy, not
+    /// an OASIS-mandated duration.
+    pub fn issuance_lifetime(&self) -> Duration {
+        Duration::new(
+            self.issuance_lifetime.whole_seconds().unsigned_abs(),
+            self.issuance_lifetime.subsec_nanoseconds().unsigned_abs(),
+        )
+    }
+
+    /// Validation policy.
+    pub fn validation(&self) -> &IdpValidationPolicy {
+        &self.validation
+    }
+
+    /// Algorithm policy.
+    pub fn algorithms(&self) -> &AlgorithmPolicy {
+        &self.algorithms
+    }
+
+    /// XML parser, redirect, clock, and encryption policy.
+    pub fn xml(&self) -> &XmlPolicy {
+        &self.xml
+    }
+
+    /// Template and prefix policy.
+    pub fn templates(&self) -> &TemplatePolicy {
+        &self.templates
+    }
+
+    pub(crate) fn issuance_period(&self) -> time::Duration {
+        self.issuance_lifetime
     }
 }
 
@@ -372,7 +348,7 @@ impl IdpConfigBuilder {
     fn new(entity_id: EntityId) -> Self {
         Self {
             entity_id,
-            metadata: IdpMetadataConfig::new(Vec::new()),
+            metadata: IdpMetadataConfig::new(),
             credentials: Credentials::default(),
             issuance_lifetime: Duration::from_secs(300),
             validation: IdpValidationPolicy::recommended(),
@@ -492,32 +468,33 @@ impl IdpConfigBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when required fields are missing, the issuance
-    /// lifetime is zero or outside the internal supported range, or selected
-    /// policy requires crypto in a no-default-features build.
+    /// Returns [`SamlError`] when the entity ID is not an absolute URI
+    /// reference of at most 1024 characters, no SSO endpoint is set, two
+    /// `ArtifactResolutionService` endpoints share an index, the organization,
+    /// contacts, or error URI are invalid, an additional decryption key has no
+    /// primary one, the issuance lifetime is zero or outside the internal
+    /// supported range, the algorithm policy is not supported, or the selected
+    /// policy requires crypto in a build without a crypto provider.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
+        validate_entity_id_syntax(self.entity_id.as_str())?;
+        self.metadata.validate()?;
         let config = IdpConfig {
             entity_id: self.entity_id,
             metadata: self.metadata,
             credentials: self.credentials,
-            issuance_lifetime: self.issuance_lifetime,
+            issuance_lifetime: validated_idp_issuance_lifetime(self.issuance_lifetime)?,
             validation: self.validation,
             algorithms: self.algorithms,
             xml: self.xml,
             templates: self.templates,
         };
-        config.validate()?;
+        validate_idp_policy(&config)?;
         Ok(config)
     }
 }
 
 fn validate_common_credentials(credentials: &Credentials) -> Result<(), SamlError> {
-    if credentials.signing_key_passphrase.is_some() && credentials.signing_key.is_none() {
-        return Err(SamlError::MissingKey("signing_key".into()));
-    }
-    let decryption_key_needed = credentials.decryption_key_passphrase.is_some()
-        || !credentials.additional_decryption_keys.is_empty();
-    if decryption_key_needed && credentials.decryption_key.is_none() {
+    if !credentials.additional_decryption_keys().is_empty() && credentials.decryption().is_none() {
         return Err(SamlError::MissingKey("decryption_key".into()));
     }
     Ok(())
@@ -533,20 +510,19 @@ fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
     ) {
         validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
     }
-    if config.xml.encryption.selects_any_element() && config.credentials.decryption_key.is_none() {
+    if config.xml.encryption.selects_any_element() && config.credentials.decryption().is_none() {
         return Err(SamlError::MissingKey("decryption_key".into()));
     }
     Ok(())
 }
 
 fn validate_idp_policy(config: &IdpConfig) -> Result<(), SamlError> {
-    validated_idp_issuance_lifetime(config.issuance_lifetime)?;
     validate_idp_crypto_support(config)?;
     super::encryption::validate_algorithms(&config.algorithms)?;
     validate_common_credentials(&config.credentials)
 }
 
-pub(crate) fn validated_idp_issuance_lifetime(
+fn validated_idp_issuance_lifetime(
     issuance_lifetime: Duration,
 ) -> Result<time::Duration, SamlError> {
     if issuance_lifetime.is_zero() {
@@ -566,15 +542,15 @@ fn validate_signing_credentials(
     algorithm: &SignatureAlgorithm,
 ) -> Result<(), SamlError> {
     if matches!(algorithm, SignatureAlgorithm::HmacSha1) {
-        if credentials.hmac_secret.is_none() {
+        if credentials.hmac_secret().is_none() {
             return Err(SamlError::MissingKey("hmac_secret".into()));
         }
         return Ok(());
     }
-    if credentials.signing_key.is_none() {
+    if credentials.signing_key().is_none() {
         return Err(SamlError::MissingKey("signing_key".into()));
     }
-    if credentials.signing_certificate.is_none() {
+    if credentials.signing_certificate().is_none() {
         return Err(SamlError::MissingKey("signing_certificate".into()));
     }
     Ok(())
@@ -645,167 +621,15 @@ fn logout_signature_policy_requires_crypto(policy: LogoutSignaturePolicy) -> boo
     matches!(policy, LogoutSignaturePolicy::RequireSigned)
 }
 
-fn apply_common_settings(
-    entity_id: &EntityId,
-    name_id_format: &[NameIdFormat],
-    credentials: &Credentials,
-    algorithms: &AlgorithmPolicy,
-    xml: &XmlPolicy,
-    templates: &TemplatePolicy,
-    setting: &mut EntitySetting,
-) {
-    setting.entity_id = Some(entity_id.as_str().to_string());
-    setting.request_signature_algorithm = algorithms.signature.as_uri().to_string();
-    setting.data_encryption_algorithm = algorithms.data_encryption.as_uri().to_string();
-    setting.key_encryption_algorithm = algorithms.key_encryption.as_uri().to_string();
-    setting.rsa_oaep_parameters = if let super::KeyEncryptionAlgorithm::RsaOaep { digest, mgf } =
-        &algorithms.key_encryption
-    {
-        Some((digest.clone(), *mgf))
-    } else {
-        None
-    };
-    setting.message_signing_order = algorithms.message_signing_order;
-    setting.is_assertion_encrypted = matches!(
-        xml.encryption.assertions,
-        AssertionEncryptionPolicy::EncryptAssertions
-    );
-    setting.assertion_element_encryption = xml.encryption.assertion_elements();
-    setting.received_encrypted_elements = ReceivedEncryptedElements::DecryptReceived;
-    setting.allow_rsa15_key_transport_decryption =
-        xml.encryption.allows_rsa15_key_transport_decryption();
-    setting.max_decryption_work = xml.encryption.max_decryption_work();
-    setting.relay_state = templates.relay_state.clone();
-    setting.name_id_format = name_id_format_uris(name_id_format);
-    setting.private_key = credentials
-        .signing_key
-        .as_ref()
-        .map(|key| key.as_str().to_string());
-    setting.private_key_pass = credentials
-        .signing_key_passphrase
-        .as_ref()
-        .map(|passphrase| passphrase.as_str().to_string());
-    setting.signing_cert = credentials
-        .signing_certificate
-        .as_ref()
-        .map(|certificate| certificate.as_str().to_string());
-    setting.hmac_secret = credentials.hmac_secret.clone();
-    setting.encrypt_cert = credentials
-        .encryption_certificate
-        .as_ref()
-        .map(|certificate| certificate.as_str().to_string());
-    setting.enc_private_key = credentials
-        .decryption_key
-        .as_ref()
-        .map(|key| key.as_str().to_string());
-    setting.enc_private_key_pass = credentials
-        .decryption_key_passphrase
-        .as_ref()
-        .map(|passphrase| passphrase.as_str().to_string());
-    setting
-        .additional_decryption_keys
-        .clone_from(&credentials.additional_decryption_keys);
-    setting.clock_drifts = xml.clock_drifts;
-    setting.redirect_inflate_max_bytes = xml.redirect_inflate_max_bytes;
-    setting.xml_limits = xml.limits;
-    setting.tag_prefix_protocol = templates.tag_prefix_protocol.clone();
-    setting.tag_prefix_assertion = templates.tag_prefix_assertion.clone();
-    setting.tag_prefix_encrypted_assertion = templates.tag_prefix_encrypted_assertion.clone();
-    setting.login_response_template = templates.login_response_template.clone();
-    setting.login_request_template = templates.login_request_template.clone();
-    setting.logout_request_template = templates.logout_request_template.clone();
-    setting.logout_response_template = templates.logout_response_template.clone();
-    setting.signature_config = templates.signature_config.clone();
-    setting.transformation_algorithms =
-        transform_algorithm_uris(&algorithms.signed_reference_transforms);
-}
-
-impl TryFrom<&SpConfig> for EntitySetting {
-    type Error = SamlError;
-
-    fn try_from(config: &SpConfig) -> Result<Self, Self::Error> {
-        config.validate()?;
-        let mut setting = Self::default();
-        apply_common_settings(
-            &config.entity_id,
-            &config.metadata.name_id_format,
-            &config.credentials,
-            &config.algorithms,
-            &config.xml,
-            &config.templates,
-            &mut setting,
-        );
-        setting.allow_create = name_id_creation_allowed(config.validation.name_id_creation);
-        setting.authn_requests_signed =
-            authn_request_signing_enabled(config.validation.authn_requests);
-        setting.want_assertions_signed = assertion_signature_required(config.validation.assertions);
-        setting.validate_audience = audience_validation_enabled(config.validation.audience);
-        setting.require_audience_restriction =
-            audience_restriction_required(config.validation.audience);
-        setting.want_message_signed = response_signature_required(config.validation.responses);
-        setting.xml_signatures = config.validation.xml_signatures;
-        setting.want_encrypted_cbc_response_signed =
-            encrypted_cbc_response_signature_required(config.validation.responses);
-        setting.want_logout_request_signed =
-            logout_signature_required(config.validation.logout.requests);
-        setting.want_logout_response_signed =
-            logout_signature_required(config.validation.logout.responses);
-        Ok(setting)
-    }
-}
-
-impl TryFrom<&IdpConfig> for EntitySetting {
-    type Error = SamlError;
-
-    fn try_from(config: &IdpConfig) -> Result<Self, Self::Error> {
-        config.validate()?;
-        let mut setting = Self::default();
-        apply_common_settings(
-            &config.entity_id,
-            &config.metadata.name_id_format,
-            &config.credentials,
-            &config.algorithms,
-            &config.xml,
-            &config.templates,
-            &mut setting,
-        );
-        setting.want_authn_requests_signed =
-            authn_request_signature_required(config.validation.authn_requests);
-        setting.verify_authn_request_signature_if_present =
-            verify_present_authn_request_signature(config.validation.authn_requests);
-        setting.xml_signatures = config.validation.xml_signatures;
-        setting.want_logout_request_signed =
-            logout_signature_required(config.validation.logout.requests);
-        setting.want_logout_response_signed =
-            logout_signature_required(config.validation.logout.responses);
-        Ok(setting)
-    }
-}
-
 #[cfg(all(test, not(crypto)))]
 mod no_crypto_tests {
-    use super::{
-        IdpConfig, IdpMetadataConfig, IdpValidationPolicy, SpConfig, SpMetadataConfig,
-        SpValidationPolicy,
-    };
+    use super::{IdpConfig, IdpValidationPolicy, SpConfig, SpValidationPolicy};
     use crate::browser::{AcsEndpoint, SsoEndpoint};
     use crate::config::descriptors::EntityId;
     use crate::error::SamlError;
 
     #[test]
-    fn recommended_constructors_need_a_crypto_provider() -> Result<(), SamlError> {
-        let sp = SpConfig::try_new(
-            EntityId::try_new("https://sp.example.com/metadata")?,
-            SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-        );
-        assert!(matches!(sp, Err(SamlError::Unsupported(_))));
-
-        let idp = IdpConfig::try_new(
-            EntityId::try_new("https://idp.example.com/metadata")?,
-            IdpMetadataConfig::new(vec![SsoEndpoint::post("https://idp.example.com/sso")?]),
-        );
-        assert!(matches!(idp, Err(SamlError::Unsupported(_))));
-
+    fn recommended_builders_need_a_crypto_provider() -> Result<(), SamlError> {
         let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
             .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
             .build();
@@ -825,20 +649,6 @@ mod no_crypto_tests {
             .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
             .validation(IdpValidationPolicy::compatibility())
             .build()?;
-
-        let mut sp = SpConfig::new(
-            EntityId::try_new("https://sp.example.com/metadata")?,
-            SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-        );
-        sp.validation = SpValidationPolicy::compatibility();
-        sp.validate()?;
-
-        let mut idp = IdpConfig::new(
-            EntityId::try_new("https://idp.example.com/metadata")?,
-            IdpMetadataConfig::new(vec![SsoEndpoint::post("https://idp.example.com/sso")?]),
-        );
-        idp.validation = IdpValidationPolicy::compatibility();
-        idp.validate()?;
         Ok(())
     }
 }

@@ -113,6 +113,23 @@ It was generated with OpenSSL `4.1.0`:
 The certificate SHA-256 fingerprint is
 `78:BC:C4:72:37:9A:F4:66:06:87:7E:8C:77:35:7D:CD:C1:6D:0E:43:02:F3:8C:11:52:9B:DE:B9:C3:44:D7:51`.
 
+## Certificate for the passphrase-protected SP key
+
+`key/sp/cert.encrypted.pkcs8.reissued.cer` is a test-only self-signed
+certificate for the key in `key/sp/privkey.encrypted.pkcs8.pem`. Its upstream
+partner is not kept here. `tests/typed_sso/encryption.rs` uses the pair to sign
+and decrypt with a passphrase-protected key. It was generated with OpenSSL
+`4.1.0`:
+`req -new -x509 -key key/sp/privkey.encrypted.pkcs8.pem -sha256 -days 36500 -set_serial 1 -subj "/CN=saml-rs encrypted SP key test"`,
+with the passphrase from upstream `test/key/keypass.txt`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `key/sp/cert.encrypted.pkcs8.reissued.cer` | `22f2f99036727e12fecccce29a0d64b26f7ec43897cbe20717c8421e9483b5e2` |
+
+The certificate SHA-256 fingerprint is
+`73:57:B0:45:7F:C6:2E:14:70:1F:12:08:A0:3B:D8:CD:7B:C4:C0:2E:13:AA:AB:13:6C:EF:03:2C:EB:88:EA:56`.
+
 ## External SLO HTTP-Redirect fixtures
 
 The fixtures under `tests/fixtures/interop/` are immutable interoperability
@@ -254,8 +271,8 @@ canonical path; tests and unit tests load it from that path.
 
 The SP signing pair is `key/sp/privkey.unencrypted.pkcs8.pem` with
 `key/sp/cert.unencrypted.pkcs8.cer`. `key/sp/privkey.encrypted.pkcs8.pem` is
-a different, passphrase-protected key that tests load only to exercise
-encrypted private-key loading.
+a different, passphrase-protected key that tests load to exercise encrypted
+private-key loading, paired with `key/sp/cert.encrypted.pkcs8.reissued.cer`.
 
 Byte-identical copies of `misc/` documents at the top of `tests/fixtures/`,
 and the flat `key/idp_cert.cer`, `key/sp_cert.cer`, `key/sp_signing_cert.cer`,

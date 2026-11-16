@@ -1180,10 +1180,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
                 signature: SignatureAlgorithm::HmacSha1,
                 ..AlgorithmPolicy::default()
             },
-            Credentials {
-                hmac_secret: Some(HmacSecret::try_new(secret)?),
-                ..Credentials::default()
-            },
+            Credentials::default().with_hmac_secret(HmacSecret::try_new(secret)?),
         ))
     };
     let (sp_algorithms, sp_credentials) = hmac(b"service-provider-hmac-secret")?;

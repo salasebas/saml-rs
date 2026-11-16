@@ -479,11 +479,11 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std::error::Error>> {
-    let credentials = saml_rs::Credentials {
-        encryption_certificate: Some(saml_rs::CertificatePem::new(CERT)),
-        decryption_key: Some(saml_rs::PrivateKeyPem::new(KEY)),
-        ..signing_credentials()
-    };
+    let credentials = signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+        certificate: saml_rs::CertificatePem::new(CERT),
+        key: saml_rs::PrivateKeyPem::new(KEY),
+        passphrase: None,
+    });
     let (sp, idp, sp_descriptor, idp_descriptor) = parties_with(
         saml_rs::XmlPolicy {
             encryption: saml_rs::XmlEncryptionPolicy::encrypt_assertions(),

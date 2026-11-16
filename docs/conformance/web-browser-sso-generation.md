@@ -4,7 +4,7 @@ Producer rules for typed Web Browser SSO generation: service-provider
 `start_sso`, and identity-provider `respond_sso` and `initiate_sso`.
 `SpValidationPolicy::recommended` leaves AuthnRequest signing and identifier
 creation off. `IdpValidationPolicy::recommended` does not turn assertion
-encryption on. `Default`, `new`, `try_new`, and the config builders are
+encryption on. `Default` and the config builders are
 Recommended. Raw generation keeps its existing validation defaults. The
 preset distinction is recorded in
 [validation presets](../adr/0002-validation-presets.md).

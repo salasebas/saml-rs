@@ -11,7 +11,7 @@
 //!
 //! [`SpValidationPolicy::recommended`] is the preset for claimed features.
 //! [`SpValidationPolicy::compatibility`] keeps the samlify-port behavior.
-//! `Default`, `new`, `try_new`, and the config builders start on Recommended.
+//! `Default` and the config builders start on Recommended.
 //!
 //! Where the compact flow examples below use
 //! [`ReplayPolicy::DisabledForCompatibility`] or unsigned metadata, treat those
@@ -29,7 +29,7 @@
 //!     .validation(SpValidationPolicy::compatibility())
 //!     .build()?;
 //!
-//! assert_eq!(config.entity_id.as_str(), "https://sp.example.com/metadata");
+//! assert_eq!(config.entity_id().as_str(), "https://sp.example.com/metadata");
 //! # Ok(()) }
 //! ```
 //!
@@ -275,7 +275,7 @@
 //!
 //! The [`raw`] module is the samlify-port surface. [`SpValidationPolicy::compatibility`]
 //! keeps that behavior when leaving the raw API. The two surfaces keep their
-//! own defaults. `Default`, `new`, `try_new`, and the config builders start
+//! own defaults. `Default` and the config builders start
 //! on Recommended. Advanced callers should import
 //! [`raw::ServiceProvider`], [`raw::IdentityProvider`], [`raw::HttpRequest`],
 //! and [`raw::BindingContext`] from there rather than using the root re-exports.

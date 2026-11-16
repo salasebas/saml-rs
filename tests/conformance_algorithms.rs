@@ -53,13 +53,14 @@ struct Side {
 fn signed_with(algorithms: AlgorithmPolicy, key: &str, cert: &str) -> Side {
     Side {
         algorithms,
-        credentials: Credentials {
-            signing_key: Some(PrivateKeyPem::new(key)),
-            signing_certificate: Some(CertificatePem::new(cert)),
-            encryption_certificate: Some(CertificatePem::new(RSA_CERT)),
-            decryption_key: Some(PrivateKeyPem::new(RSA_KEY)),
-            ..Credentials::default()
-        },
+        credentials: Credentials::default()
+            .with_signing_key(PrivateKeyPem::new(key))
+            .with_signing_certificate(CertificatePem::new(cert))
+            .with_decryption(saml_rs::DecryptionCredential {
+                certificate: CertificatePem::new(RSA_CERT),
+                key: PrivateKeyPem::new(RSA_KEY),
+                passphrase: None,
+            }),
     }
 }
 
@@ -837,10 +838,7 @@ fn hmac_sha1(secret: &[u8]) -> Result<Side, SamlError> {
             signature: SignatureAlgorithm::HmacSha1,
             ..AlgorithmPolicy::default()
         },
-        credentials: Credentials {
-            hmac_secret: Some(HmacSecret::try_new(secret)?),
-            ..Credentials::default()
-        },
+        credentials: Credentials::default().with_hmac_secret(HmacSecret::try_new(secret)?),
     })
 }
 

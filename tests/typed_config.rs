@@ -3,17 +3,11 @@ use saml_rs::constants::{
     signature_algorithm, transform_algorithm,
 };
 use saml_rs::flow::FlowOptions;
-#[cfg(crypto)]
 use saml_rs::{
-    xml::XmlLimits, AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, Credentials, IdpConfig, IdpMetadataConfig,
-    ResponseSignaturePolicy, SpConfig, SpMetadataConfig, SsoEndpoint,
-};
-use saml_rs::{
-    CertificatePem, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, EntitySetting, HmacSecret,
-    IdpDescriptor, KeyEncryptionAlgorithm, MaskGenerationFunction, MetadataTrustPolicy,
-    NameIdFormat, Passphrase, PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor,
-    TransformAlgorithm,
+    CertificatePem, Credentials, DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm,
+    EntityId, EntitySetting, HmacSecret, IdpDescriptor, KeyEncryptionAlgorithm,
+    MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
+    SamlError, SignatureAlgorithm, SpDescriptor, TransformAlgorithm,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");
@@ -67,6 +61,27 @@ fn hmac_secret_is_at_least_the_sha1_output_length() {
         Err(SamlError::Invalid(_))
     ));
     assert!(HmacSecret::try_new([0_u8; HmacSecret::MIN_LEN]).is_ok());
+}
+
+#[test]
+fn typed_config_credentials_debug_redacts_every_secret() {
+    let credentials = Credentials::default()
+        .with_encrypted_signing_key(
+            PrivateKeyPem::new("dummy-signing-key-for-credentials-debug-test"),
+            Passphrase::new("dummy-signing-pass-for-credentials-debug-test"),
+        )
+        .with_decryption(DecryptionCredential {
+            certificate: CertificatePem::new("dummy-certificate-for-credentials-debug-test"),
+            key: PrivateKeyPem::new("dummy-decryption-key-for-credentials-debug-test"),
+            passphrase: Some(Passphrase::new(
+                "dummy-decryption-pass-for-credentials-debug-test",
+            )),
+        });
+
+    let debug = format!("{credentials:?}");
+
+    assert!(debug.contains("redacted"), "{debug}");
+    assert!(!debug.contains("for-credentials-debug-test"), "{debug}");
 }
 
 #[test]
@@ -214,105 +229,6 @@ fn typed_config_name_id_formats_return_existing_uri_constants() {
         NameIdFormat::X509SubjectName.as_uri(),
         name_id_format::X509_SUBJECT_NAME
     );
-}
-
-#[cfg(crypto)]
-#[test]
-fn typed_config_sp_config_converts_selected_settings() -> Result<(), Box<dyn std::error::Error>> {
-    let mut config = SpConfig::new(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-    );
-    let limits = XmlLimits {
-        max_bytes: 32_768,
-        max_depth: 64,
-        max_nodes: 512,
-        max_attributes_per_element: 16,
-        max_attribute_value_bytes: 2048,
-        max_text_bytes: 4096,
-    };
-    config.metadata.name_id_format = vec![NameIdFormat::EmailAddress];
-    config.credentials = Credentials {
-        signing_key: Some(PrivateKeyPem::new("dummy-private-key-for-conversion-test")),
-        signing_certificate: Some(CertificatePem::new(
-            "dummy-signing-certificate-for-conversion-test",
-        )),
-        ..Credentials::default()
-    };
-    config.validation.assertions = AssertionSignaturePolicy::RequireSigned;
-    config.validation.responses = ResponseSignaturePolicy::RequireSigned;
-    config.validation.authn_requests = AuthnRequestSigningPolicy::Sign;
-    config.xml.clock_drifts = (-120_000, 180_000);
-    config.xml.limits = limits;
-    config.algorithms.signature = SignatureAlgorithm::RsaSha512;
-    config.algorithms.data_encryption = DataEncryptionAlgorithm::Aes128;
-    config.algorithms.key_encryption = KeyEncryptionAlgorithm::Rsa15ForCompatibility;
-    config.algorithms.signed_reference_transforms =
-        vec![TransformAlgorithm::ExclusiveCanonicalization];
-
-    let debug = format!("{:?}", config.credentials);
-    let setting = EntitySetting::try_from(&config)?;
-
-    assert!(!debug.contains("dummy-private-key-for-conversion-test"));
-    assert_eq!(
-        setting.entity_id.as_deref(),
-        Some("https://sp.example.com/metadata")
-    );
-    assert_eq!(
-        setting.private_key.as_deref(),
-        Some("dummy-private-key-for-conversion-test")
-    );
-    assert_eq!(
-        setting.signing_cert.as_deref(),
-        Some("dummy-signing-certificate-for-conversion-test")
-    );
-    assert!(setting.want_assertions_signed);
-    assert!(setting.want_message_signed);
-    assert!(setting.authn_requests_signed);
-    assert_eq!(setting.clock_drifts, (-120_000, 180_000));
-    assert_eq!(setting.xml_limits, limits);
-    assert_eq!(
-        setting.request_signature_algorithm,
-        signature_algorithm::RSA_SHA512
-    );
-    assert_eq!(
-        setting.data_encryption_algorithm,
-        data_encryption_algorithm::AES_128
-    );
-    assert_eq!(
-        setting.key_encryption_algorithm,
-        key_encryption_algorithm::RSA_1_5
-    );
-    assert_eq!(
-        setting.transformation_algorithms,
-        vec![transform_algorithm::EXC_C14N.to_string()]
-    );
-    Ok(())
-}
-
-#[cfg(crypto)]
-#[test]
-fn typed_config_idp_config_converts_authn_request_policy() -> Result<(), Box<dyn std::error::Error>>
-{
-    let mut config = IdpConfig::new(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        IdpMetadataConfig::new(vec![SsoEndpoint::redirect("https://idp.example.com/sso")?]),
-    );
-    config.metadata.name_id_format = vec![NameIdFormat::Transient];
-    config.validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
-
-    let setting = EntitySetting::try_from(&config)?;
-
-    assert_eq!(
-        setting.entity_id.as_deref(),
-        Some("https://idp.example.com/metadata")
-    );
-    assert!(setting.want_authn_requests_signed);
-    assert_eq!(
-        setting.name_id_format,
-        vec![name_id_format::TRANSIENT.to_string()]
-    );
-    Ok(())
 }
 
 #[test]

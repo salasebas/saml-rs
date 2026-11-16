@@ -16,10 +16,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let privkey = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     let cert = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-    let credentials = || Credentials {
-        signing_key: Some(PrivateKeyPem::new(privkey)),
-        signing_certificate: Some(CertificatePem::new(cert)),
-        ..Credentials::default()
+    let credentials = || {
+        Credentials::default()
+            .with_signing_key(PrivateKeyPem::new(privkey))
+            .with_signing_certificate(CertificatePem::new(cert))
     };
     // DisabledForCompatibility preserves the raw API, which has no replay cache.
     let validation =

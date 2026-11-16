@@ -7,14 +7,13 @@ use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
     AudienceValidationPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
     CertificatePem, Credentials, DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm,
-    EntityId, EntitySetting, IdpConfig, IdpMetadataConfig, IdpValidationPolicy,
-    KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy, MaskGenerationFunction,
-    NameIdCreationPolicy, Passphrase, PrivateKeyPem, ResponseSignaturePolicy, SamlError,
-    SignatureAlgorithm, SpConfig, SpMetadataConfig, SpValidationPolicy, SsoEndpoint,
-    TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
+    EntityId, EntitySetting, IdpConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
+    LogoutSignaturePolicy, MaskGenerationFunction, NameIdCreationPolicy, PrivateKeyPem,
+    ResponseSignaturePolicy, SamlError, SignatureAlgorithm, SpConfig, SpValidationPolicy,
+    SsoEndpoint, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(crypto)]
-use saml_rs::{SloEndpoint, TemplatePolicy, XmlEncryptionPolicy};
+use saml_rs::{TemplatePolicy, XmlEncryptionPolicy};
 
 #[test]
 fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,11 +61,9 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
 }
 
 fn signing_credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new("test signing key")),
-        signing_certificate: Some(CertificatePem::new("test signing certificate")),
-        ..Credentials::default()
-    }
+    Credentials::default()
+        .with_signing_key(PrivateKeyPem::new("test signing key"))
+        .with_signing_certificate(CertificatePem::new("test signing certificate"))
 }
 
 fn assert_missing_metadata(result: Result<impl Sized, SamlError>, field: &str) {
@@ -83,107 +80,15 @@ fn assert_missing_key(result: Result<impl Sized, SamlError>, field: &str) {
     ));
 }
 
-#[cfg(crypto)]
-#[test]
-fn sp_builder_and_struct_literal_reach_same_config() -> Result<(), Box<dyn std::error::Error>> {
-    let entity_id = EntityId::try_new("https://sp.example.com/metadata")?;
-    let acs = AcsEndpoint::post("https://sp.example.com/acs")?;
-    let slo = SloEndpoint::post("https://sp.example.com/slo")?;
-    let credentials = signing_credentials();
-    let validation = SpValidationPolicy::recommended();
-
-    let builder = SpConfig::builder(entity_id.clone())
-        .acs_endpoint(acs.clone())
-        .slo_endpoint(slo.clone())
-        .name_id_format(saml_rs::NameIdFormat::EmailAddress)
-        .credentials(credentials.clone())
-        .validation(validation.clone())
-        .build()?;
-    let literal = SpConfig {
-        entity_id,
-        metadata: SpMetadataConfig {
-            name_id_format: vec![saml_rs::NameIdFormat::EmailAddress],
-            single_logout_service: vec![slo],
-            assertion_consumer_service: vec![acs],
-            manage_name_id_service: Vec::new(),
-            elements_order: None,
-            lifetime: None,
-            organization: None,
-            contacts: Vec::new(),
-            error_url: None,
-        },
-        credentials,
-        validation,
-        algorithms: AlgorithmPolicy::default(),
-        xml: XmlPolicy::default(),
-        templates: Default::default(),
-    };
-    literal.validate()?;
-
-    assert_eq!(builder.entity_id, literal.entity_id);
-    assert_eq!(builder.metadata, literal.metadata);
-    assert_eq!(builder.credentials, literal.credentials);
-    assert_eq!(builder.validation, literal.validation);
-    assert_eq!(builder.algorithms, literal.algorithms);
-    assert_eq!(builder.xml, literal.xml);
-    Ok(())
-}
-
-#[cfg(crypto)]
-#[test]
-fn idp_builder_and_struct_literal_reach_same_config() -> Result<(), Box<dyn std::error::Error>> {
-    let entity_id = EntityId::try_new("https://idp.example.com/metadata")?;
-    let sso = SsoEndpoint::redirect("https://idp.example.com/sso")?;
-    let slo = SloEndpoint::post("https://idp.example.com/slo")?;
-    let validation = IdpValidationPolicy::recommended();
-
-    let builder = IdpConfig::builder(entity_id.clone())
-        .sso_endpoint(sso.clone())
-        .slo_endpoint(slo.clone())
-        .issuance_lifetime(Duration::from_secs(900))
-        .validation(validation.clone())
-        .build()?;
-    let literal = IdpConfig {
-        entity_id,
-        metadata: IdpMetadataConfig {
-            name_id_format: Vec::new(),
-            single_sign_on_service: vec![sso],
-            single_logout_service: vec![slo],
-            artifact_resolution_service: Vec::new(),
-            manage_name_id_service: Vec::new(),
-            elements_order: None,
-            lifetime: None,
-            organization: None,
-            contacts: Vec::new(),
-            error_url: None,
-        },
-        credentials: Credentials::default(),
-        issuance_lifetime: Duration::from_secs(900),
-        validation,
-        algorithms: AlgorithmPolicy::default(),
-        xml: XmlPolicy::default(),
-        templates: Default::default(),
-    };
-    literal.validate()?;
-
-    assert_eq!(builder.entity_id, literal.entity_id);
-    assert_eq!(builder.metadata, literal.metadata);
-    assert_eq!(builder.issuance_lifetime, literal.issuance_lifetime);
-    assert_eq!(builder.validation, literal.validation);
-    assert_eq!(builder.algorithms, literal.algorithms);
-    assert_eq!(builder.xml, literal.xml);
-    Ok(())
-}
-
 #[test]
 fn idp_config_defaults_issuance_lifetime_to_five_minutes() -> Result<(), Box<dyn std::error::Error>>
 {
-    let config = IdpConfig::new(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        IdpMetadataConfig::new(vec![SsoEndpoint::post("https://idp.example.com/sso")?]),
-    );
+    let config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
+        .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+        .validation(IdpValidationPolicy::compatibility())
+        .build()?;
 
-    assert_eq!(config.issuance_lifetime, Duration::from_secs(300));
+    assert_eq!(config.issuance_lifetime(), Duration::from_secs(300));
     Ok(())
 }
 
@@ -195,7 +100,7 @@ fn idp_builder_sets_issuance_lifetime() -> Result<(), Box<dyn std::error::Error>
         .issuance_lifetime(Duration::from_secs(600))
         .build()?;
 
-    assert_eq!(config.issuance_lifetime, Duration::from_secs(600));
+    assert_eq!(config.issuance_lifetime(), Duration::from_secs(600));
     Ok(())
 }
 
@@ -240,39 +145,37 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
         .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
         .build()?;
 
-    assert_eq!(sp.validation, SpValidationPolicy::recommended());
-    assert_eq!(idp.validation, IdpValidationPolicy::recommended());
+    let (sp, idp) = (sp.validation(), idp.validation());
+    assert_eq!(sp, &SpValidationPolicy::recommended());
+    assert_eq!(idp, &IdpValidationPolicy::recommended());
     assert_eq!(
-        sp.validation.assertions,
+        sp.assertions,
         AssertionSignaturePolicy::AllowUnsignedForCompatibility
     );
     assert_eq!(
-        sp.validation.responses,
+        sp.responses,
         ResponseSignaturePolicy::RequireForEncryptedCbc
     );
     assert_eq!(
-        sp.validation.authn_requests,
+        sp.authn_requests,
         AuthnRequestSigningPolicy::DoNotSignForCompatibility
     );
     assert_eq!(
-        sp.validation.audience,
+        sp.audience,
         AudienceValidationPolicy::EvaluatePresentRestrictions
     );
+    assert_eq!(sp.name_id_creation, NameIdCreationPolicy::DoNotAllowCreate);
+    assert_eq!(sp.logout, LogoutPolicy::recommended());
     assert_eq!(
-        sp.validation.name_id_creation,
-        NameIdCreationPolicy::DoNotAllowCreate
-    );
-    assert_eq!(sp.validation.logout, LogoutPolicy::recommended());
-    assert_eq!(
-        sp.validation.xml_signatures,
+        sp.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     assert_eq!(
-        idp.validation.authn_requests,
+        idp.authn_requests,
         AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
     );
     assert_eq!(
-        idp.validation.xml_signatures,
+        idp.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     Ok(())
@@ -313,41 +216,6 @@ fn compatibility_policy_names_unsigned_choices_explicitly() {
         idp.logout.requests,
         LogoutSignaturePolicy::AllowUnsignedForCompatibility
     );
-}
-
-#[test]
-fn raw_settings_keep_audience_and_logout_defaults_that_differ_from_compatibility(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let raw = EntitySetting::default();
-    assert!(raw.validate_audience);
-    assert!(raw.want_logout_request_signed);
-    assert!(raw.want_logout_response_signed);
-
-    let mut sp = SpConfig::new(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-    );
-    sp.validation = SpValidationPolicy::compatibility();
-    let converted = EntitySetting::try_from(&sp)?;
-    assert!(!converted.validate_audience);
-    assert!(!converted.want_logout_request_signed);
-    assert!(!converted.want_logout_response_signed);
-
-    let mut idp = IdpConfig::new(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        IdpMetadataConfig::new(vec![SsoEndpoint::redirect("https://idp.example.com/sso")?]),
-    );
-    idp.validation = IdpValidationPolicy::compatibility();
-    let converted = EntitySetting::try_from(&idp)?;
-    assert!(converted.validate_audience);
-    assert!(!converted.want_logout_request_signed);
-    assert!(!converted.want_logout_response_signed);
-
-    let raw_after = EntitySetting::default();
-    assert!(raw_after.validate_audience);
-    assert!(raw_after.want_logout_request_signed);
-    assert!(raw_after.want_logout_response_signed);
-    Ok(())
 }
 
 #[test]
@@ -414,33 +282,6 @@ fn policy_defaults_are_the_recommended_presets() {
     assert_eq!(LogoutSignaturePolicy::default(), logout.responses);
 }
 
-#[cfg(crypto)]
-#[test]
-fn constructors_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = SpConfig::try_new(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-    )?;
-    let idp = IdpConfig::try_new(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        IdpMetadataConfig::new(vec![SsoEndpoint::redirect("https://idp.example.com/sso")?]),
-    )?;
-    let sp_new = SpConfig::new(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-    );
-    let idp_new = IdpConfig::new(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        IdpMetadataConfig::new(vec![SsoEndpoint::redirect("https://idp.example.com/sso")?]),
-    );
-
-    assert_eq!(sp.validation, SpValidationPolicy::recommended());
-    assert_eq!(idp.validation, IdpValidationPolicy::recommended());
-    assert_eq!(sp_new.validation, SpValidationPolicy::default());
-    assert_eq!(idp_new.validation, IdpValidationPolicy::default());
-    Ok(())
-}
-
 #[test]
 fn legacy_algorithm_variants_are_risk_named() {
     let variants = [
@@ -500,12 +341,15 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         .templates(templates.clone())
         .build()?;
 
-    assert_eq!(config.metadata.elements_order, Some(elements_order));
-    assert_eq!(config.algorithms, algorithms);
-    assert_eq!(config.xml, xml);
-    assert_eq!(config.templates.relay_state, templates.relay_state);
     assert_eq!(
-        config.templates.tag_prefix_protocol,
+        config.metadata().elements_order(),
+        Some(elements_order.as_slice())
+    );
+    assert_eq!(config.algorithms(), &algorithms);
+    assert_eq!(config.xml(), &xml);
+    assert_eq!(config.templates().relay_state, templates.relay_state);
+    assert_eq!(
+        config.templates().tag_prefix_protocol,
         templates.tag_prefix_protocol
     );
     Ok(())
@@ -540,12 +384,15 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         .templates(templates.clone())
         .build()?;
 
-    assert_eq!(config.metadata.elements_order, Some(elements_order));
-    assert_eq!(config.algorithms, algorithms);
-    assert_eq!(config.xml, xml);
-    assert_eq!(config.templates.relay_state, templates.relay_state);
     assert_eq!(
-        config.templates.tag_prefix_assertion,
+        config.metadata().elements_order(),
+        Some(elements_order.as_slice())
+    );
+    assert_eq!(config.algorithms(), &algorithms);
+    assert_eq!(config.xml(), &xml);
+    assert_eq!(config.templates().relay_state, templates.relay_state);
+    assert_eq!(
+        config.templates().tag_prefix_assertion,
         templates.tag_prefix_assertion
     );
     Ok(())
@@ -622,65 +469,23 @@ fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_charact
 }
 
 #[test]
-fn struct_literal_conversion_rejects_an_entity_id_that_is_not_a_uri(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let config = SpConfig::new(
-        EntityId::try_new("not a uri")?,
-        SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
-    );
-    let result = EntitySetting::try_from(&config);
+fn sp_builder_rejects_an_entity_id_that_is_not_a_uri() -> Result<(), Box<dyn std::error::Error>> {
+    let result = SpConfig::builder(EntityId::try_new("not a uri")?)
+        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+        .build();
 
     assert!(matches!(result, Err(SamlError::Invalid(_))));
     Ok(())
 }
 
 #[test]
-fn sp_builder_rejects_signing_passphrase_without_signing_key(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let credentials = Credentials {
-        signing_key_passphrase: Some(Passphrase::new("test passphrase")),
-        ..Credentials::default()
-    };
-
-    let result = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .validation(SpValidationPolicy::compatibility())
-        .credentials(credentials)
-        .build();
-
-    assert_missing_key(result, "signing_key");
-    Ok(())
-}
-
-#[test]
-fn sp_builder_rejects_decryption_passphrase_without_decryption_key(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let credentials = Credentials {
-        decryption_key_passphrase: Some(Passphrase::new("test passphrase")),
-        ..Credentials::default()
-    };
-
-    let result = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .validation(SpValidationPolicy::compatibility())
-        .credentials(credentials)
-        .build();
-
-    assert_missing_key(result, "decryption_key");
-    Ok(())
-}
-
-#[test]
 fn sp_builder_rejects_additional_decryption_keys_without_decryption_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let credentials = Credentials {
-        additional_decryption_keys: vec![DecryptionCredential {
-            certificate: CertificatePem::new("certificate"),
-            key: PrivateKeyPem::new("key"),
-            passphrase: None,
-        }],
-        ..Credentials::default()
-    };
+    let credentials = Credentials::default().with_additional_decryption_key(DecryptionCredential {
+        certificate: CertificatePem::new("certificate"),
+        key: PrivateKeyPem::new("key"),
+        passphrase: None,
+    });
 
     let result = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
         .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
@@ -730,10 +535,8 @@ fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
 #[test]
 fn sp_builder_requires_signing_certificate_when_authn_requests_are_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let credentials = Credentials {
-        signing_key: Some(PrivateKeyPem::new("test signing key")),
-        ..Credentials::default()
-    };
+    let credentials =
+        Credentials::default().with_signing_key(PrivateKeyPem::new("test signing key"));
     let result = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
         .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
         .validation(SpValidationPolicy {
@@ -755,8 +558,8 @@ fn sp_builder_allows_protocol_only_compatibility_without_credentials(
         .validation(SpValidationPolicy::compatibility())
         .build()?;
 
-    assert_eq!(config.validation, SpValidationPolicy::compatibility());
-    assert_eq!(config.credentials, Credentials::default());
+    assert_eq!(config.validation(), &SpValidationPolicy::compatibility());
+    assert_eq!(config.credentials(), &Credentials::default());
     Ok(())
 }
 
@@ -776,15 +579,6 @@ fn sp_builder_requires_decryption_key_when_encrypted_assertions_are_selected(
 
     assert_missing_key(result, "decryption_key");
     Ok(())
-}
-
-#[test]
-fn metadata_try_new_rejects_missing_required_endpoints() {
-    let sp = SpMetadataConfig::try_new(Vec::new());
-    let idp = IdpMetadataConfig::try_new(Vec::new());
-
-    assert_missing_metadata(sp, "AssertionConsumerService");
-    assert_missing_metadata(idp, "SingleSignOnService");
 }
 
 #[test]
