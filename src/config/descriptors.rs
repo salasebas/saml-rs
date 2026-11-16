@@ -95,32 +95,23 @@ use super::metadata_trust::{
 pub struct EntityId(String);
 
 impl EntityId {
-    /// Validate and wrap an entity ID.
+    /// Wrap an entity ID.
     ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when the entity ID is not an absolute
-    /// URI reference, is longer than 1024 characters, or has leading or
-    /// trailing whitespace, a tab, a line break, or consecutive spaces.
-    pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
-        let value = value.into();
-        validate_entity_id_syntax(&value)?;
-        Ok(Self(value))
-    }
-
-    /// Wrap a peer's entity ID, which need not be a URI.
-    ///
-    /// Use it to name the expected entity ID of a peer such as
-    /// `idp.example.com`. A provider's own entity ID built this way is still
-    /// checked when its config is validated.
+    /// Any value with a non-whitespace character is accepted, so this also
+    /// names a peer whose entity ID is not a URI, such as `idp.example.com`.
+    /// A provider's own entity ID must be an absolute URI reference of at most
+    /// 1024 characters with collapsed whitespace; building an `SpConfig` or
+    /// `IdpConfig` checks that.
     ///
     /// # Errors
     ///
     /// Returns [`SamlError::Invalid`] when the entity ID has no
     /// non-whitespace character.
-    pub fn peer(value: impl Into<String>) -> Result<Self, SamlError> {
+    pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
         let value = value.into();
-        validate_peer_entity_id(&value)?;
+        if value.trim().is_empty() {
+            return Err(SamlError::Invalid("entity ID must not be empty".into()));
+        }
         Ok(Self(value))
     }
 
@@ -162,13 +153,6 @@ pub(crate) fn validate_entity_id_syntax(value: &str) -> Result<(), SamlError> {
         return Err(SamlError::Invalid(format!(
             "an entity ID must be an absolute URI reference of at most {MAX_ENTITY_ID_CHARACTERS} characters with collapsed whitespace"
         )));
-    }
-    Ok(())
-}
-
-fn validate_peer_entity_id(value: &str) -> Result<(), SamlError> {
-    if value.trim().is_empty() {
-        return Err(SamlError::Invalid("entity ID must not be empty".into()));
     }
     Ok(())
 }

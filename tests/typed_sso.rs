@@ -1596,12 +1596,12 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         .replace(IDP_ENTITY_ID, PEER_IDP_ENTITY_ID);
     let peer_sp_metadata = sp.metadata_xml().replace(SP_ENTITY_ID, PEER_SP_ENTITY_ID);
     let peer_idp_descriptor = IdpDescriptor::from_metadata_xml(
-        EntityId::peer(PEER_IDP_ENTITY_ID)?,
+        EntityId::try_new(PEER_IDP_ENTITY_ID)?,
         &peer_idp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let peer_sp_descriptor = SpDescriptor::from_metadata_xml(
-        EntityId::peer(PEER_SP_ENTITY_ID)?,
+        EntityId::try_new(PEER_SP_ENTITY_ID)?,
         &peer_sp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;

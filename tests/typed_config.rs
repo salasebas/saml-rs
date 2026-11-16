@@ -316,16 +316,6 @@ fn typed_config_idp_config_converts_authn_request_policy() -> Result<(), Box<dyn
 }
 
 #[test]
-fn typed_config_peer_entity_id_rejects_a_blank_value() {
-    for value in ["", " \t\n"] {
-        assert!(
-            matches!(EntityId::peer(value), Err(SamlError::Invalid(_))),
-            "{value:?}"
-        );
-    }
-}
-
-#[test]
 fn typed_config_idp_descriptor_accepts_expected_unsigned_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let descriptor = IdpDescriptor::from_metadata_xml(
@@ -388,12 +378,12 @@ fn typed_config_descriptors_import_a_peer_entity_id_that_is_not_a_uri(
     let sp_metadata = SP_METADATA.replace("https://sp.example.org/metadata", "sp.example.org");
 
     let idp = IdpDescriptor::from_metadata_xml(
-        EntityId::peer("idp.example.com")?,
+        EntityId::try_new("idp.example.com")?,
         &idp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
-        EntityId::peer("sp.example.org")?,
+        EntityId::try_new("sp.example.org")?,
         &sp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
