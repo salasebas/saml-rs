@@ -1,8 +1,8 @@
 use super::*;
 use crate::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512};
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
-use crate::crypto::construct_saml_signature;
-use crate::crypto::keys::load_private_key;
+use crate::crypto::keys::read_private_key;
+use crate::crypto::sign_saml_xml;
 use crate::util::normalize_cert_string;
 use crate::xml::{extract, ExtractorField};
 use bergshamra::sign;
@@ -181,11 +181,11 @@ fn strict_saml_signature_preflight_rejects_ambiguous_references_and_algorithms()
 
 #[test]
 fn advice_assertion_is_not_a_wrapping_shape() -> Result<(), Box<dyn std::error::Error>> {
-    let document = dom::parse(&format!(
+    let document = dom::parse_document(&format!(
         "<samlp:Response xmlns:samlp=\"{protocol}\" xmlns:saml=\"{assertion}\"><saml:Assertion ID=\"_outer\"><saml:Advice><saml:Assertion ID=\"_advice\"/></saml:Advice></saml:Assertion></samlp:Response>",
         protocol = namespace::PROTOCOL,
         assertion = namespace::ASSERTION,
-    ))?;
+    ), crate::XmlLimits::default())?;
     assert!(!wrapping_detected(&document.root));
     Ok(())
 }
@@ -193,19 +193,20 @@ fn advice_assertion_is_not_a_wrapping_shape() -> Result<(), Box<dyn std::error::
 #[test]
 fn subject_confirmation_data_assertion_is_a_wrapping_shape(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let document = dom::parse(&format!(
+    let document = dom::parse_document(&format!(
         "<samlp:Response xmlns:samlp=\"{protocol}\" xmlns:saml=\"{assertion}\"><saml:Assertion ID=\"_outer\"><saml:Subject><saml:SubjectConfirmation><saml:SubjectConfirmationData><saml:Assertion ID=\"_nested\"/></saml:SubjectConfirmationData></saml:SubjectConfirmation></saml:Subject></saml:Assertion></samlp:Response>",
         protocol = namespace::PROTOCOL,
         assertion = namespace::ASSERTION,
-    ))?;
+    ), crate::XmlLimits::default())?;
     assert!(wrapping_detected(&document.root));
     Ok(())
 }
 
 #[test]
 fn duplicate_saml_id_allows_unique_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let doc = dom::parse(
+    let doc = dom::parse_document(
         r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response"><saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_assertion"/></samlp:Response>"#,
+        crate::XmlLimits::default(),
     )?;
     let mut seen = HashSet::new();
     assert_eq!(duplicate_saml_id(&doc.root, &mut seen), None);
@@ -214,8 +215,9 @@ fn duplicate_saml_id_allows_unique_ids() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn duplicate_saml_id_returns_repeated_value() -> Result<(), Box<dyn std::error::Error>> {
-    let doc = dom::parse(
+    let doc = dom::parse_document(
         r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"><saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_same"/><saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_same"/></samlp:Response>"#,
+        crate::XmlLimits::default(),
     )?;
     let mut seen = HashSet::new();
     assert_eq!(
@@ -227,8 +229,9 @@ fn duplicate_saml_id_returns_repeated_value() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn duplicate_saml_id_ignores_empty_values() -> Result<(), Box<dyn std::error::Error>> {
-    let doc = dom::parse(
+    let doc = dom::parse_document(
         r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID=""><saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID=""/></samlp:Response>"#,
+        crate::XmlLimits::default(),
     )?;
     let mut seen = HashSet::new();
     assert_eq!(duplicate_saml_id(&doc.root, &mut seen), None);
@@ -260,8 +263,8 @@ fn signed_response_with_foreign_extension_certificate() -> Result<String, Box<dy
         r#"<samlp:Extensions><x:Signature xmlns:x="urn:example:extension"><x:X509Certificate>attacker</x:X509Certificate></x:Signature></samlp:Extensions><samlp:Status>"#,
         1,
     );
-    let key = load_private_key(SP_PRIVKEY, None)?;
-    Ok(construct_saml_signature(
+    let key = read_private_key(SP_PRIVKEY, None)?;
+    Ok(sign_saml_xml(
         &response,
         false,
         &key,
@@ -312,7 +315,7 @@ fn signature_over_top_level_issuer(
         &format!("</saml:Issuer>{signature}<samlp:Status>"),
         1,
     );
-    let key = load_private_key(key_pem, None)?;
+    let key = read_private_key(key_pem, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let context = DsigContext::new(manager).with_insecure(true);
@@ -320,7 +323,7 @@ fn signature_over_top_level_issuer(
 }
 
 fn signature_over_response_and_assertion() -> Result<String, Box<dyn std::error::Error>> {
-    let document = dom::parse(RESPONSE)?;
+    let document = dom::parse_document(RESPONSE, crate::XmlLimits::default())?;
     let response_id = node_saml_id(&document.root).ok_or("missing Response ID")?;
     let assertion = document
         .root
@@ -349,7 +352,7 @@ fn signature_over_response_and_assertion() -> Result<String, Box<dyn std::error:
         &format!("</saml:Issuer>{signature}<samlp:Status>"),
         1,
     );
-    let key = load_private_key(SP_PRIVKEY, None)?;
+    let key = read_private_key(SP_PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let context = DsigContext::new(manager).with_insecure(true);
@@ -357,7 +360,7 @@ fn signature_over_response_and_assertion() -> Result<String, Box<dyn std::error:
 }
 
 fn root_signature(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let document = dom::parse(xml)?;
+    let document = dom::parse_document(xml, crate::XmlLimits::default())?;
     let signature = document
         .root
         .child_named("Signature")
@@ -366,7 +369,7 @@ fn root_signature(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 fn remove_signature_key_info(signature: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let document = dom::parse(signature)?;
+    let document = dom::parse_document(signature, crate::XmlLimits::default())?;
     let key_info = document
         .root
         .child_named("KeyInfo")
@@ -386,8 +389,8 @@ fn assertion_signed_response_with_extra_signature(
         "<saml:Issuer ID=\"_signed_response_issuer\">",
         1,
     );
-    let key = load_private_key(SP_PRIVKEY, None)?;
-    let assertion_signed = construct_saml_signature(
+    let key = read_private_key(SP_PRIVKEY, None)?;
+    let assertion_signed = sign_saml_xml(
         &response,
         false,
         &key,
@@ -404,7 +407,7 @@ fn assertion_signed_response_with_extra_signature(
 }
 
 fn sign_template(template: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let key = load_private_key(SP_PRIVKEY, None)?;
+    let key = read_private_key(SP_PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let context = DsigContext::new(manager).with_insecure(true);
@@ -414,7 +417,7 @@ fn sign_template(template: &str) -> Result<String, Box<dyn std::error::Error>> {
 fn response_signed_over_assertion_with_foreign_xpath() -> Result<String, Box<dyn std::error::Error>>
 {
     const XPATH_TRANSFORM: &str = "http://www.w3.org/TR/1999/REC-xpath-19991116";
-    let document = dom::parse(RESPONSE)?;
+    let document = dom::parse_document(RESPONSE, crate::XmlLimits::default())?;
     let assertion = document
         .root
         .child_named("Assertion")
@@ -444,7 +447,7 @@ fn response_signed_over_assertion_with(
     algorithm: &str,
     digest: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let document = dom::parse(RESPONSE)?;
+    let document = dom::parse_document(RESPONSE, crate::XmlLimits::default())?;
     let assertion = document
         .root
         .child_named("Assertion")
@@ -497,7 +500,7 @@ fn cid_reference_response() -> Result<String, Box<dyn std::error::Error>> {
         digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?,
     );
     let template = RESPONSE.replacen("<samlp:Status>", &format!("{signature}<samlp:Status>"), 1);
-    let key = load_private_key(SP_PRIVKEY, None)?;
+    let key = read_private_key(SP_PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);
@@ -857,8 +860,8 @@ fn detailed_rolling_cert_unloadable_peer_keeps_invalid_verdict(
 fn rolling_cert_unloadable_peer_does_not_block_valid_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // response_signed.xml is SHA-1; FIPS rejects that digest.
-    let key = load_private_key(SP_PRIVKEY, None)?;
-    let signed = construct_saml_signature(
+    let key = read_private_key(SP_PRIVKEY, None)?;
+    let signed = sign_saml_xml(
         RESPONSE,
         false,
         &key,
@@ -881,8 +884,8 @@ fn rolling_cert_unloadable_peer_does_not_block_valid_signature(
 #[test]
 fn rolling_cert_key_info_naming_another_trusted_cert_still_verifies(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let key = load_private_key(SP_PRIVKEY, None)?;
-    let signed = construct_saml_signature(RESPONSE, false, &key, IDP_CERT, RSA_SHA256, &[], None)?;
+    let key = read_private_key(SP_PRIVKEY, None)?;
+    let signed = sign_saml_xml(RESPONSE, false, &key, IDP_CERT, RSA_SHA256, &[], None)?;
     let signer = SP_SIGNING_CERT.to_string();
     let named = IDP_CERT.to_string();
     for certs in [vec![signer.clone(), named.clone()], vec![named, signer]] {
@@ -902,8 +905,8 @@ fn rolling_cert_key_info_naming_another_trusted_cert_still_verifies(
 #[test]
 fn rolling_cert_rejects_signer_outside_the_trusted_keys() -> Result<(), Box<dyn std::error::Error>>
 {
-    let key = load_private_key(UNTRUSTED_PRIVKEY, None)?;
-    let signed = construct_saml_signature(RESPONSE, false, &key, SP_CERT, RSA_SHA256, &[], None)?;
+    let key = read_private_key(UNTRUSTED_PRIVKEY, None)?;
+    let signed = sign_saml_xml(RESPONSE, false, &key, SP_CERT, RSA_SHA256, &[], None)?;
     let certs = [SP_SIGNING_CERT.to_string(), SP_CERT.to_string()];
     assert_eq!(verify_signature(&signed, &certs)?, (false, None));
     let detailed = verify_signatures_detailed_with_profile(
@@ -939,11 +942,11 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
     };
     let sign_hmac = |key_bytes: &[u8]| -> Result<String, SamlError> {
         let key = load_hmac_secret(&HmacSecret::try_new(key_bytes)?)?;
-        construct_saml_signature(RESPONSE, false, &key, IDP_CERT, HMAC_SHA1, &[], None)
+        sign_saml_xml(RESPONSE, false, &key, IDP_CERT, HMAC_SHA1, &[], None)
     };
 
-    let rsa_key = load_private_key(SP_PRIVKEY, None)?;
-    let rsa = construct_saml_signature(RESPONSE, false, &rsa_key, IDP_CERT, RSA_SHA256, &[], None)?;
+    let rsa_key = read_private_key(SP_PRIVKEY, None)?;
+    let rsa = sign_saml_xml(RESPONSE, false, &rsa_key, IDP_CERT, RSA_SHA256, &[], None)?;
     assert!(verified(&rsa)?);
     assert!(verified(&sign_hmac(secret.as_bytes())?)?);
 

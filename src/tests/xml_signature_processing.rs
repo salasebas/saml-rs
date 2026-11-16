@@ -4,7 +4,7 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::ParserType;
-use saml_rs::crypto::keys::load_private_key;
+use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{
     verify_signature, verify_signature_with_limits, BergshamraBackend, XmlSecurityBackend,
 };
@@ -35,7 +35,7 @@ fn message(root: &str, signature: &str, children: &str) -> String {
 
 fn sign(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut keys = bergshamra::KeysManager::new();
-    keys.add_key(load_private_key(KEY, None)?);
+    keys.add_key(read_private_key(KEY, None)?);
     Ok(bergshamra::sign(
         &bergshamra::DsigContext::new(keys).with_insecure(true),
         &xml.replace(">AAAA<", "><"),
@@ -114,7 +114,7 @@ fn assertion_only_sso_signature_still_returns_the_assertion(
         signature("#_assertion")
     );
     let xml = sign(&message("Response", "", &assertion))?;
-    let dom = saml_rs::xml::dom::parse(&xml)?;
+    let dom = saml_rs::xml::dom::parse_document(&xml, crate::XmlLimits::default())?;
     let assertion = dom
         .root
         .children

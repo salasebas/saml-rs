@@ -1,8 +1,8 @@
 //! Global parsing context and optional schema validation.
 //!
 //! The [`crate::xml::dom`] parser rejects DOCTYPEs and malformed structures.
-//! [`is_valid_xml`] always runs that baseline hardening; a registered schema
-//! validator is optional defense in depth.
+//! [`is_valid_xml_with_limits`] always runs that baseline hardening; a
+//! registered schema validator is optional defense in depth.
 
 use crate::error::SamlError;
 use crate::xml::XmlLimits;
@@ -13,7 +13,7 @@ pub type SchemaValidator = fn(&str) -> Result<(), String>;
 
 static SCHEMA_VALIDATOR: RwLock<Option<SchemaValidator>> = RwLock::new(None);
 
-/// Register a schema validator run by [`is_valid_xml`].
+/// Register a schema validator run by [`is_valid_xml_with_limits`].
 pub fn set_schema_validator(validator: SchemaValidator) {
     if let Ok(mut guard) = SCHEMA_VALIDATOR.write() {
         *guard = Some(validator);
@@ -21,6 +21,9 @@ pub fn set_schema_validator(validator: SchemaValidator) {
 }
 
 /// Validate XML: baseline hardening (always) plus the registered validator (if any).
+#[deprecated(
+    note = "`saml_rs::context` becomes crate-private in the next minor release; the typed API checks every message it receives"
+)]
 pub fn is_valid_xml(xml: &str) -> Result<(), SamlError> {
     is_valid_xml_with_limits(xml, XmlLimits::default())
 }
@@ -34,7 +37,7 @@ pub(crate) fn validated_document_with_limits(
     xml: &str,
     limits: XmlLimits,
 ) -> Result<crate::xml::dom::Document, SamlError> {
-    let document = crate::xml::dom::parse_with_limits(xml, limits)?;
+    let document = crate::xml::dom::parse_document(xml, limits)?;
     if let Ok(guard) = SCHEMA_VALIDATOR.read() {
         if let Some(validate) = *guard {
             validate(xml).map_err(SamlError::Invalid)?;
@@ -48,6 +51,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "the deprecated public check keeps its behaviour until removal"
+    )]
     fn baseline_rejects_doctype_without_validator() {
         assert!(is_valid_xml("<!DOCTYPE x><x/>").is_err());
         assert!(is_valid_xml("<x>ok</x>").is_ok());

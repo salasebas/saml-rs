@@ -22,15 +22,13 @@ use saml_rs::binding::{append_signature, build_redirect_octet, deflate_raw_decod
 use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
 use saml_rs::constants::{status_code, ParserType};
-use saml_rs::crypto::{
-    construct_message_signature, construct_saml_signature, keys::load_private_key,
-};
+use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::create_logout_request;
 use saml_rs::raw::Binding;
-use saml_rs::xml::dom::parse;
+use saml_rs::xml::dom::parse_document;
 use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
@@ -187,13 +185,13 @@ fn signed_idp_metadata() -> Result<String, SamlError> {
     let xml = format!(
         r#"<EntityDescriptor ID="_idp_md1" entityID="{IDP_ENTITY_ID}" xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_SSO_POST}"/></IDPSSODescriptor></EntityDescriptor>"#
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let config = SignatureConfig {
         prefix: "ds".into(),
         reference: Some("/*[local-name(.)='EntityDescriptor']".into()),
         action: SignatureAction::Prepend,
     };
-    construct_saml_signature(&xml, true, &key, CERT, RSA_SHA256, &[], Some(&config))
+    sign_saml_xml(&xml, true, &key, CERT, RSA_SHA256, &[], Some(&config))
 }
 
 fn sp_with_validation(validation: SpValidationPolicy) -> Result<SpConfig, SamlError> {
@@ -1261,9 +1259,9 @@ fn typed_http_post_preserves_distinct_response_and_assertion_signature_evidence(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
     let response_xml = response_xml_from_fields(&exchange.response_fields)?;
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let response_and_assertion_signed =
-        construct_saml_signature(&response_xml, true, &key, CERT, RSA_SHA512, &[], None)?;
+        sign_saml_xml(&response_xml, true, &key, CERT, RSA_SHA512, &[], None)?;
     let response_fields =
         response_fields_with_xml(exchange.response_fields, &response_and_assertion_signed)?;
     let session = exchange.sp.finish_sso(
@@ -2111,8 +2109,8 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
         other => return Err(format!("expected SignatureVerification, got {other:?}").into()),
     }
 
-    let key = load_private_key(PRIVKEY, None)?;
-    let xml = corrupt_signature_value(&construct_saml_signature(
+    let key = read_private_key(PRIVKEY, None)?;
+    let xml = corrupt_signature_value(&sign_saml_xml(
         &response_xml_from_fields(&exchange.response_fields)?,
         true,
         &key,
@@ -2125,10 +2123,7 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
     let embedded_signature_corrupted = vec![
         FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
         FormField::new("SigAlg", RSA_SHA256),
-        FormField::new(
-            "Signature",
-            construct_message_signature(&octet, &key, RSA_SHA256)?,
-        ),
+        FormField::new("Signature", sign_octet_string(&octet, &key, RSA_SHA256)?),
     ];
     match finish(embedded_signature_corrupted) {
         Err(SamlError::SignatureVerification { reason }) => {
@@ -2153,14 +2148,14 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
     let ruled_xml = response_xml_from_fields(&ruled_fields)?;
     let empty_on_response =
         ruled_xml.replacen("<samlp:Response ", "<samlp:Response InResponseTo=\"\" ", 1);
-    let empty_on_bearer = construct_saml_signature(
+    let empty_on_bearer = sign_saml_xml(
         &strip_embedded_signatures(&ruled_xml.replacen(
             "<saml:SubjectConfirmationData ",
             "<saml:SubjectConfirmationData InResponseTo=\"\" ",
             1,
         ))?,
         false,
-        &load_private_key(PRIVKEY, None)?,
+        &read_private_key(PRIVKEY, None)?,
         CERT,
         RSA_SHA256,
         &[],
@@ -2362,7 +2357,7 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
         let response = idp.initiate_sso(&sp_descriptor, subject(), options)?;
         let fields = post_fields(&response)?;
         let xml = response_xml_from_fields(&fields)?;
-        let document = parse(&xml)?;
+        let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
         let issue_instant = document
             .root
             .attr("IssueInstant")
@@ -2452,8 +2447,8 @@ fn strip_embedded_signatures(xml: &str) -> Result<String, Box<dyn std::error::Er
 }
 
 fn resign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let key = load_private_key(PRIVKEY, None)?;
-    Ok(construct_saml_signature(
+    let key = read_private_key(PRIVKEY, None)?;
+    Ok(sign_saml_xml(
         &strip_embedded_signatures(xml)?,
         true,
         &key,
@@ -3117,8 +3112,8 @@ fn signed_redirect_query_without_destination(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let unsigned = strip_embedded_signatures(&without_destination(xml)?)?;
     let octet = build_redirect_octet(ParserType::SamlRequest, &unsigned, None, RSA_SHA256)?;
-    let key = load_private_key(PRIVKEY, None)?;
-    let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+    let key = read_private_key(PRIVKEY, None)?;
+    let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
     let url = append_signature(IDP_SSO_REDIRECT, &octet, &signature);
     Ok(url
         .split_once('?')

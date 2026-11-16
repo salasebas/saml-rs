@@ -27,7 +27,7 @@ pub(super) fn ensure_import_signature_shape(
     xml: &str,
     transforms: MetadataSignatureTransforms,
 ) -> Result<(), SamlError> {
-    let document = dom::parse(xml)?;
+    let document = dom::parse_document(xml, crate::XmlLimits::default())?;
     let root = &document.root;
     if !is_metadata_root(root) {
         return Ok(());

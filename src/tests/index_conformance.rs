@@ -293,10 +293,10 @@ mod crypto {
     #[cfg(feature = "crypto-rustcrypto")]
     use saml_rs::constants::signature_algorithm::RSA_SHA1;
     use saml_rs::constants::signature_algorithm::RSA_SHA512;
-    use saml_rs::crypto::keys::load_private_key;
+    use saml_rs::crypto::keys::read_private_key;
     use saml_rs::crypto::{
-        construct_message_signature, construct_saml_signature, encrypt_assertion,
-        verify_message_signature, verify_signature,
+        encrypt_assertion, sign_octet_string, sign_saml_xml, verify_octet_string_signature,
+        verify_signature,
     };
     use saml_rs::SamlError;
 
@@ -348,9 +348,9 @@ mod crypto {
 
     // 9-11: sign a SAML message (round-trip verify; bytes are deterministic).
     fn sign_and_verify(octet: &str, alg: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let sig = construct_message_signature(octet, &key, alg)?;
-        assert!(verify_message_signature(octet, &sig, SIGN_CERT, alg)?);
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let sig = sign_octet_string(octet, &key, alg)?;
+        assert!(verify_octet_string_signature(octet, &sig, SIGN_CERT, alg)?);
         Ok(())
     }
     #[cfg(feature = "crypto-rustcrypto")]
@@ -369,8 +369,8 @@ mod crypto {
 
     // 18-20: construct an embedded signature (round-trip verify).
     fn construct_and_verify(alg: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let signed = construct_saml_signature(REQUEST, true, &key, SIGN_CERT, alg, &[], None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let signed = sign_saml_xml(REQUEST, true, &key, SIGN_CERT, alg, &[], None)?;
         assert!(verify_signature(&signed, &[SIGN_CERT.to_string()])?.0);
         Ok(())
     }
@@ -423,9 +423,8 @@ mod crypto {
     // 27: rolling certificate — verification picks the matching cert from a list.
     #[test]
     fn verify_xml_signature_with_rolling_certificate() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let signed =
-            construct_saml_signature(REQUEST, true, &key, SIGN_CERT, RSA_SHA256, &[], None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let signed = sign_saml_xml(REQUEST, true, &key, SIGN_CERT, RSA_SHA256, &[], None)?;
         // metadata declares two certs; only the second is the signer.
         let certs = vec![IDP_CERT.to_string(), SIGN_CERT.to_string()];
         assert!(verify_signature(&signed, &certs)?.0);

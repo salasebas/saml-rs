@@ -18,9 +18,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::name_id_format::{PERSISTENT, UNSPECIFIED};
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512};
-use saml_rs::crypto::{
-    construct_message_signature, construct_saml_signature, keys::load_private_key,
-};
+use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, BrowserInput, EntityId, FormField,
@@ -155,8 +153,8 @@ fn strip_embedded_signatures(xml: &str) -> Result<String, Box<dyn std::error::Er
 }
 
 fn resign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let key = load_private_key(PRIVKEY, None)?;
-    Ok(construct_saml_signature(
+    let key = read_private_key(PRIVKEY, None)?;
+    Ok(sign_saml_xml(
         &strip_embedded_signatures(xml)?,
         true,
         &key,
@@ -338,8 +336,8 @@ fn simple_sign_fields(
         }
         None => format!("SAMLResponse={xml}&SigAlg={sig_alg}"),
     };
-    let key = load_private_key(PRIVKEY, None)?;
-    let signature = construct_message_signature(&octet, &key, sig_alg)?;
+    let key = read_private_key(PRIVKEY, None)?;
+    let signature = sign_octet_string(&octet, &key, sig_alg)?;
     let mut signed = vec![
         FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
         FormField::new("SigAlg", sig_alg),
@@ -390,16 +388,8 @@ fn accept_simple_sign(
 }
 
 fn sign_first_assertion(xml: &str, algorithm: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let key = load_private_key(PRIVKEY, None)?;
-    Ok(construct_saml_signature(
-        xml,
-        false,
-        &key,
-        CERT,
-        algorithm,
-        &[],
-        None,
-    )?)
+    let key = read_private_key(PRIVKEY, None)?;
+    Ok(sign_saml_xml(xml, false, &key, CERT, algorithm, &[], None)?)
 }
 
 fn move_last_assertion_first(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -686,8 +676,8 @@ fn a_second_bearer_assertion_with_the_wrong_audience_is_rejected(
 fn an_unsigned_sibling_assertion_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
     let stripped = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?;
-    let key = load_private_key(PRIVKEY, None)?;
-    let signed = construct_saml_signature(&stripped, false, &key, CERT, RSA_SHA256, &[], None)?;
+    let key = read_private_key(PRIVKEY, None)?;
+    let signed = sign_saml_xml(&stripped, false, &key, CERT, RSA_SHA256, &[], None)?;
     let forged = "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_forged\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://idp.example.com/metadata</saml:Issuer><saml:Subject><saml:NameID>attacker@evil.com</saml:NameID></saml:Subject></saml:Assertion>";
     let at = signed.find("<saml:Assertion").ok_or("missing assertion")?;
     let mut attacked = signed;
@@ -932,16 +922,8 @@ fn expect_error(
 
 /// `xml` signed over the Response root, keeping its assertion signatures.
 fn sign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let key = load_private_key(PRIVKEY, None)?;
-    Ok(construct_saml_signature(
-        xml,
-        true,
-        &key,
-        CERT,
-        RSA_SHA256,
-        &[],
-        None,
-    )?)
+    let key = read_private_key(PRIVKEY, None)?;
+    Ok(sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?)
 }
 
 /// The response of `exchange` with its first assertion signed and no other

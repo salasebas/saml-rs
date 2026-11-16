@@ -126,7 +126,7 @@ mod tests {
     use crate::xml::dom;
 
     fn first_grandchild(xml: &str) -> Result<String, SamlError> {
-        let document = dom::parse(xml)?;
+        let document = dom::parse_document(xml, crate::XmlLimits::default())?;
         let node = document
             .root
             .children

@@ -8,8 +8,8 @@ use base64::Engine;
 use bergshamra::{sign, DsigContext, KeysManager};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
-use saml_rs::crypto::keys::load_private_key;
-use saml_rs::crypto::{construct_saml_signature, verify_signature};
+use saml_rs::crypto::keys::read_private_key;
+use saml_rs::crypto::{sign_saml_xml, verify_signature};
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::util::normalize_cert_string;
 use saml_rs::xml::{extract, ExtractorField};
@@ -24,8 +24,8 @@ const FORGED: &str = "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:a
 
 /// Sign the assertion inside `response.xml` and return the signed Response.
 fn signed_response() -> String {
-    let key = load_private_key(PRIVKEY, None).unwrap();
-    construct_saml_signature(RESPONSE, false, &key, CERT, RSA_SHA256, &[], None).unwrap()
+    let key = read_private_key(PRIVKEY, None).unwrap();
+    sign_saml_xml(RESPONSE, false, &key, CERT, RSA_SHA256, &[], None).unwrap()
 }
 
 fn response_signed_over_top_level_issuer() -> Result<String, Box<dyn std::error::Error>> {
@@ -49,7 +49,7 @@ fn response_signed_over_top_level_issuer() -> Result<String, Box<dyn std::error:
         &format!("</saml:Issuer>{signature}<samlp:Status>"),
         1,
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);
@@ -75,7 +75,7 @@ fn authn_request_signed_over_issuer() -> Result<String, Box<dyn std::error::Erro
         &format!("</saml:Issuer>{signature}<samlp:NameIDPolicy"),
         1,
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);

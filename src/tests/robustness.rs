@@ -3,7 +3,7 @@
 //! (deterministic LCG instead of a property-testing crate).
 
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
-use saml_rs::context::is_valid_xml;
+use saml_rs::context::is_valid_xml_with_limits;
 use saml_rs::xml::{extract, ExtractorField};
 
 fn lcg(seed: &mut u64) -> u8 {
@@ -41,7 +41,7 @@ fn malformed_xml_inputs_never_panic() {
         ExtractorField::new("r", &["Response", "Assertion"]).with_context(),
     ];
     for input in nasty {
-        let _ = is_valid_xml(input);
+        let _ = is_valid_xml_with_limits(input, saml_rs::XmlLimits::default());
         let _ = extract(input, &fields);
     }
 }
@@ -68,7 +68,7 @@ fn pseudo_random_inputs_never_panic() {
             };
             s.push(b as char);
         }
-        let _ = is_valid_xml(&s);
+        let _ = is_valid_xml_with_limits(&s, saml_rs::XmlLimits::default());
         let _ = extract(&s, &fields);
     }
 }
@@ -76,7 +76,7 @@ fn pseudo_random_inputs_never_panic() {
 #[test]
 fn moderately_deep_nesting_does_not_overflow() {
     let deep = format!("{}{}", "<a>".repeat(800), "</a>".repeat(800));
-    let _ = is_valid_xml(&deep);
+    let _ = is_valid_xml_with_limits(&deep, saml_rs::XmlLimits::default());
     let _ = extract(&deep, &[ExtractorField::new("a", &["a"])]);
 }
 

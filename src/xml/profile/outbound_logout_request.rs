@@ -7,7 +7,7 @@ use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
 use crate::xml::any_uri::collapse_whitespace;
-use crate::xml::dom::{parse_with_limits, Document, XmlLimits};
+use crate::xml::dom::{parse_document, Document, XmlLimits};
 use crate::xml::parse_generated_saml_utc_date_time;
 use quick_xml::events::BytesStart;
 use quick_xml::NsReader;
@@ -358,7 +358,7 @@ pub(crate) fn validate_logout_request_outbound(
     expectation: &OutboundLogoutRequestExpectation<'_>,
     validation: OutboundLogoutRequestValidation,
 ) -> Result<Document, SamlError> {
-    let document = parse_with_limits(xml, XmlLimits::unbounded())?;
+    let document = parse_document(xml, XmlLimits::unbounded())?;
     let state = validate_outbound_stream(
         xml,
         "LogoutRequest",

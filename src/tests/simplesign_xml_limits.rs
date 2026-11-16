@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
+use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::xml::dom::DEFAULT_XML_MAX_BYTES;
 use saml_rs::XmlLimits;
 use saml_rs::{
@@ -127,8 +127,8 @@ fn padded(fields: &[FormField], message: &str, padding: usize) -> TestResult<Vec
         Some(relay_state) => format!("{message}={xml}&RelayState={relay_state}&SigAlg={sig_alg}"),
         None => format!("{message}={xml}&SigAlg={sig_alg}"),
     };
-    let key = load_private_key(PRIVKEY, None)?;
-    let signature = construct_message_signature(&octet, &key, sig_alg)?;
+    let key = read_private_key(PRIVKEY, None)?;
+    let signature = sign_octet_string(&octet, &key, sig_alg)?;
 
     let mut padded = vec![
         FormField::new(message, STANDARD.encode(xml.as_bytes())),

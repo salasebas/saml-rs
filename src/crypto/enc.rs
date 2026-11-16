@@ -19,12 +19,12 @@ use crate::error::SamlError;
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeSet};
 
+pub use decrypt::*;
 pub(crate) use decrypt::{
     carries_encrypted_assertion_elements, decrypt_assertion_elements,
     decrypt_assertions_with_limits, decrypt_authn_request_encrypted_id,
     decrypt_logout_request_encrypted_id, decrypt_root_child, RequestAuthentication,
 };
-pub use decrypt::{decrypt_assertion, decrypt_assertion_with_limits, AssertionDecryptionOptions};
 pub use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{
     encrypt_assertion_elements, encrypt_assertion_with_key_transport,
@@ -218,7 +218,7 @@ mod tests {
     use crate::config::ReceivedEncryptedElements;
     use crate::constants::data_encryption_algorithm::AES_256;
     use crate::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
-    use crate::crypto::keys::load_private_key;
+    use crate::crypto::keys::read_private_key;
     use crate::xml::dom::XmlLimits;
     use bergshamra::{decrypt, EncContext, KeysManager};
 
@@ -228,6 +228,10 @@ mod tests {
     const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "the deprecated public decryptor keeps its behaviour until removal"
+    )]
     fn encrypt_then_decrypt_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         let start = RESPONSE
             .find("<saml:Assertion ")
@@ -251,7 +255,7 @@ mod tests {
             )
         );
 
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let (response, assertion) =
             decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
         assert_eq!(assertion, standalone);
@@ -276,9 +280,13 @@ mod tests {
         let encrypted = encrypt_assertion(&first, SP_CERT, AES_256, RSA_OAEP_MGF1P, "saml")?;
         assert_eq!(encrypted.matches("<saml:EncryptedAssertion").count(), 2);
 
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let (response, decrypted) =
-            decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let (response, decrypted) = decrypt_assertion_with_limits(
+            &encrypted,
+            &key,
+            AssertionDecryptionOptions::default(),
+            crate::XmlLimits::default(),
+        )?;
         assert!(!response.contains("EncryptedAssertion"));
         let standalone = assertion.replacen(
             "<saml:Assertion ",
@@ -319,7 +327,7 @@ mod tests {
         assert!(encrypted.contains("<saml:Subject><saml:EncryptedID><xenc:EncryptedData"));
 
         let mut manager = KeysManager::new();
-        manager.add_key(load_private_key(SP_PRIVKEY, None)?);
+        manager.add_key(read_private_key(SP_PRIVKEY, None)?);
         let plaintext = decrypt(&EncContext::new(manager), only_encrypted_data(&encrypted)?)?;
         let document = uppsala::parse(&plaintext)?;
         let root = document.document_element().ok_or("no plaintext element")?;
@@ -364,7 +372,7 @@ mod tests {
 
     #[test]
     fn encrypted_id_must_carry_a_name_id() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let decrypt = |xml: &str| {
             decrypt_assertion_elements(
                 xml,
@@ -424,7 +432,7 @@ mod tests {
         )?;
         let result = decrypt_assertion_elements(
             &plaintext_beside,
-            &[load_private_key(SP_PRIVKEY, None)?],
+            &[read_private_key(SP_PRIVKEY, None)?],
             AssertionDecryptionOptions::default(),
             XmlLimits::default(),
             encrypted_ids(),
@@ -482,7 +490,7 @@ mod tests {
 
         let decrypted = decrypt_assertion_elements(
             &peer,
-            &[load_private_key(SP_PRIVKEY, None)?],
+            &[read_private_key(SP_PRIVKEY, None)?],
             AssertionDecryptionOptions::default(),
             XmlLimits::default(),
             encrypted_ids(),
@@ -509,10 +517,11 @@ mod tests {
         );
         assert!(peer.contains("</xenc:EncryptedData><?pi?><xenc:EncryptedKey"));
 
-        let (response, assertion) = decrypt_assertion(
+        let (response, assertion) = decrypt_assertion_with_limits(
             &peer,
-            &load_private_key(SP_PRIVKEY, None)?,
+            &read_private_key(SP_PRIVKEY, None)?,
             AssertionDecryptionOptions::default(),
+            crate::XmlLimits::default(),
         )?;
         assert!(assertion.starts_with("<saml:Assertion"));
         assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
@@ -538,7 +547,7 @@ mod tests {
         if root_children(&document, namespace::ASSERTION, "EncryptedID")?.len() != 1 {
             return Err(format!("no assertion-namespace EncryptedID: {encrypted}").into());
         }
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let decrypted = decrypt_logout_request_encrypted_id(
             &encrypted,
             &[key],
@@ -561,9 +570,14 @@ mod tests {
         let embedded = encrypt_assertion(RESPONSE, SP_CERT, AES_256, RSA_1_5, "saml")?;
         let encrypted_data = only_encrypted_data(&embedded)?;
         let peer = embedded.replacen(encrypted_data, &with_peer_key(encrypted_data)?, 1);
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         for encrypted in [embedded.as_str(), peer.as_str()] {
-            let refused = decrypt_assertion(encrypted, &key, AssertionDecryptionOptions::default());
+            let refused = decrypt_assertion_with_limits(
+                encrypted,
+                &key,
+                AssertionDecryptionOptions::default(),
+                crate::XmlLimits::default(),
+            );
             assert!(
                 matches!(&refused, Err(SamlError::Unsupported(message)) if message.contains("rsa-1_5")),
                 "{refused:?}"
@@ -573,7 +587,12 @@ mod tests {
                 allow_rsa15_key_transport_decryption: true,
                 ..AssertionDecryptionOptions::default()
             };
-            let (_, assertion) = decrypt_assertion(encrypted, &key, selected)?;
+            let (_, assertion) = decrypt_assertion_with_limits(
+                encrypted,
+                &key,
+                selected,
+                crate::XmlLimits::default(),
+            )?;
             assert!(assertion.contains("_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"));
         }
         Ok(())

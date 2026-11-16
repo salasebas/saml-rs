@@ -10,7 +10,7 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
-use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
+use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
     AcsEndpoint, AuthnRequest, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy,
@@ -133,8 +133,8 @@ fn assertion_signed_with_response_issuer(exchange: &Exchange, issuer: &str) -> T
         issuer,
         1,
     );
-    let key = load_private_key(PRIVKEY, None)?;
-    Ok(construct_saml_signature(
+    let key = read_private_key(PRIVKEY, None)?;
+    Ok(sign_saml_xml(
         &xml,
         false,
         &key,
