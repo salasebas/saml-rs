@@ -2,14 +2,13 @@
 //! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 and is not that preset.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 #[cfg(not(feature = "crypto-fips"))]
 #[path = "typed_sso/encryption.rs"]
 mod encryption;
 
-#[path = "common/replay_cache.rs"]
-mod replay_cache;
+use super::replay_cache;
 
 use replay_cache::RecordingReplayCache;
 
@@ -81,8 +80,8 @@ const HOSTILE_NAME_ID_FORMAT: &str = concat!(
     "<samlp:NameIDPolicy Format=\""
 );
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
@@ -1607,10 +1606,12 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         &peer_sp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let mut signing_setting = EntitySetting::default();
-    signing_setting.private_key = Some(PRIVKEY.to_string());
-    signing_setting.signing_cert = Some(CERT.to_string());
-    signing_setting.want_assertions_signed = true;
+    let signing_setting = EntitySetting {
+        private_key: Some(PRIVKEY.to_string()),
+        signing_cert: Some(CERT.to_string()),
+        want_assertions_signed: true,
+        ..EntitySetting::default()
+    };
     let peer_idp = IdentityProvider::from_metadata(&peer_idp_metadata, signing_setting.clone())?;
     let peer_sp = ServiceProvider::from_metadata(&peer_sp_metadata, signing_setting)?;
     let local_idp = IdentityProvider::from_metadata(idp.metadata_xml(), EntitySetting::default())?;

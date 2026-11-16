@@ -1,7 +1,7 @@
 //! HTTP-POST-SimpleSign messages are decoded under the configured XML limits.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 use common::signing_credentials;
 
@@ -25,7 +25,7 @@ type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 
 const CONFIGURED_MAX_BYTES: usize = 2 * 1024 * 1024;
 const PADDING_ABOVE_DEFAULT_LIMIT: usize = DEFAULT_XML_MAX_BYTES + 1;

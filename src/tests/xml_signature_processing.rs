@@ -13,8 +13,8 @@ use saml_rs::raw::{flow, Binding, FlowOptions, HttpRequest};
 use saml_rs::XmlLimits;
 use saml_rs::{SamlError, XmlSignatureProfile};
 
-const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const DSIG: &str = "http://www.w3.org/2000/09/xmldsig#";
 const PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 const ASSERTION: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
@@ -44,12 +44,14 @@ fn sign(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 fn verify_flow(xml: &str, profile: XmlSignatureProfile) -> Result<(), SamlError> {
     let certs = [CERT.to_string()];
-    let mut options = FlowOptions::default();
-    options.binding = Some(Binding::Post);
-    options.parser_type = Some(ParserType::SamlResponse);
-    options.check_signature = true;
-    options.signing_certs = &certs;
-    options.xml_signatures = profile;
+    let options = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlResponse),
+        check_signature: true,
+        signing_certs: &certs,
+        xml_signatures: profile,
+        ..FlowOptions::default()
+    };
     flow(
         &options,
         &HttpRequest::post(vec![(

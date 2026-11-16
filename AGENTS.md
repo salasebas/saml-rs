@@ -13,6 +13,9 @@ work in the repo, not restate the README.
   compatibility crates. Read it before searching `flow.rs`, `idp.rs`, `sp.rs`,
   or `crypto/verify.rs`.
 - `tests/` contains integration tests and committed fixtures.
+- `src/tests/` holds the tests that build signed, encrypted, or malformed
+  input with crate-private helpers. They import through `saml_rs::` like
+  integration tests do.
 - `examples/` contains runnable examples.
 - XML cryptography is delegated to `bergshamra` behind the default
   `crypto-bergshamra` feature. Do not add in-tree XML-DSig/XML-Enc

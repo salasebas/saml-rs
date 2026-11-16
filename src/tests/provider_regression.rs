@@ -13,18 +13,20 @@ use saml_rs::crypto::{decrypt_assertion, AssertionDecryptionOptions};
 use saml_rs::SamlError;
 use saml_rs::{initialize_crypto_provider, CryptoFipsStatus, CryptoProvider};
 
-const PRIVATE_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
-const CERTIFICATE: &str = include_str!("fixtures/key/idp/cert.cer");
-const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
-const RESPONSE_SIGNED_SHA1: &str = include_str!("fixtures/misc/response_signed.xml");
+const PRIVATE_KEY: &str =
+    include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const CERTIFICATE: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
+const RESPONSE_SIGNED_SHA1: &str = include_str!("../../tests/fixtures/misc/response_signed.xml");
 const RSA_SHA1_OCTETS: &str = "SAMLRequest=provider-matrix";
 // PKCS#1 v1.5 RSA-SHA1 over RSA_SHA1_OCTETS with provider_matrix_privkey.
 const RSA_SHA1_SIGNATURE: &str = "C6V+Aylkp2rFZJEZrpZrYFZDl2xn8kLuuSZcsxZ6ClDkYUBADwl3cVdDstU0i1Kx9CV56m3La/iT463DoKASWY+Jg31NU2741dgH6q3vuWLnUOlKTWHCHrbGOBdpU1DzZw2Ab9CA2KOg7KPlOFvJZMfY2IfdznPyQk4GNr54ij/HZWTZbASdBca6yGONqbsyU2f+IdKAYd+qDOgXn7WZQ3LkCNY1tOTGSoGmRv1FRCfJ4MP2FW2MMSueuS8NLPeW4tsgZ7pIK5Vx2HGeKNz4QtEOlMkOnWNJb6o9MgdywQ0sxbN+vI/m2O1qZz4G/JuoX1NXj+hoQ7UJ2UejcdiscA==";
 
 #[cfg(any(feature = "crypto-aws-lc", feature = "crypto-fips"))]
-const RSA_512_PRIVATE_KEY: &str = include_str!("fixtures/key/rsa512/privkey.pkcs8.pem");
-const RSA_512_CERTIFICATE: &str = include_str!("fixtures/key/rsa512/cert.pem");
-const RSA_512_RESPONSE_SIGNED: &str = include_str!("fixtures/key/rsa512/response_signed.xml");
+const RSA_512_PRIVATE_KEY: &str = include_str!("../../tests/fixtures/key/rsa512/privkey.pkcs8.pem");
+const RSA_512_CERTIFICATE: &str = include_str!("../../tests/fixtures/key/rsa512/cert.pem");
+const RSA_512_RESPONSE_SIGNED: &str =
+    include_str!("../../tests/fixtures/key/rsa512/response_signed.xml");
 const RSA_512_OCTETS: &str = "SAMLRequest=rsa-512";
 // PKCS#1 v1.5 RSA-SHA256 over RSA_512_OCTETS with rsa512/privkey.pkcs8.pem.
 const RSA_512_SIGNATURE: &str =

@@ -1,10 +1,9 @@
 //! Typed SSO acceptance of assertion conditions and every assertion in a response.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
-#[path = "common/replay_cache.rs"]
-mod replay_cache;
+use super::replay_cache;
 
 use replay_cache::RecordingReplayCache;
 
@@ -37,8 +36,8 @@ const SP_ACS_POST: &str = "https://sp.example.com/acs/post";
 const SP_ACS_SIMPLE: &str = "https://sp.example.com/acs/simple";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const OTHER_AUDIENCE: &str = "https://other.example/metadata";
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 struct Exchange {
     sp: Saml<saml_rs::Sp>,
@@ -1026,7 +1025,7 @@ mod encrypted_assertions {
     use saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
     use saml_rs::crypto::encrypt_assertion;
 
-    const OTHER_RECIPIENT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+    const OTHER_RECIPIENT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
     const ENCRYPTED_ID: &str = concat!(
         "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\">",
         "<xenc:CipherData><xenc:CipherValue>AAAA</xenc:CipherValue></xenc:CipherData>",

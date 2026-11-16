@@ -45,12 +45,12 @@ const LOGOUT_REQUEST_MALFORMED_NOT_ON_OR_AFTER_CONTEXT: &str =
     not(feature = "crypto-fips"),
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
-const PRIVATE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const PRIVATE_KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 #[cfg(all(
     not(feature = "crypto-fips"),
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
-const CERTIFICATE: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const CERTIFICATE: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn parse_flow_with_binding(
     xml: &str,
@@ -69,10 +69,12 @@ fn parse_flow_with_binding(
         Binding::Post | Binding::SimpleSign => HttpRequest::post(vec![parameter]),
         _ => return Err(SamlError::UnsupportedBinding { binding }),
     };
-    let mut options = FlowOptions::default();
-    options.binding = Some(binding);
-    options.parser_type = Some(parser_type);
-    options.check_signature = check_signature;
+    let options = FlowOptions {
+        binding: Some(binding),
+        parser_type: Some(parser_type),
+        check_signature,
+        ..FlowOptions::default()
+    };
     flow(&options, &request)
 }
 
@@ -207,11 +209,13 @@ fn expect_decrypted_assertion_profile_rejection_with_context(
         "SAMLResponse".into(),
         STANDARD.encode(encrypted.as_bytes()),
     )]);
-    let mut options = FlowOptions::default();
-    options.binding = Some(Binding::Post);
-    options.parser_type = Some(ParserType::SamlResponse);
-    options.check_signature = true;
-    options.decrypt_key = Some(PRIVATE_KEY);
+    let options = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlResponse),
+        check_signature: true,
+        decrypt_key: Some(PRIVATE_KEY),
+        ..FlowOptions::default()
+    };
 
     match flow(&options, &request) {
         Err(SamlError::ProtocolProfile(message)) if message.contains(context) => Ok(()),
@@ -967,10 +971,12 @@ fn decrypted_assertion_honors_xml_depth_limit_before_profile(
         "SAMLResponse".into(),
         STANDARD.encode(encrypted.as_bytes()),
     )]);
-    let mut options = FlowOptions::default();
-    options.binding = Some(Binding::Post);
-    options.parser_type = Some(ParserType::SamlResponse);
-    options.check_signature = true;
+    let mut options = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlResponse),
+        check_signature: true,
+        ..FlowOptions::default()
+    };
     options.xml_limits.max_depth = 12;
 
     match flow(&options, &request) {

@@ -10,10 +10,10 @@ use saml_rs::crypto::enc::{decrypt_assertion, encrypt_assertion, AssertionDecryp
 use saml_rs::crypto::keys::{load_certificate, load_private_key};
 use saml_rs::SamlError;
 
-const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const OTHER_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
-const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
+const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const OTHER_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
 const SAML: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
 
@@ -98,8 +98,10 @@ fn encrypted_assertion_rejects_excess_key_candidates() -> TestResult {
             &format!("{}{candidate}", wrong_key.repeat(wrong_keys)),
             1,
         );
-        let mut options = AssertionDecryptionOptions::default();
-        options.max_decryption_work = maximum;
+        let options = AssertionDecryptionOptions {
+            max_decryption_work: maximum,
+            ..AssertionDecryptionOptions::default()
+        };
         let result = decrypt_assertion(&crowded, &key, options);
         if accepted {
             assert!(result?.1.contains("<saml:Assertion"));
@@ -125,8 +127,10 @@ fn encrypted_assertions_share_the_document_work_limit() -> TestResult {
         (32, 17, false),
     ] {
         let multiple = encrypted.replacen(assertion, &assertion.repeat(count), 1);
-        let mut options = AssertionDecryptionOptions::default();
-        options.max_decryption_work = maximum;
+        let options = AssertionDecryptionOptions {
+            max_decryption_work: maximum,
+            ..AssertionDecryptionOptions::default()
+        };
         let result = decrypt_assertion(&multiple, &key, options);
         if accepted {
             let (plaintext, _) = result?;
@@ -165,8 +169,10 @@ fn revealed_encrypted_elements_share_the_outer_work_limit() -> TestResult {
             &format!("<saml:EncryptedID>{inner}</saml:EncryptedID>"),
         );
         let outer = encrypted_response(&response)?;
-        let mut options = AssertionDecryptionOptions::default();
-        options.max_decryption_work = maximum;
+        let options = AssertionDecryptionOptions {
+            max_decryption_work: maximum,
+            ..AssertionDecryptionOptions::default()
+        };
         let result = decrypt_assertion(&outer, &key, options);
         if accepted {
             assert!(result?.1.contains("EncryptedID"));

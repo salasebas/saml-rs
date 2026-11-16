@@ -36,11 +36,12 @@ const AES256_CBC: &str = "http://www.w3.org/2001/04/xmlenc#aes256-cbc";
 const AES128_GCM: &str = "http://www.w3.org/2009/xmlenc11#aes128-gcm";
 const RSA_OAEP: &str = "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
-const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
-const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const NEXT_PRIVKEY: &str =
+    include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
