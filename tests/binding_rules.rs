@@ -497,3 +497,32 @@ fn typed_simplesign_binds_relay_state_to_the_raw_xml_signature(
         .into()),
     }
 }
+
+#[test]
+fn typed_simplesign_requires_the_sig_alg_field() -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation(), TemplatePolicy::default())?;
+    let idp = idp_with(signed_authn_request_idp_validation())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::simple_sign())?;
+    let fields: Vec<FormField> = started
+        .outbound
+        .post_form()?
+        .fields()
+        .iter()
+        .filter(|field| field.name() != "SigAlg")
+        .cloned()
+        .collect();
+    let result = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::simple_sign(fields),
+        validation(),
+    );
+    assert!(
+        matches!(
+            result,
+            Err(SamlError::MissingBindingParameter { name: "SigAlg" })
+        ),
+        "{result:?}"
+    );
+    Ok(())
+}

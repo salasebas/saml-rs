@@ -551,7 +551,10 @@ fn simplesign_octet_from_fields(
     let encoded = validate_form_message_kind(fields, expected_message)?;
     let raw_xml = String::from_utf8(base64_decode_with_limit(encoded, limits.max_bytes)?)
         .map_err(|err| SamlError::Xml(err.to_string()))?;
-    let sig_alg = field_value(fields, url_params::SIG_ALG)?.ok_or(SamlError::MissingSigAlg)?;
+    let sig_alg =
+        field_value(fields, url_params::SIG_ALG)?.ok_or(SamlError::MissingBindingParameter {
+            name: url_params::SIG_ALG,
+        })?;
     let relay_state = field_value(fields, url_params::RELAY_STATE)?;
     Ok(build_simplesign_octet(
         message_name,

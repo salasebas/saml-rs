@@ -31,9 +31,6 @@ API. Callers should branch on validation rule failures without string matching.
 
 ## Target Error Shape
 
-The semantic variants below are the ones callers match on. `UnmatchIssuer`
-remains a compatibility variant beside `IssuerMismatch`.
-
 Keep `SamlError` and make it semantic:
 
 ```rust

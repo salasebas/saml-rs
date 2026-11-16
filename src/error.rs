@@ -306,23 +306,8 @@ pub enum SamlError {
     /// No trusted certificate could be selected for verification.
     #[error("no trusted certificate could be selected for verification")]
     NoTrustedCertificate,
-    /// Certificate embedded in the message does not match configured metadata.
-    ///
-    /// The crate does not return it: a signature verifies when a trusted key
-    /// verifies it, whatever certificate its `KeyInfo` carries.
-    #[error("certificate mismatch")]
-    CertificateMismatch,
 
-    // Legacy compatibility and lower-level operational variants.
-    /// Compatibility variant for issuer validation; prefer [`Self::IssuerMismatch`].
-    #[error("ERR_UNMATCH_ISSUER")]
-    UnmatchIssuer,
-    /// Compatibility variant for audience validation; prefer [`Self::AudienceMismatch`].
-    #[error("ERR_UNMATCH_AUDIENCE")]
-    UnmatchAudience,
-    /// Compatibility variant for destination validation; prefer [`Self::DestinationMismatch`].
-    #[error("ERR_UNMATCH_DESTINATION")]
-    UnmatchDestination,
+    // Lower-level operational variants.
     /// Caller supplied a malformed request ID for response correlation.
     ///
     /// Prefer [`Self::InResponseToMismatch`] when a message value fails request
@@ -332,39 +317,11 @@ pub enum SamlError {
     /// Response status code is missing, empty, or could not be extracted.
     #[error("ERR_UNDEFINED_STATUS")]
     UndefinedStatus,
-    /// Compatibility variant for non-success status; prefer [`Self::StatusNotSuccess`].
-    #[error("ERR_FAILED_STATUS with top tier code: {top}, second tier code: {second}")]
-    FailedStatus {
-        /// Top-tier status code.
-        top: String,
-        /// Second-tier status code (empty when absent).
-        second: String,
-    },
-    /// Compatibility variant for elapsed session bounds; prefer [`Self::TimeWindowInvalid`].
-    #[error("ERR_EXPIRED_SESSION")]
-    ExpiredSession,
-    /// Compatibility variant for subject confirmation failures; prefer
-    /// [`Self::SubjectConfirmationInvalid`].
-    #[error("ERR_SUBJECT_UNCONFIRMED")]
-    SubjectUnconfirmed,
     /// A signature-wrapping (XSW) attempt was detected.
     #[error("ERR_POTENTIAL_WRAPPING_ATTACK")]
     PotentialWrappingAttack,
-    /// Compatibility variant for missing binding signature parameters; prefer
-    /// [`Self::SignatureMissing`] or [`Self::MissingBindingParameter`].
-    #[error("ERR_MISSING_SIG_ALG")]
-    MissingSigAlg,
-    /// Compatibility variant for detached signature failures; prefer
-    /// [`Self::SignatureVerification`].
-    #[error("ERR_FAILED_MESSAGE_SIGNATURE_VERIFICATION")]
-    FailedMessageSignatureVerification,
-    /// Compatibility variant for XML-DSig failures; prefer [`Self::SignatureVerification`].
-    #[error("FAILED_TO_VERIFY_SIGNATURE")]
-    FailedToVerifySignature,
-    /// Compatibility variant for certificate mismatch; prefer [`Self::CertificateMismatch`].
-    #[error("ERROR_UNMATCH_CERTIFICATE_DECLARATION_IN_METADATA")]
-    UnmatchCertificate,
-    /// Compatibility variant for unsupported bindings; prefer [`Self::UnsupportedBinding`].
+    /// A binding name is unrecognized, or an input, outbound action, or
+    /// stored binding is one the called operation does not handle.
     #[error("ERR_UNDEFINED_BINDING")]
     UndefinedBinding,
     /// Required metadata (endpoint/certificate) was missing.
