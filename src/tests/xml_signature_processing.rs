@@ -8,13 +8,14 @@ use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{
     verify_signature, verify_signature_with_limits, BergshamraBackend, XmlSecurityBackend,
 };
-use saml_rs::error::ReferenceResolutionReason;
+use saml_rs::error::{ReferenceResolutionReason, SignatureVerificationReason};
 use saml_rs::raw::{flow, Binding, FlowOptions, HttpRequest};
 use saml_rs::XmlLimits;
 use saml_rs::{SamlError, XmlSignatureProfile};
 
 const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const OTHER_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 const DSIG: &str = "http://www.w3.org/2000/09/xmldsig#";
 const PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 const ASSERTION: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
@@ -103,6 +104,22 @@ fn public_verifiers_return_the_covered_root_for_protocol_documents(
         );
         BergshamraBackend::default().verify_signature(&xml, CERT)?;
     }
+    Ok(())
+}
+
+#[test]
+fn backend_rejects_a_signature_no_trusted_key_verifies() -> Result<(), Box<dyn std::error::Error>> {
+    let xml = sign(&message("Response", &signature("#_root"), ""))?;
+    let result = BergshamraBackend::default().verify_signature(&xml, OTHER_CERT);
+    assert!(
+        matches!(
+            result,
+            Err(SamlError::SignatureVerification {
+                reason: SignatureVerificationReason::XmlSignature
+            })
+        ),
+        "{result:?}"
+    );
     Ok(())
 }
 

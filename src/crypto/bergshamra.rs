@@ -1,7 +1,7 @@
 //! `bergshamra`-backed XML security for the selected provider feature.
 
 use crate::crypto::backend::XmlSecurityBackend;
-use crate::error::SamlError;
+use crate::error::{SamlError, SignatureVerificationReason};
 
 /// [`XmlSecurityBackend`] implementation backed by the `bergshamra` crate.
 ///
@@ -18,7 +18,9 @@ impl XmlSecurityBackend for BergshamraBackend {
         match crate::crypto::verify::verify_signature(xml, &[cert_pem.to_string()])? {
             (true, Some(_)) => Ok(()),
             (true, None) => Err(SamlError::SignedReferenceMismatch),
-            (false, _) => Err(SamlError::FailedToVerifySignature),
+            (false, _) => Err(SamlError::SignatureVerification {
+                reason: SignatureVerificationReason::XmlSignature,
+            }),
         }
     }
 }
