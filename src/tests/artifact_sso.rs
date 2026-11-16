@@ -28,8 +28,7 @@ use saml_rs::{
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
-    CertificatePem, Credentials, IdpConfigBuilder, PrivateKeyPem, SloEndpoint, XmlEncryptionPolicy,
-    XmlPolicy,
+    CertificatePem, IdpConfigBuilder, PrivateKeyPem, SloEndpoint, XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -1028,11 +1027,13 @@ fn encrypted_assertion_parties(
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::artifact(SP_ACS_ARTIFACT)?)
-            .credentials(Credentials {
-                encryption_certificate: Some(CertificatePem::new(CERT)),
-                decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-                ..signing_credentials()
-            })
+            .credentials(
+                signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+                    certificate: CertificatePem::new(CERT),
+                    key: PrivateKeyPem::new(PRIVKEY),
+                    passphrase: None,
+                }),
+            )
             .xml(encryption())
             .build()?,
     )?;

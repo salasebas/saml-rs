@@ -1,11 +1,12 @@
 use super::{
-    descriptors, idp_config, logout_request_input, logout_response_input, sp_config, subject,
+    descriptors, idp_config_builder, logout_request_input, logout_response_input,
+    signed_authn_request_idp_validation, signing_sp_validation, sp_config_builder, subject,
     validation, LocalSloRole, LOCAL_SLO_ROLES,
 };
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    Credentials, HmacSecret, LogoutBinding, RespondSlo, Saml, SamlError, SignatureAlgorithm,
-    StartSlo,
+    AlgorithmPolicy, Credentials, HmacSecret, LogoutBinding, RespondSlo, Saml, SamlError,
+    SignatureAlgorithm, StartSlo,
 };
 
 #[test]
@@ -20,20 +21,26 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
             b"shared-provider-hmac-secret".as_slice(),
         ),
     ] {
-        let mut sp_config = sp_config()?;
-        sp_config.algorithms.signature = SignatureAlgorithm::HmacSha1;
-        sp_config.credentials = Credentials {
-            hmac_secret: Some(HmacSecret::try_new(sp_secret)?),
-            ..Credentials::default()
+        let hmac = AlgorithmPolicy {
+            signature: SignatureAlgorithm::HmacSha1,
+            ..AlgorithmPolicy::default()
         };
-        let mut idp_config = idp_config()?;
-        idp_config.algorithms.signature = SignatureAlgorithm::HmacSha1;
-        idp_config.credentials = Credentials {
-            hmac_secret: Some(HmacSecret::try_new(idp_secret)?),
-            ..Credentials::default()
-        };
-        let sp = Saml::sp(sp_config)?;
-        let idp = Saml::idp(idp_config)?;
+        let sp = Saml::sp(
+            sp_config_builder(signing_sp_validation(), None)?
+                .algorithms(hmac.clone())
+                .credentials(
+                    Credentials::default().with_hmac_secret(HmacSecret::try_new(sp_secret)?),
+                )
+                .build()?,
+        )?;
+        let idp = Saml::idp(
+            idp_config_builder(signed_authn_request_idp_validation(), None)?
+                .algorithms(hmac)
+                .credentials(
+                    Credentials::default().with_hmac_secret(HmacSecret::try_new(idp_secret)?),
+                )
+                .build()?,
+        )?;
         let (sp_missing, idp_missing) = descriptors(&sp, &idp)?;
         let sp_wrong = sp_missing
             .clone()

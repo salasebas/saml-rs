@@ -27,12 +27,11 @@ level.
 
 Web Browser SSO, Single Logout, metadata, and replay are classified under
 `docs/conformance/`. `recommended()` publishes that combination.
-`strict()` is removed. `Default`, `new`, `try_new`, and the config builders
-start on Recommended so typed construction has one preset. A validation
-policy enum implements `Default` only when that value is its field in
-Recommended. `XmlSignatureProfile`, `ResponseSignaturePolicy`,
+`strict()` is removed. `Default` and the config builders start on
+Recommended so typed construction has one preset. A validation policy enum
+implements `Default` only when that value is its field in Recommended.
+`XmlSignatureProfile`, `ResponseSignaturePolicy`,
 `AuthnRequestValidationPolicy`, and `AudienceValidationPolicy` have no
 `Default`, so a field takes its value from a preset rather than from a
-silently different enum default. A direct Assertion
-signature and the RSA-SHA2 XML-DSig profile stay independent options on that
-preset. `compatibility()` remains the legacy permissive preset.
+silently different enum default. A direct Assertion signature and the
+RSA-SHA2 XML-DSig profile stay independent options on that preset. `compatibility()` remains the legacy permissive preset.

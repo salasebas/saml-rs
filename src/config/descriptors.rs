@@ -158,39 +158,28 @@ pub(crate) fn validate_entity_id_syntax(value: &str) -> Result<(), SamlError> {
 }
 
 /// Local SP metadata inputs used by typed configuration.
+///
+/// [`SpConfigBuilder`](crate::SpConfigBuilder) fills it, and
+/// [`SpConfig::metadata`](crate::SpConfig::metadata) reads it back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpMetadataConfig {
-    /// `<NameIDFormat>` values advertised by the SP.
-    pub name_id_format: Vec<NameIdFormat>,
-    /// `SingleLogoutService` endpoints.
-    pub single_logout_service: Vec<SloEndpoint>,
-    /// `AssertionConsumerService` endpoints.
-    pub assertion_consumer_service: Vec<AcsEndpoint>,
-    /// HTTP-Redirect `ManageNameIDService` endpoints.
-    pub manage_name_id_service: Vec<ManageNameIdService>,
-    /// Element ordering profile for generated metadata.
-    pub elements_order: Option<Vec<String>>,
-    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
-    /// neither.
-    pub lifetime: Option<MetadataLifetime>,
-    /// Entity-level organization. `None` writes no `Organization`.
-    pub organization: Option<crate::metadata::Organization>,
-    /// Entity-level contacts, in publication order.
-    pub contacts: Vec<crate::metadata::ContactPerson>,
-    /// Error information URI on the SSO role descriptor. `None` omits it.
-    pub error_url: Option<String>,
+    pub(super) name_id_format: Vec<NameIdFormat>,
+    pub(super) single_logout_service: Vec<SloEndpoint>,
+    pub(super) assertion_consumer_service: Vec<AcsEndpoint>,
+    pub(super) manage_name_id_service: Vec<ManageNameIdService>,
+    pub(super) elements_order: Option<Vec<String>>,
+    pub(super) lifetime: Option<MetadataLifetime>,
+    pub(super) organization: Option<crate::metadata::Organization>,
+    pub(super) contacts: Vec<crate::metadata::ContactPerson>,
+    pub(super) error_url: Option<String>,
 }
 
 impl SpMetadataConfig {
-    /// Create SP metadata input with required ACS endpoints visible at the call site.
-    ///
-    /// This constructor does not validate the endpoint list. Use
-    /// [`Self::try_new`] for caller-provided endpoint collections.
-    pub fn new(assertion_consumer_service: Vec<AcsEndpoint>) -> Self {
+    pub(super) fn new() -> Self {
         Self {
             name_id_format: Vec::new(),
             single_logout_service: Vec::new(),
-            assertion_consumer_service,
+            assertion_consumer_service: Vec::new(),
             manage_name_id_service: Vec::new(),
             elements_order: None,
             lifetime: None,
@@ -200,25 +189,7 @@ impl SpMetadataConfig {
         }
     }
 
-    /// Validate and create SP metadata input.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::MissingMetadata`] when no ACS endpoint is supplied.
-    pub fn try_new(assertion_consumer_service: Vec<AcsEndpoint>) -> Result<Self, SamlError> {
-        let config = Self::new(assertion_consumer_service);
-        config.validate()?;
-        Ok(config)
-    }
-
-    /// Validate required SP metadata inputs.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::MissingMetadata`] when no ACS endpoint is supplied,
-    /// [`SamlError::Unsupported`] for a SOAP `ManageNameIDService`, and
-    /// [`SamlError::Invalid`] for invalid organization, contact, or error URI inputs.
-    pub fn validate(&self) -> Result<(), SamlError> {
+    pub(super) fn validate(&self) -> Result<(), SamlError> {
         if self.assertion_consumer_service.is_empty() {
             return Err(SamlError::MissingMetadata(
                 "AssertionConsumerService".into(),
@@ -240,43 +211,77 @@ impl SpMetadataConfig {
         )?;
         Ok(())
     }
+
+    /// `<NameIDFormat>` values advertised by the SP.
+    pub fn name_id_format(&self) -> &[NameIdFormat] {
+        &self.name_id_format
+    }
+
+    /// `SingleLogoutService` endpoints.
+    pub fn single_logout_service(&self) -> &[SloEndpoint] {
+        &self.single_logout_service
+    }
+
+    /// `AssertionConsumerService` endpoints.
+    pub fn assertion_consumer_service(&self) -> &[AcsEndpoint] {
+        &self.assertion_consumer_service
+    }
+
+    /// HTTP-Redirect `ManageNameIDService` endpoints.
+    pub fn manage_name_id_service(&self) -> &[ManageNameIdService] {
+        &self.manage_name_id_service
+    }
+
+    /// Element ordering profile for generated metadata.
+    pub fn elements_order(&self) -> Option<&[String]> {
+        self.elements_order.as_deref()
+    }
+
+    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
+    /// neither.
+    pub fn lifetime(&self) -> Option<MetadataLifetime> {
+        self.lifetime
+    }
+
+    /// Entity-level organization. `None` writes no `Organization`.
+    pub fn organization(&self) -> Option<&crate::metadata::Organization> {
+        self.organization.as_ref()
+    }
+
+    /// Entity-level contacts, in publication order.
+    pub fn contacts(&self) -> &[crate::metadata::ContactPerson] {
+        &self.contacts
+    }
+
+    /// Error information URI on the SSO role descriptor. `None` omits it.
+    pub fn error_url(&self) -> Option<&str> {
+        self.error_url.as_deref()
+    }
 }
 
 /// Local IdP metadata inputs used by typed configuration.
+///
+/// [`IdpConfigBuilder`](crate::IdpConfigBuilder) fills it, and
+/// [`IdpConfig::metadata`](crate::IdpConfig::metadata) reads it back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdpMetadataConfig {
-    /// `<NameIDFormat>` values advertised by the IdP.
-    pub name_id_format: Vec<NameIdFormat>,
-    /// `SingleSignOnService` endpoints.
-    pub single_sign_on_service: Vec<SsoEndpoint>,
-    /// `SingleLogoutService` endpoints.
-    pub single_logout_service: Vec<SloEndpoint>,
-    /// SOAP `ArtifactResolutionService` endpoints.
-    pub artifact_resolution_service: Vec<ArtifactResolutionService>,
-    /// SOAP and HTTP-Redirect `ManageNameIDService` endpoints.
-    pub manage_name_id_service: Vec<ManageNameIdService>,
-    /// Element ordering profile for generated metadata.
-    pub elements_order: Option<Vec<String>>,
-    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
-    /// neither.
-    pub lifetime: Option<MetadataLifetime>,
-    /// Entity-level organization. `None` writes no `Organization`.
-    pub organization: Option<crate::metadata::Organization>,
-    /// Entity-level contacts, in publication order.
-    pub contacts: Vec<crate::metadata::ContactPerson>,
-    /// Error information URI on the SSO role descriptor. `None` omits it.
-    pub error_url: Option<String>,
+    pub(super) name_id_format: Vec<NameIdFormat>,
+    pub(super) single_sign_on_service: Vec<SsoEndpoint>,
+    pub(super) single_logout_service: Vec<SloEndpoint>,
+    pub(super) artifact_resolution_service: Vec<ArtifactResolutionService>,
+    pub(super) manage_name_id_service: Vec<ManageNameIdService>,
+    pub(super) elements_order: Option<Vec<String>>,
+    pub(super) lifetime: Option<MetadataLifetime>,
+    pub(super) organization: Option<crate::metadata::Organization>,
+    pub(super) contacts: Vec<crate::metadata::ContactPerson>,
+    pub(super) error_url: Option<String>,
 }
 
 impl IdpMetadataConfig {
-    /// Create IdP metadata input with required SSO endpoints visible at the call site.
-    ///
-    /// This constructor does not validate the endpoint list. Use
-    /// [`Self::try_new`] for caller-provided endpoint collections.
-    pub fn new(single_sign_on_service: Vec<SsoEndpoint>) -> Self {
+    pub(super) fn new() -> Self {
         Self {
             name_id_format: Vec::new(),
-            single_sign_on_service,
+            single_sign_on_service: Vec::new(),
             single_logout_service: Vec::new(),
             artifact_resolution_service: Vec::new(),
             manage_name_id_service: Vec::new(),
@@ -288,25 +293,7 @@ impl IdpMetadataConfig {
         }
     }
 
-    /// Validate and create IdP metadata input.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::MissingMetadata`] when no SSO endpoint is supplied.
-    pub fn try_new(single_sign_on_service: Vec<SsoEndpoint>) -> Result<Self, SamlError> {
-        let config = Self::new(single_sign_on_service);
-        config.validate()?;
-        Ok(config)
-    }
-
-    /// Validate required IdP metadata inputs.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::MissingMetadata`] when no SSO endpoint is supplied,
-    /// and [`SamlError::Invalid`] for duplicate artifact endpoint indexes or
-    /// invalid organization, contact, or error URI inputs.
-    pub fn validate(&self) -> Result<(), SamlError> {
+    pub(super) fn validate(&self) -> Result<(), SamlError> {
         if self.single_sign_on_service.is_empty() {
             return Err(SamlError::MissingMetadata("SingleSignOnService".into()));
         }
@@ -325,6 +312,57 @@ impl IdpMetadataConfig {
             self.error_url.as_deref(),
         )?;
         Ok(())
+    }
+
+    /// `<NameIDFormat>` values advertised by the IdP.
+    pub fn name_id_format(&self) -> &[NameIdFormat] {
+        &self.name_id_format
+    }
+
+    /// `SingleSignOnService` endpoints.
+    pub fn single_sign_on_service(&self) -> &[SsoEndpoint] {
+        &self.single_sign_on_service
+    }
+
+    /// `SingleLogoutService` endpoints.
+    pub fn single_logout_service(&self) -> &[SloEndpoint] {
+        &self.single_logout_service
+    }
+
+    /// SOAP `ArtifactResolutionService` endpoints.
+    pub fn artifact_resolution_service(&self) -> &[ArtifactResolutionService] {
+        &self.artifact_resolution_service
+    }
+
+    /// SOAP and HTTP-Redirect `ManageNameIDService` endpoints.
+    pub fn manage_name_id_service(&self) -> &[ManageNameIdService] {
+        &self.manage_name_id_service
+    }
+
+    /// Element ordering profile for generated metadata.
+    pub fn elements_order(&self) -> Option<&[String]> {
+        self.elements_order.as_deref()
+    }
+
+    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
+    /// neither.
+    pub fn lifetime(&self) -> Option<MetadataLifetime> {
+        self.lifetime
+    }
+
+    /// Entity-level organization. `None` writes no `Organization`.
+    pub fn organization(&self) -> Option<&crate::metadata::Organization> {
+        self.organization.as_ref()
+    }
+
+    /// Entity-level contacts, in publication order.
+    pub fn contacts(&self) -> &[crate::metadata::ContactPerson] {
+        &self.contacts
+    }
+
+    /// Error information URI on the SSO role descriptor. `None` omits it.
+    pub fn error_url(&self) -> Option<&str> {
+        self.error_url.as_deref()
     }
 }
 

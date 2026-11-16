@@ -285,15 +285,15 @@ fn generation_validates_localized_values_contacts_and_error_uris() -> TestResult
         generate_idp_metadata(&cfg),
         Err(SamlError::Invalid(_))
     ));
-    let mut config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+    let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
         .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
         .validation(SpValidationPolicy::compatibility())
-        .build()?;
-    config.metadata.contacts = vec![ContactPerson {
-        email_addresses: vec!["invalid".into()],
-        ..ContactPerson::new(ContactType::Technical)
-    }];
-    assert!(matches!(config.validate(), Err(SamlError::Invalid(_))));
+        .contact(ContactPerson {
+            email_addresses: vec!["invalid".into()],
+            ..ContactPerson::new(ContactType::Technical)
+        })
+        .build();
+    assert!(matches!(config, Err(SamlError::Invalid(_))));
     Ok(())
 }
 

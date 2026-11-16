@@ -103,6 +103,9 @@ mapping is not implemented.
 | Clock, replay context, and message age | `src/model/validation.rs` |
 | Validation presets and named policies | `src/config/policies.rs` |
 | Peer descriptors | `src/config/descriptors.rs` |
+| `SpConfig`, `IdpConfig`, their builders, and the checks `build()` runs | `src/config/builders.rs` |
+| `Credentials` | `src/config/credentials.rs` |
+| Typed config to raw `EntitySetting` | `src/config/entity_setting.rs` |
 | Metadata `validUntil` of a peer descriptor | `src/metadata/validity.rs` |
 | `validUntil` and `cacheDuration` on generated metadata | `src/metadata/lifetime.rs` |
 

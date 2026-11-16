@@ -33,11 +33,9 @@ struct Parties {
 }
 
 fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
-    let credentials = Credentials {
-        signing_key: Some(PrivateKeyPem::new(KEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        ..Credentials::default()
-    };
+    let credentials = Credentials::default()
+        .with_signing_key(PrivateKeyPem::new(KEY))
+        .with_signing_certificate(CertificatePem::new(CERT));
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.mark_default())

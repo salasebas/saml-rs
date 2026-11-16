@@ -107,8 +107,7 @@ mod response_acs;
 mod slo;
 mod sp;
 
-use crate::config::{validated_idp_issuance_lifetime, IdpConfig, SpConfig};
-use crate::entity::EntitySetting;
+use crate::config::{IdpConfig, SpConfig};
 use crate::error::SamlError as Error;
 use crate::idp::IdentityProvider;
 use crate::sp::ServiceProvider;
@@ -151,15 +150,14 @@ impl Saml {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the SP config cannot be converted into raw
-    /// settings or metadata, including missing metadata, missing keys, a
-    /// configured NameID format that is not an absolute URI reference, two
-    /// ACS endpoints with the same index, more ACS endpoints than
-    /// `unsignedShort` indexes, or unsupported crypto configuration.
+    /// Returns [`SamlError`] when SP metadata cannot be generated from the
+    /// config, including a configured NameID format that is not an absolute
+    /// URI reference, two ACS endpoints with the same index, more ACS
+    /// endpoints than `unsignedShort` indexes, or an endpoint or certificate
+    /// that the generated metadata cannot declare.
     pub fn sp(config: SpConfig) -> Result<Saml<Sp>, SamlError> {
-        let setting = EntitySetting::try_from(&config)?;
         let raw_config = raw_sp_metadata_config(&config);
-        let service_provider = ServiceProvider::from_config(&raw_config, setting)?;
+        let service_provider = ServiceProvider::from_config(&raw_config, config.entity_setting())?;
         Ok(Saml(Sp { service_provider }))
     }
 
@@ -167,18 +165,17 @@ impl Saml {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the IdP config cannot be converted into raw
-    /// settings or metadata, including an invalid issuance lifetime, missing
-    /// metadata, missing keys, a configured NameID format that is not an
-    /// absolute URI reference, or unsupported crypto configuration.
+    /// Returns [`SamlError`] when IdP metadata cannot be generated from the
+    /// config, including a configured NameID format that is not an absolute
+    /// URI reference, or an endpoint or certificate that the generated
+    /// metadata cannot declare.
     pub fn idp(config: IdpConfig) -> Result<Saml<Idp>, SamlError> {
-        let issuance_lifetime = validated_idp_issuance_lifetime(config.issuance_lifetime)?;
-        let setting = EntitySetting::try_from(&config)?;
         let raw_config = raw_idp_metadata_config(&config);
-        let identity_provider = IdentityProvider::from_config(&raw_config, setting)?;
+        let identity_provider =
+            IdentityProvider::from_config(&raw_config, config.entity_setting())?;
         Ok(Saml(Idp {
             identity_provider,
-            issuance_lifetime,
+            issuance_lifetime: config.issuance_period(),
         }))
     }
 }

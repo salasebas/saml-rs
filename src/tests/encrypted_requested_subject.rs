@@ -47,11 +47,11 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
-            .credentials(Credentials {
-                signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-                signing_certificate: Some(CertificatePem::new(CERT)),
-                ..Credentials::default()
-            })
+            .credentials(
+                Credentials::default()
+                    .with_signing_key(PrivateKeyPem::new(PRIVKEY))
+                    .with_signing_certificate(CertificatePem::new(CERT)),
+            )
             .validation(SpValidationPolicy::recommended())
             .build()?,
     )
@@ -62,13 +62,14 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 fn idp_credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(CertificatePem::new(CERT)),
-        encryption_certificate: Some(CertificatePem::new(CERT)),
-        decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        ..Credentials::default()
-    }
+    Credentials::default()
+        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
+        .with_signing_certificate(CertificatePem::new(CERT))
+        .with_decryption(DecryptionCredential {
+            certificate: CertificatePem::new(CERT),
+            key: PrivateKeyPem::new(PRIVKEY),
+            passphrase: None,
+        })
 }
 
 fn idp_with_credentials(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -216,14 +217,13 @@ fn unsigned_request_encrypted_id_is_decrypted_only_with_gcm(
 #[test]
 fn encrypted_id_made_for_either_published_certificate_is_the_requested_name_id(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp_with_credentials(Credentials {
-        additional_decryption_keys: vec![DecryptionCredential {
+    let idp = idp_with_credentials(idp_credentials().with_additional_decryption_key(
+        DecryptionCredential {
             certificate: CertificatePem::new(NEXT_CERT),
             key: PrivateKeyPem::new(NEXT_PRIVKEY),
             passphrase: None,
-        }],
-        ..idp_credentials()
-    })?;
+        },
+    ))?;
     for encryption_cert in [CERT, NEXT_CERT] {
         let encrypted = encrypted_id_for(encryption_cert, AES128_GCM)?;
         assert_eq!(received_by(&idp, &encrypted, Signing::Signed)?, alice());

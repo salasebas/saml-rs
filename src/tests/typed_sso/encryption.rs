@@ -4,16 +4,21 @@ use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, DecryptionCredential};
 fn encrypted_exchange(
     algorithm: DataEncryptionAlgorithm,
 ) -> Result<SsoExchange, Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_with_validation_and_xml(SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        ..recommended_sso_accept_validation()
-    })?)?;
-    let mut idp_config = idp_with_validation_and_xml(recommended_sso_accept_idp_validation())?;
-    idp_config.algorithms = AlgorithmPolicy {
-        data_encryption: algorithm,
-        ..AlgorithmPolicy::default()
-    };
-    let idp = Saml::idp(idp_config)?;
+    let sp = Saml::sp(
+        sp_with_validation_and_xml(SpValidationPolicy {
+            assertions: AssertionSignaturePolicy::RequireSigned,
+            ..recommended_sso_accept_validation()
+        })?
+        .build()?,
+    )?;
+    let idp = Saml::idp(
+        idp_with_validation_and_xml(recommended_sso_accept_idp_validation())?
+            .algorithms(AlgorithmPolicy {
+                data_encryption: algorithm,
+                ..AlgorithmPolicy::default()
+            })
+            .build()?,
+    )?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -72,13 +77,15 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
 #[test]
 fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let accepting = Saml::sp(sp_with_validation_and_xml(
-        recommended_sso_accept_validation(),
-    )?)?;
-    let relaxed = Saml::sp(sp_with_validation_and_xml(SpValidationPolicy {
-        responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
-        ..recommended_sso_accept_validation()
-    })?)?;
+    let accepting =
+        Saml::sp(sp_with_validation_and_xml(recommended_sso_accept_validation())?.build()?)?;
+    let relaxed = Saml::sp(
+        sp_with_validation_and_xml(SpValidationPolicy {
+            responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
+            ..recommended_sso_accept_validation()
+        })?
+        .build()?,
+    )?;
     for algorithm in [
         DataEncryptionAlgorithm::Aes128,
         DataEncryptionAlgorithm::Custom("http://www.w3.org/2001/04/xmlenc#aes192-cbc".into()),
@@ -172,18 +179,23 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
         .ok_or("missing key")?;
     let range = document.node_range(key).ok_or("missing key range")?;
     let candidate = &xml[range];
-    let mut config = sp_with_validation_and_xml(recommended_sso_accept_validation())?;
-    config.credentials.decryption_key = Some(PrivateKeyPem::new(include_str!(
-        "../../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"
-    )));
-    config.credentials.encryption_certificate = Some(CertificatePem::new(include_str!(
-        "../../../tests/fixtures/key/idp/cert.cer"
-    )));
-    config.credentials.additional_decryption_keys = vec![DecryptionCredential {
-        certificate: CertificatePem::new(CERT),
-        key: PrivateKeyPem::new(PRIVKEY),
-        passphrase: None,
-    }];
+    let config = sp_with_validation_and_xml(recommended_sso_accept_validation())?.credentials(
+        encryption_credentials()
+            .with_decryption(DecryptionCredential {
+                certificate: CertificatePem::new(include_str!(
+                    "../../../tests/fixtures/key/idp/cert.cer"
+                )),
+                key: PrivateKeyPem::new(include_str!(
+                    "../../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"
+                )),
+                passphrase: None,
+            })
+            .with_additional_decryption_key(DecryptionCredential {
+                certificate: CertificatePem::new(CERT),
+                key: PrivateKeyPem::new(PRIVKEY),
+                passphrase: None,
+            }),
+    );
     for (maximum, count, accepted) in [
         (16, 1, true),
         (16, 7, true),
@@ -193,8 +205,15 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
         (3, 1, false),
         (0, 1, false),
     ] {
-        let mut configured = config.clone();
-        configured.xml.encryption = configured.xml.encryption.with_max_decryption_work(maximum);
+        let configured = config
+            .clone()
+            .xml(XmlPolicy {
+                encryption: encrypted_xml_policy()
+                    .encryption
+                    .with_max_decryption_work(maximum),
+                ..encrypted_xml_policy()
+            })
+            .build()?;
         let rollover = Saml::sp(configured)?;
         let crowded = xml.replacen(candidate, &candidate.repeat(count), 1);
         for variant in [crowded.clone(), resign_response(&crowded)?] {
@@ -217,5 +236,51 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
             }
         }
     }
+    Ok(())
+}
+
+#[cfg(feature = "crypto-rustcrypto")]
+#[test]
+fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
+) -> Result<(), Box<dyn std::error::Error>> {
+    const KEY: &str = include_str!("../../../tests/fixtures/key/sp/privkey.encrypted.pkcs8.pem");
+    const KEY_CERT: &str =
+        include_str!("../../../tests/fixtures/key/sp/cert.encrypted.pkcs8.reissued.cer");
+    const PASSPHRASE: &str = "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px";
+    use saml_rs::{Credentials, Passphrase};
+    let credentials = Credentials::default()
+        .with_encrypted_signing_key(PrivateKeyPem::new(KEY), Passphrase::new(PASSPHRASE))
+        .with_signing_certificate(CertificatePem::new(KEY_CERT))
+        .with_decryption(DecryptionCredential {
+            certificate: CertificatePem::new(KEY_CERT),
+            key: PrivateKeyPem::new(KEY),
+            passphrase: Some(Passphrase::new(PASSPHRASE)),
+        });
+    let sp = Saml::sp(
+        sp_with_validation_and_xml(signing_sp_validation())?
+            .credentials(credentials)
+            .build()?,
+    )?;
+    let idp =
+        Saml::idp(idp_with_validation_and_xml(signed_authn_request_idp_validation())?.build()?)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        validation(),
+    )?;
+    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let fields = post_fields(&response)?;
+    assert!(response_xml_from_fields(&fields)?.contains("EncryptedAssertion"));
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(fields),
+        validation(),
+    )?;
+
+    assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())
 }

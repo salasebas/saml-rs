@@ -52,11 +52,9 @@ const SIGNED_AUTHN_REQUEST_TEMPLATE: &str = r#"
 "#;
 
 fn credentials() -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(saml_rs::CertificatePem::new(CERT)),
-        ..Credentials::default()
-    }
+    Credentials::default()
+        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
+        .with_signing_certificate(saml_rs::CertificatePem::new(CERT))
 }
 
 fn signing_sp_validation() -> SpValidationPolicy {

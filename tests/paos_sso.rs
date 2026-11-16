@@ -38,11 +38,9 @@ struct EnhancedClient {
 }
 
 fn credentials() -> saml_rs::Credentials {
-    saml_rs::Credentials {
-        signing_key: Some(saml_rs::PrivateKeyPem::new(PRIVKEY)),
-        signing_certificate: Some(saml_rs::CertificatePem::new(CERT)),
-        ..saml_rs::Credentials::default()
-    }
+    saml_rs::Credentials::default()
+        .with_signing_key(saml_rs::PrivateKeyPem::new(PRIVKEY))
+        .with_signing_certificate(saml_rs::CertificatePem::new(CERT))
 }
 
 type Parties = (
@@ -685,11 +683,11 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         encryption: saml_rs::XmlEncryptionPolicy::encrypt_assertions(),
         ..saml_rs::XmlPolicy::default()
     };
-    let encrypted_credentials = saml_rs::Credentials {
-        encryption_certificate: Some(saml_rs::CertificatePem::new(CERT)),
-        decryption_key: Some(saml_rs::PrivateKeyPem::new(PRIVKEY)),
-        ..credentials()
-    };
+    let encrypted_credentials = credentials().with_decryption(saml_rs::DecryptionCredential {
+        certificate: saml_rs::CertificatePem::new(CERT),
+        key: saml_rs::PrivateKeyPem::new(PRIVKEY),
+        passphrase: None,
+    });
     let sp_validation = SpValidationPolicy {
         assertions: saml_rs::AssertionSignaturePolicy::RequireSigned,
         ..SpValidationPolicy::recommended()

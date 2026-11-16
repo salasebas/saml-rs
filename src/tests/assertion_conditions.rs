@@ -10,7 +10,7 @@ use replay_cache::RecordingReplayCache;
 use common::signing_credentials;
 
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{Credentials, PrivateKeyPem};
+use saml_rs::{CertificatePem, PrivateKeyPem};
 
 use std::time::SystemTime;
 
@@ -1021,10 +1021,13 @@ mod encrypted_assertions {
         Saml::sp(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
                 .acs_endpoint(acs)
-                .credentials(Credentials {
-                    decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-                    ..signing_credentials()
-                })
+                .credentials(
+                    signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+                        certificate: CertificatePem::new(CERT),
+                        key: PrivateKeyPem::new(PRIVKEY),
+                        passphrase: None,
+                    }),
+                )
                 .validation(validation)
                 .build()?,
         )

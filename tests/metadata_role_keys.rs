@@ -24,11 +24,9 @@ const IDP_ROLE_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privke
 const IDP_ROLE_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 
 fn credentials(key: &str, cert: &str) -> Credentials {
-    Credentials {
-        signing_key: Some(PrivateKeyPem::new(key)),
-        signing_certificate: Some(CertificatePem::new(cert)),
-        ..Credentials::default()
-    }
+    Credentials::default()
+        .with_signing_key(PrivateKeyPem::new(key))
+        .with_signing_certificate(CertificatePem::new(cert))
 }
 
 fn idp_signing_with(key: &str, cert: &str) -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -173,26 +171,22 @@ fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>,
 #[test]
 fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_switch(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut rolling = credentials(SP_ROLE_KEY, SP_ROLE_CERT);
-    rolling.additional_signing_certificates = vec![CertificatePem::new(IDP_ROLE_CERT)];
-    let mut sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+    let rolling = credentials(SP_ROLE_KEY, SP_ROLE_CERT)
+        .with_additional_signing_certificate(CertificatePem::new(IDP_ROLE_CERT));
+    let sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
-        .credentials(rolling.clone())
         .validation(SpValidationPolicy {
             authn_requests: saml_rs::AuthnRequestSigningPolicy::Sign,
             ..SpValidationPolicy::recommended()
-        })
-        .build()?;
-    let mut idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+        });
+    let idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO)?)
-        .credentials(rolling)
         .validation(IdpValidationPolicy {
             authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
             ..IdpValidationPolicy::recommended()
-        })
-        .build()?;
-    let published_sp = Saml::sp(sp_config.clone())?;
-    let published_idp = Saml::idp(idp_config.clone())?;
+        });
+    let published_sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?)?;
+    let published_idp = Saml::idp(idp_config.clone().credentials(rolling).build()?)?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         published_sp.metadata_xml(),
@@ -208,12 +202,10 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
         (SP_ROLE_KEY, SP_ROLE_CERT, IDP_ROLE_CERT),
         (IDP_ROLE_KEY, IDP_ROLE_CERT, SP_ROLE_CERT),
     ] {
-        let mut rolling = credentials(key, current);
-        rolling.additional_signing_certificates = vec![CertificatePem::new(overlap)];
-        sp_config.credentials = rolling.clone();
-        idp_config.credentials = rolling;
-        let sp = Saml::sp(sp_config.clone())?;
-        let idp = Saml::idp(idp_config.clone())?;
+        let rolling = credentials(key, current)
+            .with_additional_signing_certificate(CertificatePem::new(overlap));
+        let sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?)?;
+        let idp = Saml::idp(idp_config.clone().credentials(rolling).build()?)?;
 
         for metadata in [sp.metadata_xml(), idp.metadata_xml()] {
             let document = roxmltree::Document::parse(metadata)?;

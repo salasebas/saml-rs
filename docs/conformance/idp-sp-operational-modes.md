@@ -81,7 +81,7 @@ Conformance §3.4: a mode processes or generates `<EncryptedID>`,
 generates `<NameID>`, `<Assertion>`, or `<Attribute>`. Generating the
 encrypted form is the producer's choice (Core §§2.2.4, 2.3.4, 2.7.3.2), so
 generation stays off until it is selected. Processing does not wait for a
-selection: an entity with `Credentials::decryption_key` decrypts what it
+selection: an entity with `Credentials::with_decryption` decrypts what it
 receives.
 
 | Context | Actor | Disposition |

@@ -28,7 +28,8 @@ pub enum SignatureAlgorithm {
     ///
     /// Needs the RustCrypto provider and `crypto-legacy-algorithms`.
     DsaSha1,
-    /// HMAC-SHA1, signed with [`crate::Credentials::hmac_secret`].
+    /// HMAC-SHA1, signed with the secret set by
+    /// [`crate::Credentials::with_hmac_secret`].
     ///
     /// The verifier sets the same secret with `IdpDescriptor::with_hmac_secret`
     /// or `SpDescriptor::with_hmac_secret`.

@@ -99,11 +99,11 @@ fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
 
 #[cfg(not(feature = "crypto-fips"))]
 fn encryption_credentials() -> Credentials {
-    Credentials {
-        encryption_certificate: Some(CertificatePem::new(CERT)),
-        decryption_key: Some(PrivateKeyPem::new(PRIVKEY)),
-        ..signing_credentials()
-    }
+    signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+        certificate: CertificatePem::new(CERT),
+        key: PrivateKeyPem::new(PRIVKEY),
+        passphrase: None,
+    })
 }
 
 #[cfg(not(feature = "crypto-fips"))]
@@ -2915,23 +2915,25 @@ fn cbc_relaxation_does_not_disable_other_accept_rules() -> Result<(), Box<dyn st
 }
 
 #[cfg(not(feature = "crypto-fips"))]
-fn sp_with_validation_and_xml(validation: SpValidationPolicy) -> Result<SpConfig, SamlError> {
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+fn sp_with_validation_and_xml(
+    validation: SpValidationPolicy,
+) -> Result<saml_rs::SpConfigBuilder, SamlError> {
+    Ok(SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
         .credentials(encryption_credentials())
         .validation(validation)
-        .xml(encrypted_xml_policy())
-        .build()
+        .xml(encrypted_xml_policy()))
 }
 
 #[cfg(not(feature = "crypto-fips"))]
-fn idp_with_validation_and_xml(validation: IdpValidationPolicy) -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+fn idp_with_validation_and_xml(
+    validation: IdpValidationPolicy,
+) -> Result<saml_rs::IdpConfigBuilder, SamlError> {
+    Ok(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
         .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
         .credentials(signing_credentials())
         .validation(validation)
-        .xml(encrypted_xml_policy())
-        .build()
+        .xml(encrypted_xml_policy()))
 }
 
 fn response_without_audience_restriction(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
