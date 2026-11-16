@@ -1,8 +1,9 @@
 use saml_rs::constants::ParserType;
 use saml_rs::context::{is_valid_xml, is_valid_xml_with_limits};
 use saml_rs::validator::{check_status, check_status_with_limits};
-use saml_rs::xml::{dom::DEFAULT_XML_MAX_BYTES, extract, extract_with_limits, XmlLimits};
+use saml_rs::xml::{dom::DEFAULT_XML_MAX_BYTES, extract, extract_with_limits};
 use saml_rs::SamlError;
+use saml_rs::XmlLimits;
 
 #[test]
 fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::error::Error>> {

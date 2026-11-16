@@ -4,7 +4,8 @@
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::{
     AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, BrowserInput, CertificatePem,
     Credentials, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest,
@@ -115,10 +116,10 @@ fn form_with_object(
             if field.name() != name {
                 return Ok(field.clone());
             }
-            let xml = String::from_utf8(base64_decode(field.value())?)?;
+            let xml = String::from_utf8(STANDARD.decode(field.value())?)?;
             Ok(FormField::new(
                 name,
-                base64_encode(with_object(&xml)?.as_bytes()),
+                STANDARD.encode(with_object(&xml)?.as_bytes()),
             ))
         })
         .collect()

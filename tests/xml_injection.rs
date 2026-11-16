@@ -1,6 +1,8 @@
 #![cfg(crypto)]
 
-use saml_rs::binding::base64_decode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::constants::{
@@ -10,14 +12,15 @@ use saml_rs::crypto::keys::load_private_key;
 use saml_rs::crypto::{construct_saml_signature, encrypt_assertion, verify_signature};
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::crypto::{decrypt_assertion, AssertionDecryptionOptions};
-use saml_rs::entity::{EntitySetting, SignatureAction, SignatureConfig, User};
+use saml_rs::entity::{EntitySetting, User};
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::template::{LoginResponseAttribute, LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::xml::dom::{parse_roots, Node};
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
+use saml_rs::{SignatureAction, SignatureConfig};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -62,7 +65,7 @@ fn sp() -> TestResult<ServiceProvider> {
 }
 
 fn decode_binding_context(context: &str) -> TestResult<String> {
-    Ok(String::from_utf8(base64_decode(context)?)?)
+    Ok(String::from_utf8(STANDARD.decode(context)?)?)
 }
 
 fn login_response_shape(xml: &str) -> TestResult {

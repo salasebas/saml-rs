@@ -1,5 +1,5 @@
 use super::*;
-use crate::binding::{base64_decode, base64_encode, deflate_raw_decode};
+use crate::binding::{decode_base64, deflate_raw_decode, encode_base64};
 use crate::browser::BrowserInput;
 use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting, User};
@@ -106,7 +106,7 @@ fn decode_logout_response_context(
 ) -> Result<String, Box<dyn std::error::Error>> {
     match context.binding {
         Binding::Post | Binding::SimpleSign => {
-            Ok(String::from_utf8(base64_decode(&context.context)?)?)
+            Ok(String::from_utf8(decode_base64(&context.context)?)?)
         }
         Binding::Soap => Ok(context.context.clone()),
         Binding::Redirect => {
@@ -115,7 +115,7 @@ fn decode_logout_response_context(
                 .query_pairs()
                 .find_map(|(key, value)| (key == "SAMLResponse").then_some(value.into_owned()))
                 .ok_or("missing SAMLResponse")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
+            Ok(String::from_utf8(deflate_raw_decode(&decode_base64(
                 &encoded,
             )?)?)?)
         }
@@ -136,7 +136,7 @@ fn logout_response_request(issue_instant_attribute: &str) -> HttpRequest {
   </samlp:Status>
 </samlp:LogoutResponse>"#
     );
-    HttpRequest::post(vec![("SAMLResponse".into(), base64_encode(xml.as_bytes()))])
+    HttpRequest::post(vec![("SAMLResponse".into(), encode_base64(xml.as_bytes()))])
 }
 
 fn parse_unsigned_logout_response(
@@ -168,7 +168,7 @@ fn logout_request_request(issue_instant: &str, not_on_or_after: Option<&str>) ->
   <saml:NameID>alice@example.com</saml:NameID>
 </samlp:LogoutRequest>"#
     );
-    HttpRequest::post(vec![("SAMLRequest".into(), base64_encode(xml.as_bytes()))])
+    HttpRequest::post(vec![("SAMLRequest".into(), encode_base64(xml.as_bytes()))])
 }
 
 fn parse_unsigned_logout_request_at(
@@ -299,7 +299,7 @@ fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error
         .query_pairs()
         .find(|(k, _)| k == "SAMLRequest")
         .ok_or("missing SAMLRequest")?;
-    let xml = String::from_utf8(deflate_raw_decode(&base64_decode(&value)?)?)?;
+    let xml = String::from_utf8(deflate_raw_decode(&decode_base64(&value)?)?)?;
     assert!(xml.contains("<samlp:LogoutRequest"));
     assert!(xml.contains("user@example.com"));
 
@@ -357,11 +357,11 @@ fn raw_logout_request_parser_does_not_infer_actual_recipient(
         None,
         false,
     )?;
-    let xml = String::from_utf8(base64_decode(&context.context)?)?.replace(
+    let xml = String::from_utf8(decode_base64(&context.context)?)?.replace(
         r#"Destination="https://idp/slo""#,
         r#"Destination="https://different.example/slo""#,
     );
-    let request = HttpRequest::post(vec![("SAMLRequest".into(), base64_encode(xml.as_bytes()))]);
+    let request = HttpRequest::post(vec![("SAMLRequest".into(), encode_base64(xml.as_bytes()))]);
 
     let result =
         parse_logout_request(&receiver.setting, &sender.metadata, Binding::Post, &request)?;
@@ -702,7 +702,7 @@ fn logout_response_post_round_trips() -> Result<(), Box<dyn std::error::Error>> 
         None,
         false,
     )?;
-    let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+    let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
     assert!(xml.contains("<samlp:LogoutResponse"));
 
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);

@@ -2,7 +2,8 @@
 
 use std::time::SystemTime;
 
-use saml_rs::binding::base64_decode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
@@ -190,7 +191,7 @@ fn signed_redirect_request_then_post_response(
         .find(|field| field.name() == "SAMLResponse")
         .map(FormField::value)
         .ok_or("missing SAMLResponse")?;
-    let response_xml = String::from_utf8(base64_decode(encoded)?)?;
+    let response_xml = String::from_utf8(STANDARD.decode(encoded)?)?;
 
     let session = peers.sp.finish_sso(
         &peers.idp_descriptor,

@@ -2,7 +2,8 @@
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
-use saml_rs::binding::base64_decode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
@@ -443,7 +444,7 @@ fn hardening_unsolicited_response_accepts_empty_in_response_to(
             subject_in_response_to: "",
         },
     )?;
-    let xml = String::from_utf8(base64_decode(&response)?)?;
+    let xml = String::from_utf8(STANDARD.decode(&response)?)?;
     assert_eq!(xml.matches("InResponseTo=\"\"").count(), 2, "{xml}");
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req)?;
@@ -597,7 +598,7 @@ fn resigned_response_request(xml: &str) -> Result<HttpRequest, SamlError> {
         saml_rs::crypto::construct_saml_signature(&xml, false, &key, CERT, RSA_SHA256, &[], None)?;
     Ok(HttpRequest::post(vec![(
         "SAMLResponse".into(),
-        saml_rs::binding::base64_encode(signed.as_bytes()),
+        STANDARD.encode(signed.as_bytes()),
     )]))
 }
 
@@ -605,7 +606,7 @@ fn resigned_response_request(xml: &str) -> Result<HttpRequest, SamlError> {
 fn hardening_duplicate_confirmation_data_keeps_the_missing_expiry_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with("https://sp.example.com/metadata", signing());
-    let xml = String::from_utf8(base64_decode(&response_for(&sp))?)?;
+    let xml = String::from_utf8(STANDARD.decode(response_for(&sp))?)?;
     let xml = xml
         .replacen(
             "</saml:SubjectConfirmation>",
@@ -679,8 +680,8 @@ fn hardening_signed_metadata_verifies_against_trust_anchor(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::crypto::keys::load_private_key;
     use saml_rs::crypto::{construct_saml_signature, verify_metadata_signature};
-    use saml_rs::entity::{SignatureAction, SignatureConfig};
     use saml_rs::metadata::IdpMetadata;
+    use saml_rs::{SignatureAction, SignatureConfig};
 
     let md = "<EntityDescriptor ID=\"_md1\" entityID=\"https://idp.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><IDPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://idp/sso\"/></IDPSSODescriptor></EntityDescriptor>";
     let key = load_private_key(PRIVKEY, None)?;

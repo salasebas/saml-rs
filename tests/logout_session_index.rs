@@ -1,11 +1,13 @@
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
+use saml_rs::config::LOGOUT_REQUEST_TEMPLATE;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::logout::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
 };
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::template::LOGOUT_REQUEST_TEMPLATE;
 use saml_rs::xml::dom::parse;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
@@ -100,16 +102,16 @@ fn decode_binding_context(
     query_param: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     match binding {
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(context)?)?),
+        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(STANDARD.decode(context)?)?),
         Binding::Redirect => {
             let url = url::Url::parse(context)?;
             let value = url
                 .query_pairs()
                 .find_map(|(key, value)| (key == query_param).then_some(value.into_owned()))
                 .ok_or("missing SAML message")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-                &value,
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &STANDARD.decode(value.as_bytes())?,
+            )?)?)
         }
         Binding::Soap => Ok(context.to_string()),
         _ => Err("binding does not render logout messages here".into()),

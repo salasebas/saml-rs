@@ -869,10 +869,10 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
                 IDP_NIM_URL,
             )?))
             .xml(saml_rs::XmlPolicy {
-                limits: saml_rs::xml::XmlLimits {
+                limits: saml_rs::XmlLimits {
                     max_depth: 6,
                     max_attribute_value_bytes: 64 * 1024,
-                    ..saml_rs::xml::XmlLimits::default()
+                    ..saml_rs::XmlLimits::default()
                 },
                 ..saml_rs::XmlPolicy::default()
             })

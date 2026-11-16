@@ -16,9 +16,10 @@ use common::signing_credentials;
 
 use std::time::{Duration, SystemTime};
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::binding::{
-    append_signature, base64_decode, base64_encode, build_redirect_octet, deflate_raw_decode,
-    deflate_raw_encode,
+    append_signature, build_redirect_octet, deflate_raw_decode, deflate_raw_encode,
 };
 use saml_rs::constants::{
     signature_algorithm::RSA_SHA256,
@@ -29,8 +30,8 @@ use saml_rs::crypto::{
     construct_message_signature, construct_saml_signature, keys::load_private_key,
 };
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
+use saml_rs::raw::Value;
 use saml_rs::raw::{Binding, FlowResult};
-use saml_rs::util::Value;
 use saml_rs::xml::dom::parse;
 use saml_rs::xml::extract;
 use saml_rs::xml::fields::login_response_fields;
@@ -428,7 +429,7 @@ fn tampered_logout_request_expiration_input(
             let (_, query) = url
                 .split_once('?')
                 .ok_or("redirect URL is missing a query")?;
-            let encoded = base64_encode(&deflate_raw_encode(tampered.as_bytes())?);
+            let encoded = STANDARD.encode(&deflate_raw_encode(tampered.as_bytes())?);
             let encoded_pair = url::form_urlencoded::Serializer::new(String::new())
                 .append_pair("SAMLRequest", &encoded)
                 .finish();
@@ -458,7 +459,7 @@ fn tampered_logout_request_expiration_input(
                 .into_iter()
                 .map(|field| {
                     if field.name() == "SAMLRequest" {
-                        FormField::new("SAMLRequest", base64_encode(tampered.as_bytes()))
+                        FormField::new("SAMLRequest", STANDARD.encode(tampered.as_bytes()))
                     } else {
                         field
                     }
@@ -579,7 +580,7 @@ fn signed_logout_request_input(
             let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(BrowserInput::<LogoutRequest>::post(vec![FormField::new(
                 "SAMLRequest",
-                base64_encode(signed.as_bytes()),
+                STANDARD.encode(signed.as_bytes()),
             )]))
         }
         LogoutBinding::Redirect => {
@@ -595,7 +596,7 @@ fn signed_logout_request_input(
             let octet = format!("SAMLRequest={xml}&SigAlg={RSA_SHA256}");
             let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
             Ok(BrowserInput::<LogoutRequest>::simple_sign(vec![
-                FormField::new("SAMLRequest", base64_encode(xml.as_bytes())),
+                FormField::new("SAMLRequest", STANDARD.encode(xml.as_bytes())),
                 FormField::new("SigAlg", RSA_SHA256),
                 FormField::new("Signature", signature),
             ]))
@@ -617,7 +618,7 @@ fn unsigned_logout_request_input(
     match binding {
         LogoutBinding::Post => Ok(BrowserInput::<LogoutRequest>::post(vec![FormField::new(
             "SAMLRequest",
-            base64_encode(xml.as_bytes()),
+            STANDARD.encode(xml.as_bytes()),
         )])),
         LogoutBinding::Redirect => {
             let url = saml_rs::binding::build_redirect_url(
@@ -703,7 +704,7 @@ fn signed_logout_response_input(
             let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(BrowserInput::<LogoutResponse>::post(vec![FormField::new(
                 "SAMLResponse",
-                base64_encode(signed.as_bytes()),
+                STANDARD.encode(signed.as_bytes()),
             )]))
         }
         LogoutBinding::Redirect => {
@@ -719,7 +720,7 @@ fn signed_logout_response_input(
             let octet = format!("SAMLResponse={xml}&SigAlg={RSA_SHA256}");
             let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
             Ok(BrowserInput::<LogoutResponse>::simple_sign(vec![
-                FormField::new("SAMLResponse", base64_encode(xml.as_bytes())),
+                FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
                 FormField::new("SigAlg", RSA_SHA256),
                 FormField::new("Signature", signature),
             ]))
@@ -741,7 +742,7 @@ fn unsigned_logout_response_input(
     match binding {
         LogoutBinding::Post => Ok(BrowserInput::<LogoutResponse>::post(vec![FormField::new(
             "SAMLResponse",
-            base64_encode(xml.as_bytes()),
+            STANDARD.encode(xml.as_bytes()),
         )])),
         LogoutBinding::Redirect => {
             let url = saml_rs::binding::build_redirect_url(
@@ -845,7 +846,7 @@ fn replace_response_issue_instant(
             if field.name() != "SAMLResponse" {
                 return Ok(field);
             }
-            let xml = String::from_utf8(base64_decode(field.value())?)?;
+            let xml = String::from_utf8(STANDARD.decode(field.value())?)?;
             let (before, after) = xml
                 .split_once(" IssueInstant=\"")
                 .ok_or("missing IssueInstant attribute")?;
@@ -858,7 +859,7 @@ fn replace_response_issue_instant(
             let xml = format!("{before}{replacement}{after}");
             Ok(FormField::new(
                 "SAMLResponse",
-                base64_encode(xml.as_bytes()),
+                STANDARD.encode(xml.as_bytes()),
             ))
         })
         .collect()
@@ -875,13 +876,13 @@ fn outbound_xml<Message>(
                 .query_pairs()
                 .find(|(key, _)| key == message_field)
                 .ok_or("missing SAML message")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-                encoded.as_ref(),
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &STANDARD.decode(encoded.as_ref())?,
+            )?)?)
         }
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(
-            &outbound.raw_context().context,
-        )?)?),
+        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(
+            STANDARD.decode(&outbound.raw_context().context)?,
+        )?),
         Binding::Soap => Ok(outbound.raw_context().context.clone()),
         _ => Err("binding is unsupported".into()),
     }
@@ -3483,7 +3484,7 @@ fn typed_logout_response_template_carries_only_the_top_level_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(idp_config_with_logout_response_template(
-        saml_rs::template::LOGOUT_RESPONSE_TEMPLATE.to_string(),
+        saml_rs::config::LOGOUT_RESPONSE_TEMPLATE.to_string(),
     )?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
@@ -3577,7 +3578,7 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
 #[test]
 fn typed_logout_response_template_must_carry_the_supplied_top_level_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template = saml_rs::template::LOGOUT_RESPONSE_TEMPLATE
+    let template = saml_rs::config::LOGOUT_RESPONSE_TEMPLATE
         .replace("{StatusCode}", saml_rs::constants::status_code::SUCCESS);
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(idp_config_with_logout_response_template(template)?)?;
@@ -4397,9 +4398,9 @@ fn soap_logout_verifies_a_present_signature_over_an_attested_mutual_channel(
 #[test]
 fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let limits = saml_rs::xml::XmlLimits {
+    let limits = saml_rs::XmlLimits {
         max_depth: 12,
-        ..saml_rs::xml::XmlLimits::default()
+        ..saml_rs::XmlLimits::default()
     };
     let mut sp_config = sp_config()?;
     sp_config.xml.limits = limits;

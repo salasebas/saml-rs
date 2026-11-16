@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use super::deflate::deflate_raw_encode;
-use super::encoding::base64_encode;
+use super::encoding::encode_base64;
 use crate::constants::namespace;
 use crate::constants::ParserType;
 use crate::error::SamlError;
@@ -51,7 +51,7 @@ pub fn build_redirect_url(
 ) -> Result<String, SamlError> {
     let xml = redirect_message_xml(xml, false)?;
     let deflated = deflate_raw_encode(xml.as_bytes())?;
-    let encoded = base64_encode(&deflated);
+    let encoded = encode_base64(&deflated);
     let query = redirect_binding_query(parser_type.query_param(), &encoded, relay_state);
     Ok(append_redirect_query(base_url, &query))
 }
@@ -81,7 +81,7 @@ pub fn build_redirect_octet(
 ) -> Result<String, SamlError> {
     let xml = redirect_message_xml(xml, true)?;
     let deflated = deflate_raw_encode(xml.as_bytes())?;
-    let encoded = base64_encode(&deflated);
+    let encoded = encode_base64(&deflated);
     let mut octet = redirect_binding_query(parser_type.query_param(), &encoded, relay_state);
     octet.push_str(&format!("&SigAlg={}", url_encode(sig_alg)));
     Ok(octet)
@@ -235,7 +235,7 @@ pub fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::binding::{base64_decode, deflate_raw_decode, saml_post_binding_form};
+    use crate::binding::{decode_base64, deflate_raw_decode, saml_post_binding_form};
     use url::Url;
 
     const REQUEST: &str = "<samlp:AuthnRequest ID=\"_1\">hi&amp;bye</samlp:AuthnRequest>";
@@ -253,7 +253,7 @@ mod tests {
         let mut pairs = parsed.query_pairs();
         let (k, v) = pairs.next().ok_or("missing SAMLRequest")?;
         assert_eq!(k, "SAMLRequest");
-        let inflated = deflate_raw_decode(&base64_decode(&v)?)?;
+        let inflated = deflate_raw_decode(&decode_base64(&v)?)?;
         assert_eq!(String::from_utf8(inflated)?, REQUEST);
         let relay = parsed
             .query_pairs()
@@ -294,7 +294,7 @@ mod tests {
     fn redirect_parameters_join_the_query_before_any_fragment(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let deflated = deflate_raw_encode(REQUEST.as_bytes())?;
-        let query = redirect_binding_query("SAMLResponse", &base64_encode(&deflated), None);
+        let query = redirect_binding_query("SAMLResponse", &encode_base64(&deflated), None);
         let octet = build_redirect_octet(ParserType::SamlResponse, REQUEST, None, "sig-alg")?;
         let signed = format!("{octet}&Signature=a%2Bb%3D");
         let acs = "https://sp.example.com/acs";
@@ -323,8 +323,8 @@ mod tests {
     #[test]
     fn post_and_simplesign_base64_message() -> Result<(), Box<dyn std::error::Error>> {
         // POST / SimpleSign carry base64(xml) verbatim (no DEFLATE)
-        let b64 = base64_encode(REQUEST.as_bytes());
-        assert_eq!(String::from_utf8(base64_decode(&b64)?)?, REQUEST);
+        let b64 = encode_base64(REQUEST.as_bytes());
+        assert_eq!(String::from_utf8(decode_base64(&b64)?)?, REQUEST);
         let form = saml_post_binding_form(
             "https://idp.example.com/sso",
             ParserType::SamlRequest.query_param(),
@@ -368,7 +368,7 @@ mod tests {
             .find(|(name, _)| name == "SAMLRequest")
             .map(|(_, value)| value.into_owned())
             .ok_or("missing encoded request")?;
-        let inflated = String::from_utf8(deflate_raw_decode(&base64_decode(&encoded)?)?)?;
+        let inflated = String::from_utf8(deflate_raw_decode(&decode_base64(&encoded)?)?)?;
         assert!(!inflated.contains("protocol-signature"));
         assert!(inflated.contains("assertion-signature"));
         assert!(octet.contains("&RelayState=state&SigAlg=sig-alg"));
@@ -380,7 +380,7 @@ mod tests {
             .find(|(name, _)| name == "SAMLRequest")
             .map(|(_, value)| value.into_owned())
             .ok_or("missing encoded request")?;
-        let inflated = String::from_utf8(deflate_raw_decode(&base64_decode(&encoded)?)?)?;
+        let inflated = String::from_utf8(deflate_raw_decode(&decode_base64(&encoded)?)?)?;
         crate::xml::dom::parse(&inflated)?;
         assert!(!inflated.contains("protocol-signature"));
         assert!(inflated.contains("assertion-signature"));

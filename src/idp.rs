@@ -16,7 +16,7 @@ use crate::model::{
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
-    apply_tag_prefixes, attr_tag, attribute_statement_builder, replace_tags_by_optional_value,
+    apply_tag_prefixes, attr_tag, build_attribute_statement, replace_tags_by_optional_value,
     validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
     LOGIN_RESPONSE_TEMPLATE,
 };
@@ -338,11 +338,7 @@ impl IdentityProvider {
         let attribute_statement = if attributes.is_empty() {
             String::new()
         } else {
-            attribute_statement_builder(
-                attributes,
-                ATTRIBUTE_TEMPLATE,
-                ATTRIBUTE_STATEMENT_TEMPLATE,
-            )
+            build_attribute_statement(attributes, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE)
         };
         let prepared = base.replacen("{AttributeStatement}", &attribute_statement, 1);
         let prepared = apply_tag_prefixes(
@@ -521,11 +517,11 @@ impl IdentityProvider {
         acs: &str,
         relay_state: Option<&str>,
     ) -> Result<(String, Option<String>, Option<String>), SamlError> {
-        use crate::binding::{base64_encode, sign_detached_message};
+        use crate::binding::{encode_base64, sign_detached_message};
         use crate::crypto::SigningCredential;
 
         match binding {
-            Binding::Post => Ok((base64_encode(xml.as_bytes()), None, None)),
+            Binding::Post => Ok((encode_base64(xml.as_bytes()), None, None)),
             Binding::Redirect | Binding::SimpleSign => {
                 let sig_alg = &self.setting.request_signature_algorithm;
                 let credential = SigningCredential::from_setting(&self.setting)?;
@@ -936,7 +932,7 @@ mod crypto_tests {
     #[test]
     fn custom_login_response_template_keeps_placeholder_text_in_the_name_id_format(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use crate::binding::base64_decode;
+        use crate::binding::decode_base64;
         use crate::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 
         let mut setting = signing_setting();
@@ -956,7 +952,7 @@ mod crypto_tests {
             },
         )?;
 
-        let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         assert!(xml.contains("Format=\"urn:example:{InResponseTo}\""));
         assert!(xml.contains("InResponseTo=\"_req123\""));
         Ok(())
@@ -965,7 +961,7 @@ mod crypto_tests {
     #[test]
     fn raw_login_response_defaults_to_five_minute_issuance_window_for_standard_renderers(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use crate::binding::base64_decode;
+        use crate::binding::decode_base64;
         use crate::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
         use crate::xml::dom::parse;
         use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -988,7 +984,7 @@ mod crypto_tests {
                     ..Default::default()
                 },
             )?;
-            let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+            let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
             let document = parse(&xml)?;
             let response_issue_instant = document
                 .root
@@ -1095,7 +1091,7 @@ mod crypto_tests {
 
     #[test]
     fn login_response_escapes_attribute_xml_markup() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::binding::base64_decode;
+        use crate::binding::decode_base64;
         use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
 
         let mut setting = signing_setting();
@@ -1137,7 +1133,7 @@ mod crypto_tests {
             },
         )?;
 
-        let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         assert!(xml.contains("<ds:Signature"));
         assert!(xml.contains("alpha&lt;/saml:AttributeValue&gt;"));
         assert!(xml.contains("&lt;saml:AttributeValue xmlns:xs=&quot;"));
@@ -1153,12 +1149,12 @@ mod crypto_tests {
 
     #[test]
     fn parse_signed_login_request() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::binding::base64_decode;
+        use crate::binding::decode_base64;
         let (idp, sp) = (idp()?, sp()?);
         let ctx = sp.create_login_request(&idp, Binding::Post, None)?;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]);
         let result = idp.parse_login_request(&sp, Binding::Post, &request)?;
-        let signed_xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        let signed_xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         assert!(signed_xml.contains("<ds:Signature"));
         assert_eq!(result.extract.get_str("request.id"), Some(ctx.id.as_str()));
         Ok(())

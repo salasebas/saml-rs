@@ -7,9 +7,11 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
-use saml_rs::xml::{dom::DEFAULT_XML_MAX_BYTES, XmlLimits};
+use saml_rs::xml::dom::DEFAULT_XML_MAX_BYTES;
+use saml_rs::XmlLimits;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, FormField,
@@ -115,7 +117,7 @@ fn field<'a>(fields: &'a [FormField], name: &str) -> Option<&'a str> {
 /// the SimpleSign octet string again.
 fn padded(fields: &[FormField], message: &str, padding: usize) -> TestResult<Vec<FormField>> {
     let encoded = field(fields, message).ok_or("missing SimpleSign message field")?;
-    let mut xml = String::from_utf8(base64_decode(encoded)?)?;
+    let mut xml = String::from_utf8(STANDARD.decode(encoded)?)?;
     let closing_tag = xml.rfind("</").ok_or("message has no closing root tag")?;
     xml.insert_str(closing_tag, &" ".repeat(padding));
 
@@ -129,7 +131,7 @@ fn padded(fields: &[FormField], message: &str, padding: usize) -> TestResult<Vec
     let signature = construct_message_signature(&octet, &key, sig_alg)?;
 
     let mut padded = vec![
-        FormField::new(message, base64_encode(xml.as_bytes())),
+        FormField::new(message, STANDARD.encode(xml.as_bytes())),
         FormField::new("SigAlg", sig_alg),
         FormField::new("Signature", signature),
     ];

@@ -9,6 +9,12 @@ mod metadata_signature_shape;
 mod metadata_trust;
 mod policies;
 
+pub use crate::entity::{SignatureAction, SignatureConfig};
+pub use crate::template::{
+    LoginResponseAttribute, LoginResponseTemplate, LOGIN_REQUEST_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
+    LOGOUT_REQUEST_TEMPLATE, LOGOUT_RESPONSE_TEMPLATE,
+};
+pub use crate::xml::XmlLimits;
 pub(crate) use algorithms::name_id_format_uris;
 pub use algorithms::{
     DataEncryptionAlgorithm, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,

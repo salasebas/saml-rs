@@ -8,7 +8,7 @@ use super::artifact::DeliveredArtifact;
 use super::forms::FormField;
 use super::MessageField;
 use crate::artifact::ResolvedProtocolMessage;
-use crate::binding::{base64_decode_with_limit, base64_encode, build_simplesign_octet};
+use crate::binding::{base64_decode_with_limit, build_simplesign_octet, encode_base64};
 use crate::constants::url_params;
 use crate::error::SamlError;
 use crate::model::{AuthnRequest, LogoutRequest, LogoutResponse, SsoResponse};
@@ -348,7 +348,7 @@ fn soap_request(
     let body = read_soap_body(envelope, limits, &[])?;
     Ok(HttpRequest::post(vec![(
         expected_message.param_name().to_string(),
-        base64_encode(body.xml.as_bytes()),
+        encode_base64(body.xml.as_bytes()),
     )]))
 }
 

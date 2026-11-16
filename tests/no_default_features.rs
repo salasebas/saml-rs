@@ -1,6 +1,8 @@
 #![cfg(not(crypto))]
 
-use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
@@ -349,7 +351,7 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 #[test]
 fn unsigned_login_request_creation_still_works() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = sp(false)?.create_login_request(&idp(false)?, Binding::Post, None)?;
-    let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+    let xml = String::from_utf8(STANDARD.decode(&ctx.context)?)?;
     assert!(xml.contains("<samlp:AuthnRequest"));
     assert!(ctx.signature.is_none());
     Ok(())
@@ -364,7 +366,7 @@ fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn 
         .query_pairs()
         .find(|(key, _)| key == "SAMLRequest")
         .ok_or("missing SAMLRequest")?;
-    let xml = String::from_utf8(deflate_raw_decode(&base64_decode(encoded.as_ref())?)?)?;
+    let xml = String::from_utf8(deflate_raw_decode(&STANDARD.decode(encoded.as_ref())?)?)?;
     assert!(xml.contains("AssertionConsumerServiceURL=\"https://sp.example.com/acs\""));
     Ok(())
 }
@@ -390,7 +392,7 @@ fn signed_login_response_creation_returns_unsupported() -> Result<(), Box<dyn st
 fn encrypted_assertion_parse_path_returns_unsupported() {
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
-        base64_encode(
+        STANDARD.encode(
             br#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_encrypted_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://idp.example.com/metadata</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status><saml:EncryptedAssertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"/></samlp:Response>"#,
         ),
     )]);

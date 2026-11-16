@@ -1,4 +1,6 @@
-use saml_rs::binding::{base64_encode, deflate_raw_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_encode;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest};
 use saml_rs::{SamlError, SsoSession};
@@ -57,8 +59,8 @@ fn parse_flow_with_binding(
     check_signature: bool,
 ) -> Result<FlowResult, SamlError> {
     let encoded = match binding {
-        Binding::Redirect => base64_encode(&deflate_raw_encode(xml.as_bytes())?),
-        Binding::Post | Binding::SimpleSign => base64_encode(xml.as_bytes()),
+        Binding::Redirect => STANDARD.encode(&deflate_raw_encode(xml.as_bytes())?),
+        Binding::Post | Binding::SimpleSign => STANDARD.encode(xml.as_bytes()),
         _ => return Err(SamlError::UnsupportedBinding { binding }),
     };
     let parameter = (parser_type.query_param().to_string(), encoded);
@@ -203,7 +205,7 @@ fn expect_decrypted_assertion_profile_rejection_with_context(
     let encrypted = encrypt_assertion(xml, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "a")?;
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
-        base64_encode(encrypted.as_bytes()),
+        STANDARD.encode(encrypted.as_bytes()),
     )]);
     let mut options = FlowOptions::default();
     options.binding = Some(Binding::Post);
@@ -963,7 +965,7 @@ fn decrypted_assertion_honors_xml_depth_limit_before_profile(
     let encrypted = encrypt_assertion(&plaintext, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "a")?;
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
-        base64_encode(encrypted.as_bytes()),
+        STANDARD.encode(encrypted.as_bytes()),
     )]);
     let mut options = FlowOptions::default();
     options.binding = Some(Binding::Post);

@@ -11,7 +11,9 @@
 
 use std::time::{Duration, SystemTime};
 
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::status_code;
 use saml_rs::raw::Binding;
 use saml_rs::{
@@ -259,12 +261,12 @@ fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
                 .ok_or("missing SAMLRequest")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-                encoded.as_ref(),
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &STANDARD.decode(encoded.as_ref())?,
+            )?)?)
         }
         Binding::Post | Binding::SimpleSign => {
-            Ok(String::from_utf8(base64_decode(&context.context)?)?)
+            Ok(String::from_utf8(STANDARD.decode(&context.context)?)?)
         }
         Binding::Soap => Ok(context.context.clone()),
         _ => Err("binding is unsupported".into()),

@@ -12,7 +12,8 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
 use saml_rs::{
@@ -97,7 +98,7 @@ impl SignedExchange {
             .find(|field| field.name() == "SAMLResponse")
             .map(FormField::value)
             .ok_or("missing SAMLResponse")?;
-        let xml = String::from_utf8(base64_decode(encoded)?)?;
+        let xml = String::from_utf8(STANDARD.decode(encoded)?)?;
         if xml.matches('\n').count() != 2 || xml.contains('\r') {
             return Err("expected the two signed line feeds and no carriage return".into());
         }
@@ -116,7 +117,7 @@ impl SignedExchange {
             .fields
             .iter()
             .map(|field| match field.name() {
-                "SAMLResponse" => FormField::new("SAMLResponse", base64_encode(xml.as_bytes())),
+                "SAMLResponse" => FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
                 _ => field.clone(),
             })
             .collect();

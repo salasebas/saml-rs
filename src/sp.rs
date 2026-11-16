@@ -3,7 +3,7 @@
 use crate::assertion_acceptance::{
     reject_unsolicited_bearer_in_response_to, UnsolicitedInResponseTo,
 };
-use crate::binding::{base64_encode, build_redirect_url};
+use crate::binding::{build_redirect_url, encode_base64};
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::{
     generate_id, now_iso8601, BindingContext, CustomTagReplacement, EntitySetting,
@@ -376,7 +376,7 @@ impl ServiceProvider {
                 &xml,
                 relay_state.as_deref(),
             )?,
-            Binding::Post | Binding::SimpleSign => base64_encode(xml.as_bytes()),
+            Binding::Post | Binding::SimpleSign => encode_base64(xml.as_bytes()),
             Binding::Artifact | Binding::Soap => {
                 return Err(SamlError::UnsupportedBinding { binding });
             }
@@ -427,7 +427,7 @@ impl ServiceProvider {
                     &self.setting.transformation_algorithms,
                     self.setting.signature_config.as_ref(),
                 )?;
-                (base64_encode(signed.as_bytes()), None, None)
+                (encode_base64(signed.as_bytes()), None, None)
             }
             Binding::Artifact | Binding::Soap => {
                 return Err(SamlError::UnsupportedBinding { binding });
@@ -691,7 +691,7 @@ impl ServiceProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::binding::{base64_decode, deflate_raw_decode};
+    use crate::binding::{decode_base64, deflate_raw_decode};
     use crate::metadata::{Endpoint, IdpMetadataConfig};
     use url::Url;
 
@@ -732,7 +732,7 @@ mod tests {
             .query_pairs()
             .find(|(k, _)| k == "SAMLRequest")
             .ok_or("missing SAMLRequest")?;
-        let xml = String::from_utf8(deflate_raw_decode(&base64_decode(&value)?)?)?;
+        let xml = String::from_utf8(deflate_raw_decode(&decode_base64(&value)?)?)?;
         assert!(xml.contains("AssertionConsumerServiceURL=\"https://sp.example.com/acs\""));
         assert!(url.query_pairs().all(|(k, _)| k != "Signature"));
         Ok(())
@@ -741,7 +741,7 @@ mod tests {
     #[test]
     fn create_unsigned_login_request_post_is_base64() -> Result<(), Box<dyn std::error::Error>> {
         let ctx = unsigned_sp()?.create_login_request(&unsigned_idp()?, Binding::Post, None)?;
-        let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         assert!(xml.starts_with("<samlp:AuthnRequest"));
         Ok(())
     }
@@ -760,7 +760,7 @@ mod tests {
             Some(&replace as &dyn Fn(&str) -> (String, String)),
         )?;
         assert_eq!(ctx.id, "_custom");
-        let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         assert!(xml.contains("ID=\"_custom\""));
         Ok(())
     }
@@ -769,7 +769,7 @@ mod tests {
 #[cfg(all(test, crypto))]
 mod crypto_tests {
     use super::*;
-    use crate::binding::base64_decode;
+    use crate::binding::decode_base64;
     use crate::constants::signature_algorithm::RSA_SHA256;
     use crate::crypto::verify_signature;
     use crate::entity::User;
@@ -859,7 +859,7 @@ mod crypto_tests {
             },
         )?;
         let ctx = sp.create_login_request(&signing_idp()?, Binding::Post, None)?;
-        let signed_xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        let signed_xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         let (verified, _) = verify_signature(&signed_xml, &[SP_SIGNING_CERT.to_string()])?;
         assert!(
             verified,

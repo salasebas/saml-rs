@@ -1,4 +1,4 @@
-use super::{append_signature, base64_encode, build_redirect_octet, build_simplesign_octet};
+use super::{append_signature, build_redirect_octet, build_simplesign_octet, encode_base64};
 use crate::constants::{Binding, ParserType};
 use crate::crypto::SigningCredential;
 use crate::error::SamlError;
@@ -27,7 +27,7 @@ pub(crate) fn sign_detached_message(
                 build_simplesign_octet(parser_type.query_param(), xml, relay_state, sig_alg);
             let signature = credential.sign_detached(&octet, sig_alg)?;
             Ok((
-                base64_encode(xml.as_bytes()),
+                encode_base64(xml.as_bytes()),
                 Some(signature),
                 Some(sig_alg.to_string()),
             ))

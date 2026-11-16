@@ -60,3 +60,5 @@ pub use crate::idp::{IdentityProvider, LoginResponseOptions};
 pub use crate::logout;
 pub use crate::metadata;
 pub use crate::sp::{LoginRequestOptions, ServiceProvider};
+pub use crate::util::Value;
+pub use crate::xml::{ExtractorField, LocalPath};

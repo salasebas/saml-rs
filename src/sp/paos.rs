@@ -61,7 +61,7 @@ impl ServiceProvider {
             None,
             id,
         )?;
-        let xml = crate::binding::base64_decode(&signed.context)?;
+        let xml = crate::binding::decode_base64(&signed.context)?;
         let xml = String::from_utf8(xml).map_err(|err| SamlError::Xml(err.to_string()))?;
         Ok((signed.id, xml))
     }

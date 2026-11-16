@@ -3,8 +3,9 @@
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use bergshamra::{sign, DsigContext, KeysManager};
-use saml_rs::binding::base64_encode;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
 use saml_rs::crypto::keys::load_private_key;
@@ -107,7 +108,7 @@ fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn 
         other => return Err(format!("unexpected verification result: {other:?}").into()),
     }
 
-    let encoded = base64_encode(signed.as_bytes());
+    let encoded = STANDARD.encode(signed.as_bytes());
     let request = HttpRequest::post(vec![("SAMLRequest".into(), encoded)]);
     let certs = [CERT.to_string()];
     let mut options = FlowOptions::default();

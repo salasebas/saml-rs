@@ -9,6 +9,8 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{append_signature, build_redirect_octet};
@@ -161,7 +163,7 @@ fn redirect_message_xml<Message>(
         .find(|(name, _)| name == "SAMLRequest" || name == "SAMLResponse")
         .map(|(_, value)| value.into_owned())
         .ok_or("redirect URL carries no SAML message")?;
-    let deflated = saml_rs::binding::base64_decode(&encoded)?;
+    let deflated = STANDARD.decode(&encoded)?;
     Ok(String::from_utf8(saml_rs::binding::deflate_raw_decode(
         &deflated,
     )?)?)

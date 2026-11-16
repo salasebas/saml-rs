@@ -7,7 +7,8 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::base64_encode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::{
     BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
     LogoutRequest, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
@@ -286,7 +287,7 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
     let input = |xml: &str| {
         BrowserInput::<LogoutRequest>::post(vec![FormField::new(
             "SAMLRequest",
-            base64_encode(xml.as_bytes()),
+            STANDARD.encode(xml.as_bytes()),
         )])
     };
 

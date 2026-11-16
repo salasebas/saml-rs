@@ -7,7 +7,9 @@
 
 #![allow(clippy::unwrap_used)]
 
-use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode, deflate_raw_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
 use saml_rs::constants::{elements_order, signature_algorithm::RSA_SHA256, Binding, CertUse};
 use saml_rs::entity::{iso8601_offset, EntitySetting};
 use saml_rs::metadata::{
@@ -31,23 +33,9 @@ const IDP_CERT2: &str = include_str!("fixtures/key/idp/cert2.cer");
 const IDP_ENC_CERT: &str = include_str!("fixtures/key/idp/encryptionCert.cer");
 
 #[test]
-fn base64_encoding_returns_encoded_string() {
-    assert_eq!(base64_encode(b"Hello World"), "SGVsbG8gV29ybGQ=");
-}
-
-#[test]
-fn base64_decoding_returns_decoded_string() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(
-        String::from_utf8(base64_decode("SGVsbG8gV29ybGQ=")?)?,
-        "Hello World"
-    );
-    Ok(())
-}
-
-#[test]
 fn deflate_plus_base64_encoded() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
-        base64_encode(&deflate_raw_encode(b"Hello World")?),
+        STANDARD.encode(&deflate_raw_encode(b"Hello World")?),
         "80jNyclXCM8vykkBAA=="
     );
     Ok(())
@@ -55,7 +43,7 @@ fn deflate_plus_base64_encoded() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn base64_decoded_plus_inflate() -> Result<(), Box<dyn std::error::Error>> {
-    let inflated = deflate_raw_decode(&base64_decode("80jNyclXCM8vykkBAA==")?)?;
+    let inflated = deflate_raw_decode(&STANDARD.decode("80jNyclXCM8vykkBAA==")?)?;
     assert_eq!(String::from_utf8(inflated)?, "Hello World");
     Ok(())
 }
@@ -295,49 +283,6 @@ fn explicit_certificate_declaration_for_signing_and_encryption(
     assert!(signing.is_some() && encryption.is_some());
     assert_ne!(signing, encryption);
     Ok(())
-}
-
-#[test]
-fn building_attribute_statement_with_one_attribute() {
-    use saml_rs::template::{
-        attribute_statement_builder, LoginResponseAttribute, ATTRIBUTE_STATEMENT_TEMPLATE,
-        ATTRIBUTE_TEMPLATE,
-    };
-    let attrs = [LoginResponseAttribute {
-        name: "email".into(),
-        value_tag: "user.email".into(),
-        name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".into(),
-        value_xsi_type: "xs:string".into(),
-        value_xmlns_xs: None,
-        value_xmlns_xsi: None,
-    }];
-    let expected = "<saml:AttributeStatement><saml:Attribute Name=\"email\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserEmail}</saml:AttributeValue></saml:Attribute></saml:AttributeStatement>";
-    assert_eq!(
-        attribute_statement_builder(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
-        expected
-    );
-}
-
-#[test]
-fn building_attribute_statement_with_multiple_attributes() {
-    use saml_rs::template::{
-        attribute_statement_builder, LoginResponseAttribute, ATTRIBUTE_STATEMENT_TEMPLATE,
-        ATTRIBUTE_TEMPLATE,
-    };
-    let mk = |name: &str, tag: &str| LoginResponseAttribute {
-        name: name.into(),
-        value_tag: tag.into(),
-        name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".into(),
-        value_xsi_type: "xs:string".into(),
-        value_xmlns_xs: None,
-        value_xmlns_xsi: None,
-    };
-    let attrs = [mk("email", "user.email"), mk("firstname", "user.firstname")];
-    let expected = "<saml:AttributeStatement><saml:Attribute Name=\"email\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserEmail}</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"firstname\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserFirstname}</saml:AttributeValue></saml:Attribute></saml:AttributeStatement>";
-    assert_eq!(
-        attribute_statement_builder(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
-        expected
-    );
 }
 
 #[cfg(crypto)]

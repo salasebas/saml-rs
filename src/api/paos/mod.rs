@@ -603,7 +603,7 @@ impl Saml<Sp> {
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let request = HttpRequest::post(vec![(
             "SAMLResponse".into(),
-            crate::binding::base64_encode(body.element_xml.as_bytes()),
+            crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
         let parsed = self
             .raw_service_provider()
@@ -660,7 +660,7 @@ impl Saml<Idp> {
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let http = HttpRequest::post(vec![(
             "SAMLRequest".into(),
-            crate::binding::base64_encode(body.element_xml.as_bytes()),
+            crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
         let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
             raw_sp,

@@ -337,7 +337,18 @@ pub struct LoginResponseTemplate {
 /// later by [`replace_tags_by_value`]. The other attribute fields are
 /// XML-escaped, and each `{` in them is written as the character reference
 /// `&#123;`, so no placeholder pass substitutes inside them.
+#[deprecated(
+    note = "`saml_rs::template` becomes crate-private in the next minor release; pass attributes with `RespondSso::attributes`, or set `LoginResponseTemplate::attributes` for a custom login response template"
+)]
 pub fn attribute_statement_builder(
+    attributes: &[LoginResponseAttribute],
+    attribute_template: &str,
+    attribute_statement_template: &str,
+) -> String {
+    build_attribute_statement(attributes, attribute_template, attribute_statement_template)
+}
+
+pub(crate) fn build_attribute_statement(
     attributes: &[LoginResponseAttribute],
     attribute_template: &str,
     attribute_statement_template: &str,
@@ -528,21 +539,41 @@ mod tests {
 
     #[test]
     fn builds_attribute_statement_with_value_placeholder() {
-        let attrs = vec![LoginResponseAttribute {
-            name: "mail".into(),
+        let attrs = [LoginResponseAttribute {
+            name: "email".into(),
+            value_tag: "user.email".into(),
             name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".into(),
             value_xsi_type: "xs:string".into(),
-            value_tag: "user.email".into(),
             value_xmlns_xs: None,
             value_xmlns_xsi: None,
         }];
-        let built =
-            attribute_statement_builder(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE);
-        assert!(built.starts_with("<saml:AttributeStatement>"));
-        assert!(built.contains("Name=\"mail\""));
-        assert!(built.contains("xsi:type=\"xs:string\""));
-        // value_tag -> {attrUserEmail}
-        assert!(built.contains("{attrUserEmail}"));
+        let expected = "<saml:AttributeStatement><saml:Attribute Name=\"email\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserEmail}</saml:AttributeValue></saml:Attribute></saml:AttributeStatement>";
+        assert_eq!(
+            build_attribute_statement(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
+            expected
+        );
+    }
+
+    #[test]
+    #[expect(
+        deprecated,
+        reason = "the deprecated public builder keeps its output until removal"
+    )]
+    fn builds_attribute_statement_with_multiple_attributes() {
+        let mk = |name: &str, tag: &str| LoginResponseAttribute {
+            name: name.into(),
+            value_tag: tag.into(),
+            name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".into(),
+            value_xsi_type: "xs:string".into(),
+            value_xmlns_xs: None,
+            value_xmlns_xsi: None,
+        };
+        let attrs = [mk("email", "user.email"), mk("firstname", "user.firstname")];
+        let expected = "<saml:AttributeStatement><saml:Attribute Name=\"email\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserEmail}</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"firstname\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserFirstname}</saml:AttributeValue></saml:Attribute></saml:AttributeStatement>";
+        assert_eq!(
+            attribute_statement_builder(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
+            expected
+        );
     }
 
     #[test]
