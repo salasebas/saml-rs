@@ -22,20 +22,21 @@ use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 use saml_rs::{SignatureAction, SignatureConfig};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
 const AUTHN_REQUEST: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>";
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 fn signing() -> EntitySetting {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some(PRIVKEY.into());
-    setting.signing_cert = Some(CERT.into());
-    setting.request_signature_algorithm = RSA_SHA256.into();
-    setting
+    EntitySetting {
+        private_key: Some(PRIVKEY.into()),
+        signing_cert: Some(CERT.into()),
+        request_signature_algorithm: RSA_SHA256.into(),
+        ..EntitySetting::default()
+    }
 }
 
 fn idp(setting: EntitySetting) -> TestResult<IdentityProvider> {

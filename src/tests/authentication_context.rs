@@ -1,6 +1,6 @@
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 use std::time::SystemTime;
 
@@ -28,8 +28,8 @@ const SSO: &str = "https://idp.example.com/sso";
 const MFA: &str = "https://refeds.org/profile/mfa";
 const DECLARATION: &str = "https://idp.example.com/context/token?a=1&b=2";
 const PROVIDER: &str = "Accounts & \"Services\" <Portal>";
-const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 type Parties = (
     Saml<saml_rs::Sp>,

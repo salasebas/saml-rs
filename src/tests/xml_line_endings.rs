@@ -6,7 +6,7 @@
 //! return. The `&#xD;` character reference stays a carriage return.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 use common::signing_credentials;
 
@@ -33,8 +33,8 @@ const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const NAME_ID: &str = "alice\nx";
 const ROLE: &str = "user\nadmin";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)

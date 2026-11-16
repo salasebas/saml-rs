@@ -28,7 +28,7 @@ invented organization and contact details and contain no key material.
 
 ## Crypto provider matrix fixture audit
 
-`tests/provider_regression.rs` deliberately uses the matching
+`src/tests/provider_regression.rs` deliberately uses the matching
 `key/idp/provider_matrix_privkey.pkcs8.pem` and `key/idp/cert.cer` pair for
 every provider. The private key is the unencrypted PKCS#8 encoding of the
 samlify test-only IdP RSA key for `key/idp/cert.cer` (upstream
@@ -64,7 +64,7 @@ The certificate SHA-256 fingerprint is
 
 `key/rsa512/privkey.pkcs8.pem` and `key/rsa512/cert.pem` are a test-only
 512-bit RSA key and self-signed certificate for the rejection tests in
-`tests/provider_regression.rs`. They were generated with OpenSSL `4.1.0`:
+`src/tests/provider_regression.rs`. They were generated with OpenSSL `4.1.0`:
 `genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:512` and
 `req -new -x509 -sha256 -days 36500`. The `RSA_512_SIGNATURE` constant is
 `dgst -sha256 -sign` over `SAMLRequest=rsa-512`. `key/rsa512/response_signed.xml`
