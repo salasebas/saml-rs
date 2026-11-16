@@ -41,13 +41,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .validation(IdpValidationPolicy::recommended())
             .build()?,
     )?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),
         // UnsignedForCompatibility preserves an unsigned samlify-port metadata import.
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         idp.metadata_xml(),
         // UnsignedForCompatibility preserves an unsigned samlify-port metadata import.

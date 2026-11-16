@@ -624,11 +624,15 @@ fn entity_id_constructors_accept_only_a_uri_of_at_most_1024_characters(
 fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_characters(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for value in entity_ids_that_are_not_a_uri_of_at_most_1024_characters() {
-        let sp = SpConfig::builder(EntityId::new(value.clone()))
+        let Ok(entity_id) = EntityId::peer(value.clone()) else {
+            assert!(value.trim().is_empty(), "{value:?}");
+            continue;
+        };
+        let sp = SpConfig::builder(entity_id.clone())
             .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
             .credentials(signing_credentials())
             .build();
-        let idp = IdpConfig::builder(EntityId::new(value.clone()))
+        let idp = IdpConfig::builder(entity_id)
             .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
             .credentials(signing_credentials())
             .build();
@@ -640,9 +644,10 @@ fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_charact
 }
 
 #[test]
-fn struct_literal_conversion_rejects_empty_entity_id() -> Result<(), Box<dyn std::error::Error>> {
+fn struct_literal_conversion_rejects_an_entity_id_that_is_not_a_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
     let config = SpConfig::new(
-        EntityId::new(""),
+        EntityId::peer("not a uri")?,
         SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
     );
     let result = EntitySetting::try_from(&config);

@@ -170,10 +170,12 @@ impl Saml<Idp> {
     ///         .build()?,
     /// )?;
     /// let sp_descriptor = SpDescriptor::from_metadata_xml(
+    ///     EntityId::try_new("https://sp.example.com/metadata")?,
     ///     sp.metadata_xml(),
     ///     MetadataTrustPolicy::UnsignedForCompatibility,
     /// )?;
     /// let idp_descriptor = IdpDescriptor::from_metadata_xml(
+    ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
     ///     MetadataTrustPolicy::UnsignedForCompatibility,
     /// )?;

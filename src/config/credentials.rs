@@ -15,12 +15,7 @@ impl PrivateKeyPem {
         Self(value.into())
     }
 
-    /// Borrow the PEM text.
-    ///
-    /// The value is secret-bearing key material. Prefer passing typed
-    /// credentials through config APIs when possible; this accessor exists for
-    /// migration code and raw compatibility escape hatches.
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -44,8 +39,7 @@ impl CertificatePem {
         Self(value.into())
     }
 
-    /// Borrow the PEM text for internal compatibility mapping.
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -69,12 +63,7 @@ impl Passphrase {
         Self(value.into())
     }
 
-    /// Borrow the passphrase text.
-    ///
-    /// The value is secret-bearing credential material. Prefer passing typed
-    /// credentials through config APIs when possible; this accessor exists for
-    /// migration code and raw compatibility escape hatches.
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -112,8 +101,7 @@ impl HmacSecret {
         Ok(Self(value))
     }
 
-    /// Borrow the secret bytes.
-    pub fn as_bytes(&self) -> &[u8] {
+    pub(crate) fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 }

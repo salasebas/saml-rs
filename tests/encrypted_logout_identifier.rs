@@ -139,12 +139,12 @@ fn parties_with(
     sp: Saml<saml_rs::Sp>,
     idp: Saml<saml_rs::Idp>,
 ) -> Result<Parties, Box<dyn std::error::Error>> {
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -520,12 +520,12 @@ fn encrypted_id_requires_the_peer_encryption_key() -> Result<(), Box<dyn std::er
     let parties = parties()?;
     let options =
         || StartSlo::post().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
-    let idp_without_keys = IdpDescriptor::from_metadata_xml_for(
+    let idp_without_keys = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &without_key_descriptors(parties.idp.metadata_xml())?,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let sp_without_keys = SpDescriptor::from_metadata_xml_for(
+    let sp_without_keys = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &without_key_descriptors(parties.sp.metadata_xml())?,
         MetadataTrustPolicy::UnsignedForCompatibility,

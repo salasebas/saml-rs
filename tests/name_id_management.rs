@@ -81,6 +81,7 @@ fn service_provider(
         1,
     );
     Ok(SpDescriptor::from_metadata_xml(
+        EntityId::try_new(entity_id)?,
         &metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?)
@@ -615,6 +616,7 @@ fn a_service_provider_without_a_soap_service_is_not_sent_a_request() -> TestResu
         r#"<IDPSSODescriptor protocolSupportEnumeration="{PROTOCOL}"><ManageNameIDService Binding="{SOAP_BINDING}" Location="https://sp.example.com/idp-role/nameid"/><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://sp.example.com/idp-role/sso"/></IDPSSODescriptor><SPSSODescriptor"#
     );
     let dual_role = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         &service_provider(SP_ENTITY_ID, &[])?
             .metadata()
             .get_metadata()

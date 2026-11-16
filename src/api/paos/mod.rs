@@ -257,7 +257,7 @@ impl PendingPaosSso {
         Ok(Self {
             request_id: MessageId::try_new(snapshot.request_id)?,
             relay_state: snapshot.relay_state,
-            idp_entity_id: EntityId::from_peer(snapshot.idp_entity_id)?,
+            idp_entity_id: EntityId::peer(snapshot.idp_entity_id)?,
             acs_url: EndpointUrl::try_new(snapshot.acs_url)?,
         })
     }
@@ -473,6 +473,7 @@ impl Saml<Sp> {
     ///         .build()?,
     /// )?;
     /// let idp = IdpDescriptor::from_metadata_xml(
+    ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
     ///     MetadataTrustPolicy::UnsignedForCompatibility,
     /// )?;

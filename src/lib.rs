@@ -57,7 +57,7 @@
 //!         .validation(SpValidationPolicy::compatibility())
 //!         .build()?,
 //! )?;
-//! let idp = IdpDescriptor::from_metadata_xml_for(
+//! let idp = IdpDescriptor::from_metadata_xml(
 //!     EntityId::try_new("https://idp.example.com/metadata")?,
 //!     idp_metadata_xml,
 //!     MetadataTrustPolicy::UnsignedForCompatibility,

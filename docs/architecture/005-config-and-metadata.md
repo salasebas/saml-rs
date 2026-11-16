@@ -129,8 +129,6 @@ Rules:
   `additional_decryption_keys` in order. Metadata publishes
   `encryption_certificate`, then the certificate of each additional key, as
   `<KeyDescriptor use="encryption">`.
-- Credential strings stay behind typed wrappers, with `as_str()` available as a
-  raw compatibility and migration escape hatch.
 - `EntitySetting` with raw strings stays a raw-compatibility escape, not the
   primary typed config.
 
@@ -308,36 +306,21 @@ Constructors:
 
 ```rust
 impl IdpDescriptor {
-    pub fn from_metadata_xml_for(
-        expected_entity_id: EntityId,
-        xml: &str,
-        trust: MetadataTrustPolicy<'_>,
-    ) -> Result<Self, SamlError>;
-
     pub fn from_metadata_xml(
+        expected_entity_id: EntityId,
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError>;
 }
 
 impl SpDescriptor {
-    pub fn from_metadata_xml_for(
-        expected_entity_id: EntityId,
-        xml: &str,
-        trust: MetadataTrustPolicy<'_>,
-    ) -> Result<Self, SamlError>;
-
     pub fn from_metadata_xml(
+        expected_entity_id: EntityId,
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError>;
 }
 ```
-
-Prefer `from_metadata_xml_for(expected_entity_id, xml, trust)`. It binds the
-metadata to the entity ID the caller intended to trust. The shorter
-`from_metadata_xml(xml, trust)` is only a convenience for callers that
-explicitly accept the entity ID found in metadata.
 
 ## Metadata Trust
 

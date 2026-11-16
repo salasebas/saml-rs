@@ -95,16 +95,6 @@ use super::metadata_trust::{
 pub struct EntityId(String);
 
 impl EntityId {
-    /// Wrap an entity ID URI or deployment-specific identifier without validation.
-    ///
-    /// Prefer [`Self::try_new`] for caller-provided input. Use this constructor
-    /// for already-validated compatibility data, or to name a peer whose
-    /// entity ID is not a URI. A configured provider's own entity ID is still
-    /// checked when its config is validated.
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
     /// Validate and wrap an entity ID.
     ///
     /// # Errors
@@ -118,7 +108,17 @@ impl EntityId {
         Ok(Self(value))
     }
 
-    pub(crate) fn from_peer(value: impl Into<String>) -> Result<Self, SamlError> {
+    /// Wrap a peer's entity ID, which need not be a URI.
+    ///
+    /// Use it to name the expected entity ID of a peer such as
+    /// `idp.example.com`. A provider's own entity ID built this way is still
+    /// checked when its config is validated.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the entity ID has no
+    /// non-whitespace character.
+    pub fn peer(value: impl Into<String>) -> Result<Self, SamlError> {
         let value = value.into();
         validate_peer_entity_id(&value)?;
         Ok(Self(value))
@@ -366,12 +366,11 @@ impl IdpDescriptor {
     /// or unexpected, the entity has no `IDPSSODescriptor` that lists the SAML 2.0
     /// protocol, the requested trust policy cannot be satisfied, or a
     /// `validUntil` is not an `xs:dateTime` with a timezone.
-    pub fn from_metadata_xml_for(
+    pub fn from_metadata_xml(
         expected_entity_id: EntityId,
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        validate_peer_entity_id(expected_entity_id.as_str())?;
         let metadata = IdpMetadata::from_xml(xml)?;
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
@@ -379,29 +378,6 @@ impl IdpDescriptor {
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
-            provider: IdentityProvider::from_parsed_metadata(metadata, EntitySetting::default()),
-            validity,
-            trust,
-        })
-    }
-
-    /// Parse IdP metadata when the caller accepts the metadata-declared entity ID.
-    ///
-    /// Prefer [`Self::from_metadata_xml_for`] when the expected entity ID is known.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent,
-    /// the entity has no `IDPSSODescriptor` that lists the SAML 2.0 protocol, the
-    /// requested trust policy cannot be satisfied, or a `validUntil` is not an
-    /// `xs:dateTime` with a timezone.
-    pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
-        let metadata = IdpMetadata::from_xml(xml)?;
-        let entity_id = EntityId::from_peer(metadata_entity_id(&metadata)?)?;
-        let trust = ensure_metadata_trust(&metadata, trust)?;
-        let validity = metadata.validity()?;
-        Ok(Self {
-            entity_id,
             provider: IdentityProvider::from_parsed_metadata(metadata, EntitySetting::default()),
             validity,
             trust,
@@ -482,12 +458,11 @@ impl SpDescriptor {
     /// or unexpected, the entity has no `SPSSODescriptor` that lists the SAML 2.0
     /// protocol, the requested trust policy cannot be satisfied, or a
     /// `validUntil` is not an `xs:dateTime` with a timezone.
-    pub fn from_metadata_xml_for(
+    pub fn from_metadata_xml(
         expected_entity_id: EntityId,
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        validate_peer_entity_id(expected_entity_id.as_str())?;
         let metadata = SpMetadata::from_xml(xml)?;
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
@@ -495,29 +470,6 @@ impl SpDescriptor {
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
-            provider: ServiceProvider::from_parsed_metadata(metadata, EntitySetting::default()),
-            validity,
-            trust,
-        })
-    }
-
-    /// Parse SP metadata when the caller accepts the metadata-declared entity ID.
-    ///
-    /// Prefer [`Self::from_metadata_xml_for`] when the expected entity ID is known.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when the XML is malformed, the entity ID is absent,
-    /// the entity has no `SPSSODescriptor` that lists the SAML 2.0 protocol, the
-    /// requested trust policy cannot be satisfied, or a `validUntil` is not an
-    /// `xs:dateTime` with a timezone.
-    pub fn from_metadata_xml(xml: &str, trust: MetadataTrustPolicy<'_>) -> Result<Self, SamlError> {
-        let metadata = SpMetadata::from_xml(xml)?;
-        let entity_id = EntityId::from_peer(metadata_entity_id(&metadata)?)?;
-        let trust = ensure_metadata_trust(&metadata, trust)?;
-        let validity = metadata.validity()?;
-        Ok(Self {
-            entity_id,
             provider: ServiceProvider::from_parsed_metadata(metadata, EntitySetting::default()),
             validity,
             trust,

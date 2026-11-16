@@ -74,7 +74,7 @@ fn idp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Idp>, SamlErr
 }
 
 fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> {
-    IdpDescriptor::from_metadata_xml_for(
+    IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -82,7 +82,7 @@ fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> 
 }
 
 fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
-    SpDescriptor::from_metadata_xml_for(
+    SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -99,7 +99,7 @@ fn soap_name_id_sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, Sa
         ),
         1,
     );
-    SpDescriptor::from_metadata_xml_for(
+    SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -302,8 +302,11 @@ fn import_rejects_a_malformed_valid_until() -> Result<(), Box<dyn std::error::Er
         r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{IDP_ENTITY_ID}" validUntil="2001-01-01T00:00:00"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#
     );
 
-    let imported =
-        IdpDescriptor::from_metadata_xml(&xml, MetadataTrustPolicy::UnsignedForCompatibility);
+    let imported = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &xml,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    );
 
     assert!(is_valid_until_error(&imported));
     Ok(())

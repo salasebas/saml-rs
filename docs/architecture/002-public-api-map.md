@@ -106,7 +106,7 @@ The typed call shape this design called for:
 ```rust
 let sp_saml = Saml::sp(sp_config)?;
 let idp_descriptor =
-    IdpDescriptor::from_metadata_xml_for(expected_idp_entity_id, idp_xml, trust_policy)?;
+    IdpDescriptor::from_metadata_xml(expected_idp_entity_id, idp_xml, trust_policy)?;
 
 let started = sp_saml.start_sso(&idp_descriptor, StartSso::post())?;
 

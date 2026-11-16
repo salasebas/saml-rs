@@ -145,7 +145,7 @@ pub(crate) fn request_from_flow(
     let issuer = issuer(&request).ok_or_else(|| {
         SamlError::ProtocolProfile("ManageNameIDRequest is missing Issuer".into())
     })?;
-    let issuer = EntityId::from_peer(issuer.value)?;
+    let issuer = EntityId::peer(issuer.value)?;
     let content = if request.required_attr("Version")? == "2.0" {
         let (identifier, change) = identifier_and_change(&request)?;
         RequestContent::Identifiers(identifier, change)

@@ -71,10 +71,12 @@ fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
             .build()?,
     )?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -720,10 +722,12 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
             .build()?,
     )?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -1026,8 +1030,11 @@ fn assertion_consumer_of_a_binding_that_cannot_carry_the_response_is_rejected(
         1,
     );
     assert_ne!(metadata, sp_descriptor.metadata_xml());
-    let sp_descriptor =
-        SpDescriptor::from_metadata_xml(&metadata, MetadataTrustPolicy::UnsignedForCompatibility)?;
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::headers_checked_by_caller(),
@@ -1108,8 +1115,11 @@ fn request_without_an_assertion_consumer_is_answered_at_the_metadata_default(
         1,
     );
     assert_ne!(metadata, sp_descriptor.metadata_xml());
-    let sp_descriptor =
-        SpDescriptor::from_metadata_xml(&metadata, MetadataTrustPolicy::UnsignedForCompatibility)?;
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &metadata,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::headers_checked_by_caller(),
@@ -1165,6 +1175,7 @@ fn request_without_an_assertion_consumer_is_answered_at_the_metadata_default(
         1,
     );
     let artifact_sp = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         &artifact_default,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;

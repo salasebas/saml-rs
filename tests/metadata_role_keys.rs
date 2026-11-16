@@ -81,7 +81,7 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
             .validation(SpValidationPolicy::recommended())
             .build()?,
     )?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -91,7 +91,7 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
         r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/as-sp/acs" index="0"/></SPSSODescriptor></EntityDescriptor>"#,
         normalize_cert_string(SP_ROLE_CERT)
     );
-    let dual_role_idp = IdpDescriptor::from_metadata_xml_for(
+    let dual_role_idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &identity_provider
             .metadata_xml()
@@ -193,12 +193,12 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
         .build()?;
     let published_sp = Saml::sp(sp_config.clone())?;
     let published_idp = Saml::idp(idp_config.clone())?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         published_sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         published_idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -242,12 +242,12 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
         let session = sso_response_from(&sp, &sp_descriptor, &idp_descriptor, &idp)??;
         assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
 
-        let current_sp = SpDescriptor::from_metadata_xml_for(
+        let current_sp = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp_signing_authn_requests(key, current)?.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
         )?;
-        let current_idp = IdpDescriptor::from_metadata_xml_for(
+        let current_idp = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             idp_signing_with(key, current)?.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
@@ -267,7 +267,7 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
             .validation(SpValidationPolicy::recommended())
             .build()?,
     )?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -280,7 +280,7 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
         "IDPSSODescriptor",
         &saml11_idp_role(SP_ROLE_CERT),
     ) {
-        let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+        let idp_descriptor = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             &metadata,
             MetadataTrustPolicy::UnsignedForCompatibility,
@@ -347,7 +347,7 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
             })
             .build()?,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -358,7 +358,7 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
         "SPSSODescriptor",
         &saml11_sp_role(IDP_ROLE_CERT),
     ) {
-        let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+        let sp_descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             &metadata,
             MetadataTrustPolicy::UnsignedForCompatibility,
@@ -421,7 +421,7 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
     let saml2 = format!(r#"protocolSupportEnumeration="{SAML2_PROTOCOL}""#);
     for protocols in [SAML11_PROTOCOL, "urn:oasis:names:tc:SAML:2.0:protocolx", ""] {
         let listed = format!(r#"protocolSupportEnumeration="{protocols}""#);
-        let idp = IdpDescriptor::from_metadata_xml_for(
+        let idp = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             &idp_metadata.replace(&saml2, &listed),
             MetadataTrustPolicy::UnsignedForCompatibility,
@@ -430,7 +430,7 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
             matches!(&idp, Err(SamlError::MissingMetadata(role)) if role == "IDPSSODescriptor"),
             "{protocols}: {idp:?}"
         );
-        let sp = SpDescriptor::from_metadata_xml_for(
+        let sp = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             &sp_metadata.replace(&saml2, &listed),
             MetadataTrustPolicy::UnsignedForCompatibility,
@@ -460,7 +460,7 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
         r#"<IDPSSODescriptor xmlns="urn:example:not-metadata""#,
         1,
     );
-    let foreign = IdpDescriptor::from_metadata_xml_for(
+    let foreign = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &foreign_namespace,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -472,7 +472,7 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
 
     let listed_with_saml11 =
         format!("protocolSupportEnumeration=\"{SAML11_PROTOCOL}&#x9;&#xA;{SAML2_PROTOCOL}&#xD;\"");
-    let idp = IdpDescriptor::from_metadata_xml_for(
+    let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &idp_metadata.replace(&saml2, &listed_with_saml11),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -483,7 +483,7 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
             .as_deref(),
         Some(IDP_SSO)
     );
-    let sp = SpDescriptor::from_metadata_xml_for(
+    let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &sp_metadata.replace(&saml2, &listed_with_saml11),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -512,7 +512,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
         .metadata_xml()
         .to_string();
 
-    let idp = IdpDescriptor::from_metadata_xml_for(
+    let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &idp_metadata.replace(metadata_namespace, referenced_namespace),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -523,7 +523,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
             .as_deref(),
         Some(IDP_SSO)
     );
-    let sp = SpDescriptor::from_metadata_xml_for(
+    let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &sp_metadata.replace(metadata_namespace, referenced_namespace),
         MetadataTrustPolicy::UnsignedForCompatibility,

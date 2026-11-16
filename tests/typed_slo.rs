@@ -300,12 +300,12 @@ fn descriptors(
     sp: &Saml<saml_rs::Sp>,
     idp: &Saml<saml_rs::Idp>,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -1121,7 +1121,7 @@ fn typed_slo_rejects_peer_without_requested_logout_binding(
             .validation(signed_authn_request_idp_validation())
             .build()?,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -2634,6 +2634,7 @@ fn typed_facade_rejects_slo_pending_peer_mismatch() -> Result<(), Box<dyn std::e
             .build()?,
     )?;
     let other_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://other-idp.example.com/metadata")?,
         other_idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -3384,12 +3385,12 @@ fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
         "https://idp.example.com/slo/[t]/post",
         "https://idp.example.com/slo/post?next=100%",
     ] {
-        let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+        let sp_descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
         )?;
-        let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+        let idp_descriptor = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             &idp.metadata_xml().replace(
                 &format!(r#"Location="{IDP_SLO_POST}""#),

@@ -64,12 +64,12 @@ fn descriptor_pair(
     idp: &Saml<saml_rs::Idp>,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     Ok((
-        SpDescriptor::from_metadata_xml_for(
+        SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
         )?,
-        IdpDescriptor::from_metadata_xml_for(
+        IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             idp.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
@@ -97,6 +97,7 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
         validation(),
     )?;
     let other = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(OTHER_SP_ENTITY_ID)?,
         &format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{OTHER_SP_ENTITY_ID}"><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://other.example.com/slo"/><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://other.example.com/acs" index="0"/></SPSSODescriptor></EntityDescriptor>"#
         ),
@@ -118,6 +119,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
     let service_provider = sp(SpValidationPolicy::compatibility())?;
     let identity_provider = idp(IdpValidationPolicy::compatibility(), &[IDP_SLO])?;
     let idp_for_requests = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
         &format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{IDP_ENTITY_ID}"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_SSO}"/><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_SLO_REQUEST}" ResponseLocation="{IDP_SLO_RESPONSE}"/></IDPSSODescriptor></EntityDescriptor>"#
         ),
@@ -137,12 +139,13 @@ fn logout_response_uses_response_location_and_request_uses_location(
     );
 
     let sp_for_responses = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         &format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{SP_ENTITY_ID}"><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_SLO}" ResponseLocation="{SP_SLO_RESPONSE}"/><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_ACS}" index="0"/></SPSSODescriptor></EntityDescriptor>"#
         ),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let local_idp = IdpDescriptor::from_metadata_xml_for(
+    let local_idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         identity_provider.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -172,6 +175,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
             .metadata_xml()
             .replace(SP_SLO_RESPONSE, &padded_location);
         let padded_peer = SpDescriptor::from_metadata_xml(
+            EntityId::try_new(SP_ENTITY_ID)?,
             &padded_metadata,
             MetadataTrustPolicy::UnsignedForCompatibility,
         )?;
@@ -188,6 +192,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
         )
         .replace(" ResponseLocation=", " ext:ResponseLocation=");
     let extension_peer = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         &extension_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -209,7 +214,7 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
     let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
     let peer_sp = sp(SpValidationPolicy::recommended())?;
     let response_metadata = peer_sp.metadata_xml().replace(SP_SLO, SP_SLO_RESPONSE);
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &response_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -268,7 +273,7 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
         IdpValidationPolicy::compatibility(),
         &[IDP_SLO, IDP_SLO_SECOND],
     )?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         service_provider.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -337,7 +342,7 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
     const IDP_ROLE_OF_SP_SLO: &str = "https://sp.example.com/as-idp/slo";
     let service_provider = sp(SpValidationPolicy::recommended())?;
     let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
-    let sp_peer = SpDescriptor::from_metadata_xml_for(
+    let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &service_provider.metadata_xml().replace(
             "<SPSSODescriptor ",
@@ -347,7 +352,7 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
         ),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_peer = IdpDescriptor::from_metadata_xml_for(
+    let idp_peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &identity_provider.metadata_xml().replace(
             "<IDPSSODescriptor ",

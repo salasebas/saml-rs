@@ -8,8 +8,8 @@ distinction is recorded in
 [validation presets](../adr/0002-validation-presets.md).
 
 Metadata trust is `MetadataTrustPolicy`, passed to
-`IdpDescriptor::from_metadata_xml_for` and
-`SpDescriptor::from_metadata_xml_for`. Replay is `ReplayPolicy`, passed to
+`IdpDescriptor::from_metadata_xml` and
+`SpDescriptor::from_metadata_xml`. Replay is `ReplayPolicy`, passed to
 `SamlValidationContext::new`. Neither value is a field of
 `SpValidationPolicy` or `IdpValidationPolicy`. The Web Browser SSO and Single
 Logout field combinations do not select signed metadata, invent trust anchors,
