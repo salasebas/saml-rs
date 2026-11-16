@@ -38,10 +38,16 @@ pub enum AssertionSignaturePolicy {
 /// [`Self::RequireSigned`] requires a signature on every response and is
 /// library hardening. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+///
+/// The policy has no `Default`. Take it from a preset, such as
+/// `SpValidationPolicy::recommended().responses`:
+///
+/// ```compile_fail,E0599
+/// let policy = saml_rs::ResponseSignaturePolicy::default();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResponseSignaturePolicy {
     /// Accept a CBC `EncryptedAssertion` without a Response signature.
-    #[default]
     AllowUnsignedEncryptedCbc,
     /// Require a signed Response when an `<EncryptedAssertion>` uses CBC.
     ///
@@ -69,7 +75,14 @@ pub enum ResponseSignaturePolicy {
 /// library hardening. Selecting it does not require a signature directly on the
 /// Assertion. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+///
+/// The profile has no `Default`. Take it from a preset, such as
+/// `SpValidationPolicy::recommended().xml_signatures`:
+///
+/// ```compile_fail,E0599
+/// let profile = saml_rs::XmlSignatureProfile::default();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum XmlSignatureProfile {
     /// Require RSA-SHA256/384/512.
@@ -110,7 +123,6 @@ pub enum XmlSignatureProfile {
     /// ignored when the first signature of the message verifies, and
     /// HTTP-Redirect and HTTP-POST-SimpleSign verify only the detached
     /// signature unless the Assertion must be signed.
-    #[default]
     AllowProviderSupportedForCompatibility,
 }
 
@@ -133,7 +145,14 @@ pub enum AuthnRequestSigningPolicy {
 /// [`Self::AllowUnsignedForCompatibility`] does not verify a present signature.
 /// The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+///
+/// The policy has no `Default`. Take it from a preset, such as
+/// `IdpValidationPolicy::recommended().authn_requests`:
+///
+/// ```compile_fail,E0599
+/// let policy = saml_rs::AuthnRequestValidationPolicy::default();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthnRequestValidationPolicy {
     /// Reject unsigned AuthnRequests.
     RequireSigned,
@@ -142,7 +161,6 @@ pub enum AuthnRequestValidationPolicy {
     /// `AuthnRequestsSigned`.
     AllowUnsignedVerifyIfPresent,
     /// Accept unsigned AuthnRequests without verifying a signature that is present.
-    #[default]
     AllowUnsignedForCompatibility,
 }
 
@@ -162,13 +180,19 @@ pub enum LogoutSignaturePolicy {
 /// [`Self::Validate`] also rejects a bearer assertion that omits one.
 /// [`Self::SkipForCompatibility`] skips the check. The accept combination is
 /// classified in `docs/conformance/web-browser-sso-acceptance.md`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+///
+/// The policy has no `Default`. Take it from a preset, such as
+/// `SpValidationPolicy::recommended().audience`:
+///
+/// ```compile_fail,E0599
+/// let policy = saml_rs::AudienceValidationPolicy::default();
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudienceValidationPolicy {
     /// Evaluate audience restrictions and reject a bearer assertion that omits one.
     ///
     /// Rejecting a missing restriction is library hardening. Recommended uses
     /// [`Self::EvaluatePresentRestrictions`].
-    #[default]
     Validate,
     /// Evaluate `<AudienceRestriction>` elements that are present.
     ///

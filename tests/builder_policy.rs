@@ -397,41 +397,21 @@ fn recommended_preset_matches_classified_validation_and_hardenings_stay_independ
 }
 
 #[test]
-fn policy_defaults_start_on_recommended_and_field_defaults_stay_permissive() {
+fn policy_defaults_are_the_recommended_presets() {
     assert!(!EntitySetting::default().want_message_signed);
-    assert_eq!(
-        SpValidationPolicy::default(),
-        SpValidationPolicy::recommended()
-    );
+    let sp = SpValidationPolicy::recommended();
+    let logout = LogoutPolicy::recommended();
+    assert_eq!(SpValidationPolicy::default(), sp);
     assert_eq!(
         IdpValidationPolicy::default(),
         IdpValidationPolicy::recommended()
     );
-    assert_eq!(LogoutPolicy::default(), LogoutPolicy::recommended());
-    assert_eq!(
-        AssertionSignaturePolicy::default(),
-        AssertionSignaturePolicy::AllowUnsignedForCompatibility
-    );
-    assert_eq!(
-        ResponseSignaturePolicy::default(),
-        ResponseSignaturePolicy::AllowUnsignedEncryptedCbc
-    );
-    assert_eq!(
-        AuthnRequestSigningPolicy::default(),
-        AuthnRequestSigningPolicy::DoNotSignForCompatibility
-    );
-    assert_eq!(
-        AuthnRequestValidationPolicy::default(),
-        AuthnRequestValidationPolicy::AllowUnsignedForCompatibility
-    );
-    assert_eq!(
-        XmlSignatureProfile::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility
-    );
-    assert_eq!(
-        SpValidationPolicy::recommended().xml_signatures,
-        XmlSignatureProfile::ExcludeWeakAlgorithms
-    );
+    assert_eq!(LogoutPolicy::default(), logout);
+    assert_eq!(AssertionSignaturePolicy::default(), sp.assertions);
+    assert_eq!(AuthnRequestSigningPolicy::default(), sp.authn_requests);
+    assert_eq!(NameIdCreationPolicy::default(), sp.name_id_creation);
+    assert_eq!(LogoutSignaturePolicy::default(), logout.requests);
+    assert_eq!(LogoutSignaturePolicy::default(), logout.responses);
 }
 
 #[cfg(crypto)]
