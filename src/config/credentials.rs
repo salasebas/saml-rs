@@ -229,33 +229,40 @@ impl Credentials {
         self
     }
 
-    pub(crate) fn signing_key(&self) -> Option<&PrivateKeyPem> {
+    /// The signing private key.
+    pub fn signing_key(&self) -> Option<&PrivateKeyPem> {
         self.signing_key.as_ref().map(|signing| &signing.key)
     }
 
-    pub(crate) fn signing_key_passphrase(&self) -> Option<&Passphrase> {
+    /// The passphrase that unlocks the signing key, when it is encrypted.
+    pub fn signing_key_passphrase(&self) -> Option<&Passphrase> {
         self.signing_key
             .as_ref()
             .and_then(|signing| signing.passphrase.as_ref())
     }
 
-    pub(crate) fn signing_certificate(&self) -> Option<&CertificatePem> {
+    /// The signing certificate.
+    pub fn signing_certificate(&self) -> Option<&CertificatePem> {
         self.signing_certificate.as_ref()
     }
 
-    pub(crate) fn additional_signing_certificates(&self) -> &[CertificatePem] {
+    /// The additional signing certificates, in publication order.
+    pub fn additional_signing_certificates(&self) -> &[CertificatePem] {
         &self.additional_signing_certificates
     }
 
-    pub(crate) fn hmac_secret(&self) -> Option<&HmacSecret> {
+    /// The secret for [`crate::SignatureAlgorithm::HmacSha1`].
+    pub fn hmac_secret(&self) -> Option<&HmacSecret> {
         self.hmac_secret.as_ref()
     }
 
-    pub(crate) fn decryption(&self) -> Option<&DecryptionCredential> {
+    /// The primary decryption key, with its certificate and passphrase.
+    pub fn decryption(&self) -> Option<&DecryptionCredential> {
         self.decryption.as_ref()
     }
 
-    pub(crate) fn additional_decryption_keys(&self) -> &[DecryptionCredential] {
+    /// The additional decryption keys, in decryption order.
+    pub fn additional_decryption_keys(&self) -> &[DecryptionCredential] {
         &self.additional_decryption_keys
     }
 }

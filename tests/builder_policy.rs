@@ -469,16 +469,6 @@ fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_charact
 }
 
 #[test]
-fn sp_builder_rejects_an_entity_id_that_is_not_a_uri() -> Result<(), Box<dyn std::error::Error>> {
-    let result = SpConfig::builder(EntityId::try_new("not a uri")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .build();
-
-    assert!(matches!(result, Err(SamlError::Invalid(_))));
-    Ok(())
-}
-
-#[test]
 fn sp_builder_rejects_additional_decryption_keys_without_decryption_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let credentials = Credentials::default().with_additional_decryption_key(DecryptionCredential {

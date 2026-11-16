@@ -1,7 +1,5 @@
 use super::*;
-use saml_rs::{
-    AlgorithmPolicy, Credentials, DataEncryptionAlgorithm, DecryptionCredential, Passphrase,
-};
+use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, DecryptionCredential};
 
 fn encrypted_exchange(
     algorithm: DataEncryptionAlgorithm,
@@ -184,7 +182,9 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
     let config = sp_with_validation_and_xml(recommended_sso_accept_validation())?.credentials(
         encryption_credentials()
             .with_decryption(DecryptionCredential {
-                certificate: CertificatePem::new(include_str!("../../../tests/fixtures/key/idp/cert.cer")),
+                certificate: CertificatePem::new(include_str!(
+                    "../../../tests/fixtures/key/idp/cert.cer"
+                )),
                 key: PrivateKeyPem::new(include_str!(
                     "../../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"
                 )),
@@ -244,8 +244,10 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
 fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
 ) -> Result<(), Box<dyn std::error::Error>> {
     const KEY: &str = include_str!("../../../tests/fixtures/key/sp/privkey.encrypted.pkcs8.pem");
-    const KEY_CERT: &str = include_str!("../../../tests/fixtures/key/sp/cert.encrypted.pkcs8.reissued.cer");
+    const KEY_CERT: &str =
+        include_str!("../../../tests/fixtures/key/sp/cert.encrypted.pkcs8.reissued.cer");
     const PASSPHRASE: &str = "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px";
+    use saml_rs::{Credentials, Passphrase};
     let credentials = Credentials::default()
         .with_encrypted_signing_key(PrivateKeyPem::new(KEY), Passphrase::new(PASSPHRASE))
         .with_signing_certificate(CertificatePem::new(KEY_CERT))

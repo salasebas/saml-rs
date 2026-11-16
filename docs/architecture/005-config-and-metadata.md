@@ -109,6 +109,9 @@ impl Credentials {
     pub fn with_hmac_secret(self, secret: HmacSecret) -> Self;
     pub fn with_decryption(self, credential: DecryptionCredential) -> Self;
     pub fn with_additional_decryption_key(self, credential: DecryptionCredential) -> Self;
+    // and a borrowing getter for each value: signing_key, signing_key_passphrase,
+    // signing_certificate, additional_signing_certificates, hmac_secret,
+    // decryption, additional_decryption_keys
 }
 
 pub struct DecryptionCredential {
