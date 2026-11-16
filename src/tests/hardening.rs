@@ -14,15 +14,16 @@ use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn signing() -> EntitySetting {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some(PRIVKEY.into());
-    setting.signing_cert = Some(CERT.into());
-    setting.request_signature_algorithm = RSA_SHA256.into();
-    setting
+    EntitySetting {
+        private_key: Some(PRIVKEY.into()),
+        signing_cert: Some(CERT.into()),
+        request_signature_algorithm: RSA_SHA256.into(),
+        ..EntitySetting::default()
+    }
 }
 
 fn idp() -> IdentityProvider {

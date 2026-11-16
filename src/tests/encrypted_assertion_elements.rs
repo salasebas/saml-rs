@@ -33,11 +33,12 @@ const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const PERSISTENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
-const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
-const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const NEXT_PRIVKEY: &str =
+    include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
 fn credentials() -> Credentials {
     Credentials {

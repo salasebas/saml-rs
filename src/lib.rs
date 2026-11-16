@@ -352,6 +352,9 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(test)]
+extern crate self as saml_rs;
+
 #[cfg(any(
     all(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"),
     all(feature = "crypto-rustcrypto", feature = "crypto-fips"),
@@ -415,6 +418,9 @@ pub mod util;
 pub mod validator;
 #[doc(hidden)]
 pub mod xml;
+
+#[cfg(test)]
+mod tests;
 
 pub use api::{
     ForceAuthn, HttpHeader, Idp, IsPassive, LogoutSigning, MessageDelivery, PaosAuthnRequest,

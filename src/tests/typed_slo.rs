@@ -1,14 +1,13 @@
 //! Compatibility is the legacy permissive preset.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 #[cfg(feature = "crypto-rustcrypto")]
 #[path = "typed_slo/peer_hmac.rs"]
 mod peer_hmac;
 
-#[path = "common/replay_cache.rs"]
-mod replay_cache;
+use super::replay_cache;
 
 use replay_cache::RecordingReplayCache;
 
@@ -78,8 +77,8 @@ const LOGOUT_BINDINGS_WITH_SOAP: [LogoutBinding; 4] = [
 const UNSIGNED_COMPATIBILITY_BINDINGS: [LogoutBinding; 2] =
     [LogoutBinding::Post, LogoutBinding::Redirect];
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 #[derive(Debug, Clone, Copy)]
 enum LocalSloRole {
@@ -103,7 +102,6 @@ impl SloEndpointSet {
             LogoutBinding::Redirect => self.redirect,
             LogoutBinding::SimpleSign => self.simple_sign,
             LogoutBinding::Soap => self.soap,
-            _ => return Err(SamlError::UndefinedBinding),
         })
     }
 }
@@ -356,7 +354,6 @@ fn logout_request_input(
         LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
             outbound.soap_request()?.envelope(),
         )),
-        _ => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -379,7 +376,6 @@ fn logout_response_input(
         LogoutBinding::Soap => Ok(BrowserInput::<LogoutResponse>::soap(
             outbound.soap_response()?.envelope(),
         )),
-        _ => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -389,7 +385,6 @@ fn respond_slo_for_binding(binding: LogoutBinding) -> Result<RespondSlo, SamlErr
         LogoutBinding::Post => RespondSlo::post(),
         LogoutBinding::SimpleSign => RespondSlo::simple_sign(),
         LogoutBinding::Soap => RespondSlo::soap(),
-        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 
@@ -399,7 +394,6 @@ fn sp_slo_endpoint(binding: LogoutBinding) -> Result<&'static str, SamlError> {
         LogoutBinding::Post => SP_SLO_POST,
         LogoutBinding::SimpleSign => SP_SLO_SIMPLESIGN,
         LogoutBinding::Soap => SP_SLO_SOAP,
-        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 
@@ -474,7 +468,6 @@ fn tampered_logout_request_expiration_input(
         LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
             SoapProtocolMessage::response_envelope(&tampered)?,
         )),
-        _ => Err(SamlError::UndefinedBinding.into()),
     }
 }
 
@@ -484,7 +477,6 @@ fn start_slo_for_binding(binding: LogoutBinding) -> Result<StartSlo, SamlError> 
         LogoutBinding::Post => StartSlo::post(),
         LogoutBinding::SimpleSign => StartSlo::simple_sign(),
         LogoutBinding::Soap => StartSlo::soap(),
-        _ => return Err(SamlError::UndefinedBinding),
     })
 }
 
@@ -607,7 +599,6 @@ fn signed_logout_request_input(
                 SoapProtocolMessage::response_envelope(&signed)?,
             ))
         }
-        _ => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -638,7 +629,6 @@ fn unsigned_logout_request_input(
         LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
             SoapProtocolMessage::response_envelope(xml)?,
         )),
-        _ => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -731,7 +721,6 @@ fn signed_logout_response_input(
                 SoapProtocolMessage::response_envelope(&signed)?,
             ))
         }
-        _ => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -762,7 +751,6 @@ fn unsigned_logout_response_input(
         LogoutBinding::Soap => Ok(BrowserInput::<LogoutResponse>::soap(
             SoapProtocolMessage::response_envelope(xml)?,
         )),
-        _ => Err(SamlError::UndefinedBinding),
     }
 }
 
@@ -2077,7 +2065,6 @@ fn typed_session_authority_slo_signatures_cover_expiration_for_every_binding(
             LogoutBinding::Redirect | LogoutBinding::SimpleSign => {
                 SignatureVerificationReason::DetachedMessageSignature
             }
-            _ => return Err("unsupported logout binding".into()),
         };
 
         match sp.receive_slo(

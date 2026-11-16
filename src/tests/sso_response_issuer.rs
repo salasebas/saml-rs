@@ -1,7 +1,7 @@
 //! Typed SSO comparison of a success `<Response>` `<Issuer>` with the identity provider.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 use common::signing_credentials;
 
@@ -23,8 +23,8 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS_POST: &str = "https://sp.example.com/acs/post";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const FOREIGN_ISSUER: &str = "https://attacker.example/idp";
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 

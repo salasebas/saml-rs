@@ -13,8 +13,8 @@ use saml_rs::{
 };
 use saml_rs::{SignatureAction, SignatureConfig};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn idp_metadata_xml() -> &'static str {
     r#"<EntityDescriptor ID="_idp_md1" entityID="https://idp.example.com/metadata" xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#
@@ -630,9 +630,9 @@ fn require_signature_rejects_a_nested_signature_ahead_of_the_root_signature(
 }
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
-const RSA_1024_KEY: &str = include_str!("fixtures/key/rsa1024/privkey.pkcs8.pem");
+const RSA_1024_KEY: &str = include_str!("../../tests/fixtures/key/rsa1024/privkey.pkcs8.pem");
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
-const RSA_1024_CERT: &str = include_str!("fixtures/key/rsa1024/cert.pem");
+const RSA_1024_CERT: &str = include_str!("../../tests/fixtures/key/rsa1024/cert.pem");
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 fn sign_idp_metadata_with(

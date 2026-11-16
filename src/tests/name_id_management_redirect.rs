@@ -5,10 +5,9 @@
 //! Errata 05 E8, E12, E14, and E55.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
-#[path = "common/replay_cache.rs"]
-mod replay_cache;
+use super::replay_cache;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -48,7 +47,7 @@ const SP_MANAGE_OTHER: &str = "https://sp.example.com/manage-name-id/other";
 const IDP_SSO: &str = "https://idp.example.com/sso";
 const IDP_MANAGE: &str = "https://idp.example.com/manage-name-id";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 
 fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
     let mut builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
