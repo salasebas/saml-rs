@@ -101,6 +101,7 @@ impl HmacSecret {
         Ok(Self(value))
     }
 
+    #[cfg(crypto)]
     pub(crate) fn as_bytes(&self) -> &[u8] {
         &self.0
     }
