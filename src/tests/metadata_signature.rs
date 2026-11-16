@@ -3,9 +3,9 @@
 use bergshamra::{sign, DsigContext, KeysManager};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
-use saml_rs::crypto::keys::load_private_key;
+use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{
-    construct_saml_signature, verify_metadata_signature, verify_metadata_signature_detailed,
+    sign_saml_xml, verify_metadata_signature, verify_metadata_signature_detailed,
     verify_metadata_signature_detailed_with_limits, verify_metadata_signature_with_limits,
 };
 use saml_rs::metadata::IdpMetadata;
@@ -14,9 +14,9 @@ use saml_rs::SamlError;
 use saml_rs::XmlLimits;
 use saml_rs::{SignatureAction, SignatureConfig};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const WRONG_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const WRONG_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 const XPATH_TRANSFORM: &str = "http://www.w3.org/TR/1999/REC-xpath-19991116";
 
 fn idp_metadata_xml() -> &'static str {
@@ -24,23 +24,23 @@ fn idp_metadata_xml() -> &'static str {
 }
 
 fn sign_root_metadata(xml: &str) -> Result<String, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let config = SignatureConfig {
         prefix: "ds".into(),
         reference: Some("/*[local-name(.)='EntityDescriptor']".into()),
         action: SignatureAction::Prepend,
     };
-    construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], Some(&config))
+    sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], Some(&config))
 }
 
 fn signed_non_metadata_root() -> Result<String, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let config = SignatureConfig {
         prefix: "ds".into(),
         reference: Some("/*[local-name(.)='Root']".into()),
         action: SignatureAction::Prepend,
     };
-    construct_saml_signature(
+    sign_saml_xml(
         r#"<Root ID="_root"><Payload>signed</Payload></Root>"#,
         true,
         &key,
@@ -64,7 +64,7 @@ fn signed_child_metadata() -> Result<String, Box<dyn std::error::Error>> {
     let template = format!(
         "<EntityDescriptor ID=\"_evil_root\" entityID=\"https://evil.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{signature}<IDPSSODescriptor ID=\"_signed_child\" protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://trusted.example.com/sso\"/></IDPSSODescriptor></EntityDescriptor>"
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);

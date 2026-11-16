@@ -1,6 +1,6 @@
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 use std::time::SystemTime;
 
@@ -9,9 +9,9 @@ use base64::Engine;
 use common::signing_credentials;
 use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
-use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
+use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::raw::Binding;
-use saml_rs::xml::dom::parse;
+use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, FormField,
@@ -28,8 +28,8 @@ const SSO: &str = "https://idp.example.com/sso";
 const MFA: &str = "https://refeds.org/profile/mfa";
 const DECLARATION: &str = "https://idp.example.com/context/token?a=1&b=2";
 const PROVIDER: &str = "Accounts & \"Services\" <Portal>";
-const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 type Parties = (
     Saml<saml_rs::Sp>,
@@ -193,7 +193,7 @@ fn signed_requests_round_trip_context_passive_and_provider_for_all_bindings(
                             .provider_name(PROVIDER),
                     )?;
                     let xml = request_xml(&started.outbound)?;
-                    let document = parse(&xml)?;
+                    let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
                     let children: Vec<_> = document
                         .root
                         .children
@@ -321,7 +321,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
             .sign_response(),
     )?;
     let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
-    let document = parse(&xml)?;
+    let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
     let assertion = document
         .root
         .children
@@ -343,7 +343,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         statements,
         &xml[statement.end..]
     );
-    let document = parse(&edited)?;
+    let document = parse_document(&edited, saml_rs::XmlLimits::default())?;
     let selected = document
         .root
         .children
@@ -382,7 +382,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         &edited[..selected.start],
         &edited[selected.start..]
     );
-    let document = parse(&edited)?;
+    let document = parse_document(&edited, saml_rs::XmlLimits::default())?;
     let mut unsigned = edited.clone();
     let mut signatures: Vec<_> = document
         .root
@@ -404,10 +404,10 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
     for (start, end) in signatures.into_iter().rev() {
         unsigned.replace_range(start..end, "");
     }
-    let signed = construct_saml_signature(
+    let signed = sign_saml_xml(
         &unsigned,
         true,
-        &load_private_key(KEY, None)?,
+        &read_private_key(KEY, None)?,
         CERT,
         RSA_SHA256,
         &[],
@@ -657,7 +657,7 @@ fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
         )?),
     )?;
     let xml = request_xml(&started.outbound)?.replace(MFA, "relative-context");
-    let document = parse(&xml)?;
+    let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
     let signature = document
         .root
         .children
@@ -665,10 +665,10 @@ fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
         .find(|child| child.local_name == "Signature")
         .ok_or("missing request signature")?;
     let unsigned = format!("{}{}", &xml[..signature.start], &xml[signature.end..]);
-    let signed = construct_saml_signature(
+    let signed = sign_saml_xml(
         &unsigned,
         true,
-        &load_private_key(KEY, None)?,
+        &read_private_key(KEY, None)?,
         CERT,
         RSA_SHA256,
         &[],

@@ -10,10 +10,10 @@ use saml_rs::raw::Value;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{IdentityProvider, ServiceProvider};
 
-const DUMPES_ISSUER: &str = include_str!("fixtures/misc/dumpes_issuer_response.xml");
+const DUMPES_ISSUER: &str = include_str!("../../tests/fixtures/misc/dumpes_issuer_response.xml");
 #[cfg(crypto)]
-const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
-const SP_META_98: &str = include_str!("fixtures/misc/sp_metadata_98.xml");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
+const SP_META_98: &str = include_str!("../../tests/fixtures/misc/sp_metadata_98.xml");
 
 fn sp_config() -> SpMetadataConfig {
     SpMetadataConfig {

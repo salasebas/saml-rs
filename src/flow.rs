@@ -1045,9 +1045,8 @@ mod tests {
             include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
         const SP_CERT: &str = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
-        let key = crate::crypto::keys::load_private_key(SP_PRIVKEY, None)?;
-        let signature =
-            crate::crypto::construct_message_signature("SAMLRequest=other", &key, RSA_SHA256)?;
+        let key = crate::crypto::keys::read_private_key(SP_PRIVKEY, None)?;
+        let signature = crate::crypto::sign_octet_string("SAMLRequest=other", &key, RSA_SHA256)?;
         let octet = url::form_urlencoded::Serializer::new(String::new())
             .append_pair("SAMLRequest", "payload")
             .append_pair("SigAlg", RSA_SHA256)

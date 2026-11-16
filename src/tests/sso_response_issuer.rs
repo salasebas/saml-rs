@@ -1,7 +1,7 @@
 //! Typed SSO comparison of a success `<Response>` `<Issuer>` with the identity provider.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
 use common::signing_credentials;
 
@@ -10,7 +10,7 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
-use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
+use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
     AcsEndpoint, AuthnRequest, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy,
@@ -23,8 +23,8 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS_POST: &str = "https://sp.example.com/acs/post";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const FOREIGN_ISSUER: &str = "https://attacker.example/idp";
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -133,8 +133,8 @@ fn assertion_signed_with_response_issuer(exchange: &Exchange, issuer: &str) -> T
         issuer,
         1,
     );
-    let key = load_private_key(PRIVKEY, None)?;
-    Ok(construct_saml_signature(
+    let key = read_private_key(PRIVKEY, None)?;
+    Ok(sign_saml_xml(
         &xml,
         false,
         &key,

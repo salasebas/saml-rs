@@ -5,10 +5,9 @@
 //! Errata 05 E8, E12, E14, and E55.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
 
-#[path = "common/replay_cache.rs"]
-mod replay_cache;
+use super::replay_cache;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -25,7 +24,7 @@ use saml_rs::binding::{append_signature, build_redirect_octet};
 use saml_rs::constants::{
     name_id_format, signature_algorithm::RSA_SHA256, status_code, ParserType,
 };
-use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
+use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, BrowserInput, ClockSkew, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
@@ -48,7 +47,7 @@ const SP_MANAGE_OTHER: &str = "https://sp.example.com/manage-name-id/other";
 const IDP_SSO: &str = "https://idp.example.com/sso";
 const IDP_MANAGE: &str = "https://idp.example.com/manage-name-id";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 
 fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
     let mut builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
@@ -171,9 +170,9 @@ fn restored(pending: &PendingManageNameIdRequest) -> Result<PendingManageNameIdR
 }
 
 fn signed_request_input(xml: &str) -> Result<BrowserInput<ManageNameIdRequest>, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdRequest, xml, None, RSA_SHA256)?;
-    let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+    let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
     let url = append_signature(SP_MANAGE, &octet, &signature);
     let (_, query) = url
         .split_once('?')
@@ -182,9 +181,9 @@ fn signed_request_input(xml: &str) -> Result<BrowserInput<ManageNameIdRequest>, 
 }
 
 fn signed_response_input(xml: &str) -> Result<BrowserInput<ManageNameIdResponse>, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdResponse, xml, None, RSA_SHA256)?;
-    let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+    let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
     let url = append_signature(IDP_MANAGE, &octet, &signature);
     let (_, query) = url
         .split_once('?')
@@ -343,7 +342,7 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
     let sp = sp()?;
     let idp = idp()?;
     let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     for (added, expected) in [
         ("added", RelayStateParam::try_from_option(Some("added"))?),
         ("", RelayStateParam::PresentEmpty),
@@ -371,7 +370,7 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
             Some(added),
             RSA_SHA256,
         )?;
-        let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+        let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
         let url = append_signature(SP_MANAGE, &octet, &signature);
         let (_, query) = url
             .split_once('?')
@@ -394,7 +393,7 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
     let sp = sp()?;
     let idp = idp()?;
     let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let long = "n".repeat(200);
     let started = sp.start_name_id_management_redirect(
         &idp_peer,
@@ -408,7 +407,7 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
         Some(&long),
         RSA_SHA256,
     )?;
-    let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+    let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
     let url = append_signature(IDP_MANAGE, &octet, &signature);
     let (_, query) = url
         .split_once('?')

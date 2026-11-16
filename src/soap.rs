@@ -296,7 +296,7 @@ pub(crate) fn read_soap_body(
     limits: XmlLimits,
     understood: &[UnderstoodHeader],
 ) -> Result<SoapBody, SamlError> {
-    let document = dom::parse_with_limits(envelope, limits)?;
+    let document = dom::parse_document(envelope, limits)?;
     let scan = scan_envelope(envelope, understood)?;
     let child_namespace = scan
         .child
@@ -362,7 +362,7 @@ fn envelope(element_xml: &str) -> Result<String, SamlError> {
 }
 
 fn single_element(xml: &str) -> Result<String, SamlError> {
-    let document = dom::parse(xml)?;
+    let document = dom::parse_document(xml, crate::XmlLimits::default())?;
     if document.root.end < document.root.start || document.root.end > xml.len() {
         return Err(SamlError::Xml("protocol element is incomplete".into()));
     }

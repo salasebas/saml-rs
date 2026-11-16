@@ -71,7 +71,7 @@ pub(crate) fn decrypt_encrypted_id(
         | (LogoutRequestAuthentication::Authenticated, None) => return Ok(request),
     };
     let flow = request.raw_flow();
-    let document = crate::xml::dom::parse_with_limits(&flow.saml_content, setting.xml_limits)?;
+    let document = crate::xml::dom::parse_document(&flow.saml_content, setting.xml_limits)?;
     let carries_encrypted_id = document
         .root
         .children

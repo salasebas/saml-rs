@@ -4,7 +4,7 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::ParserType;
-use saml_rs::crypto::keys::load_private_key;
+use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{
     verify_signature, verify_signature_with_limits, BergshamraBackend, XmlSecurityBackend,
 };
@@ -13,8 +13,8 @@ use saml_rs::raw::{flow, Binding, FlowOptions, HttpRequest};
 use saml_rs::XmlLimits;
 use saml_rs::{SamlError, XmlSignatureProfile};
 
-const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const DSIG: &str = "http://www.w3.org/2000/09/xmldsig#";
 const PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 const ASSERTION: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
@@ -35,7 +35,7 @@ fn message(root: &str, signature: &str, children: &str) -> String {
 
 fn sign(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut keys = bergshamra::KeysManager::new();
-    keys.add_key(load_private_key(KEY, None)?);
+    keys.add_key(read_private_key(KEY, None)?);
     Ok(bergshamra::sign(
         &bergshamra::DsigContext::new(keys).with_insecure(true),
         &xml.replace(">AAAA<", "><"),
@@ -44,12 +44,14 @@ fn sign(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 fn verify_flow(xml: &str, profile: XmlSignatureProfile) -> Result<(), SamlError> {
     let certs = [CERT.to_string()];
-    let mut options = FlowOptions::default();
-    options.binding = Some(Binding::Post);
-    options.parser_type = Some(ParserType::SamlResponse);
-    options.check_signature = true;
-    options.signing_certs = &certs;
-    options.xml_signatures = profile;
+    let options = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlResponse),
+        check_signature: true,
+        signing_certs: &certs,
+        xml_signatures: profile,
+        ..FlowOptions::default()
+    };
     flow(
         &options,
         &HttpRequest::post(vec![(
@@ -112,7 +114,7 @@ fn assertion_only_sso_signature_still_returns_the_assertion(
         signature("#_assertion")
     );
     let xml = sign(&message("Response", "", &assertion))?;
-    let dom = saml_rs::xml::dom::parse(&xml)?;
+    let dom = saml_rs::xml::dom::parse_document(&xml, crate::XmlLimits::default())?;
     let assertion = dom
         .root
         .children

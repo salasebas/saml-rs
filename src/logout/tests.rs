@@ -975,7 +975,7 @@ fn custom_logout_response_accepts_issue_instant_placeholder_for_all_supported_bi
             false,
         )?;
         let xml = decode_logout_response_context(&context)?;
-        let document = crate::xml::dom::parse(&xml)?;
+        let document = crate::xml::dom::parse_document(&xml, crate::XmlLimits::default())?;
         let issue_instant = document
             .root
             .attr("IssueInstant")

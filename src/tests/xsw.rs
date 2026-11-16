@@ -8,24 +8,24 @@ use base64::Engine;
 use bergshamra::{sign, DsigContext, KeysManager};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
-use saml_rs::crypto::keys::load_private_key;
-use saml_rs::crypto::{construct_saml_signature, verify_signature};
+use saml_rs::crypto::keys::read_private_key;
+use saml_rs::crypto::{sign_saml_xml, verify_signature};
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::util::normalize_cert_string;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{constants::Binding, constants::ParserType, SamlError};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
-const ATTACK: &str = include_str!("fixtures/misc/attack_response_signed.xml");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
+const ATTACK: &str = include_str!("../../tests/fixtures/misc/attack_response_signed.xml");
 
 const FORGED: &str = "<saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_forged\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://idp.example.com/metadata</saml:Issuer><saml:Subject><saml:NameID>attacker@evil.com</saml:NameID></saml:Subject></saml:Assertion>";
 
 /// Sign the assertion inside `response.xml` and return the signed Response.
 fn signed_response() -> String {
-    let key = load_private_key(PRIVKEY, None).unwrap();
-    construct_saml_signature(RESPONSE, false, &key, CERT, RSA_SHA256, &[], None).unwrap()
+    let key = read_private_key(PRIVKEY, None).unwrap();
+    sign_saml_xml(RESPONSE, false, &key, CERT, RSA_SHA256, &[], None).unwrap()
 }
 
 fn response_signed_over_top_level_issuer() -> Result<String, Box<dyn std::error::Error>> {
@@ -49,7 +49,7 @@ fn response_signed_over_top_level_issuer() -> Result<String, Box<dyn std::error:
         &format!("</saml:Issuer>{signature}<samlp:Status>"),
         1,
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);
@@ -75,7 +75,7 @@ fn authn_request_signed_over_issuer() -> Result<String, Box<dyn std::error::Erro
         &format!("</saml:Issuer>{signature}<samlp:NameIDPolicy"),
         1,
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);
@@ -111,12 +111,14 @@ fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn 
     let encoded = STANDARD.encode(signed.as_bytes());
     let request = HttpRequest::post(vec![("SAMLRequest".into(), encoded)]);
     let certs = [CERT.to_string()];
-    let mut options = FlowOptions::default();
-    options.binding = Some(Binding::Post);
-    options.parser_type = Some(ParserType::SamlRequest);
-    options.check_signature = true;
-    options.from_issuer = Some("https://sp.example.com/metadata");
-    options.signing_certs = &certs;
+    let options = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlRequest),
+        check_signature: true,
+        from_issuer: Some("https://sp.example.com/metadata"),
+        signing_certs: &certs,
+        ..FlowOptions::default()
+    };
     match flow(&options, &request) {
         Err(SamlError::SignedReferenceMismatch) => Ok(()),
         Ok(result) => Err(format!(

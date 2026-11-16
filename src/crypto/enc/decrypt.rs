@@ -114,6 +114,9 @@ fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
 /// transport, [`SamlError::Invalid`] with `ERR_DECRYPTION_LIMIT_EXCEEDED`
 /// when `options.max_decryption_work` is exceeded, and another
 /// [`SamlError`] when decryption fails.
+#[deprecated(
+    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed service provider decrypts assertions in `finish_sso`. To decrypt other XML, use `bergshamra` directly"
+)]
 pub fn decrypt_assertion(
     xml: &str,
     enc_key: &Key,
@@ -126,7 +129,7 @@ pub fn decrypt_assertion(
 ///
 /// # Errors
 ///
-/// As [`decrypt_assertion`], and [`SamlError::Invalid`] when a limit is exceeded.
+/// As `decrypt_assertion`, and [`SamlError::Invalid`] when a limit is exceeded.
 pub fn decrypt_assertion_with_limits(
     xml: &str,
     enc_key: &Key,
@@ -411,7 +414,7 @@ fn decrypt_selected(
     decrypt: impl FnOnce(&XmlDocument<'_>) -> Result<Option<Vec<DecryptedElement>>, SamlError>,
 ) -> Result<Option<String>, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
-    dom::parse_with_limits(xml, limits)?;
+    dom::parse_document(xml, limits)?;
     let document = parse_xml_document(xml)?;
     let mut work = work::document_work(&document, keys, options.max_decryption_work)?;
     let Some(replacements) = decrypt(&document)? else {
@@ -520,7 +523,7 @@ fn decrypted_plaintext(
     kind: EncryptedElementKind,
     limits: XmlLimits,
 ) -> Result<&str, SamlError> {
-    let root = dom::parse_with_limits(wrapper, limits)?.root;
+    let root = dom::parse_document(wrapper, limits)?.root;
     let Some((plaintext, keys)) = root.children.split_first() else {
         return Err(must_carry(kind));
     };

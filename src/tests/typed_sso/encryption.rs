@@ -53,7 +53,7 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
         )?;
         let fields = post_fields(&response)?;
         let xml = response_xml_from_fields(&fields)?;
-        assert!(parse(&xml)?
+        assert!(parse_document(&xml, saml_rs::XmlLimits::default())?
             .root
             .children
             .iter()
@@ -174,10 +174,10 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
     let candidate = &xml[range];
     let mut config = sp_with_validation_and_xml(recommended_sso_accept_validation())?;
     config.credentials.decryption_key = Some(PrivateKeyPem::new(include_str!(
-        "../fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"
+        "../../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"
     )));
     config.credentials.encryption_certificate = Some(CertificatePem::new(include_str!(
-        "../fixtures/key/idp/cert.cer"
+        "../../../tests/fixtures/key/idp/cert.cer"
     )));
     config.credentials.additional_decryption_keys = vec![DecryptionCredential {
         certificate: CertificatePem::new(CERT),

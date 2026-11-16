@@ -8,34 +8,35 @@ use saml_rs::constants::Binding;
 use saml_rs::constants::{
     data_encryption_algorithm::AES_256, key_encryption_algorithm::RSA_OAEP_MGF1P,
 };
-use saml_rs::crypto::keys::load_private_key;
-use saml_rs::crypto::{construct_saml_signature, encrypt_assertion, verify_signature};
+use saml_rs::crypto::keys::read_private_key;
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::crypto::{decrypt_assertion, AssertionDecryptionOptions};
+use saml_rs::crypto::{decrypt_assertion_with_limits, AssertionDecryptionOptions};
+use saml_rs::crypto::{encrypt_assertion, sign_saml_xml, verify_signature};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::xml::dom::{parse_roots, Node};
+use saml_rs::xml::dom::{parse_all_roots, Node};
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 use saml_rs::{SignatureAction, SignatureConfig};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
 const AUTHN_REQUEST: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>";
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 fn signing() -> EntitySetting {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some(PRIVKEY.into());
-    setting.signing_cert = Some(CERT.into());
-    setting.request_signature_algorithm = RSA_SHA256.into();
-    setting
+    EntitySetting {
+        private_key: Some(PRIVKEY.into()),
+        signing_cert: Some(CERT.into()),
+        request_signature_algorithm: RSA_SHA256.into(),
+        ..EntitySetting::default()
+    }
 }
 
 fn idp(setting: EntitySetting) -> TestResult<IdentityProvider> {
@@ -69,7 +70,7 @@ fn decode_binding_context(context: &str) -> TestResult<String> {
 }
 
 fn login_response_shape(xml: &str) -> TestResult {
-    let roots = parse_roots(xml)?;
+    let roots = parse_all_roots(xml, saml_rs::XmlLimits::default())?;
     assert_eq!(roots.len(), 1);
     let response = roots.first().ok_or("missing response root")?;
     assert_eq!(response.local_name, "Response");
@@ -98,14 +99,14 @@ fn assert_invalid(result: Result<String, SamlError>) {
 
 #[test]
 fn crypto_signature_custom_prefix_still_verifies() -> TestResult {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let config = SignatureConfig {
         prefix: "ds2".into(),
         reference: Some("/*[local-name(.)='AuthnRequest']/*[local-name(.)='Issuer']".into()),
         action: SignatureAction::Before,
     };
 
-    let signed = construct_saml_signature(
+    let signed = sign_saml_xml(
         AUTHN_REQUEST,
         true,
         &key,
@@ -123,7 +124,7 @@ fn crypto_signature_custom_prefix_still_verifies() -> TestResult {
 
 #[test]
 fn crypto_signature_prefix_rejects_invalid_ncname() -> TestResult {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     for prefix in ["", "ds sig", "ds:sig", "1ds", "xml", "xmlns"] {
         let config = SignatureConfig {
             prefix: prefix.into(),
@@ -131,7 +132,7 @@ fn crypto_signature_prefix_rejects_invalid_ncname() -> TestResult {
             action: SignatureAction::After,
         };
 
-        assert_invalid(construct_saml_signature(
+        assert_invalid(sign_saml_xml(
             AUTHN_REQUEST,
             true,
             &key,
@@ -146,11 +147,11 @@ fn crypto_signature_prefix_rejects_invalid_ncname() -> TestResult {
 
 #[test]
 fn crypto_signature_escapes_transform_algorithm() -> TestResult {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let malicious_transform = "urn:example\" injected=\"yes\"><ds:Transform Algorithm=\"evil";
     let transforms = [malicious_transform.to_string()];
 
-    let result = construct_saml_signature(
+    let result = sign_saml_xml(
         AUTHN_REQUEST,
         true,
         &key,
@@ -169,7 +170,7 @@ fn crypto_signature_escapes_transform_algorithm() -> TestResult {
 
 #[test]
 fn crypto_signature_escapes_reference_uri_id() -> TestResult {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let xml = concat!(
         "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ",
         "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ",
@@ -179,7 +180,7 @@ fn crypto_signature_escapes_reference_uri_id() -> TestResult {
         "</samlp:AuthnRequest>"
     );
 
-    let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+    let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
 
     assert!(!signed.contains(" injected=\"yes\""));
     assert!(!signed.contains("<ds:Reference URI=\"#evil"));
@@ -193,9 +194,13 @@ fn crypto_encrypt_assertion_prefix_still_round_trips() -> TestResult {
     let encrypted = encrypt_assertion(RESPONSE, CERT, AES_256, RSA_OAEP_MGF1P, "saml2")?;
     assert!(encrypted.contains("<saml2:EncryptedAssertion"));
 
-    let key = load_private_key(PRIVKEY, None)?;
-    let (response, assertion) =
-        decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
+    let key = read_private_key(PRIVKEY, None)?;
+    let (response, assertion) = decrypt_assertion_with_limits(
+        &encrypted,
+        &key,
+        AssertionDecryptionOptions::default(),
+        saml_rs::XmlLimits::default(),
+    )?;
 
     assert!(assertion.contains("Assertion"));
     assert!(response.contains("Assertion"));
@@ -655,7 +660,7 @@ fn login_response_attribute_metadata_placeholders_are_written_literally() -> Tes
     )?;
     let xml = decode_binding_context(&ctx.context)?;
 
-    let roots = parse_roots(&xml)?;
+    let roots = parse_all_roots(&xml, saml_rs::XmlLimits::default())?;
     let response = roots.first().ok_or("missing response root")?;
     let assertion = direct_children(response, "Assertion")
         .next()

@@ -10,7 +10,6 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::error::TimeWindowField;
 use saml_rs::raw::Binding;
-use saml_rs::xml::dom::parse;
 use saml_rs::{
     AcsEndpoint, ArtifactDereference, ArtifactResolutionService, ArtifactUses, AuthnRequest,
     BrowserInput, EndpointUrl, EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig,
@@ -340,10 +339,11 @@ fn generated_root_carries_the_configured_lifetime() -> Result<(), Box<dyn std::e
         let sp = sp(lifetime)?;
         let idp = idp(lifetime)?;
         for xml in [sp.metadata_xml(), idp.metadata_xml()] {
-            let root = parse(xml)?.root;
-            assert_eq!(root.local_name, "EntityDescriptor");
-            assert_eq!(root.attr("validUntil"), valid_until, "{xml}");
-            assert_eq!(root.attr("cacheDuration"), cache_duration, "{xml}");
+            let document = roxmltree::Document::parse(xml)?;
+            let root = document.root_element();
+            assert_eq!(root.tag_name().name(), "EntityDescriptor");
+            assert_eq!(root.attribute("validUntil"), valid_until, "{xml}");
+            assert_eq!(root.attribute("cacheDuration"), cache_duration, "{xml}");
         }
     }
     Ok(())

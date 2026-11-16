@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::binding::{append_signature, build_redirect_octet};
 use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserType};
-use saml_rs::crypto::{construct_message_signature, keys::load_private_key};
+use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, BrowserInput, CertificatePem, Credentials, DecryptionCredential, EndpointUrl,
@@ -39,14 +39,19 @@ const IDP_MANAGE_SOAP: &str = "https://idp.example.com/manage-name-id/soap";
 const PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 const ASSERTION: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
 
-const SIGNING_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const SIGNING_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const SP_DECRYPTION_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const SP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const IDP_DECRYPTION_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
-const IDP_ENCRYPTION_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
-const IDP_NEXT_DECRYPTION_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const IDP_NEXT_ENCRYPTION_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const SIGNING_KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const SIGNING_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const SP_DECRYPTION_KEY: &str =
+    include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const SP_ENCRYPTION_CERT: &str =
+    include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const IDP_DECRYPTION_KEY: &str =
+    include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const IDP_ENCRYPTION_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+const IDP_NEXT_DECRYPTION_KEY: &str =
+    include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const IDP_NEXT_ENCRYPTION_CERT: &str =
+    include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     Credentials {
@@ -200,9 +205,9 @@ fn idp_request_input(content: &str) -> Result<BrowserInput<ManageNameIdRequest>,
     let xml = format!(
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_manage1" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" Destination="{SP_MANAGE}"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>{content}</samlp:ManageNameIDRequest>"#
     );
-    let key = load_private_key(SIGNING_KEY, None)?;
+    let key = read_private_key(SIGNING_KEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdRequest, &xml, None, RSA_SHA256)?;
-    let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+    let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
     let url = append_signature(SP_MANAGE, &octet, &signature);
     let (_, query) = url
         .split_once('?')

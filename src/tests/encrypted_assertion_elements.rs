@@ -33,11 +33,12 @@ const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const PERSISTENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const NEXT_PRIVKEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
-const NEXT_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
-const UNKNOWN_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const NEXT_PRIVKEY: &str =
+    include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
 fn credentials() -> Credentials {
     Credentials {
@@ -294,7 +295,9 @@ fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
 fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dyn std::error::Error>>
 {
     use saml_rs::constants::{key_encryption_algorithm::RSA_OAEP_MGF1P, Binding};
-    use saml_rs::crypto::{decrypt_assertion, keys::load_private_key, AssertionDecryptionOptions};
+    use saml_rs::crypto::{
+        decrypt_assertion_with_limits, keys::read_private_key, AssertionDecryptionOptions,
+    };
     use saml_rs::{
         AlgorithmPolicy, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,
     };
@@ -332,8 +335,13 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
                 element.matches_name_ns("http://www.w3.org/2009/xmlenc11#", "MGF")
             })
         }));
-    let key = load_private_key(PRIVKEY, None)?;
-    let (_, assertion) = decrypt_assertion(&xml, &key, AssertionDecryptionOptions::default())?;
+    let key = read_private_key(PRIVKEY, None)?;
+    let (_, assertion) = decrypt_assertion_with_limits(
+        &xml,
+        &key,
+        AssertionDecryptionOptions::default(),
+        saml_rs::XmlLimits::default(),
+    )?;
     assert!(assertion.contains("alice-persistent-id"));
     Ok(())
 }

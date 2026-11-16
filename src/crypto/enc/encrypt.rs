@@ -106,7 +106,7 @@ pub(crate) fn encrypt_assertion_with_key_transport(
 ) -> Result<String, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
     validate_crypto_xml_prefix("EncryptedAssertion", tag_prefix)?;
-    let doc = dom::parse(xml)?;
+    let doc = dom::parse_document(xml, crate::XmlLimits::default())?;
     let assertion = doc
         .root
         .child_named("Assertion")

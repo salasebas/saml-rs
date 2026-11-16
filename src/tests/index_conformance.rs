@@ -19,18 +19,18 @@ use saml_rs::util::{normalize_cert_string, normalize_pem_string};
 use saml_rs::validator::verify_time;
 use saml_rs::IdentityProvider;
 
-const SP_CERT: &str = include_str!("fixtures/key/sp/cert.cer");
-const SP_ENCKEY: &str = include_str!("fixtures/key/sp/encryptKey.pem");
-const SP_KNOWN_CERT: &str = include_str!("fixtures/key/sp/knownGoodCert.cer");
-const SP_KNOWN_ENCKEY: &str = include_str!("fixtures/key/sp/knownGoodEncryptKey.pem");
-const IDPMETA: &str = include_str!("fixtures/misc/idpmeta.xml");
-const IDPMETA_ROLLING: &str = include_str!("fixtures/misc/idpmeta_rollingcert.xml");
-const IDPMETA_SHARE: &str = include_str!("fixtures/misc/idpmeta_share_cert.xml");
-const SPMETA: &str = include_str!("fixtures/misc/spmeta.xml");
-const MULTI_ENTITY: &str = include_str!("fixtures/misc/multiple_entitydescriptor.xml");
-const IDP_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
-const IDP_CERT2: &str = include_str!("fixtures/key/idp/cert2.cer");
-const IDP_ENC_CERT: &str = include_str!("fixtures/key/idp/encryptionCert.cer");
+const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
+const SP_ENCKEY: &str = include_str!("../../tests/fixtures/key/sp/encryptKey.pem");
+const SP_KNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/knownGoodCert.cer");
+const SP_KNOWN_ENCKEY: &str = include_str!("../../tests/fixtures/key/sp/knownGoodEncryptKey.pem");
+const IDPMETA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
+const IDPMETA_ROLLING: &str = include_str!("../../tests/fixtures/misc/idpmeta_rollingcert.xml");
+const IDPMETA_SHARE: &str = include_str!("../../tests/fixtures/misc/idpmeta_share_cert.xml");
+const SPMETA: &str = include_str!("../../tests/fixtures/misc/spmeta.xml");
+const MULTI_ENTITY: &str = include_str!("../../tests/fixtures/misc/multiple_entitydescriptor.xml");
+const IDP_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+const IDP_CERT2: &str = include_str!("../../tests/fixtures/key/idp/cert2.cer");
+const IDP_ENC_CERT: &str = include_str!("../../tests/fixtures/key/idp/encryptionCert.cer");
 
 #[test]
 fn deflate_plus_base64_encoded() -> Result<(), Box<dyn std::error::Error>> {
@@ -293,27 +293,31 @@ mod crypto {
     #[cfg(feature = "crypto-rustcrypto")]
     use saml_rs::constants::signature_algorithm::RSA_SHA1;
     use saml_rs::constants::signature_algorithm::RSA_SHA512;
-    use saml_rs::crypto::keys::load_private_key;
+    use saml_rs::crypto::keys::read_private_key;
     use saml_rs::crypto::{
-        construct_message_signature, construct_saml_signature, encrypt_assertion,
-        verify_message_signature, verify_signature,
+        encrypt_assertion, sign_octet_string, sign_saml_xml, verify_octet_string_signature,
+        verify_signature,
     };
     use saml_rs::SamlError;
 
-    const SP_PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-    const SIGN_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-    const REQUEST: &str = include_str!("fixtures/misc/request.xml");
+    const SP_PRIVKEY: &str =
+        include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const SIGN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+    const REQUEST: &str = include_str!("../../tests/fixtures/misc/request.xml");
     #[cfg(not(feature = "crypto-fips"))]
-    const RESPONSE_SIGNED: &str = include_str!("fixtures/misc/response_signed.xml");
+    const RESPONSE_SIGNED: &str = include_str!("../../tests/fixtures/misc/response_signed.xml");
     #[cfg(feature = "crypto-rustcrypto")]
-    const SIGNED_SHA1: &str = include_str!("fixtures/misc/signed_request_sha1.xml");
-    const SIGNED_SHA256: &str = include_str!("fixtures/misc/signed_request_sha256.xml");
-    const SIGNED_SHA512: &str = include_str!("fixtures/misc/signed_request_sha512.xml");
+    const SIGNED_SHA1: &str = include_str!("../../tests/fixtures/misc/signed_request_sha1.xml");
+    const SIGNED_SHA256: &str = include_str!("../../tests/fixtures/misc/signed_request_sha256.xml");
+    const SIGNED_SHA512: &str = include_str!("../../tests/fixtures/misc/signed_request_sha512.xml");
     #[cfg(feature = "crypto-rustcrypto")]
-    const FALSE_SHA1: &str = include_str!("fixtures/misc/false_signed_request_sha1.xml");
-    const FALSE_SHA256: &str = include_str!("fixtures/misc/false_signed_request_sha256.xml");
-    const FALSE_SHA512: &str = include_str!("fixtures/misc/false_signed_request_sha512.xml");
-    const INVALID_RESPONSE: &str = include_str!("fixtures/misc/invalid_response.xml");
+    const FALSE_SHA1: &str =
+        include_str!("../../tests/fixtures/misc/false_signed_request_sha1.xml");
+    const FALSE_SHA256: &str =
+        include_str!("../../tests/fixtures/misc/false_signed_request_sha256.xml");
+    const FALSE_SHA512: &str =
+        include_str!("../../tests/fixtures/misc/false_signed_request_sha512.xml");
+    const INVALID_RESPONSE: &str = include_str!("../../tests/fixtures/misc/invalid_response.xml");
 
     #[cfg(feature = "crypto-rustcrypto")]
     const OCTET_SHA1: &str = "SAMLRequest=fVNdj9MwEHxH4j9Yfm/i5PpBrLaotEJUOrioKTzwgoy9oZZiO9ibu/LvcXLtKUhHnyzZM7Mzu+tlEKZp+abDkz3A7w4CkrNpbODDw4p23nIngg7cCgOBo+TV5vM9zxPGW+/QSdfQEeU2Q4QAHrWzlOx3K/rjHSsWbFEzdsfETDE2z5ksVKHqYlHP84WooVBS5lNKvoEPkbeiUYaS0rtHrcB/iRVWtCoJRuNRM4QO9jagsBiRLJtO2GKSzY/5HZ/lfDr7TskuIrUVOIidEFueplq1CZyFaRtIpDNpVT1U4B+1hKQ9tUO5IegHbZW2v25n/PkMCvzT8VhOyofqSMnmmnvrbOgM+Iv818P9i4nwrwcFxmVp1IJzb+K9kIGu374hZNm3mQ9R/fp1rgEUSqBYpmPsC7nlfd/2u9I1Wv4hH503Av8fKkuy4UarST1AORihm41SHkKI4ZrGPW09CIyzQN8BTce1LmsFaliy2ACEM5KtM63wOvRTiNYlPoe7xhtjt01cmwPU65ubJbnscfG6jMeT8+qS/lWpwV96w2BEXN/Hn2P9Fw==&SigAlg=http%3A%2F%2Fwww.w3.org%2F2000%2F09%2Fxmldsig%23rsa-sha1";
@@ -344,9 +348,9 @@ mod crypto {
 
     // 9-11: sign a SAML message (round-trip verify; bytes are deterministic).
     fn sign_and_verify(octet: &str, alg: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let sig = construct_message_signature(octet, &key, alg)?;
-        assert!(verify_message_signature(octet, &sig, SIGN_CERT, alg)?);
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let sig = sign_octet_string(octet, &key, alg)?;
+        assert!(verify_octet_string_signature(octet, &sig, SIGN_CERT, alg)?);
         Ok(())
     }
     #[cfg(feature = "crypto-rustcrypto")]
@@ -365,8 +369,8 @@ mod crypto {
 
     // 18-20: construct an embedded signature (round-trip verify).
     fn construct_and_verify(alg: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let signed = construct_saml_signature(REQUEST, true, &key, SIGN_CERT, alg, &[], None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let signed = sign_saml_xml(REQUEST, true, &key, SIGN_CERT, alg, &[], None)?;
         assert!(verify_signature(&signed, &[SIGN_CERT.to_string()])?.0);
         Ok(())
     }
@@ -419,9 +423,8 @@ mod crypto {
     // 27: rolling certificate — verification picks the matching cert from a list.
     #[test]
     fn verify_xml_signature_with_rolling_certificate() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let signed =
-            construct_saml_signature(REQUEST, true, &key, SIGN_CERT, RSA_SHA256, &[], None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let signed = sign_saml_xml(REQUEST, true, &key, SIGN_CERT, RSA_SHA256, &[], None)?;
         // metadata declares two certs; only the second is the signer.
         let certs = vec![IDP_CERT.to_string(), SIGN_CERT.to_string()];
         assert!(verify_signature(&signed, &certs)?.0);
