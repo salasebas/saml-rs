@@ -262,7 +262,7 @@ impl Metadata {
         extra: Vec<ExtractorField>,
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
-        let roots = dom::parse_roots_with_limits(xml, limits)?;
+        let roots = dom::parse_all_roots(xml, limits)?;
         if roots
             .iter()
             .filter(|n| n.local_name == "EntityDescriptor")

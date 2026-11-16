@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::transform_algorithm;
-use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
+use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService,
@@ -646,16 +646,8 @@ fn strip_embedded_signatures(xml: &str) -> Result<String, Box<dyn std::error::Er
 }
 
 fn sign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let key = load_private_key(PRIVKEY, None)?;
-    Ok(construct_saml_signature(
-        xml,
-        true,
-        &key,
-        CERT,
-        RSA_SHA256,
-        &[],
-        None,
-    )?)
+    let key = read_private_key(PRIVKEY, None)?;
+    Ok(sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?)
 }
 
 /// A pending login and the unsigned `<Response>` the identity provider
@@ -808,7 +800,8 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
 fn service_provider_metadata_publishes_the_artifact_consumer(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let document = saml_rs::xml::dom::parse(parties.sp.metadata_xml())?;
+    let document =
+        saml_rs::xml::dom::parse_document(parties.sp.metadata_xml(), crate::XmlLimits::default())?;
     let descriptor = document
         .root
         .children

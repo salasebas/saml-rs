@@ -1,7 +1,7 @@
 //! XML-DSig signing and detached message signatures, delegating crypto to the
 //! selected `bergshamra` provider.
 
-use super::keys::{load_certificate, load_hmac_secret, load_private_key};
+use super::keys::{load_certificate, load_hmac_secret, read_private_key};
 use super::signature_profile::check_verification_key;
 use super::xml_syntax::validate_crypto_xml_prefix;
 use crate::binding::{decode_base64, encode_base64, xml_escape};
@@ -123,7 +123,7 @@ fn place_signature(
 /// placement; by default the `<Signature>` is inserted right after the target's
 /// `<Issuer>`. bergshamra then fills the digest and signature value. Returns
 /// the signed XML.
-pub fn construct_saml_signature(
+pub(crate) fn sign_saml_xml(
     xml: &str,
     sign_message: bool,
     key: &Key,
@@ -153,7 +153,7 @@ fn embed_signature(
     config: Option<&SignatureConfig>,
 ) -> Result<String, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    let doc = dom::parse(xml)?;
+    let doc = dom::parse_document(xml, crate::XmlLimits::default())?;
     let target = if sign_message {
         &doc.root
     } else {
@@ -246,7 +246,7 @@ impl<'a> SigningCredential<'a> {
             .as_deref()
             .ok_or_else(|| SamlError::MissingKey("private_key".into()))?;
         Ok(Self::PrivateKey {
-            key: load_private_key(pem, setting.private_key_pass.as_deref())?,
+            key: read_private_key(pem, setting.private_key_pass.as_deref())?,
             certificate: setting.signing_cert.as_deref(),
         })
     }
@@ -272,7 +272,7 @@ impl<'a> SigningCredential<'a> {
         let key = match self {
             Self::PrivateKey { key, .. } | Self::HmacSecret(key) => key,
         };
-        construct_message_signature(octet_string, key, sig_alg)
+        sign_octet_string(octet_string, key, sig_alg)
     }
 
     pub(crate) fn sign_xml(
@@ -307,7 +307,7 @@ impl<'a> SigningCredential<'a> {
 /// Sign a detached octet string (redirect/SimpleSign binding).
 ///
 /// Returns the base64-encoded signature.
-pub fn construct_message_signature(
+pub(crate) fn sign_octet_string(
     octet_string: &str,
     key: &Key,
     sig_alg: &str,
@@ -322,7 +322,7 @@ pub fn construct_message_signature(
 }
 
 /// Verify a detached octet-string signature against `cert`.
-pub fn verify_message_signature(
+pub(crate) fn verify_octet_string_signature(
     octet_string: &str,
     signature_b64: &str,
     cert: &str,
@@ -376,13 +376,62 @@ fn verify_detached_with_key(
         .map_err(crypto_err)
 }
 
+/// Construct and embed an enveloped XML-DSig signature.
+///
+/// When `sign_message` the whole root is referenced; otherwise the contained
+/// `<Assertion>` is referenced. `config` customizes the element prefix and
+/// placement; by default the `<Signature>` is inserted right after the target's
+/// `<Issuer>`. bergshamra then fills the digest and signature value. Returns
+/// the signed XML.
+#[deprecated(
+    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed API signs the messages it creates. To sign other XML, use `bergshamra` directly"
+)]
+pub fn construct_saml_signature(
+    xml: &str,
+    sign_message: bool,
+    key: &Key,
+    cert: &str,
+    sig_alg: &str,
+    transforms: &[String],
+    config: Option<&SignatureConfig>,
+) -> Result<String, SamlError> {
+    sign_saml_xml(xml, sign_message, key, cert, sig_alg, transforms, config)
+}
+
+/// Sign a detached octet string (redirect/SimpleSign binding).
+///
+/// Returns the base64-encoded signature.
+#[deprecated(
+    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed API signs the messages it creates. To sign other XML, use `bergshamra` directly"
+)]
+pub fn construct_message_signature(
+    octet_string: &str,
+    key: &Key,
+    sig_alg: &str,
+) -> Result<String, SamlError> {
+    sign_octet_string(octet_string, key, sig_alg)
+}
+
+/// Verify a detached octet-string signature against `cert`.
+#[deprecated(
+    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed receive operations verify detached message signatures. To verify other input, use `bergshamra` directly"
+)]
+pub fn verify_message_signature(
+    octet_string: &str,
+    signature_b64: &str,
+    cert: &str,
+    sig_alg: &str,
+) -> Result<bool, SamlError> {
+    verify_octet_string_signature(octet_string, signature_b64, cert, sig_alg)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[cfg(feature = "crypto-rustcrypto")]
     use crate::constants::signature_algorithm::RSA_SHA1;
     use crate::constants::signature_algorithm::{RSA_SHA256, RSA_SHA256_MGF1, RSA_SHA512};
-    use crate::crypto::keys::load_private_key;
+    use crate::crypto::keys::read_private_key;
     use crate::crypto::verify::verify_signature;
     use crate::entity::EntitySetting;
 
@@ -415,14 +464,13 @@ mod tests {
 
     #[test]
     fn sign_message_then_verify_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         #[cfg(feature = "crypto-rustcrypto")]
         let algorithms = [RSA_SHA1, RSA_SHA256, RSA_SHA512];
         #[cfg(not(feature = "crypto-rustcrypto"))]
         let algorithms = [RSA_SHA256, RSA_SHA512];
         for alg in algorithms {
-            let signed =
-                construct_saml_signature(AUTHN_REQUEST, true, &key, SP_CERT, alg, &[], None)?;
+            let signed = sign_saml_xml(AUTHN_REQUEST, true, &key, SP_CERT, alg, &[], None)?;
             assert!(signed.contains("<ds:Signature"));
             assert!(!signed.contains("<ds:SignatureValue></ds:SignatureValue>"));
             let (verified, _) = verify_signature(&signed, &[SP_CERT.to_string()])?;
@@ -433,8 +481,8 @@ mod tests {
 
     #[test]
     fn sign_message_with_rsa_pss_sha256_then_verify() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let signed = construct_saml_signature(
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let signed = sign_saml_xml(
             AUTHN_REQUEST,
             true,
             &key,
@@ -453,9 +501,8 @@ mod tests {
 
     #[test]
     fn sign_assertion_then_verify_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
-        let signed =
-            construct_saml_signature(RESPONSE, false, &key, SP_CERT, RSA_SHA256, &[], None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
+        let signed = sign_saml_xml(RESPONSE, false, &key, SP_CERT, RSA_SHA256, &[], None)?;
         let (verified, content) = verify_signature(&signed, &[SP_CERT.to_string()])?;
         assert!(verified, "signed assertion should verify");
         assert!(content.ok_or("expected assertion")?.contains("Assertion"));
@@ -465,13 +512,13 @@ mod tests {
     #[test]
     fn custom_signature_config_prefix_and_location() -> Result<(), Box<dyn std::error::Error>> {
         use crate::entity::{SignatureAction, SignatureConfig};
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let config = SignatureConfig {
             prefix: "ds2".into(),
             reference: Some("/*[local-name(.)='AuthnRequest']/*[local-name(.)='Issuer']".into()),
             action: SignatureAction::Before,
         };
-        let signed = construct_saml_signature(
+        let signed = sign_saml_xml(
             AUTHN_REQUEST,
             true,
             &key,
@@ -489,7 +536,7 @@ mod tests {
     #[test]
     fn child_placement_inside_reference_element() -> Result<(), Box<dyn std::error::Error>> {
         use crate::entity::{SignatureAction, SignatureConfig};
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let empty = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\" ProviderName=\"SP > portal\" />";
         let with_issuer = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_req1\" Version=\"2.0\" IssueInstant=\"2024-01-01T00:00:00Z\" ProviderName=\"SP > portal\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>";
         let cases: [(&str, SignatureAction, &[&str]); 4] = [
@@ -512,16 +559,9 @@ mod tests {
                 action,
                 ..SignatureConfig::default()
             };
-            let signed = construct_saml_signature(
-                request,
-                true,
-                &key,
-                SP_CERT,
-                RSA_SHA256,
-                &[],
-                Some(&config),
-            )?;
-            let root = dom::parse(&signed)?.root;
+            let signed =
+                sign_saml_xml(request, true, &key, SP_CERT, RSA_SHA256, &[], Some(&config))?;
+            let root = dom::parse_document(&signed, crate::XmlLimits::default())?.root;
             let children: Vec<&str> = root
                 .children
                 .iter()
@@ -542,7 +582,7 @@ mod tests {
                 action,
                 ..SignatureConfig::default()
             };
-            let signed = construct_saml_signature(
+            let signed = sign_saml_xml(
                 self_closing_child,
                 true,
                 &key,
@@ -551,7 +591,7 @@ mod tests {
                 &[],
                 Some(&config),
             )?;
-            let root = dom::parse(&signed)?.root;
+            let root = dom::parse_document(&signed, crate::XmlLimits::default())?.root;
             let children: Vec<&str> = root
                 .children
                 .iter()
@@ -573,11 +613,36 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "the deprecated public signing functions keep their behaviour until removal"
+    )]
+    fn deprecated_signing_functions_keep_their_behaviour() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let key = crate::crypto::keys::load_private_key(SP_PRIVKEY, None)?;
+        let signed =
+            construct_saml_signature(AUTHN_REQUEST, true, &key, SP_CERT, RSA_SHA256, &[], None)?;
+        assert!(verify_signature(&signed, &[SP_CERT.to_string()])?.0);
+        let octet = "SAMLRequest=abc&SigAlg=alg";
+        let signature = construct_message_signature(octet, &key, RSA_SHA256)?;
+        assert!(verify_message_signature(
+            octet, &signature, SP_CERT, RSA_SHA256
+        )?);
+        assert!(!verify_message_signature(
+            "SAMLRequest=abd&SigAlg=alg",
+            &signature,
+            SP_CERT,
+            RSA_SHA256
+        )?);
+        Ok(())
+    }
+
+    #[test]
     fn explicit_transformation_algorithms_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         use crate::constants::transform_algorithm::{ENVELOPED_SIGNATURE, EXC_C14N};
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let transforms = [ENVELOPED_SIGNATURE.to_string(), EXC_C14N.to_string()];
-        let signed = construct_saml_signature(
+        let signed = sign_saml_xml(
             AUTHN_REQUEST,
             true,
             &key,
@@ -593,16 +658,18 @@ mod tests {
 
     #[test]
     fn detached_message_signature_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let octet = "SAMLRequest=abc&RelayState=xyz&SigAlg=http%3A%2F%2Fexample";
-        let sig = construct_message_signature(octet, &key, RSA_SHA256)?;
-        assert!(verify_message_signature(octet, &sig, SP_CERT, RSA_SHA256)?);
+        let sig = sign_octet_string(octet, &key, RSA_SHA256)?;
+        assert!(verify_octet_string_signature(
+            octet, &sig, SP_CERT, RSA_SHA256
+        )?);
         assert!(matches!(
-            verify_message_signature(octet, &format!("{sig}\u{a0}"), SP_CERT, RSA_SHA256),
+            verify_octet_string_signature(octet, &format!("{sig}\u{a0}"), SP_CERT, RSA_SHA256),
             Err(SamlError::Base64(_))
         ));
         // tampered octet string must fail
-        assert!(!verify_message_signature(
+        assert!(!verify_octet_string_signature(
             "SAMLRequest=TAMPERED",
             &sig,
             SP_CERT,
@@ -614,10 +681,10 @@ mod tests {
     #[test]
     fn detached_message_signature_with_rsa_pss_sha256_round_trip(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let octet = "SAMLRequest=abc&RelayState=xyz&SigAlg=http%3A%2F%2Fwww.w3.org%2F2007%2F05%2Fxmldsig-more%23sha256-rsa-MGF1";
-        let sig = construct_message_signature(octet, &key, RSA_SHA256_MGF1)?;
-        assert!(verify_message_signature(
+        let sig = sign_octet_string(octet, &key, RSA_SHA256_MGF1)?;
+        assert!(verify_octet_string_signature(
             octet,
             &sig,
             SP_CERT,
@@ -629,12 +696,12 @@ mod tests {
     #[test]
     fn default_rsa_sha256_detached_signature_does_not_verify_as_rsa_pss(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let octet =
             "SAMLRequest=abc&SigAlg=http%3A%2F%2Fwww.w3.org%2F2001%2F04%2Fxmldsig-more%23rsa-sha256";
-        let sig = construct_message_signature(octet, &key, RSA_SHA256)?;
+        let sig = sign_octet_string(octet, &key, RSA_SHA256)?;
         assert!(
-            !verify_message_signature(octet, &sig, SP_CERT, RSA_SHA256_MGF1)?,
+            !verify_octet_string_signature(octet, &sig, SP_CERT, RSA_SHA256_MGF1)?,
             "RSA-SHA256 signature must not verify under PSS"
         );
         Ok(())
@@ -642,13 +709,13 @@ mod tests {
 
     #[test]
     fn unknown_signature_algorithm_fails_closed() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         let alg = "http://example.com/signature#unknown";
-        assert!(construct_message_signature("SAMLRequest=abc", &key, alg).is_err());
-        assert!(verify_message_signature("SAMLRequest=abc", "c2lnbmF0dXJl", SP_CERT, alg).is_err());
+        assert!(sign_octet_string("SAMLRequest=abc", &key, alg).is_err());
         assert!(
-            construct_saml_signature(AUTHN_REQUEST, true, &key, SP_CERT, alg, &[], None).is_err()
+            verify_octet_string_signature("SAMLRequest=abc", "c2lnbmF0dXJl", SP_CERT, alg).is_err()
         );
+        assert!(sign_saml_xml(AUTHN_REQUEST, true, &key, SP_CERT, alg, &[], None).is_err());
         Ok(())
     }
 

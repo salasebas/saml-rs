@@ -25,13 +25,11 @@ use saml_rs::constants::{
     transform_algorithm::{C14N, ENVELOPED_SIGNATURE},
     ParserType,
 };
-use saml_rs::crypto::{
-    construct_message_signature, construct_saml_signature, keys::load_private_key,
-};
+use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::raw::Value;
 use saml_rs::raw::{Binding, FlowResult};
-use saml_rs::xml::dom::parse;
+use saml_rs::xml::dom::parse_document;
 use saml_rs::xml::extract;
 use saml_rs::xml::fields::login_response_fields;
 use saml_rs::{
@@ -402,7 +400,7 @@ fn tampered_logout_request_expiration_input(
     binding: LogoutBinding,
 ) -> Result<BrowserInput<LogoutRequest>, Box<dyn std::error::Error>> {
     let xml = outbound_xml(outbound, "SAMLRequest")?;
-    let expiration = parse(&xml)?
+    let expiration = parse_document(&xml, saml_rs::XmlLimits::default())?
         .root
         .attr("NotOnOrAfter")
         .ok_or("missing LogoutRequest NotOnOrAfter")?
@@ -566,10 +564,10 @@ fn signed_logout_request_input(
     xml: &str,
     binding: LogoutBinding,
 ) -> Result<BrowserInput<LogoutRequest>, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     match binding {
         LogoutBinding::Post => {
-            let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+            let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(BrowserInput::<LogoutRequest>::post(vec![FormField::new(
                 "SAMLRequest",
                 STANDARD.encode(signed.as_bytes()),
@@ -577,7 +575,7 @@ fn signed_logout_request_input(
         }
         LogoutBinding::Redirect => {
             let octet = build_redirect_octet(ParserType::LogoutRequest, xml, None, RSA_SHA256)?;
-            let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+            let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
             let url = append_signature("https://receiver.example.com/slo", &octet, &signature);
             let (_, query) = url
                 .split_once('?')
@@ -586,7 +584,7 @@ fn signed_logout_request_input(
         }
         LogoutBinding::SimpleSign => {
             let octet = format!("SAMLRequest={xml}&SigAlg={RSA_SHA256}");
-            let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+            let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
             Ok(BrowserInput::<LogoutRequest>::simple_sign(vec![
                 FormField::new("SAMLRequest", STANDARD.encode(xml.as_bytes())),
                 FormField::new("SigAlg", RSA_SHA256),
@@ -594,7 +592,7 @@ fn signed_logout_request_input(
             ]))
         }
         LogoutBinding::Soap => {
-            let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+            let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(BrowserInput::<LogoutRequest>::soap(
                 SoapProtocolMessage::response_envelope(&signed)?,
             ))
@@ -688,10 +686,10 @@ fn signed_logout_response_input(
     xml: &str,
     binding: LogoutBinding,
 ) -> Result<BrowserInput<LogoutResponse>, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     match binding {
         LogoutBinding::Post => {
-            let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+            let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(BrowserInput::<LogoutResponse>::post(vec![FormField::new(
                 "SAMLResponse",
                 STANDARD.encode(signed.as_bytes()),
@@ -699,7 +697,7 @@ fn signed_logout_response_input(
         }
         LogoutBinding::Redirect => {
             let octet = build_redirect_octet(ParserType::LogoutResponse, xml, None, RSA_SHA256)?;
-            let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+            let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
             let url = append_signature("https://receiver.example.com/slo", &octet, &signature);
             let (_, query) = url
                 .split_once('?')
@@ -708,7 +706,7 @@ fn signed_logout_response_input(
         }
         LogoutBinding::SimpleSign => {
             let octet = format!("SAMLResponse={xml}&SigAlg={RSA_SHA256}");
-            let signature = construct_message_signature(&octet, &key, RSA_SHA256)?;
+            let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
             Ok(BrowserInput::<LogoutResponse>::simple_sign(vec![
                 FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
                 FormField::new("SigAlg", RSA_SHA256),
@@ -716,7 +714,7 @@ fn signed_logout_response_input(
             ]))
         }
         LogoutBinding::Soap => {
-            let signed = construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
+            let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(BrowserInput::<LogoutResponse>::soap(
                 SoapProtocolMessage::response_envelope(&signed)?,
             ))
@@ -2006,7 +2004,7 @@ fn typed_session_authority_slo_uses_configured_expiration_for_every_binding(
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let started = idp.start_slo(&sp_descriptor, subject()?, start_slo_for_binding(binding)?)?;
         let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-        let document = parse(&xml)?;
+        let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
         let issue_instant = document
             .root
             .attr("IssueInstant")
@@ -2103,7 +2101,7 @@ fn one_typed_idp_issuance_lifetime_drives_sso_and_slo_expiration(
         RespondSso::post(),
     )?;
     let sso_xml = outbound_xml(&sso, "SAMLResponse")?;
-    let sso_document = parse(&sso_xml)?;
+    let sso_document = parse_document(&sso_xml, saml_rs::XmlLimits::default())?;
     let sso_issue_instant = sso_document
         .root
         .attr("IssueInstant")
@@ -2145,7 +2143,7 @@ fn one_typed_idp_issuance_lifetime_drives_sso_and_slo_expiration(
 
     let slo = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
     let slo_xml = outbound_xml(&slo.outbound, "SAMLRequest")?;
-    let slo_document = parse(&slo_xml)?;
+    let slo_document = parse_document(&slo_xml, saml_rs::XmlLimits::default())?;
     let slo_issue_instant = slo_document
         .root
         .attr("IssueInstant")
@@ -2176,7 +2174,7 @@ fn typed_session_authority_slo_preserves_configured_subsecond_expiration(
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-    let document = parse(&xml)?;
+    let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
     let issue_instant = document
         .root
         .attr("IssueInstant")
@@ -2210,7 +2208,7 @@ fn typed_session_authority_slo_defaults_to_five_minutes() -> Result<(), Box<dyn 
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-    let document = parse(&xml)?;
+    let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
     let issue_instant = OffsetDateTime::parse(
         document
             .root
@@ -2284,7 +2282,9 @@ fn typed_session_participant_preserves_unrecognized_expiration_placeholder(
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
 
     assert_eq!(
-        parse(&xml)?.root.attr("NotOnOrAfter"),
+        parse_document(&xml, saml_rs::XmlLimits::default())?
+            .root
+            .attr("NotOnOrAfter"),
         Some("{NotOnOrAfter}")
     );
     Ok(())
@@ -3646,7 +3646,7 @@ fn qualified_name_id_attrs() -> Vec<(String, String)> {
 type NameIdView = (String, Vec<(String, String)>);
 
 fn logout_request_name_id(xml: &str) -> Result<NameIdView, Box<dyn std::error::Error>> {
-    let document = parse(xml)?;
+    let document = parse_document(xml, saml_rs::XmlLimits::default())?;
     let name_id = document
         .root
         .children
@@ -3833,7 +3833,7 @@ fn typed_logout_request_keeps_whitespace_in_a_name_id_format_under_generation_ru
 }
 
 fn assertion_name_id(xml: &str) -> Result<NameIdView, Box<dyn std::error::Error>> {
-    let document = parse(xml)?;
+    let document = parse_document(xml, saml_rs::XmlLimits::default())?;
     let name_id = document
         .root
         .children
@@ -4022,7 +4022,7 @@ fn soap_body_xml(envelope: &str) -> Result<String, SamlError> {
 }
 
 fn root_has_signature(xml: &str) -> Result<bool, Box<dyn std::error::Error>> {
-    Ok(parse(xml)?
+    Ok(parse_document(xml, saml_rs::XmlLimits::default())?
         .root
         .children
         .iter()
@@ -4046,7 +4046,9 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
     let request_xml = soap_body_xml(request.envelope())?;
     assert!(root_has_signature(&request_xml)?);
     assert_eq!(
-        parse(&request_xml)?.root.attr("Destination"),
+        parse_document(&request_xml, saml_rs::XmlLimits::default())?
+            .root
+            .attr("Destination"),
         Some(IDP_SLO_SOAP)
     );
 
@@ -4064,7 +4066,12 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
     let response_envelope = response.soap_response()?.envelope();
     let response_xml = soap_body_xml(response_envelope)?;
     assert!(root_has_signature(&response_xml)?);
-    assert_eq!(parse(&response_xml)?.root.attr("Destination"), None);
+    assert_eq!(
+        parse_document(&response_xml, saml_rs::XmlLimits::default())?
+            .root
+            .attr("Destination"),
+        None
+    );
 
     let completed = sp.finish_slo(
         &idp_descriptor,
@@ -4092,7 +4099,10 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
     assert_eq!(request.endpoint().as_str(), SP_SLO_SOAP);
     let request_xml = soap_body_xml(request.envelope())?;
     assert!(root_has_signature(&request_xml)?);
-    assert!(parse(&request_xml)?.root.attr("NotOnOrAfter").is_some());
+    assert!(parse_document(&request_xml, saml_rs::XmlLimits::default())?
+        .root
+        .attr("NotOnOrAfter")
+        .is_some());
 
     let received = sp.receive_slo(
         &idp_descriptor,
@@ -4107,7 +4117,12 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
     )?;
     let response_xml = soap_body_xml(response.soap_response()?.envelope())?;
     assert!(root_has_signature(&response_xml)?);
-    assert_eq!(parse(&response_xml)?.root.attr("Destination"), None);
+    assert_eq!(
+        parse_document(&response_xml, saml_rs::XmlLimits::default())?
+            .root
+            .attr("Destination"),
+        None
+    );
 
     let completed = idp.finish_slo(
         &sp_descriptor,
@@ -4198,9 +4213,9 @@ const SOAP_NAMESPACE_DECLARATION: &str =
     r#" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/""#;
 
 fn inclusive_c14n_signed(xml: &str) -> Result<String, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let transforms = [ENVELOPED_SIGNATURE.to_string(), C14N.to_string()];
-    construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, &transforms, None)
+    sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &transforms, None)
 }
 
 #[test]

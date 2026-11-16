@@ -3,7 +3,7 @@ use crate::config::DecryptionCredential;
 use crate::constants::{
     data_encryption_algorithm::AES_256_GCM, key_encryption_algorithm::RSA_OAEP_MGF1P,
 };
-use crate::crypto::keys::load_private_key;
+use crate::crypto::keys::read_private_key;
 use crate::xml::XmlLimits;
 
 const KEY: &str = include_str!("../../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -68,7 +68,7 @@ fn other_inbound_encrypted_elements_preflight_the_document(
         .ok_or("missing key")?;
     let key_xml = &data[node_range(&document, key_info)?];
     let crowded = data.replacen(key_xml, &key_xml.repeat(32), 1);
-    let keys = [load_private_key(KEY, None)?];
+    let keys = [read_private_key(KEY, None)?];
     let limits = XmlLimits::default();
     let wrap = |root: &str, body: &str| {
         format!(

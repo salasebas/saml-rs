@@ -409,18 +409,30 @@ fn push_general_ref(node: &mut Node, e: BytesRef, limits: XmlLimits) -> Result<(
 ///
 /// `xml` must also be namespace-well-formed: it declares every namespace
 /// prefix it uses.
+#[deprecated(
+    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
+)]
 pub fn parse(xml: &str) -> Result<Document, SamlError> {
-    parse_with_limits(xml, XmlLimits::default())
+    parse_document(xml, XmlLimits::default())
 }
 
 /// Parse `xml` into a well-formed [`Document`] with explicit resource limits.
+#[deprecated(
+    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
+)]
 pub fn parse_with_limits(xml: &str, limits: XmlLimits) -> Result<Document, SamlError> {
+    parse_document(xml, limits)
+}
+
+/// Parse `xml` into a well-formed, namespace-well-formed [`Document`] with one
+/// document element, within `limits`.
+pub(crate) fn parse_document(xml: &str, limits: XmlLimits) -> Result<Document, SamlError> {
     parse_single_root(xml, limits, ParseMode::Document)
 }
 
 /// Parse one element cut out of a larger document, such as an extracted
 /// `context` value. A namespace prefix it uses may be declared on an ancestor
-/// that is not part of `xml`; every other [`parse_with_limits`] check applies.
+/// that is not part of `xml`; every other [`parse_document`] check applies.
 pub(crate) fn parse_fragment_with_limits(
     xml: &str,
     limits: XmlLimits,
@@ -444,12 +456,24 @@ fn parse_single_root(xml: &str, limits: XmlLimits, mode: ParseMode) -> Result<Do
 ///
 /// Each element must be well-formed and declare every namespace prefix it
 /// uses.
+#[deprecated(
+    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
+)]
 pub fn parse_roots(xml: &str) -> Result<Vec<Node>, SamlError> {
-    parse_roots_with_limits(xml, XmlLimits::default())
+    parse_all_roots(xml, XmlLimits::default())
 }
 
 /// Parse every top-level element with explicit resource limits.
+#[deprecated(
+    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
+)]
 pub fn parse_roots_with_limits(xml: &str, limits: XmlLimits) -> Result<Vec<Node>, SamlError> {
+    parse_all_roots(xml, limits)
+}
+
+/// Parse every top-level element within `limits`. Each element must be
+/// well-formed and declare every namespace prefix it uses.
+pub(crate) fn parse_all_roots(xml: &str, limits: XmlLimits) -> Result<Vec<Node>, SamlError> {
     parse_roots_inner(xml, limits, ParseMode::Roots)
 }
 
@@ -579,14 +603,35 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "the deprecated public parsers keep their behaviour until removal"
+    )]
+    fn deprecated_parse_functions_keep_their_behaviour() -> Result<(), Box<dyn std::error::Error>> {
+        let shallow = XmlLimits {
+            max_depth: 1,
+            ..XmlLimits::default()
+        };
+        assert_eq!(parse("<a><b/></a>")?.root.local_name, "a");
+        assert!(parse("<a/><b/>").is_err());
+        assert!(parse_with_limits("<a><b/></a>", shallow).is_err());
+        assert_eq!(parse_roots("<a/><b/>")?.len(), 2);
+        assert!(parse_roots_with_limits("<a><b/></a><c/>", shallow).is_err());
+        Ok(())
+    }
+
+    #[test]
     fn rejects_doctype() {
         let xml = "<!DOCTYPE foo [<!ENTITY x \"y\">]><foo/>";
-        assert!(parse(xml).is_err());
+        assert!(parse_document(xml, XmlLimits::default()).is_err());
     }
 
     #[test]
     fn parses_root_and_attrs() -> Result<(), SamlError> {
-        let doc = parse("<a:Root xmlns:a=\"urn:x\" id=\"1\"><b>hi</b></a:Root>")?;
+        let doc = parse_document(
+            "<a:Root xmlns:a=\"urn:x\" id=\"1\"><b>hi</b></a:Root>",
+            XmlLimits::default(),
+        )?;
         assert_eq!(doc.root.local_name, "Root");
         assert_eq!(doc.root.attr("id"), Some("1"));
         assert_eq!(doc.root.children.len(), 1);
@@ -596,7 +641,10 @@ mod tests {
 
     #[test]
     fn parses_escaped_attribute_and_text_values() -> Result<(), SamlError> {
-        let doc = parse("<Root value=\"one &amp; two\"><Child>three &lt; four</Child></Root>")?;
+        let doc = parse_document(
+            "<Root value=\"one &amp; two\"><Child>three &lt; four</Child></Root>",
+            XmlLimits::default(),
+        )?;
 
         assert_eq!(doc.root.attr("value"), Some("one & two"));
         assert_eq!(doc.root.children[0].text, "three < four");
@@ -621,7 +669,11 @@ mod tests {
             ("<a>x\r&#xA;y</a>", "x\n\ny"),
         ];
         for (xml, text) in cases {
-            assert_eq!(parse(xml)?.root.text, text, "{xml:?}");
+            assert_eq!(
+                parse_document(xml, XmlLimits::default())?.root.text,
+                text,
+                "{xml:?}"
+            );
         }
         Ok(())
     }
@@ -630,7 +682,7 @@ mod tests {
     fn line_ending_normalization_keeps_source_offsets() -> Result<(), SamlError> {
         let xml = "<a>\r\n<b>x\r\ny</b>\r\n</a>";
 
-        let doc = parse(xml)?;
+        let doc = parse_document(xml, XmlLimits::default())?;
 
         let child = &doc.root.children[0];
         assert_eq!(&xml[child.start..child.end], "<b>x\r\ny</b>");
@@ -641,35 +693,35 @@ mod tests {
 
     #[test]
     fn parse_rejects_multiple_document_elements() {
-        let result = parse("<Root/><Second/>");
+        let result = parse_document("<Root/><Second/>", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
 
     #[test]
     fn parse_rejects_text_before_document_element() {
-        let result = parse("outside<Root/>");
+        let result = parse_document("outside<Root/>", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
 
     #[test]
     fn parse_rejects_text_after_document_element() {
-        let result = parse("<Root/>outside");
+        let result = parse_document("<Root/>outside", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
 
     #[test]
     fn parse_rejects_cdata_outside_document_element() {
-        let result = parse("<Root/><![CDATA[outside]]>");
+        let result = parse_document("<Root/><![CDATA[outside]]>", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
 
     #[test]
     fn parse_rejects_reference_outside_document_element() {
-        let result = parse("<Root/>&amp;");
+        let result = parse_document("<Root/>&amp;", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
@@ -683,7 +735,7 @@ mod tests {
             "<?after allowed?><!-- after -->",
         );
 
-        let document = parse(xml)?;
+        let document = parse_document(xml, XmlLimits::default())?;
 
         assert_eq!(document.root.local_name, "Root");
         Ok(())
@@ -691,28 +743,31 @@ mod tests {
 
     #[test]
     fn parse_rejects_stylesheet_processing_instruction() {
-        let result = parse("<?xml-stylesheet href=\"external.xsl\"?><Root/>");
+        let result = parse_document(
+            "<?xml-stylesheet href=\"external.xsl\"?><Root/>",
+            XmlLimits::default(),
+        );
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
 
     #[test]
     fn parse_rejects_unclosed_element_after_document_element() {
-        let result = parse("<Root/><Second>");
+        let result = parse_document("<Root/><Second>", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
 
     #[test]
     fn parse_roots_rejects_unclosed_element() {
-        let result = parse_roots("<Root/><Second>");
+        let result = parse_all_roots("<Root/><Second>", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
 
     #[test]
     fn parse_rejects_less_than_in_attribute_value() {
-        let result = parse("<Root value=\"one<two\"/>");
+        let result = parse_document("<Root value=\"one<two\"/>", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
@@ -727,7 +782,7 @@ mod tests {
             "<Root value=\"&#x1F;\"/>",
             "<Root>&#xFFFF;</Root>",
         ] {
-            let result = parse(xml);
+            let result = parse_document(xml, XmlLimits::default());
 
             assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
         }
@@ -735,7 +790,7 @@ mod tests {
 
     #[test]
     fn parse_rejects_double_hyphen_in_comment() {
-        let result = parse("<Root><!-- one -- two --></Root>");
+        let result = parse_document("<Root><!-- one -- two --></Root>", XmlLimits::default());
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
@@ -753,7 +808,7 @@ mod tests {
             "<a:b:c xmlns:a=\"u\"/>",
             "<a xmlns:p=\"\"/>",
         ] {
-            let result = parse(xml);
+            let result = parse_document(xml, XmlLimits::default());
 
             assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
         }
@@ -768,7 +823,7 @@ mod tests {
             "<Root><a:Child xmlns:a=\"urn:a\"/><a:Child/></Root>",
             "<Root><Child xmlns:a=\"urn:a\"></Child><a:Child/></Root>",
         ] {
-            let result = parse(xml);
+            let result = parse_document(xml, XmlLimits::default());
 
             assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
         }
@@ -780,7 +835,7 @@ mod tests {
             "<Root/><p:Second/>",
             "<a:Root xmlns:a=\"urn:a\"></a:Root><a:Second/>",
         ] {
-            let result = parse_roots(xml);
+            let result = parse_all_roots(xml, XmlLimits::default());
 
             assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
         }
@@ -798,7 +853,7 @@ mod tests {
             "<Root xmlns=\"http://www.w3.org/2000/xmlns/\"/>",
             "<Root xmlns=\"&#x68;ttp://www.w3.org/2000/xmlns/\"/>",
         ] {
-            let result = parse(xml);
+            let result = parse_document(xml, XmlLimits::default());
 
             assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
         }
@@ -811,7 +866,7 @@ mod tests {
             "<Root xmlns:a=\"urn:a\" xmlns:b=\"&#x75;rn:a\" a:value=\"1\" b:value=\"2\"/>",
             "<Root xmlns:a=\"urn:a\"><Child a:value=\"1\" xmlns:b=\"urn:a\" b:value=\"2\"/></Root>",
         ] {
-            let result = parse(xml);
+            let result = parse_document(xml, XmlLimits::default());
 
             assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
         }
@@ -820,11 +875,14 @@ mod tests {
     #[test]
     fn parse_accepts_prefixes_declared_on_an_ancestor_and_the_xml_prefix() -> Result<(), SamlError>
     {
-        let document = parse(concat!(
-            "<a:Root xmlns:a=\"urn:a\" xmlns:b=\"urn:b\" xml:lang=\"en\">",
-            "<a:Child a:value=\"1\" b:value=\"2\" value=\"3\"/>",
-            "</a:Root>",
-        ))?;
+        let document = parse_document(
+            concat!(
+                "<a:Root xmlns:a=\"urn:a\" xmlns:b=\"urn:b\" xml:lang=\"en\">",
+                "<a:Child a:value=\"1\" b:value=\"2\" value=\"3\"/>",
+                "</a:Root>",
+            ),
+            XmlLimits::default(),
+        )?;
 
         assert_eq!(document.root.attr("lang"), Some("en"));
         assert_eq!(document.root.children[0].attrs.len(), 3);
@@ -834,10 +892,13 @@ mod tests {
     #[test]
     fn parse_accepts_the_xml_namespace_written_with_a_character_reference() -> Result<(), SamlError>
     {
-        let document = parse(concat!(
-            "<Root xmlns:xml=\"&#x68;ttp://www.w3.org/XML/1998/namespace\" ",
-            "xmlns:a=\"&#x75;rn:a\" xml:lang=\"en\" a:value=\"1\"/>",
-        ))?;
+        let document = parse_document(
+            concat!(
+                "<Root xmlns:xml=\"&#x68;ttp://www.w3.org/XML/1998/namespace\" ",
+                "xmlns:a=\"&#x75;rn:a\" xml:lang=\"en\" a:value=\"1\"/>",
+            ),
+            XmlLimits::default(),
+        )?;
 
         assert_eq!(document.root.attr("lang"), Some("en"));
         Ok(())
@@ -875,7 +936,7 @@ mod tests {
 
     #[test]
     fn parse_roots_preserves_multiple_root_collection() -> Result<(), SamlError> {
-        let roots = parse_roots("<Root/><Second/>")?;
+        let roots = parse_all_roots("<Root/><Second/>", XmlLimits::default())?;
 
         assert_eq!(roots.len(), 2);
         Ok(())
@@ -892,7 +953,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_with_limits("<Root/>", limits)));
+        assert!(limit_hit(parse_document("<Root/>", limits)));
     }
 
     #[test]
@@ -902,7 +963,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_with_limits("<a><b><c/></b></a>", limits)));
+        assert!(limit_hit(parse_document("<a><b><c/></b></a>", limits)));
     }
 
     #[test]
@@ -912,7 +973,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_with_limits("<a><b/><c/></a>", limits)));
+        assert!(limit_hit(parse_document("<a><b/><c/></a>", limits)));
     }
 
     #[test]
@@ -922,7 +983,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_with_limits("<a x=\"1\" y=\"2\"/>", limits)));
+        assert!(limit_hit(parse_document("<a x=\"1\" y=\"2\"/>", limits)));
     }
 
     #[test]
@@ -933,7 +994,7 @@ mod tests {
         }
         xml.push_str("/>");
 
-        assert!(limit_hit(parse(&xml)));
+        assert!(limit_hit(parse_document(&xml, XmlLimits::default())));
     }
 
     #[test]
@@ -944,7 +1005,7 @@ mod tests {
         }
         xml.push_str("/>");
 
-        assert!(limit_hit(parse(&xml)));
+        assert!(limit_hit(parse_document(&xml, XmlLimits::default())));
     }
 
     fn nested_namespace_bindings(levels: usize) -> String {
@@ -960,19 +1021,24 @@ mod tests {
 
     #[test]
     fn rejects_xml_over_default_namespace_bindings_in_scope_limit() -> Result<(), SamlError> {
-        parse(&nested_namespace_bindings(
-            DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT,
-        ))?;
+        parse_document(
+            &nested_namespace_bindings(DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT),
+            XmlLimits::default(),
+        )?;
 
-        assert!(limit_hit(parse(&nested_namespace_bindings(
-            DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT + 1
-        ))));
+        assert!(limit_hit(parse_document(
+            &nested_namespace_bindings(DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT + 1),
+            XmlLimits::default()
+        )));
         Ok(())
     }
 
     #[test]
     fn duplicate_attribute_returns_xml_error() {
-        let result = parse("<Response ID=\"first\" ID=\"second\"/>");
+        let result = parse_document(
+            "<Response ID=\"first\" ID=\"second\"/>",
+            XmlLimits::default(),
+        );
 
         assert!(matches!(result, Err(SamlError::Xml(_))));
     }
@@ -984,7 +1050,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_with_limits("<a x=\"1234\"/>", limits)));
+        assert!(limit_hit(parse_document("<a x=\"1234\"/>", limits)));
     }
 
     #[test]
@@ -994,6 +1060,6 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_with_limits("<a>1234</a>", limits)));
+        assert!(limit_hit(parse_document("<a>1234</a>", limits)));
     }
 }

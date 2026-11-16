@@ -963,7 +963,7 @@ mod crypto_tests {
     ) -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
         use crate::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
-        use crate::xml::dom::parse;
+        use crate::xml::dom::parse_document;
         use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
         let mut custom_template = signing_setting();
@@ -985,7 +985,7 @@ mod crypto_tests {
                 },
             )?;
             let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
-            let document = parse(&xml)?;
+            let document = parse_document(&xml, crate::XmlLimits::default())?;
             let response_issue_instant = document
                 .root
                 .attr("IssueInstant")

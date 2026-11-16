@@ -4,8 +4,8 @@ use bergshamra::{sign, DsigContext, KeysManager};
 use saml_rs::constants::digest_algorithm::SHA256;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
-use saml_rs::crypto::construct_saml_signature;
-use saml_rs::crypto::keys::load_private_key;
+use saml_rs::crypto::keys::read_private_key;
+use saml_rs::crypto::sign_saml_xml;
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::util::normalize_cert_string;
 use saml_rs::{
@@ -33,14 +33,14 @@ fn sign_metadata_root(
     root_local_name: &str,
     transforms: &[String],
 ) -> Result<String, SamlError> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let reference = format!("/*[local-name(.)='{root_local_name}']");
     let config = SignatureConfig {
         prefix: "ds".into(),
         reference: Some(reference),
         action: SignatureAction::Prepend,
     };
-    construct_saml_signature(xml, true, &key, CERT, RSA_SHA256, transforms, Some(&config))
+    sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, transforms, Some(&config))
 }
 
 fn signed_child_metadata() -> Result<String, Box<dyn std::error::Error>> {
@@ -56,7 +56,7 @@ fn signed_child_metadata() -> Result<String, Box<dyn std::error::Error>> {
     let template = format!(
         "<EntityDescriptor ID=\"_evil_root\" entityID=\"https://evil.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{signature}<IDPSSODescriptor ID=\"_signed_child\" protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://trusted.example.com/sso\"/></IDPSSODescriptor></EntityDescriptor>"
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);
@@ -595,7 +595,7 @@ fn unsigned_for_compatibility_does_not_record_a_signature_as_verified(
 #[test]
 fn require_signature_rejects_a_nested_signature_ahead_of_the_root_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let config = SignatureConfig {
         prefix: "ds".into(),
         reference: Some(
@@ -603,7 +603,7 @@ fn require_signature_rejects_a_nested_signature_ahead_of_the_root_signature(
         ),
         action: SignatureAction::Prepend,
     };
-    let nested = construct_saml_signature(
+    let nested = sign_saml_xml(
         idp_metadata_xml(),
         true,
         &key,
@@ -650,7 +650,7 @@ fn sign_idp_metadata_with(
     );
     let template = entity_document(Some("_idp_md1"), &signature);
     let mut manager = KeysManager::new();
-    manager.add_key(load_private_key(key_pem, None)?);
+    manager.add_key(read_private_key(key_pem, None)?);
     let ctx = DsigContext::new(manager).with_insecure(true);
     Ok(sign(&ctx, &template)?)
 }

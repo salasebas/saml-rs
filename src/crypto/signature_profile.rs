@@ -85,7 +85,7 @@ fn rsa_modulus_bits(key: &Key) -> Result<Option<usize>, SamlError> {
     }
     let unreadable = || SamlError::Crypto("RSA key modulus could not be read".into());
     let key_value = key.to_key_value_xml("").ok_or_else(unreadable)?;
-    let document = dom::parse(&key_value)?;
+    let document = dom::parse_document(&key_value, crate::XmlLimits::default())?;
     let modulus = document
         .root
         .children

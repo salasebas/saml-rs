@@ -576,7 +576,7 @@ fn verify_first_signature_with_profile(
 ) -> Result<(bool, Option<String>), SamlError> {
     let Some(prepared) = prepare_signature_verification(
         xml,
-        dom::parse_with_limits(xml, limits)?,
+        dom::parse_document(xml, limits)?,
         metadata_certs,
         None,
         profile,
@@ -653,7 +653,7 @@ pub(crate) fn verify_present_signatures(
     if !rejects_present_signature_that_does_not_verify(profile) {
         return Ok(());
     }
-    let dom = dom::parse_with_limits(xml, limits)?;
+    let dom = dom::parse_document(xml, limits)?;
     if saml_signature_candidates(&dom.root).is_empty() {
         return Ok(());
     }
@@ -725,7 +725,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
 ) -> Result<SignatureVerification, SamlError> {
     let Some(prepared) = prepare_signature_verification(
         xml,
-        dom::parse_with_limits(xml, limits)?,
+        dom::parse_document(xml, limits)?,
         metadata_certs,
         hmac_secret,
         profile,
@@ -886,7 +886,7 @@ pub fn verify_metadata_signature_detailed_with_limits(
     trusted_certificates: &[String],
     limits: XmlLimits,
 ) -> Result<MetadataSignatureVerification, SamlError> {
-    let doc = dom::parse_with_limits(xml, limits)?;
+    let doc = dom::parse_document(xml, limits)?;
     ensure_metadata_signature_transforms_preserve_descriptor(&doc.root)?;
     verify_metadata_signature_coverage_with_limits(
         xml,
@@ -919,7 +919,7 @@ pub(crate) fn verify_metadata_signature_coverage_with_limits(
     }
     let signed_entity_descriptor_xml =
         signed_entity_descriptor_xml.ok_or_else(verified_content_not_covered)?;
-    let descriptor = dom::parse_with_limits(xml, limits)?;
+    let descriptor = dom::parse_document(xml, limits)?;
     if !matches!(
         descriptor.root.local_name.as_str(),
         "EntityDescriptor" | "EntitiesDescriptor"

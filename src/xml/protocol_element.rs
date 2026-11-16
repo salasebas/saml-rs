@@ -68,7 +68,7 @@ pub(crate) fn parse_saml_with_limits(
     xml: &str,
     limits: XmlLimits,
 ) -> Result<SamlElement, SamlError> {
-    let document = dom::parse_with_limits(xml, limits)?;
+    let document = dom::parse_document(xml, limits)?;
     let mut elements = resolved_elements(xml, limits)?;
     annotate(&document.root, xml.len(), &mut elements)
 }

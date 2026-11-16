@@ -583,7 +583,7 @@ fn hardening_subject_confirmation_request_id_must_match() -> Result<(), Box<dyn 
 }
 
 fn resigned_response_request(xml: &str) -> Result<HttpRequest, SamlError> {
-    let document = saml_rs::xml::dom::parse(xml)?;
+    let document = saml_rs::xml::dom::parse_document(xml, crate::XmlLimits::default())?;
     let signature = document
         .root
         .children
@@ -594,9 +594,8 @@ fn resigned_response_request(xml: &str) -> Result<HttpRequest, SamlError> {
         .ok_or_else(|| SamlError::Xml("missing assertion signature".into()))?;
     let mut xml = xml.to_string();
     xml.replace_range(signature.start..signature.end, "");
-    let key = saml_rs::crypto::keys::load_private_key(PRIVKEY, None)?;
-    let signed =
-        saml_rs::crypto::construct_saml_signature(&xml, false, &key, CERT, RSA_SHA256, &[], None)?;
+    let key = saml_rs::crypto::keys::read_private_key(PRIVKEY, None)?;
+    let signed = saml_rs::crypto::sign_saml_xml(&xml, false, &key, CERT, RSA_SHA256, &[], None)?;
     Ok(HttpRequest::post(vec![(
         "SAMLResponse".into(),
         STANDARD.encode(signed.as_bytes()),
@@ -679,19 +678,19 @@ fn hardening_sign_then_encrypt_message_auto_resolves() -> Result<(), Box<dyn std
 #[test]
 fn hardening_signed_metadata_verifies_against_trust_anchor(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use saml_rs::crypto::keys::load_private_key;
-    use saml_rs::crypto::{construct_saml_signature, verify_metadata_signature};
+    use saml_rs::crypto::keys::read_private_key;
+    use saml_rs::crypto::{sign_saml_xml, verify_metadata_signature};
     use saml_rs::metadata::IdpMetadata;
     use saml_rs::{SignatureAction, SignatureConfig};
 
     let md = "<EntityDescriptor ID=\"_md1\" entityID=\"https://idp.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><IDPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://idp/sso\"/></IDPSSODescriptor></EntityDescriptor>";
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let config = SignatureConfig {
         prefix: "ds".into(),
         reference: Some("/*[local-name(.)='EntityDescriptor']".into()),
         action: SignatureAction::Prepend,
     };
-    let signed = construct_saml_signature(md, true, &key, CERT, RSA_SHA256, &[], Some(&config))?;
+    let signed = sign_saml_xml(md, true, &key, CERT, RSA_SHA256, &[], Some(&config))?;
 
     // Valid against the trust anchor.
     assert!(verify_metadata_signature(&signed, &[CERT.to_string()])?);
@@ -711,7 +710,7 @@ fn hardening_signed_metadata_verifies_against_trust_anchor(
 fn hardening_metadata_signature_requires_root_coverage() -> Result<(), Box<dyn std::error::Error>> {
     use bergshamra::{sign, DsigContext, KeysManager};
     use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
-    use saml_rs::crypto::keys::load_private_key;
+    use saml_rs::crypto::keys::read_private_key;
     use saml_rs::crypto::verify_metadata_signature;
     use saml_rs::metadata::IdpMetadata;
     use saml_rs::util::normalize_cert_string;
@@ -728,7 +727,7 @@ fn hardening_metadata_signature_requires_root_coverage() -> Result<(), Box<dyn s
     let template = format!(
         "<EntityDescriptor ID=\"_evil_root\" entityID=\"https://evil.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{signature}<IDPSSODescriptor ID=\"_signed_child\" protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://trusted.example.com/sso\"/></IDPSSODescriptor></EntityDescriptor>"
     );
-    let key = load_private_key(PRIVKEY, None)?;
+    let key = read_private_key(PRIVKEY, None)?;
     let mut manager = KeysManager::new();
     manager.add_key(key);
     let ctx = DsigContext::new(manager).with_insecure(true);

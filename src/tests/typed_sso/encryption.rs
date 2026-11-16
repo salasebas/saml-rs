@@ -53,7 +53,7 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
         )?;
         let fields = post_fields(&response)?;
         let xml = response_xml_from_fields(&fields)?;
-        assert!(parse(&xml)?
+        assert!(parse_document(&xml, saml_rs::XmlLimits::default())?
             .root
             .children
             .iter()
