@@ -10,6 +10,8 @@ mod common;
 #[path = "common/replay_cache.rs"]
 mod replay_cache;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use replay_cache::RecordingReplayCache;
 
 use common::signing_credentials;
@@ -157,7 +159,7 @@ fn redirect_message_xml<Message>(
         .find(|(name, _)| name == "SAMLRequest" || name == "SAMLResponse")
         .map(|(_, value)| value.into_owned())
         .ok_or("redirect URL carries no SAML message")?;
-    let deflated = saml_rs::binding::base64_decode(&encoded)?;
+    let deflated = STANDARD.decode(&encoded)?;
     Ok(String::from_utf8(saml_rs::binding::deflate_raw_decode(
         &deflated,
     )?)?)
@@ -974,7 +976,7 @@ fn generated_request_names_the_identifier_and_one_change() -> TestResult {
         .map(|(_, value)| value.into_owned())
         .ok_or("undecodable SAMLRequest")?;
     let xml = String::from_utf8(saml_rs::binding::deflate_raw_decode(
-        &saml_rs::binding::base64_decode(&decoded)?,
+        &STANDARD.decode(&decoded)?,
     )?)?;
     assert!(xml.contains(&format!(
         r#"<saml:NameID Format="{}">alice@example.com</saml:NameID><samlp:NewID>alice-2</samlp:NewID>"#,
@@ -1333,9 +1335,9 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
 
 #[test]
 fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
-    let limits = saml_rs::xml::XmlLimits {
+    let limits = saml_rs::XmlLimits {
         max_attributes_per_element: 128,
-        ..saml_rs::xml::XmlLimits::default()
+        ..saml_rs::XmlLimits::default()
     };
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)

@@ -921,7 +921,7 @@ fn rolling_cert_rejects_signer_outside_the_trusted_keys() -> Result<(), Box<dyn 
 #[test]
 fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use crate::binding::base64_decode;
+    use crate::binding::decode_base64;
     use crate::constants::signature_algorithm::HMAC_SHA1;
     use crate::crypto::keys::load_hmac_secret;
 
@@ -950,7 +950,7 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
     let base64 = normalize_cert_string(IDP_CERT);
     let pem = format!("-----BEGIN CERTIFICATE-----\n{base64}\n-----END CERTIFICATE-----\n");
     for forged_key in [
-        base64_decode(&base64)?,
+        decode_base64(&base64)?,
         base64.into_bytes(),
         pem.into_bytes(),
     ] {

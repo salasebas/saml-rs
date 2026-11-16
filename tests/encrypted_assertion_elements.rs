@@ -12,7 +12,8 @@
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::CertUse;
 use saml_rs::metadata::{IdpMetadata, SpMetadata};
 use saml_rs::util::normalize_cert_string;
@@ -149,7 +150,7 @@ fn response_xml(outbound: &Outbound<SsoResponse>) -> Result<String, Box<dyn std:
         .find(|field| field.name() == "SAMLResponse")
         .map(FormField::value)
         .ok_or("missing SAMLResponse")?;
-    Ok(String::from_utf8(base64_decode(encoded)?)?)
+    Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
 struct Exchange {
@@ -321,7 +322,7 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
         &saml_rs::entity::User::new("alice-persistent-id"),
         &saml_rs::idp::LoginResponseOptions::default(),
     )?;
-    let xml = String::from_utf8(base64_decode(&response.context)?)?;
+    let xml = String::from_utf8(STANDARD.decode(&response.context)?)?;
     let document = bergshamra::xml::uppsala::parse(&xml)?;
     assert!(!document
         .descendants(document.root())
@@ -635,7 +636,7 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
         .fields()
         .iter()
         .map(|field| match field.name() {
-            "SAMLResponse" => FormField::new("SAMLResponse", base64_encode(tampered.as_bytes())),
+            "SAMLResponse" => FormField::new("SAMLResponse", STANDARD.encode(tampered.as_bytes())),
             _ => field.clone(),
         })
         .collect::<Vec<_>>();
@@ -714,7 +715,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
             .iter()
             .map(|field| match field.name() {
                 "SAMLResponse" => {
-                    FormField::new("SAMLResponse", base64_encode(tampered.as_bytes()))
+                    FormField::new("SAMLResponse", STANDARD.encode(tampered.as_bytes()))
                 }
                 _ => field.clone(),
             })

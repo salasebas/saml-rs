@@ -7,11 +7,12 @@ use replay_cache::RecordingReplayCache;
 
 use std::time::{Duration, SystemTime};
 
-use saml_rs::binding::base64_encode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::error::{SubjectConfirmationReason, TimeWindowField};
 use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest};
-use saml_rs::util::Value;
+use saml_rs::raw::Value;
 use saml_rs::{
     AuthnRequest, ClockSkew, ReplayPolicy, SamlError, SamlValidationContext, SsoSession,
 };
@@ -26,7 +27,7 @@ fn instant(value: &str) -> Result<SystemTime, time::error::Parse> {
 fn response_request(xml: &str) -> HttpRequest {
     HttpRequest::post(vec![(
         "SAMLResponse".to_string(),
-        base64_encode(xml.as_bytes()),
+        STANDARD.encode(xml.as_bytes()),
     )])
 }
 

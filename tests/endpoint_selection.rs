@@ -7,7 +7,8 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::base64_encode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, BrowserInput,
     EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
@@ -81,7 +82,7 @@ fn authn_request(destination: &str) -> String {
 fn post_authn_request(xml: &str) -> BrowserInput<AuthnRequest> {
     BrowserInput::<AuthnRequest>::post(vec![FormField::new(
         "SAMLRequest",
-        base64_encode(xml.as_bytes()),
+        STANDARD.encode(xml.as_bytes()),
     )])
 }
 

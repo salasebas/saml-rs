@@ -50,19 +50,12 @@ modules as the supported public documentation surface. The visible modules are
 Advanced callers that need the lower-level compatibility API should import it
 through `saml_rs::raw`.
 
-Some root modules remain publicly importable but hidden from docs.rs. These
-hidden public modules are not the recommended starting point for new
-integrations. When such paths remain available for compatibility, they are
-lower-level implementation or protocol surfaces and may receive less item-level
-documentation than the visible API.
-
-Current hidden root modules are classified as:
-
-| Category | Modules |
-| --- | --- |
-| Root-reexported implementation module | `api` |
-| Raw implementation modules | `sp`, `idp`, `flow`, `entity`, `logout` |
-| Protocol/helper modules | `binding`, `crypto`, `xml`, `context`, `template`, `util`, `validator` |
+The root modules hidden from docs.rs (`binding`, `context`, `crypto`,
+`entity`, `flow`, `idp`, `logout`, `sp`, `template`, `util`, `validator`, and
+`xml`) are not part of this surface. An item that the documented API names has
+a documented path: configuration types under `config`, and raw extractor types
+under `raw`. The [0.8 to 0.9 guide](../migrations/0.8-to-0.9.md#2-move-off-the-hidden-modules)
+lists those paths and the deprecated items.
 
 ## Raw API in this design
 

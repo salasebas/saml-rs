@@ -1,4 +1,6 @@
-use saml_rs::binding::{base64_encode, deflate_raw_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_encode;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::SamlError;
@@ -22,7 +24,7 @@ fn options(binding: Binding) -> FlowOptions<'static> {
 fn post_request(xml: &str) -> HttpRequest {
     HttpRequest::post(vec![(
         "SAMLRequest".to_string(),
-        base64_encode(xml.as_bytes()),
+        STANDARD.encode(xml.as_bytes()),
     )])
 }
 
@@ -30,7 +32,7 @@ fn redirect_request(xml: &str) -> Result<HttpRequest, SamlError> {
     let compressed = deflate_raw_encode(xml.as_bytes())?;
     Ok(HttpRequest::redirect(vec![(
         "SAMLRequest".to_string(),
-        base64_encode(&compressed),
+        STANDARD.encode(&compressed),
     )]))
 }
 

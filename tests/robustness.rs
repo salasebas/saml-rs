@@ -2,7 +2,7 @@
 //! panic on hostile input, and DEFLATE must round-trip. Dependency-free
 //! (deterministic LCG instead of a property-testing crate).
 
-use saml_rs::binding::{base64_decode, deflate_raw_decode, deflate_raw_encode};
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
 use saml_rs::context::is_valid_xml;
 use saml_rs::xml::{extract, ExtractorField};
 
@@ -78,11 +78,6 @@ fn moderately_deep_nesting_does_not_overflow() {
     let deep = format!("{}{}", "<a>".repeat(800), "</a>".repeat(800));
     let _ = is_valid_xml(&deep);
     let _ = extract(&deep, &[ExtractorField::new("a", &["a"])]);
-}
-
-#[test]
-fn malformed_base64_errors() {
-    assert!(base64_decode("@@@ not base64 @@@").is_err());
 }
 
 #[test]

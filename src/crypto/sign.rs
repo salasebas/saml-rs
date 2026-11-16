@@ -4,7 +4,7 @@
 use super::keys::{load_certificate, load_hmac_secret, load_private_key};
 use super::signature_profile::check_verification_key;
 use super::xml_syntax::validate_crypto_xml_prefix;
-use crate::binding::{base64_decode, base64_encode, xml_escape};
+use crate::binding::{decode_base64, encode_base64, xml_escape};
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
 use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
@@ -318,7 +318,7 @@ pub fn construct_message_signature(
     let signature = alg
         .sign(&signing, octet_string.as_bytes())
         .map_err(crypto_err)?;
-    Ok(base64_encode(&signature))
+    Ok(encode_base64(&signature))
 }
 
 /// Verify a detached octet-string signature against `cert`.
@@ -371,7 +371,7 @@ fn verify_detached_with_key(
 ) -> Result<bool, SamlError> {
     let verifying = require_operation_key(key.to_signing_key(), "no verification key")?;
     let alg = bergshamra::crypto::sign::from_uri(sig_alg).map_err(crypto_err)?;
-    let signature = base64_decode(signature_b64)?;
+    let signature = decode_base64(signature_b64)?;
     alg.verify(&verifying, octet_string.as_bytes(), &signature)
         .map_err(crypto_err)
 }

@@ -15,7 +15,8 @@ use saml_rs::{Credentials, PrivateKeyPem};
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::name_id_format::{PERSISTENT, UNSPECIFIED};
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512};
 use saml_rs::crypto::{
@@ -124,7 +125,7 @@ fn response_xml(fields: &[FormField]) -> Result<String, Box<dyn std::error::Erro
         .find(|field| field.name() == "SAMLResponse")
         .map(FormField::value)
         .ok_or("missing SAMLResponse")?;
-    Ok(String::from_utf8(base64_decode(encoded)?)?)
+    Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
 fn fields_with_xml(
@@ -135,7 +136,7 @@ fn fields_with_xml(
         .iter_mut()
         .find(|field| field.name() == "SAMLResponse")
         .ok_or("missing SAMLResponse")?;
-    *field = FormField::new("SAMLResponse", base64_encode(xml.as_bytes()));
+    *field = FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes()));
     Ok(fields)
 }
 
@@ -341,7 +342,7 @@ fn simple_sign_fields(
     let key = load_private_key(PRIVKEY, None)?;
     let signature = construct_message_signature(&octet, &key, sig_alg)?;
     let mut signed = vec![
-        FormField::new("SAMLResponse", base64_encode(xml.as_bytes())),
+        FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
         FormField::new("SigAlg", sig_alg),
         FormField::new("Signature", signature),
     ];

@@ -7,7 +7,8 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::{
     AcsEndpoint, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
     LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning,
@@ -95,9 +96,9 @@ fn subject_without_session() -> LogoutSubject {
 }
 
 fn post_xml<Message>(outbound: &Outbound<Message>) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(String::from_utf8(base64_decode(
-        &outbound.raw_context().context,
-    )?)?)
+    Ok(String::from_utf8(
+        STANDARD.decode(&outbound.raw_context().context)?,
+    )?)
 }
 
 fn post_input<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, SamlError> {
@@ -123,7 +124,7 @@ fn unsigned_response_fields(
         .iter()
         .map(|field| {
             if field.name() == "SAMLResponse" {
-                FormField::new("SAMLResponse", base64_encode(unsigned.as_bytes()))
+                FormField::new("SAMLResponse", STANDARD.encode(unsigned.as_bytes()))
             } else {
                 field.clone()
             }

@@ -4,7 +4,8 @@
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
@@ -83,14 +84,14 @@ fn without_key_info(form: &[FormField]) -> Result<Vec<FormField>, Box<dyn std::e
             if field.name() != "SAMLRequest" {
                 return Ok(field.clone());
             }
-            let xml = String::from_utf8(base64_decode(field.value())?)?;
+            let xml = String::from_utf8(STANDARD.decode(field.value())?)?;
             let start = xml.find("<ds:KeyInfo>").ok_or("signature has no KeyInfo")?;
             let end_tag = "</ds:KeyInfo>";
             let end = xml.find(end_tag).ok_or("KeyInfo is not closed")? + end_tag.len();
             let stripped = format!("{}{}", &xml[..start], &xml[end..]);
             Ok(FormField::new(
                 "SAMLRequest",
-                base64_encode(stripped.as_bytes()),
+                STANDARD.encode(stripped.as_bytes()),
             ))
         })
         .collect()

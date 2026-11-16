@@ -1,7 +1,8 @@
 //! Processing restrictions and content coverage at public XML verification entry points.
 #![cfg(crypto)]
 
-use saml_rs::binding::base64_encode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::ParserType;
 use saml_rs::crypto::keys::load_private_key;
 use saml_rs::crypto::{
@@ -9,7 +10,7 @@ use saml_rs::crypto::{
 };
 use saml_rs::error::ReferenceResolutionReason;
 use saml_rs::raw::{flow, Binding, FlowOptions, HttpRequest};
-use saml_rs::xml::dom::XmlLimits;
+use saml_rs::XmlLimits;
 use saml_rs::{SamlError, XmlSignatureProfile};
 
 const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -51,7 +52,10 @@ fn verify_flow(xml: &str, profile: XmlSignatureProfile) -> Result<(), SamlError>
     options.xml_signatures = profile;
     flow(
         &options,
-        &HttpRequest::post(vec![("SAMLResponse".into(), base64_encode(xml.as_bytes()))]),
+        &HttpRequest::post(vec![(
+            "SAMLResponse".into(),
+            STANDARD.encode(xml.as_bytes()),
+        )]),
     )
     .map(|_| ())
 }

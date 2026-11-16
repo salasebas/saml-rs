@@ -2,7 +2,9 @@
 
 use std::cell::RefCell;
 
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
@@ -10,7 +12,8 @@ use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::template::{replace_tags_by_value, LoginResponseTemplate};
+use saml_rs::template::replace_tags_by_value;
+use saml_rs::LoginResponseTemplate;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -62,23 +65,27 @@ fn sp(want_assertions_signed: bool) -> Result<ServiceProvider, SamlError> {
 
 fn decode_post_or_simplesign(ctx: &BindingContext) -> Result<String, Box<dyn std::error::Error>> {
     match ctx.binding {
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(&ctx.context)?)?),
+        Binding::Post | Binding::SimpleSign => {
+            Ok(String::from_utf8(STANDARD.decode(&ctx.context)?)?)
+        }
         _ => Err("expected POST or SimpleSign context".into()),
     }
 }
 
 fn decode_logout_context(ctx: &BindingContext) -> Result<String, Box<dyn std::error::Error>> {
     match ctx.binding {
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(&ctx.context)?)?),
+        Binding::Post | Binding::SimpleSign => {
+            Ok(String::from_utf8(STANDARD.decode(&ctx.context)?)?)
+        }
         Binding::Redirect => {
             let url = url::Url::parse(&ctx.context)?;
             let value = url
                 .query_pairs()
                 .find_map(|(key, value)| (key == ctx.request_type).then_some(value.into_owned()))
                 .ok_or("missing SAML logout message")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-                &value,
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &STANDARD.decode(value.as_bytes())?,
+            )?)?)
         }
         Binding::Soap => Ok(ctx.context.clone()),
         _ => Err("binding does not render logout messages here".into()),
@@ -207,7 +214,7 @@ fn caller_login_response_template_is_rewritten_before_custom_callback(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = prefixed_setting("samlp2", "saml2");
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = idp_with_setting(setting)?;
@@ -256,7 +263,7 @@ fn caller_login_response_template_rewrites_each_prefix_once(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = prefixed_setting("saml", "a");
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = idp_with_setting(setting)?;

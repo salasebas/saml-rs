@@ -1,10 +1,12 @@
 //! Historical regression cases derived from npm `samlify` issue tests.
 
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::metadata::{generate_sp_metadata, Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::util::Value;
+use saml_rs::raw::Value;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{IdentityProvider, ServiceProvider};
 
@@ -210,7 +212,7 @@ fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::
         .query_pairs()
         .find(|(k, _)| k == "SAMLRequest")
         .ok_or("missing SAMLRequest")?;
-    let xml = String::from_utf8(deflate_raw_decode(&base64_decode(&value)?)?)?;
+    let xml = String::from_utf8(deflate_raw_decode(&STANDARD.decode(value.as_bytes())?)?)?;
     assert!(xml.contains("AssertionConsumerServiceURL=\"https://example.org/response\""));
     Ok(())
 }

@@ -88,7 +88,7 @@ impl ResponseParseInput {
             binding: Binding::Post,
             request: HttpRequest::post(vec![(
                 crate::constants::url_params::SAML_RESPONSE.into(),
-                crate::binding::base64_encode(resolved.xml().as_bytes()),
+                crate::binding::encode_base64(resolved.xml().as_bytes()),
             )]),
             signed_destination: SignedMessageDestination::Optional,
         })

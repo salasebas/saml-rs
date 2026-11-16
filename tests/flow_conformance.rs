@@ -7,7 +7,9 @@
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
-use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode, deflate_raw_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
@@ -19,8 +21,9 @@ use saml_rs::logout::{
 };
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::template::{replace_tags_by_value, LoginResponseAttribute, LoginResponseTemplate};
+use saml_rs::template::replace_tags_by_value;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -132,7 +135,7 @@ fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
 }
 
 fn simplesign_request(param: &str, ctx: &BindingContext) -> Result<HttpRequest, SamlError> {
-    let raw_xml = String::from_utf8(base64_decode(&ctx.context)?)
+    let raw_xml = String::from_utf8(STANDARD.decode(&ctx.context)?)
         .map_err(|e| SamlError::Xml(e.to_string()))?;
     let sig_alg = ctx.sig_alg.clone().unwrap_or_default();
     let octet = match ctx.relay_state.as_deref() {
@@ -176,7 +179,7 @@ fn simplesign_form_request(param: &str, ctx: &BindingContext) -> Result<HttpRequ
     let mut request = HttpRequest::post(form_hidden_fields(&form)?);
     let encoded = body_param(&request, param)?.to_string();
     let raw_xml =
-        String::from_utf8(base64_decode(&encoded)?).map_err(|e| SamlError::Xml(e.to_string()))?;
+        String::from_utf8(STANDARD.decode(&encoded)?).map_err(|e| SamlError::Xml(e.to_string()))?;
     let relay_state = body_param(&request, "RelayState")?.to_string();
     let sig_alg = body_param(&request, "SigAlg")?.to_string();
     let _signature = body_param(&request, "Signature")?.to_string();
@@ -226,7 +229,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
 fn custom_idp() -> Result<IdentityProvider, SamlError> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
     });
     IdentityProvider::from_config(&idp_config(false), setting)
@@ -388,7 +391,8 @@ fn detached_signature_rejects_mismatched_login_request(
 
     match binding {
         Binding::Redirect => {
-            let attacker = base64_encode(&deflate_raw_encode(attacker_authn_request().as_bytes())?);
+            let attacker =
+                STANDARD.encode(&deflate_raw_encode(attacker_authn_request().as_bytes())?);
             let (_, saml_request) = request
                 .query
                 .iter_mut()
@@ -397,7 +401,7 @@ fn detached_signature_rejects_mismatched_login_request(
             *saml_request = attacker;
         }
         Binding::SimpleSign => {
-            let attacker = base64_encode(attacker_authn_request().as_bytes());
+            let attacker = STANDARD.encode(attacker_authn_request().as_bytes());
             let (_, saml_request) = request
                 .body
                 .iter_mut()
@@ -866,7 +870,7 @@ fn signed_response_without_destination_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
@@ -921,7 +925,7 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
@@ -978,7 +982,7 @@ fn required_response_signature_accepts_detached_without_embedded_signature(
         .find(|(name, _)| name == "SAMLResponse")
         .map(|(_, value)| value.as_str())
         .ok_or("missing bound SAMLResponse")?;
-    let decoded = base64_decode(encoded)?;
+    let decoded = STANDARD.decode(encoded)?;
     let xml = match binding {
         Binding::Redirect => deflate_raw_decode(&decoded)?,
         Binding::SimpleSign => decoded,
@@ -1122,7 +1126,7 @@ fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std:
     idp_setting.is_assertion_encrypted = true;
     if custom {
         idp_setting.login_response_template = Some(LoginResponseTemplate {
-            context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
+            context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
             attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
         });
     }
@@ -1303,13 +1307,13 @@ fn tamper_body_message(
     to: &str,
 ) -> Result<(), SamlError> {
     let encoded = body_param_mut(request, param)?;
-    let xml = String::from_utf8(base64_decode(encoded.as_str())?)
+    let xml = String::from_utf8(STANDARD.decode(encoded.as_str())?)
         .map_err(|e| SamlError::Xml(e.to_string()))?;
     let tampered = xml.replace(from, to);
     if tampered == xml {
         return Err(SamlError::Invalid("tamper target not found".into()));
     }
-    *encoded = base64_encode(tampered.as_bytes());
+    *encoded = STANDARD.encode(tampered.as_bytes());
     Ok(())
 }
 
@@ -1623,7 +1627,7 @@ fn encrypted_prefix(prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_config(&sp_config(false, true, true), sp_setting)?;
     let ctx =
         idp.create_login_response(&sp, Binding::Post, &User::new("p@example.com"), &opts("_r"))?;
-    let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+    let xml = String::from_utf8(STANDARD.decode(&ctx.context)?)?;
     assert!(xml.contains(&format!("<{prefix}:EncryptedAssertion")));
     Ok(())
 }
@@ -1642,10 +1646,11 @@ fn flow_conformance_encrypted_prefix_default_saml() -> Result<(), Box<dyn std::e
 // ----- malformed response (57-59) -----
 
 fn malformed(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    use saml_rs::binding::base64_encode;
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
     let idp = idp(false);
     let sp = sp(true, false);
-    let bad = base64_encode(b"<<<not-xml");
+    let bad = STANDARD.encode(b"<<<not-xml");
     let request = match binding {
         Binding::Redirect => HttpRequest::redirect(vec![("SAMLResponse".into(), bad)]),
         _ => HttpRequest::post(vec![("SAMLResponse".into(), bad)]),
@@ -1674,12 +1679,13 @@ const ATTACK: &str = include_str!("fixtures/misc/attack_response_signed.xml");
 #[test]
 fn flow_conformance_reject_signature_wrapped_response_case_1(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use saml_rs::binding::base64_encode;
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
     let idp = idp(false);
     let sp = sp(true, false);
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
-        base64_encode(ATTACK.as_bytes()),
+        STANDARD.encode(ATTACK.as_bytes()),
     )]);
     assert!(sp
         .parse_login_response(&idp, Binding::Post, &request)
@@ -1708,7 +1714,8 @@ fn flow_conformance_use_signed_contents_in_wrapped_response_case_2(
 // ----- two-tier status error (62-64) -----
 
 fn two_tier_status(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    use saml_rs::binding::base64_encode;
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
     let idp = idp(false);
     let sp = sp(true, false);
     let failed = FAILED.replace(
@@ -1718,12 +1725,12 @@ fn two_tier_status(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let request = match binding {
         Binding::Redirect => {
             use saml_rs::binding::deflate_raw_encode;
-            let enc = base64_encode(&deflate_raw_encode(failed.as_bytes())?);
+            let enc = STANDARD.encode(&deflate_raw_encode(failed.as_bytes())?);
             HttpRequest::redirect(vec![("SAMLResponse".into(), enc)])
         }
         _ => HttpRequest::post(vec![(
             "SAMLResponse".into(),
-            base64_encode(failed.as_bytes()),
+            STANDARD.encode(failed.as_bytes()),
         )]),
     };
     match sp.parse_login_response(&idp, binding, &request) {

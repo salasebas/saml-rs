@@ -8,10 +8,13 @@ use common::signing_credentials;
 
 use std::time::{Duration, SystemTime};
 
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
+use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::status_code;
 use saml_rs::raw::{Binding, HttpRequest};
-use saml_rs::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
+use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, ForceAuthn,
@@ -114,13 +117,13 @@ fn authn_request_xml(
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
                 .ok_or("missing SAMLRequest")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-                encoded.as_ref(),
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &STANDARD.decode(encoded.as_ref())?,
+            )?)?)
         }
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(
-            &outbound.raw_context().context,
-        )?)?),
+        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(
+            STANDARD.decode(&outbound.raw_context().context)?,
+        )?),
         _ => Err("binding is unsupported".into()),
     }
 }
@@ -133,7 +136,7 @@ fn response_xml(outbound: &Outbound<SsoResponse>) -> Result<String, Box<dyn std:
         .find(|field| field.name() == "SAMLResponse")
         .map(FormField::value)
         .ok_or("missing SAMLResponse")?;
-    Ok(String::from_utf8(base64_decode(encoded)?)?)
+    Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
 fn assert_generated_instants_have_no_leap_second(
@@ -1105,7 +1108,7 @@ fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dy
         .validation(signed_authn_request_idp_validation())
         .build()?;
     idp_config.templates.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.to_string()),
+        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.to_string()),
         attributes: Vec::new(),
     });
     let idp = Saml::idp(idp_config)?;

@@ -4,8 +4,10 @@ mod common;
 
 use std::time::SystemTime;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use common::signing_credentials;
-use saml_rs::binding::{base64_decode, base64_encode, deflate_raw_decode};
+use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
 use saml_rs::raw::Binding;
@@ -98,9 +100,9 @@ fn request_xml(outbound: &Outbound<AuthnRequest>) -> Result<String, Box<dyn std:
                 .find(|(name, _)| name == "SAMLRequest")
                 .ok_or("missing request")?
                 .1;
-            deflate_raw_decode(&base64_decode(&value)?)?
+            deflate_raw_decode(&STANDARD.decode(value.as_bytes())?)?
         }
-        Binding::Post | Binding::SimpleSign => base64_decode(&context.context)?,
+        Binding::Post | Binding::SimpleSign => STANDARD.decode(&context.context)?,
         _ => return Err("unexpected request binding".into()),
     };
     Ok(String::from_utf8(bytes)?)
@@ -318,7 +320,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
             .apply_web_browser_sso_generation_rules()
             .sign_response(),
     )?;
-    let xml = String::from_utf8(base64_decode(&response.raw_context().context)?)?;
+    let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
     let document = parse(&xml)?;
     let assertion = document
         .root
@@ -416,7 +418,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         &started.pending,
         BrowserInput::<SsoResponse>::post(vec![FormField::new(
             "SAMLResponse",
-            base64_encode(signed.as_bytes()),
+            STANDARD.encode(signed.as_bytes()),
         )]),
         validation(),
     )?;
@@ -503,7 +505,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
             .apply_web_browser_sso_generation_rules()
             .authn_context(AuthnContextReference::class(MFA)?),
     )?;
-    let xml = String::from_utf8(base64_decode(&response.raw_context().context)?)?;
+    let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
     assert!(xml.contains("EncryptedAssertion"));
     assert!(!xml.contains(MFA));
     let session = sp.finish_sso(
@@ -536,7 +538,7 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
                 ..SpValidationPolicy::recommended()
             })
             .templates(saml_rs::TemplatePolicy {
-                login_request_template: Some(saml_rs::template::LOGIN_REQUEST_TEMPLATE.into()),
+                login_request_template: Some(saml_rs::config::LOGIN_REQUEST_TEMPLATE.into()),
                 ..Default::default()
             })
             .build()?,
@@ -622,7 +624,7 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
                     .iter()
                     .map(|field| {
                         if field.name() == "SAMLRequest" {
-                            FormField::new("SAMLRequest", base64_encode(xml.as_bytes()))
+                            FormField::new("SAMLRequest", STANDARD.encode(xml.as_bytes()))
                         } else {
                             field.clone()
                         }
@@ -676,7 +678,7 @@ fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
         &sp_descriptor,
         BrowserInput::<AuthnRequest>::post(vec![FormField::new(
             "SAMLRequest",
-            base64_encode(signed.as_bytes()),
+            STANDARD.encode(signed.as_bytes()),
         )]),
         validation(),
     )?;

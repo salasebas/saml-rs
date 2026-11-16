@@ -1,9 +1,10 @@
-use saml_rs::binding::base64_encode;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::Binding;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::Value;
 use saml_rs::raw::{BindingContext, FlowResult};
-use saml_rs::util::Value;
-use saml_rs::xml::XmlLimits;
+use saml_rs::XmlLimits;
 #[cfg(crypto)]
 use saml_rs::{
     raw::LoginResponseOptions,
@@ -567,13 +568,13 @@ fn typed_models_simplesign_browser_input_accepts_response_markers(
     let sso_xml = "<samlp:Response/>";
     let logout_xml = "<samlp:LogoutResponse/>";
     let sso = BrowserInput::<SsoResponse>::simple_sign(vec![
-        FormField::new("SAMLResponse", base64_encode(sso_xml.as_bytes())),
+        FormField::new("SAMLResponse", STANDARD.encode(sso_xml.as_bytes())),
         FormField::new("RelayState", "relay"),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]);
     let logout = BrowserInput::<LogoutResponse>::simple_sign(vec![
-        FormField::new("SAMLResponse", base64_encode(logout_xml.as_bytes())),
+        FormField::new("SAMLResponse", STANDARD.encode(logout_xml.as_bytes())),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]);
@@ -595,22 +596,22 @@ fn typed_models_simplesign_browser_input_accepts_response_markers(
 #[test]
 fn typed_models_simplesign_browser_input_rejects_marker_field_mismatch() {
     assert_browser_input_invalid(BrowserInput::<AuthnRequest>::simple_sign(vec![
-        FormField::new("SAMLResponse", base64_encode(b"<samlp:Response/>")),
+        FormField::new("SAMLResponse", STANDARD.encode(b"<samlp:Response/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
     assert_browser_input_invalid(BrowserInput::<LogoutRequest>::simple_sign(vec![
-        FormField::new("SAMLResponse", base64_encode(b"<samlp:LogoutResponse/>")),
+        FormField::new("SAMLResponse", STANDARD.encode(b"<samlp:LogoutResponse/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
     assert_browser_input_invalid(BrowserInput::<SsoResponse>::simple_sign(vec![
-        FormField::new("SAMLRequest", base64_encode(b"<samlp:AuthnRequest/>")),
+        FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
     assert_browser_input_invalid(BrowserInput::<LogoutResponse>::simple_sign(vec![
-        FormField::new("SAMLRequest", base64_encode(b"<samlp:LogoutRequest/>")),
+        FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:LogoutRequest/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
@@ -623,14 +624,14 @@ fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_messa
         FormField::new("Signature", "sig"),
     ]));
     assert_browser_input_invalid(BrowserInput::<AuthnRequest>::simple_sign(vec![
-        FormField::new("SAMLRequest", base64_encode(b"<samlp:AuthnRequest/>")),
-        FormField::new("SAMLRequest", base64_encode(b"<samlp:AuthnRequest/>")),
+        FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
+        FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
     assert_browser_input_invalid(BrowserInput::<AuthnRequest>::simple_sign(vec![
-        FormField::new("SAMLRequest", base64_encode(b"<samlp:AuthnRequest/>")),
-        FormField::new("SAMLResponse", base64_encode(b"<samlp:Response/>")),
+        FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
+        FormField::new("SAMLResponse", STANDARD.encode(b"<samlp:Response/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
@@ -695,7 +696,7 @@ fn typed_models_logout_browser_input_preserves_detached_signature_octets(
 fn typed_models_simplesign_browser_input_bounds_decoded_xml() {
     let too_large = vec![b'a'; XmlLimits::default().max_bytes + 1];
     let input = BrowserInput::<AuthnRequest>::simple_sign(vec![
-        FormField::new("SAMLRequest", base64_encode(&too_large)),
+        FormField::new("SAMLRequest", STANDARD.encode(&too_large)),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]);

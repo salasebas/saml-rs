@@ -1,9 +1,9 @@
-use saml_rs::binding::{
-    base64_decode, build_redirect_octet, build_redirect_url, deflate_raw_decode,
-};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::{build_redirect_octet, build_redirect_url, deflate_raw_decode};
 use saml_rs::constants::ParserType;
-use saml_rs::xml::XmlLimits;
 use saml_rs::SamlError;
+use saml_rs::XmlLimits;
 
 const ENDPOINT: &str = "https://idp.example.com/sso";
 const ROOT: &str = "<r xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">";
@@ -23,9 +23,9 @@ fn decode_request(query: &str) -> Result<String, Box<dyn std::error::Error>> {
         .find(|(name, _)| name == "SAMLRequest")
         .map(|(_, value)| value.into_owned())
         .ok_or("missing SAMLRequest")?;
-    Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-        &encoded,
-    )?)?)?)
+    Ok(String::from_utf8(deflate_raw_decode(
+        &STANDARD.decode(&encoded)?,
+    )?)?)
 }
 
 #[test]

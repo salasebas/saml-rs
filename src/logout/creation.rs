@@ -527,7 +527,7 @@ pub(crate) fn create_logout_response_inner(
 /// The signed XML an embedded-signature binding carries.
 fn embedded_signed_xml(binding: Binding, context: &str) -> Result<Option<String>, SamlError> {
     match binding {
-        Binding::Post => String::from_utf8(crate::binding::base64_decode(context)?)
+        Binding::Post => String::from_utf8(crate::binding::decode_base64(context)?)
             .map(Some)
             .map_err(|error| SamlError::Xml(error.to_string())),
         Binding::Soap => Ok(Some(context.to_string())),

@@ -535,7 +535,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
         Some(SP_ACS)
     );
 
-    let unbounded = saml_rs::xml::XmlLimits::unbounded();
+    let unbounded = saml_rs::XmlLimits::unbounded();
     let idp = saml_rs::metadata::IdpMetadata::from_xml_with_limits(
         &idp_metadata.replacen(
             "<EntityDescriptor",
@@ -568,7 +568,8 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
 #[test]
 fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use saml_rs::binding::base64_decode;
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
     use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
     use saml_rs::constants::Binding;
     use saml_rs::entity::{EntitySetting, User};
@@ -604,8 +605,8 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
             &LoginResponseOptions::default(),
         )?;
         let request = sp.create_login_request(&idp, Binding::Post, None)?;
-        let response_xml = String::from_utf8(base64_decode(&response.context)?)?;
-        let request_xml = String::from_utf8(base64_decode(&request.context)?)?;
+        let response_xml = String::from_utf8(STANDARD.decode(&response.context)?)?;
+        let request_xml = String::from_utf8(STANDARD.decode(&request.context)?)?;
         assert!(
             response_xml.contains(&format!(r#"Format="{PERSISTENT}""#))
                 && !response_xml.contains(TRANSIENT),

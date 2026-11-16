@@ -10,8 +10,9 @@
 
 use std::time::SystemTime;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use bergshamra::{encrypt, EncContext, KeysManager};
-use saml_rs::binding::{base64_decode, base64_encode};
 use saml_rs::crypto::{
     construct_saml_signature,
     keys::{load_certificate, load_private_key},
@@ -140,7 +141,7 @@ fn received_by(
     if context.binding != Binding::Post {
         return Err("expected an HTTP-POST AuthnRequest".into());
     }
-    let xml = String::from_utf8(base64_decode(&context.context)?)?;
+    let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
     let position = xml
         .find("<samlp:NameIDPolicy")
         .ok_or("missing NameIDPolicy")?;
@@ -165,7 +166,7 @@ fn received_by(
         &sp_descriptor,
         BrowserInput::<AuthnRequest>::post(vec![FormField::new(
             "SAMLRequest",
-            base64_encode(xml.as_bytes()),
+            STANDARD.encode(xml.as_bytes()),
         )]),
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility),
     )?;

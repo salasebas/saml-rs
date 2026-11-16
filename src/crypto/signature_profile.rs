@@ -2,7 +2,7 @@
 //! [`XmlSignatureProfile`] accepts on a signature that authenticates an
 //! accepted message or a signed metadata import.
 
-use crate::binding::base64_decode;
+use crate::binding::decode_base64;
 use crate::config::XmlSignatureProfile;
 use crate::constants::{digest_algorithm, signature_algorithm};
 use crate::error::SamlError;
@@ -92,7 +92,7 @@ fn rsa_modulus_bits(key: &Key) -> Result<Option<usize>, SamlError> {
         .iter()
         .find(|child| child.local_name == bergshamra::core::ns::node::RSA_MODULUS)
         .ok_or_else(unreadable)?;
-    let modulus = base64_decode(&modulus.text)?;
+    let modulus = decode_base64(&modulus.text)?;
     let Some(first) = modulus.iter().position(|byte| *byte != 0) else {
         return Ok(Some(0));
     };

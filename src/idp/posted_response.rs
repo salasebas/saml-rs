@@ -33,7 +33,7 @@ impl IdentityProvider {
             },
             overrides,
         )?;
-        let xml = crate::binding::base64_decode(&issued.context.context)?;
+        let xml = crate::binding::decode_base64(&issued.context.context)?;
         let xml = String::from_utf8(xml).map_err(|err| SamlError::Xml(err.to_string()))?;
         Ok(RenderedLoginResponse {
             id: issued.context.id,

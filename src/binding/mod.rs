@@ -16,7 +16,8 @@ pub use deflate::{
     deflate_raw_decode, deflate_raw_decode_with_limit, deflate_raw_encode,
     MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-pub use encoding::{base64_decode, base64_decode_with_limit, base64_encode};
+pub use encoding::base64_decode_with_limit;
+pub(crate) use encoding::{decode_base64, encode_base64};
 pub use escape::{html_escape, xml_escape};
 pub(crate) use post_form::{
     build_simplesign_octet, saml_post_binding_form_with_signature,
@@ -27,3 +28,22 @@ pub(crate) use redirect::append_redirect_query;
 pub use redirect::{
     append_signature, build_redirect_octet, build_redirect_url, redirect_binding_query,
 };
+
+/// Standard base64 encoding (no line wrapping).
+#[deprecated(
+    note = "`saml_rs::binding` becomes crate-private in the next minor release; use `base64::engine::general_purpose::STANDARD.encode`"
+)]
+pub fn base64_encode(input: &[u8]) -> String {
+    encoding::encode_base64(input)
+}
+
+/// Decode standard base64.
+///
+/// ASCII whitespace is ignored: space, tab, line feed, form feed, and carriage
+/// return. Any other byte outside the base64 alphabet is rejected.
+#[deprecated(
+    note = "`saml_rs::binding` becomes crate-private in the next minor release; remove ASCII whitespace and use `base64::engine::general_purpose::STANDARD.decode`"
+)]
+pub fn base64_decode(input: &str) -> Result<Vec<u8>, crate::error::SamlError> {
+    encoding::decode_base64(input)
+}

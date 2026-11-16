@@ -1,11 +1,11 @@
-use saml_rs::binding::{
-    base64_encode, deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES,
-};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::xml::XmlLimits;
+use saml_rs::XmlLimits;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 use url::Url;
 
@@ -68,7 +68,7 @@ fn deflate_raw_decode_rejects_oversized_output() -> Result<(), Box<dyn std::erro
 fn redirect_flow_rejects_oversized_compressed_input_before_inflate(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request =
-        HttpRequest::redirect(vec![("SAMLRequest".to_string(), base64_encode(&[0u8; 9]))]);
+        HttpRequest::redirect(vec![("SAMLRequest".to_string(), STANDARD.encode([0u8; 9]))]);
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Redirect);
     opts.parser_type = Some(ParserType::SamlRequest);
@@ -95,7 +95,7 @@ fn flow_options_custom_redirect_inflate_limit_is_enforced() -> Result<(), Box<dy
     }
     let request = HttpRequest::redirect(vec![(
         "SAMLRequest".to_string(),
-        base64_encode(&compressed),
+        STANDARD.encode(&compressed),
     )]);
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Redirect);
@@ -139,7 +139,7 @@ fn redirect_flow_rejects_oversized_inflated_message() -> Result<(), Box<dyn std:
     let compressed = oversized_deflate_payload()?;
     let request = HttpRequest::redirect(vec![(
         "SAMLRequest".to_string(),
-        base64_encode(&compressed),
+        STANDARD.encode(&compressed),
     )]);
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Redirect);
@@ -160,7 +160,7 @@ fn redirect_flow_rejects_oversized_inflated_message() -> Result<(), Box<dyn std:
 fn post_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::Error>> {
     let request = HttpRequest::post(vec![(
         "SAMLRequest".to_string(),
-        base64_encode(b"<AuthnRequest/>"),
+        STANDARD.encode(b"<AuthnRequest/>"),
     )]);
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Post);
@@ -185,7 +185,7 @@ fn post_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::
 fn simplesign_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::Error>> {
     let request = HttpRequest::post(vec![(
         "SAMLRequest".to_string(),
-        base64_encode(b"<AuthnRequest/>"),
+        STANDARD.encode(b"<AuthnRequest/>"),
     )]);
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::SimpleSign);
@@ -212,7 +212,7 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
     let xml = format!("<AuthnRequest>{}</AuthnRequest>", "<Extra/>".repeat(4));
     let request = HttpRequest::post(vec![(
         "SAMLRequest".to_string(),
-        base64_encode(xml.as_bytes()),
+        STANDARD.encode(xml.as_bytes()),
     )]);
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Post);

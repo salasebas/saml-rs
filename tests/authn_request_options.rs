@@ -1,4 +1,6 @@
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{BindingContext, EntitySetting};
 use saml_rs::flow::HttpRequest;
@@ -53,11 +55,13 @@ fn request_xml(ctx: &BindingContext) -> Result<String, Box<dyn std::error::Error
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
                 .ok_or("missing SAMLRequest")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-                &value,
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &STANDARD.decode(value.as_bytes())?,
+            )?)?)
         }
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(&ctx.context)?)?),
+        Binding::Post | Binding::SimpleSign => {
+            Ok(String::from_utf8(STANDARD.decode(&ctx.context)?)?)
+        }
         _ => Err("binding is unsupported".into()),
     }
 }
@@ -512,7 +516,7 @@ mod signed {
     }
 
     fn simplesign_request(ctx: &BindingContext) -> Result<HttpRequest, Box<dyn std::error::Error>> {
-        let xml = String::from_utf8(base64_decode(&ctx.context)?)?;
+        let xml = String::from_utf8(STANDARD.decode(&ctx.context)?)?;
         let relay_state = ctx.relay_state.clone().ok_or("missing RelayState")?;
         let sig_alg = ctx.sig_alg.clone().ok_or("missing SigAlg")?;
         let signature = ctx.signature.clone().ok_or("missing Signature")?;

@@ -1,6 +1,8 @@
 #![cfg(crypto)]
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{status_code, Binding, ParserType};
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
@@ -8,7 +10,7 @@ use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::template::{replace_tags_by_value, LOGIN_RESPONSE_TEMPLATE};
+use saml_rs::template::replace_tags_by_value;
 use saml_rs::validator::check_status;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
@@ -171,7 +173,7 @@ fn parse_raw_response(response: String, request_id: &str) -> Result<(), SamlErro
     let idp = idp()?;
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
-        base64_encode(response.as_bytes()),
+        STANDARD.encode(response.as_bytes()),
     )]);
     sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, request_id)?;
     Ok(())
@@ -262,12 +264,12 @@ fn error_taxonomy_unsigned_post_response_returns_signature_missing(
 fn error_taxonomy_invalid_xml_signature_returns_xml_signature_reason(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let response = signed_response(&ResponseShape::default())?;
-    let xml = String::from_utf8(base64_decode(&response)?)?.replacen(
+    let xml = String::from_utf8(STANDARD.decode(&response)?)?.replacen(
         "user@example.com",
         "evil@example.com",
         1,
     );
-    let response = base64_encode(xml.as_bytes());
+    let response = STANDARD.encode(xml.as_bytes());
 
     match parse_response(response, "_request123") {
         Err(SamlError::SignatureVerification {

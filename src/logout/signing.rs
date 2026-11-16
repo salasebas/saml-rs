@@ -1,5 +1,5 @@
 #[cfg(crypto)]
-use crate::binding::base64_encode;
+use crate::binding::encode_base64;
 use crate::constants::{Binding, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
@@ -45,7 +45,7 @@ pub(crate) fn sign_browser_message(
             sig_alg,
         ),
         Binding::Post => Ok((
-            base64_encode(embedded_signature(&setting.transformation_algorithms)?.as_bytes()),
+            encode_base64(embedded_signature(&setting.transformation_algorithms)?.as_bytes()),
             None,
             None,
         )),

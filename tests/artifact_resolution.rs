@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::xml::XmlLimits;
+use saml_rs::XmlLimits;
 use saml_rs::{
     AcsEndpoint, Artifact, ArtifactDereference, ArtifactRelease, ArtifactResolutionService,
     ArtifactUses, ArtifactWithheld, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor,

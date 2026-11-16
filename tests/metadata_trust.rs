@@ -6,12 +6,12 @@ use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
 use saml_rs::crypto::construct_saml_signature;
 use saml_rs::crypto::keys::load_private_key;
-use saml_rs::entity::{SignatureAction, SignatureConfig};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy, SamlError, SpDescriptor,
 };
+use saml_rs::{SignatureAction, SignatureConfig};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");

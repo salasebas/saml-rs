@@ -11,7 +11,9 @@
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, deflate_raw_decode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::deflate_raw_decode;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, Credentials, EntityId,
@@ -132,9 +134,9 @@ fn redirect_xml(url: &str) -> Result<String, Box<dyn std::error::Error>> {
         .find(|(name, _)| name == "SAMLRequest")
         .map(|(_, value)| value.into_owned())
         .ok_or("missing SAMLRequest")?;
-    Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-        &encoded,
-    )?)?)?)
+    Ok(String::from_utf8(deflate_raw_decode(
+        &STANDARD.decode(&encoded)?,
+    )?)?)
 }
 
 fn query_names(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {

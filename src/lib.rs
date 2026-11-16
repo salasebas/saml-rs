@@ -377,8 +377,7 @@ compile_error!(
     "crypto capability features require one provider: crypto-rustcrypto, crypto-aws-lc, or crypto-fips"
 );
 
-#[doc(hidden)]
-pub mod api;
+mod api;
 mod artifact;
 mod assertion_acceptance;
 #[doc(hidden)]
@@ -440,11 +439,12 @@ pub use config::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
     DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm, EntityId, HmacSecret,
     IdentifierEncryptionPolicy, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig,
-    IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy,
-    ManageNameIdService, MaskGenerationFunction, MetadataTrustPolicy, NameIdCreationPolicy,
-    NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy, SignatureAlgorithm, SpConfig,
+    IdpValidationPolicy, KeyEncryptionAlgorithm, LoginResponseAttribute, LoginResponseTemplate,
+    LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService, MaskGenerationFunction,
+    MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
+    ResponseSignaturePolicy, SignatureAction, SignatureAlgorithm, SignatureConfig, SpConfig,
     SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
-    TransformAlgorithm, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
+    TransformAlgorithm, XmlEncryptionPolicy, XmlLimits, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(crypto)]
 pub use crypto::{

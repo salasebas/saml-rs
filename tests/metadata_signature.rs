@@ -8,11 +8,11 @@ use saml_rs::crypto::{
     construct_saml_signature, verify_metadata_signature, verify_metadata_signature_detailed,
     verify_metadata_signature_detailed_with_limits, verify_metadata_signature_with_limits,
 };
-use saml_rs::entity::{SignatureAction, SignatureConfig};
 use saml_rs::metadata::IdpMetadata;
 use saml_rs::util::normalize_cert_string;
-use saml_rs::xml::XmlLimits;
 use saml_rs::SamlError;
+use saml_rs::XmlLimits;
+use saml_rs::{SignatureAction, SignatureConfig};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");

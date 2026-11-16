@@ -17,21 +17,22 @@ use common::signing_credentials;
 
 use std::time::{Duration, SystemTime};
 
-use saml_rs::binding::{
-    append_signature, base64_decode, base64_encode, build_redirect_octet, deflate_raw_decode,
-};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::binding::{append_signature, build_redirect_octet, deflate_raw_decode};
+use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
 use saml_rs::constants::{status_code, ParserType};
 use saml_rs::crypto::{
     construct_message_signature, construct_saml_signature, keys::load_private_key,
 };
-use saml_rs::entity::{EntitySetting, SignatureAction, SignatureConfig, User};
+use saml_rs::entity::{EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::create_logout_request;
 use saml_rs::raw::Binding;
-use saml_rs::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
 use saml_rs::xml::dom::parse;
+use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestAgePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput,
@@ -45,6 +46,7 @@ use saml_rs::{
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
+use saml_rs::{SignatureAction, SignatureConfig};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use url::Url;
 
@@ -322,13 +324,13 @@ fn authn_request_xml(
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
                 .ok_or("missing SAMLRequest")?;
-            Ok(String::from_utf8(deflate_raw_decode(&base64_decode(
-                encoded.as_ref(),
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &STANDARD.decode(encoded.as_ref())?,
+            )?)?)
         }
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(base64_decode(
-            &outbound.raw_context().context,
-        )?)?),
+        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(
+            STANDARD.decode(&outbound.raw_context().context)?,
+        )?),
         _ => Err("binding is unsupported for AuthnRequest".into()),
     }
 }
@@ -354,7 +356,7 @@ fn authn_request_input(
 fn post_authn_request_input_with_xml(xml: &str) -> BrowserInput<AuthnRequest> {
     BrowserInput::<AuthnRequest>::post(vec![FormField::new(
         "SAMLRequest",
-        base64_encode(xml.as_bytes()),
+        STANDARD.encode(xml.as_bytes()),
     )])
 }
 
@@ -380,7 +382,7 @@ fn response_xml_from_fields(fields: &[FormField]) -> Result<String, Box<dyn std:
         .find(|field| field.name() == "SAMLResponse")
         .map(FormField::value)
         .ok_or("missing SAMLResponse")?;
-    Ok(String::from_utf8(base64_decode(encoded)?)?)
+    Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
 fn response_fields_with_xml(
@@ -391,7 +393,7 @@ fn response_fields_with_xml(
         .iter_mut()
         .find(|field| field.name() == "SAMLResponse")
         .ok_or("missing SAMLResponse")?;
-    *field = FormField::new("SAMLResponse", base64_encode(xml.as_bytes()));
+    *field = FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes()));
     Ok(fields)
 }
 
@@ -1938,7 +1940,7 @@ fn finish_sso_with_response_xml(
         &exchange.pending,
         BrowserInput::<SsoResponse>::post(vec![FormField::new(
             "SAMLResponse",
-            base64_encode(xml.as_bytes()),
+            STANDARD.encode(xml.as_bytes()),
         )]),
         validation(),
     )
@@ -2093,10 +2095,10 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
         .iter_mut()
         .find(|field| field.name() == "Signature")
         .ok_or("missing Signature")?;
-    let mut signature_bytes = base64_decode(signature.value())?;
+    let mut signature_bytes = STANDARD.decode(signature.value())?;
     let first = signature_bytes.first_mut().ok_or("empty Signature")?;
     *first ^= 0x01;
-    *signature = FormField::new("Signature", base64_encode(&signature_bytes));
+    *signature = FormField::new("Signature", STANDARD.encode(&signature_bytes));
 
     match finish(tampered) {
         Err(SamlError::SignatureVerification { reason }) => {
@@ -2120,7 +2122,7 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
     )?)?;
     let octet = format!("SAMLResponse={xml}&SigAlg={RSA_SHA256}");
     let embedded_signature_corrupted = vec![
-        FormField::new("SAMLResponse", base64_encode(xml.as_bytes())),
+        FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
         FormField::new("SigAlg", RSA_SHA256),
         FormField::new(
             "Signature",

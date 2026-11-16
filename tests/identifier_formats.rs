@@ -14,16 +14,16 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
 use saml_rs::entity::iso8601_offset;
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, IdpMetadataConfig, SpMetadataConfig,
 };
 use saml_rs::raw::{Binding, LoginResponseOptions, User};
-use saml_rs::template::{
-    replace_tags_by_value, LoginResponseAttribute, LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE,
-};
+use saml_rs::template::replace_tags_by_value;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
     Attributes, AudienceValidationPolicy, AuthnRequest, BrowserInput, EntityId, FormField,
@@ -32,6 +32,7 @@ use saml_rs::{
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
     SsoSession, StartSso, Status, Subject, TemplatePolicy,
 };
+use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -111,7 +112,7 @@ fn response_xml(outbound: &Outbound<SsoResponse>) -> Result<String, Box<dyn std:
         .find(|field| field.name() == "SAMLResponse")
         .map(FormField::value)
         .ok_or("missing SAMLResponse")?;
-    Ok(String::from_utf8(base64_decode(encoded)?)?)
+    Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
 /// The start tag of the `<saml:Attribute>` whose `Name` is `name`.
@@ -390,7 +391,7 @@ fn typed_attributes_require_the_built_in_login_response_renderer(
     };
     for template in [
         LoginResponseTemplate {
-            context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.to_string()),
+            context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.to_string()),
             attributes: Vec::new(),
         },
         LoginResponseTemplate {
@@ -947,7 +948,7 @@ fn identity_provider_accepts_a_requested_identifier_that_misses_the_producer_rul
         let idp = idp()?;
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-        let xml = String::from_utf8(base64_decode(&started.outbound.raw_context().context)?)?;
+        let xml = String::from_utf8(STANDARD.decode(&started.outbound.raw_context().context)?)?;
         let policy = xml
             .find("<samlp:NameIDPolicy")
             .ok_or("missing NameIDPolicy")?;
@@ -961,7 +962,7 @@ fn identity_provider_accepts_a_requested_identifier_that_misses_the_producer_rul
             &sp_descriptor,
             BrowserInput::<AuthnRequest>::post(vec![FormField::new(
                 "SAMLRequest",
-                base64_encode(xml.as_bytes()),
+                STANDARD.encode(xml.as_bytes()),
             )]),
             validation(),
         )?;
@@ -1204,12 +1205,12 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
     raw_sp.setting.name_id_format = Vec::new();
     for template in [
         None,
-        Some(saml_rs::template::LOGIN_REQUEST_TEMPLATE.to_string()),
+        Some(saml_rs::config::LOGIN_REQUEST_TEMPLATE.to_string()),
     ] {
         raw_sp.setting.login_request_template = template;
         let context =
             raw_sp.create_login_request(idp.raw_identity_provider(), Binding::Post, None)?;
-        let xml = String::from_utf8(base64_decode(&context.context)?)?;
+        let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
         let policy = xml
             .split("<samlp:NameIDPolicy")
             .nth(1)

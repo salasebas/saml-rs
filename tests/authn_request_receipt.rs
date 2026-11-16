@@ -11,7 +11,8 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::raw::Binding;
 use saml_rs::{
@@ -92,7 +93,7 @@ fn receive(
         &sp_descriptor,
         BrowserInput::<AuthnRequest>::post(vec![FormField::new(
             "SAMLRequest",
-            base64_encode(xml.as_bytes()),
+            STANDARD.encode(xml.as_bytes()),
         )]),
         validation(),
     )?;
@@ -107,9 +108,9 @@ fn authn_request_xml(
     outbound: &Outbound<AuthnRequest>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     match outbound.raw_context().binding {
-        Binding::Post => Ok(String::from_utf8(base64_decode(
-            &outbound.raw_context().context,
-        )?)?),
+        Binding::Post => Ok(String::from_utf8(
+            STANDARD.decode(&outbound.raw_context().context)?,
+        )?),
         _ => Err("expected an HTTP-POST AuthnRequest".into()),
     }
 }
@@ -171,9 +172,9 @@ fn class_ref(uri: &str) -> String {
 fn response_xml(
     response: &Outbound<saml_rs::SsoResponse>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(String::from_utf8(base64_decode(
-        &response.raw_context().context,
-    )?)?)
+    Ok(String::from_utf8(
+        STANDARD.decode(&response.raw_context().context)?,
+    )?)
 }
 
 #[test]

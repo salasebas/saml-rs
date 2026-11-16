@@ -7,7 +7,8 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::binding::{base64_decode, base64_encode};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{construct_saml_signature, keys::load_private_key};
 use saml_rs::{
@@ -108,7 +109,7 @@ fn response_xml(fields: &[FormField]) -> TestResult<String> {
         .find(|field| field.name() == "SAMLResponse")
         .map(FormField::value)
         .ok_or("missing SAMLResponse")?;
-    Ok(String::from_utf8(base64_decode(encoded)?)?)
+    Ok(String::from_utf8(STANDARD.decode(encoded)?)?)
 }
 
 fn strip_embedded_signatures(xml: &str) -> TestResult<String> {
@@ -147,7 +148,7 @@ fn assertion_signed_with_response_issuer(exchange: &Exchange, issuer: &str) -> T
 fn accept(exchange: &Exchange, xml: &str) -> Result<SsoSession, SamlError> {
     let input = BrowserInput::<SsoResponse>::post(vec![FormField::new(
         "SAMLResponse",
-        base64_encode(xml.as_bytes()),
+        STANDARD.encode(xml.as_bytes()),
     )]);
     match &exchange.pending {
         Some(pending) => {
