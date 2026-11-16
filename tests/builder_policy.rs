@@ -571,10 +571,8 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn entity_ids_that_are_not_a_uri_of_at_most_1024_characters() -> [String; 6] {
+fn entity_ids_that_are_not_a_uri_of_at_most_1024_characters() -> [String; 4] {
     [
-        String::new(),
-        " ".into(),
         "not a uri".into(),
         "/metadata".into(),
         " https://sp.example.com/metadata\n".into(),
@@ -583,39 +581,42 @@ fn entity_ids_that_are_not_a_uri_of_at_most_1024_characters() -> [String; 6] {
 }
 
 #[test]
-fn entity_id_constructors_accept_only_a_uri_of_at_most_1024_characters(
+fn entity_id_constructors_reject_only_a_value_without_a_non_whitespace_character(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for value in entity_ids_that_are_not_a_uri_of_at_most_1024_characters() {
+    for value in ["", " ", " \t\n"] {
         assert!(
-            matches!(EntityId::try_new(value.clone()), Err(SamlError::Invalid(_))),
-            "{value}"
+            matches!(EntityId::try_new(value), Err(SamlError::Invalid(_))),
+            "{value:?}"
         );
         assert!(
-            matches!(EntityId::from_str(&value), Err(SamlError::Invalid(_))),
-            "{value}"
+            matches!(EntityId::from_str(value), Err(SamlError::Invalid(_))),
+            "{value:?}"
         );
         assert!(
-            matches!(
-                EntityId::try_from(value.as_str()),
-                Err(SamlError::Invalid(_))
-            ),
-            "{value}"
+            matches!(EntityId::try_from(value), Err(SamlError::Invalid(_))),
+            "{value:?}"
         );
         assert!(
             matches!(
-                EntityId::try_from(value.clone()),
+                EntityId::try_from(value.to_string()),
                 Err(SamlError::Invalid(_))
             ),
-            "{value}"
+            "{value:?}"
         );
     }
-    for value in [
-        "https://sp.example.com/metadata".to_string(),
-        "urn:example:sp".into(),
-        format!("https://sp.example.com/{}", "a".repeat(1001)),
-        format!("https://sp.example.com/{}", "\u{e9}".repeat(1001)),
-    ] {
+    for value in entity_ids_that_are_not_a_uri_of_at_most_1024_characters()
+        .into_iter()
+        .chain([
+            "https://sp.example.com/metadata".to_string(),
+            "urn:example:sp".into(),
+            format!("https://sp.example.com/{}", "a".repeat(1001)),
+            format!("https://sp.example.com/{}", "\u{e9}".repeat(1001)),
+        ])
+    {
         assert_eq!(EntityId::try_new(value.clone())?.as_str(), value);
+        assert_eq!(EntityId::from_str(&value)?.as_str(), value);
+        assert_eq!(EntityId::try_from(value.as_str())?.as_str(), value);
+        assert_eq!(EntityId::try_from(value.clone())?.as_str(), value);
     }
     Ok(())
 }
@@ -624,11 +625,12 @@ fn entity_id_constructors_accept_only_a_uri_of_at_most_1024_characters(
 fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_characters(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for value in entity_ids_that_are_not_a_uri_of_at_most_1024_characters() {
-        let sp = SpConfig::builder(EntityId::new(value.clone()))
+        let entity_id = EntityId::try_new(value.clone())?;
+        let sp = SpConfig::builder(entity_id.clone())
             .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
             .credentials(signing_credentials())
             .build();
-        let idp = IdpConfig::builder(EntityId::new(value.clone()))
+        let idp = IdpConfig::builder(entity_id)
             .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
             .credentials(signing_credentials())
             .build();
@@ -640,9 +642,10 @@ fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_charact
 }
 
 #[test]
-fn struct_literal_conversion_rejects_empty_entity_id() -> Result<(), Box<dyn std::error::Error>> {
+fn struct_literal_conversion_rejects_an_entity_id_that_is_not_a_uri(
+) -> Result<(), Box<dyn std::error::Error>> {
     let config = SpConfig::new(
-        EntityId::new(""),
+        EntityId::try_new("not a uri")?,
         SpMetadataConfig::new(vec![AcsEndpoint::post("https://sp.example.com/acs")?]),
     );
     let result = EntitySetting::try_from(&config);

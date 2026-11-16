@@ -66,14 +66,17 @@ fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
     let sp = service_provider(SP_ENTITY_ID, "https://sp.example.com/acs", xml)?;
     let other = service_provider(OTHER_ENTITY_ID, "https://other.example.com/acs", xml)?;
     let idp_metadata = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let sp_metadata = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let other_metadata = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(OTHER_ENTITY_ID)?,
         other.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -366,6 +369,7 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
     )?;
     assert!(!without.metadata_xml().contains("ArtifactResolutionService"));
     let peer = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         parties.sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -658,8 +662,11 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
     );
     assert_ne!(replaced, posted);
     posted = replaced;
-    let peer =
-        IdpDescriptor::from_metadata_xml(&posted, MetadataTrustPolicy::UnsignedForCompatibility)?;
+    let peer = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &posted,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
     let unsupported = parties.sp.resolve_artifact(
         &peer,
         &artifact,
@@ -968,8 +975,11 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
     let replaced = posted.replacen(RESOLUTION_URL, "urn:example:artifact", 1);
     assert_ne!(replaced, posted);
     posted = replaced;
-    let peer =
-        IdpDescriptor::from_metadata_xml(&posted, MetadataTrustPolicy::UnsignedForCompatibility)?;
+    let peer = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &posted,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    )?;
     let channel = confidential();
     let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);
     let first = parties.sp.resolve_artifact(

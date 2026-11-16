@@ -101,7 +101,7 @@ fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
-    SpDescriptor::from_metadata_xml_for(
+    SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -109,7 +109,7 @@ fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
 }
 
 fn idp_descriptor_from(metadata: &str) -> Result<IdpDescriptor, SamlError> {
-    IdpDescriptor::from_metadata_xml_for(
+    IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -349,7 +349,7 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
     let sp = sp()?;
     let idp = idp()?;
     let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
-    let sp_soap_peer = SpDescriptor::from_metadata_xml_for(
+    let sp_soap_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &sp.metadata_xml().replacen(
             "<ManageNameIDService ",

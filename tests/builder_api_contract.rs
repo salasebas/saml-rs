@@ -42,7 +42,7 @@ fn builder_entrypoints_construct_facades_without_raw_mutation(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(idp_config()?)?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,

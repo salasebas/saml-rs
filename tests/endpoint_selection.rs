@@ -59,12 +59,12 @@ fn descriptors(
     sp: &Saml<saml_rs::Sp>,
     idp: &Saml<saml_rs::Idp>,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -166,7 +166,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign",
         "urn:example:unsupported-binding",
     );
-    let unsupported_descriptor = SpDescriptor::from_metadata_xml_for(
+    let unsupported_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &unsupported_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -206,7 +206,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         let metadata = format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{SP_ENTITY_ID}">{roles}</EntityDescriptor>"#
         );
-        let descriptor = SpDescriptor::from_metadata_xml_for(
+        let descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             &metadata,
             MetadataTrustPolicy::UnsignedForCompatibility,

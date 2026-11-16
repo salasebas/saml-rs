@@ -35,7 +35,7 @@ use super::policies::XmlSignatureProfile;
 /// # fn run() -> Result<(), saml_rs::SamlError> {
 /// let cert = CertificatePem::new(load_metadata_signing_cert());
 /// let certificates = [cert];
-/// let idp = IdpDescriptor::from_metadata_xml_for(
+/// let idp = IdpDescriptor::from_metadata_xml(
 ///     EntityId::try_new("https://idp.example.com/metadata")?,
 ///     &load_metadata(),
 ///     MetadataTrustPolicy::RequireSignature {

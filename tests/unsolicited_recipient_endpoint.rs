@@ -97,11 +97,13 @@ fn accept(
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let receiver = sp(binding, ACS_A)?;
     let sender_view = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         sp(binding, sent_to)?.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let idp = idp()?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;

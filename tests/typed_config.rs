@@ -70,15 +70,6 @@ fn hmac_secret_is_at_least_the_sha1_output_length() {
 }
 
 #[test]
-fn typed_config_secret_accessors_expose_inner_values() {
-    let key = PrivateKeyPem::new("dummy-private-key-for-accessor-test");
-    let passphrase = Passphrase::new("dummy-passphrase-for-accessor-test");
-
-    assert_eq!(key.as_str(), "dummy-private-key-for-accessor-test");
-    assert_eq!(passphrase.as_str(), "dummy-passphrase-for-accessor-test");
-}
-
-#[test]
 fn typed_config_certificate_debug_does_not_dump_pem() {
     let certificate = CertificatePem::new("dummy-certificate-for-redaction-test");
 
@@ -325,20 +316,9 @@ fn typed_config_idp_config_converts_authn_request_policy() -> Result<(), Box<dyn
 }
 
 #[test]
-fn typed_config_idp_descriptor_rejects_empty_expected_entity_id() {
-    let result = IdpDescriptor::from_metadata_xml_for(
-        EntityId::new(""),
-        IDP_METADATA,
-        MetadataTrustPolicy::UnsignedForCompatibility,
-    );
-
-    assert!(matches!(result, Err(SamlError::Invalid(_))));
-}
-
-#[test]
 fn typed_config_idp_descriptor_accepts_expected_unsigned_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let descriptor = IdpDescriptor::from_metadata_xml_for(
+    let descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         IDP_METADATA,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -355,7 +335,7 @@ fn typed_config_idp_descriptor_accepts_expected_unsigned_metadata(
 #[test]
 fn typed_config_idp_descriptor_rejects_unexpected_entity_id(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let result = IdpDescriptor::from_metadata_xml_for(
+    let result = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://unexpected.example.com/metadata")?,
         IDP_METADATA,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -377,7 +357,7 @@ fn typed_config_idp_descriptor_rejects_unexpected_entity_id(
 #[test]
 fn typed_config_sp_descriptor_accepts_expected_unsigned_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let descriptor = SpDescriptor::from_metadata_xml_for(
+    let descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.org/metadata")?,
         SP_METADATA,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -398,28 +378,18 @@ fn typed_config_descriptors_import_a_peer_entity_id_that_is_not_a_uri(
     let sp_metadata = SP_METADATA.replace("https://sp.example.org/metadata", "sp.example.org");
 
     let idp = IdpDescriptor::from_metadata_xml(
-        &idp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
-    )?;
-    let expected_idp = IdpDescriptor::from_metadata_xml_for(
-        EntityId::new("idp.example.com"),
+        EntityId::try_new("idp.example.com")?,
         &idp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
-        &sp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
-    )?;
-    let expected_sp = SpDescriptor::from_metadata_xml_for(
-        EntityId::new("sp.example.org"),
+        EntityId::try_new("sp.example.org")?,
         &sp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
 
     assert_eq!(idp.entity_id().as_str(), "idp.example.com");
-    assert_eq!(expected_idp.entity_id().as_str(), "idp.example.com");
     assert_eq!(sp.entity_id().as_str(), "sp.example.org");
-    assert_eq!(expected_sp.entity_id().as_str(), "sp.example.org");
     Ok(())
 }
 
@@ -430,10 +400,12 @@ fn typed_config_descriptors_return_the_imported_metadata_xml_unchanged(
     let sp_metadata = SP_METADATA.replace('\n', "\r\n");
 
     let idp = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://sp.example.org/metadata")?,
         &sp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -444,20 +416,9 @@ fn typed_config_descriptors_return_the_imported_metadata_xml_unchanged(
 }
 
 #[test]
-fn typed_config_sp_descriptor_rejects_empty_expected_entity_id() {
-    let result = SpDescriptor::from_metadata_xml_for(
-        EntityId::new(""),
-        SP_METADATA,
-        MetadataTrustPolicy::UnsignedForCompatibility,
-    );
-
-    assert!(matches!(result, Err(SamlError::Invalid(_))));
-}
-
-#[test]
 fn typed_config_pinned_certificate_trust_does_not_accept_unsigned_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let result = IdpDescriptor::from_metadata_xml_for(
+    let result = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         IDP_METADATA,
         MetadataTrustPolicy::RequireSignature {

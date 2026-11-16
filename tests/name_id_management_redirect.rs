@@ -84,7 +84,7 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
-    SpDescriptor::from_metadata_xml_for(
+    SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -92,7 +92,7 @@ fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
 }
 
 fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> {
-    IdpDescriptor::from_metadata_xml_for(
+    IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -911,7 +911,7 @@ fn request_must_name_one_identifier_and_one_change() -> TestResult {
 fn http_name_identifier_management_endpoint_needs_an_explicit_relaxation() -> TestResult {
     const HTTP_SP_METADATA: &str = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://sp.example.com/metadata"><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><ManageNameIDService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://sp.example.com/manage-name-id"/><AssertionConsumerService index="0" Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/acs"/></SPSSODescriptor></EntityDescriptor>"#;
     let idp = idp()?;
-    let sp_peer = SpDescriptor::from_metadata_xml_for(
+    let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         HTTP_SP_METADATA,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -1042,7 +1042,7 @@ fn request_goes_to_the_service_provider_role_of_a_dual_role_peer() -> TestResult
         manage = SP_MANAGE,
         acs = SP_ACS,
     );
-    let sp_peer = SpDescriptor::from_metadata_xml_for(
+    let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &dual_role,
         MetadataTrustPolicy::UnsignedForCompatibility,

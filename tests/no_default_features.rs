@@ -103,12 +103,12 @@ fn typed_protocol_facades() -> Result<
 > {
     let sp = Saml::sp(typed_sp_config()?)?;
     let idp = Saml::idp(typed_idp_config()?)?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -145,7 +145,7 @@ fn unsigned_metadata_parsing_and_xml_extraction_still_work(
 fn typed_metadata_descriptors_parse_unsigned_metadata_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp_metadata_xml = idp(false)?.metadata_xml().to_string();
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_metadata_xml,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -156,7 +156,7 @@ fn typed_metadata_descriptors_parse_unsigned_metadata_without_default_crypto(
     );
 
     let sp_metadata_xml = sp(false)?.metadata_xml().to_string();
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         &sp_metadata_xml,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -174,7 +174,7 @@ fn typed_metadata_require_signature_is_unsupported_without_default_crypto(
     let idp_metadata_xml = idp(false)?.metadata_xml().to_string();
     let cert = CertificatePem::new("placeholder");
 
-    assert_unsupported(IdpDescriptor::from_metadata_xml_for(
+    assert_unsupported(IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_metadata_xml,
         MetadataTrustPolicy::RequireSignature {

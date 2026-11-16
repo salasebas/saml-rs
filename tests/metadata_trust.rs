@@ -89,7 +89,7 @@ fn trust_allowing_weak_algorithms<'a>(
 }
 
 fn import_idp(xml: &str, policy: MetadataTrustPolicy<'_>) -> Result<IdpDescriptor, SamlError> {
-    IdpDescriptor::from_metadata_xml_for(
+    IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         xml,
         policy,
@@ -174,7 +174,7 @@ fn metadata_trust_accepts_signed_idp_descriptor_with_pinned_certificate(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);
     let signed = sign_root_metadata(idp_metadata_xml())?;
-    let descriptor = IdpDescriptor::from_metadata_xml_for(
+    let descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &signed,
         trust(std::slice::from_ref(&cert)),
@@ -192,7 +192,7 @@ fn metadata_trust_accepts_signed_sp_descriptor_with_pinned_certificate(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);
     let signed = sign_root_metadata(sp_metadata_xml())?;
-    let descriptor = SpDescriptor::from_metadata_xml_for(
+    let descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         &signed,
         trust(std::slice::from_ref(&cert)),
@@ -209,7 +209,7 @@ fn metadata_trust_accepts_signed_sp_descriptor_with_pinned_certificate(
 fn metadata_trust_rejects_unsigned_metadata_when_signature_required(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cert = CertificatePem::new(CERT);
-    match IdpDescriptor::from_metadata_xml_for(
+    match IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         idp_metadata_xml(),
         trust(std::slice::from_ref(&cert)),
@@ -228,7 +228,11 @@ fn metadata_trust_rejects_signature_without_descriptor_coverage(
     let cert = CertificatePem::new(CERT);
     let wrapped = signed_child_metadata()?;
 
-    match IdpDescriptor::from_metadata_xml(&wrapped, trust(std::slice::from_ref(&cert))) {
+    match IdpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://evil.example.com/metadata")?,
+        &wrapped,
+        trust(std::slice::from_ref(&cert)),
+    ) {
         Err(SamlError::SignedReferenceMismatch) => Ok(()),
         other => Err(format!("expected SignedReferenceMismatch, got {other:?}").into()),
     }
@@ -557,7 +561,11 @@ fn entities_descriptor_import_rejects_two_entities() -> Result<(), Box<dyn std::
         r#"<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"><EntityDescriptor entityID="https://idp.example.com/metadata">{role}</EntityDescriptor><EntityDescriptor entityID="https://other.example.com/metadata">{role}</EntityDescriptor></EntitiesDescriptor>"#,
         role = idp_role(),
     );
-    match IdpDescriptor::from_metadata_xml(&xml, MetadataTrustPolicy::UnsignedForCompatibility) {
+    match IdpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        &xml,
+        MetadataTrustPolicy::UnsignedForCompatibility,
+    ) {
         Err(SamlError::Xml(message))
             if message.contains("ERR_MULTIPLE_METADATA_ENTITYDESCRIPTOR") =>
         {
@@ -573,7 +581,7 @@ fn entities_descriptor_import_rejects_two_entities() -> Result<(), Box<dyn std::
 fn unsigned_for_compatibility_does_not_record_a_signature_as_verified(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signed = sign_root_metadata(idp_metadata_xml())?;
-    let descriptor = IdpDescriptor::from_metadata_xml_for(
+    let descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &signed,
         MetadataTrustPolicy::UnsignedForCompatibility,

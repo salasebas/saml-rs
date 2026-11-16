@@ -14,7 +14,7 @@ integration are in
 ```rust
 let sp_saml = Saml::sp(sp_config)?;
 let idp_descriptor =
-    IdpDescriptor::from_metadata_xml_for(expected_idp_entity_id, idp_metadata_xml, trust)?;
+    IdpDescriptor::from_metadata_xml(expected_idp_entity_id, idp_metadata_xml, trust)?;
 
 let started = sp_saml.start_sso(
     &idp_descriptor,
@@ -148,7 +148,7 @@ Rules:
 ```rust
 let idp_saml = Saml::idp(idp_config)?;
 let sp_descriptor =
-    SpDescriptor::from_metadata_xml_for(expected_sp_entity_id, sp_metadata_xml, trust)?;
+    SpDescriptor::from_metadata_xml(expected_sp_entity_id, sp_metadata_xml, trust)?;
 
 let request = idp_saml.receive_sso(
     &sp_descriptor,

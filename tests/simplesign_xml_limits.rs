@@ -82,12 +82,12 @@ fn parties() -> TestResult<Parties> {
             .xml(raised_xml_policy())
             .build()?,
     )?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,

@@ -64,7 +64,7 @@ use saml_rs::{
 
 let sp_saml: Saml<Sp> = Saml::sp(sp_config)?;
 
-let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+let idp_descriptor = IdpDescriptor::from_metadata_xml(
     expected_idp_entity_id,
     idp_metadata_xml,
     MetadataTrustPolicy::RequireSignature {

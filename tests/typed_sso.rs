@@ -282,12 +282,12 @@ fn descriptors(
     sp: &Saml<saml_rs::Sp>,
     idp: &Saml<saml_rs::Idp>,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -458,12 +458,12 @@ fn start_receive_respond() -> Result<SsoExchange, SamlError> {
 fn typed_builder_authn_request_escapes_hostile_values_for_all_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = hostile_facades()?;
-    let sp_descriptor = SpDescriptor::from_metadata_xml_for(
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(HOSTILE_SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -597,7 +597,7 @@ fn typed_facade_honors_custom_acs_index_from_metadata() -> Result<(), Box<dyn st
             .build()?,
     )?;
     let idp = Saml::idp(idp_config()?)?;
-    let idp_descriptor = IdpDescriptor::from_metadata_xml_for(
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -1596,10 +1596,12 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         .replace(IDP_ENTITY_ID, PEER_IDP_ENTITY_ID);
     let peer_sp_metadata = sp.metadata_xml().replace(SP_ENTITY_ID, PEER_SP_ENTITY_ID);
     let peer_idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(PEER_IDP_ENTITY_ID)?,
         &peer_idp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let peer_sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(PEER_SP_ENTITY_ID)?,
         &peer_sp_metadata,
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -1672,6 +1674,7 @@ fn typed_facade_rejects_pending_peer_mismatch() -> Result<(), Box<dyn std::error
             .build()?,
     )?;
     let other_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://other-idp.example.com/metadata")?,
         other_idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -1706,6 +1709,7 @@ fn typed_facade_rejects_response_with_wrong_sp_descriptor() -> Result<(), Box<dy
             .build()?,
     )?;
     let other_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://other-sp.example.com/metadata")?,
         other_sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -2503,7 +2507,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
     }
 
     let empty: [CertificatePem; 0] = [];
-    match IdpDescriptor::from_metadata_xml_for(
+    match IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &signed,
         MetadataTrustPolicy::RequireSignature {
@@ -2520,7 +2524,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
     }
 
     let pinned = [CertificatePem::new(CERT)];
-    let verified = IdpDescriptor::from_metadata_xml_for(
+    let verified = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &signed,
         MetadataTrustPolicy::RequireSignature {
@@ -2531,7 +2535,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
     let started = sp.start_sso(&verified, StartSso::post())?;
     assert!(!started.outbound.id().as_str().is_empty());
 
-    let unverified = IdpDescriptor::from_metadata_xml_for(
+    let unverified = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &signed,
         MetadataTrustPolicy::UnsignedForCompatibility,

@@ -85,7 +85,7 @@ fn sp_receiver() -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn shibboleth_idp_descriptor() -> Result<IdpDescriptor, SamlError> {
-    IdpDescriptor::from_metadata_xml_for(
+    IdpDescriptor::from_metadata_xml(
         EntityId::try_new(SHIBBOLETH_IDP_ENTITY_ID)?,
         SHIBBOLETH_METADATA,
         MetadataTrustPolicy::UnsignedForCompatibility,
@@ -105,7 +105,7 @@ fn idp_receiver() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 fn simplesamlphp_sp_descriptor() -> Result<SpDescriptor, SamlError> {
-    SpDescriptor::from_metadata_xml_for(
+    SpDescriptor::from_metadata_xml(
         EntityId::try_new(SIMPLESAMLPHP_SP_ENTITY_ID)?,
         SIMPLESAMLPHP_METADATA,
         MetadataTrustPolicy::UnsignedForCompatibility,

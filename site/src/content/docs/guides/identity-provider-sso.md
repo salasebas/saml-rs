@@ -21,7 +21,7 @@ let idp = Saml::idp(
         .build()?,
 )?;
 
-let sp = SpDescriptor::from_metadata_xml_for(
+let sp = SpDescriptor::from_metadata_xml(
     EntityId::try_new("https://sp.example.com/metadata")?,
     sp_metadata_xml,
     MetadataTrustPolicy::RequireSignature {

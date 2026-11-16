@@ -100,10 +100,12 @@ fn parties_with_consumers(
             .build()?,
     )?;
     let idp_metadata = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
     let sp_metadata = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -764,6 +766,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
             .build()?,
     )?;
     let other_metadata = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://other-idp.example.com/metadata")?,
         other.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -889,6 +892,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
             .build()?,
     )?;
     let sp_metadata = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
         MetadataTrustPolicy::UnsignedForCompatibility,
     )?;
@@ -1041,10 +1045,12 @@ fn encrypted_assertion_parties(
     )?;
     Ok(Parties {
         idp_metadata: IdpDescriptor::from_metadata_xml(
+            EntityId::try_new(IDP_ENTITY_ID)?,
             idp.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
         )?,
         sp_metadata: SpDescriptor::from_metadata_xml(
+            EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
             MetadataTrustPolicy::UnsignedForCompatibility,
         )?,
