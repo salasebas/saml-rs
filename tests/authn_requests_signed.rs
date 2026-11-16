@@ -10,7 +10,6 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use saml_rs::xml::dom::parse;
 use saml_rs::{
     AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, BrowserInput, EntityId, IdpConfig,
     IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, Outbound, PaosAuthnRequest,
@@ -90,21 +89,17 @@ fn redirect_input(
 }
 
 fn envelope_for_idp(sp_soap: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let document = parse(sp_soap)?;
+    let document = roxmltree::Document::parse(sp_soap)?;
     let authn = document
-        .root
-        .children
-        .iter()
-        .find(|node| node.local_name == "Body")
+        .root_element()
+        .children()
+        .find(|node| node.has_tag_name("Body"))
         .and_then(|body| {
-            body.children
-                .iter()
-                .find(|node| node.local_name == "AuthnRequest")
+            body.children()
+                .find(|node| node.has_tag_name("AuthnRequest"))
         })
         .ok_or("AuthnRequest missing from the SOAP body")?;
-    let authn = sp_soap
-        .get(authn.start..authn.end)
-        .ok_or("element offsets")?;
+    let authn = sp_soap.get(authn.range()).ok_or("element offsets")?;
     Ok(format!(
         "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"{SOAP_NS}\"><SOAP-ENV:Body>{authn}</SOAP-ENV:Body></SOAP-ENV:Envelope>"
     ))

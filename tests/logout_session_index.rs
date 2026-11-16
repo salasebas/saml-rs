@@ -8,7 +8,6 @@ use saml_rs::logout::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
 };
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::xml::dom::parse;
 use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 
 fn idp() -> Result<IdentityProvider, SamlError> {
@@ -195,7 +194,9 @@ fn public_raw_logout_request_preserves_unrecognized_expiration_placeholder(
     let xml = decode_logout_request(Binding::Post, &context.context)?;
 
     assert_eq!(
-        parse(&xml)?.root.attr("NotOnOrAfter"),
+        roxmltree::Document::parse(&xml)?
+            .root_element()
+            .attribute("NotOnOrAfter"),
         Some("{NotOnOrAfter}")
     );
     Ok(())

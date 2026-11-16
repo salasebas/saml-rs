@@ -831,7 +831,7 @@ fn a_release_that_cannot_be_built_leaves_the_artifact_outstanding(
         r#"<samlp:Response xmlns:samlp="{PROTOCOL}" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">"#
     );
     let suffix = "</samlp:Response>";
-    let limit = saml_rs::xml::dom::DEFAULT_XML_MAX_BYTES;
+    let limit = XmlLimits::default().max_bytes;
     let text_len = limit
         .checked_sub(prefix.len() + suffix.len() + 256)
         .ok_or("XML byte limit is smaller than the response shell")?;
