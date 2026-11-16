@@ -14,7 +14,14 @@ fn crypto_err(err: impl std::fmt::Display) -> SamlError {
 
 /// Load a private key from PEM using the formats supported by the selected
 /// crypto provider.
+#[deprecated(
+    note = "`saml_rs::crypto` becomes crate-private in the next minor release; typed configs take the key as `PrivateKeyPem`. To load a key for other use, call `initialize_crypto_provider` and `bergshamra::keys::loader::load_pem_auto`"
+)]
 pub fn load_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
+    read_private_key(pem, password)
+}
+
+pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     load_pem_auto(pem.as_bytes(), password).map_err(crypto_err)
 }
@@ -26,9 +33,9 @@ pub(crate) fn load_decryption_keys(
     password: Option<&str>,
     additional: &[DecryptionCredential],
 ) -> Result<Vec<Key>, SamlError> {
-    std::iter::once(load_private_key(pem, password))
+    std::iter::once(read_private_key(pem, password))
         .chain(additional.iter().map(|credential| {
-            load_private_key(
+            read_private_key(
                 credential.key.as_str(),
                 credential
                     .passphrase
@@ -99,7 +106,7 @@ mod tests {
 
     #[test]
     fn loads_unencrypted_private_key() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY, None)?;
+        let key = read_private_key(SP_PRIVKEY, None)?;
         assert!(key.has_private_key());
         assert_eq!(key.algorithm_name(), "RSA");
         Ok(())
@@ -128,7 +135,7 @@ mod tests {
     #[test]
     #[cfg(feature = "crypto-rustcrypto")]
     fn loads_encrypted_private_key_with_passphrase() -> Result<(), Box<dyn std::error::Error>> {
-        let key = load_private_key(SP_PRIVKEY_ENC, Some(SP_PASS))?;
+        let key = read_private_key(SP_PRIVKEY_ENC, Some(SP_PASS))?;
         assert!(key.has_private_key());
         Ok(())
     }
@@ -139,7 +146,7 @@ mod tests {
         not(feature = "crypto-rustcrypto")
     ))]
     fn rejects_encrypted_private_key_when_provider_does_not_support_it() {
-        assert!(load_private_key(SP_PRIVKEY_ENC, Some("unused")).is_err());
+        assert!(read_private_key(SP_PRIVKEY_ENC, Some("unused")).is_err());
     }
 
     #[test]

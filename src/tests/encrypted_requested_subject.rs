@@ -14,8 +14,8 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use bergshamra::{encrypt, EncContext, KeysManager};
 use saml_rs::crypto::{
-    construct_saml_signature,
-    keys::{load_certificate, load_private_key},
+    keys::{load_certificate, read_private_key},
+    sign_saml_xml,
 };
 use saml_rs::raw::Binding;
 use saml_rs::{
@@ -152,10 +152,10 @@ fn received_by(
         &xml[position..]
     );
     let xml = match signing {
-        Signing::Signed => construct_saml_signature(
+        Signing::Signed => sign_saml_xml(
             &xml,
             true,
-            &load_private_key(PRIVKEY, None)?,
+            &read_private_key(PRIVKEY, None)?,
             CERT,
             RSA_SHA256,
             &[],

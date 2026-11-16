@@ -38,8 +38,8 @@ fn verifies_signed_response_with_metadata_cert() -> Result<(), Box<dyn std::erro
 
 #[test]
 fn verifies_generated_same_document_signature() -> Result<(), Box<dyn std::error::Error>> {
-    let key = load_private_key(SP_PRIVKEY, None)?;
-    let signed = construct_saml_signature(
+    let key = read_private_key(SP_PRIVKEY, None)?;
+    let signed = sign_saml_xml(
         RESPONSE,
         false,
         &key,
@@ -143,8 +143,8 @@ fn substring_and_foreign_namespace_roots_skip_response_wrapping(
 }
 
 fn sign_message_root(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let key = load_private_key(SP_PRIVKEY, None)?;
-    Ok(construct_saml_signature(
+    let key = read_private_key(SP_PRIVKEY, None)?;
+    Ok(sign_saml_xml(
         xml,
         true,
         &key,
@@ -234,8 +234,8 @@ fn logout_and_artifact_responses_keep_signature_coverage() -> Result<(), Box<dyn
 #[test]
 fn detailed_verification_aggregates_rolling_cert_coverage_after_first_signature_verifies(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let assertion_key = load_private_key(UNTRUSTED_PRIVKEY, None)?;
-    let signed_assertion = construct_saml_signature(
+    let assertion_key = read_private_key(UNTRUSTED_PRIVKEY, None)?;
+    let signed_assertion = sign_saml_xml(
         RESPONSE,
         false,
         &assertion_key,
@@ -244,8 +244,8 @@ fn detailed_verification_aggregates_rolling_cert_coverage_after_first_signature_
         &[],
         None,
     )?;
-    let response_key = load_private_key(SP_PRIVKEY, None)?;
-    let signed_response_and_assertion = construct_saml_signature(
+    let response_key = read_private_key(SP_PRIVKEY, None)?;
+    let signed_response_and_assertion = sign_saml_xml(
         &signed_assertion,
         true,
         &response_key,

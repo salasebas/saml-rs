@@ -381,7 +381,7 @@ mod tests {
             .map(|(_, value)| value.into_owned())
             .ok_or("missing encoded request")?;
         let inflated = String::from_utf8(deflate_raw_decode(&decode_base64(&encoded)?)?)?;
-        crate::xml::dom::parse(&inflated)?;
+        crate::xml::dom::parse_document(&inflated, crate::XmlLimits::default())?;
         assert!(!inflated.contains("protocol-signature"));
         assert!(inflated.contains("assertion-signature"));
         Ok(())

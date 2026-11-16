@@ -50,7 +50,7 @@ pub(crate) fn accept_response_assertions(
     expected_recipient: Option<&str>,
 ) -> Result<(), SamlError> {
     reject_unrecognized_conditions(response_xml, opts.xml_limits)?;
-    let document = dom::parse_with_limits(response_xml, opts.xml_limits)?;
+    let document = dom::parse_document(response_xml, opts.xml_limits)?;
     let assertions = direct_assertions(&document.root);
     if assertions.is_empty() {
         return Err(SamlError::Xml("ERR_EMPTY_ASSERTION".into()));
@@ -124,7 +124,7 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
     limits: XmlLimits,
     rule: UnsolicitedInResponseTo,
 ) -> Result<(), SamlError> {
-    let document = dom::parse_with_limits(response_xml, limits)?;
+    let document = dom::parse_document(response_xml, limits)?;
     for assertion in direct_assertions(&document.root) {
         for confirmation in subject_confirmations(assertion) {
             let is_bearer = confirmation.attr("Method") == Some(BEARER_SUBJECT_CONFIRMATION_METHOD);
@@ -150,7 +150,7 @@ pub(crate) fn first_login_assertion_xml(
     xml: &str,
     limits: XmlLimits,
 ) -> Result<Option<String>, SamlError> {
-    let document = dom::parse_with_limits(xml, limits)?;
+    let document = dom::parse_document(xml, limits)?;
     Ok(consumed_assertion(&document.root).map(|chosen| xml[chosen.start..chosen.end].to_string()))
 }
 

@@ -27,9 +27,7 @@ pub use backend::XmlSecurityBackend;
 #[cfg(crypto)]
 pub use bergshamra::BergshamraBackend;
 #[cfg(crypto)]
-pub use enc::{
-    decrypt_assertion, decrypt_assertion_with_limits, encrypt_assertion, AssertionDecryptionOptions,
-};
+pub use enc::*;
 #[cfg(crypto)]
 pub use provider::{
     crypto_provider_info, initialize_crypto_provider, CryptoFipsStatus, CryptoProvider,
@@ -38,7 +36,7 @@ pub use provider::{
 #[cfg(crypto)]
 pub(crate) use sign::SigningCredential;
 #[cfg(crypto)]
-pub use sign::{construct_message_signature, construct_saml_signature, verify_message_signature};
+pub use sign::*;
 #[cfg(crypto)]
 pub use verify::{
     verify_metadata_signature, verify_metadata_signature_detailed,

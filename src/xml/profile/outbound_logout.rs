@@ -6,7 +6,7 @@ use super::{
 use crate::constants::{namespace, status_code};
 use crate::error::SamlError;
 use crate::xml::any_uri::is_absolute_uri_reference;
-use crate::xml::dom::{parse_with_limits, Document, XmlLimits};
+use crate::xml::dom::{parse_document, Document, XmlLimits};
 use crate::xml::name::is_ncname;
 use crate::xml::parse_generated_saml_utc_date_time;
 use quick_xml::events::BytesStart;
@@ -438,7 +438,7 @@ pub(crate) fn validate_logout_response_outbound(
     expected_in_response_to: Option<&str>,
     validation: OutboundLogoutValidation,
 ) -> Result<Document, SamlError> {
-    let document = parse_with_limits(xml, XmlLimits::unbounded())?;
+    let document = parse_document(xml, XmlLimits::unbounded())?;
     let expectation = OutboundLogoutExpectation {
         id: expected_id,
         destination: expected_destination,

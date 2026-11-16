@@ -19,7 +19,7 @@ pub(crate) fn require_one_assertion_unless_message_authenticated(
     if message_authenticated {
         return Ok(());
     }
-    let document = crate::xml::dom::parse_with_limits(saml_content, limits)?;
+    let document = crate::xml::dom::parse_document(saml_content, limits)?;
     let assertions = document
         .root
         .children
@@ -107,7 +107,7 @@ fn direct_assertion_position(
     let start = response
         .find(assertion)
         .ok_or(SamlError::SignedReferenceMismatch)?;
-    let document = crate::xml::dom::parse_with_limits(response, limits)?;
+    let document = crate::xml::dom::parse_document(response, limits)?;
     let position = direct_assertions(&document.root).position(|node| node.start == start);
     position.ok_or(SamlError::SignedReferenceMismatch)
 }
@@ -118,7 +118,7 @@ fn direct_assertion(
     position: usize,
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
-    let document = crate::xml::dom::parse_with_limits(response, limits)?;
+    let document = crate::xml::dom::parse_document(response, limits)?;
     let node = direct_assertions(&document.root)
         .nth(position)
         .ok_or(SamlError::SignedReferenceMismatch)?;
