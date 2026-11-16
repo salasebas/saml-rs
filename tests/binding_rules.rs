@@ -417,7 +417,7 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
     )?;
     let url = started.outbound.redirect_url()?.to_string();
     let xml = redirect_xml(&url)?;
-    saml_rs::xml::dom::parse(&xml)?;
+    roxmltree::Document::parse(&xml)?;
     if xml.contains("protocol-signature") || !xml.contains("assertion-signature") {
         return Err(
             "HTTP-Redirect must drop the protocol signature and keep an assertion signature".into(),

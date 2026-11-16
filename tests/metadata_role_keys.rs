@@ -216,24 +216,22 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
         let idp = Saml::idp(idp_config.clone())?;
 
         for metadata in [sp.metadata_xml(), idp.metadata_xml()] {
-            let document = saml_rs::xml::dom::parse(metadata)?;
+            let document = roxmltree::Document::parse(metadata)?;
             let descriptors: Vec<_> = document
-                .root
-                .children
-                .iter()
-                .flat_map(|role| &role.children)
-                .filter(|node| node.local_name == "KeyDescriptor")
+                .root_element()
+                .children()
+                .flat_map(|role| role.children())
+                .filter(|node| node.has_tag_name("KeyDescriptor"))
                 .collect();
             assert_eq!(descriptors.len(), 2);
             for (descriptor, expected) in descriptors.iter().zip([current, overlap]) {
-                assert_eq!(descriptor.attr("use"), Some("signing"));
+                assert_eq!(descriptor.attribute("use"), Some("signing"));
                 let certificates: Vec<_> = descriptor
-                    .children
-                    .iter()
-                    .flat_map(|key_info| &key_info.children)
-                    .flat_map(|x509_data| &x509_data.children)
-                    .filter(|node| node.local_name == "X509Certificate")
-                    .map(|node| node.text.as_str())
+                    .children()
+                    .flat_map(|key_info| key_info.children())
+                    .flat_map(|x509_data| x509_data.children())
+                    .filter(|node| node.has_tag_name("X509Certificate"))
+                    .map(|node| node.text().unwrap_or_default())
                     .collect();
                 assert_eq!(certificates, [normalize_cert_string(expected)]);
             }

@@ -10,8 +10,8 @@ mod authn_context;
 
 use std::time::{Duration, SystemTime};
 
+use roxmltree::{Document, Node};
 use saml_rs::constants::{status_code::AUTH_FAILED, transform_algorithm};
-use saml_rs::xml::dom::{parse, Node};
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, Attribute, AttributeNameFormat, AttributeValue, Attributes,
     AuthnContextReference, EndpointUrl, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor,
@@ -97,23 +97,19 @@ fn subject() -> Subject {
 fn enhanced_client_takes_authn_request(
     sp_soap: &str,
 ) -> Result<(EnhancedClient, String), Box<dyn std::error::Error>> {
-    let document = parse(sp_soap)?;
-    let header = child(&document.root, "Header").ok_or("SOAP header missing")?;
+    let document = Document::parse(sp_soap)?;
+    let header = child(document.root_element(), "Header").ok_or("SOAP header missing")?;
     let paos_request = header
-        .children
-        .iter()
-        .find(|node| node.attr("responseConsumerURL").is_some())
+        .children()
+        .find(|node| node.attribute("responseConsumerURL").is_some())
         .ok_or("paos:Request missing")?;
     let response_consumer_url = paos_request
-        .attr("responseConsumerURL")
+        .attribute("responseConsumerURL")
         .ok_or("responseConsumerURL missing")?
         .to_string();
-    let relay_state = header
-        .children
-        .iter()
-        .find(|node| node.local_name == "RelayState")
-        .map(|node| node.text.clone());
-    let authn = body_element(sp_soap, &document.root, "AuthnRequest")?;
+    let relay_state =
+        child(header, "RelayState").map(|node| node.text().unwrap_or_default().to_string());
+    let authn = body_element(sp_soap, document.root_element(), "AuthnRequest")?;
     let forwarded = soap_envelope("", &authn);
     Ok((
         EnhancedClient {
@@ -128,20 +124,19 @@ fn enhanced_client_takes_response(
     client: &EnhancedClient,
     idp_soap: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let document = parse(idp_soap)?;
-    let header = child(&document.root, "Header").ok_or("SOAP header missing")?;
+    let document = Document::parse(idp_soap)?;
+    let header = child(document.root_element(), "Header").ok_or("SOAP header missing")?;
     let ecp_response = header
-        .children
-        .iter()
-        .find(|node| node.attr("AssertionConsumerServiceURL").is_some())
+        .children()
+        .find(|node| node.attribute("AssertionConsumerServiceURL").is_some())
         .ok_or("ecp:Response missing")?;
     let assertion_consumer = ecp_response
-        .attr("AssertionConsumerServiceURL")
+        .attribute("AssertionConsumerServiceURL")
         .ok_or("AssertionConsumerServiceURL missing")?;
     if assertion_consumer != client.response_consumer_url {
         return Err("assertion consumer does not match responseConsumerURL".into());
     }
-    let response = body_element(idp_soap, &document.root, "Response")?;
+    let response = body_element(idp_soap, document.root_element(), "Response")?;
     let relay = client
         .relay_state
         .as_ref()
@@ -164,23 +159,17 @@ fn relay_state_header(value: &str) -> String {
 
 fn body_element(
     xml: &str,
-    envelope: &Node,
+    envelope: Node,
     name: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let body = child(envelope, "Body").ok_or("SOAP body missing")?;
-    let element = body
-        .children
-        .iter()
-        .find(|node| node.local_name == name)
-        .ok_or(name)?;
-    let slice = xml
-        .get(element.start..element.end)
-        .ok_or("element offsets")?;
+    let element = child(body, name).ok_or(name)?;
+    let slice = xml.get(element.range()).ok_or("element offsets")?;
     Ok(slice.to_string())
 }
 
-fn child<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-    node.children.iter().find(|child| child.local_name == name)
+fn child<'a, 'input>(node: Node<'a, 'input>, name: &str) -> Option<Node<'a, 'input>> {
+    node.children().find(|child| child.has_tag_name(name))
 }
 
 #[test]
@@ -230,8 +219,8 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
         |header| header.name() == "Content-Type" && header.value() == "text/xml; charset=utf-8"
     ));
 
-    let document = parse(answered.envelope())?;
-    let mut transforms = &document.root;
+    let document = Document::parse(answered.envelope())?;
+    let mut transforms = document.root_element();
     for name in [
         "Body",
         "Response",
@@ -244,9 +233,9 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
     }
     assert_eq!(
         transforms
-            .children
-            .iter()
-            .map(|transform| transform.attr("Algorithm"))
+            .children()
+            .filter(|transform| transform.is_element())
+            .map(|transform| transform.attribute("Algorithm"))
             .collect::<Vec<_>>(),
         [
             Some(transform_algorithm::ENVELOPED_SIGNATURE),
@@ -843,8 +832,8 @@ fn overlong_relay_state_in_response_is_rejected() -> Result<(), Box<dyn std::err
         subject(),
         RespondPaosSso::default(),
     )?;
-    let document = parse(answered.envelope())?;
-    let response = body_element(answered.envelope(), &document.root, "Response")?;
+    let document = Document::parse(answered.envelope())?;
+    let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let long = "r".repeat(81);
     let sp_request = soap_envelope(&relay_state_header(&long), &response);
     let error = match sp.finish_paos_sso(
@@ -1253,8 +1242,8 @@ fn identity_provider_refuses_a_header_it_must_understand_and_does_not_process(
         StartPaosSso::to_soap_endpoint(IDP_SOAP)?,
     )?;
     let sp_soap = started.http_response.envelope();
-    let document = parse(sp_soap)?;
-    let authn = body_element(sp_soap, &document.root, "AuthnRequest")?;
+    let document = Document::parse(sp_soap)?;
+    let authn = body_element(sp_soap, document.root_element(), "AuthnRequest")?;
     let idp_request = soap_envelope(WSSE_SECURITY_HEADER, &authn);
     let error = match idp.receive_paos_sso(
         &sp_descriptor,
@@ -1289,8 +1278,8 @@ fn service_provider_refuses_a_header_it_must_understand_and_does_not_process(
         subject(),
         RespondPaosSso::default(),
     )?;
-    let document = parse(answered.envelope())?;
-    let response = body_element(answered.envelope(), &document.root, "Response")?;
+    let document = Document::parse(answered.envelope())?;
+    let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let sp_request = soap_envelope(WSSE_SECURITY_HEADER, &response);
     let error = match sp.finish_paos_sso(
         &idp_descriptor,
@@ -1327,8 +1316,8 @@ fn service_provider_processes_relay_state_and_paos_response_headers(
         subject(),
         RespondPaosSso::default(),
     )?;
-    let document = parse(answered.envelope())?;
-    let response = body_element(answered.envelope(), &document.root, "Response")?;
+    let document = Document::parse(answered.envelope())?;
+    let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let paos_response = "<paos:Response xmlns:paos=\"urn:liberty:paos:2003-08\" SOAP-ENV:mustUnderstand=\"1\" SOAP-ENV:actor=\"http://schemas.xmlsoap.org/soap/actor/next\"/>";
     let headers = format!("{paos_response}{}", relay_state_header("state"));
     let session = sp.finish_paos_sso(
