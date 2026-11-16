@@ -1,6 +1,7 @@
 //! Production-hardening tests: Audience restriction and InResponseTo / anti-replay.
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
+#![allow(deprecated)]
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;

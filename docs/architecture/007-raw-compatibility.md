@@ -4,8 +4,8 @@
 > [the module map](../module-map.md). A heading that says Proposed, Target,
 > or Today describes this design.
 
-The typed API is additive. The current flow API remains available because
-removing it would strand integrations that still need direct XML.
+The typed API is additive. The raw API is deprecated, and the next minor
+release removes it. This record describes why it stayed until then.
 
 ## Why raw stays
 
@@ -34,7 +34,8 @@ pub mod raw {
 
 ## Current Raw Flow
 
-This remains supported:
+This flow is deprecated, and each raw message function warns with its typed
+replacement. The minor release after the deprecation removes it:
 
 ```rust
 use saml_rs::raw::{

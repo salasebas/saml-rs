@@ -154,6 +154,9 @@ impl LogoutReceipt {
 /// therefore does not compare `Destination`. Callers that operate an endpoint
 /// directly own that check. Prefer [`crate::Saml`] for a binding-aware typed
 /// SLO receiver.
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::receive_slo` or `Saml::<Idp>::receive_slo`"
+)]
 pub fn parse_logout_request(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
@@ -297,6 +300,9 @@ fn parse_logout_response_inner(
 /// therefore does not compare `Destination`. Callers that operate an endpoint
 /// directly own that check. Prefer [`crate::Saml`] for a binding-aware typed
 /// SLO receiver.
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::finish_slo` or `Saml::<Idp>::finish_slo`"
+)]
 pub fn parse_logout_response(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
@@ -359,6 +365,9 @@ pub(crate) fn parse_logout_response_at(
 /// certificates, invalid detached signatures, RelayState/signed-octet
 /// correlation failures, and XML signature validation errors. This function
 /// deliberately does not enforce `InResponseTo` correlation.
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::finish_slo` or `Saml::<Idp>::finish_slo`"
+)]
 pub fn parse_logout_response_without_request_id(
     self_setting: &EntitySetting,
     from_meta: &Metadata,

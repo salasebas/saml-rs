@@ -556,6 +556,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
 }
 
 #[test]
+#[allow(deprecated)]
 fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use base64::engine::general_purpose::STANDARD;

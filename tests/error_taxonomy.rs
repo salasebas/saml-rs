@@ -140,6 +140,7 @@ fn response_xml(template: &str, shape: &ResponseShape) -> String {
     )
 }
 
+#[allow(deprecated)]
 fn signed_response(shape: &ResponseShape) -> Result<String, SamlError> {
     let idp = idp()?;
     let sp = sp()?;
@@ -161,6 +162,7 @@ fn signed_response(shape: &ResponseShape) -> Result<String, SamlError> {
         .context)
 }
 
+#[allow(deprecated)]
 fn parse_response(response: String, request_id: &str) -> Result<(), SamlError> {
     let sp = sp()?;
     let idp = idp()?;
@@ -169,6 +171,7 @@ fn parse_response(response: String, request_id: &str) -> Result<(), SamlError> {
     Ok(())
 }
 
+#[allow(deprecated)]
 fn parse_raw_response(response: String, request_id: &str) -> Result<(), SamlError> {
     let sp = sp()?;
     let idp = idp()?;

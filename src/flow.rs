@@ -43,6 +43,9 @@ pub struct HttpRequest {
 
 impl HttpRequest {
     /// HTTP-Redirect request from query pairs.
+    #[deprecated(
+        note = "the raw API is removed in the next minor release; use `BrowserInput::redirect` with the raw query string"
+    )]
     pub fn redirect(query: Vec<(String, String)>) -> Self {
         Self {
             query,
@@ -970,6 +973,9 @@ pub(crate) fn flow_with_authentication(
     Ok((result.into_flow_result(), message_authenticated))
 }
 
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use the typed receive operations, such as `Saml::<Sp>::finish_sso` or `Saml::<Idp>::receive_slo`"
+)]
 pub fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult, SamlError> {
     Ok(flow_inner(
         opts,

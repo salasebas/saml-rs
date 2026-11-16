@@ -443,6 +443,7 @@ fn error_response_omits_typed_attributes() -> Result<(), Box<dyn std::error::Err
 
 /// A peer identity provider that ignores the producer rules: the raw
 /// samlify-port renderer writes each `(Name, NameFormat, value)` as given.
+#[allow(deprecated)]
 fn accept_peer_attributes(
     attributes: &[(&str, &str, &str)],
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
@@ -797,6 +798,7 @@ fn expect_name_id_length_error<T: std::fmt::Debug>(
 }
 
 #[test]
+#[allow(deprecated)]
 fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_256_characters(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // The limit counts characters, not bytes.
@@ -868,6 +870,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
 
 /// A peer identity provider that ignores the producer rules: the raw renderer
 /// callback writes the `<NameID>` as given.
+#[allow(deprecated)]
 fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp()?;
@@ -1061,6 +1064,7 @@ fn templated_idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 #[test]
+#[allow(deprecated)]
 fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
@@ -1180,6 +1184,7 @@ fn metadata_is_not_generated_for_an_entity_id_that_is_not_a_uri_of_at_most_1024_
 }
 
 #[test]
+#[allow(deprecated)]
 fn service_provider_does_not_request_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp()?;
@@ -1196,6 +1201,7 @@ fn service_provider_does_not_request_a_name_id_format_that_is_not_an_absolute_ur
 }
 
 #[test]
+#[allow(deprecated)]
 fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // An omitted NameIDPolicy Format leaves the identity provider free to

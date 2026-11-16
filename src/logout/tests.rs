@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use super::*;
 use crate::binding::{decode_base64, deflate_raw_decode, encode_base64};
 use crate::browser::BrowserInput;

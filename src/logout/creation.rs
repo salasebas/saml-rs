@@ -32,6 +32,9 @@ use super::signing::sign_browser_message;
 /// fails. When `want_signed` is true, missing or invalid signing
 /// keys/certificates, unavailable crypto support, XML signature construction,
 /// and detached-signature construction errors are propagated.
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::start_slo` or `Saml::<Idp>::start_slo`"
+)]
 pub fn create_logout_request(
     init_setting: &EntitySetting,
     init_meta: &Metadata,
@@ -41,7 +44,7 @@ pub fn create_logout_request(
     relay_state: Option<&str>,
     want_signed: bool,
 ) -> Result<BindingContext, SamlError> {
-    create_logout_request_with_id(
+    compatibility_logout_request(
         init_setting,
         init_meta,
         target_meta,
@@ -60,7 +63,33 @@ pub fn create_logout_request(
 /// Returns the same errors as [`create_logout_request`]. Empty `message_id`
 /// values are ignored and replaced with a generated ID.
 #[allow(clippy::too_many_arguments)] // public API adds optional `message_id`
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::start_slo` or `Saml::<Idp>::start_slo`"
+)]
 pub fn create_logout_request_with_id(
+    init_setting: &EntitySetting,
+    init_meta: &Metadata,
+    target_meta: &Metadata,
+    binding: Binding,
+    user: &User,
+    relay_state: Option<&str>,
+    want_signed: bool,
+    message_id: Option<&str>,
+) -> Result<BindingContext, SamlError> {
+    compatibility_logout_request(
+        init_setting,
+        init_meta,
+        target_meta,
+        binding,
+        user,
+        relay_state,
+        want_signed,
+        message_id,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compatibility_logout_request(
     init_setting: &EntitySetting,
     init_meta: &Metadata,
     target_meta: &Metadata,
@@ -317,6 +346,9 @@ pub(crate) fn create_logout_request_for_subject_inner(
 /// or invalid signing keys/certificates, unavailable crypto support, XML
 /// signature construction, detached-signature construction, and invalid
 /// post-signing placement errors are propagated.
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::respond_slo` or `Saml::<Idp>::respond_slo`"
+)]
 pub fn create_logout_response(
     init_setting: &EntitySetting,
     init_meta: &Metadata,
@@ -326,7 +358,7 @@ pub fn create_logout_response(
     relay_state: Option<&str>,
     want_signed: bool,
 ) -> Result<BindingContext, SamlError> {
-    create_logout_response_with_id(
+    compatibility_logout_response(
         init_setting,
         init_meta,
         target_meta,
@@ -357,7 +389,33 @@ pub(crate) struct LogoutResponseInput<'a> {
 /// Returns the same errors as [`create_logout_response`]. Empty `message_id`
 /// values are ignored and replaced with a generated ID.
 #[allow(clippy::too_many_arguments)] // public API adds optional `message_id`
+#[deprecated(
+    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::respond_slo` or `Saml::<Idp>::respond_slo`"
+)]
 pub fn create_logout_response_with_id(
+    init_setting: &EntitySetting,
+    init_meta: &Metadata,
+    target_meta: &Metadata,
+    binding: Binding,
+    in_response_to: Option<&str>,
+    relay_state: Option<&str>,
+    want_signed: bool,
+    message_id: Option<&str>,
+) -> Result<BindingContext, SamlError> {
+    compatibility_logout_response(
+        init_setting,
+        init_meta,
+        target_meta,
+        binding,
+        in_response_to,
+        relay_state,
+        want_signed,
+        message_id,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compatibility_logout_response(
     init_setting: &EntitySetting,
     init_meta: &Metadata,
     target_meta: &Metadata,

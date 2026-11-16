@@ -294,6 +294,7 @@ fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
 }
 
 #[test]
+#[allow(deprecated)]
 fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dyn std::error::Error>>
 {
     use saml_rs::constants::{key_encryption_algorithm::RSA_OAEP_MGF1P, Binding};

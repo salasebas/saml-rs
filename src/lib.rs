@@ -273,17 +273,18 @@
 //!
 //! # Raw samlify-port API
 //!
-//! The [`raw`] module is the samlify-port surface. [`SpValidationPolicy::compatibility`]
-//! keeps that behavior when leaving the raw API. The two surfaces keep their
+//! The [`raw`] module is the samlify-port surface. It is deprecated and is
+//! removed in the next minor release: each raw message function warns with its
+//! typed replacement, and [`raw`] lists them. [`SpValidationPolicy::compatibility`]
+//! keeps the raw behavior when leaving the raw API. The two surfaces keep their
 //! own defaults. `Default` and the config builders start
 //! on Recommended. Import [`raw::ServiceProvider`], [`raw::IdentityProvider`],
 //! [`raw::EntitySetting`], [`raw::HttpRequest`], and [`raw::BindingContext`]
 //! from [`raw`]; the crate root does not re-export them.
 //!
 //! Visible docs.rs modules and crate-root re-exports are the supported public
-//! documentation surface. The [`raw`] module is the supported samlify-port
-//! API. Hidden modules are lower-level implementation paths and should not be
-//! the first choice for new integrations.
+//! documentation surface. Hidden modules are lower-level implementation paths
+//! and should not be the first choice for new integrations.
 //!
 //! # Artifact resolution
 //!

@@ -3754,6 +3754,7 @@ fn custom_format_subject(format: &str) -> Result<LogoutSubject, SamlError> {
 }
 
 #[test]
+#[allow(deprecated)]
 fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // SAML Core §1.3.2 binds the writer of the LogoutRequest, in either role.

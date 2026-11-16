@@ -10,6 +10,7 @@ mod signing;
 #[cfg(test)]
 mod tests;
 
+#[allow(deprecated)]
 pub use creation::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
     create_logout_response_with_id,
@@ -19,6 +20,7 @@ pub(crate) use creation::{
     LogoutRequestValidation, LogoutResponseInput,
 };
 pub(crate) use encrypted_id::decrypt_encrypted_id;
+#[allow(deprecated)]
 pub use parsing::{
     parse_logout_request, parse_logout_response, parse_logout_response_without_request_id,
 };

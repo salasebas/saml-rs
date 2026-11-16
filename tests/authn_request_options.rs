@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::deflate_raw_decode;

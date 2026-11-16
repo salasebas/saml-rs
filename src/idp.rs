@@ -418,6 +418,9 @@ impl IdentityProvider {
     /// fails, the SP encryption certificate is missing when assertion
     /// encryption is enabled, XML encryption fails, or detached-signature
     /// construction for Redirect/SimpleSign fails.
+    #[deprecated(
+        note = "the raw API is removed in the next minor release; use `Saml::<Idp>::respond_sso`, or `Saml::<Idp>::initiate_sso` for an unsolicited response"
+    )]
     pub fn create_login_response(
         &self,
         sp: &ServiceProvider,
@@ -668,6 +671,9 @@ impl IdentityProvider {
     /// Signature failures include missing signatures, untrusted SP signing
     /// certificates, invalid detached signatures, and XML signature validation
     /// errors.
+    #[deprecated(
+        note = "the raw API is removed in the next minor release; use `Saml::<Idp>::receive_sso`"
+    )]
     pub fn parse_login_request(
         &self,
         sp: &ServiceProvider,
@@ -822,6 +828,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn parse_login_request_accepts_matching_sp_issuer() -> Result<(), Box<dyn std::error::Error>> {
         let idp = unsigned_idp()?;
         let sp = unsigned_sp("https://sp.example.com/metadata")?;
@@ -838,6 +845,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn parse_login_request_rejects_unexpected_sp_issuer() -> Result<(), Box<dyn std::error::Error>>
     {
         let idp = unsigned_idp()?;
@@ -913,6 +921,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn idp_response_consumed_by_sp() -> Result<(), Box<dyn std::error::Error>> {
         let (idp, sp) = (idp()?, sp()?);
         let ctx = idp.create_login_response(
@@ -936,6 +945,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn custom_login_response_template_keeps_placeholder_text_in_the_name_id_format(
     ) -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
@@ -965,6 +975,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn raw_login_response_defaults_to_five_minute_issuance_window_for_standard_renderers(
     ) -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
@@ -1046,6 +1057,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn login_response_with_attributes() -> Result<(), Box<dyn std::error::Error>> {
         use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
         let mut setting = signing_setting();
@@ -1096,6 +1108,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn login_response_escapes_attribute_xml_markup() -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
         use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
@@ -1154,6 +1167,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn parse_signed_login_request() -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
         let (idp, sp) = (idp()?, sp()?);
@@ -1167,6 +1181,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn parse_signed_login_request_rejects_unexpected_sp_issuer(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idp = idp()?;

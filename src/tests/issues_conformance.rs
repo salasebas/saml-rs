@@ -195,6 +195,7 @@ fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std
 }
 
 #[test]
+#[allow(deprecated)]
 fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_metadata(SP_META_98, EntitySetting::default())?;
     let idp = IdentityProvider::from_config(

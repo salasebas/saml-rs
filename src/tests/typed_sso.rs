@@ -26,6 +26,7 @@ use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::idp::LoginResponseOptions;
+#[allow(deprecated)]
 use saml_rs::logout::create_logout_request;
 use saml_rs::raw::Binding;
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
@@ -1578,6 +1579,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
 }
 
 #[test]
+#[allow(deprecated)]
 fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     const PEER_IDP_ENTITY_ID: &str = "idp.example.com";

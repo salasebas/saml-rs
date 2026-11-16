@@ -141,7 +141,7 @@ verification, and encryption return `SamlError::Unsupported`. Details are in
 | API reference | [docs.rs](https://docs.rs/saml-rs/latest/saml_rs/) |
 | Identity provider and logout examples | [`examples/sso.rs`](examples/sso.rs), [`examples/slo.rs`](examples/slo.rs) |
 | Upgrade an existing integration | [Migration guides](docs/migrations/README.md) |
-| Keep a `ServiceProvider` / `IdentityProvider` integration | [`saml_rs::raw`](examples/raw_compat.rs) |
+| Keep a `ServiceProvider` / `IdentityProvider` integration (deprecated; removed in the next minor release) | [`saml_rs::raw`](examples/raw_compat.rs) |
 | Choose a crypto provider | [Crypto providers](docs/crypto-providers.md) |
 | See the rules each flow claims | [Conformance records](docs/conformance/) |
 | Contribute | [Contributing](CONTRIBUTING.md) |

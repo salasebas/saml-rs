@@ -11,6 +11,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::error::{SubjectConfirmationReason, TimeWindowField};
+#[allow(deprecated)]
 use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest};
 use saml_rs::raw::Value;
 use saml_rs::{
@@ -31,6 +32,7 @@ fn response_request(xml: &str) -> HttpRequest {
     )])
 }
 
+#[allow(deprecated)]
 fn parse_response_at(
     xml: &str,
     validation: &SamlValidationContext<'_>,
