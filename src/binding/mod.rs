@@ -47,3 +47,24 @@ pub fn base64_encode(input: &[u8]) -> String {
 pub fn base64_decode(input: &str) -> Result<Vec<u8>, crate::error::SamlError> {
     encoding::decode_base64(input)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[expect(
+        deprecated,
+        reason = "the deprecated public base64 functions keep their behaviour until removal"
+    )]
+    fn deprecated_base64_functions_keep_their_behaviour() -> Result<(), Box<dyn std::error::Error>>
+    {
+        assert_eq!(base64_encode(b"A"), "QQ==");
+        assert_eq!(base64_decode("Q Q\n=\t=\r\u{000c}")?, b"A");
+        assert!(matches!(
+            base64_decode("QQ==\u{00a0}"),
+            Err(crate::error::SamlError::Base64(_))
+        ));
+        Ok(())
+    }
+}

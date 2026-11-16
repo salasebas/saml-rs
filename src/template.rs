@@ -555,6 +555,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        deprecated,
+        reason = "the deprecated public builder keeps its output until removal"
+    )]
     fn builds_attribute_statement_with_multiple_attributes() {
         let mk = |name: &str, tag: &str| LoginResponseAttribute {
             name: name.into(),
@@ -567,7 +571,7 @@ mod tests {
         let attrs = [mk("email", "user.email"), mk("firstname", "user.firstname")];
         let expected = "<saml:AttributeStatement><saml:Attribute Name=\"email\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserEmail}</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"firstname\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserFirstname}</saml:AttributeValue></saml:Attribute></saml:AttributeStatement>";
         assert_eq!(
-            build_attribute_statement(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
+            attribute_statement_builder(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
             expected
         );
     }
