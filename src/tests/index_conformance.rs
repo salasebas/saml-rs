@@ -15,9 +15,9 @@ use saml_rs::entity::{iso8601_offset, EntitySetting};
 use saml_rs::metadata::{
     generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataConfig, SpMetadata, SpMetadataConfig,
 };
+use saml_rs::raw::IdentityProvider;
 use saml_rs::util::{normalize_cert_string, normalize_pem_string};
 use saml_rs::validator::verify_time;
-use saml_rs::IdentityProvider;
 
 const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 const SP_ENCKEY: &str = include_str!("../../tests/fixtures/key/sp/encryptKey.pem");

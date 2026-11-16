@@ -11,8 +11,9 @@ use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::template::replace_tags_by_value;
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::SamlError;
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -422,11 +423,11 @@ fn hardening_in_response_to_mismatch_rejected() {
 }
 
 #[test]
-fn hardening_default_login_response_rejects_non_empty_in_response_to() {
+fn hardening_unsolicited_response_rejects_non_empty_in_response_to() {
     let sp = sp_with("https://sp.example.com/metadata", signing());
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp))]);
     assert!(matches!(
-        sp.parse_login_response(&idp(), Binding::Post, &req),
+        sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
         Err(SamlError::InResponseToMismatch { .. })
     ));
 }

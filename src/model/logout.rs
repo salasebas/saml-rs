@@ -8,7 +8,7 @@ use super::subject::NameId;
 use super::{EndpointUrl, RelayStateParam};
 use crate::config::EntityId;
 use crate::error::SamlError;
-use crate::raw::FlowResult;
+use crate::flow::FlowResult;
 use crate::xml::parse_saml_utc_date_time;
 
 /// Subject data used to issue a front-channel Single Logout request.

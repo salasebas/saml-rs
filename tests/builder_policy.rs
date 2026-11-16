@@ -7,11 +7,13 @@ use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
     AudienceValidationPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
     CertificatePem, Credentials, DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm,
-    EntityId, EntitySetting, IdpConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
+    EntityId, IdpConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
     LogoutSignaturePolicy, MaskGenerationFunction, NameIdCreationPolicy, PrivateKeyPem,
     ResponseSignaturePolicy, SamlError, SignatureAlgorithm, SpConfig, SpValidationPolicy,
     SsoEndpoint, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
+
+use saml_rs::raw::EntitySetting;
 #[cfg(crypto)]
 use saml_rs::{TemplatePolicy, XmlEncryptionPolicy};
 

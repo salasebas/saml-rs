@@ -3,11 +3,12 @@ use saml_rs::constants::{
     signature_algorithm, transform_algorithm,
 };
 use saml_rs::flow::FlowOptions;
+use saml_rs::raw::EntitySetting;
 use saml_rs::{
     CertificatePem, Credentials, DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm,
-    EntityId, EntitySetting, HmacSecret, IdpDescriptor, KeyEncryptionAlgorithm,
-    MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
-    SamlError, SignatureAlgorithm, SpDescriptor, TransformAlgorithm,
+    EntityId, HmacSecret, IdpDescriptor, KeyEncryptionAlgorithm, MaskGenerationFunction,
+    MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem, SamlError, SignatureAlgorithm,
+    SpDescriptor, TransformAlgorithm,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");

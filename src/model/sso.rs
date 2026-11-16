@@ -15,7 +15,7 @@ use super::{
 use crate::assertion_acceptance::latest_bearer_not_on_or_after;
 use crate::config::EntityId;
 use crate::error::{SamlError, TimeWindowField};
-use crate::raw::FlowResult;
+use crate::flow::FlowResult;
 use crate::xml::{dom, parse_saml_utc_date_time, XmlLimits};
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 

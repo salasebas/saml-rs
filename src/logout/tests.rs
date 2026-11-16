@@ -6,7 +6,7 @@ use crate::entity::{BindingContext, EntitySetting, User};
 use crate::error::SamlError;
 use crate::flow::HttpRequest;
 use crate::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use crate::{IdentityProvider, ServiceProvider};
+use crate::raw::{IdentityProvider, ServiceProvider};
 use std::time::{Duration, SystemTime};
 use url::Url;
 

@@ -565,7 +565,7 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
     use saml_rs::entity::{EntitySetting, User};
     use saml_rs::idp::LoginResponseOptions;
     use saml_rs::metadata::{IdpMetadata, SpMetadata};
-    use saml_rs::{IdentityProvider, ServiceProvider};
+    use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 
     let sp_role = format!(
         r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>{TRANSIENT}</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
@@ -594,7 +594,8 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
             &User::new("alice@example.com"),
             &LoginResponseOptions::default(),
         )?;
-        let request = sp.create_login_request(&idp, Binding::Post, None)?;
+        let request =
+            sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
         let response_xml = String::from_utf8(STANDARD.decode(&response.context)?)?;
         let request_xml = String::from_utf8(STANDARD.decode(&request.context)?)?;
         assert!(

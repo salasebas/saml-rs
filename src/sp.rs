@@ -37,7 +37,7 @@ pub struct ServiceProvider {
     pub metadata: SpMetadata,
 }
 
-/// Per-call options for [`ServiceProvider::create_login_request_with_options`].
+/// Per-call options for [`ServiceProvider::create_login_request`].
 #[derive(Default)]
 pub struct LoginRequestOptions<'a> {
     /// RelayState for this request. `Some("")` is preserved as an empty RelayState.
@@ -179,37 +179,12 @@ impl ServiceProvider {
             .unwrap_or_default()
     }
 
-    /// Build a login `<AuthnRequest>` for `idp` over `binding`.
-    ///
-    /// When both sides require signing, the request is signed (requires the
-    /// a crypto provider feature and the SP's `private_key`/`signing_cert`).
-    /// `custom` overrides template rendering, receiving the resolved template
-    /// and returning `(id, xml)`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if SP and IdP signing requirements conflict, the IdP
-    /// metadata has no SSO endpoint for `binding`, the SP metadata has no ACS
-    /// endpoint for the requested response binding, `binding` is unsupported
-    /// for AuthnRequest generation, or the first configured NameID format is
-    /// not an absolute URI reference and `custom` is not set. When signing is required, key loading,
-    /// missing `private_key`/`signing_cert`, unsupported crypto features, XML
-    /// signature construction, and detached-signature construction errors are
-    /// propagated.
-    pub fn create_login_request(
-        &self,
-        idp: &IdentityProvider,
-        binding: Binding,
-        custom: Option<CustomTagReplacement<'_>>,
-    ) -> Result<BindingContext, SamlError> {
-        let options = LoginRequestOptions {
-            custom,
-            ..Default::default()
-        };
-        self.create_login_request_with_options(idp, binding, &options)
-    }
-
     /// Build a login `<AuthnRequest>` for `idp` over `binding` with per-call options.
+    ///
+    /// When both sides require signing, the request is signed (requires a
+    /// crypto provider feature and the SP's `private_key`/`signing_cert`).
+    /// `options.custom` overrides template rendering, receiving the resolved
+    /// template and returning `(id, xml)`.
     ///
     /// # Errors
     ///
@@ -221,7 +196,7 @@ impl ServiceProvider {
     /// missing `private_key`/`signing_cert`, unsupported crypto features, XML
     /// signature construction, and detached-signature construction errors are
     /// propagated.
-    pub fn create_login_request_with_options(
+    pub fn create_login_request(
         &self,
         idp: &IdentityProvider,
         binding: Binding,
@@ -459,33 +434,6 @@ impl ServiceProvider {
         ))
     }
 
-    /// Parse and validate an unsolicited IdP login `<Response>` (signature required).
-    ///
-    /// This mode is for IdP-initiated SSO. It rejects a non-empty
-    /// `InResponseTo`; for SP-initiated SSO use
-    /// [`Self::parse_login_response_with_request_id`] to bind the response to
-    /// the AuthnRequest ID you issued.
-    ///
-    /// When `setting.validate_audience` is set, the assertion's `<Audience>`
-    /// must include this SP's entity ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error for all unsolicited-response validation failures from
-    /// [`Self::parse_unsolicited_login_response`], including malformed browser
-    /// input, unsupported bindings, missing ACS metadata, XML parsing failures,
-    /// missing or invalid signatures, untrusted signing certificates, issuer,
-    /// destination, recipient, audience, status, time-window, and unexpected
-    /// `InResponseTo` failures.
-    pub fn parse_login_response(
-        &self,
-        idp: &IdentityProvider,
-        binding: Binding,
-        request: &HttpRequest,
-    ) -> Result<FlowResult, SamlError> {
-        self.parse_unsolicited_login_response(idp, binding, request)
-    }
-
     /// Parse and validate an IdP-initiated login `<Response>` that is not bound
     /// to an outbound AuthnRequest.
     ///
@@ -530,7 +478,7 @@ impl ServiceProvider {
         )
     }
 
-    /// Like [`Self::parse_login_response`] but also requires `InResponseTo` to
+    /// Parse and validate a login `<Response>` and require `InResponseTo` to
     /// equal `request_id` (anti-replay: bind the response to a request you sent).
     ///
     /// An empty caller-provided `request_id` is rejected as
@@ -726,7 +674,11 @@ mod tests {
     #[test]
     fn create_unsigned_login_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>>
     {
-        let ctx = unsigned_sp()?.create_login_request(&unsigned_idp()?, Binding::Redirect, None)?;
+        let ctx = unsigned_sp()?.create_login_request(
+            &unsigned_idp()?,
+            Binding::Redirect,
+            &LoginRequestOptions::default(),
+        )?;
         let url = Url::parse(&ctx.context)?;
         let (_, value) = url
             .query_pairs()
@@ -740,7 +692,11 @@ mod tests {
 
     #[test]
     fn create_unsigned_login_request_post_is_base64() -> Result<(), Box<dyn std::error::Error>> {
-        let ctx = unsigned_sp()?.create_login_request(&unsigned_idp()?, Binding::Post, None)?;
+        let ctx = unsigned_sp()?.create_login_request(
+            &unsigned_idp()?,
+            Binding::Post,
+            &LoginRequestOptions::default(),
+        )?;
         let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         assert!(xml.starts_with("<samlp:AuthnRequest"));
         Ok(())
@@ -757,7 +713,10 @@ mod tests {
         let ctx = unsigned_sp()?.create_login_request(
             &unsigned_idp()?,
             Binding::Post,
-            Some(&replace as &dyn Fn(&str) -> (String, String)),
+            &LoginRequestOptions {
+                custom: Some(&replace as &dyn Fn(&str) -> (String, String)),
+                ..Default::default()
+            },
         )?;
         assert_eq!(ctx.id, "_custom");
         let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
@@ -858,7 +817,11 @@ mod crypto_tests {
                 ..Default::default()
             },
         )?;
-        let ctx = sp.create_login_request(&signing_idp()?, Binding::Post, None)?;
+        let ctx = sp.create_login_request(
+            &signing_idp()?,
+            Binding::Post,
+            &LoginRequestOptions::default(),
+        )?;
         let signed_xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         let (verified, _) = verify_signature(&signed_xml, &[SP_SIGNING_CERT.to_string()])?;
         assert!(
@@ -884,7 +847,11 @@ mod crypto_tests {
                 ..Default::default()
             },
         )?;
-        let ctx = sp.create_login_request(&signing_idp()?, Binding::Redirect, None)?;
+        let ctx = sp.create_login_request(
+            &signing_idp()?,
+            Binding::Redirect,
+            &LoginRequestOptions::default(),
+        )?;
         assert!(ctx.context.contains("&SigAlg="));
         assert!(ctx.context.contains("&Signature="));
         Ok(())

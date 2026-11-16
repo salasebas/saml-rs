@@ -767,6 +767,7 @@ mod tests {
     use super::*;
     use crate::constants::Binding;
     use crate::metadata::{Endpoint, SpMetadataConfig};
+    use crate::sp::LoginRequestOptions;
 
     const IDPMETA: &str = include_str!("../tests/fixtures/misc/idpmeta.xml");
 
@@ -824,7 +825,7 @@ mod tests {
     fn parse_login_request_accepts_matching_sp_issuer() -> Result<(), Box<dyn std::error::Error>> {
         let idp = unsigned_idp()?;
         let sp = unsigned_sp("https://sp.example.com/metadata")?;
-        let ctx = sp.create_login_request(&idp, Binding::Post, None)?;
+        let ctx = sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
 
         let result = idp.parse_login_request(&sp, Binding::Post, &request)?;
@@ -842,7 +843,11 @@ mod tests {
         let idp = unsigned_idp()?;
         let expected_sp = unsigned_sp("https://expected-sp.example.com/metadata")?;
         let attacker_sp = unsigned_sp("https://attacker-sp.example.com/metadata")?;
-        let ctx = attacker_sp.create_login_request(&idp, Binding::Post, None)?;
+        let ctx = attacker_sp.create_login_request(
+            &idp,
+            Binding::Post,
+            &LoginRequestOptions::default(),
+        )?;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
 
         let result = idp.parse_login_request(&expected_sp, Binding::Post, &request);
@@ -857,6 +862,7 @@ mod crypto_tests {
     use super::*;
     use crate::constants::signature_algorithm::RSA_SHA256;
     use crate::metadata::{Endpoint, SpMetadataConfig};
+    use crate::sp::LoginRequestOptions;
 
     // A working RSA keypair (used as both IdP and SP signing material in tests).
     const PRIVKEY: &str = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -1151,7 +1157,7 @@ mod crypto_tests {
     fn parse_signed_login_request() -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
         let (idp, sp) = (idp()?, sp()?);
-        let ctx = sp.create_login_request(&idp, Binding::Post, None)?;
+        let ctx = sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]);
         let result = idp.parse_login_request(&sp, Binding::Post, &request)?;
         let signed_xml = String::from_utf8(decode_base64(&ctx.context)?)?;
@@ -1166,7 +1172,11 @@ mod crypto_tests {
         let idp = idp()?;
         let expected_sp = sp()?;
         let attacker_sp = signed_sp("https://attacker-sp.example.com/metadata")?;
-        let ctx = attacker_sp.create_login_request(&idp, Binding::Post, None)?;
+        let ctx = attacker_sp.create_login_request(
+            &idp,
+            Binding::Post,
+            &LoginRequestOptions::default(),
+        )?;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
 
         let result = idp.parse_login_request(&expected_sp, Binding::Post, &request);

@@ -62,7 +62,7 @@ lists those paths and the deprecated items.
 The raw call shape this design kept:
 
 ```rust
-let request = sp.create_login_request(&idp, Binding::Post, None)?;
+let request = sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
 
 let parsed = idp.parse_login_request(
     &sp,
@@ -160,7 +160,5 @@ use saml_rs::raw::{
 };
 ```
 
-`raw::ServiceProvider` and `raw::IdentityProvider` are the recommended raw
-imports. Root-level `ServiceProvider` and `IdentityProvider` can remain during
-the migration window only as rustdoc-deprecated compatibility exports before
-typed API stabilization.
+Each raw item has one public path. `ServiceProvider`, `IdentityProvider`, and
+`EntitySetting` are imported from `raw`, not from the crate root.

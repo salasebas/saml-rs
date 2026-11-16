@@ -8,7 +8,8 @@ use saml_rs::logout::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
 };
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::raw::{IdentityProvider, ServiceProvider};
+use saml_rs::SamlError;
 
 fn idp() -> Result<IdentityProvider, SamlError> {
     IdentityProvider::from_config(

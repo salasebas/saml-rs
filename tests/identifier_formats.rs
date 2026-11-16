@@ -22,7 +22,7 @@ use saml_rs::entity::iso8601_offset;
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, IdpMetadataConfig, SpMetadataConfig,
 };
-use saml_rs::raw::{Binding, LoginResponseOptions, User};
+use saml_rs::raw::{Binding, LoginRequestOptions, LoginResponseOptions, User};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
@@ -1189,7 +1189,7 @@ fn service_provider_does_not_request_a_name_id_format_that_is_not_an_absolute_ur
         expect_name_id_format_error(raw_sp.create_login_request(
             idp.raw_identity_provider(),
             Binding::Post,
-            None,
+            &LoginRequestOptions::default(),
         ))?;
     }
     Ok(())
@@ -1208,8 +1208,11 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
         Some(saml_rs::config::LOGIN_REQUEST_TEMPLATE.to_string()),
     ] {
         raw_sp.setting.login_request_template = template;
-        let context =
-            raw_sp.create_login_request(idp.raw_identity_provider(), Binding::Post, None)?;
+        let context = raw_sp.create_login_request(
+            idp.raw_identity_provider(),
+            Binding::Post,
+            &LoginRequestOptions::default(),
+        )?;
         let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
         let policy = xml
             .split("<samlp:NameIDPolicy")

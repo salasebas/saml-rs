@@ -4,6 +4,7 @@ use saml_rs::constants::Binding;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
 use saml_rs::raw::Value;
 use saml_rs::raw::{BindingContext, FlowResult};
+use saml_rs::raw::{EntitySetting, IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::XmlLimits;
 #[cfg(crypto)]
 use saml_rs::{
@@ -12,11 +13,10 @@ use saml_rs::{
     template::{LoginResponseAttribute, LoginResponseTemplate},
 };
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, EndpointUrl, EntityId, EntitySetting, FormField,
-    IdentityProvider, LogoutCompleted, LogoutRequest, LogoutResponse, MessageId,
-    NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, PendingAuthnRequest, RelayState,
-    RelayStateParam, SamlError, SamlInstant, ServiceProvider, SsoRequestBinding, SsoResponse,
-    SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
+    AcsEndpoint, AuthnRequest, BrowserInput, EndpointUrl, EntityId, FormField, LogoutCompleted,
+    LogoutRequest, LogoutResponse, MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy,
+    Outbound, PendingAuthnRequest, RelayState, RelayStateParam, SamlError, SamlInstant,
+    SsoRequestBinding, SsoResponse, SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
 };
 
 #[cfg(crypto)]
@@ -1647,7 +1647,7 @@ fn typed_models_existing_authn_request_flow_converts_to_typed_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
     let idp = idp(EntitySetting::default())?;
-    let context = sp.create_login_request(&idp, Binding::Post, None)?;
+    let context = sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
     let request =
         saml_rs::raw::HttpRequest::post(vec![("SAMLRequest".to_string(), context.context.clone())]);
 

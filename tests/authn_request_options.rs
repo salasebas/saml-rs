@@ -5,8 +5,9 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::{BindingContext, EntitySetting};
 use saml_rs::flow::HttpRequest;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::SamlError;
 use url::Url;
 
 fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataConfig {
@@ -196,7 +197,11 @@ fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_r
     assert!(metadata.contains(r#"WantAuthnRequestsSigned="1""#));
     let idp = IdentityProvider::from_metadata(&metadata, EntitySetting::default())?;
     let sp = unsigned_sp()?;
-    let ctx = sp.create_login_request(&unsigned_idp()?, Binding::Post, None)?;
+    let ctx = sp.create_login_request(
+        &unsigned_idp()?,
+        Binding::Post,
+        &LoginRequestOptions::default(),
+    )?;
 
     match idp.parse_login_request(&sp, Binding::Post, &login_request_http_request(&ctx)?) {
         Err(SamlError::SignatureMissing) => Ok(()),
@@ -215,7 +220,10 @@ fn legacy_create_login_request_callback_still_works() -> Result<(), Box<dyn std:
     let ctx = unsigned_sp()?.create_login_request(
         &unsigned_idp()?,
         Binding::Post,
-        Some(&replace as &dyn Fn(&str) -> (String, String)),
+        &LoginRequestOptions {
+            custom: Some(&replace as &dyn Fn(&str) -> (String, String)),
+            ..Default::default()
+        },
     )?;
 
     assert_eq!(ctx.id, "_custom");
@@ -230,7 +238,7 @@ fn hostile_authn_request_values_escape_for_all_login_request_bindings(
     let idp = hostile_unsigned_idp()?;
 
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
-        let ctx = sp.create_login_request_with_options(
+        let ctx = sp.create_login_request(
             &idp,
             binding,
             &LoginRequestOptions {
@@ -254,7 +262,7 @@ fn hostile_authn_request_values_escape_with_acs_index_for_all_login_request_bind
     let idp = hostile_unsigned_idp()?;
 
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
-        let ctx = sp.create_login_request_with_options(
+        let ctx = sp.create_login_request(
             &idp,
             binding,
             &LoginRequestOptions {
@@ -274,7 +282,7 @@ fn hostile_authn_request_values_escape_with_acs_index_for_all_login_request_bind
 
 #[test]
 fn redirect_per_request_relay_state_appears_in_url() -> Result<(), Box<dyn std::error::Error>> {
-    let ctx = unsigned_sp()?.create_login_request_with_options(
+    let ctx = unsigned_sp()?.create_login_request(
         &unsigned_idp()?,
         Binding::Redirect,
         &LoginRequestOptions {
@@ -295,7 +303,7 @@ fn redirect_per_request_relay_state_appears_in_url() -> Result<(), Box<dyn std::
 fn post_and_simplesign_per_request_relay_state_appear_in_context(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Post, Binding::SimpleSign] {
-        let ctx = unsigned_sp()?.create_login_request_with_options(
+        let ctx = unsigned_sp()?.create_login_request(
             &unsigned_idp()?,
             binding,
             &LoginRequestOptions {
@@ -317,7 +325,7 @@ fn per_request_relay_state_overrides_entity_state_without_leaking(
     let sp = unsigned_sp_with_setting(setting)?;
     let idp = unsigned_idp()?;
 
-    let first = sp.create_login_request_with_options(
+    let first = sp.create_login_request(
         &idp,
         Binding::Redirect,
         &LoginRequestOptions {
@@ -325,12 +333,9 @@ fn per_request_relay_state_overrides_entity_state_without_leaking(
             ..Default::default()
         },
     )?;
-    let second = sp.create_login_request_with_options(
-        &idp,
-        Binding::Redirect,
-        &LoginRequestOptions::default(),
-    )?;
-    let third = sp.create_login_request_with_options(
+    let second =
+        sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
+    let third = sp.create_login_request(
         &idp,
         Binding::Redirect,
         &LoginRequestOptions {
@@ -359,7 +364,7 @@ fn force_authn_renders_true_and_false_for_all_login_request_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
         for force_authn in [true, false] {
-            let ctx = unsigned_sp()?.create_login_request_with_options(
+            let ctx = unsigned_sp()?.create_login_request(
                 &unsigned_idp()?,
                 binding,
                 &LoginRequestOptions {
@@ -377,7 +382,7 @@ fn force_authn_renders_true_and_false_for_all_login_request_bindings(
 #[test]
 fn force_authn_is_omitted_by_default() -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
-        let ctx = unsigned_sp()?.create_login_request_with_options(
+        let ctx = unsigned_sp()?.create_login_request(
             &unsigned_idp()?,
             binding,
             &LoginRequestOptions::default(),
@@ -393,7 +398,7 @@ fn acs_index_renders_and_omits_url_and_protocol_binding_for_all_login_request_bi
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
         for index in [0, 7] {
-            let ctx = unsigned_sp()?.create_login_request_with_options(
+            let ctx = unsigned_sp()?.create_login_request(
                 &unsigned_idp()?,
                 binding,
                 &LoginRequestOptions {
@@ -415,7 +420,7 @@ fn acs_index_renders_and_omits_url_and_protocol_binding_for_all_login_request_bi
 fn no_options_rendering_keeps_acs_url_and_protocol_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
-        let ctx = unsigned_sp()?.create_login_request_with_options(
+        let ctx = unsigned_sp()?.create_login_request(
             &unsigned_idp()?,
             binding,
             &LoginRequestOptions::default(),
@@ -444,7 +449,7 @@ fn requested_response_binding_without_acs_returns_missing_metadata(
         EntitySetting::default(),
     )?;
 
-    match sp.create_login_request_with_options(
+    match sp.create_login_request(
         &unsigned_idp()?,
         Binding::Post,
         &LoginRequestOptions {
@@ -539,7 +544,7 @@ mod signed {
         for binding in [Binding::Redirect, Binding::SimpleSign] {
             let sp = signed_sp()?;
             let idp = signed_idp()?;
-            let ctx = sp.create_login_request_with_options(
+            let ctx = sp.create_login_request(
                 &idp,
                 binding,
                 &LoginRequestOptions {

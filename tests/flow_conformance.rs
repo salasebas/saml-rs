@@ -20,9 +20,10 @@ use saml_rs::logout::{
     create_logout_request, create_logout_response, parse_logout_request, parse_logout_response,
 };
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::template::replace_tags_by_value;
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::SamlError;
 use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -175,7 +176,7 @@ fn form_hidden_fields(form: &str) -> Result<Vec<(String, String)>, SamlError> {
 }
 
 fn simplesign_form_request(param: &str, ctx: &BindingContext) -> Result<HttpRequest, SamlError> {
-    let form = ctx.post_form();
+    let form = ctx.post_form()?;
     let mut request = HttpRequest::post(form_hidden_fields(&form)?);
     let encoded = body_param(&request, param)?.to_string();
     let raw_xml =
@@ -275,7 +276,7 @@ fn assert_failed_message_signature(
 fn login_request_round_trip(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let sp = unsigned_sp();
     let idp = unsigned_idp();
-    let ctx = sp.create_login_request(&idp, binding, None)?;
+    let ctx = sp.create_login_request(&idp, binding, &LoginRequestOptions::default())?;
     let request = match binding {
         Binding::Redirect => redirect_request(&ctx.context)?,
         _ => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
@@ -304,7 +305,7 @@ fn signing_sp_against_idp_without_requirement(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_config(&sp_config(true, false, false), signing())?;
-    let ctx = sp.create_login_request(&idp(false), binding, None)?;
+    let ctx = sp.create_login_request(&idp(false), binding, &LoginRequestOptions::default())?;
     let request = match binding {
         Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
         Binding::Redirect => redirect_request(&ctx.context)?,
@@ -333,7 +334,11 @@ fn flow_conformance_signing_sp_without_idp_requirement_simplesign(
 }
 #[test]
 fn flow_conformance_unsigned_sp_against_requiring_idp() -> Result<(), Box<dyn std::error::Error>> {
-    match sp(false, false).create_login_request(&idp(true), Binding::Redirect, None) {
+    match sp(false, false).create_login_request(
+        &idp(true),
+        Binding::Redirect,
+        &LoginRequestOptions::default(),
+    ) {
         Err(SamlError::Invalid(m)) if m.contains("CONFLICT") => Ok(()),
         other => Err(format!("expected conflict, got {other:?}").into()),
     }
@@ -353,7 +358,10 @@ fn login_request_custom(binding: Binding) -> Result<(), Box<dyn std::error::Erro
     let ctx = sp.create_login_request(
         &idp,
         binding,
-        Some(&cb as &dyn Fn(&str) -> (String, String)),
+        &LoginRequestOptions {
+            custom: Some(&cb as &dyn Fn(&str) -> (String, String)),
+            ..Default::default()
+        },
     )?;
     assert_eq!(ctx.id, "_custom_req");
     Ok(())
@@ -379,7 +387,7 @@ fn detached_signature_rejects_mismatched_login_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_config(&sp_config(true, false, false), signing())?;
     let idp = idp(true);
-    let ctx = sp.create_login_request(&idp, binding, None)?;
+    let ctx = sp.create_login_request(&idp, binding, &LoginRequestOptions::default())?;
     let mut request = match binding {
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::SimpleSign => simplesign_request("SAMLRequest", &ctx)?,
@@ -432,7 +440,7 @@ fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_config(&sp_config(true, false, false), signing())?;
     let idp = idp(true);
-    let ctx = sp.create_login_request_with_options(
+    let ctx = sp.create_login_request(
         &idp,
         Binding::Redirect,
         &LoginRequestOptions {
@@ -471,7 +479,7 @@ fn signed_request_with_key(
     setting.request_signature_algorithm = RSA_SHA256.into();
     let sp = ServiceProvider::from_config(&sp_config(true, false, false), setting)?;
     let idp = idp(true);
-    let ctx = sp.create_login_request(&idp, Binding::Redirect, None)?;
+    let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     assert!(ctx.context.contains("&Signature="));
     Ok(())
 }
@@ -1655,7 +1663,9 @@ fn malformed(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
         Binding::Redirect => HttpRequest::redirect(vec![("SAMLResponse".into(), bad)]),
         _ => HttpRequest::post(vec![("SAMLResponse".into(), bad)]),
     };
-    assert!(sp.parse_login_response(&idp, binding, &request).is_err());
+    assert!(sp
+        .parse_unsolicited_login_response(&idp, binding, &request)
+        .is_err());
     Ok(())
 }
 
@@ -1688,7 +1698,7 @@ fn flow_conformance_reject_signature_wrapped_response_case_1(
         STANDARD.encode(ATTACK.as_bytes()),
     )]);
     assert!(sp
-        .parse_login_response(&idp, Binding::Post, &request)
+        .parse_unsolicited_login_response(&idp, Binding::Post, &request)
         .is_err());
     Ok(())
 }
@@ -1733,7 +1743,7 @@ fn two_tier_status(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
             STANDARD.encode(failed.as_bytes()),
         )]),
     };
-    match sp.parse_login_response(&idp, binding, &request) {
+    match sp.parse_unsolicited_login_response(&idp, binding, &request) {
         Err(SamlError::StatusNotSuccess { .. }) => Ok(()),
         other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }

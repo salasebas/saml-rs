@@ -17,8 +17,9 @@ use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::xml::dom::{parse_all_roots, Node};
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::SamlError;
 use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 use saml_rs::{SignatureAction, SignatureConfig};
 

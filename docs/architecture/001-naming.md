@@ -85,8 +85,8 @@ pub mod raw {
 }
 ```
 
-Root re-exports of `ServiceProvider` and `IdentityProvider` can stay during the
-migration window. New docs should prefer `Saml<Sp>` and `Saml<Idp>`.
+The crate root does not re-export `ServiceProvider`, `IdentityProvider`, or
+`EntitySetting`. New docs should prefer `Saml<Sp>` and `Saml<Idp>`.
 
 ## Binding Names
 

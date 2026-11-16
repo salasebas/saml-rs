@@ -28,7 +28,6 @@ pub mod raw {
     pub use crate::flow::{flow, FlowOptions, FlowResult, HttpRequest};
     pub use crate::idp::{IdentityProvider, LoginResponseOptions};
     pub use crate::logout;
-    pub use crate::metadata;
     pub use crate::sp::{LoginRequestOptions, ServiceProvider};
 }
 ```
@@ -39,10 +38,11 @@ This remains supported:
 
 ```rust
 use saml_rs::raw::{
-    Binding, HttpRequest, IdentityProvider, LoginResponseOptions, ServiceProvider,
+    Binding, HttpRequest, IdentityProvider, LoginRequestOptions, LoginResponseOptions,
+    ServiceProvider,
 };
 
-let request = sp.create_login_request(&idp, Binding::Post, None)?;
+let request = sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
 
 let parsed = idp.parse_login_request(
     &sp,
@@ -70,23 +70,11 @@ let result = sp.parse_login_response_with_request_id(
 let name_id = result.extract.get_str("nameID");
 ```
 
-`raw::ServiceProvider` and `raw::IdentityProvider` are the recommended imports
-for advanced raw callers. Typed docs should not import those role types from
-the crate root.
+## One Path Per Item
 
-## Root-Level Compatibility
-
-During the migration window, these may remain available at the crate root:
-
-```rust
-pub use idp::IdentityProvider;
-pub use sp::ServiceProvider;
-pub use entity::EntitySetting;
-```
-
-Root-level `ServiceProvider` and `IdentityProvider` stay available for older
-imports. Their rustdoc points a new integration at `Saml`, and these notes
-describe the typed API first.
+Each raw item has one public path. The crate root does not re-export
+`ServiceProvider`, `IdentityProvider`, or `EntitySetting`, and `raw` does not
+re-export the visible `metadata` module.
 
 ## Raw Escape Hatches From Typed Results
 
