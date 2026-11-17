@@ -492,7 +492,7 @@ pub(crate) fn create_logout_response_inner(
             &init_setting.tag_prefix_protocol,
             &init_setting.tag_prefix_assertion,
         );
-        let xml = replace_tags_by_optional_value(
+        replace_tags_by_optional_value(
             &template,
             &[
                 ("ID", Some(id.clone())),
@@ -502,18 +502,7 @@ pub(crate) fn create_logout_response_inner(
                 ("StatusCode", Some(status.top_level().as_uri().to_string())),
                 ("InResponseTo", in_response_to.map(str::to_string)),
             ],
-        );
-        if let Ok(extracted) =
-            crate::xml::extract(&xml, &crate::xml::fields::logout_response_status_fields())
-        {
-            if extracted.get_str("top") != Some(status.top_level().as_uri()) {
-                return Err(SamlError::Invalid(
-                    "LogoutResponse template did not carry the supplied top-level status code"
-                        .into(),
-                ));
-            }
-        }
-        xml
+        )
     } else {
         render_default_logout_response(
             init_setting,
@@ -531,6 +520,7 @@ pub(crate) fn create_logout_response_inner(
         destination.as_deref(),
         &issuer,
         in_response_to,
+        status.top_level().as_uri(),
         OutboundLogoutValidation::BeforeSigning {
             destination_required: want_signed,
         },
@@ -566,6 +556,7 @@ pub(crate) fn create_logout_response_inner(
                 destination.as_deref(),
                 &issuer,
                 in_response_to,
+                status.top_level().as_uri(),
                 OutboundLogoutValidation::AfterEmbeddedSigning,
             )?;
         }

@@ -58,7 +58,14 @@ struct OutboundLogoutExpectation<'a> {
     destination: Option<&'a str>,
     issuer: &'a str,
     in_response_to: Option<&'a str>,
+    top_level_status: &'a str,
     validation: OutboundLogoutValidation,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum StatusCodeLevel<'a> {
+    TopLevel { expected: &'a str },
+    Subordinate,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -213,7 +220,7 @@ fn validate_outbound_status_code(
     reader: &NsReader<&[u8]>,
     element: &BytesStart<'_>,
     element_namespace: NamespaceKind,
-    top_level: bool,
+    level: StatusCodeLevel<'_>,
 ) -> Result<(), SamlError> {
     if element_namespace != NamespaceKind::Protocol {
         return Err(profile_error("StatusCode has an invalid namespace"));
@@ -228,20 +235,27 @@ fn validate_outbound_status_code(
             "StatusCode Value must be a non-empty absolute URI without whitespace",
         ));
     }
-    if top_level
-        && !matches!(
-            value,
-            status_code::SUCCESS
-                | status_code::REQUESTER
-                | status_code::RESPONDER
-                | status_code::VERSION_MISMATCH
-        )
-    {
-        return Err(profile_error(
-            "top-level StatusCode Value must be Success, Requester, Responder, or VersionMismatch",
-        ));
+    match level {
+        StatusCodeLevel::TopLevel { .. }
+            if !matches!(
+                value,
+                status_code::SUCCESS
+                    | status_code::REQUESTER
+                    | status_code::RESPONDER
+                    | status_code::VERSION_MISMATCH
+            ) =>
+        {
+            Err(profile_error(
+                "top-level StatusCode Value must be Success, Requester, Responder, or VersionMismatch",
+            ))
+        }
+        StatusCodeLevel::TopLevel { expected } if value != expected => {
+            Err(SamlError::Invalid(format!(
+                "outbound LogoutResponse did not carry the supplied top-level status code: expected {expected}, got {value}"
+            )))
+        }
+        StatusCodeLevel::TopLevel { .. } | StatusCodeLevel::Subordinate => Ok(()),
     }
-    Ok(())
 }
 
 fn validate_outbound_root_child(
@@ -297,6 +311,7 @@ fn validate_outbound_status_child(
     reader: &NsReader<&[u8]>,
     element: &BytesStart<'_>,
     element_namespace: NamespaceKind,
+    expectation: &OutboundLogoutExpectation<'_>,
     state: &mut OutboundLogoutState,
 ) -> Result<OutboundLogoutElement, SamlError> {
     let local = element.local_name();
@@ -310,7 +325,14 @@ fn validate_outbound_status_child(
             NamespaceKind::Protocol,
             StatusStage::ExpectStatusCode,
         ) => {
-            validate_outbound_status_code(reader, element, element_namespace, true)?;
+            validate_outbound_status_code(
+                reader,
+                element,
+                element_namespace,
+                StatusCodeLevel::TopLevel {
+                    expected: expectation.top_level_status,
+                },
+            )?;
             state.status_stage = StatusStage::AfterStatusCode;
             Ok(OutboundLogoutElement::StatusCode { child_seen: false })
         }
@@ -359,7 +381,7 @@ fn validate_outbound_logout_start(
             "LogoutResponse Issuer must not contain child elements",
         )),
         OutboundLogoutElement::Status => {
-            validate_outbound_status_child(reader, element, element_namespace, state)
+            validate_outbound_status_child(reader, element, element_namespace, expectation, state)
         }
         OutboundLogoutElement::StatusCode { child_seen } => {
             if *child_seen
@@ -370,7 +392,12 @@ fn validate_outbound_logout_start(
                     "StatusCode may contain at most one subordinate StatusCode",
                 ));
             }
-            validate_outbound_status_code(reader, element, element_namespace, false)?;
+            validate_outbound_status_code(
+                reader,
+                element,
+                element_namespace,
+                StatusCodeLevel::Subordinate,
+            )?;
             *child_seen = true;
             Ok(OutboundLogoutElement::StatusCode { child_seen: false })
         }
@@ -436,6 +463,7 @@ pub(crate) fn validate_logout_response_outbound(
     expected_destination: Option<&str>,
     expected_issuer: &str,
     expected_in_response_to: Option<&str>,
+    expected_top_level_status: &str,
     validation: OutboundLogoutValidation,
 ) -> Result<Document, SamlError> {
     let document = parse_document(xml, XmlLimits::unbounded())?;
@@ -444,6 +472,7 @@ pub(crate) fn validate_logout_response_outbound(
         destination: expected_destination,
         issuer: expected_issuer,
         in_response_to: expected_in_response_to,
+        top_level_status: expected_top_level_status,
         validation,
     };
     let state = validate_outbound_stream(
