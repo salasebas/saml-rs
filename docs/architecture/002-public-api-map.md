@@ -54,7 +54,7 @@ The root modules hidden from docs.rs (`binding`, `context`, `crypto`,
 `entity`, `flow`, `idp`, `logout`, `sp`, `template`, `util`, `validator`, and
 `xml`) are not part of this surface. An item that the documented API names has
 a documented path: configuration types under `config`, and raw extractor types
-under `raw`. The [0.8 to 0.9 guide](../migrations/0.8-to-0.9/README.md#2-move-off-the-hidden-modules)
+under `raw`. The [0.8 to 0.9 guide](../migrations/0.8-to-0.9/public-imports.md)
 lists those paths and the deprecated items.
 
 ## Raw API in this design

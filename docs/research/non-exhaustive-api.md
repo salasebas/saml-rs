@@ -16,7 +16,7 @@ Public fields remain mutable after annotation. The attribute does not establish 
 
 The audit follows [root exports and module visibility](../../src/lib.rs), the [public API map](../architecture/002-public-api-map.md), and public definitions under `src/`. Hidden public modules remain externally accessible and are included. Private implementation types are excluded. The private pending module's public associated-detail types are recorded below because they support public generic types. Type aliases need no separate annotation. The attribute does not apply to traits, functions, or modules.
 
-The existing annotations listed below were present when research began. These changes preserve protocol behavior, defaults, and variant payloads. The source break and catch-all handling are documented in the [0.7-to-0.8 migration](../migrations/0.7-to-0.8.md#18-extend-exhaustive-matches).
+The existing annotations listed below were present when research began. These changes preserve protocol behavior, defaults, and variant payloads. The source break and catch-all handling are documented in the [0.7-to-0.8 migration](../migrations/0.7-to-0.8/compile-errors.md#18-extend-exhaustive-matches).
 
 ## Selected additions
 

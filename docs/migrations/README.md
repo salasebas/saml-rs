@@ -1,19 +1,17 @@
 # How to upgrade saml-rs
 
-Apply every guide from the minor version you run today up to the version you
-are installing. Each guide is the work an existing integration must do. The
-[changelog](../../CHANGELOG.md) lists the rest of the release, including
-compatible additions.
+Apply the guides in order, starting with your installed minor version. Each
+guide covers one upgrade. The [changelog](../../CHANGELOG.md) lists compatible
+additions.
 
 ## Guides
 
-- [How to upgrade from 0.2 to 0.3](0.2-to-0.3.md)
-- [How to upgrade from 0.3 to 0.4](0.3-to-0.4.md)
-- [How to upgrade from 0.4 to 0.5](0.4-to-0.5.md)
-- [How to upgrade from 0.5 to 0.6](0.5-to-0.6.md)
-- [How to upgrade from 0.6 to 0.7](0.6-to-0.7.md)
-- [How to upgrade from 0.7 to 0.8](0.7-to-0.8.md)
-- [How to upgrade from 0.8 to 0.9](0.8-to-0.9/README.md), including [metadata API changes](0.8-to-0.9/metadata-api.md) and [logout, validation, and replay changes](0.8-to-0.9/logout-validation-replay.md)
+- [How to upgrade from 0.2 to 0.3](0.2-to-0.3/README.md)
+- [How to upgrade from 0.3 to 0.4](0.3-to-0.4/README.md)
+- [How to upgrade from 0.4 to 0.5](0.4-to-0.5/README.md)
+- [How to upgrade from 0.5 to 0.6](0.5-to-0.6/README.md)
+- [How to upgrade from 0.6 to 0.7](0.6-to-0.7/README.md)
+- [How to upgrade from 0.7 to 0.8](0.7-to-0.8/README.md)
+- [How to upgrade from 0.8 to 0.9](0.8-to-0.9/README.md)
 
-Someone shipping a breaking change adds the next guide from
-[Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
+[How to add a migration guide](../../CONTRIBUTING.md#how-to-add-a-migration-guide)

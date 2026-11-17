@@ -1,8 +1,9 @@
 # Update metadata imports and accessors
 
-This guide covers callers of `saml_rs::metadata` and peer descriptors in the
-unreleased metadata API cleanup. The compatibility crates re-export the same
-API.
+[How to upgrade from 0.8 to 0.9](README.md)
+
+These changes apply to callers of `saml_rs::metadata` and peer descriptors.
+The compatibility crates re-export the same API.
 
 ## Parse without extractor fields
 
@@ -200,7 +201,7 @@ IdP and SP readers:
 Import with `IdpDescriptor::from_metadata_xml` or
 `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`.
 A failed verification then returns an error that `?` propagates. See
-[Verify signed metadata on import](README.md#7-verify-signed-metadata-on-import)
+[Verify signed metadata on import](metadata.md#7-verify-signed-metadata-on-import)
 for the replacement. The separate deprecated `crypto::verify_metadata_signature*`
 functions remain for their own removal task. For the former limited variants,
 configure `XmlPolicy::limits` and import with `from_metadata_xml_with_policy`.

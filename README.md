@@ -132,7 +132,7 @@ is out of scope, is in the [conformance records](docs/conformance/).
   callback runs after baseline parsing and can run multiple times per operation.
   No schema validator is installed by default. See
   [schema validation scope](docs/conformance/xml-schema-validation.md) and the
-  [migration guide](docs/migrations/0.8-to-0.9/README.md#9-move-schema-validation-into-xml-policy).
+  [migration guide](docs/migrations/0.8-to-0.9/xml-policy.md).
 
 To report a vulnerability, follow [SECURITY.md](SECURITY.md).
 
