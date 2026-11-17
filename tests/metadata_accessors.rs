@@ -34,43 +34,43 @@ fn peer_endpoints_keep_their_role_direction_and_indexed_default(
     assert_eq!(sp.name_id_formats(), [NameIdFormat::Transient]);
     for (selected, expected) in [
         (
-            idp.single_sign_on_service(SsoRequestBinding::Post)?,
+            idp.single_sign_on_location(SsoRequestBinding::Post)?,
             "https://peer.example.com/sso",
         ),
         (
-            sp.assertion_consumer_service(SsoResponseBinding::Post)?,
+            sp.assertion_consumer_location(SsoResponseBinding::Post)?,
             "https://peer.example.com/acs/default",
         ),
         (
-            idp.single_logout_service(LogoutBinding::Post)?,
+            idp.single_logout_location(LogoutBinding::Post)?,
             "https://peer.example.com/idp/logout",
         ),
         (
-            idp.single_logout_response_service(LogoutBinding::Post)?,
+            idp.single_logout_response_location(LogoutBinding::Post)?,
             "https://peer.example.com/idp/response",
         ),
         (
-            sp.single_logout_service(LogoutBinding::Post)?,
+            sp.single_logout_location(LogoutBinding::Post)?,
             "https://peer.example.com/sp/logout",
         ),
         (
-            sp.single_logout_response_service(LogoutBinding::Post)?,
+            sp.single_logout_response_location(LogoutBinding::Post)?,
             "https://peer.example.com/sp/logout",
         ),
     ] {
         assert_eq!(selected, Some(EndpointUrl::try_new(expected)?));
     }
     assert_eq!(
-        idp.single_sign_on_service(SsoRequestBinding::Redirect)?,
+        idp.single_sign_on_location(SsoRequestBinding::Redirect)?,
         None
     );
     assert_eq!(
-        sp.assertion_consumer_service(SsoResponseBinding::Artifact)?,
+        sp.assertion_consumer_location(SsoResponseBinding::Artifact)?,
         None
     );
-    assert_eq!(idp.single_logout_service(LogoutBinding::Soap)?, None);
+    assert_eq!(idp.single_logout_location(LogoutBinding::Soap)?, None);
     assert_eq!(
-        sp.single_logout_response_service(LogoutBinding::Soap)?,
+        sp.single_logout_response_location(LogoutBinding::Soap)?,
         None
     );
     Ok(())
@@ -90,17 +90,39 @@ fn endpoint_access_validates_selected_urls_without_rejecting_metadata_on_import(
         &xml,
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    for selected in [
-        idp.single_sign_on_service(SsoRequestBinding::Post),
-        sp.assertion_consumer_service(SsoResponseBinding::Post),
-        idp.single_logout_service(LogoutBinding::Post),
-        idp.single_logout_response_service(LogoutBinding::Post),
-        sp.single_logout_service(LogoutBinding::Post),
-        sp.single_logout_response_service(LogoutBinding::Post),
+    for (selected, element) in [
+        (
+            idp.single_sign_on_location(SsoRequestBinding::Post),
+            "SingleSignOnService",
+        ),
+        (
+            sp.assertion_consumer_location(SsoResponseBinding::Post),
+            "AssertionConsumerService",
+        ),
+        (
+            idp.single_logout_location(LogoutBinding::Post),
+            "SingleLogoutService",
+        ),
+        (
+            idp.single_logout_response_location(LogoutBinding::Post),
+            "SingleLogoutService",
+        ),
+        (
+            sp.single_logout_location(LogoutBinding::Post),
+            "SingleLogoutService",
+        ),
+        (
+            sp.single_logout_response_location(LogoutBinding::Post),
+            "SingleLogoutService",
+        ),
     ] {
+        let Err(SamlError::Invalid(detail)) = selected else {
+            return Err(format!("expected an invalid {element} location, got {selected:?}").into());
+        };
+        assert!(detail.contains(element), "missing endpoint name: {detail}");
         assert!(
-            matches!(selected, Err(SamlError::Invalid(_))),
-            "{selected:?}"
+            detail.contains(SsoRequestBinding::Post.as_binding().urn()),
+            "missing binding: {detail}"
         );
     }
     Ok(())

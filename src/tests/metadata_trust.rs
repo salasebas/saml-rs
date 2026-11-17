@@ -180,9 +180,9 @@ fn metadata_trust_accepts_signed_idp_descriptor_with_pinned_certificate(
         trust(std::slice::from_ref(&cert)),
     )?;
 
-    assert!(descriptor.was_verified_with_pinned_certificates());
+    assert!(descriptor.metadata_signature_verified());
     assert!(descriptor
-        .signed_entity_descriptor_xml()
+        .signed_metadata_xml()
         .is_some_and(|xml| xml.contains("https://idp.example.com/metadata")));
     Ok(())
 }
@@ -198,9 +198,9 @@ fn metadata_trust_accepts_signed_sp_descriptor_with_pinned_certificate(
         trust(std::slice::from_ref(&cert)),
     )?;
 
-    assert!(descriptor.was_verified_with_pinned_certificates());
+    assert!(descriptor.metadata_signature_verified());
     assert!(descriptor
-        .signed_entity_descriptor_xml()
+        .signed_metadata_xml()
         .is_some_and(|xml| xml.contains("https://sp.example.com/metadata")));
     Ok(())
 }
@@ -354,9 +354,9 @@ fn require_signature_allowing_other_transforms_accepts_inclusive_canonicalizatio
         &signed,
         trust_allowing_other_transforms(std::slice::from_ref(&cert)),
     )?;
-    assert!(descriptor.was_verified_with_pinned_certificates());
+    assert!(descriptor.metadata_signature_verified());
     assert!(descriptor
-        .signed_entity_descriptor_xml()
+        .signed_metadata_xml()
         .is_some_and(|xml| xml.contains("https://idp.example.com/metadata")));
     Ok(())
 }
@@ -369,7 +369,7 @@ fn allowing_weak_algorithms_keeps_the_profile_transforms() -> Result<(), Box<dyn
     let profile = sign_root_metadata(idp_metadata_xml())?;
     assert!(
         import_idp(&profile, trust_allowing_weak_algorithms(certificates))?
-            .was_verified_with_pinned_certificates()
+            .metadata_signature_verified()
     );
 
     let inclusive = sign_metadata_root(
@@ -489,19 +489,17 @@ fn entities_descriptor_require_signature_accepts_the_profile_shape(
     )?;
     let descriptor = import_idp(&signed, trust(std::slice::from_ref(&cert)))?;
 
-    assert!(descriptor.was_verified_with_pinned_certificates());
+    assert!(descriptor.metadata_signature_verified());
     assert_eq!(
         descriptor
-            .single_sign_on_service(saml_rs::SsoRequestBinding::Post)?
+            .single_sign_on_location(saml_rs::SsoRequestBinding::Post)?
             .as_ref()
             .map(saml_rs::EndpointUrl::as_str),
         Some("https://idp.example.com/sso")
     );
-    assert!(descriptor
-        .signed_entity_descriptor_xml()
-        .is_some_and(|xml| {
-            xml.contains("EntitiesDescriptor") && xml.contains("https://idp.example.com/metadata")
-        }));
+    assert!(descriptor.signed_metadata_xml().is_some_and(|xml| {
+        xml.contains("EntitiesDescriptor") && xml.contains("https://idp.example.com/metadata")
+    }));
     Ok(())
 }
 
@@ -587,8 +585,8 @@ fn unsigned_for_compatibility_does_not_record_a_signature_as_verified(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
 
-    assert!(!descriptor.was_verified_with_pinned_certificates());
-    assert_eq!(descriptor.signed_entity_descriptor_xml(), None);
+    assert!(!descriptor.metadata_signature_verified());
+    assert_eq!(descriptor.signed_metadata_xml(), None);
     Ok(())
 }
 
@@ -676,8 +674,7 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
             trust(certificates),
             trust_allowing_other_transforms(certificates),
         ] {
-            match import_idp(&signed, policy).map(|idp| idp.was_verified_with_pinned_certificates())
-            {
+            match import_idp(&signed, policy).map(|idp| idp.metadata_signature_verified()) {
                 Err(SamlError::AlgorithmUnsupported) => {}
                 other => failures.push(format!(
                     "{signature_method} with {digest_method} under {policy:?}: {other:?}"
@@ -685,7 +682,7 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
             }
         }
         let compatible = import_idp(&signed, trust_allowing_weak_algorithms(certificates))?;
-        assert!(compatible.was_verified_with_pinned_certificates());
+        assert!(compatible.metadata_signature_verified());
         assert!(saml_rs::crypto::verify_metadata_signature(
             &signed,
             &[CERT.to_string()]
@@ -701,7 +698,7 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
         trust(certificates),
         trust_allowing_other_transforms(certificates),
     ] {
-        assert!(import_idp(&sha1, policy)?.was_verified_with_pinned_certificates());
+        assert!(import_idp(&sha1, policy)?.metadata_signature_verified());
     }
     Ok(())
 }
@@ -718,22 +715,21 @@ fn require_signature_does_not_verify_with_a_1024_bit_rsa_key(
         trust(only_short),
         trust_allowing_other_transforms(only_short),
     ] {
-        match import_idp(&signed, policy).map(|idp| idp.was_verified_with_pinned_certificates()) {
+        match import_idp(&signed, policy).map(|idp| idp.metadata_signature_verified()) {
             Err(SamlError::Crypto(message)) if message.contains("1024-bit RSA key") => {}
             other => return Err(format!("{policy:?}: {other:?}").into()),
         }
     }
 
     let compatible = import_idp(&signed, trust_allowing_weak_algorithms(only_short))?;
-    assert!(compatible.was_verified_with_pinned_certificates());
+    assert!(compatible.metadata_signature_verified());
     assert!(saml_rs::crypto::verify_metadata_signature(
         &signed,
         &[RSA_1024_CERT.to_string()]
     )?);
 
     let with_usable_key = [short, CertificatePem::new(CERT)];
-    match import_idp(&signed, trust(&with_usable_key))
-        .map(|idp| idp.was_verified_with_pinned_certificates())
+    match import_idp(&signed, trust(&with_usable_key)).map(|idp| idp.metadata_signature_verified())
     {
         Err(SamlError::SignatureVerification {
             reason: SignatureVerificationReason::XmlSignature,

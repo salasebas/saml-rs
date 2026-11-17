@@ -13,7 +13,7 @@ use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
 use saml_rs::constants::{elements_order, signature_algorithm::RSA_SHA256, Binding, CertUse};
 use saml_rs::entity::{iso8601_offset, EntitySetting};
 use saml_rs::metadata::{
-    generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataConfig, SpMetadata, SpMetadataConfig,
+    generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, SpMetadata, SpMetadataInput,
 };
 use saml_rs::raw::IdentityProvider;
 use saml_rs::util::{normalize_cert_string, normalize_pem_string};
@@ -61,7 +61,7 @@ fn normalize_pem_key_returns_clean_string() {
 #[test]
 fn get_acs_with_one_binding() -> Result<(), Box<dyn std::error::Error>> {
     let loc = "https:sp.example.org/sp/sso/post";
-    let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataConfig {
+    let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp".into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, loc)],
         single_logout_service: vec![Endpoint::new(
@@ -71,7 +71,7 @@ fn get_acs_with_one_binding() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     })?)?;
     assert_eq!(
-        sp.assertion_consumer_service(Binding::Post).as_deref(),
+        sp.assertion_consumer_location(Binding::Post).as_deref(),
         Some(loc)
     );
     Ok(())
@@ -81,7 +81,7 @@ fn get_acs_with_one_binding() -> Result<(), Box<dyn std::error::Error>> {
 fn get_acs_with_two_bindings() -> Result<(), Box<dyn std::error::Error>> {
     let post = "https:sp.example.org/sp/sso/post";
     let artifact = "https:sp.example.org/sp/sso/artifact";
-    let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataConfig {
+    let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp".into(),
         assertion_consumer_service: vec![
             Endpoint::new(Binding::Post, post),
@@ -90,18 +90,18 @@ fn get_acs_with_two_bindings() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     })?)?;
     assert_eq!(
-        sp.assertion_consumer_service(Binding::Post).as_deref(),
+        sp.assertion_consumer_location(Binding::Post).as_deref(),
         Some(post)
     );
     assert_eq!(
-        sp.assertion_consumer_service(Binding::Artifact).as_deref(),
+        sp.assertion_consumer_location(Binding::Artifact).as_deref(),
         Some(artifact)
     );
     Ok(())
 }
 
-fn order_base_config() -> SpMetadataConfig {
-    SpMetadataConfig {
+fn order_base_config() -> SpMetadataInput {
+    SpMetadataInput {
         entity_id: "http://sp".into(),
         signing_certs: vec![SP_CERT.into()],
         name_id_format: vec!["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into()],
@@ -124,7 +124,7 @@ fn sp_metadata_with_default_elements_order() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn sp_metadata_with_onelogin_elements_order() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         manage_name_id_service: vec![Endpoint::new(Binding::Redirect, "https://sp/nameid")],
         elements_order: Some(
             elements_order::ONELOGIN
@@ -161,7 +161,7 @@ fn sp_metadata_with_onelogin_elements_order() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn sp_metadata_with_shibboleth_elements_order() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         elements_order: Some(
             elements_order::SHIBBOLETH
                 .iter()
@@ -183,7 +183,7 @@ fn sp_metadata_with_shibboleth_elements_order() -> Result<(), Box<dyn std::error
 fn idp_with_multiple_signing_and_encryption_certificates() -> Result<(), Box<dyn std::error::Error>>
 {
     let idp = IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp".into(),
             signing_certs: vec![IDP_CERT.into(), IDP_CERT2.into()],
             encrypt_certs: vec![IDP_ENC_CERT.into(), IDP_ENC_CERT.into()],
@@ -192,8 +192,20 @@ fn idp_with_multiple_signing_and_encryption_certificates() -> Result<(), Box<dyn
         },
         EntitySetting::default(),
     )?;
-    assert_eq!(idp.metadata.x509_certificates(CertUse::Signing).len(), 2);
-    assert_eq!(idp.metadata.x509_certificates(CertUse::Encryption).len(), 2);
+    assert_eq!(
+        idp.metadata
+            .as_metadata()
+            .x509_certificates(CertUse::Signing)
+            .len(),
+        2
+    );
+    assert_eq!(
+        idp.metadata
+            .as_metadata()
+            .x509_certificates(CertUse::Encryption)
+            .len(),
+        2
+    );
     Ok(())
 }
 
@@ -236,21 +248,35 @@ fn metadata_with_multiple_entity_descriptors_is_invalid() {
 fn undefined_x509_key_in_metadata_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     // Metadata without any certificate returns None for either use (samlify
     // returns null for a certificate use that is not declared).
-    let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataConfig {
+    let sp = SpMetadata::from_xml(&generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp".into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "http://sp/acs")],
         ..Default::default()
     })?)?;
-    assert!(sp.x509_certificates(CertUse::Signing).is_empty());
-    assert!(sp.x509_certificates(CertUse::Encryption).is_empty());
+    assert!(sp
+        .as_metadata()
+        .x509_certificates(CertUse::Signing)
+        .is_empty());
+    assert!(sp
+        .as_metadata()
+        .x509_certificates(CertUse::Encryption)
+        .is_empty());
     Ok(())
 }
 
 #[test]
 fn list_of_x509_keys_when_multiple_keys_used() -> Result<(), Box<dyn std::error::Error>> {
     let idp = IdpMetadata::from_xml(IDPMETA_ROLLING)?;
-    assert_eq!(idp.x509_certificates(CertUse::Signing).len(), 2);
-    assert_eq!(idp.x509_certificates(CertUse::Encryption).len(), 1);
+    assert_eq!(
+        idp.as_metadata().x509_certificates(CertUse::Signing).len(),
+        2
+    );
+    assert_eq!(
+        idp.as_metadata()
+            .x509_certificates(CertUse::Encryption)
+            .len(),
+        1
+    );
     Ok(())
 }
 
@@ -259,9 +285,10 @@ fn get_name_id_format_in_metadata() -> Result<(), Box<dyn std::error::Error>> {
     let sp = SpMetadata::from_xml(SPMETA)?;
     let idp = IdpMetadata::from_xml(IDPMETA)?;
     assert!(sp
+        .as_metadata()
         .name_id_formats()
         .contains(&saml_rs::NameIdFormat::EmailAddress));
-    assert!(!idp.name_id_formats().is_empty());
+    assert!(!idp.as_metadata().name_id_formats().is_empty());
     Ok(())
 }
 
@@ -270,20 +297,23 @@ fn get_entity_setting() -> Result<(), Box<dyn std::error::Error>> {
     let idp = IdpMetadata::from_xml(IDPMETA)?;
     let sp = SpMetadata::from_xml(SPMETA)?;
     // Settings are plain accessible structs in Rust.
-    assert!(idp.entity_id().is_some());
+    assert!(idp.as_metadata().entity_id().is_some());
     assert_eq!(
         EntitySetting::default().request_signature_algorithm,
         RSA_SHA256
     );
-    assert!(sp.entity_id().is_some());
+    assert!(sp.as_metadata().entity_id().is_some());
     Ok(())
 }
 
 #[test]
 fn shared_certificate_for_signing_and_encryption() -> Result<(), Box<dyn std::error::Error>> {
     let m = IdpMetadata::from_xml(IDPMETA_SHARE)?;
-    let signing = m.x509_certificates(CertUse::Signing).first();
-    let encryption = m.x509_certificates(CertUse::Encryption).first();
+    let signing = m.as_metadata().x509_certificates(CertUse::Signing).first();
+    let encryption = m
+        .as_metadata()
+        .x509_certificates(CertUse::Encryption)
+        .first();
     assert!(signing.is_some() && encryption.is_some());
     assert_eq!(signing, encryption);
     Ok(())
@@ -293,8 +323,11 @@ fn shared_certificate_for_signing_and_encryption() -> Result<(), Box<dyn std::er
 fn explicit_certificate_declaration_for_signing_and_encryption(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let m = IdpMetadata::from_xml(IDPMETA)?;
-    let signing = m.x509_certificates(CertUse::Signing).first();
-    let encryption = m.x509_certificates(CertUse::Encryption).first();
+    let signing = m.as_metadata().x509_certificates(CertUse::Signing).first();
+    let encryption = m
+        .as_metadata()
+        .x509_certificates(CertUse::Encryption)
+        .first();
     assert!(signing.is_some() && encryption.is_some());
     assert_ne!(signing, encryption);
     Ok(())
@@ -342,6 +375,7 @@ mod crypto {
     fn sp_signing() -> Vec<String> {
         SpMetadata::from_xml(SPMETA)
             .unwrap()
+            .as_metadata()
             .x509_certificates(CertUse::Signing)
             .to_vec()
     }
@@ -349,6 +383,7 @@ mod crypto {
     fn idp_signing() -> Vec<String> {
         IdpMetadata::from_xml(IDPMETA)
             .unwrap()
+            .as_metadata()
             .x509_certificates(CertUse::Signing)
             .to_vec()
     }

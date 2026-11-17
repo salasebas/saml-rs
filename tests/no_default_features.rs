@@ -10,7 +10,7 @@ use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::idp::LoginResponseOptions;
 #[allow(deprecated)]
 use saml_rs::logout::{create_logout_request, create_logout_response};
-use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
@@ -23,8 +23,8 @@ use saml_rs::{
 };
 use std::time::SystemTime;
 
-fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataConfig {
-    IdpMetadataConfig {
+fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataInput {
+    IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         want_authn_requests_signed,
         single_sign_on_service: vec![
@@ -36,8 +36,8 @@ fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataConfig {
     }
 }
 
-fn sp_config(authn_requests_signed: bool) -> SpMetadataConfig {
-    SpMetadataConfig {
+fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
+    SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         authn_requests_signed,
         assertion_consumer_service: vec![Endpoint::new(
@@ -130,7 +130,7 @@ fn unsigned_metadata_parsing_and_xml_extraction_still_work(
     let metadata_xml = idp(false)?.metadata_xml().to_string();
     let metadata = IdpMetadata::from_xml(&metadata_xml)?;
     assert_eq!(
-        metadata.entity_id(),
+        metadata.as_metadata().entity_id(),
         Some("https://idp.example.com/metadata")
     );
 
@@ -432,8 +432,8 @@ fn encrypted_assertion_parse_path_returns_unsupported() {
 fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(create_logout_request(
         &EntitySetting::default(),
-        &sp(false)?.metadata,
-        &idp(false)?.metadata,
+        sp(false)?.metadata.as_metadata(),
+        idp(false)?.metadata.as_metadata(),
         Binding::Post,
         &User::new("user@example.com"),
         None,
@@ -447,8 +447,8 @@ fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error:
 fn signed_logout_response_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(create_logout_response(
         &EntitySetting::default(),
-        &idp(false)?.metadata,
-        &sp(false)?.metadata,
+        idp(false)?.metadata.as_metadata(),
+        sp(false)?.metadata.as_metadata(),
         Binding::Post,
         Some("_logout_request"),
         None,

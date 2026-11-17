@@ -6,7 +6,7 @@ This note evaluates the planned metadata API cleanup. It uses the [Rust API Guid
 
 The Rust API Guidelines recommend inherent static constructors and commonly suffix secondary constructors with `_with_foo` ([C-CTOR](https://rust-lang.github.io/api-guidelines/predictability.html#c-ctor)). Keep `from_metadata_xml` and `from_metadata_xml_with_policy`. Requiring `MetadataTrustPolicy` on both keeps the trust decision explicit. C-CTOR supports the naming pattern, not a security requirement.
 
-Rust getters normally omit `get_` ([C-GETTER](https://rust-lang.github.io/api-guidelines/naming.html#c-getter)). Typed accessors such as `single_sign_on_service` fit that convention. Arguments should use deliberate types instead of ambiguous `bool` or `Option` values ([C-CUSTOM-TYPE](https://rust-lang.github.io/api-guidelines/type-safety.html#c-custom-type)). `MetadataTrustPolicy` therefore communicates the caller's trust choice better than a boolean or implicit default. Neither guideline establishes SAML wire rules.
+Rust getters normally omit `get_` ([C-GETTER](https://rust-lang.github.io/api-guidelines/naming.html#c-getter)). Typed accessors such as `single_sign_on_location` fit that convention. Arguments should use deliberate types instead of ambiguous `bool` or `Option` values ([C-CUSTOM-TYPE](https://rust-lang.github.io/api-guidelines/type-safety.html#c-custom-type)). `MetadataTrustPolicy` therefore communicates the caller's trust choice better than a boolean or implicit default. Neither guideline establishes SAML wire rules.
 
 ## Metadata preserves more than typed flows need
 
@@ -27,3 +27,21 @@ Metadata §4.3.3 describes several trust mechanisms. It does not require every m
 The SAML type permits `anyURI`; it does not require every endpoint to be an HTTP(S) URL. Typed SP and IdP descriptor accessors can return an `EndpointUrl` and report an error when the selected endpoint is not absolute HTTP(S), while metadata import keeps unknown bindings and URI values. That HTTP(S) filter is a library API policy for the supported flow. It must not become an import-time protocol rejection. Read organization, contact, and `NameIDFormat` values without narrowing the imported XML. Report accessor-specific interpretation errors only when callers request those values. The only planned behavior change is requiring the raw artifact publisher to receive a typed HTTP(S) URL. It does not change protocol acceptance on import.
 
 Hiding the extractor argument and keeping `metadata::{sp,idp,generate}` private behind deliberate reexports are API encapsulation choices, not SAML requirements. Removing filesystem export is also an API cleanup, not a conformance change. The change removes the extractor arguments, raw descriptor accessors, singular certificate getter, filesystem writer, and duplicate submodule paths. These are library API changes, not newly discovered SAML protocol defects.
+## Explicit raw composition and final names
+
+The raw role readers borrow their shared fields through `as_metadata()`.
+They no longer use `Deref` as inheritance. This follows
+[C-DEREF](https://rust-lang.github.io/api-guidelines/predictability.html#c-deref)
+and leaves the role-specific reader responsible for selecting its shared view.
+No additional view type is needed. The typed descriptor still offers direct,
+role-specific endpoint accessors. Methods returning one endpoint location use
+`_location`, while the configuration's endpoint collections retain `_service`.
+
+Raw generator records are `SpMetadataInput` and `IdpMetadataInput`. The names
+separate those passive inputs from the typed config readers. List getters use
+`name_id_formats()` and the builder's repeatable setter stays singular.
+
+`metadata_signature_verified()` names the import-time check, and
+`signed_metadata_xml()` names evidence that may cover an `EntitiesDescriptor`.
+Neither method claims that metadata is unexpired or that the default algorithm
+policy was selected.

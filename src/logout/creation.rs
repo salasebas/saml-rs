@@ -182,7 +182,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         ));
     }
     let destination = target_meta
-        .single_logout_service(binding)
+        .single_logout_location(binding)
         .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?;
     let id = message_id
         .filter(|value| !value.is_empty())
@@ -466,7 +466,7 @@ pub(crate) fn create_logout_response_inner(
         Binding::Soap => None,
         Binding::Redirect | Binding::Post | Binding::SimpleSign | Binding::Artifact => Some(
             target_meta
-                .single_logout_response_service(binding)
+                .single_logout_response_location(binding)
                 .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?,
         ),
     };

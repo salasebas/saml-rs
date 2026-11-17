@@ -805,21 +805,21 @@ pub(crate) fn verify_signatures_detailed_with_profile(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataSignatureVerification {
     verified: bool,
-    signed_entity_descriptor_xml: Option<String>,
+    signed_metadata_xml: Option<String>,
 }
 
 impl MetadataSignatureVerification {
-    pub(crate) fn from_signed_descriptor(signed_entity_descriptor_xml: String) -> Self {
+    pub(crate) fn from_signed_metadata(signed_metadata_xml: String) -> Self {
         Self {
             verified: true,
-            signed_entity_descriptor_xml: Some(signed_entity_descriptor_xml),
+            signed_metadata_xml: Some(signed_metadata_xml),
         }
     }
 
     pub(crate) fn unverified() -> Self {
         Self {
             verified: false,
-            signed_entity_descriptor_xml: None,
+            signed_metadata_xml: None,
         }
     }
 
@@ -829,12 +829,12 @@ impl MetadataSignatureVerification {
     }
 
     /// Signed `<EntityDescriptor>` or `<EntitiesDescriptor>` when verification succeeds.
-    pub fn signed_entity_descriptor_xml(&self) -> Option<&str> {
-        self.signed_entity_descriptor_xml.as_deref()
+    pub fn signed_metadata_xml(&self) -> Option<&str> {
+        self.signed_metadata_xml.as_deref()
     }
 
-    pub(crate) fn into_signed_entity_descriptor_xml(self) -> Option<String> {
-        self.signed_entity_descriptor_xml
+    pub(crate) fn into_signed_metadata_xml(self) -> Option<String> {
+        self.signed_metadata_xml
     }
 }
 
@@ -948,13 +948,12 @@ pub(crate) fn verify_metadata_signature_coverage_with_limits(
     limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<MetadataSignatureVerification, SamlError> {
-    let (verified, signed_entity_descriptor_xml) =
+    let (verified, signed_metadata_xml) =
         verify_first_signature_with_profile(xml, trusted_certificates, limits, profile)?;
     if !verified {
         return Ok(MetadataSignatureVerification::unverified());
     }
-    let signed_entity_descriptor_xml =
-        signed_entity_descriptor_xml.ok_or_else(verified_content_not_covered)?;
+    let signed_metadata_xml = signed_metadata_xml.ok_or_else(verified_content_not_covered)?;
     let descriptor = dom::parse_document(xml, limits)?;
     if !matches!(
         descriptor.root.local_name.as_str(),
@@ -962,8 +961,8 @@ pub(crate) fn verify_metadata_signature_coverage_with_limits(
     ) {
         return Err(verified_content_not_covered());
     }
-    Ok(MetadataSignatureVerification::from_signed_descriptor(
-        signed_entity_descriptor_xml,
+    Ok(MetadataSignatureVerification::from_signed_metadata(
+        signed_metadata_xml,
     ))
 }
 

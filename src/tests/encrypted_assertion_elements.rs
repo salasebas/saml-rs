@@ -371,11 +371,15 @@ fn metadata_publishes_each_encryption_certificate_in_order(
     ];
 
     assert_eq!(
-        SpMetadata::from_xml(sp.metadata_xml())?.x509_certificates(CertUse::Encryption),
+        SpMetadata::from_xml(sp.metadata_xml())?
+            .as_metadata()
+            .x509_certificates(CertUse::Encryption),
         published
     );
     assert_eq!(
-        IdpMetadata::from_xml(idp.metadata_xml())?.x509_certificates(CertUse::Encryption),
+        IdpMetadata::from_xml(idp.metadata_xml())?
+            .as_metadata()
+            .x509_certificates(CertUse::Encryption),
         published
     );
     for metadata in [sp.metadata_xml(), idp.metadata_xml()] {

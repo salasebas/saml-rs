@@ -11,7 +11,7 @@ use saml_rs::entity::{iso8601_offset, EntitySetting, User};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::SamlError;
@@ -30,7 +30,7 @@ fn signing() -> EntitySetting {
 
 fn idp() -> IdentityProvider {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -43,7 +43,7 @@ fn idp() -> IdentityProvider {
 
 fn sp_with(entity_id: &str, setting: EntitySetting) -> ServiceProvider {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: entity_id.into(),
             want_assertions_signed: true,
             signing_certs: vec![CERT.into()],
@@ -639,7 +639,7 @@ fn hardening_sign_then_encrypt_message_auto_resolves() -> Result<(), Box<dyn std
     let mut idp_setting = signing();
     idp_setting.is_assertion_encrypted = true;
     let idp = IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -651,7 +651,7 @@ fn hardening_sign_then_encrypt_message_auto_resolves() -> Result<(), Box<dyn std
     sp_setting.is_assertion_encrypted = true;
     sp_setting.enc_private_key = Some(PRIVKEY.into());
     let sp = ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             want_assertions_signed: false, // message gets signed
             signing_certs: vec![CERT.into()],
@@ -733,7 +733,9 @@ fn hardening_metadata_signature_requires_root_coverage() -> Result<(), Box<dyn s
     let wrapped_metadata = sign(&ctx, &template)?;
 
     assert_eq!(
-        IdpMetadata::from_xml(&wrapped_metadata)?.entity_id(),
+        IdpMetadata::from_xml(&wrapped_metadata)?
+            .as_metadata()
+            .entity_id(),
         Some("https://evil.example.com/metadata")
     );
     match verify_metadata_signature(&wrapped_metadata, &[CERT.to_string()]) {

@@ -64,7 +64,7 @@ impl Saml<Sp> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         start_slo_impl(
             &self.raw_service_provider().setting,
-            &self.raw_service_provider().metadata,
+            self.raw_service_provider().metadata.as_metadata(),
             peer,
             subject,
             options,
@@ -100,7 +100,7 @@ impl Saml<Sp> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
         receive_slo_impl(
             &self.raw_service_provider().setting,
-            &self.raw_service_provider().metadata,
+            self.raw_service_provider().metadata.as_metadata(),
             peer,
             input,
             validation,
@@ -132,7 +132,7 @@ impl Saml<Sp> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         respond_slo_impl(
             &self.raw_service_provider().setting,
-            &self.raw_service_provider().metadata,
+            self.raw_service_provider().metadata.as_metadata(),
             peer,
             request,
             options,
@@ -203,7 +203,7 @@ impl Saml<Sp> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
         finish_slo_impl(
             &self.raw_service_provider().setting,
-            &self.raw_service_provider().metadata,
+            self.raw_service_provider().metadata.as_metadata(),
             peer,
             pending,
             input,
@@ -269,7 +269,7 @@ impl Saml<Idp> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         start_slo_impl(
             &self.raw_identity_provider().setting,
-            &self.raw_identity_provider().metadata,
+            self.raw_identity_provider().metadata.as_metadata(),
             peer,
             subject,
             options,
@@ -329,7 +329,7 @@ impl Saml<Idp> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
         receive_slo_impl(
             &self.raw_identity_provider().setting,
-            &self.raw_identity_provider().metadata,
+            self.raw_identity_provider().metadata.as_metadata(),
             peer,
             input,
             validation,
@@ -375,7 +375,7 @@ impl Saml<Idp> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         respond_slo_impl(
             &self.raw_identity_provider().setting,
-            &self.raw_identity_provider().metadata,
+            self.raw_identity_provider().metadata.as_metadata(),
             peer,
             request,
             options,
@@ -446,7 +446,7 @@ impl Saml<Idp> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
         finish_slo_impl(
             &self.raw_identity_provider().setting,
-            &self.raw_identity_provider().metadata,
+            self.raw_identity_provider().metadata.as_metadata(),
             peer,
             pending,
             input,

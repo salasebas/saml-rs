@@ -186,7 +186,7 @@ impl Saml<Sp> {
         let sp = self.raw_service_provider();
         Local {
             setting: &sp.setting,
-            metadata: &sp.metadata,
+            metadata: sp.metadata.as_metadata(),
             requester: Requester::ServiceProvider,
         }
     }
@@ -360,7 +360,7 @@ impl Saml<Idp> {
         let idp = self.raw_identity_provider();
         Local {
             setting: &idp.setting,
-            metadata: &idp.metadata,
+            metadata: idp.metadata.as_metadata(),
             requester: Requester::IdentityProvider,
         }
     }

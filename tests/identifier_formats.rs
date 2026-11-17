@@ -20,7 +20,7 @@ use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
 use saml_rs::entity::iso8601_offset;
 use saml_rs::metadata::{
-    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataConfig, SpMetadataConfig,
+    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
 use saml_rs::raw::{Binding, LoginRequestOptions, LoginResponseOptions, User};
 use saml_rs::template::replace_tags_by_value;
@@ -1199,11 +1199,11 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
             NameIdFormat::EmailAddress.as_uri().to_string(),
             format.to_string(),
         ];
-        expect_name_id_format_error(generate_sp_metadata(&SpMetadataConfig {
+        expect_name_id_format_error(generate_sp_metadata(&SpMetadataInput {
             name_id_format: formats.clone(),
             ..raw_sp_metadata_config(SP_ENTITY_ID)
         }))?;
-        expect_name_id_format_error(generate_idp_metadata(&IdpMetadataConfig {
+        expect_name_id_format_error(generate_idp_metadata(&IdpMetadataInput {
             name_id_format: formats,
             ..raw_idp_metadata_config(IDP_ENTITY_ID)
         }))?;
@@ -1231,19 +1231,19 @@ fn metadata_is_not_generated_for_an_entity_id_that_is_not_a_uri_of_at_most_1024_
     Ok(())
 }
 
-fn raw_sp_metadata_config(entity_id: &str) -> SpMetadataConfig {
-    SpMetadataConfig {
+fn raw_sp_metadata_config(entity_id: &str) -> SpMetadataInput {
+    SpMetadataInput {
         entity_id: entity_id.into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, SP_ACS)],
-        ..SpMetadataConfig::default()
+        ..SpMetadataInput::default()
     }
 }
 
-fn raw_idp_metadata_config(entity_id: &str) -> IdpMetadataConfig {
-    IdpMetadataConfig {
+fn raw_idp_metadata_config(entity_id: &str) -> IdpMetadataInput {
+    IdpMetadataInput {
         entity_id: entity_id.into(),
         single_sign_on_service: vec![Endpoint::new(Binding::Post, IDP_SSO_POST)],
-        ..IdpMetadataConfig::default()
+        ..IdpMetadataInput::default()
     }
 }
 

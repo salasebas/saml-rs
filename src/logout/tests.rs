@@ -6,14 +6,14 @@ use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting, User};
 use crate::error::SamlError;
 use crate::flow::HttpRequest;
-use crate::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use crate::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use crate::raw::{IdentityProvider, ServiceProvider};
 use std::time::{Duration, SystemTime};
 use url::Url;
 
 fn sp() -> Result<ServiceProvider, SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![
                 Endpoint::new(Binding::Redirect, "https://sp/slo"),
@@ -29,7 +29,7 @@ fn sp() -> Result<ServiceProvider, SamlError> {
 
 fn idp() -> Result<IdentityProvider, SamlError> {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
             single_logout_service: vec![
@@ -52,7 +52,7 @@ fn unsigned_setting() -> EntitySetting {
 
 fn unsigned_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: entity_id.into(),
             single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -79,8 +79,8 @@ fn create_custom_logout_response(
         Some(custom_logout_response_template(issue_instant_attribute));
     create_logout_response(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         binding,
         Some("_req1"),
         None,
@@ -148,7 +148,7 @@ fn parse_unsigned_logout_response(
     sp.setting.want_logout_response_signed = false;
     parse_logout_response(
         &sp.setting,
-        &idp.metadata,
+        idp.metadata.as_metadata(),
         Binding::Post,
         &logout_response_request(issue_instant_attribute),
         "_req1",
@@ -183,7 +183,7 @@ fn parse_unsigned_logout_request_at(
     receiver.setting.want_logout_request_signed = false;
     parse_logout_request_at(
         &receiver.setting,
-        &sender.metadata,
+        sender.metadata.as_metadata(),
         LogoutReceipt::of_input(&BrowserInput::<crate::LogoutRequest>::post(Vec::new()))?,
         &logout_request_request(issue_instant, not_on_or_after),
         LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_drifts, None),
@@ -287,8 +287,8 @@ fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error
     idp.setting.want_logout_request_signed = false;
     let ctx = create_logout_request(
         &sp.setting,
-        &sp.metadata,
-        &idp.metadata,
+        sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         Binding::Redirect,
         &User::new("user@example.com"),
         None,
@@ -306,7 +306,12 @@ fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error
 
     // IdP parses it (unsigned)
     let request = HttpRequest::redirect(vec![("SAMLRequest".into(), value.into_owned())]);
-    let result = parse_logout_request(&idp.setting, &sp.metadata, Binding::Redirect, &request)?;
+    let result = parse_logout_request(
+        &idp.setting,
+        sp.metadata.as_metadata(),
+        Binding::Redirect,
+        &request,
+    )?;
     assert_eq!(
         result.extract.get_str("issuer"),
         Some("https://sp.example.com/metadata")
@@ -328,8 +333,8 @@ fn unsigned_logout_request_rejects_unexpected_issuer_when_explicitly_allowed(
     let attacker_sp = unsigned_sp("https://attacker-sp.example.com/metadata")?;
     let ctx = create_logout_request(
         &attacker_sp.setting,
-        &attacker_sp.metadata,
-        &idp.metadata,
+        attacker_sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         Binding::Post,
         &User::new("victim@example.com"),
         None,
@@ -337,7 +342,12 @@ fn unsigned_logout_request_rejects_unexpected_issuer_when_explicitly_allowed(
     )?;
     let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
 
-    let result = parse_logout_request(&idp.setting, &expected_sp.metadata, Binding::Post, &request);
+    let result = parse_logout_request(
+        &idp.setting,
+        expected_sp.metadata.as_metadata(),
+        Binding::Post,
+        &request,
+    );
 
     assert!(matches!(result, Err(SamlError::IssuerMismatch { .. })));
     Ok(())
@@ -351,8 +361,8 @@ fn raw_logout_request_parser_does_not_infer_actual_recipient(
     receiver.setting.want_logout_request_signed = false;
     let context = create_logout_request(
         &sender.setting,
-        &sender.metadata,
-        &receiver.metadata,
+        sender.metadata.as_metadata(),
+        receiver.metadata.as_metadata(),
         Binding::Post,
         &User::new("victim@example.com"),
         None,
@@ -364,8 +374,12 @@ fn raw_logout_request_parser_does_not_infer_actual_recipient(
     );
     let request = HttpRequest::post(vec![("SAMLRequest".into(), encode_base64(xml.as_bytes()))]);
 
-    let result =
-        parse_logout_request(&receiver.setting, &sender.metadata, Binding::Post, &request)?;
+    let result = parse_logout_request(
+        &receiver.setting,
+        sender.metadata.as_metadata(),
+        Binding::Post,
+        &request,
+    )?;
 
     assert_eq!(
         result.extract.get_str("request.destination"),
@@ -394,7 +408,7 @@ mod signed_tests {
 
     fn signed_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
         ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: entity_id.into(),
                 signing_certs: vec![CERT.into()],
                 single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
@@ -412,8 +426,8 @@ mod signed_tests {
         let attacker_sp = signed_sp("https://attacker-sp.example.com/metadata")?;
         let ctx = create_logout_request(
             &attacker_sp.setting,
-            &attacker_sp.metadata,
-            &idp.metadata,
+            attacker_sp.metadata.as_metadata(),
+            idp.metadata.as_metadata(),
             Binding::Post,
             &User::new("victim@example.com"),
             None,
@@ -421,8 +435,12 @@ mod signed_tests {
         )?;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
 
-        let result =
-            parse_logout_request(&idp.setting, &expected_sp.metadata, Binding::Post, &request);
+        let result = parse_logout_request(
+            &idp.setting,
+            expected_sp.metadata.as_metadata(),
+            Binding::Post,
+            &request,
+        );
 
         assert!(matches!(result, Err(SamlError::IssuerMismatch { .. })));
         Ok(())
@@ -451,8 +469,8 @@ mod signed_tests {
 
             let result = create_logout_response(
                 &sender.setting,
-                &sender.metadata,
-                &target.metadata,
+                sender.metadata.as_metadata(),
+                target.metadata.as_metadata(),
                 Binding::Post,
                 Some("_req1"),
                 None,
@@ -489,8 +507,8 @@ mod signed_tests {
 
         let result = create_logout_response(
             &sender.setting,
-            &sender.metadata,
-            &target.metadata,
+            sender.metadata.as_metadata(),
+            target.metadata.as_metadata(),
             Binding::Post,
             Some("_req1"),
             None,
@@ -505,7 +523,7 @@ mod signed_tests {
 
     fn signed_idp() -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
                 single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -537,8 +555,8 @@ mod signed_tests {
         let service_provider = strict_sp()?;
         let request = create_logout_request(
             &idp.setting,
-            &idp.metadata,
-            &service_provider.metadata,
+            idp.metadata.as_metadata(),
+            service_provider.metadata.as_metadata(),
             Binding::Post,
             &User::new("user@example.com"),
             None,
@@ -546,7 +564,7 @@ mod signed_tests {
         )?;
         let parsed = parse_logout_request(
             &service_provider.setting,
-            &idp.metadata,
+            idp.metadata.as_metadata(),
             Binding::Post,
             &post_logout_request(request.context),
         )?;
@@ -557,8 +575,8 @@ mod signed_tests {
 
         let response = create_logout_response(
             &idp.setting,
-            &idp.metadata,
-            &service_provider.metadata,
+            idp.metadata.as_metadata(),
+            service_provider.metadata.as_metadata(),
             Binding::Post,
             Some("_req1"),
             None,
@@ -566,7 +584,7 @@ mod signed_tests {
         )?;
         let parsed = parse_logout_response(
             &service_provider.setting,
-            &idp.metadata,
+            idp.metadata.as_metadata(),
             Binding::Post,
             &post_logout_response(response.context),
             "_req1",
@@ -593,8 +611,8 @@ mod signed_tests {
 
         let request = create_logout_request(
             &idp.setting,
-            &idp.metadata,
-            &strict.metadata,
+            idp.metadata.as_metadata(),
+            strict.metadata.as_metadata(),
             Binding::Post,
             &User::new("user@example.com"),
             None,
@@ -604,7 +622,7 @@ mod signed_tests {
         assert_eq!(
             parse_logout_request(
                 &compatible.setting,
-                &idp.metadata,
+                idp.metadata.as_metadata(),
                 Binding::Post,
                 &request_message,
             )?
@@ -615,7 +633,7 @@ mod signed_tests {
         assert!(matches!(
             parse_logout_request(
                 &strict.setting,
-                &idp.metadata,
+                idp.metadata.as_metadata(),
                 Binding::Post,
                 &request_message
             ),
@@ -624,8 +642,8 @@ mod signed_tests {
 
         let response = create_logout_response(
             &idp.setting,
-            &idp.metadata,
-            &strict.metadata,
+            idp.metadata.as_metadata(),
+            strict.metadata.as_metadata(),
             Binding::Post,
             Some("_req1"),
             None,
@@ -635,7 +653,7 @@ mod signed_tests {
         assert_eq!(
             parse_logout_response(
                 &compatible.setting,
-                &idp.metadata,
+                idp.metadata.as_metadata(),
                 Binding::Post,
                 &response_message,
                 "_req1",
@@ -647,7 +665,7 @@ mod signed_tests {
         assert!(matches!(
             parse_logout_response(
                 &strict.setting,
-                &idp.metadata,
+                idp.metadata.as_metadata(),
                 Binding::Post,
                 &response_message,
                 "_req1",
@@ -669,20 +687,28 @@ mod signed_tests {
         let strict = strict_sp()?;
         let request = create_logout_request(
             &idp.setting,
-            &idp.metadata,
-            &strict.metadata,
+            idp.metadata.as_metadata(),
+            strict.metadata.as_metadata(),
             Binding::Post,
             &User::new("user@example.com"),
             None,
             true,
         )?;
         let message = post_logout_request(request.context);
-        assert!(
-            parse_logout_request(&compatible.setting, &idp.metadata, Binding::Post, &message,)
-                .is_ok()
-        );
+        assert!(parse_logout_request(
+            &compatible.setting,
+            idp.metadata.as_metadata(),
+            Binding::Post,
+            &message,
+        )
+        .is_ok());
         assert!(matches!(
-            parse_logout_request(&strict.setting, &idp.metadata, Binding::Post, &message),
+            parse_logout_request(
+                &strict.setting,
+                idp.metadata.as_metadata(),
+                Binding::Post,
+                &message
+            ),
             Err(SamlError::AlgorithmUnsupported)
         ));
         Ok(())
@@ -696,8 +722,8 @@ fn logout_response_post_round_trips() -> Result<(), Box<dyn std::error::Error>> 
     // IdP responds to SP's logout; target is the SP (SLO via redirect endpoint)
     let ctx = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -707,8 +733,13 @@ fn logout_response_post_round_trips() -> Result<(), Box<dyn std::error::Error>> 
     assert!(xml.contains("<samlp:LogoutResponse"));
 
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let result =
-        parse_logout_response(&sp.setting, &idp.metadata, Binding::Post, &request, "_req1")?;
+    let result = parse_logout_response(
+        &sp.setting,
+        idp.metadata.as_metadata(),
+        Binding::Post,
+        &request,
+        "_req1",
+    )?;
     assert_eq!(
         result.extract.get_str("issuer"),
         Some("https://idp.example.com/metadata")
@@ -787,8 +818,8 @@ fn public_custom_logout_response_enforces_in_response_to_correlation(
 
     let result = create_logout_response(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -816,8 +847,8 @@ fn custom_logout_response_omits_optional_in_response_to_placeholder(
 
     let context = create_logout_response(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         Binding::Post,
         None,
         None,
@@ -834,7 +865,7 @@ fn custom_logout_response_keeps_placeholder_text_in_the_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sender = idp()?;
     let target = ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![Endpoint::new(
                 Binding::Post,
@@ -851,8 +882,8 @@ fn custom_logout_response_keeps_placeholder_text_in_the_destination(
 
     let context = create_logout_response(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -889,8 +920,8 @@ fn custom_logout_response_rejects_root_signature_before_each_supported_binding(
         assert_protocol_profile_error(
             create_logout_response(
                 &sender.setting,
-                &sender.metadata,
-                &target.metadata,
+                sender.metadata.as_metadata(),
+                target.metadata.as_metadata(),
                 binding,
                 Some("_req1"),
                 None,
@@ -908,7 +939,7 @@ fn logout_response_rejects_a_peer_slo_location_that_is_not_a_url(
     let sender = idp()?;
     for location in ["http://", "https://sp:70000/slo"] {
         let target = ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 single_logout_service: vec![Endpoint::new(Binding::Redirect, location)],
                 assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -919,8 +950,8 @@ fn logout_response_rejects_a_peer_slo_location_that_is_not_a_url(
         assert_protocol_profile_error(
             create_logout_response(
                 &sender.setting,
-                &sender.metadata,
-                &target.metadata,
+                sender.metadata.as_metadata(),
+                target.metadata.as_metadata(),
                 Binding::Redirect,
                 Some("_req1"),
                 None,
@@ -944,8 +975,8 @@ fn custom_logout_response_rejects_doctype_before_profile_validation(
 
     match create_logout_response(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -968,8 +999,8 @@ fn custom_logout_response_accepts_issue_instant_placeholder_for_all_supported_bi
     for binding in [Binding::Post, Binding::Redirect, Binding::SimpleSign] {
         let context = create_logout_response(
             &sender.setting,
-            &sender.metadata,
-            &target.metadata,
+            sender.metadata.as_metadata(),
+            target.metadata.as_metadata(),
             binding,
             Some("_req1"),
             None,
@@ -1000,8 +1031,8 @@ fn custom_logout_response_preserves_valid_literal_without_destination(
 
     let context = create_logout_response_with_id(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -1068,8 +1099,8 @@ fn logout_response_rejects_empty_request_id() -> Result<(), Box<dyn std::error::
     sp.setting.want_logout_response_signed = false;
     let ctx = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -1078,7 +1109,13 @@ fn logout_response_rejects_empty_request_id() -> Result<(), Box<dyn std::error::
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
 
     assert!(matches!(
-        parse_logout_response(&sp.setting, &idp.metadata, Binding::Post, &request, ""),
+        parse_logout_response(
+            &sp.setting,
+            idp.metadata.as_metadata(),
+            Binding::Post,
+            &request,
+            ""
+        ),
         Err(SamlError::InvalidInResponseTo)
     ));
     Ok(())
@@ -1090,8 +1127,8 @@ fn logout_response_rejects_wrong_request_id() -> Result<(), Box<dyn std::error::
     sp.setting.want_logout_response_signed = false;
     let ctx = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -1102,7 +1139,7 @@ fn logout_response_rejects_wrong_request_id() -> Result<(), Box<dyn std::error::
     assert!(matches!(
         parse_logout_response(
             &sp.setting,
-            &idp.metadata,
+            idp.metadata.as_metadata(),
             Binding::Post,
             &request,
             "_other"
@@ -1117,8 +1154,8 @@ fn default_logout_response_parsing_requires_signature() -> Result<(), Box<dyn st
     let (sp, idp) = (sp()?, idp()?);
     let ctx = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -1126,8 +1163,13 @@ fn default_logout_response_parsing_requires_signature() -> Result<(), Box<dyn st
     )?;
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
 
-    let result =
-        parse_logout_response(&sp.setting, &idp.metadata, Binding::Post, &request, "_req1");
+    let result = parse_logout_response(
+        &sp.setting,
+        idp.metadata.as_metadata(),
+        Binding::Post,
+        &request,
+        "_req1",
+    );
 
     #[cfg(crypto)]
     assert!(matches!(result, Err(SamlError::SignatureMissing)));
@@ -1151,8 +1193,8 @@ fn logout_response_uses_response_location_and_request_uses_location(
     let sender = idp()?;
     let response = create_logout_response(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         Binding::Post,
         Some("_req1"),
         None,
@@ -1164,8 +1206,8 @@ fn logout_response_uses_response_location_and_request_uses_location(
     );
     let request = create_logout_request(
         &sender.setting,
-        &sender.metadata,
-        &target.metadata,
+        sender.metadata.as_metadata(),
+        target.metadata.as_metadata(),
         Binding::Post,
         &User::new("alice"),
         None,
@@ -1184,8 +1226,8 @@ fn raw_logout_generation_rejects_soap() -> Result<(), Box<dyn std::error::Error>
     let idp = idp()?;
     let request = create_logout_request(
         &sp.setting,
-        &sp.metadata,
-        &idp.metadata,
+        sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         Binding::Soap,
         &User::new("alice@example.com"),
         None,
@@ -1199,8 +1241,8 @@ fn raw_logout_generation_rejects_soap() -> Result<(), Box<dyn std::error::Error>
     ));
     let response = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Soap,
         Some("_request"),
         None,

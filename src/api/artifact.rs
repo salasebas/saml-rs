@@ -247,6 +247,7 @@ impl Saml<Sp> {
         let entity_id = self
             .raw_service_provider()
             .metadata
+            .as_metadata()
             .entity_id()
             .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?;
         artifact::resolve(

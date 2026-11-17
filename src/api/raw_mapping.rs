@@ -41,7 +41,7 @@ impl<'a> RawPeer<'a> {
         let raw = raw_idp_descriptor(idp, now)?;
         Ok(Self {
             entity_id: idp.entity_id(),
-            metadata: &raw.metadata,
+            metadata: raw.metadata.as_metadata(),
             hmac_secret: raw.setting.hmac_secret.as_ref(),
         })
     }
@@ -50,7 +50,7 @@ impl<'a> RawPeer<'a> {
         let raw = raw_sp_descriptor(sp, now)?;
         Ok(Self {
             entity_id: sp.entity_id(),
-            metadata: &raw.metadata,
+            metadata: raw.metadata.as_metadata(),
             hmac_secret: raw.setting.hmac_secret.as_ref(),
         })
     }
@@ -64,7 +64,7 @@ pub(super) fn selected_acs(
     if let Some(index) = index {
         let endpoint = sp
             .metadata
-            .get_assertion_consumer_service_by_index(index)?
+            .assertion_consumer_service_by_index(index)?
             .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?;
         let binding = SsoResponseBinding::try_from(endpoint.binding)?;
         if let Some(requested_binding) = requested_binding {
@@ -85,7 +85,7 @@ pub(super) fn selected_acs(
     let binding = requested_binding.unwrap_or(SsoResponseBinding::Post);
     let endpoint = sp
         .metadata
-        .get_assertion_consumer_service_endpoint(binding.as_binding())
+        .assertion_consumer_service_endpoint(binding.as_binding())
         .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?;
     Ok(AcsEndpoint::new(
         binding,

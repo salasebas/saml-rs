@@ -5,7 +5,7 @@ use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_D
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::SamlError;
 use saml_rs::XmlLimits;
@@ -32,7 +32,7 @@ fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
 
 fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
@@ -43,7 +43,7 @@ fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
 
 fn unsigned_idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
             ..Default::default()

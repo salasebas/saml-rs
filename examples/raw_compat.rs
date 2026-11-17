@@ -10,7 +10,7 @@
 #[allow(deprecated)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::constants::signature_algorithm::RSA_SHA256;
-    use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+    use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
     use saml_rs::raw::{
         Binding, EntitySetting, HttpRequest, IdentityProvider, LoginRequestOptions,
         LoginResponseOptions, ServiceProvider, User,
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let idp = IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![cert.into()],
             want_authn_requests_signed: true,
@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         signing(),
     )?;
     let sp = ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             authn_requests_signed: true,
             want_assertions_signed: true,

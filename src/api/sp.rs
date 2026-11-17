@@ -404,7 +404,7 @@ impl Saml<Sp> {
                 &metadata.assertion_consumer_service_locations(binding.as_binding()),
             )?,
             None => metadata
-                .assertion_consumer_service(binding.as_binding())
+                .assertion_consumer_location(binding.as_binding())
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let parse = ResponseParseInput::try_new(

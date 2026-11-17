@@ -45,7 +45,7 @@ pub(super) fn resolve_response_acs(
                     return Err(SamlError::destination_mismatch(
                         url.as_str(),
                         metadata
-                            .assertion_consumer_service(binding.as_binding())
+                            .assertion_consumer_location(binding.as_binding())
                             .as_deref(),
                     ));
                 }
@@ -67,11 +67,11 @@ pub(super) fn resolve_response_acs(
     }
 
     let endpoint = if let Some(index) = acs_index {
-        metadata.get_assertion_consumer_service_by_index(index)?
+        metadata.assertion_consumer_service_by_index(index)?
     } else if let (ResponseAcsBindings::Browser(binding), Some(_)) = (&bindings, protocol_binding) {
-        metadata.get_assertion_consumer_service_endpoint(binding.as_binding())
+        metadata.assertion_consumer_service_endpoint(binding.as_binding())
     } else {
-        metadata.get_default_assertion_consumer_service_endpoint()?
+        metadata.default_assertion_consumer_service_endpoint()?
     }
     .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
 

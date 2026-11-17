@@ -45,22 +45,39 @@ After:
 ```rust
 # fn run(idp: &saml_rs::IdpDescriptor, sp: &saml_rs::SpDescriptor) -> Result<(), saml_rs::SamlError> {
 use saml_rs::{EndpointUrl, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
-let sso: Option<EndpointUrl> = idp.single_sign_on_service(SsoRequestBinding::Post)?;
-let acs = sp.assertion_consumer_service(SsoResponseBinding::Post)?;
-let logout = idp.single_logout_service(LogoutBinding::Post)?;
-let response = idp.single_logout_response_service(LogoutBinding::Post)?;
+let sso: Option<EndpointUrl> = idp.single_sign_on_location(SsoRequestBinding::Post)?;
+let acs = sp.assertion_consumer_location(SsoResponseBinding::Post)?;
+let logout = idp.single_logout_location(LogoutBinding::Post)?;
+let response = idp.single_logout_response_location(LogoutBinding::Post)?;
 # Ok(()) }
 ```
 
 These methods return `Ok(None)` for an absent endpoint and
 `SamlError::Invalid` when its selected location is not an absolute HTTP(S) URL.
 Import does not reject those locations. HTTP(S) is the library's typed endpoint
-contract, not a general metadata schema restriction.
+contract, not a general metadata schema restriction. Invalid-location errors
+identify the metadata element and binding. For SOAP, the logout response
+location is descriptive metadata only; the response returns on the HTTP
+exchange rather than being sent to that URL.
 
 Both descriptors also expose `name_id_formats()`, `organization()`, and
 `contacts()`. `metadata_xml()` still returns the original XML. For raw
 metadata inspection, parse that XML with `metadata::IdpMetadata` or
-`metadata::SpMetadata`.
+`metadata::SpMetadata`. Reuse the import policy when you used custom XML limits
+or a schema validator:
+
+```rust
+# fn run(idp: &saml_rs::IdpDescriptor, same_policy: &saml_rs::XmlPolicy) -> Result<(), saml_rs::SamlError> {
+use saml_rs::metadata::IdpMetadata;
+let raw = IdpMetadata::from_xml_with_policy(idp.metadata_xml(), same_policy)?;
+let certificates = raw.as_metadata().x509_certificates(
+	saml_rs::constants::CertUse::Signing,
+);
+# Ok(()) }
+```
+
+The same pattern applies to `SpMetadata`. Reparsing with `from_xml` uses the
+default policy, which can reject XML the original custom policy accepted.
 
 ## Rename raw metadata getters
 
@@ -70,18 +87,21 @@ metadata inspection, parse that XML with `metadata::IdpMetadata` or
 | `get_entity_id()` | `entity_id()` |
 | `get_name_id_format()` | `name_id_formats()` |
 | `get_support_bindings()` | `single_logout_bindings()` |
-| `get_single_sign_on_service(binding)` | `single_sign_on_service(binding)` |
-| `get_assertion_consumer_service(binding)` | `assertion_consumer_service(binding)` |
-| `get_single_logout_service(binding)` | `single_logout_service(binding)` |
-| `get_single_logout_response_service(binding)` | `single_logout_response_service(binding)` |
+| `get_single_sign_on_service(binding)` | `single_sign_on_location(binding)` |
+| `get_assertion_consumer_service(binding)` | `assertion_consumer_location(binding)` |
+| `get_single_logout_service(binding)` | `single_logout_location(binding)` |
+| `get_single_logout_response_service(binding)` | `single_logout_response_location(binding)` |
 | `is_want_authn_requests_signed()` | `want_authn_requests_signed()` |
 | `is_want_assertions_signed()` | `want_assertions_signed()` |
 | `is_authn_request_signed()` | `authn_requests_signed()` |
 
 `name_id_formats()` returns `Vec<NameIdFormat>` instead of `Vec<String>`.
 Known URIs become their named variants. Other values remain
-`NameIdFormat::Custom`, in the same document order, including repeats. Use
-`format.as_uri()` when you need the original string.
+`NameIdFormat::Custom`, in the same document order, including repeats. XML Schema
+whitespace collapse applies before mapping: leading and trailing XML whitespace
+is removed, and internal runs become one space. This also changes the formats
+used by raw provider settings and generated protocol messages. Use
+`format.as_uri()` when you need the normalized URI string.
 
 `single_logout_bindings()` lists bindings with non-empty logout request
 locations. It does not report SSO or assertion consumer bindings.
@@ -123,8 +143,8 @@ Replace `metadata::ArtifactResolutionEndpoint` with the existing crate-root
 ```rust
 # fn run() -> Result<(), saml_rs::SamlError> {
 use saml_rs::{ArtifactResolutionService, EndpointUrl};
-use saml_rs::metadata::IdpMetadataConfig;
-let config = IdpMetadataConfig {
+use saml_rs::metadata::IdpMetadataInput;
+let config = IdpMetadataInput {
 	artifact_resolution_service: vec![ArtifactResolutionService::new(
 		0,
 		EndpointUrl::try_new("https://idp.example.com/artifact")?,
@@ -147,3 +167,119 @@ A failed verification then returns an error that `?` propagates. See
 [Verify signed metadata on import](0.8-to-0.9.md#7-verify-signed-metadata-on-import)
 for the replacement. The separate deprecated `crypto::verify_metadata_signature*`
 functions remain for their own removal task.
+
+## Borrow common fields explicitly from raw readers
+
+`IdpMetadata` and `SpMetadata` no longer implement `Deref<Target = Metadata>`.
+Use `as_metadata()` for shared fields. Role-specific endpoints and signing
+flags stay on their raw reader.
+
+Before:
+
+```rust,ignore
+let raw = IdpMetadata::from_xml(xml)?;
+let entity_id = raw.get_entity_id();
+let formats = raw.get_name_id_format();
+```
+
+After:
+
+```rust
+# fn run(xml: &str) -> Result<(), saml_rs::SamlError> {
+use saml_rs::metadata::IdpMetadata;
+let raw = IdpMetadata::from_xml(xml)?;
+let entity_id = raw.as_metadata().entity_id();
+let formats = raw.as_metadata().name_id_formats();
+# Ok(()) }
+```
+
+The shared view contains only the role selected by the reader. For example,
+an IdP reader's `as_metadata().x509_certificates(use_)` still reads IdP keys.
+When a raw helper takes `&Metadata`, pass `raw.as_metadata()` instead of `&raw`.
+This is a borrowed view and does not reparse or clone the metadata.
+
+## Distinguish raw generation inputs from typed configs
+
+The raw `metadata::SpMetadataConfig` and `metadata::IdpMetadataConfig` types
+are renamed to `metadata::SpMetadataInput` and `metadata::IdpMetadataInput`.
+They are the records passed to `generate_sp_metadata`, `generate_idp_metadata`,
+and the raw providers' `from_config` constructors. Their fields keep their
+names and meanings. The crate-root typed `SpMetadataConfig` and
+`IdpMetadataConfig` readers keep their names.
+
+Before:
+
+```rust,ignore
+use saml_rs::metadata::{generate_sp_metadata, Endpoint, SpMetadataConfig};
+use saml_rs::constants::Binding;
+let input = SpMetadataConfig {
+	entity_id: "https://sp.example.com/metadata".into(),
+	assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")],
+	..Default::default()
+};
+let xml = generate_sp_metadata(&input)?;
+```
+
+After:
+
+```rust,no_run
+# fn run() -> Result<(), saml_rs::SamlError> {
+use saml_rs::metadata::{generate_sp_metadata, SpMetadataInput};
+let input = SpMetadataInput {
+	entity_id: "https://sp.example.com/metadata".into(),
+	assertion_consumer_service: vec![saml_rs::metadata::Endpoint::new(
+		saml_rs::constants::Binding::Post,
+		"https://sp.example.com/acs",
+	)],
+	..Default::default()
+};
+let xml = generate_sp_metadata(&input)?;
+# Ok(()) }
+```
+
+The typed config readers rename their list getter `name_id_format()` to
+`name_id_formats()`. The builder setter stays `name_id_format(format)` because
+it adds one format per call.
+
+Before:
+
+```rust,ignore
+let formats = config.metadata().name_id_format();
+```
+
+After:
+
+```rust
+# fn run(config: &saml_rs::SpConfig) {
+let formats = config.metadata().name_id_formats();
+# }
+```
+
+## Read metadata signature status and evidence
+
+On both peer descriptors, `was_verified_with_pinned_certificates()` becomes
+`metadata_signature_verified()`. It records verification at import with the
+caller-pinned certificates under the selected policy. It does not check
+expiration and does not imply that the caller selected the default algorithm
+policy. Import with `AllowUnsigned` leaves it false even if XML has a signature.
+
+`signed_entity_descriptor_xml()` becomes `signed_metadata_xml()` on both
+peer descriptors and on `crypto::MetadataSignatureVerification`. The result
+can be a signed `EntityDescriptor` or a covering `EntitiesDescriptor`, so the
+new name covers both. The original signed XML is retained.
+
+Before:
+
+```rust,ignore
+let verified = idp.was_verified_with_pinned_certificates();
+let evidence = idp.signed_entity_descriptor_xml();
+```
+
+After:
+
+```rust
+# fn run(idp: &saml_rs::IdpDescriptor) {
+let verified = idp.metadata_signature_verified();
+let evidence = idp.signed_metadata_xml();
+# }
+```

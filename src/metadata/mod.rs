@@ -15,7 +15,7 @@ mod write;
 pub use crate::crypto::MetadataSignatureVerification;
 pub use description::{ContactPerson, ContactType, LocalizedValue, Organization};
 pub use generate::{
-    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataConfig, SpMetadataConfig,
+    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
@@ -348,7 +348,7 @@ impl Metadata {
     }
 
     /// `<NameIDFormat>` values of the SSO role descriptors read, in document
-    /// order.
+    /// order, after XML Schema whitespace collapse.
     pub fn name_id_formats(&self) -> Vec<crate::NameIdFormat> {
         let values = match self.meta.get("nameIDFormat") {
             Some(Value::Array(items)) => items.as_slice(),
@@ -358,7 +358,11 @@ impl Metadata {
         values
             .iter()
             .filter_map(Value::as_str)
-            .map(crate::model::name_id_format_from_uri)
+            .map(|value| {
+                crate::model::name_id_format_from_uri(&crate::xml::any_uri::collapse_whitespace(
+                    value,
+                ))
+            })
             .collect()
     }
 
@@ -374,8 +378,8 @@ impl Metadata {
     /// First non-empty `SingleLogoutService` `Location` for `binding`.
     ///
     /// Logout requests are sent to this URL. Logout responses use
-    /// [`Self::single_logout_response_service`].
-    pub fn single_logout_service(&self, binding: Binding) -> Option<String> {
+    /// [`Self::single_logout_response_location`].
+    pub fn single_logout_location(&self, binding: Binding) -> Option<String> {
         self.single_logout_service_location(binding, EndpointDirection::Request)
     }
 
@@ -383,7 +387,7 @@ impl Metadata {
     ///
     /// Each endpoint for `binding` offers its non-empty `ResponseLocation`, or
     /// else its non-empty `Location`. This is the first such URL.
-    pub fn single_logout_response_service(&self, binding: Binding) -> Option<String> {
+    pub fn single_logout_response_location(&self, binding: Binding) -> Option<String> {
         self.single_logout_service_location(binding, EndpointDirection::Response)
     }
 
@@ -427,7 +431,7 @@ impl Metadata {
             Binding::Soap,
         ]
         .into_iter()
-        .filter(|b| self.single_logout_service(*b).is_some())
+        .filter(|b| self.single_logout_location(*b).is_some())
         .collect()
     }
 }
@@ -488,14 +492,21 @@ mod tests {
     #[test]
     fn parses_idp_metadata() -> Result<(), Box<dyn std::error::Error>> {
         let idp = IdpMetadata::from_xml(IDPMETA)?;
-        assert_eq!(idp.entity_id(), Some("https://idp.example.com/metadata"));
+        assert_eq!(
+            idp.as_metadata().entity_id(),
+            Some("https://idp.example.com/metadata")
+        );
         assert!(idp.want_authn_requests_signed());
         assert_eq!(
-            idp.single_sign_on_service(Binding::Redirect).as_deref(),
+            idp.single_sign_on_location(Binding::Redirect).as_deref(),
             Some("https://idp.example.org/sso/SingleSignOnService")
         );
-        assert!(!idp.x509_certificates(CertUse::Signing).is_empty());
+        assert!(!idp
+            .as_metadata()
+            .x509_certificates(CertUse::Signing)
+            .is_empty());
         assert!(idp
+            .as_metadata()
             .name_id_formats()
             .contains(&crate::NameIdFormat::Persistent));
         Ok(())
@@ -562,18 +573,26 @@ mod tests {
     #[test]
     fn parses_sp_metadata() -> Result<(), Box<dyn std::error::Error>> {
         let sp = SpMetadata::from_xml(SPMETA)?;
-        assert_eq!(sp.entity_id(), Some("https://sp.example.org/metadata"));
+        assert_eq!(
+            sp.as_metadata().entity_id(),
+            Some("https://sp.example.org/metadata")
+        );
         assert!(sp.want_assertions_signed());
         assert!(sp.authn_requests_signed());
         assert_eq!(
-            sp.assertion_consumer_service(Binding::Post).as_deref(),
+            sp.assertion_consumer_location(Binding::Post).as_deref(),
             Some("https://sp.example.org/sp/sso")
         );
         assert_eq!(
-            sp.single_logout_service(Binding::Redirect).as_deref(),
+            sp.as_metadata()
+                .single_logout_location(Binding::Redirect)
+                .as_deref(),
             Some("https://sp.example.org/sp/slo")
         );
-        assert!(!sp.x509_certificates(CertUse::Encryption).is_empty());
+        assert!(!sp
+            .as_metadata()
+            .x509_certificates(CertUse::Encryption)
+            .is_empty());
         Ok(())
     }
 
@@ -590,12 +609,12 @@ mod tests {
 </EntityDescriptor>"#;
         let metadata = Metadata::parse(xml)?;
         assert_eq!(
-            metadata.single_logout_service(Binding::Post).as_deref(),
+            metadata.single_logout_location(Binding::Post).as_deref(),
             Some("https://sp.example.com/slo/a")
         );
         assert_eq!(
             metadata
-                .single_logout_response_service(Binding::Post)
+                .single_logout_response_location(Binding::Post)
                 .as_deref(),
             Some("https://sp.example.com/slo/b")
         );
@@ -615,7 +634,7 @@ mod tests {
         );
         assert_eq!(
             metadata
-                .single_logout_response_service(Binding::Redirect)
+                .single_logout_response_location(Binding::Redirect)
                 .as_deref(),
             Some("https://sp.example.com/slo/redirect")
         );
@@ -638,30 +657,40 @@ mod tests {
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
         assert_eq!(
-            idp.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
+            idp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec!["https://dual.example.com/idp/slo".to_string()]
         );
         assert_eq!(
-            idp.single_logout_service_locations(Binding::Post, EndpointDirection::Response),
+            idp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Response),
             vec!["https://dual.example.com/idp/slo/response".to_string()]
         );
-        assert_eq!(idp.single_logout_bindings(), vec![Binding::Post]);
+        assert_eq!(
+            idp.as_metadata().single_logout_bindings(),
+            vec![Binding::Post]
+        );
 
         let sp = SpMetadata::from_xml(xml)?;
         assert_eq!(
-            sp.single_logout_service(Binding::Post).as_deref(),
+            sp.as_metadata()
+                .single_logout_location(Binding::Post)
+                .as_deref(),
             Some("https://dual.example.com/sp/slo")
         );
         assert_eq!(
-            sp.single_logout_response_service(Binding::Post).as_deref(),
+            sp.as_metadata()
+                .single_logout_response_location(Binding::Post)
+                .as_deref(),
             Some("https://dual.example.com/sp/slo/response")
         );
         assert_eq!(
-            sp.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
+            sp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec!["https://dual.example.com/sp/slo".to_string()]
         );
         assert_eq!(
-            sp.single_logout_bindings(),
+            sp.as_metadata().single_logout_bindings(),
             vec![Binding::Redirect, Binding::Post]
         );
 
@@ -700,11 +729,15 @@ mod tests {
             "ENCRYPTION",
         )))?;
         assert_eq!(
-            encryption_only.x509_certificates(CertUse::Signing),
+            encryption_only
+                .as_metadata()
+                .x509_certificates(CertUse::Signing),
             Vec::<String>::new()
         );
         assert_eq!(
-            encryption_only.x509_certificates(CertUse::Encryption),
+            encryption_only
+                .as_metadata()
+                .x509_certificates(CertUse::Encryption),
             vec!["ENCRYPTION".to_string()]
         );
 
@@ -713,11 +746,15 @@ mod tests {
             "SIGNING",
         )))?;
         assert_eq!(
-            signing_only.x509_certificates(CertUse::Signing),
+            signing_only
+                .as_metadata()
+                .x509_certificates(CertUse::Signing),
             vec!["SIGNING".to_string()]
         );
         assert_eq!(
-            signing_only.x509_certificates(CertUse::Encryption),
+            signing_only
+                .as_metadata()
+                .x509_certificates(CertUse::Encryption),
             Vec::<String>::new()
         );
         Ok(())
@@ -733,11 +770,11 @@ mod tests {
         .concat();
         let idp = IdpMetadata::from_xml(&idp_metadata_with_keys(&key_descriptors))?;
         assert_eq!(
-            idp.x509_certificates(CertUse::Signing),
+            idp.as_metadata().x509_certificates(CertUse::Signing),
             vec!["OLD".to_string(), "NEW".to_string()]
         );
         assert_eq!(
-            idp.x509_certificates(CertUse::Encryption),
+            idp.as_metadata().x509_certificates(CertUse::Encryption),
             vec!["NEW".to_string(), "ENCRYPTION".to_string()]
         );
         Ok(())
@@ -757,15 +794,24 @@ mod tests {
   </SPSSODescriptor>
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
-        assert_eq!(idp.x509_certificates(CertUse::Signing), vec!["IDP-SIGNING"]);
         assert_eq!(
-            idp.x509_certificates(CertUse::Encryption),
+            idp.as_metadata().x509_certificates(CertUse::Signing),
+            vec!["IDP-SIGNING"]
+        );
+        assert_eq!(
+            idp.as_metadata().x509_certificates(CertUse::Encryption),
             vec!["IDP-ENCRYPTION"]
         );
 
         let sp = SpMetadata::from_xml(xml)?;
-        assert_eq!(sp.x509_certificates(CertUse::Signing), vec!["SP-SHARED"]);
-        assert_eq!(sp.x509_certificates(CertUse::Encryption), vec!["SP-SHARED"]);
+        assert_eq!(
+            sp.as_metadata().x509_certificates(CertUse::Signing),
+            vec!["SP-SHARED"]
+        );
+        assert_eq!(
+            sp.as_metadata().x509_certificates(CertUse::Encryption),
+            vec!["SP-SHARED"]
+        );
 
         Ok(())
     }
@@ -781,7 +827,7 @@ mod tests {
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
         assert_eq!(
-            idp.single_sign_on_service(Binding::Post).as_deref(),
+            idp.single_sign_on_location(Binding::Post).as_deref(),
             Some("https://idp.example.com/sso/a")
         );
         assert_eq!(
@@ -810,24 +856,34 @@ mod tests {
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
         assert_eq!(
-            idp.single_sign_on_service(Binding::Post).as_deref(),
+            idp.single_sign_on_location(Binding::Post).as_deref(),
             Some("https://idp.example.com/sso")
         );
         assert_eq!(
             idp.single_sign_on_service_locations(Binding::Post),
             vec!["https://idp.example.com/sso".to_string()]
         );
-        assert_eq!(idp.single_sign_on_service(Binding::Redirect), None);
+        assert_eq!(idp.single_sign_on_location(Binding::Redirect), None);
         assert_eq!(
-            idp.single_logout_service(Binding::Post).as_deref(),
+            idp.as_metadata()
+                .single_logout_location(Binding::Post)
+                .as_deref(),
             Some("https://idp.example.com/slo")
         );
         assert_eq!(
-            idp.single_logout_response_service(Binding::Post).as_deref(),
+            idp.as_metadata()
+                .single_logout_response_location(Binding::Post)
+                .as_deref(),
             Some("https://idp.example.com/slo")
         );
-        assert_eq!(idp.single_logout_service(Binding::Redirect), None);
-        assert_eq!(idp.single_logout_bindings(), vec![Binding::Post]);
+        assert_eq!(
+            idp.as_metadata().single_logout_location(Binding::Redirect),
+            None
+        );
+        assert_eq!(
+            idp.as_metadata().single_logout_bindings(),
+            vec![Binding::Post]
+        );
         Ok(())
     }
 
@@ -849,11 +905,13 @@ mod tests {
 </EntityDescriptor>"#
         ))?;
         assert_eq!(
-            idp.single_logout_service(Binding::Post).as_deref(),
+            idp.as_metadata()
+                .single_logout_location(Binding::Post)
+                .as_deref(),
             Some("https://idp.example.com/slo")
         );
         assert_eq!(
-            idp.single_sign_on_service(Binding::Post).as_deref(),
+            idp.single_sign_on_location(Binding::Post).as_deref(),
             Some("https://idp.example.com/sso")
         );
         let artifact_resolution = idp.artifact_resolution_services()?;
@@ -865,7 +923,8 @@ mod tests {
             "https://idp.example.com/ars"
         );
         assert_eq!(
-            idp.manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Response),
+            idp.as_metadata()
+                .manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Response),
             vec!["https://idp.example.com/mnid/response".to_string()]
         );
 
@@ -879,15 +938,18 @@ mod tests {
 </EntityDescriptor>"#
         ))?;
         assert_eq!(
-            sp.single_logout_service(Binding::Post).as_deref(),
+            sp.as_metadata()
+                .single_logout_location(Binding::Post)
+                .as_deref(),
             Some("https://sp.example.com/slo")
         );
         assert_eq!(
-            sp.assertion_consumer_service(Binding::Post).as_deref(),
+            sp.assertion_consumer_location(Binding::Post).as_deref(),
             Some("https://sp.example.com/acs")
         );
         assert_eq!(
-            sp.manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Request),
+            sp.as_metadata()
+                .manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Request),
             vec!["https://sp.example.com/mnid".to_string()]
         );
         Ok(())

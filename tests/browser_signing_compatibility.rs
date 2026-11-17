@@ -4,7 +4,7 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::{EntitySetting, User};
 #[allow(deprecated)]
 use saml_rs::logout::create_logout_request;
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::SamlError;
 
@@ -17,7 +17,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Soap, Binding::Artifact] {
         let idp = IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 single_sign_on_service: vec![Endpoint::new(binding, "https://idp.example.com/sso")],
                 ..Default::default()
@@ -25,7 +25,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
             EntitySetting::default(),
         )?;
         let mut sp = ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 authn_requests_signed: true,
                 assertion_consumer_service: vec![Endpoint::new(
@@ -60,7 +60,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 fn signed_logout_artifact_rejects_binding_before_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(
                 Binding::Post,
@@ -75,7 +75,7 @@ fn signed_logout_artifact_rejects_binding_before_credentials(
         EntitySetting::default(),
     )?;
     let sp = ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             assertion_consumer_service: vec![Endpoint::new(
                 Binding::Post,
@@ -91,8 +91,8 @@ fn signed_logout_artifact_rejects_binding_before_credentials(
         assert!(matches!(
             create_logout_request(
                 &setting,
-                &sp.metadata,
-                &idp.metadata,
+                sp.metadata.as_metadata(),
+                idp.metadata.as_metadata(),
                 Binding::Artifact,
                 &User::new("alice@example.com"),
                 None,

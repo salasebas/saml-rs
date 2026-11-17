@@ -9,7 +9,7 @@ use saml_rs::entity::{iso8601_offset, EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::validator::check_status;
@@ -62,7 +62,7 @@ fn signing() -> EntitySetting {
 
 fn idp() -> Result<IdentityProvider, SamlError> {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -74,7 +74,7 @@ fn idp() -> Result<IdentityProvider, SamlError> {
 
 fn sp() -> Result<ServiceProvider, SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             want_assertions_signed: true,
             signing_certs: vec![CERT.into()],

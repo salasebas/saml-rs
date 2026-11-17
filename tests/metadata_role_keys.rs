@@ -278,14 +278,18 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
         let idp_metadata = saml_rs::metadata::IdpMetadata::from_xml(&metadata)?;
         assert_eq!(
             (
-                idp_metadata.x509_certificates(saml_rs::constants::CertUse::Signing),
+                idp_metadata
+                    .as_metadata()
+                    .x509_certificates(saml_rs::constants::CertUse::Signing),
                 idp_metadata.want_authn_requests_signed(),
                 idp_metadata
-                    .single_sign_on_service(saml_rs::constants::Binding::Post)
+                    .single_sign_on_location(saml_rs::constants::Binding::Post)
                     .as_deref(),
                 idp_metadata.artifact_resolution_services()?.len(),
-                idp_metadata.single_logout_service(saml_rs::constants::Binding::Post),
-                idp_metadata.name_id_formats(),
+                idp_metadata
+                    .as_metadata()
+                    .single_logout_location(saml_rs::constants::Binding::Post),
+                idp_metadata.as_metadata().name_id_formats(),
             ),
             (
                 [normalize_cert_string(IDP_ROLE_CERT)].as_slice(),
@@ -356,13 +360,15 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
         let sp_metadata = saml_rs::metadata::SpMetadata::from_xml(&metadata)?;
         assert_eq!(
             (
-                sp_metadata.x509_certificates(saml_rs::constants::CertUse::Signing),
+                sp_metadata
+                    .as_metadata()
+                    .x509_certificates(saml_rs::constants::CertUse::Signing),
                 sp_metadata.authn_requests_signed(),
                 sp_metadata.want_assertions_signed(),
                 sp_metadata
-                    .assertion_consumer_service(saml_rs::constants::Binding::Post)
+                    .assertion_consumer_location(saml_rs::constants::Binding::Post)
                     .as_deref(),
-                sp_metadata.name_id_formats(),
+                sp_metadata.as_metadata().name_id_formats(),
             ),
             (
                 [normalize_cert_string(SP_ROLE_CERT)].as_slice(),
@@ -468,7 +474,7 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     assert_eq!(
-        idp.single_sign_on_service(saml_rs::SsoRequestBinding::Post)?
+        idp.single_sign_on_location(saml_rs::SsoRequestBinding::Post)?
             .as_ref()
             .map(saml_rs::EndpointUrl::as_str),
         Some(IDP_SSO)
@@ -479,7 +485,7 @@ fn an_entity_without_a_saml2_role_of_the_peer_kind_is_rejected(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     assert_eq!(
-        sp.assertion_consumer_service(saml_rs::SsoResponseBinding::Post)?
+        sp.assertion_consumer_location(saml_rs::SsoResponseBinding::Post)?
             .as_ref()
             .map(saml_rs::EndpointUrl::as_str),
         Some(SP_ACS)
@@ -508,7 +514,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     assert_eq!(
-        idp.single_sign_on_service(saml_rs::SsoRequestBinding::Post)?
+        idp.single_sign_on_location(saml_rs::SsoRequestBinding::Post)?
             .as_ref()
             .map(saml_rs::EndpointUrl::as_str),
         Some(IDP_SSO)
@@ -519,7 +525,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     assert_eq!(
-        sp.assertion_consumer_service(saml_rs::SsoResponseBinding::Post)?
+        sp.assertion_consumer_location(saml_rs::SsoResponseBinding::Post)?
             .as_ref()
             .map(saml_rs::EndpointUrl::as_str),
         Some(SP_ACS)
@@ -535,7 +541,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
         unbounded,
     )?;
     assert_eq!(
-        idp.single_sign_on_service(saml_rs::constants::Binding::Post)
+        idp.single_sign_on_location(saml_rs::constants::Binding::Post)
             .as_deref(),
         Some(IDP_SSO)
     );
@@ -548,7 +554,7 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
         unbounded,
     )?;
     assert_eq!(
-        sp.assertion_consumer_service(saml_rs::constants::Binding::Post)
+        sp.assertion_consumer_location(saml_rs::constants::Binding::Post)
             .as_deref(),
         Some(SP_ACS)
     );
@@ -569,22 +575,26 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
     use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 
     let sp_role = format!(
-        r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>{TRANSIENT}</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
+        r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>&#x9; {TRANSIENT} &#xD;&#xA;</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
     );
     let idp_only = format!(
-        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://proxy.example.com/metadata"><IDPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}">{}<NameIDFormat>{PERSISTENT}</NameIDFormat><NameIDFormat>urn:example:custom</NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#,
+        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://proxy.example.com/metadata"><IDPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}">{}<NameIDFormat>&#xA; {PERSISTENT} &#x9;&#xD;</NameIDFormat><NameIDFormat> urn:example:custom&#x9;  value </NameIDFormat><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#,
         signing_key_descriptor(IDP_ROLE_CERT)
     );
     for metadata in with_role_in_both_orders(&idp_only, "IDPSSODescriptor", &sp_role) {
         assert_eq!(
             (
-                IdpMetadata::from_xml(&metadata)?.name_id_formats(),
-                SpMetadata::from_xml(&metadata)?.name_id_formats(),
+                IdpMetadata::from_xml(&metadata)?
+                    .as_metadata()
+                    .name_id_formats(),
+                SpMetadata::from_xml(&metadata)?
+                    .as_metadata()
+                    .name_id_formats(),
             ),
             (
                 vec![
                     saml_rs::NameIdFormat::Persistent,
-                    saml_rs::NameIdFormat::Custom("urn:example:custom".into())
+                    saml_rs::NameIdFormat::Custom("urn:example:custom value".into())
                 ],
                 vec![saml_rs::NameIdFormat::Transient]
             )

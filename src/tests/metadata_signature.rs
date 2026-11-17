@@ -93,7 +93,7 @@ fn metadata_signature_detailed_default_limits_preserves_signed_descriptor(
 
     assert!(verification.verified());
     let signed_xml = verification
-        .signed_entity_descriptor_xml()
+        .signed_metadata_xml()
         .ok_or("missing signed descriptor")?;
     assert!(signed_xml.contains("entityID=\"https://idp.example.com/metadata\""));
     assert!(signed_xml.contains("<ds:Signature"));
@@ -153,7 +153,7 @@ fn metadata_signature_unsigned_metadata_returns_unverified(
     )?;
 
     assert!(!verification.verified());
-    assert_eq!(verification.signed_entity_descriptor_xml(), None);
+    assert_eq!(verification.signed_metadata_xml(), None);
     Ok(())
 }
 
@@ -164,7 +164,7 @@ fn metadata_signature_does_not_verify_with_a_certificate_outside_the_trust_ancho
     let verification = verify_metadata_signature_detailed(&signed, &[WRONG_CERT.to_string()])?;
 
     assert!(!verification.verified());
-    assert_eq!(verification.signed_entity_descriptor_xml(), None);
+    assert_eq!(verification.signed_metadata_xml(), None);
     Ok(())
 }
 

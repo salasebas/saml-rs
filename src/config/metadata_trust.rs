@@ -1,5 +1,3 @@
-use core::ops::Deref;
-
 use crate::error::SamlError;
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
@@ -42,7 +40,7 @@ use super::policies::XmlSignatureProfile;
 ///         trusted_certificates: &certificates,
 ///     },
 /// )?;
-/// assert!(idp.was_verified_with_pinned_certificates());
+/// assert!(idp.metadata_signature_verified());
 /// # Ok(()) }
 /// ```
 #[derive(Debug, Clone, Copy)]
@@ -89,15 +87,10 @@ pub enum MetadataTrustPolicy<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(not(crypto), allow(dead_code))]
 pub(super) enum AppliedMetadataTrust {
-    Unsigned,
-    SignedByPinnedCertificates {
-        signed_entity_descriptor_xml: String,
-    },
+    Unverified,
+    SignedByPinnedCertificates { signed_metadata_xml: String },
 }
-pub(super) fn metadata_entity_id<M>(metadata: &M) -> Result<&str, SamlError>
-where
-    M: Deref<Target = Metadata>,
-{
+pub(super) fn metadata_entity_id(metadata: &Metadata) -> Result<&str, SamlError> {
     metadata
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))
@@ -116,15 +109,12 @@ pub(super) fn ensure_expected_entity_id(
     )))
 }
 
-pub(super) fn ensure_metadata_trust<M>(
-    metadata: &M,
+pub(super) fn ensure_metadata_trust(
+    metadata: &Metadata,
     trust: MetadataTrustPolicy<'_>,
-) -> Result<AppliedMetadataTrust, SamlError>
-where
-    M: Deref<Target = Metadata>,
-{
+) -> Result<AppliedMetadataTrust, SamlError> {
     match trust {
-        MetadataTrustPolicy::AllowUnsigned => Ok(AppliedMetadataTrust::Unsigned),
+        MetadataTrustPolicy::AllowUnsigned => Ok(AppliedMetadataTrust::Unverified),
         MetadataTrustPolicy::RequireSignature {
             trusted_certificates,
         } => verify_pinned_metadata_signature(
@@ -153,15 +143,12 @@ where
 }
 
 #[cfg(crypto)]
-fn verify_pinned_metadata_signature<M>(
-    metadata: &M,
+fn verify_pinned_metadata_signature(
+    metadata: &Metadata,
     trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
     algorithms: XmlSignatureProfile,
-) -> Result<AppliedMetadataTrust, SamlError>
-where
-    M: Deref<Target = Metadata>,
-{
+) -> Result<AppliedMetadataTrust, SamlError> {
     ensure_import_signature_shape(metadata.metadata_xml(), transforms)?;
     let trusted_certificates: Vec<String> = trusted_certificates
         .iter()
@@ -174,11 +161,11 @@ where
         algorithms,
     )?;
     if verification.verified() {
-        let signed_entity_descriptor_xml = verification
-            .into_signed_entity_descriptor_xml()
+        let signed_metadata_xml = verification
+            .into_signed_metadata_xml()
             .ok_or(SamlError::SignedReferenceMismatch)?;
         return Ok(AppliedMetadataTrust::SignedByPinnedCertificates {
-            signed_entity_descriptor_xml,
+            signed_metadata_xml,
         });
     }
     Err(SamlError::SignatureVerification {
@@ -187,15 +174,12 @@ where
 }
 
 #[cfg(not(crypto))]
-fn verify_pinned_metadata_signature<M>(
-    metadata: &M,
+fn verify_pinned_metadata_signature(
+    metadata: &Metadata,
     _trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
     _algorithms: XmlSignatureProfile,
-) -> Result<AppliedMetadataTrust, SamlError>
-where
-    M: Deref<Target = Metadata>,
-{
+) -> Result<AppliedMetadataTrust, SamlError> {
     ensure_import_signature_shape(metadata.metadata_xml(), transforms)?;
     Err(SamlError::Unsupported(
         "signed metadata verification requires a crypto provider feature".into(),

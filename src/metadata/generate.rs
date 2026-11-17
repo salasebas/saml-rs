@@ -43,7 +43,7 @@ impl Endpoint {
 
 /// SP metadata generation input.
 #[derive(Debug, Clone, Default)]
-pub struct SpMetadataConfig {
+pub struct SpMetadataInput {
     /// `entityID`.
     pub entity_id: String,
     /// Signing certificates (PEM or bare base64).
@@ -79,7 +79,7 @@ pub struct SpMetadataConfig {
 
 /// IdP metadata generation input.
 #[derive(Debug, Clone, Default)]
-pub struct IdpMetadataConfig {
+pub struct IdpMetadataInput {
     /// `entityID`.
     pub entity_id: String,
     /// Signing certificates.
@@ -263,7 +263,7 @@ fn write_manage_name_id_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) 
 
 fn write_sp_group(
     w: &mut MetadataWriter,
-    cfg: &SpMetadataConfig,
+    cfg: &SpMetadataInput,
     name: &str,
 ) -> Result<(), SamlError> {
     match name {
@@ -286,7 +286,7 @@ fn write_sp_group(
 
 fn write_idp_group(
     w: &mut MetadataWriter,
-    cfg: &IdpMetadataConfig,
+    cfg: &IdpMetadataInput,
     name: &str,
 ) -> Result<(), SamlError> {
     match name {
@@ -357,7 +357,7 @@ fn bool_str(value: bool) -> &'static str {
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
 /// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
-pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError> {
+pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> {
     if cfg.assertion_consumer_service.is_empty() {
         return Err(SamlError::MissingMetadata(
             "AssertionConsumerService".to_string(),
@@ -412,7 +412,7 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
 /// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
-pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
+pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
             "SingleSignOnService".to_string(),

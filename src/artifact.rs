@@ -556,6 +556,7 @@ pub(crate) fn issue(
     issued: &mut IssuedArtifacts,
 ) -> Result<Artifact, SamlError> {
     let entity_id = metadata
+        .as_metadata()
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?;
     let _service = soap_service(metadata, endpoint_index)?;
@@ -636,6 +637,7 @@ pub(crate) fn answer(
     schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<AnsweredArtifact, SamlError> {
     let entity_id = metadata
+        .as_metadata()
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();

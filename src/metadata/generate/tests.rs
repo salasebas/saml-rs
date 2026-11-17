@@ -23,13 +23,13 @@ fn metadata_rejects_unknown_and_duplicate_order_groups() {
         ),
     ] {
         let order: Vec<String> = order.into_iter().map(str::to_string).collect();
-        let sp = generate_sp_metadata(&SpMetadataConfig {
+        let sp = generate_sp_metadata(&SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             elements_order: Some(order.clone()),
             ..Default::default()
         });
-        let idp = generate_idp_metadata(&IdpMetadataConfig {
+        let idp = generate_idp_metadata(&IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
             elements_order: Some(order),
@@ -43,7 +43,7 @@ fn metadata_rejects_unknown_and_duplicate_order_groups() {
 
 #[test]
 fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         encrypt_certs: vec!["MIIBencrypt".into()],
@@ -72,19 +72,26 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     };
     let xml = generate_sp_metadata(&cfg)?;
     let parsed = SpMetadata::from_xml(&xml)?;
-    assert_eq!(parsed.entity_id(), Some("https://sp.example.com/metadata"));
+    assert_eq!(
+        parsed.as_metadata().entity_id(),
+        Some("https://sp.example.com/metadata")
+    );
     assert!(parsed.authn_requests_signed());
     assert!(parsed.want_assertions_signed());
     assert_eq!(
-        parsed.assertion_consumer_service(Binding::Post).as_deref(),
+        parsed.assertion_consumer_location(Binding::Post).as_deref(),
         Some("https://sp.example.com/acs")
     );
     assert_eq!(
-        parsed.single_logout_service(Binding::Redirect).as_deref(),
+        parsed
+            .as_metadata()
+            .single_logout_location(Binding::Redirect)
+            .as_deref(),
         Some("https://sp.example.com/slo")
     );
     assert_eq!(
         parsed
+            .as_metadata()
             .x509_certificates(CertUse::Signing)
             .first()
             .map(String::as_str),
@@ -92,6 +99,7 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(
         parsed
+            .as_metadata()
             .x509_certificates(CertUse::Encryption)
             .first()
             .map(String::as_str),
@@ -120,11 +128,11 @@ fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
         is_default_false: false,
     };
     assert_eq!(
-        parsed.get_assertion_consumer_service_by_index(0)?,
+        parsed.assertion_consumer_service_by_index(0)?,
         Some(endpoint(0, "https://sp/acs-zero"))
     );
     assert_eq!(
-        parsed.get_assertion_consumer_service_by_index(1)?,
+        parsed.assertion_consumer_service_by_index(1)?,
         Some(endpoint(1, "https://sp/acs-implicit"))
     );
     Ok(())
@@ -136,7 +144,7 @@ fn sp_metadata_keeps_free_positions_and_fills_taken_ones() -> TestResult {
         index,
         ..Endpoint::new(Binding::Post, location)
     };
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         assertion_consumer_service: vec![
             acs(None, "https://sp/a"),
@@ -168,7 +176,7 @@ fn sp_metadata_rejects_duplicate_explicit_acs_index() {
         index: Some(3),
         ..Endpoint::new(Binding::Post, location)
     };
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         assertion_consumer_service: vec![acs("https://sp/a"), acs("https://sp/b")],
         ..Default::default()
@@ -185,7 +193,7 @@ fn sp_metadata_rejects_duplicate_explicit_acs_index() {
 
 #[test]
 fn sp_metadata_rejects_more_acs_endpoints_than_indexes() {
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         assertion_consumer_service: vec![
             Endpoint::new(Binding::Post, "https://sp/acs");
@@ -209,14 +217,14 @@ fn metadata_writes_is_default_only_on_indexed_endpoints() -> TestResult {
         is_default: true,
         ..Endpoint::new(binding, location)
     };
-    let sp = generate_sp_metadata(&SpMetadataConfig {
+    let sp = generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         single_logout_service: vec![default(Binding::Redirect, "https://sp/slo")],
         assertion_consumer_service: vec![default(Binding::Post, "https://sp/acs")],
         manage_name_id_service: vec![default(Binding::Redirect, "https://sp/nameid")],
         ..Default::default()
     })?;
-    let idp = generate_idp_metadata(&IdpMetadataConfig {
+    let idp = generate_idp_metadata(&IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![default(Binding::Redirect, "https://idp/sso")],
         single_logout_service: vec![default(Binding::Redirect, "https://idp/slo")],
@@ -264,7 +272,7 @@ fn metadata_writes_is_default_only_on_indexed_endpoints() -> TestResult {
 
 #[test]
 fn sp_elements_order_respected() -> TestResult {
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -280,7 +288,7 @@ fn sp_elements_order_respected() -> TestResult {
 
 #[test]
 fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBidp".into()],
         want_authn_requests_signed: true,
@@ -294,11 +302,12 @@ fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let parsed = IdpMetadata::from_xml(&xml)?;
     assert!(parsed.want_authn_requests_signed());
     assert_eq!(
-        parsed.single_sign_on_service(Binding::Redirect).as_deref(),
+        parsed.single_sign_on_location(Binding::Redirect).as_deref(),
         Some("https://idp.example.com/sso")
     );
     assert_eq!(
         parsed
+            .as_metadata()
             .x509_certificates(CertUse::Signing)
             .first()
             .map(String::as_str),
@@ -309,11 +318,11 @@ fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn metadata_is_not_generated_without_the_role_endpoint_the_schema_requires() {
-    let sp = generate_sp_metadata(&SpMetadataConfig {
+    let sp = generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         ..Default::default()
     });
-    let idp = generate_idp_metadata(&IdpMetadataConfig {
+    let idp = generate_idp_metadata(&IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         ..Default::default()
     });
@@ -335,7 +344,7 @@ fn sp_from_config_escapes_name_id_format_xml_markup() -> TestResult {
         name_id_format::EMAIL_ADDRESS,
         Binding::Redirect.urn()
     );
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         name_id_format: vec![injected_format.clone()],
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -346,7 +355,8 @@ fn sp_from_config_escapes_name_id_format_xml_markup() -> TestResult {
 
     assert!(sp
         .metadata
-        .single_logout_service(Binding::Redirect)
+        .as_metadata()
+        .single_logout_location(Binding::Redirect)
         .is_none());
     assert_eq!(sp.setting.name_id_format, vec![injected_format]);
     assert!(sp.metadata_xml().contains("&lt;SingleLogoutService"));
@@ -356,7 +366,7 @@ fn sp_from_config_escapes_name_id_format_xml_markup() -> TestResult {
 #[test]
 fn sp_metadata_escapes_entity_id_attribute_markup() -> TestResult {
     let entity_id = "https://sp.example.com/metadata\" ID=\"_evil";
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: entity_id.into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..Default::default()
@@ -367,7 +377,7 @@ fn sp_metadata_escapes_entity_id_attribute_markup() -> TestResult {
 
     assert!(!xml.contains(" ID=\"_evil\""));
     assert!(xml.contains("&quot; ID=&quot;_evil"));
-    assert_eq!(parsed.entity_id(), Some(entity_id));
+    assert_eq!(parsed.as_metadata().entity_id(), Some(entity_id));
     Ok(())
 }
 
@@ -378,7 +388,7 @@ fn sp_metadata_escapes_certificate_text_markup() -> TestResult {
         "<NameIDFormat>evil</NameIDFormat>",
         "<KeyDescriptor><ds:KeyInfo><ds:X509Data><ds:X509Certificate>tail"
     );
-    let cfg = SpMetadataConfig {
+    let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         signing_certs: vec![injected_cert.into()],
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -394,16 +404,22 @@ fn sp_metadata_escapes_certificate_text_markup() -> TestResult {
 
     assert!(xml.contains("&lt;NameIDFormat&gt;evil&lt;/NameIDFormat&gt;"));
     assert_eq!(
-        parsed.name_id_formats(),
+        parsed.as_metadata().name_id_formats(),
         [crate::NameIdFormat::EmailAddress]
     );
-    assert_eq!(parsed.x509_certificates(CertUse::Signing).len(), 1);
+    assert_eq!(
+        parsed
+            .as_metadata()
+            .x509_certificates(CertUse::Signing)
+            .len(),
+        1
+    );
     Ok(())
 }
 
 #[test]
 fn sp_custom_elements_order_preserves_omitted_groups() -> TestResult {
-    let mut cfg = SpMetadataConfig {
+    let mut cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
@@ -443,7 +459,7 @@ fn idp_metadata_escapes_endpoint_location_attribute_markup() -> TestResult {
         "https://idp/sso\"/><SingleLogoutService Binding=\"{}\" Location=\"https://evil.example/slo",
         Binding::Redirect.urn()
     );
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, injected_location.clone())],
         ..Default::default()
@@ -454,16 +470,19 @@ fn idp_metadata_escapes_endpoint_location_attribute_markup() -> TestResult {
 
     assert!(!xml.contains("<SingleLogoutService"));
     assert_eq!(
-        parsed.single_sign_on_service(Binding::Redirect).as_deref(),
+        parsed.single_sign_on_location(Binding::Redirect).as_deref(),
         Some(injected_location.as_str())
     );
-    assert!(parsed.single_logout_service(Binding::Redirect).is_none());
+    assert!(parsed
+        .as_metadata()
+        .single_logout_location(Binding::Redirect)
+        .is_none());
     Ok(())
 }
 
 #[test]
 fn idp_custom_elements_order_can_place_sso_before_key_descriptor() -> TestResult {
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
@@ -492,7 +511,7 @@ fn idp_custom_elements_order_can_place_sso_before_key_descriptor() -> TestResult
 
 #[test]
 fn idp_elements_order_filters_empty_groups() -> TestResult {
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
@@ -516,7 +535,7 @@ fn idp_elements_order_filters_empty_groups() -> TestResult {
 
 #[test]
 fn idp_custom_elements_order_preserves_unlisted_optional_groups() -> TestResult {
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
@@ -551,7 +570,7 @@ fn idp_custom_elements_order_preserves_unlisted_optional_groups() -> TestResult 
 
 #[test]
 fn idp_custom_elements_order_preserves_omitted_populated_sso() -> TestResult {
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
@@ -570,7 +589,7 @@ fn idp_custom_elements_order_preserves_omitted_populated_sso() -> TestResult {
 
 #[test]
 fn idp_custom_elements_order_writes_omitted_manage_name_id_service_after_logout() -> TestResult {
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
@@ -605,7 +624,7 @@ fn idp_custom_elements_order_writes_omitted_manage_name_id_service_after_logout(
 
 #[test]
 fn idp_custom_elements_order_writes_omitted_artifact_resolution_after_keys() -> TestResult {
-    let cfg = IdpMetadataConfig {
+    let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
@@ -642,7 +661,7 @@ fn idp_custom_elements_order_writes_omitted_artifact_resolution_after_keys() -> 
 
 #[test]
 fn default_orders_follow_the_metadata_schema_sequence() -> TestResult {
-    let idp = generate_idp_metadata(&IdpMetadataConfig {
+    let idp = generate_idp_metadata(&IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],
@@ -655,7 +674,7 @@ fn default_orders_follow_the_metadata_schema_sequence() -> TestResult {
         manage_name_id_service: vec![Endpoint::new(Binding::Soap, "https://idp/nameid")],
         ..Default::default()
     })?;
-    let sp = generate_sp_metadata(&SpMetadataConfig {
+    let sp = generate_sp_metadata(&SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],

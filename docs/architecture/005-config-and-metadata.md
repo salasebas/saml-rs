@@ -303,6 +303,17 @@ pub struct SpDescriptor {
 }
 ```
 
+Endpoint accessors return one `EndpointUrl` through `single_sign_on_location`,
+`assertion_consumer_location`, `single_logout_location`, or
+`single_logout_response_location`, using the binding type for the operation.
+They validate the selected HTTP(S) location without narrowing metadata import.
+Name identifier format lists use `name_id_formats()` on descriptors and config
+readers. Repeatable builder setters remain singular.
+
+Raw role readers expose their shared fields with `as_metadata()`. They do not
+implement `Deref`. Raw generation records are `metadata::SpMetadataInput` and
+`metadata::IdpMetadataInput`, distinct from the typed config readers above.
+
 Constructors:
 
 ```rust
@@ -357,17 +368,17 @@ pub struct MetadataSignatureVerification { /* private fields */ }
 
 impl MetadataSignatureVerification {
     pub fn verified(&self) -> bool;
-    pub fn signed_entity_descriptor_xml(&self) -> Option<&str>;
+    pub fn signed_metadata_xml(&self) -> Option<&str>;
 }
 
 impl IdpDescriptor {
-    pub fn was_verified_with_pinned_certificates(&self) -> bool;
-    pub fn signed_entity_descriptor_xml(&self) -> Option<&str>;
+    pub fn metadata_signature_verified(&self) -> bool;
+    pub fn signed_metadata_xml(&self) -> Option<&str>;
 }
 
 impl SpDescriptor {
-    pub fn was_verified_with_pinned_certificates(&self) -> bool;
-    pub fn signed_entity_descriptor_xml(&self) -> Option<&str>;
+    pub fn metadata_signature_verified(&self) -> bool;
+    pub fn signed_metadata_xml(&self) -> Option<&str>;
 }
 ```
 
@@ -383,7 +394,7 @@ Rules:
 - MD5 and RIPEMD-160 algorithms and RSA signing keys shorter than 2048 bits
   are excluded. `RequireSignatureAllowingWeakAlgorithms`
   accepts them.
-- `signed_entity_descriptor_xml()` exposes the signed descriptor evidence when
+- `signed_metadata_xml()` exposes the signed descriptor evidence when
   pinned verification passed.
 - `AllowUnsigned` is explicit and visible in call sites.
 - PKIX path validation, federation, and online metadata refresh are outside

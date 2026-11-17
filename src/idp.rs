@@ -8,7 +8,7 @@ use crate::entity::{
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
-use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
+use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataInput};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
     NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
@@ -120,7 +120,7 @@ impl IdentityProvider {
 
     pub(crate) fn from_parsed_metadata(metadata: IdpMetadata, mut setting: EntitySetting) -> Self {
         setting.want_authn_requests_signed = metadata.want_authn_requests_signed();
-        let formats = metadata.name_id_formats();
+        let formats = metadata.as_metadata().name_id_formats();
         if !formats.is_empty() {
             setting.name_id_format = formats
                 .iter()
@@ -128,7 +128,7 @@ impl IdentityProvider {
                 .collect();
         }
         if setting.entity_id.is_none() {
-            setting.entity_id = metadata.entity_id().map(str::to_string);
+            setting.entity_id = metadata.as_metadata().entity_id().map(str::to_string);
         }
         Self { setting, metadata }
     }
@@ -144,7 +144,7 @@ impl IdentityProvider {
     /// `<NameIDFormat>` is not an absolute URI reference, or if the generated metadata
     /// cannot be parsed back into IdP metadata.
     pub fn from_config(
-        config: &IdpMetadataConfig,
+        config: &IdpMetadataInput,
         setting: EntitySetting,
     ) -> Result<Self, SamlError> {
         let metadata_xml = generate_idp_metadata(config)?;
@@ -153,14 +153,14 @@ impl IdentityProvider {
 
     /// The IdP metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.metadata.metadata_xml()
+        self.metadata.as_metadata().metadata_xml()
     }
 
     pub(crate) fn entity_id(&self) -> String {
         self.setting
             .entity_id
             .clone()
-            .or_else(|| self.metadata.entity_id().map(str::to_string))
+            .or_else(|| self.metadata.as_metadata().entity_id().map(str::to_string))
             .unwrap_or_default()
     }
 
@@ -293,9 +293,18 @@ impl IdentityProvider {
             };
             let id = generate_id();
             let assertion_id = generate_id();
-            let audience = sp.metadata.entity_id().unwrap_or_default().to_string();
+            let audience = sp
+                .metadata
+                .as_metadata()
+                .entity_id()
+                .unwrap_or_default()
+                .to_string();
             let issuer = self.entity_id();
-            let supports_single_logout = !self.metadata.single_logout_bindings().is_empty();
+            let supports_single_logout = !self
+                .metadata
+                .as_metadata()
+                .single_logout_bindings()
+                .is_empty();
             let session_index = (rendering.web_browser_sso_producer.follows()
                 && supports_single_logout)
                 .then(|| SessionIndex::try_new(assertion_id.as_str()))
@@ -371,7 +380,11 @@ impl IdentityProvider {
             ("AssertionConsumerServiceURL", acs.to_string()),
             (
                 "Audience",
-                sp.metadata.entity_id().unwrap_or_default().to_string(),
+                sp.metadata
+                    .as_metadata()
+                    .entity_id()
+                    .unwrap_or_default()
+                    .to_string(),
             ),
             ("Issuer", self.entity_id()),
             ("IssueInstant", window.issue_instant.clone()),
@@ -460,7 +473,7 @@ impl IdentityProvider {
             Some(acs) => acs.to_string(),
             None => sp
                 .metadata
-                .assertion_consumer_service(binding)
+                .assertion_consumer_location(binding)
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let rendered = self.render_login_response(
@@ -713,6 +726,7 @@ impl IdentityProvider {
     ) -> Result<(FlowResult, bool), SamlError> {
         let signing_certs = sp
             .metadata
+            .as_metadata()
             .x509_certificates(crate::constants::CertUse::Signing);
         let sp_declares_signed_requests = self.setting.verify_authn_request_signature_if_present
             && sp.metadata.authn_requests_signed();
@@ -725,7 +739,7 @@ impl IdentityProvider {
                 verify_signature_if_present: self.setting.verify_authn_request_signature_if_present,
                 require_audience_restriction: true,
                 xml_signatures: self.setting.xml_signatures,
-                from_issuer: sp.metadata.entity_id(),
+                from_issuer: sp.metadata.as_metadata().entity_id(),
                 signing_certs,
                 hmac_secret: sp.setting.hmac_secret.as_ref(),
                 decrypt_key: None,
@@ -772,6 +786,7 @@ fn written_authn_instant(
 #[cfg(crypto)]
 fn sp_encryption_certificate(sp: &ServiceProvider) -> Result<&str, SamlError> {
     sp.metadata
+        .as_metadata()
         .x509_certificates(crate::constants::CertUse::Encryption)
         .first()
         .map(String::as_str)
@@ -782,14 +797,14 @@ fn sp_encryption_certificate(sp: &ServiceProvider) -> Result<&str, SamlError> {
 mod tests {
     use super::*;
     use crate::constants::Binding;
-    use crate::metadata::{Endpoint, SpMetadataConfig};
+    use crate::metadata::{Endpoint, SpMetadataInput};
     use crate::sp::LoginRequestOptions;
 
     const IDPMETA: &str = include_str!("../tests/fixtures/misc/idpmeta.xml");
 
     fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
                 ..Default::default()
@@ -800,7 +815,7 @@ mod tests {
 
     fn unsigned_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
         ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: entity_id.into(),
                 assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
                 ..Default::default()
@@ -815,7 +830,7 @@ mod tests {
         assert!(idp.setting.want_authn_requests_signed);
         assert_eq!(
             idp.metadata
-                .single_sign_on_service(Binding::Redirect)
+                .single_sign_on_location(Binding::Redirect)
                 .as_deref(),
             Some("https://idp.example.org/sso/SingleSignOnService")
         );
@@ -824,7 +839,7 @@ mod tests {
 
     #[test]
     fn idp_from_config_rejects_missing_sso() {
-        let cfg = IdpMetadataConfig {
+        let cfg = IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             ..Default::default()
         };
@@ -879,7 +894,7 @@ mod tests {
 mod crypto_tests {
     use super::*;
     use crate::constants::signature_algorithm::RSA_SHA256;
-    use crate::metadata::{Endpoint, SpMetadataConfig};
+    use crate::metadata::{Endpoint, SpMetadataInput};
     use crate::sp::LoginRequestOptions;
 
     // A working RSA keypair (used as both IdP and SP signing material in tests).
@@ -897,7 +912,7 @@ mod crypto_tests {
 
     fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
                 want_authn_requests_signed: true,
@@ -914,7 +929,7 @@ mod crypto_tests {
 
     fn signed_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
         ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: entity_id.into(),
                 authn_requests_signed: true,
                 want_assertions_signed: true,
@@ -1083,7 +1098,7 @@ mod crypto_tests {
             }],
         });
         let idp = IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
                 want_authn_requests_signed: true,
@@ -1136,7 +1151,7 @@ mod crypto_tests {
             }],
         });
         let idp = IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
                 want_authn_requests_signed: true,
