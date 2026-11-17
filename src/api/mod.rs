@@ -112,8 +112,6 @@ use crate::error::SamlError as Error;
 use crate::idp::IdentityProvider;
 use crate::sp::ServiceProvider;
 
-use raw_mapping::{raw_idp_metadata_config, raw_sp_metadata_config};
-
 pub use name_id_management::ReceivedNameIdManagementRedirect;
 pub use options::{
     ForceAuthn, IsPassive, LogoutSigning, MessageDelivery, ReceiveNameIdManagement,
@@ -150,14 +148,12 @@ impl Saml {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when SP metadata cannot be generated from the
-    /// config, including a configured NameID format that is not an absolute
-    /// URI reference, two ACS endpoints with the same index, more ACS
-    /// endpoints than `unsignedShort` indexes, or an endpoint or certificate
-    /// that the generated metadata cannot declare.
+    /// Returns no error for a config [`SpConfigBuilder::build`] returned:
+    /// `build` generates the same SP metadata and returns its errors.
+    ///
+    /// [`SpConfigBuilder::build`]: crate::SpConfigBuilder::build
     pub fn sp(config: SpConfig) -> Result<Saml<Sp>, SamlError> {
-        let raw_config = raw_sp_metadata_config(&config);
-        let service_provider = ServiceProvider::from_config(&raw_config, config.entity_setting())?;
+        let service_provider = config.to_service_provider()?;
         Ok(Saml(Sp { service_provider }))
     }
 
@@ -165,14 +161,12 @@ impl Saml {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when IdP metadata cannot be generated from the
-    /// config, including a configured NameID format that is not an absolute
-    /// URI reference, or an endpoint or certificate that the generated
-    /// metadata cannot declare.
+    /// Returns no error for a config [`IdpConfigBuilder::build`] returned:
+    /// `build` generates the same IdP metadata and returns its errors.
+    ///
+    /// [`IdpConfigBuilder::build`]: crate::IdpConfigBuilder::build
     pub fn idp(config: IdpConfig) -> Result<Saml<Idp>, SamlError> {
-        let raw_config = raw_idp_metadata_config(&config);
-        let identity_provider =
-            IdentityProvider::from_config(&raw_config, config.entity_setting())?;
+        let identity_provider = config.to_identity_provider()?;
         Ok(Saml(Idp {
             identity_provider,
             issuance_lifetime: config.issuance_period(),
