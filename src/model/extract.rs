@@ -124,7 +124,11 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
     let mut attributes: Vec<(&str, Option<&str>, Vec<AttributeValue>)> = Vec::new();
     let mut positions: HashMap<(&str, &str), usize> = HashMap::new();
     for element in elements {
-        let name = element.get_str("name").unwrap_or_default();
+        let name = element.get_str("name").ok_or_else(|| {
+            SamlError::ProtocolProfile(
+                "Attribute is missing required unqualified attribute Name".into(),
+            )
+        })?;
         let name_format = element.get_str("nameFormat");
         let values = element
             .get("attributeValue")

@@ -443,7 +443,6 @@ fn error_response_omits_typed_attributes() -> Result<(), Box<dyn std::error::Err
 
 /// A peer identity provider that ignores the producer rules: the raw
 /// samlify-port renderer writes each `(Name, NameFormat, value)` as given.
-#[allow(deprecated)]
 fn accept_peer_attributes(
     attributes: &[(&str, &str, &str)],
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
@@ -462,6 +461,31 @@ fn accept_peer_attributes(
             })
             .collect(),
     };
+    let user_attributes = attributes
+        .iter()
+        .enumerate()
+        .map(|(index, (_, _, value))| (format!("value{index}"), (*value).to_string()))
+        .collect();
+    accept_peer_response(template, user_attributes)
+}
+
+/// A peer identity provider that signs `statement` verbatim as the
+/// assertion's `<AttributeStatement>`.
+fn accept_peer_attribute_statement(
+    statement: &str,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
+    let template = LoginResponseTemplate {
+        context: Some(LOGIN_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", statement, 1)),
+        attributes: Vec::new(),
+    };
+    accept_peer_response(template, Vec::new())
+}
+
+#[allow(deprecated)]
+fn accept_peer_response(
+    template: LoginResponseTemplate,
+    user_attributes: Vec<(String, String)>,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp_with(TemplatePolicy {
         login_response_template: Some(template),
@@ -471,11 +495,7 @@ fn accept_peer_attributes(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let user = User {
         name_id: "alice@example.com".to_string(),
-        attributes: attributes
-            .iter()
-            .enumerate()
-            .map(|(index, (_, _, value))| (format!("value{index}"), (*value).to_string()))
-            .collect(),
+        attributes: user_attributes,
         session_index: None,
     };
     let context = idp.raw_identity_provider().create_login_response(
@@ -493,6 +513,45 @@ fn accept_peer_attributes(
         BrowserInput::<SsoResponse>::post(vec![FormField::new("SAMLResponse", context.context)]),
         validation(),
     )?)
+}
+
+#[test]
+fn service_provider_rejects_an_attribute_without_a_name() -> Result<(), Box<dyn std::error::Error>>
+{
+    let error = accept_peer_attribute_statement(
+        "<saml:AttributeStatement>\
+         <saml:Attribute Name=\"mail\"><saml:AttributeValue>a@example.com</saml:AttributeValue></saml:Attribute>\
+         <saml:Attribute><saml:AttributeValue>admin</saml:AttributeValue></saml:Attribute>\
+         </saml:AttributeStatement>",
+    )
+    .err()
+    .ok_or("the response was accepted")?;
+
+    assert!(
+        matches!(
+            error.downcast_ref::<SamlError>(),
+            Some(SamlError::ProtocolProfile(message))
+                if message == "Attribute is missing required unqualified attribute Name"
+        ),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn service_provider_accepts_an_attribute_whose_name_is_empty(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let session = accept_peer_attribute_statement(
+        "<saml:AttributeStatement>\
+         <saml:Attribute Name=\"\"><saml:AttributeValue>admin</saml:AttributeValue></saml:Attribute>\
+         </saml:AttributeStatement>",
+    )?;
+
+    assert_eq!(
+        session.attributes().as_slice(),
+        [Attribute::new("", None, values(&["admin"]))]
+    );
+    Ok(())
 }
 
 #[test]
