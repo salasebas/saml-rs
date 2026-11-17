@@ -35,11 +35,11 @@ pub(super) fn encrypted_data_algorithm(
                 .element(*node)
                 .is_some_and(|element| element.matches_name_ns(ENC, "EncryptedData"))
         })
-        .ok_or_else(|| SamlError::Crypto("missing EncryptedData".into()))?;
+        .ok_or_else(|| SamlError::crypto("missing EncryptedData"))?;
     encrypted
         .first_child_element_by_name_ns(data, ENC, "EncryptionMethod")
         .and_then(|method| encrypted.element(method))
         .and_then(|method| method.get_attribute("Algorithm"))
         .map(str::to_owned)
-        .ok_or_else(|| SamlError::Crypto("missing EncryptionMethod Algorithm".into()))
+        .ok_or_else(|| SamlError::crypto("missing EncryptionMethod Algorithm"))
 }

@@ -727,7 +727,7 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
         parties
             .idp
             .answer_artifact_resolve(&parties.sp_metadata, &required, &mut issued, channel);
-    assert!(matches!(refused, Err(SamlError::Xml(_))));
+    assert!(matches!(refused, Err(SamlError::Xml { .. })));
 
     let optional = resolution.request().envelope().replacen(
         "<soap:Body>",
@@ -858,20 +858,14 @@ fn a_release_that_cannot_be_built_leaves_the_artifact_outstanding(
         &mut issued,
         channel,
     );
-    assert!(matches!(
-        &first,
-        Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED")
-    ));
+    assert!(matches!(&first, Err(SamlError::LimitExceeded { .. })));
     let second = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
         &mut issued,
         channel,
     );
-    assert!(matches!(
-        second,
-        Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED")
-    ));
+    assert!(matches!(second, Err(SamlError::LimitExceeded { .. })));
     Ok(())
 }
 
@@ -1077,6 +1071,44 @@ fn the_service_provider_rejects_an_artifact_response_with_two_statuses(
 }
 
 #[test]
+fn the_service_provider_reports_an_artifact_response_without_a_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let channel = confidential();
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        ArtifactDereference::web_browser_sso(channel)?,
+        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+    )?;
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &mut issued,
+        channel,
+    )?;
+    let envelope = answer.envelope();
+    let status_end_tag = "</samlp:Status>";
+    let start = envelope
+        .find("<samlp:Status")
+        .ok_or("ArtifactResponse is missing Status")?;
+    let end = envelope
+        .find(status_end_tag)
+        .ok_or("ArtifactResponse is missing Status")?
+        + status_end_tag.len();
+    let mut without_status = envelope.to_string();
+    without_status.replace_range(start..end, "");
+    let result = resolution.finish(&without_status);
+    assert!(
+        matches!(result, Err(SamlError::StatusMissing)),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
@@ -1258,7 +1290,13 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
         channel,
     );
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
 
@@ -1276,7 +1314,13 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     let deep_response = answer.envelope().replacen("<soap:Body>", deep_header, 1);
     let refused = resolution.finish(&deep_response);
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
     assert!(resolution

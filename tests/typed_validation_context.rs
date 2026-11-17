@@ -217,7 +217,7 @@ fn typed_validation_context_expired_condition_uses_fixed_clock(
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
             Ok(())
         }
@@ -234,7 +234,7 @@ fn typed_validation_context_expired_subject_confirmation_uses_fixed_clock(
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
-        Err(SamlError::SubjectConfirmationInvalid { reason }) => {
+        Err(SamlError::SubjectConfirmationInvalid { reason, .. }) => {
             assert_eq!(reason, SubjectConfirmationReason::TimeWindowInvalid);
             Ok(())
         }
@@ -251,7 +251,7 @@ fn typed_validation_context_expired_session_not_on_or_after_uses_fixed_clock(
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::SessionNotOnOrAfter);
             Ok(())
         }
@@ -288,7 +288,7 @@ fn typed_validation_context_not_yet_valid_condition_uses_fixed_clock(
             .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(RESPONSE, &validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
             Ok(())
         }
@@ -307,7 +307,7 @@ fn typed_validation_context_invalid_timestamp_fails_closed_at_fixed_clock(
         SamlValidationContext::new(instant("2014-07-17T01:02:00Z")?, ReplayPolicy::Disabled);
 
     match parse_response_at(&xml, &validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
             Ok(())
         }
@@ -345,7 +345,7 @@ fn new_validation_context_allows_five_minutes_on_not_before_and_not_on_or_after(
         &xml_with_time_window("2026-07-15T12:05:01Z", FAR_FUTURE, FAR_FUTURE, FAR_FUTURE),
         &validation,
     ) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
         }
         other => {
@@ -371,7 +371,7 @@ fn new_validation_context_allows_five_minutes_on_not_before_and_not_on_or_after(
         ),
         &validation,
     ) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
         }
         other => {
@@ -399,7 +399,7 @@ fn new_validation_context_allows_five_minutes_on_not_before_and_not_on_or_after(
         ),
         &validation,
     ) {
-        Err(SamlError::SubjectConfirmationInvalid { reason }) => {
+        Err(SamlError::SubjectConfirmationInvalid { reason, .. }) => {
             assert_eq!(reason, SubjectConfirmationReason::TimeWindowInvalid);
             Ok(())
         }
@@ -418,7 +418,7 @@ fn clock_skew_strict_allows_no_skew() -> Result<(), Box<dyn std::error::Error>> 
         &xml_with_time_window("2026-07-15T12:01:00Z", FAR_FUTURE, FAR_FUTURE, FAR_FUTURE),
         &validation,
     ) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
         }
         other => return Err(format!("expected strict NotBefore rejection, got {other:?}").into()),
@@ -433,7 +433,7 @@ fn clock_skew_strict_allows_no_skew() -> Result<(), Box<dyn std::error::Error>> 
         ),
         &validation,
     ) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
         }
         other => {
@@ -450,7 +450,7 @@ fn clock_skew_strict_allows_no_skew() -> Result<(), Box<dyn std::error::Error>> 
         ),
         &validation,
     ) {
-        Err(SamlError::SubjectConfirmationInvalid { reason }) => {
+        Err(SamlError::SubjectConfirmationInvalid { reason, .. }) => {
             assert_eq!(reason, SubjectConfirmationReason::TimeWindowInvalid);
             Ok(())
         }
@@ -474,7 +474,7 @@ fn bearer_subject_confirmation_not_before_allows_five_minutes(
 
     parse_response_at(&with_bearer_not_before("2026-07-15T12:05:00Z"), &validation)?;
     match parse_response_at(&with_bearer_not_before("2026-07-15T12:05:01Z"), &validation) {
-        Err(SamlError::SubjectConfirmationInvalid { reason }) => {
+        Err(SamlError::SubjectConfirmationInvalid { reason, .. }) => {
             assert_eq!(reason, SubjectConfirmationReason::TimeWindowInvalid);
         }
         other => {
@@ -508,7 +508,7 @@ fn explicit_clock_skew_replaces_five_minute_default() -> Result<(), Box<dyn std:
         &xml_with_time_window("2026-07-15T12:01:01Z", FAR_FUTURE, FAR_FUTURE, FAR_FUTURE),
         &validation,
     ) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
         }
         other => return Err(format!("expected one-minute NotBefore limit, got {other:?}").into()),
@@ -532,7 +532,7 @@ fn explicit_clock_skew_replaces_five_minute_default() -> Result<(), Box<dyn std:
         ),
         &validation,
     ) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::Conditions);
             Ok(())
         }
@@ -678,7 +678,7 @@ fn typed_validation_context_zero_replay_retention_fails_closed(
             .with_replay_retention(Duration::ZERO);
 
     match request.check_and_store_replay(&mut validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
         }
@@ -696,7 +696,7 @@ fn typed_validation_context_replay_retention_overflow_fails_closed(
             .with_replay_retention(Duration::MAX);
 
     match request.check_and_store_replay(&mut validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
         }
@@ -719,7 +719,7 @@ fn typed_validation_context_duplicate_response_id_replay_returns_semantic_error(
     let mut validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
     match session.check_and_store_replay(&mut validation) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, "response_id:_response123");
+            assert_eq!(key.cache_key(), "response_id:_response123");
             Ok(())
         }
         other => Err(format!("expected ReplayDetected, got {other:?}").into()),
@@ -742,7 +742,7 @@ fn typed_validation_context_duplicate_assertion_id_replay_returns_semantic_error
     let mut validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
     match second.check_and_store_replay(&mut validation) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, "assertion_id:_assertion123");
+            assert_eq!(key.cache_key(), "assertion_id:_assertion123");
             Ok(())
         }
         other => Err(format!("expected ReplayDetected, got {other:?}").into()),
@@ -869,7 +869,7 @@ fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_cl
     );
 
     match session.check_and_store_replay(&mut validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
         }
@@ -889,7 +889,7 @@ fn typed_validation_context_replay_expiration_at_now_fails_closed(
     .with_clock_skew(ClockSkew::strict());
 
     match session.check_and_store_replay(&mut validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
         }
@@ -959,7 +959,7 @@ fn typed_validation_context_replay_without_expiration_fails_closed(
     );
 
     match session.check_and_store_replay(&mut validation) {
-        Err(SamlError::TimeWindowInvalid { field }) => {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
         }

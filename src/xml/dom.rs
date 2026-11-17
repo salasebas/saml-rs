@@ -4,7 +4,7 @@
 //! original substring for `context` fields (avoiding any re-serialisation /
 //! canonicalisation concerns — verification is delegated to bergshamra).
 
-use crate::error::SamlError;
+use crate::error::{xml_err, ResourceLimit, SamlError};
 use crate::xml::name::is_ncname;
 use crate::xml::{is_xml_char, utf8_bom_len};
 use quick_xml::escape::resolve_predefined_entity;
@@ -27,7 +27,6 @@ pub const DEFAULT_XML_MAX_ATTRIBUTE_VALUE_BYTES: usize = 16 * 1024;
 /// Default maximum decoded direct text bytes accepted for one element.
 pub const DEFAULT_XML_MAX_TEXT_BYTES: usize = DEFAULT_XML_MAX_BYTES;
 
-const XML_LIMIT_EXCEEDED: &str = "ERR_XML_LIMIT_EXCEEDED";
 const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
 
@@ -66,7 +65,10 @@ impl XmlLimits {
 
     pub(crate) fn check_input_bytes(self, len: usize) -> Result<(), SamlError> {
         if len > self.max_bytes {
-            return Err(limit_exceeded("max XML bytes", self.max_bytes));
+            return Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlBytes,
+                maximum: self.max_bytes,
+            });
         }
         Ok(())
     }
@@ -74,16 +76,25 @@ impl XmlLimits {
     pub(crate) fn count_element(self, count: &mut usize) -> Result<(), SamlError> {
         *count = count
             .checked_add(1)
-            .ok_or_else(|| limit_exceeded("max XML nodes", self.max_nodes))?;
+            .ok_or_else(|| SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlNodes,
+                maximum: self.max_nodes,
+            })?;
         if *count > self.max_nodes {
-            return Err(limit_exceeded("max XML nodes", self.max_nodes));
+            return Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlNodes,
+                maximum: self.max_nodes,
+            });
         }
         Ok(())
     }
 
     pub(crate) fn check_depth(self, depth: usize) -> Result<(), SamlError> {
         if depth > self.max_depth {
-            return Err(limit_exceeded("max XML depth", self.max_depth));
+            return Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlDepth,
+                maximum: self.max_depth,
+            });
         }
         Ok(())
     }
@@ -91,7 +102,10 @@ impl XmlLimits {
     pub(crate) fn checked_depth(self, depth: usize) -> Result<usize, SamlError> {
         let depth = depth
             .checked_add(1)
-            .ok_or_else(|| limit_exceeded("max XML depth", self.max_depth))?;
+            .ok_or_else(|| SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlDepth,
+                maximum: self.max_depth,
+            })?;
         self.check_depth(depth)?;
         Ok(depth)
     }
@@ -161,21 +175,24 @@ fn local_name_str(name: QName) -> String {
     name.local_name().into_inner().to_owned()
 }
 
-fn limit_exceeded(limit: &str, max: usize) -> SamlError {
-    SamlError::Invalid(format!("{XML_LIMIT_EXCEEDED}: {limit} exceeded ({max})"))
-}
-
 fn checked_append_text(
     target: &mut String,
     text: &str,
     limits: XmlLimits,
 ) -> Result<(), SamlError> {
-    let next_len = target
-        .len()
-        .checked_add(text.len())
-        .ok_or_else(|| limit_exceeded("max XML text bytes", limits.max_text_bytes))?;
+    let next_len =
+        target
+            .len()
+            .checked_add(text.len())
+            .ok_or_else(|| SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlTextBytes,
+                maximum: limits.max_text_bytes,
+            })?;
     if next_len > limits.max_text_bytes {
-        return Err(limit_exceeded("max XML text bytes", limits.max_text_bytes));
+        return Err(SamlError::LimitExceeded {
+            limit: ResourceLimit::XmlTextBytes,
+            maximum: limits.max_text_bytes,
+        });
     }
     target.push_str(text);
     Ok(())
@@ -183,7 +200,7 @@ fn checked_append_text(
 
 fn check_xml_chars(text: &str) -> Result<(), SamlError> {
     match text.chars().find(|&ch| !is_xml_char(ch)) {
-        Some(ch) => Err(SamlError::Xml(format!(
+        Some(ch) => Err(SamlError::xml(format!(
             "character U+{:04X} is not allowed in XML",
             u32::from(ch)
         ))),
@@ -195,7 +212,7 @@ fn check_qname(name: &str) -> Result<(), SamlError> {
     if name.splitn(2, ':').all(is_ncname) {
         Ok(())
     } else {
-        Err(SamlError::Xml(format!(
+        Err(SamlError::xml(format!(
             "`{name}` is not a qualified XML name"
         )))
     }
@@ -206,9 +223,7 @@ fn check_attribute_separation(attributes: &str) -> Result<(), SamlError> {
     let mut after_value = false;
     for ch in attributes.chars() {
         if after_value && !is_xml_whitespace_char(ch) {
-            return Err(SamlError::Xml(
-                "attributes must be separated by whitespace".into(),
-            ));
+            return Err(SamlError::xml("attributes must be separated by whitespace"));
         }
         after_value = false;
         match open_quote {
@@ -227,19 +242,28 @@ fn check_attribute_separation(attributes: &str) -> Result<(), SamlError> {
 fn check_prefix_declared(resolved: &ResolveResult<'_>, mode: ParseMode) -> Result<(), SamlError> {
     match (resolved, mode) {
         (ResolveResult::Unknown(prefix), ParseMode::Document | ParseMode::Roots) => Err(
-            SamlError::Xml(format!("namespace prefix `{prefix}` is not declared")),
+            SamlError::xml(format!("namespace prefix `{prefix}` is not declared")),
         ),
         (ResolveResult::Unknown(_), ParseMode::Fragment)
         | (ResolveResult::Unbound | ResolveResult::Bound(_), _) => Ok(()),
     }
 }
 
+/// Map a quick-xml reader error. The namespace-binding cap is a limit.
+pub(crate) fn reader_err(error: quick_xml::Error) -> SamlError {
+    match error {
+        quick_xml::Error::Namespace(error) => namespace_error(error),
+        other => xml_err(other),
+    }
+}
+
 fn namespace_error(error: NamespaceError) -> SamlError {
     match error {
-        NamespaceError::TooManyBindings(max) => {
-            limit_exceeded("max XML namespace bindings in scope", max)
-        }
-        other => SamlError::Xml(other.to_string()),
+        NamespaceError::TooManyBindings(max) => SamlError::LimitExceeded {
+            limit: ResourceLimit::XmlNamespaceBindings,
+            maximum: max,
+        },
+        other => xml_err(other),
     }
 }
 
@@ -251,12 +275,12 @@ fn bind_namespace(
     if declaration == PrefixDeclaration::Default
         && matches!(namespace, XML_NAMESPACE | XMLNS_NAMESPACE)
     {
-        return Err(SamlError::Xml(format!(
+        return Err(SamlError::xml(format!(
             "namespace `{namespace}` cannot be the default namespace"
         )));
     }
     if let (PrefixDeclaration::Named(prefix), "") = (declaration, namespace) {
-        return Err(SamlError::Xml(format!(
+        return Err(SamlError::xml(format!(
             "namespace prefix `{prefix}` cannot be undeclared"
         )));
     }
@@ -291,7 +315,7 @@ fn read_element(
         check_prefix_declared(&namespace, mode)?;
         let expanded_name = (local_name, namespace);
         if expanded_names.contains(&expanded_name) {
-            return Err(SamlError::Xml(format!(
+            return Err(SamlError::xml(format!(
                 "duplicate attribute `{}`",
                 name.into_inner()
             )));
@@ -316,27 +340,25 @@ fn read_attrs<'a>(
     let mut out = Vec::new();
     for attr in e.attributes() {
         if out.len() >= limits.max_attributes_per_element {
-            return Err(limit_exceeded(
-                "max XML attributes per element",
-                limits.max_attributes_per_element,
-            ));
+            return Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlAttributesPerElement,
+                maximum: limits.max_attributes_per_element,
+            });
         }
-        let attr = attr.map_err(|err| SamlError::Xml(err.to_string()))?;
+        let attr = attr.map_err(xml_err)?;
         check_qname(attr.key.into_inner())?;
         if attr.value.contains('<') {
-            return Err(SamlError::Xml(
-                "`<` is not allowed in an attribute value".into(),
-            ));
+            return Err(SamlError::xml("`<` is not allowed in an attribute value"));
         }
         let value = attr
             .normalized_value(XmlVersion::Implicit1_0)
-            .map_err(|err| SamlError::Xml(err.to_string()))?
+            .map_err(xml_err)?
             .into_owned();
         if value.len() > limits.max_attribute_value_bytes {
-            return Err(limit_exceeded(
-                "max XML attribute value bytes",
-                limits.max_attribute_value_bytes,
-            ));
+            return Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlAttributeValueBytes,
+                maximum: limits.max_attribute_value_bytes,
+            });
         }
         check_xml_chars(&value)?;
         if let Some(declaration) = attr.key.as_namespace_binding() {
@@ -371,18 +393,15 @@ fn is_xml_whitespace(text: &str) -> bool {
 
 fn reject_non_document_content(mode: ParseMode) -> Result<(), SamlError> {
     match mode {
-        ParseMode::Document | ParseMode::Fragment => Err(SamlError::Xml(
-            "content is not allowed outside the document element".into(),
+        ParseMode::Document | ParseMode::Fragment => Err(SamlError::xml(
+            "content is not allowed outside the document element",
         )),
         ParseMode::Roots => Ok(()),
     }
 }
 
 fn push_general_ref(node: &mut Node, e: BytesRef, limits: XmlLimits) -> Result<(), SamlError> {
-    if let Some(ch) = e
-        .resolve_char_ref()
-        .map_err(|err| SamlError::Xml(err.to_string()))?
-    {
+    if let Some(ch) = e.resolve_char_ref().map_err(xml_err)? {
         let mut buf = [0; 4];
         let text = ch.encode_utf8(&mut buf);
         check_xml_chars(text)?;
@@ -392,7 +411,7 @@ fn push_general_ref(node: &mut Node, e: BytesRef, limits: XmlLimits) -> Result<(
 
     let entity = e.as_ref();
     let resolved = resolve_predefined_entity(entity)
-        .ok_or_else(|| SamlError::Xml(format!("unrecognized entity `{entity}`")))?;
+        .ok_or_else(|| SamlError::xml(format!("unrecognized entity `{entity}`")))?;
     checked_append_text(&mut node.text, resolved, limits)?;
     Ok(())
 }
@@ -435,11 +454,11 @@ pub(crate) fn parse_fragment_with_limits(
 fn parse_single_root(xml: &str, limits: XmlLimits, mode: ParseMode) -> Result<Document, SamlError> {
     let mut roots = parse_roots_inner(xml, limits, mode)?;
     let root = match roots.len() {
-        0 => return Err(SamlError::Xml("no document element".into())),
+        0 => return Err(SamlError::xml("no document element")),
         1 => roots
             .pop()
-            .ok_or_else(|| SamlError::Xml("no document element".into()))?,
-        _ => return Err(SamlError::Xml("multiple document elements".into())),
+            .ok_or_else(|| SamlError::xml("no document element"))?,
+        _ => return Err(SamlError::xml("multiple document elements")),
     };
     Ok(Document { root })
 }
@@ -487,9 +506,7 @@ fn parse_roots_inner(
 
     loop {
         let before = bom_len + reader.buffer_position() as usize;
-        let event = reader
-            .read_event()
-            .map_err(|err| SamlError::Xml(err.to_string()))?;
+        let event = reader.read_event().map_err(xml_err)?;
         let after = bom_len + reader.buffer_position() as usize;
         match event {
             Event::Start(e) => {
@@ -529,7 +546,7 @@ fn parse_roots_inner(
             }
             Event::Text(e) => {
                 if e.contains("]]>") {
-                    return Err(SamlError::Xml("`]]>` is not allowed in text".into()));
+                    return Err(SamlError::xml("`]]>` is not allowed in text"));
                 }
                 if let Some(top) = stack.last_mut() {
                     checked_append_text(&mut top.text, &e.xml10_content(), limits)?;
@@ -554,27 +571,27 @@ fn parse_roots_inner(
             // Hardening (adapted from openauth-saml): reject DTDs so the parser
             // can never be steered into entity-expansion / XXE territory.
             Event::DocType(_) => {
-                return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
+                return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
             Event::PI(instruction) if instruction.target() == "xml-stylesheet" => {
-                return Err(SamlError::Xml(
-                    "xml-stylesheet processing instructions are not allowed".into(),
+                return Err(SamlError::xml(
+                    "xml-stylesheet processing instructions are not allowed",
                 ));
             }
             Event::Decl(_) if before != bom_len => {
-                return Err(SamlError::Xml(
-                    "an XML declaration is allowed only at the start of the input".into(),
+                return Err(SamlError::xml(
+                    "an XML declaration is allowed only at the start of the input",
                 ));
             }
             Event::PI(instruction) if instruction.target().eq_ignore_ascii_case("xml") => {
-                return Err(SamlError::Xml(format!(
+                return Err(SamlError::xml(format!(
                     "processing instruction target `{}` is reserved",
                     instruction.target()
                 )));
             }
             Event::Eof => match stack.last() {
                 Some(node) => {
-                    return Err(SamlError::Xml(format!(
+                    return Err(SamlError::xml(format!(
                         "element `{}` is not closed",
                         node.local_name
                     )));
@@ -704,35 +721,35 @@ mod tests {
     fn parse_rejects_multiple_document_elements() {
         let result = parse_document("<Root/><Second/>", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
     fn parse_rejects_text_before_document_element() {
         let result = parse_document("outside<Root/>", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
     fn parse_rejects_text_after_document_element() {
         let result = parse_document("<Root/>outside", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
     fn parse_rejects_cdata_outside_document_element() {
         let result = parse_document("<Root/><![CDATA[outside]]>", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
     fn parse_rejects_reference_outside_document_element() {
         let result = parse_document("<Root/>&amp;", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
@@ -757,28 +774,28 @@ mod tests {
             XmlLimits::default(),
         );
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
     fn parse_rejects_unclosed_element_after_document_element() {
         let result = parse_document("<Root/><Second>", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
     fn parse_roots_rejects_unclosed_element() {
         let result = parse_all_roots("<Root/><Second>", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
     fn parse_rejects_less_than_in_attribute_value() {
         let result = parse_document("<Root value=\"one<two\"/>", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
@@ -793,7 +810,7 @@ mod tests {
         ] {
             let result = parse_document(xml, XmlLimits::default());
 
-            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+            assert!(matches!(result, Err(SamlError::Xml { .. })), "{xml:?}");
         }
     }
 
@@ -801,7 +818,7 @@ mod tests {
     fn parse_rejects_double_hyphen_in_comment() {
         let result = parse_document("<Root><!-- one -- two --></Root>", XmlLimits::default());
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
@@ -819,7 +836,7 @@ mod tests {
         ] {
             let result = parse_document(xml, XmlLimits::default());
 
-            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+            assert!(matches!(result, Err(SamlError::Xml { .. })), "{xml:?}");
         }
     }
 
@@ -834,7 +851,7 @@ mod tests {
         ] {
             let result = parse_document(xml, XmlLimits::default());
 
-            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+            assert!(matches!(result, Err(SamlError::Xml { .. })), "{xml:?}");
         }
     }
 
@@ -846,7 +863,7 @@ mod tests {
         ] {
             let result = parse_all_roots(xml, XmlLimits::default());
 
-            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+            assert!(matches!(result, Err(SamlError::Xml { .. })), "{xml:?}");
         }
     }
 
@@ -864,7 +881,7 @@ mod tests {
         ] {
             let result = parse_document(xml, XmlLimits::default());
 
-            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+            assert!(matches!(result, Err(SamlError::Xml { .. })), "{xml:?}");
         }
     }
 
@@ -877,7 +894,7 @@ mod tests {
         ] {
             let result = parse_document(xml, XmlLimits::default());
 
-            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+            assert!(matches!(result, Err(SamlError::Xml { .. })), "{xml:?}");
         }
     }
 
@@ -939,7 +956,7 @@ mod tests {
         ] {
             let result = parse_fragment_with_limits(xml, XmlLimits::default());
 
-            assert!(matches!(result, Err(SamlError::Xml(_))), "{xml:?}");
+            assert!(matches!(result, Err(SamlError::Xml { .. })), "{xml:?}");
         }
     }
 
@@ -951,8 +968,8 @@ mod tests {
         Ok(())
     }
 
-    fn limit_hit<T>(result: Result<T, SamlError>) -> bool {
-        matches!(result, Err(SamlError::Invalid(message)) if message.contains(XML_LIMIT_EXCEEDED))
+    fn limit_hit<T>(result: Result<T, SamlError>, expected: ResourceLimit) -> bool {
+        matches!(result, Err(SamlError::LimitExceeded { limit, .. }) if limit == expected)
     }
 
     #[test]
@@ -962,7 +979,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_document("<Root/>", limits)));
+        assert!(limit_hit(
+            parse_document("<Root/>", limits),
+            ResourceLimit::XmlBytes
+        ));
     }
 
     #[test]
@@ -972,7 +992,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_document("<a><b><c/></b></a>", limits)));
+        assert!(limit_hit(
+            parse_document("<a><b><c/></b></a>", limits),
+            ResourceLimit::XmlDepth
+        ));
     }
 
     #[test]
@@ -982,7 +1005,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_document("<a><b/><c/></a>", limits)));
+        assert!(limit_hit(
+            parse_document("<a><b/><c/></a>", limits),
+            ResourceLimit::XmlNodes
+        ));
     }
 
     #[test]
@@ -992,7 +1018,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_document("<a x=\"1\" y=\"2\"/>", limits)));
+        assert!(limit_hit(
+            parse_document("<a x=\"1\" y=\"2\"/>", limits),
+            ResourceLimit::XmlAttributesPerElement
+        ));
     }
 
     #[test]
@@ -1003,7 +1032,10 @@ mod tests {
         }
         xml.push_str("/>");
 
-        assert!(limit_hit(parse_document(&xml, XmlLimits::default())));
+        assert!(limit_hit(
+            parse_document(&xml, XmlLimits::default()),
+            ResourceLimit::XmlAttributesPerElement
+        ));
     }
 
     #[test]
@@ -1014,7 +1046,10 @@ mod tests {
         }
         xml.push_str("/>");
 
-        assert!(limit_hit(parse_document(&xml, XmlLimits::default())));
+        assert!(limit_hit(
+            parse_document(&xml, XmlLimits::default()),
+            ResourceLimit::XmlAttributesPerElement
+        ));
     }
 
     fn nested_namespace_bindings(levels: usize) -> String {
@@ -1035,10 +1070,13 @@ mod tests {
             XmlLimits::default(),
         )?;
 
-        assert!(limit_hit(parse_document(
-            &nested_namespace_bindings(DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT + 1),
-            XmlLimits::default()
-        )));
+        assert!(limit_hit(
+            parse_document(
+                &nested_namespace_bindings(DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT + 1),
+                XmlLimits::default()
+            ),
+            ResourceLimit::XmlNamespaceBindings
+        ));
         Ok(())
     }
 
@@ -1049,7 +1087,7 @@ mod tests {
             XmlLimits::default(),
         );
 
-        assert!(matches!(result, Err(SamlError::Xml(_))));
+        assert!(matches!(result, Err(SamlError::Xml { .. })));
     }
 
     #[test]
@@ -1059,7 +1097,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_document("<a x=\"1234\"/>", limits)));
+        assert!(limit_hit(
+            parse_document("<a x=\"1234\"/>", limits),
+            ResourceLimit::XmlAttributeValueBytes
+        ));
     }
 
     #[test]
@@ -1069,6 +1110,9 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(limit_hit(parse_document("<a>1234</a>", limits)));
+        assert!(limit_hit(
+            parse_document("<a>1234</a>", limits),
+            ResourceLimit::XmlTextBytes
+        ));
     }
 }

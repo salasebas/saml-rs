@@ -26,9 +26,7 @@ fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::erro
         saml_rs::xml::extract::extract(&xml, &[]).map(drop),
     ];
     for result in defaults {
-        assert!(
-            matches!(result, Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
-        );
+        assert!(matches!(result, Err(SamlError::LimitExceeded { .. })));
     }
     is_valid_xml_with_limits(&xml, raised)?;
     check_status_with_limits(&xml, ParserType::SamlResponse, raised)?;
@@ -38,9 +36,10 @@ fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::erro
     {
         use saml_rs::crypto::{verify_signature, verify_signature_with_limits};
 
-        assert!(
-            matches!(verify_signature(&xml, &[]), Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
-        );
+        assert!(matches!(
+            verify_signature(&xml, &[]),
+            Err(SamlError::LimitExceeded { .. })
+        ));
         assert_eq!(
             verify_signature_with_limits(&xml, &[], raised)?,
             (false, None)

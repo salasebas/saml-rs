@@ -15,7 +15,7 @@ use crate::config::{
     AssertionElementEncryption, AttributeEncryptionPolicy, IdentifierEncryptionPolicy,
 };
 use crate::constants::namespace;
-use crate::error::SamlError;
+use crate::error::{crypto_err, xml_err, SamlError};
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeSet};
 
@@ -33,10 +33,6 @@ pub(crate) use encrypt::{
 pub(crate) use policy::response_uses_cbc_encrypted_assertion;
 
 const ENC: &str = "http://www.w3.org/2001/04/xmlenc#";
-
-fn crypto_err(err: impl std::fmt::Display) -> SamlError {
-    SamlError::Crypto(err.to_string())
-}
 
 /// Plaintext element, its encrypted wrapper, and the parent that holds it.
 #[derive(Debug, Clone, Copy)]
@@ -120,7 +116,7 @@ fn selected_kinds(selection: AssertionElementEncryption) -> Vec<EncryptedElement
 }
 
 fn parse_xml_document(xml: &str) -> Result<XmlDocument<'_>, SamlError> {
-    uppsala::parse(xml).map_err(|error| SamlError::Xml(error.to_string()))
+    uppsala::parse(xml).map_err(xml_err)
 }
 
 fn assertion_children<'d>(
@@ -143,7 +139,7 @@ fn root_children(
 ) -> Result<Vec<NodeId>, SamlError> {
     let root = document
         .document_element()
-        .ok_or_else(|| SamlError::Xml("no document element".into()))?;
+        .ok_or_else(|| SamlError::xml("no document element"))?;
     Ok(document.child_elements_by_name_ns(root, namespace, local_name))
 }
 
@@ -152,7 +148,7 @@ fn root_children(
 fn assertions(document: &XmlDocument<'_>) -> Result<Vec<NodeId>, SamlError> {
     let root = document
         .document_element()
-        .ok_or_else(|| SamlError::Xml("no document element".into()))?;
+        .ok_or_else(|| SamlError::xml("no document element"))?;
     let root_is_assertion = document
         .element(root)
         .is_some_and(|element| element.matches_name_ns(namespace::ASSERTION, "Assertion"));
@@ -181,7 +177,7 @@ fn assertion_elements(
 fn node_range(document: &XmlDocument<'_>, node: NodeId) -> Result<Range<usize>, SamlError> {
     document
         .node_range(node)
-        .ok_or_else(|| SamlError::Xml("element has no source range".into()))
+        .ok_or_else(|| SamlError::xml("element has no source range"))
 }
 
 /// Inclusive canonical form of `element`, which declares every namespace in

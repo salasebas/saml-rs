@@ -215,7 +215,13 @@ fn receive_padded_logout_request(padding: usize) -> TestResult<Result<(), SamlEr
 }
 
 fn is_base64_output_limit(result: &Result<(), SamlError>) -> bool {
-    matches!(result, Err(SamlError::Invalid(reason)) if reason == "ERR_BASE64_OUTPUT_LIMIT_EXCEEDED")
+    matches!(
+        result,
+        Err(SamlError::LimitExceeded {
+            limit: saml_rs::ResourceLimit::Base64DecodedBytes,
+            ..
+        })
+    )
 }
 
 #[test]

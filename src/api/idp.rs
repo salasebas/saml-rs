@@ -2,7 +2,6 @@ use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
 use crate::browser::{ArtifactDelivery, BrowserInput, Outbound, SsoRequestBinding};
 use crate::config::{NameIdFormat, SpDescriptor};
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
-use crate::error::SamlError as Error;
 use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
     AuthnRequest, Received, RelayStateParam, ReplayKey, SamlValidationContext, SsoResponse, Subject,
@@ -109,12 +108,12 @@ impl Saml<Idp> {
                 .metadata
                 .single_sign_on_service_locations(binding.as_binding());
             if locations.is_empty() {
-                return Err(Error::MissingMetadata("SingleSignOnService".into()));
+                return Err(SamlError::MissingMetadata("SingleSignOnService".into()));
             }
             let expected = validation.resolve_recipient_endpoint(&locations)?;
             let actual = authn.destination().map(|destination| destination.as_str());
             if actual != Some(expected.as_str()) {
-                return Err(Error::destination_mismatch(&expected, actual));
+                return Err(SamlError::destination_mismatch(&expected, actual));
             }
         }
         let mut validation = validation;

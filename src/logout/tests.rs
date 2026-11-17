@@ -982,7 +982,7 @@ fn custom_logout_response_rejects_doctype_before_profile_validation(
         None,
         false,
     ) {
-        Err(SamlError::Xml(message)) if message.contains("DOCTYPE is not allowed") => Ok(()),
+        Err(SamlError::Xml { message, .. }) if message.contains("DOCTYPE is not allowed") => Ok(()),
         other => Err(format!("expected structural DOCTYPE rejection, got {other:?}").into()),
     }
 }

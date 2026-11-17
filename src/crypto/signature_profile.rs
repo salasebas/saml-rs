@@ -69,7 +69,7 @@ pub(crate) fn check_verification_key(
     match profile {
         XmlSignatureProfile::StrictRsaSha2 | XmlSignatureProfile::ExcludeWeakAlgorithms => {
             match rsa_modulus_bits(key)? {
-                Some(bits) if bits < MIN_RSA_KEY_BITS => Err(SamlError::Crypto(format!(
+                Some(bits) if bits < MIN_RSA_KEY_BITS => Err(SamlError::crypto(format!(
                     "{bits}-bit RSA key is shorter than the {MIN_RSA_KEY_BITS} bits the XML signature profile requires"
                 ))),
                 Some(_) | None => Ok(()),
@@ -83,7 +83,7 @@ fn rsa_modulus_bits(key: &Key) -> Result<Option<usize>, SamlError> {
     if key.algorithm_name() != "RSA" {
         return Ok(None);
     }
-    let unreadable = || SamlError::Crypto("RSA key modulus could not be read".into());
+    let unreadable = || SamlError::crypto("RSA key modulus could not be read");
     let key_value = key.to_key_value_xml("").ok_or_else(unreadable)?;
     let document = dom::parse_document(&key_value, crate::XmlLimits::default())?;
     let modulus = document

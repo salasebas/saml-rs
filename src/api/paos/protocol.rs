@@ -421,7 +421,7 @@ mod tests {
             XmlLimits::default(),
             SP_UNDERSTOOD_HEADERS,
         ) {
-            Err(SamlError::Xml(_)) => Ok(()),
+            Err(SamlError::Xml { .. }) => Ok(()),
             Err(other) => Err(format!("expected Xml, got {other:?}")),
             Ok(_) => Err("expected Xml, got a SOAP body".into()),
         }
@@ -507,7 +507,7 @@ mod tests {
             XmlLimits::default(),
             SP_UNDERSTOOD_HEADERS,
         ) {
-            Err(SamlError::Xml(_)) => Ok(()),
+            Err(SamlError::Xml { .. }) => Ok(()),
             Err(other) => Err(format!("expected Xml, got {other:?}")),
             Ok(_) => Err("expected Xml, got a SOAP body".into()),
         }
@@ -558,7 +558,7 @@ mod tests {
             XmlLimits::default(),
             SP_UNDERSTOOD_HEADERS,
         ) {
-            Err(SamlError::Xml(_)) => Ok(()),
+            Err(SamlError::Xml { .. }) => Ok(()),
             Err(other) => Err(format!("expected Xml, got {other:?}")),
             Ok(_) => Err("expected Xml, got a SOAP body".into()),
         }

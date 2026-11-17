@@ -35,6 +35,7 @@
 | `LogoutSubject` constructors or `session_index()`, `OutstandingLogout::principal()` or `sessions()` | Use `LogoutSubject::new(name_id)`, the append methods, and the renamed getters | [Logout subjects](logout-validation-replay.md#build-a-logout-subject-with-session-indexes) |
 | `LogoutCompleted` constructors, `status()`, optional `response()` or `raw_flow()`, or equality | Obtain the completion from `finish_slo` and read the response directly | [Logout completions](logout-validation-replay.md#obtain-the-completed-response-through-finish_slo) |
 | `ReplayKey` variants ending in `Id` or `SamlValidationContext::replay_retention()` | Rename variants and keep the retention duration in your configuration | [Replay keys and cache](logout-validation-replay.md#update-replay-keys-and-cache-access) |
+| `SamlError::StatusNotSuccess { top, second }`, `ReplayDetected { key }` as a string, `UndefinedBinding`, `UndefinedStatus`, `Xml(message)`, `Crypto(message)`, `Base64(error)`, `Deflate(error)`, or `?` from a `base64::DecodeError` or `std::io::Error` into `SamlError` | Typed payloads, new variants, and no third-party `From` | [Typed errors](errors.md) |
 
 ## 1.1 Pass the expected entity ID to `from_metadata_xml`
 
@@ -210,9 +211,10 @@ fn describe(error: &SamlError) -> &'static str {
         // Before: SamlError::FailedToVerifySignature
         SamlError::SignatureVerification {
             reason: SignatureVerificationReason::XmlSignature,
+            ..
         } => "untrusted XML signature",
         // Before: SamlError::MissingSigAlg
-        SamlError::MissingBindingParameter { name: "SigAlg" } => "missing SigAlg",
+        SamlError::MissingBindingParameter { name: "SigAlg", .. } => "missing SigAlg",
         _ => "other",
     }
 }
@@ -223,8 +225,8 @@ now `signature verification failed: xml signature`, and `ERR_MISSING_SIG_ALG`
 is now `required binding parameter missing: SigAlg`. Update log filters and
 tests that compare these strings.
 
-`SamlError::UndefinedBinding` stays. SOAP and Artifact inputs have no
-`Binding` value to put in `UnsupportedBinding`.
+`SamlError::UndefinedBinding` is removed too. See
+[Replace the binding and status variants](errors.md#replace-the-binding-and-status-variants).
 
 ## 1.7 Build configs with the builder
 

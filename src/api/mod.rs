@@ -108,7 +108,7 @@ mod slo;
 mod sp;
 
 use crate::config::{IdpConfig, SpConfig};
-use crate::error::SamlError as Error;
+use crate::error::SamlError;
 use crate::idp::IdentityProvider;
 use crate::sp::ServiceProvider;
 
@@ -139,9 +139,6 @@ pub struct Idp {
     identity_provider: IdentityProvider,
     issuance_lifetime: time::Duration,
 }
-
-/// Error type returned by the typed SAML API.
-pub type SamlError = Error;
 
 impl Saml {
     /// Build a typed Service Provider facade.

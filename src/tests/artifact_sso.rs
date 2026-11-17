@@ -382,7 +382,10 @@ fn a_relay_state_above_the_receive_limit_is_not_delivered() -> Result<(), Box<dy
     assert_eq!(delivered.relay_state().as_deref(), Some(longest.as_str()));
     assert!(matches!(
         DeliveredArtifact::from_query(&query("r".repeat(MAX_RECEIVED_RELAY_STATE_BYTES + 1))),
-        Err(SamlError::Invalid(_))
+        Err(SamlError::LimitExceeded {
+            limit: saml_rs::ResourceLimit::RelayStateBytes,
+            maximum: MAX_RECEIVED_RELAY_STATE_BYTES,
+        })
     ));
     Ok(())
 }
@@ -453,7 +456,9 @@ fn an_artifact_delivered_in_a_form_establishes_the_session(
     assert_eq!(form.value("RelayState"), Some("form-state"));
     assert!(matches!(
         response.redirect_url(),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::OutboundBindingMismatch {
+            actual: saml_rs::constants::Binding::Post
+        })
     ));
 
     let delivered = DeliveredArtifact::from_form(form.fields())?;
@@ -491,9 +496,17 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
         validation(),
     );
     match result {
-        Err(SamlError::StatusNotSuccess { top, second }) => {
-            assert_eq!(top, "urn:oasis:names:tc:SAML:2.0:status:Responder");
-            assert_eq!(second.as_deref(), Some(AUTHN_FAILED));
+        Err(SamlError::StatusNotSuccess { status }) => {
+            assert_eq!(
+                status.top_level().as_uri(),
+                "urn:oasis:names:tc:SAML:2.0:status:Responder"
+            );
+            assert_eq!(
+                status
+                    .subordinate()
+                    .map(saml_rs::SubordinateStatusCode::as_uri),
+                Some(AUTHN_FAILED)
+            );
         }
         other => return Err(format!("expected a status error, got {other:?}").into()),
     }
@@ -932,24 +945,35 @@ fn an_artifact_must_be_delivered_once_and_be_a_saml_v2_artifact(
     assert_eq!(delivered.relay_state(), &RelayStateParam::absent());
     assert_eq!(delivered.artifact().endpoint_index(), 0);
 
-    for query in [
-        "RelayState=state".to_string(),
-        format!("SAMLart={ARTIFACT}&SAMLart={ARTIFACT}"),
-        format!("SAMLart={ARTIFACT}&RelayState=a&RelayState=b"),
-        // Type code 0x0001 is a SAML V1.1 artifact.
-        "SAMLart=AAEAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJyg%3D".to_string(),
+    assert!(matches!(
+        DeliveredArtifact::from_query("RelayState=state"),
+        Err(SamlError::MissingBindingParameter { name: "SAMLart" })
+    ));
+    for (query, repeated) in [
+        (format!("SAMLart={ARTIFACT}&SAMLart={ARTIFACT}"), "SAMLart"),
+        (
+            format!("SAMLart={ARTIFACT}&RelayState=a&RelayState=b"),
+            "RelayState",
+        ),
     ] {
         assert!(
             matches!(
                 DeliveredArtifact::from_query(&query),
-                Err(SamlError::Invalid(_))
+                Err(SamlError::DuplicateBindingParameter { name }) if name == repeated
             ),
             "{query}"
         );
     }
+    // Type code 0x0001 is a SAML V1.1 artifact.
+    assert!(matches!(
+        DeliveredArtifact::from_query(
+            "SAMLart=AAEAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJyg%3D"
+        ),
+        Err(SamlError::Invalid(_))
+    ));
     assert!(matches!(
         DeliveredArtifact::from_form(&[FormField::new("SAMLResponse", "PHNhbWw+")]),
-        Err(SamlError::Invalid(_))
+        Err(SamlError::MissingBindingParameter { name: "SAMLart" })
     ));
     Ok(())
 }

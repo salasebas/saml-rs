@@ -1,4 +1,4 @@
-use crate::error::SamlError;
+use crate::error::{xml_err, SamlError};
 use crate::util::{camel_case, Value};
 use quick_xml::events::Event;
 use quick_xml::{Reader, XmlVersion};
@@ -29,25 +29,22 @@ pub(super) fn parse_endpoint_fragments(
             .map(|item| parse_endpoint_fragments(item, attributes))
             .collect::<Result<Vec<_>, _>>()
             .map(Value::Array),
-        Value::Object(_) => Err(SamlError::Xml("expected endpoint XML fragment".into())),
+        Value::Object(_) => Err(SamlError::xml("expected endpoint XML fragment")),
     }
 }
 
 fn parse_endpoint_fragment(xml: &str, attributes: &[&str]) -> Result<Value, SamlError> {
     let mut reader = Reader::from_str(xml);
-    let element = match reader
-        .read_event()
-        .map_err(|error| SamlError::Xml(error.to_string()))?
-    {
+    let element = match reader.read_event().map_err(xml_err)? {
         Event::Start(element) | Event::Empty(element) => element,
-        _ => return Err(SamlError::Xml("expected endpoint element".into())),
+        _ => return Err(SamlError::xml("expected endpoint element")),
     };
     let mut values: Vec<_> = attributes
         .iter()
         .map(|name| (camel_case(name), None))
         .collect();
     for attribute in element.attributes() {
-        let attribute = attribute.map_err(|error| SamlError::Xml(error.to_string()))?;
+        let attribute = attribute.map_err(xml_err)?;
         let Some(index) = attributes
             .iter()
             .position(|name| *name == attribute.key.as_ref())
@@ -56,7 +53,7 @@ fn parse_endpoint_fragment(xml: &str, attributes: &[&str]) -> Result<Value, Saml
         };
         let value = attribute
             .normalized_value(XmlVersion::Implicit1_0)
-            .map_err(|error| SamlError::Xml(error.to_string()))?;
+            .map_err(xml_err)?;
         values[index].1 = Some(Value::Str(
             value
                 .split([' ', '\t', '\r', '\n'])

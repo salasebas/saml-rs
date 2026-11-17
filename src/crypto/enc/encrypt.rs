@@ -4,8 +4,8 @@
 use std::ops::Range;
 
 use super::{
-    assertion_elements, crypto_err, namespace_complete, node_range, parse_xml_document,
-    root_children, selected_kinds, splice, EncryptedElementKind, ENC, LOGOUT_REQUEST_ENCRYPTED_ID,
+    assertion_elements, namespace_complete, node_range, parse_xml_document, root_children,
+    selected_kinds, splice, EncryptedElementKind, ENC, LOGOUT_REQUEST_ENCRYPTED_ID,
 };
 use crate::binding::xml_escape;
 use crate::config::AssertionElementEncryption;
@@ -13,7 +13,7 @@ use crate::constants::namespace;
 use crate::crypto::keys::load_certificate;
 use crate::crypto::xml_syntax::validate_crypto_xml_prefix;
 use crate::entity::EntitySetting;
-use crate::error::SamlError;
+use crate::error::{crypto_err, SamlError};
 use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
 use bergshamra::xml::{Document as XmlDocument, NodeId};

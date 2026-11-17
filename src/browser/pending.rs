@@ -676,21 +676,21 @@ impl Pending<ManageNameIdRequest> {
 fn sso_response_binding_from_snapshot_value(value: &str) -> Result<SsoResponseBinding, SamlError> {
     let binding = Binding::from_short_name(value)
         .or_else(|| Binding::from_urn(value))
-        .ok_or(SamlError::UndefinedBinding)?;
+        .ok_or_else(|| unknown_snapshot_binding(value))?;
     SsoResponseBinding::try_from(binding)
 }
 
 fn sso_request_binding_from_snapshot_value(value: &str) -> Result<SsoRequestBinding, SamlError> {
     let binding = Binding::from_short_name(value)
         .or_else(|| Binding::from_urn(value))
-        .ok_or(SamlError::UndefinedBinding)?;
+        .ok_or_else(|| unknown_snapshot_binding(value))?;
     SsoRequestBinding::try_from(binding)
 }
 
 fn logout_binding_from_snapshot_value(value: &str) -> Result<LogoutBinding, SamlError> {
     let binding = Binding::from_short_name(value)
         .or_else(|| Binding::from_urn(value))
-        .ok_or(SamlError::UndefinedBinding)?;
+        .ok_or_else(|| unknown_snapshot_binding(value))?;
     LogoutBinding::try_from(binding)
 }
 
@@ -699,7 +699,7 @@ fn name_id_management_binding_from_snapshot_value(
 ) -> Result<NameIdManagementBinding, SamlError> {
     let binding = Binding::from_short_name(value)
         .or_else(|| Binding::from_urn(value))
-        .ok_or(SamlError::UndefinedBinding)?;
+        .ok_or_else(|| unknown_snapshot_binding(value))?;
     match binding {
         Binding::Redirect => Ok(NameIdManagementBinding::Redirect),
         Binding::Post | Binding::SimpleSign | Binding::Artifact | Binding::Soap => {
@@ -715,4 +715,8 @@ pub struct Started<Message: PendingMessage> {
     pub pending: Pending<Message>,
     /// Outbound browser action.
     pub outbound: Outbound<Message>,
+}
+
+fn unknown_snapshot_binding(value: &str) -> SamlError {
+    SamlError::Invalid(format!("snapshot binding `{value}` is not a SAML binding"))
 }

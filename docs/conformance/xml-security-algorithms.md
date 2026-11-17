@@ -168,7 +168,7 @@ Inbound decryption also applies the configurable library resource allowance
 `xenc:EncryptedData`, `xenc:EncryptedKey`, and `xenc11:DerivedKey` costs one
 unit per configured decryption key. Revealed encrypted content shares the
 allowance before subsequent decryption. Excess work returns
-`SamlError::Invalid` with `ERR_DECRYPTION_LIMIT_EXCEEDED`, including for
+`SamlError::LimitExceeded` with `ResourceLimit::DecryptionWork`, including for
 signed messages and explicit CBC or RSA-v1.5 relaxations. This is library
 resource policy beyond Core's encrypted-element rules and Conformance §4.2,
 not an OASIS receiver obligation. It bounds unauthenticated key resolution

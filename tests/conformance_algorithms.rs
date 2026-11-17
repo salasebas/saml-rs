@@ -570,7 +570,7 @@ fn rsa_1024() -> Side {
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 fn is_short_rsa_key_error(error: &SamlError) -> bool {
-    matches!(error, SamlError::Crypto(message) if message.contains("1024-bit RSA key"))
+    matches!(error, SamlError::Crypto { message, .. } if message.contains("1024-bit RSA key"))
 }
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
@@ -915,20 +915,33 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
 #[cfg(feature = "crypto-rustcrypto")]
 #[test]
 fn hmac_sha1_signature_needs_the_signers_secret() -> Result<(), Box<dyn std::error::Error>> {
-    let detached = || SamlError::SignatureVerification {
-        reason: SignatureVerificationReason::DetachedMessageSignature,
-    };
-    let cases = [
-        (None, Some(IDP_HMAC_SECRET), detached()),
-        (Some(IDP_HMAC_SECRET), Some(IDP_HMAC_SECRET), detached()),
-        (Some(SP_HMAC_SECRET), None, SamlError::NoTrustedCertificate),
-        (
-            Some(SP_HMAC_SECRET),
-            Some(SP_HMAC_SECRET),
+    fn detached(error: &SamlError) -> bool {
+        matches!(
+            error,
+            SamlError::SignatureVerification {
+                reason: SignatureVerificationReason::DetachedMessageSignature,
+                ..
+            }
+        )
+    }
+    fn no_trusted_certificate(error: &SamlError) -> bool {
+        matches!(error, SamlError::NoTrustedCertificate)
+    }
+    fn xml_signature(error: &SamlError) -> bool {
+        matches!(
+            error,
             SamlError::SignatureVerification {
                 reason: SignatureVerificationReason::XmlSignature,
-            },
-        ),
+                ..
+            }
+        )
+    }
+    type Expected = fn(&SamlError) -> bool;
+    let cases = [
+        (None, Some(IDP_HMAC_SECRET), detached as Expected),
+        (Some(IDP_HMAC_SECRET), Some(IDP_HMAC_SECRET), detached),
+        (Some(SP_HMAC_SECRET), None, no_trusted_certificate),
+        (Some(SP_HMAC_SECRET), Some(SP_HMAC_SECRET), xml_signature),
     ];
     for (sp_secret_at_idp, idp_secret_at_sp, expected) in cases {
         let peers = hmac_sha1_peers(sp_secret_at_idp, idp_secret_at_sp)?;
@@ -936,10 +949,8 @@ fn hmac_sha1_signature_needs_the_signers_secret() -> Result<(), Box<dyn std::err
             Ok(_) => return Err("verified without the signer's secret".into()),
             Err(error) => error,
         };
-        assert_eq!(
-            error.downcast_ref::<SamlError>().map(ToString::to_string),
-            Some(expected.to_string())
-        );
+        let error = error.downcast_ref::<SamlError>().ok_or("not a SamlError")?;
+        assert!(expected(error), "{error:?}");
     }
     Ok(())
 }

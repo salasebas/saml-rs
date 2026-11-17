@@ -111,7 +111,8 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
         matches!(
             rejected,
             Err(SamlError::SignatureVerification {
-                reason: SignatureVerificationReason::XmlSignature
+                reason: SignatureVerificationReason::XmlSignature,
+                ..
             })
         ),
         "{rejected:?}"
@@ -317,7 +318,8 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
             matches!(
                 rejected,
                 Err(SamlError::SignatureVerification {
-                    reason: SignatureVerificationReason::XmlSignature
+                    reason: SignatureVerificationReason::XmlSignature,
+                    ..
                 })
             ),
             "{rejected:?}"
@@ -396,7 +398,8 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
             matches!(
                 rejected,
                 Err(SamlError::SignatureVerification {
-                    reason: SignatureVerificationReason::XmlSignature
+                    reason: SignatureVerificationReason::XmlSignature,
+                    ..
                 })
             ),
             "{rejected:?}"

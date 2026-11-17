@@ -19,7 +19,9 @@ use super::signature_profile::{
 use crate::assertion_acceptance::consumed_assertion;
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::transform_algorithm;
-use crate::error::{ReferenceResolutionReason, SamlError, SignatureVerificationReason};
+use crate::error::{
+    crypto_err, xml_err, ReferenceResolutionReason, SamlError, SignatureVerificationReason,
+};
 use crate::xml::dom::{self, Node, XmlLimits};
 use crate::xml::signature_placement::saml_signature_candidates;
 use bergshamra::core::ns as bergshamra_ns;
@@ -327,22 +329,20 @@ fn verified_signature_algorithm(
             bergshamra_ns::DSIG,
             bergshamra_ns::node::SIGNED_INFO,
         )
-        .ok_or_else(|| SamlError::Crypto("verified signature is missing SignedInfo".into()))?;
+        .ok_or_else(|| SamlError::crypto("verified signature is missing SignedInfo"))?;
     let signature_method = document
         .first_child_element_by_name_ns(
             signed_info,
             bergshamra_ns::DSIG,
             bergshamra_ns::node::SIGNATURE_METHOD,
         )
-        .ok_or_else(|| SamlError::Crypto("verified signature is missing SignatureMethod".into()))?;
+        .ok_or_else(|| SamlError::crypto("verified signature is missing SignatureMethod"))?;
     document
         .element(signature_method)
         .and_then(|element| element.get_attribute(bergshamra_ns::attr::ALGORITHM))
         .filter(|algorithm| !algorithm.is_empty())
         .map(str::to_string)
-        .ok_or_else(|| {
-            SamlError::Crypto("verified signature is missing SignatureMethod Algorithm".into())
-        })
+        .ok_or_else(|| SamlError::crypto("verified signature is missing SignatureMethod Algorithm"))
 }
 
 fn reference_covers_node(references: &[VerifiedReference], node: BergshamraNodeId) -> bool {
@@ -399,7 +399,7 @@ fn verified_embedded_signature(
     };
     let root_element = document
         .element(root)
-        .ok_or_else(|| SamlError::Crypto("verified document root is not an element".into()))?;
+        .ok_or_else(|| SamlError::crypto("verified document root is not an element"))?;
     let whole_document_covered = targets
         .iter()
         .any(|target| matches!(target, VerifiedTarget::WholeDocument));
@@ -596,9 +596,7 @@ pub(crate) fn verify_first_signature_with_profile(
         return Ok((false, None));
     };
     let root = &prepared.dom.root;
-    let document = uppsala::parse(xml).map_err(|error| {
-        SamlError::Crypto(bergshamra::Error::XmlParse(error.to_string()).to_string())
-    })?;
+    let document = uppsala::parse(xml).map_err(xml_err)?;
     preflight_signature_processing(&document, SignatureSelection::First, profile)?;
     match verify_document_with_source(&prepared.context, &document, Some(xml)) {
         Ok(VerifyResult::Valid {
@@ -612,7 +610,7 @@ pub(crate) fn verify_first_signature_with_profile(
             Ok((true, Some(content)))
         }
         Ok(VerifyResult::Invalid { .. }) => Ok((false, None)),
-        Err(error) => Err(SamlError::Crypto(error.to_string())),
+        Err(error) => Err(crypto_err(error)),
     }
 }
 
@@ -673,10 +671,10 @@ pub(crate) fn verify_present_signatures(
     else {
         return Ok(());
     };
-    let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    let document = uppsala::parse(xml).map_err(xml_err)?;
     preflight_signature_processing(&document, SignatureSelection::All, profile)?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
-        .map_err(|error| SamlError::Crypto(error.to_string()))?;
+        .map_err(crypto_err)?;
     reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)
 }
 
@@ -750,10 +748,10 @@ pub(crate) fn verify_signatures_detailed_with_profile(
 
     // Signature nodes in the results index this DOM, so evidence is read
     // from the same document the verifier saw.
-    let document = uppsala::parse(xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    let document = uppsala::parse(xml).map_err(xml_err)?;
     preflight_signature_processing(&document, SignatureSelection::All, profile)?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
-        .map_err(|error| SamlError::Crypto(error.to_string()))?;
+        .map_err(crypto_err)?;
     reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)?;
     let first_signature_verified = matches!(results.first(), Some(VerifyResult::Valid { .. }));
     let mut targets = Vec::new();

@@ -160,7 +160,7 @@ fn post_form_rejects_active_and_non_http_action_urls() {
             matches!(
                 &result,
                 Err(SamlError::Invalid(message))
-                    if message == "ERR_UNSAFE_POST_BINDING_ACTION_URL"
+                    if message == "POST form action must be an absolute HTTP(S) URL"
             ),
             "unexpected result for {action}: {result:?}"
         );
@@ -185,7 +185,7 @@ fn binding_context_post_form_rejects_active_endpoint() {
     assert!(
         matches!(
             &result,
-            Err(SamlError::Invalid(message)) if message == "ERR_UNSAFE_POST_BINDING_ACTION_URL"
+            Err(SamlError::Invalid(message)) if message == "POST form action must be an absolute HTTP(S) URL"
         ),
         "unexpected result: {result:?}"
     );
@@ -209,7 +209,7 @@ fn binding_context_post_form_rejects_partial_signature_state() {
     assert!(
         matches!(
             &result,
-            Err(SamlError::Invalid(message)) if message == "ERR_PARTIAL_POST_BINDING_SIGNATURE"
+            Err(SamlError::Invalid(message)) if message == "POST form needs both SigAlg and Signature, or neither"
         ),
         "unexpected result: {result:?}"
     );

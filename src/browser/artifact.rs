@@ -4,6 +4,7 @@
 
 use super::forms::FormField;
 use crate::artifact::Artifact;
+use crate::binding::single_parameter;
 use crate::constants::url_params;
 use crate::error::SamlError;
 use crate::model::RelayStateParam;
@@ -81,9 +82,12 @@ impl DeliveredArtifact {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when `SAMLart` is missing or repeated,
-    /// is not a type 0x0004 artifact, or `RelayState` is repeated or longer
-    /// than [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES).
+    /// Returns [`SamlError::MissingBindingParameter`] when `SAMLart` is
+    /// missing, [`SamlError::DuplicateBindingParameter`] when `SAMLart` or
+    /// `RelayState` is repeated, [`SamlError::LimitExceeded`] when
+    /// `RelayState` is longer than
+    /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
+    /// and [`SamlError::Invalid`] when `SAMLart` is not a type 0x0004 artifact.
     pub fn from_query(raw_query: &str) -> Result<Self, SamlError> {
         let pairs: Vec<(String, String)> =
             url::form_urlencoded::parse(raw_query.trim_start_matches('?').as_bytes())
@@ -102,9 +106,12 @@ impl DeliveredArtifact {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when `SAMLart` is missing or repeated,
-    /// is not a type 0x0004 artifact, or `RelayState` is repeated or longer
-    /// than [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES).
+    /// Returns [`SamlError::MissingBindingParameter`] when `SAMLart` is
+    /// missing, [`SamlError::DuplicateBindingParameter`] when `SAMLart` or
+    /// `RelayState` is repeated, [`SamlError::LimitExceeded`] when
+    /// `RelayState` is longer than
+    /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
+    /// and [`SamlError::Invalid`] when `SAMLart` is not a type 0x0004 artifact.
     pub fn from_form(fields: &[FormField]) -> Result<Self, SamlError> {
         Self::from_pairs(fields.iter().map(|field| (field.name(), field.value())))
     }
@@ -122,26 +129,15 @@ impl DeliveredArtifact {
     fn from_pairs<'a>(
         pairs: impl Iterator<Item = (&'a str, &'a str)> + Clone,
     ) -> Result<Self, SamlError> {
-        let artifact = single_value(pairs.clone(), url_params::SAML_ART)?
-            .ok_or_else(|| SamlError::Invalid(format!("missing {}", url_params::SAML_ART)))?;
-        let relay_state = single_value(pairs, url_params::RELAY_STATE)?;
+        let artifact = single_parameter(pairs.clone(), url_params::SAML_ART)?.ok_or(
+            SamlError::MissingBindingParameter {
+                name: url_params::SAML_ART,
+            },
+        )?;
+        let relay_state = single_parameter(pairs, url_params::RELAY_STATE)?;
         Ok(Self {
             artifact: Artifact::try_from_encoded(artifact)?,
             relay_state: RelayStateParam::received(relay_state.map(str::to_string))?,
         })
     }
-}
-
-fn single_value<'a>(
-    pairs: impl Iterator<Item = (&'a str, &'a str)>,
-    name: &str,
-) -> Result<Option<&'a str>, SamlError> {
-    let mut values = pairs
-        .filter(|(field, _)| *field == name)
-        .map(|(_, value)| value);
-    let first = values.next();
-    if values.next().is_some() {
-        return Err(SamlError::Invalid(format!("ambiguous {name}")));
-    }
-    Ok(first)
 }

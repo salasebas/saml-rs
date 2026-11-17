@@ -191,7 +191,9 @@ fn error_taxonomy_bad_issuer_returns_issuer_mismatch() -> Result<(), Box<dyn std
     })?;
 
     match parse_response(response, "_request123") {
-        Err(SamlError::IssuerMismatch { expected, actual }) => {
+        Err(SamlError::IssuerMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, "https://idp.example.com/metadata");
             assert_eq!(
                 actual.as_deref(),
@@ -212,7 +214,9 @@ fn error_taxonomy_bad_destination_returns_destination_mismatch(
     })?;
 
     match parse_response(response, "_request123") {
-        Err(SamlError::DestinationMismatch { expected, actual }) => {
+        Err(SamlError::DestinationMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, "https://sp.example.com/acs");
             assert_eq!(actual.as_deref(), Some("https://evil.example.com/acs"));
             Ok(())
@@ -230,7 +234,7 @@ fn error_taxonomy_bad_audience_returns_audience_mismatch() -> Result<(), Box<dyn
     })?;
 
     match parse_response(response, "_request123") {
-        Err(SamlError::AudienceMismatch { expected }) => {
+        Err(SamlError::AudienceMismatch { expected, .. }) => {
             assert_eq!(expected, "https://sp.example.com/metadata");
             Ok(())
         }
@@ -244,7 +248,9 @@ fn error_taxonomy_bad_in_response_to_returns_in_response_to_mismatch(
     let response = signed_response(&ResponseShape::default())?;
 
     match parse_response(response, "_different") {
-        Err(SamlError::InResponseToMismatch { expected, actual }) => {
+        Err(SamlError::InResponseToMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected.as_deref(), Some("_different"));
             assert_eq!(actual.as_deref(), Some("_request123"));
             Ok(())
@@ -278,6 +284,7 @@ fn error_taxonomy_invalid_xml_signature_returns_xml_signature_reason(
     match parse_response(response, "_request123") {
         Err(SamlError::SignatureVerification {
             reason: SignatureVerificationReason::XmlSignature,
+            ..
         }) => Ok(()),
         other => Err(format!("expected XML signature verification failure, got {other:?}").into()),
     }
@@ -298,6 +305,7 @@ fn error_taxonomy_expired_session_returns_session_not_on_or_after_time_window(
     match parse_response(response, "_request123") {
         Err(SamlError::TimeWindowInvalid {
             field: TimeWindowField::SessionNotOnOrAfter,
+            ..
         }) => Ok(()),
         other => {
             Err(format!("expected SessionNotOnOrAfter time window failure, got {other:?}").into())
@@ -321,6 +329,7 @@ fn error_taxonomy_repeated_session_uses_earliest_expiration(
     match parse_response(response, "_request123") {
         Err(SamlError::TimeWindowInvalid {
             field: TimeWindowField::SessionNotOnOrAfter,
+            ..
         }) => Ok(()),
         other => Err(format!(
             "expected earliest repeated SessionNotOnOrAfter to fail, got {other:?}"
@@ -361,6 +370,7 @@ fn error_taxonomy_repeated_session_malformed_expiration_fails_closed(
     match parse_response(response, "_request123") {
         Err(SamlError::TimeWindowInvalid {
             field: TimeWindowField::SessionNotOnOrAfter,
+            ..
         }) => Ok(()),
         other => Err(format!(
             "expected malformed repeated SessionNotOnOrAfter to fail, got {other:?}"
@@ -380,6 +390,7 @@ fn error_taxonomy_expired_conditions_return_conditions_time_window(
     match parse_response(response, "_request123") {
         Err(SamlError::TimeWindowInvalid {
             field: TimeWindowField::Conditions,
+            ..
         }) => Ok(()),
         other => Err(format!("expected Conditions time window failure, got {other:?}").into()),
     }
@@ -406,11 +417,43 @@ fn error_taxonomy_signed_repeated_conditions_are_rejected() -> Result<(), Box<dy
 fn error_taxonomy_non_success_status_returns_status_not_success(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match check_status(FAILED, ParserType::SamlResponse) {
-        Err(SamlError::StatusNotSuccess { top, second }) => {
-            assert_eq!(top, status_code::REQUESTER);
-            assert_eq!(second.as_deref(), Some(status_code::INVALID_NAME_ID_POLICY));
+        Err(SamlError::StatusNotSuccess { status, .. }) => {
+            assert_eq!(status.top_level().as_uri(), status_code::REQUESTER);
+            assert_eq!(
+                status
+                    .subordinate()
+                    .map(saml_rs::SubordinateStatusCode::as_uri),
+                Some(status_code::INVALID_NAME_ID_POLICY)
+            );
             Ok(())
         }
         other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
+}
+
+#[test]
+fn error_taxonomy_malformed_xml_keeps_the_parser_error_as_its_source(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let error = match saml_rs::IdpDescriptor::from_metadata_xml(
+        saml_rs::EntityId::try_new("https://idp.example.com/metadata")?,
+        "<md:EntityDescriptor xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\"></md:Other>",
+        saml_rs::MetadataTrustPolicy::AllowUnsigned,
+    ) {
+        Err(error) => error,
+        Ok(_) => return Err("malformed metadata was accepted".into()),
+    };
+
+    assert!(
+        matches!(
+            error,
+            SamlError::Xml {
+                source: Some(_),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let source = std::error::Error::source(&error).ok_or("the parser error was dropped")?;
+    assert!(!source.to_string().is_empty());
+    Ok(())
 }

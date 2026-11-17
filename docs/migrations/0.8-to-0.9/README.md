@@ -21,5 +21,6 @@ Check the topics that affect your integration.
 - [Update metadata imports and accessors](metadata-api.md)
 - [Move schema validation into XML policy](xml-policy.md)
 - [Upgrade logout, validation, and replay code](logout-validation-replay.md)
+- [Match typed `SamlError` variants](errors.md)
 
 [All migration guides](../README.md)

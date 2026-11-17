@@ -1,7 +1,8 @@
 //! SAML time-window and status validation.
 
-use crate::constants::{status_code, ParserType};
+use crate::constants::ParserType;
 use crate::error::{SamlError, TimeWindowField};
+use crate::model::Status;
 use crate::util::Value;
 use crate::xml::{extract_with_limits, fields, parse_saml_utc_date_time, XmlLimits};
 use std::time::SystemTime;
@@ -180,22 +181,17 @@ pub fn check_status_with_limits(
         }
     };
     let result = extract_with_limits(content, &fields, limits)?;
-    match result.get_str("top") {
-        Some(code) if code == status_code::SUCCESS => Ok(()),
-        Some(code) if !code.is_empty() => Err(SamlError::StatusNotSuccess {
-            top: code.to_string(),
-            second: result
-                .get_str("second")
-                .filter(|second| !second.is_empty())
-                .map(str::to_string),
-        }),
-        _ => Err(SamlError::UndefinedStatus),
-    }
+    let top = result
+        .get_str("top")
+        .filter(|top| !top.is_empty())
+        .ok_or(SamlError::StatusMissing)?;
+    Status::received(top, result.get_str("second"))?.require_success()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{SubordinateStatusCode, TopLevelStatusCode};
     use std::time::Duration as StdDuration;
 
     const RESPONSE: &str = include_str!("../tests/fixtures/misc/response.xml");
@@ -274,9 +270,12 @@ mod tests {
         check_status(RESPONSE, ParserType::SamlRequest)?;
 
         match check_status(FAILED, ParserType::SamlResponse) {
-            Err(SamlError::StatusNotSuccess { top, second }) => {
-                assert_eq!(top, status_code::REQUESTER);
-                assert_eq!(second.as_deref(), Some(status_code::INVALID_NAME_ID_POLICY));
+            Err(SamlError::StatusNotSuccess { status }) => {
+                assert_eq!(status.top_level(), TopLevelStatusCode::Requester);
+                assert_eq!(
+                    status.subordinate().map(SubordinateStatusCode::as_uri),
+                    Some(crate::constants::status_code::INVALID_NAME_ID_POLICY)
+                );
             }
             other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
         }

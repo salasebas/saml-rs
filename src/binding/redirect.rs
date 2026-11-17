@@ -7,7 +7,7 @@ use super::encoding::encode_base64;
 use crate::constants::namespace;
 use crate::constants::ParserType;
 use crate::error::SamlError;
-use crate::xml::dom::XmlLimits;
+use crate::xml::dom::{reader_err, XmlLimits};
 use crate::xml::utf8_bom_len;
 use quick_xml::events::Event;
 use quick_xml::name::ResolveResult;
@@ -117,15 +117,13 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
 
     loop {
         let tag = {
-            let (resolved, event) = reader
-                .read_resolved_event()
-                .map_err(|error| SamlError::Xml(error.to_string()))?;
+            let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
             RedirectTag::from_event(resolved, &event)
         };
         let end = bom_len + reader.buffer_position() as usize;
         match tag {
             RedirectTag::DocType => {
-                return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
+                return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
             RedirectTag::Start { protocol_signature } => {
                 limits.count_element(&mut nodes)?;
@@ -143,8 +141,8 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
             }
             RedirectTag::End => {
                 if depth == 0 {
-                    return Err(SamlError::Xml(
-                        "HTTP-Redirect XML ended an element that was not open".into(),
+                    return Err(SamlError::xml(
+                        "HTTP-Redirect XML ended an element that was not open",
                     ));
                 }
                 depth -= 1;
@@ -159,8 +157,8 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
         }
     }
     if open_signature.is_some() || depth != 0 {
-        return Err(SamlError::Xml(
-            "HTTP-Redirect XML ended before its elements closed".into(),
+        return Err(SamlError::xml(
+            "HTTP-Redirect XML ended before its elements closed",
         ));
     }
     Ok(spans)
@@ -212,7 +210,7 @@ fn element_start(xml: &str, end: usize) -> Result<usize, SamlError> {
     xml.as_bytes()[..end]
         .iter()
         .rposition(|byte| *byte == b'<')
-        .ok_or_else(|| SamlError::Xml("HTTP-Redirect XML element has no start tag".into()))
+        .ok_or_else(|| SamlError::xml("HTTP-Redirect XML element has no start tag"))
 }
 
 fn remove_spans(xml: &str, spans: &[(usize, usize)]) -> String {

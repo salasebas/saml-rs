@@ -22,3 +22,14 @@ A compatible addition stays in the commit message. release-plz writes
 When the diff rejects a message the cited section accepts, the pull request
 says so in its own sentence: library policy, the section it exceeds, and why
 the looser rule cannot be applied.
+
+## Public enums that can grow
+
+Put `#[non_exhaustive]` on a public enum whose set can grow: errors, reasons,
+bindings, algorithms, and other capability lists. Leave a closed set from the
+standard, such as `TopLevelStatusCode`, exhaustive.
+
+Also mark each variant with named fields that only this crate builds, so a
+later field is not a breaking change. A variant that a public trait asks
+callers to return, such as `SamlError::ReplayDetected` for `ReplayCache`,
+stays constructible.

@@ -5,7 +5,7 @@
 //! source compatibility.
 
 use crate::constants::Binding;
-use crate::model::RelayStateParam;
+use crate::model::{RelayStateParam, ReplayKey, Status, SubordinateStatusCode};
 use std::fmt;
 
 /// Reason a required SAML signature verification failed.
@@ -129,6 +129,62 @@ impl fmt::Display for TimeWindowField {
     }
 }
 
+/// Resource limit that stopped reading an input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ResourceLimit {
+    /// XML input bytes, [`crate::XmlLimits::max_bytes`].
+    XmlBytes,
+    /// Nested element depth, [`crate::XmlLimits::max_depth`].
+    XmlDepth,
+    /// Element nodes in one document, [`crate::XmlLimits::max_nodes`].
+    XmlNodes,
+    /// Attributes on one element,
+    /// [`crate::XmlLimits::max_attributes_per_element`].
+    XmlAttributesPerElement,
+    /// Namespace bindings in scope at once. The maximum is
+    /// [`crate::XmlLimits::max_attributes_per_element`].
+    XmlNamespaceBindings,
+    /// Decoded bytes of one attribute value,
+    /// [`crate::XmlLimits::max_attribute_value_bytes`].
+    XmlAttributeValueBytes,
+    /// Decoded direct text bytes of one element,
+    /// [`crate::XmlLimits::max_text_bytes`].
+    XmlTextBytes,
+    /// Bytes decoded from a base64 binding parameter. HTTP-POST and
+    /// SimpleSign messages are bounded by [`crate::XmlLimits::max_bytes`], and
+    /// HTTP-Redirect messages by
+    /// [`crate::XmlPolicy::redirect_inflate_max_bytes`].
+    Base64DecodedBytes,
+    /// Bytes inflated from an HTTP-Redirect message,
+    /// [`crate::XmlPolicy::redirect_inflate_max_bytes`].
+    InflatedBytes,
+    /// Estimated decryption work units per message,
+    /// [`crate::XmlEncryptionPolicy::with_max_decryption_work`].
+    DecryptionWork,
+    /// Bytes of a received `RelayState`,
+    /// [`crate::MAX_RECEIVED_RELAY_STATE_BYTES`].
+    RelayStateBytes,
+}
+
+impl fmt::Display for ResourceLimit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::XmlBytes => f.write_str("XML bytes"),
+            Self::XmlDepth => f.write_str("XML depth"),
+            Self::XmlNodes => f.write_str("XML nodes"),
+            Self::XmlAttributesPerElement => f.write_str("XML attributes per element"),
+            Self::XmlNamespaceBindings => f.write_str("XML namespace bindings in scope"),
+            Self::XmlAttributeValueBytes => f.write_str("XML attribute value bytes"),
+            Self::XmlTextBytes => f.write_str("XML text bytes"),
+            Self::Base64DecodedBytes => f.write_str("base64-decoded bytes"),
+            Self::InflatedBytes => f.write_str("inflated bytes"),
+            Self::DecryptionWork => f.write_str("decryption work units"),
+            Self::RelayStateBytes => f.write_str("received RelayState bytes"),
+        }
+    }
+}
+
 /// Errors produced by the SAML-RS library.
 ///
 /// Variants are grouped by validation category:
@@ -139,21 +195,71 @@ impl fmt::Display for TimeWindowField {
 /// - metadata and trust selection failures;
 /// - configuration, unsupported binding, and compatibility failures.
 ///
+/// A variant that wraps a lower-level failure returns it from
+/// [`std::error::Error::source`]. Its type is not part of the API.
+///
 /// This enum is `#[non_exhaustive]`; downstream callers should include a
-/// fallback arm when matching.
+/// fallback arm when matching. Each variant with named fields is
+/// `#[non_exhaustive]` too, so a pattern on it ends with `..` and a field can
+/// be added later. [`Self::ReplayDetected`] and
+/// [`Self::ReplayCacheUnavailable`] stay constructible, because a
+/// [`crate::ReplayCache`] implementation returns them.
+///
+/// # Examples
+///
+/// ```
+/// use saml_rs::{SamlError, TopLevelStatusCode};
+///
+/// fn http_status(error: &SamlError) -> u16 {
+///     match error {
+///         SamlError::LimitExceeded { .. } => 413,
+///         SamlError::ReplayCacheUnavailable { .. } => 503,
+///         SamlError::StatusNotSuccess { status, .. }
+///             if status.top_level() == TopLevelStatusCode::Responder =>
+///         {
+///             502
+///         }
+///         _ => 400,
+///     }
+/// }
+/// # let _ = http_status;
+/// ```
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum SamlError {
     // Wire / XML errors.
-    /// Raw DEFLATE (de)compression failed.
-    #[error("deflate error: {0}")]
-    Deflate(#[from] std::io::Error),
+    /// Raw DEFLATE data could not be compressed or inflated.
+    #[error("deflate error")]
+    #[non_exhaustive]
+    Deflate {
+        /// Compression library error.
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Base64 decoding failed.
-    #[error("base64 decode error: {0}")]
-    Base64(#[from] base64::DecodeError),
+    #[error("base64 decode error")]
+    #[non_exhaustive]
+    Base64 {
+        /// Decoder error.
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    /// Input exceeded a resource limit.
+    #[error("{limit} limit exceeded (maximum {maximum})")]
+    #[non_exhaustive]
+    LimitExceeded {
+        /// Limit that stopped reading.
+        limit: ResourceLimit,
+        /// Configured maximum.
+        maximum: usize,
+    },
     /// Malformed or unexpected XML.
-    #[error("xml error: {0}")]
-    Xml(String),
+    #[error("xml error: {message}")]
+    #[non_exhaustive]
+    Xml {
+        /// What could not be read.
+        message: String,
+        /// Parser error, when one caused this.
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
     /// Input failed validation.
     #[error("invalid input: {0}")]
     Invalid(String),
@@ -161,21 +267,45 @@ pub enum SamlError {
     /// attributes, or their lexical forms.
     #[error("SAML protocol profile violation: {0}")]
     ProtocolProfile(String),
+    /// A binding parameter or form field occurs more than once.
+    #[error("binding parameter occurs more than once: {name}")]
+    #[non_exhaustive]
+    DuplicateBindingParameter {
+        /// Binding parameter name.
+        name: &'static str,
+    },
+    /// Required binding parameter is absent.
+    #[error("required binding parameter missing: {name}")]
+    #[non_exhaustive]
+    MissingBindingParameter {
+        /// Binding parameter name.
+        name: &'static str,
+    },
 
     // Unsupported profiles and bindings.
     /// Functionality not yet implemented in the current milestone.
     #[error("unsupported: {0}")]
     Unsupported(String),
-    /// Requested binding is not supported by this API path.
+    /// The called operation does not handle this binding.
     #[error("unsupported binding: {binding:?}")]
+    #[non_exhaustive]
     UnsupportedBinding {
-        /// Binding that reached an unsupported profile path.
+        /// Binding that reached the operation.
         binding: Binding,
+    },
+    /// An [`crate::Outbound`] accessor was called for a binding the message
+    /// does not use.
+    #[error("outbound message uses binding {actual:?}, not the one this accessor reads")]
+    #[non_exhaustive]
+    OutboundBindingMismatch {
+        /// Binding of the outbound message.
+        actual: Binding,
     },
 
     // SAML protocol validation.
     /// Issuer in the message does not match the expected peer entity ID.
     #[error("issuer mismatch: expected {expected}, got {actual:?}")]
+    #[non_exhaustive]
     IssuerMismatch {
         /// Expected peer entity ID.
         expected: String,
@@ -184,14 +314,26 @@ pub enum SamlError {
     },
     /// Response `Destination` does not match the expected recipient URL.
     #[error("destination mismatch: expected {expected}, got {actual:?}")]
+    #[non_exhaustive]
     DestinationMismatch {
         /// Expected recipient URL.
         expected: String,
         /// Actual destination value extracted from the message, when available.
         actual: Option<String>,
     },
+    /// The URL given to
+    /// [`crate::SamlValidationContext::with_recipient_endpoint`] is not
+    /// published in local metadata for the message's binding and direction.
+    #[error("receiving endpoint is not published for this binding and message direction")]
+    RecipientEndpointNotPublished,
+    /// Local metadata publishes several endpoints for the message's binding
+    /// and direction, and none was selected with
+    /// [`crate::SamlValidationContext::with_recipient_endpoint`].
+    #[error("several receiving endpoints are published; select one with with_recipient_endpoint")]
+    RecipientEndpointAmbiguous,
     /// `InResponseTo` does not match the expected request ID.
     #[error("inResponseTo mismatch: expected {expected:?}, got {actual:?}")]
+    #[non_exhaustive]
     InResponseToMismatch {
         /// Expected request ID. `None` means no request correlation was expected.
         expected: Option<String>,
@@ -200,6 +342,7 @@ pub enum SamlError {
     },
     /// RelayState does not match the pending message correlation state.
     #[error("relay state mismatch")]
+    #[non_exhaustive]
     RelayStateMismatch {
         /// Expected RelayState presence and value.
         expected: RelayStateParam,
@@ -208,12 +351,14 @@ pub enum SamlError {
     },
     /// `<Audience>` does not include the expected Service Provider entity ID.
     #[error("audience restriction not satisfied: expected {expected}")]
+    #[non_exhaustive]
     AudienceMismatch {
         /// Expected SP entity ID.
         expected: String,
     },
     /// A `<Conditions>` child is not one this service provider can evaluate.
     #[error("assertion condition is not understood: {element}")]
+    #[non_exhaustive]
     UnrecognizedCondition {
         /// Local name of the unrecognized condition element.
         element: String,
@@ -224,28 +369,44 @@ pub enum SamlError {
     /// `SPNameQualifier`. An omitted `Format` is unspecified.
     #[error("assertions do not refer to one principal")]
     PrincipalMismatch,
+    /// A `<Response>` with status `Success` carries no assertion to read: none
+    /// at all, or only `<EncryptedAssertion>` elements that were not
+    /// decrypted.
+    #[error("response carries no assertion")]
+    AssertionMissing,
     /// An `ArtifactResponse` did not contain the dereferenced protocol message.
     #[error("artifact response did not contain the protocol message")]
     ArtifactNotReturned,
     /// The SOAP channel lacks the protection this exchange requires.
     #[error("SOAP channel protection is not sufficient for this exchange")]
     SoapChannelProtection,
-    /// Response carried a non-success SAML status code.
-    #[error("status not success: top={top}, second={second:?}")]
+    /// Response status has no top-level `StatusCode` value.
+    #[error("response status code is missing")]
+    StatusMissing,
+    /// Response carried a top-level status other than `Success`.
+    ///
+    /// A top-level code outside the four SAML values is
+    /// [`Self::ProtocolProfile`]. A subordinate code holds the peer's URI.
+    #[error(
+        "status not success: top={}, second={:?}",
+        status.top_level().as_uri(),
+        status.subordinate().map(SubordinateStatusCode::as_uri)
+    )]
+    #[non_exhaustive]
     StatusNotSuccess {
-        /// Top-tier status code.
-        top: String,
-        /// Optional second-tier status code.
-        second: Option<String>,
+        /// Top-level and subordinate status codes.
+        status: Status,
     },
     /// A SAML message, assertion, session, or replay time bound is not satisfied.
     #[error("SAML time window is invalid for {field}")]
+    #[non_exhaustive]
     TimeWindowInvalid {
         /// SAML field or validation scope whose time window failed.
         field: TimeWindowField,
     },
     /// Bearer subject confirmation requirements are not satisfied.
     #[error("subject confirmation is not satisfied: {reason}")]
+    #[non_exhaustive]
     SubjectConfirmationInvalid {
         /// Stable validation reason for callers and logs.
         reason: SubjectConfirmationReason,
@@ -254,31 +415,38 @@ pub enum SamlError {
     /// `NotOnOrAfter`.
     #[error("assertion matches an outstanding logout")]
     AssertionMatchesOutstandingLogout,
-    /// A duplicate SAML message or assertion key was detected.
-    #[error("replayed SAML message or assertion: {key}")]
+    /// A message ID, assertion ID, or artifact was already accepted.
+    #[error("replayed SAML message, assertion, or artifact: {}", key.cache_key())]
     ReplayDetected {
-        /// Replay cache key or duplicate identifier.
-        key: String,
+        /// Key that was already accepted.
+        key: ReplayKey,
+    },
+    /// The replay cache could not check or store a key, so the message was
+    /// not accepted.
+    #[error("replay cache could not check or store the key")]
+    ReplayCacheUnavailable {
+        /// Cache error.
+        source: Box<dyn std::error::Error + Send + Sync>,
     },
 
     // Signature / crypto validation.
     /// Required signature is absent.
     #[error("signature missing where required")]
     SignatureMissing,
-    /// Required binding parameter is absent.
-    #[error("required binding parameter missing: {name}")]
-    MissingBindingParameter {
-        /// Binding parameter name.
-        name: &'static str,
-    },
+    /// The identity provider's metadata sets `WantAuthnRequestsSigned`, and
+    /// this service provider does not sign its `AuthnRequest`.
+    #[error("identity provider requires signed AuthnRequests and this service provider does not sign them")]
+    AuthnRequestSigningRequired,
     /// Signature verification failed for a semantic SAML validation reason.
     #[error("signature verification failed: {reason}")]
+    #[non_exhaustive]
     SignatureVerification {
         /// Stable verification reason for callers and logs.
         reason: SignatureVerificationReason,
     },
     /// Signed reference could not be resolved safely.
     #[error("signed reference could not be resolved: {reason}")]
+    #[non_exhaustive]
     ReferenceResolution {
         /// Stable reference-resolution reason for callers and logs.
         reason: ReferenceResolutionReason,
@@ -292,8 +460,10 @@ pub enum SamlError {
     /// The selected `XmlEncryptionPolicy` requires this assertion element in
     /// encrypted form, and the message carries it in plaintext.
     #[error("{element} must be encrypted")]
+    #[non_exhaustive]
     EncryptionRequired {
-        /// Local name of the plaintext element: `NameID` or `Attribute`.
+        /// Local name of the plaintext element: `Assertion`, `NameID`, or
+        /// `Attribute`.
         element: &'static str,
     },
 
@@ -308,22 +478,15 @@ pub enum SamlError {
     NoTrustedCertificate,
 
     // Lower-level operational variants.
-    /// Caller supplied a malformed request ID for response correlation.
+    /// Caller supplied an empty request ID for response correlation.
     ///
     /// Prefer [`Self::InResponseToMismatch`] when a message value fails request
     /// correlation.
-    #[error("ERR_INVALID_IN_RESPONSE_TO")]
+    #[error("request ID for response correlation is empty")]
     InvalidInResponseTo,
-    /// Response status code is missing, empty, or could not be extracted.
-    #[error("ERR_UNDEFINED_STATUS")]
-    UndefinedStatus,
     /// A signature-wrapping (XSW) attempt was detected.
-    #[error("ERR_POTENTIAL_WRAPPING_ATTACK")]
+    #[error("signature wrapping attempt detected")]
     PotentialWrappingAttack,
-    /// A binding name is unrecognized, or an input, outbound action, or
-    /// stored binding is one the called operation does not handle.
-    #[error("ERR_UNDEFINED_BINDING")]
-    UndefinedBinding,
     /// Required metadata (endpoint/certificate) was missing.
     #[error("missing metadata: {0}")]
     MissingMetadata(String),
@@ -331,11 +494,32 @@ pub enum SamlError {
     #[error("missing key: {0}")]
     MissingKey(String),
     /// A delegated cryptographic operation failed.
-    #[error("crypto error: {0}")]
-    Crypto(String),
+    #[error("crypto error: {message}")]
+    #[non_exhaustive]
+    Crypto {
+        /// What failed.
+        message: String,
+        /// Backend error, when one caused this.
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
 impl SamlError {
+    pub(crate) fn xml(message: impl Into<String>) -> Self {
+        Self::Xml {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    #[cfg(crypto)]
+    pub(crate) fn crypto(message: impl Into<String>) -> Self {
+        Self::Crypto {
+            message: message.into(),
+            source: None,
+        }
+    }
+
     pub(crate) fn issuer_mismatch(expected: &str, actual: Option<&str>) -> Self {
         Self::IssuerMismatch {
             expected: expected.to_string(),
@@ -355,5 +539,27 @@ impl SamlError {
             expected: expected.map(str::to_string),
             actual: actual.map(str::to_string),
         }
+    }
+}
+
+/// Wrap an XML parser error.
+pub(crate) fn xml_err(source: impl std::error::Error + Send + Sync + 'static) -> SamlError {
+    SamlError::Xml {
+        message: "document is not well-formed".into(),
+        source: Some(Box::new(source)),
+    }
+}
+
+/// Report bytes that are not UTF-8 text, keeping the offset and not the bytes.
+pub(crate) fn utf8_err(error: std::string::FromUtf8Error) -> SamlError {
+    xml_err(error.utf8_error())
+}
+
+/// Wrap an error from the XML security backend.
+#[cfg(crypto)]
+pub(crate) fn crypto_err(source: impl std::error::Error + Send + Sync + 'static) -> SamlError {
+    SamlError::Crypto {
+        message: "backend operation failed".into(),
+        source: Some(Box::new(source)),
     }
 }

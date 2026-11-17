@@ -1,4 +1,5 @@
 use super::{AssertionId, EndpointUrl, MessageId, SamlInstant};
+use crate::artifact::Artifact;
 use crate::error::{SamlError, TimeWindowField};
 use std::{
     fmt,
@@ -59,7 +60,11 @@ impl ClockSkew {
     }
 }
 
-/// Replay cache key derived from a validated SAML message.
+/// Key of a single-use SAML value: a message ID, an assertion ID, or an
+/// artifact.
+///
+/// [`ReplayCache`] receives message and assertion IDs. A service provider's
+/// [`crate::ArtifactUses`] records artifacts itself.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ReplayKey {
@@ -77,6 +82,8 @@ pub enum ReplayKey {
     SsoResponse(MessageId),
     /// SAML assertion ID.
     Assertion(AssertionId),
+    /// SAML artifact resolved by a service provider.
+    Artifact(Artifact),
 }
 
 impl ReplayKey {
@@ -90,10 +97,11 @@ impl ReplayKey {
             Self::ManageNameIdResponse(_) => "manage_name_id_response_id",
             Self::SsoResponse(_) => "response_id",
             Self::Assertion(_) => "assertion_id",
+            Self::Artifact(_) => "artifact",
         }
     }
 
-    /// Raw SAML identifier value.
+    /// Raw SAML identifier or artifact value.
     pub fn value(&self) -> &str {
         match self {
             Self::AuthnRequest(id)
@@ -103,6 +111,7 @@ impl ReplayKey {
             | Self::ManageNameIdResponse(id)
             | Self::SsoResponse(id) => id.as_str(),
             Self::Assertion(id) => id.as_str(),
+            Self::Artifact(artifact) => artifact.as_str(),
         }
     }
 
@@ -140,8 +149,8 @@ pub trait ReplayCache {
     /// # Errors
     ///
     /// Implementations should return [`SamlError::ReplayDetected`] for
-    /// duplicate keys. They may also return storage-specific failures mapped
-    /// to [`SamlError`] if cache access fails.
+    /// duplicate keys, and [`SamlError::ReplayCacheUnavailable`] with the
+    /// storage error as its source when they cannot check or store a key.
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError>;
 }
 
@@ -256,15 +265,11 @@ impl<'a> SamlValidationContext<'a> {
             {
                 return Ok(endpoint.as_str().to_string());
             }
-            return Err(SamlError::Invalid(
-                "receiving endpoint is not published for this binding and message direction".into(),
-            ));
+            return Err(SamlError::RecipientEndpointNotPublished);
         }
         match published {
             [endpoint] => Ok(endpoint.clone()),
-            _ => Err(SamlError::Invalid(
-                "multiple receiving endpoints require with_recipient_endpoint".into(),
-            )),
+            _ => Err(SamlError::RecipientEndpointAmbiguous),
         }
     }
 

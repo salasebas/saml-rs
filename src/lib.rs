@@ -429,7 +429,7 @@ pub use api::{
     ForceAuthn, HttpHeader, Idp, IsPassive, LogoutSigning, MessageDelivery, PaosAuthnRequest,
     PaosClientRequest, PaosHttpResponse, PaosSsoResponse, PendingPaosSso, PendingPaosSsoSnapshot,
     ReceiveNameIdManagement, ReceivedNameIdManagementRedirect, RespondNameIdManagement,
-    RespondPaosSso, RespondSlo, RespondSso, Saml, SamlError, SoapFault, Sp, StartNameIdManagement,
+    RespondPaosSso, RespondSlo, RespondSso, Saml, SoapFault, Sp, StartNameIdManagement,
     StartPaosSso, StartSlo, StartSso, StartedPaosSso, Unknown,
 };
 pub use artifact::{
@@ -461,6 +461,10 @@ pub use crypto::{
     CryptoProviderInfo,
 };
 pub use discovery::{CommonDomainCookie, CommonDomainCookieLifetime, RememberIdentityProvider};
+pub use error::{
+    ReferenceResolutionReason, ResourceLimit, SamlError, SignatureVerificationReason,
+    SubjectConfirmationReason, TimeWindowField,
+};
 #[cfg(crypto)]
 pub use metadata::MetadataSignatureVerification;
 pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};

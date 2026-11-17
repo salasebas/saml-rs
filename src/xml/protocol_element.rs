@@ -8,8 +8,9 @@ use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
 
 use crate::constants::{name_id_format, namespace};
-use crate::error::SamlError;
-use crate::xml::dom::{self, Node, XmlLimits};
+use crate::error::{xml_err, SamlError};
+use crate::model::Status;
+use crate::xml::dom::{self, reader_err, Node, XmlLimits};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SamlElement {
@@ -96,13 +97,13 @@ pub(crate) fn issuer_format_is_entity(format: Option<&str>) -> bool {
     }
 }
 
-/// Top-level and second-level `StatusCode` values of a status response.
-pub(crate) fn status_codes(response: &SamlElement) -> Result<(String, Option<String>), SamlError> {
+/// `Status` of a status response.
+pub(crate) fn read_status(response: &SamlElement) -> Result<Status, SamlError> {
     let mut statuses = response
         .children
         .iter()
         .filter(|child| child.is(namespace::PROTOCOL, "Status"));
-    let status = statuses.next().ok_or(SamlError::UndefinedStatus)?;
+    let status = statuses.next().ok_or(SamlError::StatusMissing)?;
     if statuses.next().is_some() {
         return Err(SamlError::ProtocolProfile(format!(
             "{} requires one Status",
@@ -113,19 +114,17 @@ pub(crate) fn status_codes(response: &SamlElement) -> Result<(String, Option<Str
         .children
         .iter()
         .find(|child| child.is(namespace::PROTOCOL, "StatusCode"))
-        .ok_or(SamlError::UndefinedStatus)?;
+        .ok_or(SamlError::StatusMissing)?;
     let top = code
         .attr("Value")
         .filter(|value| !value.is_empty())
-        .ok_or(SamlError::UndefinedStatus)?
-        .to_string();
+        .ok_or(SamlError::StatusMissing)?;
     let second = code
         .children
         .iter()
         .find(|child| child.is(namespace::PROTOCOL, "StatusCode"))
-        .and_then(|child| child.attr("Value"))
-        .map(str::to_string);
-    Ok((top, second))
+        .and_then(|child| child.attr("Value"));
+    Status::received(top, second)
 }
 
 struct ResolvedElement {
@@ -147,10 +146,10 @@ fn annotate(
         qualified_attributes,
     } = elements
         .next()
-        .ok_or_else(|| SamlError::Xml("protocol element is missing a namespace".into()))?;
+        .ok_or_else(|| SamlError::xml("protocol element is missing a namespace"))?;
     if local_name != node.local_name {
-        return Err(SamlError::Xml(
-            "protocol element namespace does not match the element".into(),
+        return Err(SamlError::xml(
+            "protocol element namespace does not match the element",
         ));
     }
     let mut children = Vec::new();
@@ -158,7 +157,7 @@ fn annotate(
         children.push(annotate(child, xml_len, elements)?);
     }
     if node.end < node.start || node.end > xml_len {
-        return Err(SamlError::Xml("protocol element is incomplete".into()));
+        return Err(SamlError::xml("protocol element is incomplete"));
     }
     Ok(SamlElement {
         local_name,
@@ -187,15 +186,15 @@ fn resolved_elements(
                 let (namespace, local_name) = reader.resolver().resolve_element(element.name());
                 let local_name = local_name.as_ref().to_string();
                 let namespace = match namespace {
-                    ResolveResult::Bound(Namespace(uri)) => unescape(uri)
-                        .map_err(|err| SamlError::Xml(err.to_string()))?
-                        .into_owned(),
+                    ResolveResult::Bound(Namespace(uri)) => {
+                        unescape(uri).map_err(xml_err)?.into_owned()
+                    }
                     ResolveResult::Unbound | ResolveResult::Unknown(_) => String::new(),
                 };
                 let mut unqualified_attributes = Vec::new();
                 let mut qualified_attributes = Vec::new();
                 for attribute in element.attributes() {
-                    let attribute = attribute.map_err(|err| SamlError::Xml(err.to_string()))?;
+                    let attribute = attribute.map_err(xml_err)?;
                     if attribute.key.as_ref() == "xmlns"
                         || attribute
                             .key
@@ -206,14 +205,12 @@ fn resolved_elements(
                     }
                     let value = attribute
                         .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                        .map_err(|err| SamlError::Xml(err.to_string()))?
+                        .map_err(xml_err)?
                         .into_owned();
                     if attribute.key.prefix().is_some() {
                         let (resolved, name) = reader.resolver().resolve_attribute(attribute.key);
                         if let ResolveResult::Bound(Namespace(ns)) = resolved {
-                            let ns = unescape(ns)
-                                .map_err(|err| SamlError::Xml(err.to_string()))?
-                                .into_owned();
+                            let ns = unescape(ns).map_err(xml_err)?.into_owned();
                             qualified_attributes.push((ns, name.as_ref().to_string(), value));
                         }
                     } else {
@@ -228,11 +225,11 @@ fn resolved_elements(
                 });
             }
             Ok(Event::DocType(_)) => {
-                return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
+                return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
             Ok(Event::Eof) => break,
             Ok(_) => {}
-            Err(err) => return Err(SamlError::Xml(err.to_string())),
+            Err(err) => return Err(reader_err(err)),
         }
         buf.clear();
     }

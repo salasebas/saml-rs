@@ -199,7 +199,9 @@ impl AuthnRequest {
                 return Ok(None);
             }
             match optional_response_binding(extract)? {
-                Some(SsoResponseBinding::Artifact) => Err(SamlError::UndefinedBinding),
+                Some(SsoResponseBinding::Artifact) => Err(SamlError::UnsupportedBinding {
+                    binding: Binding::Artifact,
+                }),
                 binding @ (Some(SsoResponseBinding::Post | SsoResponseBinding::SimpleSign)
                 | None) => Ok(binding),
             }

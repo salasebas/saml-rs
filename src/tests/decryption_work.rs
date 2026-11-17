@@ -111,7 +111,13 @@ fn encrypted_assertion_rejects_excess_key_candidates() -> TestResult {
             assert!(result?.1.contains("<saml:Assertion"));
         } else {
             assert!(
-                matches!(result, Err(SamlError::Invalid(message)) if message.contains("ERR_DECRYPTION_LIMIT_EXCEEDED")),
+                matches!(
+                    result,
+                    Err(SamlError::LimitExceeded {
+                        limit: saml_rs::ResourceLimit::DecryptionWork,
+                        ..
+                    })
+                ),
                 "excess candidates were not refused"
             );
         }
@@ -142,7 +148,13 @@ fn encrypted_assertions_share_the_document_work_limit() -> TestResult {
             assert_eq!(plaintext.matches("<saml:Assertion ").count(), count);
         } else {
             assert!(
-                matches!(result, Err(SamlError::Invalid(message)) if message.contains("ERR_DECRYPTION_LIMIT_EXCEEDED")),
+                matches!(
+                    result,
+                    Err(SamlError::LimitExceeded {
+                        limit: saml_rs::ResourceLimit::DecryptionWork,
+                        ..
+                    })
+                ),
                 "aggregate work was not refused"
             );
         }
@@ -184,7 +196,13 @@ fn revealed_encrypted_elements_share_the_outer_work_limit() -> TestResult {
             assert!(result?.1.contains("EncryptedID"));
         } else {
             assert!(
-                matches!(result, Err(SamlError::Invalid(message)) if message.contains("ERR_DECRYPTION_LIMIT_EXCEEDED")),
+                matches!(
+                    result,
+                    Err(SamlError::LimitExceeded {
+                        limit: saml_rs::ResourceLimit::DecryptionWork,
+                        ..
+                    })
+                ),
                 "revealed work was not charged to the outer message"
             );
         }

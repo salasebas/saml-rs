@@ -164,7 +164,7 @@ fn crypto_signature_escapes_transform_algorithm() -> TestResult {
     );
 
     assert!(
-        matches!(result, Err(SamlError::Crypto(ref message)) if message.contains("unsupported algorithm") && !message.contains("XML parsing error")),
+        matches!(result, Err(SamlError::Crypto { source: Some(ref source), .. }) if source.to_string().contains("unsupported algorithm") && !source.to_string().contains("XML parsing error")),
         "expected escaped transform to fail closed without XML parser structure errors, got {result:?}"
     );
     Ok(())
@@ -238,7 +238,7 @@ fn crypto_encrypt_assertion_escapes_algorithm_attributes() -> TestResult {
     );
 
     assert!(
-        matches!(result, Err(SamlError::Crypto(ref message)) if !message.contains("XML parsing error") && !message.contains("Mismatched end tag")),
+        matches!(result, Err(SamlError::Crypto { source: Some(ref source), .. }) if !source.to_string().contains("XML parsing error") && !source.to_string().contains("Mismatched end tag")),
         "expected escaped algorithms to fail closed without XML parser structure errors, got {result:?}"
     );
     Ok(())

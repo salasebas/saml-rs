@@ -1,5 +1,5 @@
 use super::{parse_xml_document, ENC};
-use crate::error::SamlError;
+use crate::error::{ResourceLimit, SamlError};
 use bergshamra::xml::{Document as XmlDocument, NodeId};
 
 pub(super) fn document_work(
@@ -28,11 +28,11 @@ pub(super) fn revealed_elements(wrapper: &str) -> Result<usize, SamlError> {
     let document = parse_xml_document(wrapper)?;
     let root = document
         .document_element()
-        .ok_or_else(|| SamlError::Xml("no document element".into()))?;
+        .ok_or_else(|| SamlError::xml("no document element"))?;
     let plaintext = document
         .children_iter(root)
         .find(|node| document.element(*node).is_some())
-        .ok_or_else(|| SamlError::Xml("no decrypted element".into()))?;
+        .ok_or_else(|| SamlError::xml("no decrypted element"))?;
     Ok(element_count(&document, plaintext))
 }
 
@@ -42,18 +42,12 @@ pub(super) fn add_revealed_work(
     keys: usize,
     maximum: usize,
 ) -> Result<usize, SamlError> {
-    let work = elements
+    elements
         .checked_mul(keys)
         .and_then(|work| current.checked_add(work))
-        .ok_or_else(|| limit_exceeded(maximum))?;
-    if work > maximum {
-        return Err(limit_exceeded(maximum));
-    }
-    Ok(work)
-}
-
-fn limit_exceeded(maximum: usize) -> SamlError {
-    SamlError::Invalid(format!(
-        "ERR_DECRYPTION_LIMIT_EXCEEDED: max decryption work units exceeded ({maximum})"
-    ))
+        .filter(|work| *work <= maximum)
+        .ok_or(SamlError::LimitExceeded {
+            limit: ResourceLimit::DecryptionWork,
+            maximum,
+        })
 }

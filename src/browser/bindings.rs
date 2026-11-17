@@ -42,7 +42,9 @@ impl TryFrom<Binding> for SsoRequestBinding {
             Binding::Redirect => Ok(Self::Redirect),
             Binding::Post => Ok(Self::Post),
             Binding::SimpleSign => Ok(Self::SimpleSign),
-            Binding::Artifact | Binding::Soap => Err(SamlError::UndefinedBinding),
+            binding @ (Binding::Artifact | Binding::Soap) => {
+                Err(SamlError::UnsupportedBinding { binding })
+            }
         }
     }
 }
@@ -84,7 +86,9 @@ impl TryFrom<Binding> for SsoResponseBinding {
             Binding::Post => Ok(Self::Post),
             Binding::SimpleSign => Ok(Self::SimpleSign),
             Binding::Artifact => Ok(Self::Artifact),
-            Binding::Redirect | Binding::Soap => Err(SamlError::UndefinedBinding),
+            binding @ (Binding::Redirect | Binding::Soap) => {
+                Err(SamlError::UnsupportedBinding { binding })
+            }
         }
     }
 }
@@ -132,7 +136,9 @@ impl TryFrom<Binding> for LogoutBinding {
             Binding::Post => Ok(Self::Post),
             Binding::SimpleSign => Ok(Self::SimpleSign),
             Binding::Soap => Ok(Self::Soap),
-            Binding::Artifact => Err(SamlError::UndefinedBinding),
+            Binding::Artifact => Err(SamlError::UnsupportedBinding {
+                binding: Binding::Artifact,
+            }),
         }
     }
 }

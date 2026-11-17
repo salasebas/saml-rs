@@ -30,7 +30,7 @@ fn rejects_live_duplicates_without_changing_their_deadline() -> TestResult {
     cache.check_and_store(key("_same")?, at(20))?;
     for deadline in [at(0), at(10), at(30)] {
         assert!(matches!(cache.check_and_store(key("_same")?, deadline),
-            Err(SamlError::ReplayDetected { key }) if key == "assertion_id:_same"));
+            Err(SamlError::ReplayDetected { key }) if key.cache_key() == "assertion_id:_same"));
     }
     clock.store(19, Ordering::SeqCst);
     assert!(matches!(
@@ -57,7 +57,7 @@ fn purges_out_of_order_deadlines_before_applying_the_limit() -> TestResult {
     }
     assert!(matches!(
         cache.check_and_store(key("_full")?, at(100)),
-        Err(SamlError::Invalid(_))
+        Err(SamlError::ReplayCacheUnavailable { .. })
     ));
     clock.store(100, Ordering::SeqCst);
     for value in ["_new10", "_new20", "_new30"] {
@@ -75,7 +75,7 @@ fn a_full_cache_keeps_live_keys_and_does_not_store_refused_keys() -> TestResult 
     cache.check_and_store(key("_kept")?, at(10))?;
     assert!(matches!(
         cache.check_and_store(key("_refused")?, at(100)),
-        Err(SamlError::Invalid(_))
+        Err(SamlError::ReplayCacheUnavailable { .. })
     ));
     assert!(matches!(
         cache.check_and_store(key("_kept")?, at(100)),
@@ -93,7 +93,7 @@ fn already_expired_keys_do_not_consume_capacity() -> TestResult {
     cache.check_and_store(key("_present")?, at(10))?;
     assert!(matches!(
         cache.check_and_store(key("_future")?, at(11)),
-        Err(SamlError::Invalid(_))
+        Err(SamlError::ReplayCacheUnavailable { .. })
     ));
     Ok(())
 }
@@ -131,7 +131,9 @@ fn shared_mutex_accepts_a_key_only_once_across_threads() -> TestResult {
     for worker in workers {
         match worker.join().map_err(|_| "worker panicked")? {
             Ok(()) => accepted += 1,
-            Err(SamlError::ReplayDetected { key }) if key == "assertion_id:_concurrent" => {
+            Err(SamlError::ReplayDetected { key })
+                if key.cache_key() == "assertion_id:_concurrent" =>
+            {
                 rejected += 1
             }
             Err(error) => return Err(error.into()),
@@ -159,7 +161,7 @@ fn a_poisoned_mutex_refuses_cache_access() -> TestResult {
                 key("_poisoned")?,
                 SystemTime::now() + Duration::from_secs(60)
             ),
-            Err(SamlError::Invalid(_))
+            Err(SamlError::ReplayCacheUnavailable { .. })
         ));
     }
     Ok(())

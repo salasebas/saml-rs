@@ -1,7 +1,7 @@
 use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, User};
-use crate::error::SamlError;
+use crate::error::{utf8_err, SamlError};
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
 use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefixes};
@@ -578,7 +578,7 @@ fn embedded_signed_xml(binding: Binding, context: &str) -> Result<Option<String>
     match binding {
         Binding::Post => String::from_utf8(crate::binding::decode_base64(context)?)
             .map(Some)
-            .map_err(|error| SamlError::Xml(error.to_string())),
+            .map_err(utf8_err),
         Binding::Soap => Ok(Some(context.to_string())),
         Binding::Redirect | Binding::SimpleSign | Binding::Artifact => Ok(None),
     }

@@ -62,9 +62,10 @@ pub enum SamlError {
         actual: RelayStateParam,
     },
     StatusNotSuccess {
-        top: String,
-        second: Option<String>,
+        status: Status,
     },
+    StatusMissing,
+    AssertionMissing,
     SubjectConfirmationInvalid {
         reason: &'static str,
     },
@@ -72,7 +73,11 @@ pub enum SamlError {
         field: &'static str,
     },
     SignatureMissing,
+    AuthnRequestSigningRequired,
     MissingBindingParameter {
+        name: &'static str,
+    },
+    DuplicateBindingParameter {
         name: &'static str,
     },
     SignatureVerification {
@@ -87,23 +92,66 @@ pub enum SamlError {
         reason: &'static str,
     },
     ReplayDetected {
-        key: String,
+        key: ReplayKey,
     },
-    MissingBinding,
+    ReplayCacheUnavailable {
+        source: Box<dyn Error + Send + Sync>,
+    },
+    RecipientEndpointNotPublished,
+    RecipientEndpointAmbiguous,
+    LimitExceeded {
+        limit: ResourceLimit,
+        maximum: usize,
+    },
     UnsupportedBinding {
         binding: raw::Binding,
+    },
+    OutboundBindingMismatch {
+        actual: raw::Binding,
     },
     UnsupportedProfile {
         profile: &'static str,
     },
-    Xml(String),
-    Crypto(String),
+    Xml {
+        message: String,
+        source: Option<Box<dyn Error + Send + Sync>>,
+    },
+    Crypto {
+        message: String,
+        source: Option<Box<dyn Error + Send + Sync>>,
+    },
+    Base64 {
+        source: Box<dyn Error + Send + Sync>,
+    },
+    Deflate {
+        source: Box<dyn Error + Send + Sync>,
+    },
     Unsupported(String),
 }
 ```
 
 Exact payload types can change during implementation. The important rule is
 that each security validation rule has a branchable variant.
+
+## Payload And Source Rules
+
+- A case callers handle differently has its own variant with typed data:
+  `Status` for a peer status, `ReplayKey` for a replay, `ResourceLimit` and
+  the configured maximum for a limit, and `Binding` for a binding mismatch.
+- A top-level `StatusCode` outside the four values of Core §3.2.2.2 is a
+  `ProtocolProfile` failure, not a status. A subordinate code keeps the
+  peer's URI.
+- A lower-level error stays reachable through `std::error::Error::source`, as
+  `Box<dyn Error + Send + Sync>`. No third-party type or `From` impl appears
+  in the public enum, so `?` never turns an unrelated `io::Error` into a
+  DEFLATE failure.
+- `Display` says what failed at this layer and does not repeat the source.
+- `Invalid`, `ProtocolProfile`, `Unsupported`, `MissingMetadata`,
+  `MissingKey`, and the `message` of `Xml` and `Crypto` cover failures callers
+  do not branch on. Their text is for people and is not an API.
+- `UnsupportedBinding` means the operation does not handle the binding.
+  `OutboundBindingMismatch` means the caller asked an `Outbound` for another
+  binding's delivery.
 
 ## Validation Context
 
@@ -172,16 +220,17 @@ order explicit:
 2. Reject malformed or disallowed XML.
 3. Check response status.
 4. Verify signature and signed-reference coverage.
-5. Check issuer.
-6. Check destination and recipient.
-7. Check `InResponseTo` against `Pending<AuthnRequest>`.
-8. Check RelayState exactly when the request carried it, including present
+5. Reject a success response that carries no assertion.
+6. Check issuer.
+7. Check destination and recipient.
+8. Check `InResponseTo` against `Pending<AuthnRequest>`.
+9. Check RelayState exactly when the request carried it, including present
    empty versus present value.
-9. Check assertion conditions time window using caller-owned `now`.
-10. Check audience.
-11. Check bearer subject confirmation.
-12. Check replay cache for response/assertion/session keys.
-13. Convert to `SsoSession`.
+10. Check assertion conditions time window using caller-owned `now`.
+11. Check audience.
+12. Check bearer subject confirmation.
+13. Check replay cache for response/assertion/session keys.
+14. Convert to `SsoSession`.
 
 ## Metadata Signature Validation
 

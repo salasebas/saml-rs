@@ -54,14 +54,21 @@ fn verify_present_signature(
             verify_present_signatures(xml, opts)?;
             Ok(true)
         }
-        Binding::Post | Binding::Artifact | Binding::Soap => Ok(verify_and_prepare(
-            xml.to_string(),
-            root,
-            ParserType::SamlResponse,
-            opts,
-            AssertionSignatureRequirement::Compatible,
-            ResponseSignatureRequirement::Optional,
-        )?
-        .message_authenticated),
+        Binding::Post | Binding::Artifact | Binding::Soap => {
+            let signature_only = FlowOptions {
+                decrypt_key: None,
+                element_decrypt_key: None,
+                ..opts.clone()
+            };
+            Ok(verify_and_prepare(
+                xml.to_string(),
+                root,
+                ParserType::SamlResponse,
+                &signature_only,
+                AssertionSignatureRequirement::Compatible,
+                ResponseSignatureRequirement::Optional,
+            )?
+            .message_authenticated)
+        }
     }
 }

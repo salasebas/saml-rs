@@ -653,7 +653,13 @@ mod tests {
         );
 
         assert!(
-            matches!(result, Err(SamlError::Invalid(_))),
+            matches!(
+                result,
+                Err(SamlError::LimitExceeded {
+                    limit: crate::ResourceLimit::XmlBytes,
+                    maximum: 4
+                })
+            ),
             "expected the shortcut to exceed max_bytes, got {result:?}"
         );
     }

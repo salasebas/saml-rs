@@ -241,6 +241,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
         result,
         Err(SamlError::SignatureVerification {
             reason: SignatureVerificationReason::DetachedMessageSignature,
+            ..
         })
     ));
     assert!(tampered_cache.seen.is_empty());
@@ -314,6 +315,7 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
         result,
         Err(SamlError::SignatureVerification {
             reason: SignatureVerificationReason::DetachedMessageSignature,
+            ..
         })
     ));
     assert!(tampered_cache.seen.is_empty());

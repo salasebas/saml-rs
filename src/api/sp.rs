@@ -57,7 +57,11 @@ impl ResponseParseInput {
                 resolved,
                 ..
             } => (delivered, resolved),
-            BrowserInput::Soap { .. } => return Err(SamlError::UndefinedBinding),
+            BrowserInput::Soap { .. } => {
+                return Err(SamlError::UnsupportedBinding {
+                    binding: Binding::Soap,
+                })
+            }
             BrowserInput::Redirect { .. }
             | BrowserInput::Post { .. }
             | BrowserInput::SimpleSignPost { .. } => {
@@ -331,8 +335,9 @@ impl Saml<Sp> {
     /// an empty one. A status other than `Success` returns
     /// [`SamlError::StatusNotSuccess`] once a present signature verifies and
     /// the issuer and destination checks pass. An error response does not need
-    /// a signature. Returns [`SamlError::Invalid`] when the supplied recipient
-    /// endpoint is not an assertion consumer published for the incoming binding.
+    /// a signature. Returns [`SamlError::RecipientEndpointNotPublished`] when
+    /// the supplied recipient endpoint is not an assertion consumer published
+    /// for the incoming binding.
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,

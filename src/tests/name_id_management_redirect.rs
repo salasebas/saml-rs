@@ -472,9 +472,14 @@ fn requester_receives_an_error_status_for_an_unknown_principal() -> TestResult {
         response_input(&response)?,
         validation(),
     ) {
-        Err(SamlError::StatusNotSuccess { top, second }) => {
-            assert_eq!(top, status_code::REQUESTER);
-            assert_eq!(second.as_deref(), Some(status_code::UNKNOWN_PRINCIPAL));
+        Err(SamlError::StatusNotSuccess { status }) => {
+            assert_eq!(status.top_level().as_uri(), status_code::REQUESTER);
+            assert_eq!(
+                status
+                    .subordinate()
+                    .map(saml_rs::SubordinateStatusCode::as_uri),
+                Some(status_code::UNKNOWN_PRINCIPAL)
+            );
         }
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
@@ -705,7 +710,7 @@ fn replayed_request_is_rejected() -> TestResult {
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert!(key.starts_with("manage_name_id_request_id:"));
+            assert!(key.cache_key().starts_with("manage_name_id_request_id:"));
             Ok(())
         }
         other => Err(format!("expected ReplayDetected, got {other:?}").into()),
@@ -884,7 +889,7 @@ fn request_must_name_one_identifier_and_one_change() -> TestResult {
         assert!(
             matches!(
                 received,
-                Err(SamlError::ProtocolProfile(_) | SamlError::Xml(_))
+                Err(SamlError::ProtocolProfile(_) | SamlError::Xml { .. })
             ),
             "{change} was accepted: {received:?}"
         );
@@ -1018,7 +1023,11 @@ fn error_status_is_reported_only_for_an_authenticated_matching_response() -> Tes
     let matching = signed_response_input(&sp_error_response_xml(request_id))?;
     match idp.finish_name_id_management_redirect(&sp_peer, &started.pending, matching, validation())
     {
-        Err(SamlError::StatusNotSuccess { top, .. }) if top == status_code::REQUESTER => Ok(()),
+        Err(SamlError::StatusNotSuccess { status })
+            if status.top_level().as_uri() == status_code::REQUESTER =>
+        {
+            Ok(())
+        }
         other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
 }
@@ -1274,7 +1283,7 @@ fn a_response_with_two_statuses_is_rejected() -> TestResult {
     assert!(
         matches!(
             finished,
-            Err(SamlError::ProtocolProfile(_) | SamlError::Xml(_))
+            Err(SamlError::ProtocolProfile(_) | SamlError::Xml { .. })
         ),
         "two statuses were accepted: {finished:?}"
     );
@@ -1391,7 +1400,7 @@ fn a_request_out_of_schema_order_or_with_an_extra_element_is_rejected() -> TestR
         assert!(
             matches!(
                 received,
-                Err(SamlError::ProtocolProfile(_) | SamlError::Xml(_))
+                Err(SamlError::ProtocolProfile(_) | SamlError::Xml { .. })
             ),
             "{identifier}{change} was accepted: {received:?}"
         );

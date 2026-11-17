@@ -41,7 +41,7 @@ fn redirect_request(xml: &str) -> Result<HttpRequest, SamlError> {
 fn assert_multiple_document_elements(error: SamlError) {
     assert!(matches!(
         error,
-        SamlError::Xml(message) if message == "multiple document elements"
+        SamlError::Xml { message, .. } if message == "multiple document elements"
     ));
 }
 

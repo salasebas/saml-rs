@@ -4,7 +4,6 @@ use crate::browser::{
 use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::{url_params, Binding};
 use crate::entity::User;
-use crate::error::SamlError as Error;
 use crate::idp::IdentityProvider;
 use crate::metadata::Metadata;
 use crate::model::{RelayStateParam, Subject};
@@ -65,11 +64,11 @@ pub(super) fn selected_acs(
         let endpoint = sp
             .metadata
             .assertion_consumer_service_by_index(index)?
-            .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?;
+            .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
         let binding = SsoResponseBinding::try_from(endpoint.binding)?;
         if let Some(requested_binding) = requested_binding {
             if requested_binding != binding {
-                return Err(Error::Invalid(
+                return Err(SamlError::Invalid(
                     "AssertionConsumerServiceIndex binding does not match response_binding".into(),
                 ));
             }
@@ -86,7 +85,7 @@ pub(super) fn selected_acs(
     let endpoint = sp
         .metadata
         .assertion_consumer_service_endpoint(binding.as_binding())
-        .ok_or_else(|| Error::MissingMetadata("AssertionConsumerService".into()))?;
+        .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
     Ok(AcsEndpoint::new(
         binding,
         crate::model::EndpointUrl::try_new(endpoint.location)?,
@@ -131,7 +130,7 @@ pub(super) fn ensure_relay_state(
     if *expected == RelayStateParam::Absent || expected == actual {
         return Ok(());
     }
-    Err(Error::RelayStateMismatch {
+    Err(SamlError::RelayStateMismatch {
         expected: expected.clone(),
         actual: actual.clone(),
     })
@@ -141,7 +140,7 @@ pub(super) fn ensure_entity_id(expected: &EntityId, actual: &EntityId) -> Result
     if expected == actual {
         return Ok(());
     }
-    Err(Error::issuer_mismatch(
+    Err(SamlError::issuer_mismatch(
         expected.as_str(),
         Some(actual.as_str()),
     ))
@@ -154,11 +153,11 @@ pub(super) fn ensure_https_endpoint(
     policy_option: &str,
 ) -> Result<(), SamlError> {
     let url = url::Url::parse(endpoint)
-        .map_err(|error| Error::Invalid(format!("{service} location is not a URL: {error}")))?;
+        .map_err(|error| SamlError::Invalid(format!("{service} location is not a URL: {error}")))?;
     if url.scheme() == "https" {
         return Ok(());
     }
-    Err(Error::ProtocolProfile(format!(
+    Err(SamlError::ProtocolProfile(format!(
         "{profile} sends the user agent to an https {service} unless {policy_option} is selected"
     )))
 }
@@ -170,12 +169,12 @@ pub(super) fn ensure_sso_response_binding(
     if actual == expected.as_binding() {
         return Ok(());
     }
-    Err(Error::UnsupportedBinding { binding: actual })
+    Err(SamlError::UnsupportedBinding { binding: actual })
 }
 
 pub(super) fn user_from_subject(subject: &Subject) -> Result<User, SamlError> {
     if !subject.confirmations().is_empty() {
-        return Err(Error::Unsupported(
+        return Err(SamlError::Unsupported(
             "an issued assertion takes no caller-supplied SubjectConfirmation; the identity provider writes its own bearer confirmation".into(),
         ));
     }

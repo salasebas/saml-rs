@@ -5,7 +5,7 @@ use super::{
 };
 use crate::constants::Binding;
 use crate::entity::User;
-use crate::error::SamlError;
+use crate::error::{utf8_err, SamlError};
 use crate::sp::ServiceProvider;
 
 impl IdentityProvider {
@@ -34,7 +34,7 @@ impl IdentityProvider {
             overrides,
         )?;
         let xml = crate::binding::decode_base64(&issued.context.context)?;
-        let xml = String::from_utf8(xml).map_err(|err| SamlError::Xml(err.to_string()))?;
+        let xml = String::from_utf8(xml).map_err(utf8_err)?;
         Ok(RenderedLoginResponse {
             id: issued.context.id,
             xml,

@@ -8,7 +8,7 @@ use crate::binding::{decode_base64, encode_base64, xml_escape};
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
 use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
-use crate::error::SamlError;
+use crate::error::{crypto_err, xml_err, SamlError};
 use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node};
 use bergshamra::keys::Key;
@@ -16,12 +16,8 @@ use bergshamra::{sign, DsigContext, KeysManager};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-fn crypto_err(err: impl std::fmt::Display) -> SamlError {
-    SamlError::Crypto(err.to_string())
-}
-
 fn require_operation_key<T>(
-    key: Result<Option<T>, impl std::fmt::Display>,
+    key: Result<Option<T>, impl std::error::Error + Send + Sync + 'static>,
     missing: &'static str,
 ) -> Result<T, SamlError> {
     key.map_err(crypto_err)?
@@ -67,10 +63,6 @@ fn resolve_path<'a>(root: &'a Node, names: &[String]) -> Option<&'a Node> {
     Some(current)
 }
 
-fn xml_err(err: impl std::fmt::Display) -> SamlError {
-    SamlError::Xml(err.to_string())
-}
-
 /// Insert `signature` into `xml` at `action` relative to `node`.
 ///
 /// `Prepend` and `Append` on an empty-element tag such as `<Extensions/>`
@@ -90,9 +82,9 @@ fn place_signature(
             match reader.read_event().map_err(xml_err)? {
                 Event::Empty(tag) => {
                     let name = tag.name().into_inner();
-                    let open = xml[..node.end]
-                        .strip_suffix("/>")
-                        .ok_or_else(|| xml_err("empty-element tag does not end with '/>'"))?;
+                    let open = xml[..node.end].strip_suffix("/>").ok_or_else(|| {
+                        SamlError::xml("empty-element tag does not end with '/>'")
+                    })?;
                     let rest = &xml[node.end..];
                     return Ok(format!("{open}>{signature}</{name}>{rest}"));
                 }
@@ -103,10 +95,10 @@ fn place_signature(
                     node.start
                         + element
                             .rfind("</")
-                            .ok_or_else(|| xml_err("element has no end tag"))?
+                            .ok_or_else(|| SamlError::xml("element has no end tag"))?
                 }
                 other => {
-                    return Err(xml_err(format!(
+                    return Err(SamlError::xml(format!(
                         "signature reference does not start with an element tag: {other:?}"
                     )))
                 }
@@ -165,7 +157,7 @@ fn embed_signature(
         .or_else(|| target.attr("AssertionID"))
         .ok_or_else(|| SamlError::Invalid("signing target has no ID".into()))?;
     let digest = digest_for_signature(sig_alg)
-        .ok_or_else(|| SamlError::Crypto(format!("unknown signature algorithm: {sig_alg}")))?;
+        .ok_or_else(|| SamlError::crypto(format!("unknown signature algorithm: {sig_alg}")))?;
 
     let prefix = config.map(|c| c.prefix.as_str()).unwrap_or("ds");
     validate_crypto_xml_prefix("SignatureConfig.prefix", prefix)?;
@@ -445,17 +437,22 @@ mod tests {
 
     #[test]
     fn operation_key_maps_provider_failure_to_crypto() {
-        let result = require_operation_key::<()>(Err("provider import failed"), "missing");
+        let result = require_operation_key::<()>(
+            Err(std::io::Error::other("provider import failed")),
+            "missing",
+        );
 
         assert!(matches!(
             result,
-            Err(SamlError::Crypto(message)) if message == "provider import failed"
+            Err(SamlError::Crypto { source: Some(source), .. })
+                if source.to_string() == "provider import failed"
         ));
     }
 
     #[test]
     fn operation_key_preserves_missing_key_error() {
-        let result = require_operation_key::<()>(Ok::<Option<()>, &str>(None), "no signing key");
+        let result =
+            require_operation_key::<()>(Ok::<Option<()>, std::io::Error>(None), "no signing key");
 
         assert!(matches!(
             result,
@@ -667,7 +664,7 @@ mod tests {
         )?);
         assert!(matches!(
             verify_octet_string_signature(octet, &format!("{sig}\u{a0}"), SP_CERT, RSA_SHA256),
-            Err(SamlError::Base64(_))
+            Err(SamlError::Base64 { .. })
         ));
         // tampered octet string must fail
         assert!(!verify_octet_string_signature(

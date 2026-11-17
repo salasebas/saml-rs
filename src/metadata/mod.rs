@@ -32,6 +32,8 @@ use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::{dom, extract_with_limits, ExtractorField, XmlLimits};
 
+const MULTIPLE_ENTITY_DESCRIPTORS: &str = "metadata has more than one EntityDescriptor";
+
 fn base_fields() -> Vec<ExtractorField> {
     vec![
         ExtractorField::new("entityID", &["EntityDescriptor"]).attrs(&["entityID"]),
@@ -71,9 +73,7 @@ fn entity_descriptor_xml<'n>(
     match entities.as_slice() {
         [entity] => Ok((entity.start..entity.end, Some(*entity))),
         [] => Err(SamlError::MissingMetadata("EntityDescriptor".into())),
-        _ => Err(SamlError::Xml(
-            "ERR_MULTIPLE_METADATA_ENTITYDESCRIPTOR".into(),
-        )),
+        _ => Err(SamlError::xml(MULTIPLE_ENTITY_DESCRIPTORS)),
     }
 }
 
@@ -282,9 +282,7 @@ impl Metadata {
             .count()
             > 1
         {
-            return Err(SamlError::Xml(
-                "ERR_MULTIPLE_METADATA_ENTITYDESCRIPTOR".into(),
-            ));
+            return Err(SamlError::xml(MULTIPLE_ENTITY_DESCRIPTORS));
         }
 
         let (extraction, entity) = entity_descriptor_xml(xml, &roots)?;
@@ -461,15 +459,15 @@ mod tests {
             format!("<Extra/>{entity}"),
         ] {
             assert!(
-                matches!(Metadata::parse(&xml), Err(SamlError::Xml(_))),
+                matches!(Metadata::parse(&xml), Err(SamlError::Xml { .. })),
                 "{xml}"
             );
             assert!(
-                matches!(IdpMetadata::from_xml(&xml), Err(SamlError::Xml(_))),
+                matches!(IdpMetadata::from_xml(&xml), Err(SamlError::Xml { .. })),
                 "{xml}"
             );
             assert!(
-                matches!(SpMetadata::from_xml(&xml), Err(SamlError::Xml(_))),
+                matches!(SpMetadata::from_xml(&xml), Err(SamlError::Xml { .. })),
                 "{xml}"
             );
         }

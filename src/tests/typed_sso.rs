@@ -128,7 +128,11 @@ fn sp_config_with_default_response_binding(
     let (post, simple_sign) = match binding {
         SsoResponseBinding::Post => (post.mark_default(), simple_sign),
         SsoResponseBinding::SimpleSign => (post, simple_sign.mark_default()),
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => {
+            return Err(SamlError::UnsupportedBinding {
+                binding: binding.as_binding(),
+            })
+        }
     };
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
         .acs_endpoint(post)
@@ -1102,7 +1106,7 @@ fn typed_facade_receive_sso_checks_authn_request_replay() -> Result<(), Box<dyn 
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, replay_key);
+            assert_eq!(key.cache_key(), replay_key);
             Ok(())
         }
         other => Err(format!("expected AuthnRequest ReplayDetected, got {other:?}").into()),
@@ -1954,9 +1958,181 @@ fn typed_finish_sso_reports_an_unsigned_correlated_error_status(
     let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?;
 
     match finish_sso_with_response_xml(&exchange, &xml) {
-        Err(SamlError::StatusNotSuccess { top, second }) => {
-            assert_eq!(top, status_code::RESPONDER);
-            assert_eq!(second.as_deref(), Some(status_code::AUTH_FAILED));
+        Err(SamlError::StatusNotSuccess { status }) => {
+            assert_eq!(status, auth_failed_status()?);
+            Ok(())
+        }
+        other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_finish_sso_rejects_a_top_level_status_outside_the_four_saml_values(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?
+        .replacen(
+            &format!("Value=\"{}\"", status_code::RESPONDER),
+            "Value=\"urn:example:status:Unknown\"",
+            1,
+        );
+
+    match finish_sso_with_response_xml(&exchange, &xml) {
+        Err(SamlError::ProtocolProfile(message))
+            if message.contains("urn:example:status:Unknown") =>
+        {
+            Ok(())
+        }
+        other => Err(format!("expected ProtocolProfile, got {other:?}").into()),
+    }
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+#[test]
+fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(encrypted_sp_config()?)?;
+    let idp = Saml::idp(encrypted_idp_config()?)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondSso::post().status(auth_failed_status()?),
+    )?;
+    let response_fields = post_fields(&response)?;
+    assert!(response_xml_from_fields(&response_fields)?.contains("<ds:Signature"));
+
+    match sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(response_fields.clone()),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess { status }) => assert_eq!(status, auth_failed_status()?),
+        other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+
+    let mut snapshot: PendingSnapshot<AuthnRequest> = started.pending.snapshot();
+    snapshot.id = "_different_request".to_string();
+    match sp.finish_sso(
+        &idp_descriptor,
+        &PendingAuthnRequest::from_snapshot(snapshot)?,
+        BrowserInput::<SsoResponse>::post(response_fields),
+        validation(),
+    ) {
+        Err(SamlError::InResponseToMismatch { .. }) => Ok(()),
+        other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
+    }
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+#[test]
+fn typed_finish_sso_requiring_encrypted_assertions_reports_a_response_without_any_assertion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(encrypted_sp_config()?)?;
+    let idp = Saml::idp(idp_config()?)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        validation(),
+    )?;
+    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let xml = strip_embedded_signatures(&response_xml_from_fields(&post_fields(&response)?)?)?;
+    let start = xml.find("<saml:Assertion").ok_or("missing assertion")?;
+    let end = xml
+        .find("</saml:Assertion>")
+        .ok_or("unterminated assertion")?
+        + "</saml:Assertion>".len();
+    let mut without_assertion = xml.clone();
+    without_assertion.replace_range(start..end, "");
+    let fields = vec![FormField::new(
+        "SAMLResponse",
+        STANDARD.encode(resign_response(&without_assertion)?.as_bytes()),
+    )];
+
+    match sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(fields),
+        validation(),
+    ) {
+        Err(SamlError::AssertionMissing) => Ok(()),
+        other => Err(format!("expected AssertionMissing, got {other:?}").into()),
+    }
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+#[test]
+fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+            .credentials(encryption_credentials())
+            .validation(signing_sp_validation())
+            .build()?,
+    )?;
+    let idp = Saml::idp(idp_config()?)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        subject(),
+        RespondSso::post().status(auth_failed_status()?),
+    )?;
+    let undecryptable = concat!(
+        "</samlp:Status><saml:EncryptedAssertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">",
+        "<xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\">",
+        "<xenc:CipherData><xenc:CipherValue>AAAA</xenc:CipherValue></xenc:CipherData>",
+        "</xenc:EncryptedData></saml:EncryptedAssertion>",
+    );
+    let xml = resign_response(
+        &response_xml_from_fields(&post_fields(&response)?)?.replacen(
+            "</samlp:Status>",
+            undecryptable,
+            1,
+        ),
+    )?;
+    assert!(xml.contains("<saml:EncryptedAssertion"));
+    let fields = vec![FormField::new(
+        "SAMLResponse",
+        STANDARD.encode(xml.as_bytes()),
+    )];
+
+    let mut snapshot: PendingSnapshot<AuthnRequest> = started.pending.snapshot();
+    snapshot.id = "_different_request".to_string();
+    match sp.finish_sso(
+        &idp_descriptor,
+        &PendingAuthnRequest::from_snapshot(snapshot)?,
+        BrowserInput::<SsoResponse>::post(fields.clone()),
+        validation(),
+    ) {
+        Err(SamlError::InResponseToMismatch { .. }) => {}
+        other => return Err(format!("expected InResponseToMismatch, got {other:?}").into()),
+    }
+    match sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        BrowserInput::<SsoResponse>::post(fields),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess { status }) => {
+            assert_eq!(status, auth_failed_status()?);
             Ok(())
         }
         other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
@@ -2084,9 +2260,14 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
     };
 
     match finish(exchange.response_fields.clone()) {
-        Err(SamlError::StatusNotSuccess { top, second }) => {
-            assert_eq!(top, status_code::RESPONDER);
-            assert_eq!(second.as_deref(), Some(status_code::AUTH_FAILED));
+        Err(SamlError::StatusNotSuccess { status }) => {
+            assert_eq!(status.top_level().as_uri(), status_code::RESPONDER);
+            assert_eq!(
+                status
+                    .subordinate()
+                    .map(saml_rs::SubordinateStatusCode::as_uri),
+                Some(status_code::AUTH_FAILED)
+            );
         }
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
@@ -2222,7 +2403,7 @@ fn typed_facade_checks_replay_cache() -> Result<(), Box<dyn std::error::Error>> 
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert!(replay_keys.contains(&key));
+            assert!(replay_keys.contains(&key.cache_key()));
             Ok(())
         }
         other => Err(format!("expected ReplayDetected, got {other:?}").into()),
@@ -2621,7 +2802,7 @@ fn recommended_sso_receive_does_not_store_replay_without_a_caller_cache(
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, replay_key);
+            assert_eq!(key.cache_key(), replay_key);
             Ok(())
         }
         other => Err(format!(

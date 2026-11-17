@@ -593,7 +593,7 @@ fn resigned_response_request(xml: &str) -> Result<HttpRequest, SamlError> {
         .filter(|child| child.local_name == "Assertion")
         .flat_map(|assertion| &assertion.children)
         .find(|child| child.local_name == "Signature")
-        .ok_or_else(|| SamlError::Xml("missing assertion signature".into()))?;
+        .ok_or_else(|| SamlError::xml("missing assertion signature"))?;
     let mut xml = xml.to_string();
     xml.replace_range(signature.start..signature.end, "");
     let key = saml_rs::crypto::keys::read_private_key(PRIVKEY, None)?;

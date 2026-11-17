@@ -49,7 +49,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
         sp.setting.signing_cert = Some(CERTIFICATE.into());
         assert!(matches!(
             sp.create_login_request(&idp, binding, &LoginRequestOptions::default()),
-            Err(SamlError::UnsupportedBinding { binding: rejected }) if rejected == binding
+            Err(SamlError::UnsupportedBinding { binding: rejected, .. }) if rejected == binding
         ));
     }
     Ok(())
@@ -99,7 +99,8 @@ fn signed_logout_artifact_rejects_binding_before_credentials(
                 true,
             ),
             Err(SamlError::UnsupportedBinding {
-                binding: Binding::Artifact
+                binding: Binding::Artifact,
+                ..
             })
         ));
     }
