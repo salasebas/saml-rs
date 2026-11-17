@@ -675,16 +675,11 @@ impl Saml<Idp> {
             message_authenticated,
         )?;
         let authn = AuthnRequest::try_from_paos_flow(flow)?;
-        let verify_present_signature = self
-            .raw_identity_provider()
-            .setting
-            .verify_authn_request_signature_if_present;
-        if authn.destination().is_some() || (message_authenticated && verify_present_signature) {
-            let actual = authn.destination().map(EndpointUrl::as_str);
-            if actual != Some(request.soap_endpoint.as_str()) {
+        if let Some(destination) = authn.destination() {
+            if destination.as_str() != request.soap_endpoint.as_str() {
                 return Err(SamlError::destination_mismatch(
                     request.soap_endpoint.as_str(),
-                    actual,
+                    Some(destination.as_str()),
                 ));
             }
         }
