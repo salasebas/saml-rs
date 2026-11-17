@@ -7,6 +7,41 @@ use crate::sp::ServiceProvider;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
+fn metadata_rejects_unknown_and_duplicate_order_groups() {
+    for (order, expected) in [
+        (
+            vec!["KeyDescriptr"],
+            "unknown metadata element order group KeyDescriptr",
+        ),
+        (
+            vec!["KeyDescriptor", "KeyDescriptor"],
+            "duplicate metadata element order group KeyDescriptor",
+        ),
+        (
+            vec!["Organization"],
+            "unknown metadata element order group Organization",
+        ),
+    ] {
+        let order: Vec<String> = order.into_iter().map(str::to_string).collect();
+        let sp = generate_sp_metadata(&SpMetadataConfig {
+            entity_id: "https://sp.example.com/metadata".into(),
+            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+            elements_order: Some(order.clone()),
+            ..Default::default()
+        });
+        let idp = generate_idp_metadata(&IdpMetadataConfig {
+            entity_id: "https://idp.example.com/metadata".into(),
+            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+            elements_order: Some(order),
+            ..Default::default()
+        });
+        for result in [sp, idp] {
+            assert!(matches!(result, Err(SamlError::Invalid(message)) if message == expected));
+        }
+    }
+}
+
+#[test]
 fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = SpMetadataConfig {
         entity_id: "https://sp.example.com/metadata".into(),
@@ -358,31 +393,44 @@ fn sp_metadata_escapes_certificate_text_markup() -> TestResult {
     let parsed = SpMetadata::from_xml(&xml)?;
 
     assert!(xml.contains("&lt;NameIDFormat&gt;evil&lt;/NameIDFormat&gt;"));
-    assert!(parsed.get_name_id_format().is_empty());
+    assert_eq!(parsed.get_name_id_format(), [name_id_format::EMAIL_ADDRESS]);
     assert_eq!(parsed.x509_certificates(CertUse::Signing).len(), 1);
     Ok(())
 }
 
 #[test]
-fn sp_custom_elements_order_preserves_omitted_populated_acs() -> TestResult {
-    let cfg = SpMetadataConfig {
+fn sp_custom_elements_order_preserves_omitted_groups() -> TestResult {
+    let mut cfg = SpMetadataConfig {
         entity_id: "https://sp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-        elements_order: Some(vec!["KeyDescriptor".into()]),
         ..Default::default()
     };
 
-    let xml = generate_sp_metadata(&cfg)?;
-    let key = xml.find("<KeyDescriptor").unwrap_or(usize::MAX);
-    let acs = xml.find("<AssertionConsumerService").unwrap_or(usize::MAX);
-
-    assert_eq!(xml.matches("<AssertionConsumerService").count(), 1);
-    assert!(key < acs);
-    assert!(!xml.contains("<NameIDFormat"));
-    assert!(!xml.contains("<SingleLogoutService"));
+    for order in [vec!["KeyDescriptor".into()], vec![]] {
+        cfg.elements_order = Some(order);
+        let xml = generate_sp_metadata(&cfg)?;
+        let doc = roxmltree::Document::parse(&xml)?;
+        let groups: Vec<_> = doc
+            .descendants()
+            .find(|node| node.has_tag_name((namespace::METADATA, "SPSSODescriptor")))
+            .ok_or("missing SPSSODescriptor")?
+            .children()
+            .filter(roxmltree::Node::is_element)
+            .map(|node| node.tag_name().name())
+            .collect();
+        assert_eq!(
+            groups,
+            [
+                "KeyDescriptor",
+                "SingleLogoutService",
+                "NameIDFormat",
+                "AssertionConsumerService"
+            ]
+        );
+    }
     Ok(())
 }
 
@@ -468,7 +516,7 @@ fn idp_elements_order_filters_empty_groups() -> TestResult {
 }
 
 #[test]
-fn idp_custom_elements_order_omits_unlisted_optional_groups() -> TestResult {
+fn idp_custom_elements_order_preserves_unlisted_optional_groups() -> TestResult {
     let cfg = IdpMetadataConfig {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
@@ -481,10 +529,24 @@ fn idp_custom_elements_order_omits_unlisted_optional_groups() -> TestResult {
 
     let xml = generate_idp_metadata(&cfg)?;
 
-    assert_eq!(xml.matches("<SingleSignOnService").count(), 1);
-    assert!(!xml.contains("<KeyDescriptor"));
-    assert!(!xml.contains("<NameIDFormat"));
-    assert!(!xml.contains("<SingleLogoutService"));
+    let doc = roxmltree::Document::parse(&xml)?;
+    let groups: Vec<_> = doc
+        .descendants()
+        .find(|node| node.has_tag_name((namespace::METADATA, "IDPSSODescriptor")))
+        .ok_or("missing IDPSSODescriptor")?
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .map(|node| node.tag_name().name())
+        .collect();
+    assert_eq!(
+        groups,
+        [
+            "KeyDescriptor",
+            "SingleLogoutService",
+            "NameIDFormat",
+            "SingleSignOnService"
+        ]
+    );
     Ok(())
 }
 

@@ -149,6 +149,10 @@ impl SpConfigBuilder {
     }
 
     /// Set generated metadata element ordering.
+    ///
+    /// Missing groups are inserted in schema-relative positions. Explicit
+    /// names retain their relative order. [`Self::build`] rejects unknown or
+    /// repeated group names with [`SamlError::Invalid`].
     pub fn elements_order(mut self, elements_order: Vec<String>) -> Self {
         self.metadata.elements_order = Some(elements_order);
         self
@@ -223,7 +227,8 @@ impl SpConfigBuilder {
     /// `xmlns`. Also returns the errors of generating SP metadata from the
     /// config: a NameID format that is not an absolute URI reference, two ACS
     /// endpoints with the same index, more ACS endpoints than `unsignedShort`
-    /// indexes, or a `validUntil` outside the years 0001 through 9999.
+    /// indexes, an unknown or repeated element ordering group, or a
+    /// `validUntil` outside the years 0001 through 9999.
     /// [`Saml::sp`](crate::Saml::sp) accepts every config this returns.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         validate_entity_id_syntax(self.entity_id.as_str())?;
@@ -404,6 +409,10 @@ impl IdpConfigBuilder {
     }
 
     /// Set generated metadata element ordering.
+    ///
+    /// Missing groups are inserted in schema-relative positions. Explicit
+    /// names retain their relative order. [`Self::build`] rejects unknown or
+    /// repeated group names with [`SamlError::Invalid`].
     pub fn elements_order(mut self, elements_order: Vec<String>) -> Self {
         self.metadata.elements_order = Some(elements_order);
         self
@@ -486,7 +495,8 @@ impl IdpConfigBuilder {
     /// protocol and assertion tag prefixes are not two different XML NCNames
     /// other than `xml` and `xmlns`. Also returns the errors of generating
     /// IdP metadata from the config: a NameID format that is not an absolute
-    /// URI reference, or a `validUntil` outside the years 0001 through 9999.
+    /// URI reference, an unknown or repeated element ordering group, or a
+    /// `validUntil` outside the years 0001 through 9999.
     /// [`Saml::idp`](crate::Saml::idp) accepts every config this returns.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         validate_entity_id_syntax(self.entity_id.as_str())?;

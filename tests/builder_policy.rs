@@ -18,6 +18,28 @@ use saml_rs::raw::EntitySetting;
 use saml_rs::XmlEncryptionPolicy;
 
 #[test]
+fn builders_reject_invalid_metadata_element_orders() -> Result<(), Box<dyn std::error::Error>> {
+    for order in [
+        vec!["Unknown".into()],
+        vec!["KeyDescriptor".into(), "KeyDescriptor".into()],
+    ] {
+        let sp = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+            .validation(SpValidationPolicy::compatibility())
+            .elements_order(order.clone())
+            .build();
+        let idp = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
+            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+            .validation(IdpValidationPolicy::compatibility())
+            .elements_order(order)
+            .build();
+        assert!(matches!(sp, Err(SamlError::Invalid(_))));
+        assert!(matches!(idp, Err(SamlError::Invalid(_))));
+    }
+    Ok(())
+}
+
+#[test]
 fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
     let mut algorithms = vec![AlgorithmPolicy {
         key_encryption: KeyEncryptionAlgorithm::RsaOaep {
