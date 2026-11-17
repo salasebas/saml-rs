@@ -1,7 +1,10 @@
 //! `bergshamra`-backed XML security for the selected provider feature.
 
+use crate::config::XmlSignatureProfile;
 use crate::crypto::backend::XmlSecurityBackend;
+use crate::crypto::verify::verify_first_signature_with_profile;
 use crate::error::{SamlError, SignatureVerificationReason};
+use crate::xml::XmlLimits;
 
 /// [`XmlSecurityBackend`] implementation backed by the `bergshamra` crate.
 ///
@@ -15,7 +18,12 @@ pub struct BergshamraBackend;
 
 impl XmlSecurityBackend for BergshamraBackend {
     fn verify_signature(&self, xml: &str, cert_pem: &str) -> Result<(), SamlError> {
-        match crate::crypto::verify::verify_signature(xml, &[cert_pem.to_string()])? {
+        match verify_first_signature_with_profile(
+            xml,
+            &[cert_pem.to_string()],
+            XmlLimits::default(),
+            XmlSignatureProfile::AllowWeakAlgorithms,
+        )? {
             (true, Some(_)) => Ok(()),
             (true, None) => Err(SamlError::SignedReferenceMismatch),
             (false, _) => Err(SamlError::SignatureVerification {

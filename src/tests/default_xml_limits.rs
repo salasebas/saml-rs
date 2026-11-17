@@ -5,6 +5,10 @@ use saml_rs::xml::{dom::DEFAULT_XML_MAX_BYTES, extract, extract_with_limits};
 use saml_rs::SamlError;
 use saml_rs::XmlLimits;
 
+#[cfg_attr(
+    crypto,
+    expect(deprecated, reason = "pins the deprecated signature verifiers")
+)]
 #[test]
 fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!(

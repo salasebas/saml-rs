@@ -426,6 +426,7 @@ pub fn verify_message_signature(
 }
 
 #[cfg(test)]
+#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 mod tests {
     use super::*;
     #[cfg(feature = "crypto-rustcrypto")]

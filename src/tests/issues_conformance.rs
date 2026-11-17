@@ -174,6 +174,7 @@ fn issue_86_duplicate_issuer_deduped() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[cfg(crypto)]
+#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 #[test]
 fn issue_87_existence_check_for_signature() -> Result<(), Box<dyn std::error::Error>> {
     // An unsigned response verifies to false (no signature present).

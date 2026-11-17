@@ -656,6 +656,7 @@ fn sign_idp_metadata_with(
 }
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 #[test]
 fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -706,6 +707,7 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
 }
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 #[test]
 fn require_signature_does_not_verify_with_a_1024_bit_rsa_key(
 ) -> Result<(), Box<dyn std::error::Error>> {

@@ -434,67 +434,113 @@ impl Metadata {
     /// Verify this metadata document's enveloped signature against trusted
     /// certificate(s) (federation trust anchor). Requires a crypto provider.
     ///
+    /// Returns `Ok(false)` when the document is unsigned or its signature does
+    /// not verify against `trusted_certificates`. It accepts every signature
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading,
-    /// cryptographic verification, or signed `<EntityDescriptor>` coverage
-    /// checks fail.
+    /// Returns [`SamlError`] when XML parsing, certificate loading, the
+    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
+    /// fail.
     #[cfg(crypto)]
+    #[deprecated(
+        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
+    )]
     pub fn verify_signature(&self, trusted_certificates: &[String]) -> Result<bool, SamlError> {
-        self.verify_signature_with_limits(trusted_certificates, XmlLimits::default())
+        Ok(crate::crypto::verify::verify_metadata_document_signature(
+            &self.xml,
+            trusted_certificates,
+            XmlLimits::default(),
+        )?
+        .verified())
     }
 
     /// Verify this metadata document's signature with explicit XML parser limits.
     ///
+    /// Returns `Ok(false)` when the document is unsigned or its signature does
+    /// not verify against `trusted_certificates`. It accepts every signature
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading,
-    /// cryptographic verification, or signed `<EntityDescriptor>` coverage
-    /// checks fail.
+    /// Returns [`SamlError`] when XML parsing, certificate loading, the
+    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
+    /// fail.
     #[cfg(crypto)]
+    #[deprecated(
+        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
+    )]
     pub fn verify_signature_with_limits(
         &self,
         trusted_certificates: &[String],
         limits: XmlLimits,
     ) -> Result<bool, SamlError> {
-        crate::crypto::verify_metadata_signature_with_limits(
+        Ok(crate::crypto::verify::verify_metadata_document_signature(
             &self.xml,
             trusted_certificates,
             limits,
-        )
+        )?
+        .verified())
     }
 
     /// Verify this metadata document's signature and preserve signed
     /// `<EntityDescriptor>` coverage evidence using default XML parser limits.
     ///
+    /// Returns an unverified result when the document is unsigned or its signature does
+    /// not verify against `trusted_certificates`. It accepts every signature
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading,
-    /// cryptographic verification, transform policy, or signed
-    /// `<EntityDescriptor>` coverage checks fail.
+    /// Returns [`SamlError`] when XML parsing, certificate loading, the
+    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
+    /// fail.
     #[cfg(crypto)]
+    #[deprecated(
+        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
+    )]
     pub fn verify_signature_detailed(
         &self,
         trusted_certificates: &[String],
-    ) -> Result<crate::crypto::MetadataSignatureVerification, SamlError> {
-        crate::crypto::verify_metadata_signature_detailed(&self.xml, trusted_certificates)
+    ) -> Result<MetadataSignatureVerification, SamlError> {
+        crate::crypto::verify::verify_metadata_document_signature(
+            &self.xml,
+            trusted_certificates,
+            XmlLimits::default(),
+        )
     }
 
     /// Verify this metadata document's signature and preserve signed
     /// `<EntityDescriptor>` coverage evidence.
     ///
+    /// Returns an unverified result when the document is unsigned or its signature does
+    /// not verify against `trusted_certificates`. It accepts every signature
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading,
-    /// cryptographic verification, transform policy, or signed
-    /// `<EntityDescriptor>` coverage checks fail.
+    /// Returns [`SamlError`] when XML parsing, certificate loading, the
+    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
+    /// fail.
     #[cfg(crypto)]
+    #[deprecated(
+        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
+    )]
     pub fn verify_signature_detailed_with_limits(
         &self,
         trusted_certificates: &[String],
         limits: XmlLimits,
     ) -> Result<MetadataSignatureVerification, SamlError> {
-        crate::crypto::verify_metadata_signature_detailed_with_limits(
+        crate::crypto::verify::verify_metadata_document_signature(
             &self.xml,
             trusted_certificates,
             limits,
