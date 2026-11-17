@@ -328,6 +328,9 @@ pub struct LoginResponseTemplate {
     /// Custom `<Response>` template; `None` uses [`LOGIN_RESPONSE_TEMPLATE`].
     pub context: Option<String>,
     /// Attributes rendered into the assertion's `<AttributeStatement>`.
+    ///
+    /// Rendering returns [`SamlError::Invalid`] when the user has no value
+    /// for an attribute's [`LoginResponseAttribute::value_tag`].
     pub attributes: Vec<LoginResponseAttribute>,
 }
 
@@ -376,6 +379,22 @@ pub(crate) fn build_attribute_statement(
     attribute_statement_template.replacen("{Attributes}", &attrs, 1)
 }
 
+pub(crate) fn login_response_attribute_value<'user>(
+    attribute: &LoginResponseAttribute,
+    user_attributes: &'user [(String, String)],
+) -> Result<&'user str, SamlError> {
+    user_attributes
+        .iter()
+        .find(|(tag, _)| tag == &attribute.value_tag)
+        .map(|(_, value)| value.as_str())
+        .ok_or_else(|| {
+            SamlError::Invalid(format!(
+                "missing login response attribute value for `{}`",
+                attribute.value_tag
+            ))
+        })
+}
+
 fn escape_literal_template_text(value: &str) -> String {
     xml_escape(value).replace('{', "&#123;")
 }
@@ -395,16 +414,7 @@ pub(crate) fn write_login_response_attribute_statement(
     let value_name = format!("{assertion_prefix}:AttributeValue");
     writer.start(&statement_name, &[]);
     for attribute in attributes {
-        let value = user_attributes
-            .iter()
-            .find(|(tag, _)| tag == &attribute.value_tag)
-            .map(|(_, value)| value.as_str())
-            .ok_or_else(|| {
-                SamlError::Invalid(format!(
-                    "missing login response attribute value for `{}`",
-                    attribute.value_tag
-                ))
-            })?;
+        let value = login_response_attribute_value(attribute, user_attributes)?;
         writer.start(
             &attribute_name,
             &[

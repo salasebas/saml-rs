@@ -16,9 +16,9 @@ use crate::model::{
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
 use crate::template::{
-    apply_tag_prefixes, attr_tag, build_attribute_statement, replace_tags_by_optional_value,
-    validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
-    LOGIN_RESPONSE_TEMPLATE,
+    apply_tag_prefixes, attr_tag, build_attribute_statement, login_response_attribute_value,
+    replace_tags_by_optional_value, validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE,
+    ATTRIBUTE_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
 };
 use crate::validator::offset_datetime_from_system_time;
 use crate::xml::OutboundNameIdQualifiers;
@@ -170,7 +170,8 @@ impl IdentityProvider {
     ///
     /// Returns an error when configured XML tag prefixes are invalid, a
     /// persistent or transient `NameID` is longer than 256 characters, the
-    /// default response renderer cannot produce valid XML, or template
+    /// default response renderer cannot produce valid XML, `user` has no
+    /// value for a configured login response attribute, or template
     /// rendering validation fails.
     fn render_login_response(
         &self,
@@ -353,6 +354,9 @@ impl IdentityProvider {
                 xml,
                 session_index: None,
             });
+        }
+        for attribute in attributes {
+            login_response_attribute_value(attribute, &user.attributes)?;
         }
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
         let id = generate_id();
