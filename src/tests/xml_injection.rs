@@ -1,4 +1,5 @@
 #![cfg(crypto)]
+#![allow(deprecated)]
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;

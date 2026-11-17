@@ -1,4 +1,5 @@
 #![cfg(crypto)]
+#![allow(deprecated)]
 
 use std::cell::RefCell;
 

@@ -48,6 +48,7 @@ fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
 }
 
 #[test]
+#[allow(deprecated)]
 fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
     let idp = IdentityProvider::from_config(
@@ -92,6 +93,7 @@ mod signed {
     use super::*;
     use saml_rs::constants::signature_algorithm::RSA_SHA256;
     use saml_rs::flow::HttpRequest;
+    #[allow(deprecated)]
     use saml_rs::logout::{create_logout_request, parse_logout_request};
 
     const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -106,6 +108,7 @@ mod signed {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn full_signed_sso() -> Result<(), Box<dyn std::error::Error>> {
         let sp = sp(signing_setting())?;
         let idp = idp(signing_setting())?;
@@ -127,6 +130,7 @@ mod signed {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn signed_logout_request_round_trips() -> Result<(), Box<dyn std::error::Error>> {
         let sp = sp(signing_setting())?;
         let idp = idp(signing_setting())?;

@@ -7,6 +7,7 @@
 //! values.
 
 #[cfg(crypto)]
+#[allow(deprecated)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::constants::signature_algorithm::RSA_SHA256;
     use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};

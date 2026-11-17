@@ -1643,6 +1643,7 @@ fn idp_with_attribute_template() -> Result<IdentityProvider, SamlError> {
 }
 
 #[test]
+#[allow(deprecated)]
 fn typed_models_existing_authn_request_flow_converts_to_typed_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
@@ -1661,6 +1662,7 @@ fn typed_models_existing_authn_request_flow_converts_to_typed_request(
 
 #[cfg(crypto)]
 #[test]
+#[allow(deprecated)]
 fn typed_models_existing_login_response_flow_converts_to_typed_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
@@ -1697,6 +1699,7 @@ fn typed_models_existing_login_response_flow_converts_to_typed_session(
 
 #[cfg(crypto)]
 #[test]
+#[allow(deprecated)]
 fn typed_models_existing_login_response_flow_preserves_multi_value_attributes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;

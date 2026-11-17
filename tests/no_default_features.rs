@@ -5,8 +5,10 @@ use base64::Engine;
 use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::{EntitySetting, User};
+#[allow(deprecated)]
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::idp::LoginResponseOptions;
+#[allow(deprecated)]
 use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataConfig, SpMetadataConfig};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
@@ -352,6 +354,7 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 }
 
 #[test]
+#[allow(deprecated)]
 fn unsigned_login_request_creation_still_works() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = sp(false)?.create_login_request(
         &idp(false)?,
@@ -365,6 +368,7 @@ fn unsigned_login_request_creation_still_works() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
+#[allow(deprecated)]
 fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn std::error::Error>>
 {
     let ctx = sp(false)?.create_login_request(
@@ -383,6 +387,7 @@ fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn 
 }
 
 #[test]
+#[allow(deprecated)]
 fn signing_login_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(sp(true)?.create_login_request(
         &idp(true)?,
@@ -393,6 +398,7 @@ fn signing_login_request_returns_unsupported() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+#[allow(deprecated)]
 fn signed_login_response_creation_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(idp(false)?.create_login_response(
         &sp(false)?,
@@ -404,6 +410,7 @@ fn signed_login_response_creation_returns_unsupported() -> Result<(), Box<dyn st
 }
 
 #[test]
+#[allow(deprecated)]
 fn encrypted_assertion_parse_path_returns_unsupported() {
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
@@ -421,6 +428,7 @@ fn encrypted_assertion_parse_path_returns_unsupported() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(create_logout_request(
         &EntitySetting::default(),
@@ -435,6 +443,7 @@ fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+#[allow(deprecated)]
 fn signed_logout_response_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(create_logout_response(
         &EntitySetting::default(),

@@ -2,6 +2,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::deflate_raw_encode;
 use saml_rs::constants::{Binding, ParserType};
+#[allow(deprecated)]
 use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest};
 use saml_rs::{SamlError, SsoSession};
 
@@ -52,6 +53,7 @@ const PRIVATE_KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unen
 ))]
 const CERTIFICATE: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
+#[allow(deprecated)]
 fn parse_flow_with_binding(
     xml: &str,
     parser_type: ParserType,
@@ -200,6 +202,7 @@ fn response_xml_with_issue_instants(
     not(feature = "crypto-fips"),
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
+#[allow(deprecated)]
 fn expect_decrypted_assertion_profile_rejection_with_context(
     xml: &str,
     context: &str,
@@ -957,6 +960,7 @@ fn decrypted_assertion_qualified_issue_instant_is_revalidated_before_signature_s
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
 #[test]
+#[allow(deprecated)]
 fn decrypted_assertion_honors_xml_depth_limit_before_profile(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let nested_extension = format!(

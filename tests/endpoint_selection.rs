@@ -228,6 +228,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
 }
 
 #[test]
+#[allow(deprecated)]
 fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = Saml::idp(

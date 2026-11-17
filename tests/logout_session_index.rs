@@ -4,6 +4,7 @@ use saml_rs::binding::deflate_raw_decode;
 use saml_rs::config::LOGOUT_REQUEST_TEMPLATE;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{EntitySetting, User};
+#[allow(deprecated)]
 use saml_rs::logout::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
 };
@@ -45,6 +46,7 @@ fn user(session_index: Option<&str>) -> User {
     user
 }
 
+#[allow(deprecated)]
 fn logout_request_xml(
     binding: Binding,
     session_index: Option<&str>,
@@ -64,6 +66,7 @@ fn logout_request_xml(
     decode_logout_request(binding, &context.context)
 }
 
+#[allow(deprecated)]
 fn logout_response_xml(
     binding: Binding,
     in_response_to: Option<&str>,
@@ -150,6 +153,7 @@ fn logout_request_omits_session_index_when_absent() -> Result<(), Box<dyn std::e
 }
 
 #[test]
+#[allow(deprecated)]
 fn public_raw_logout_request_generation_keeps_expiration_omitted_for_supported_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
@@ -175,6 +179,7 @@ fn public_raw_logout_request_generation_keeps_expiration_omitted_for_supported_b
 }
 
 #[test]
+#[allow(deprecated)]
 fn public_raw_logout_request_preserves_unrecognized_expiration_placeholder(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sp = sp()?;

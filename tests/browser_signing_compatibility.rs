@@ -2,6 +2,7 @@
 
 use saml_rs::constants::Binding;
 use saml_rs::entity::{EntitySetting, User};
+#[allow(deprecated)]
 use saml_rs::logout::create_logout_request;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
@@ -11,6 +12,7 @@ const PRIVATE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs
 const CERTIFICATE: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 #[test]
+#[allow(deprecated)]
 fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Soap, Binding::Artifact] {
@@ -54,6 +56,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 }
 
 #[test]
+#[allow(deprecated)]
 fn signed_logout_artifact_rejects_binding_before_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = IdentityProvider::from_config(

@@ -353,6 +353,7 @@ fn typed_sso_rejects_a_subject_with_caller_supplied_confirmations(
 }
 
 #[test]
+#[allow(deprecated)]
 fn typed_sso_compatibility_generation_keeps_todays_response_shape(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
@@ -388,6 +389,7 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
 }
 
 #[test]
+#[allow(deprecated)]
 fn login_response_template_writes_in_response_to_only_for_a_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;

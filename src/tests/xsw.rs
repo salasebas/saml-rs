@@ -10,6 +10,7 @@ use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
 use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{sign_saml_xml, verify_signature};
+#[allow(deprecated)]
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::util::normalize_cert_string;
 use saml_rs::xml::{extract, ExtractorField};
@@ -92,6 +93,7 @@ fn xsw_baseline_signed_response_verifies() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
+#[allow(deprecated)]
 fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn std::error::Error>>
 {
     let signed = authn_request_signed_over_issuer()?;

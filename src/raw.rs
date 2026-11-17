@@ -1,15 +1,23 @@
-//! Compatibility API and low-level protocol helpers.
+//! Deprecated compatibility API and low-level protocol helpers.
 //!
-//! Prefer the crate-root [`crate::Saml`] facade for new high-level browser SSO
-//! and SLO flows. Import from this module when you need direct access to the
-//! existing entity, flow, metadata, and logout building blocks.
+//! The raw API is deprecated and is removed in the next minor release. Each
+//! raw message function warns with its typed replacement on the crate-root
+//! [`crate::Saml`] facade, which makes role state, pending requests, browser
+//! input, and validation policy explicit:
 //!
-//! The typed [`crate::Saml`] API is the recommended starting point for new
-//! browser SSO and SLO integrations because it makes role state, pending
-//! requests, browser input, and validation policy explicit. This module keeps
-//! the lower-level compatibility surface public for migrations from earlier
-//! `saml-rs` releases, unusual interoperability requirements, conformance
-//! tests, and callers that need to work directly with SAML XML.
+//! | Deprecated raw function | Typed replacement |
+//! | --- | --- |
+//! | [`ServiceProvider::create_login_request`] | [`Saml::<Sp>::start_sso`](crate::Saml::start_sso) |
+//! | [`ServiceProvider::parse_login_response_with_request_id`] | [`Saml::<Sp>::finish_sso`](crate::Saml::finish_sso) |
+//! | [`ServiceProvider::parse_unsolicited_login_response`] | [`Saml::<Sp>::accept_unsolicited_sso`](crate::Saml::accept_unsolicited_sso) |
+//! | [`IdentityProvider::parse_login_request`] | [`Saml::<Idp>::receive_sso`](crate::Saml::receive_sso) |
+//! | [`IdentityProvider::create_login_response`] | [`Saml::<Idp>::respond_sso`](crate::Saml::respond_sso), or [`Saml::<Idp>::initiate_sso`](crate::Saml::initiate_sso) for an unsolicited response |
+//! | [`logout::create_logout_request`], [`logout::create_logout_request_with_id`] | `Saml::start_slo` |
+//! | [`logout::parse_logout_request`] | `Saml::receive_slo` |
+//! | [`logout::create_logout_response`], [`logout::create_logout_response_with_id`] | `Saml::respond_slo` |
+//! | [`logout::parse_logout_response`], [`logout::parse_logout_response_without_request_id`] | `Saml::finish_slo` |
+//! | [`flow()`] | The typed receive operation for the message |
+//! | [`HttpRequest::redirect`] | [`BrowserInput::redirect`](crate::BrowserInput) with the raw query string |
 //!
 //! Raw APIs expose compatibility types such as [`FlowResult`],
 //! [`BindingContext`], [`HttpRequest`], and [`EntitySetting`]. Because those
@@ -19,46 +27,12 @@
 //! that typed flows model directly. In particular, a successful raw logout
 //! parse is not a claim that `Destination` was checked: the raw parser receives
 //! no local endpoint context.
-//!
-//! ```no_run
-//! use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-//! use saml_rs::raw::{
-//!     Binding, EntitySetting, IdentityProvider, LoginRequestOptions, ServiceProvider,
-//! };
-//!
-//! # fn main() -> Result<(), saml_rs::SamlError> {
-//! let idp = IdentityProvider::from_config(
-//!     &IdpMetadataConfig {
-//!         entity_id: "https://idp.example.com/metadata".into(),
-//!         single_sign_on_service: vec![Endpoint::new(
-//!             Binding::Redirect,
-//!             "https://idp.example.com/sso",
-//!         )],
-//!         ..Default::default()
-//!     },
-//!     EntitySetting::default(),
-//! )?;
-//! let sp = ServiceProvider::from_config(
-//!     &SpMetadataConfig {
-//!         entity_id: "https://sp.example.com/metadata".into(),
-//!         assertion_consumer_service: vec![Endpoint::new(
-//!             Binding::Post,
-//!             "https://sp.example.com/acs",
-//!         )],
-//!         ..Default::default()
-//!     },
-//!     EntitySetting::default(),
-//! )?;
-//!
-//! let request =
-//!     sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
-//! # let _ = request;
-//! # Ok(()) }
-//! ```
 
 pub use crate::constants::Binding;
 pub use crate::entity::{BindingContext, EntitySetting, User};
-pub use crate::flow::{flow, FlowOptions, FlowResult, HttpRequest};
+#[allow(deprecated)]
+pub use crate::flow::flow;
+pub use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 pub use crate::idp::{IdentityProvider, LoginResponseOptions};
 pub use crate::logout;
 pub use crate::sp::{LoginRequestOptions, ServiceProvider};

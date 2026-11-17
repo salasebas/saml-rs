@@ -196,6 +196,9 @@ impl ServiceProvider {
     /// missing `private_key`/`signing_cert`, unsupported crypto features, XML
     /// signature construction, and detached-signature construction errors are
     /// propagated.
+    #[deprecated(
+        note = "the raw API is removed in the next minor release; use `Saml::<Sp>::start_sso`"
+    )]
     pub fn create_login_request(
         &self,
         idp: &IdentityProvider,
@@ -447,6 +450,9 @@ impl ServiceProvider {
     /// or issuer, destination, bearer recipient, audience, subject-confirmation,
     /// or time-window validation fails. Because this path is unsolicited, any
     /// non-empty response or bearer `InResponseTo` also returns an error.
+    #[deprecated(
+        note = "the raw API is removed in the next minor release; use `Saml::<Sp>::accept_unsolicited_sso`"
+    )]
     pub fn parse_unsolicited_login_response(
         &self,
         idp: &IdentityProvider,
@@ -494,6 +500,9 @@ impl ServiceProvider {
     /// required signature is missing or invalid, no trusted IdP signing key is
     /// available, or issuer, destination, bearer recipient, audience,
     /// `InResponseTo`, subject-confirmation, or time-window validation fails.
+    #[deprecated(
+        note = "the raw API is removed in the next minor release; use `Saml::<Sp>::finish_sso`"
+    )]
     pub fn parse_login_response_with_request_id(
         &self,
         idp: &IdentityProvider,
@@ -672,6 +681,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn create_unsigned_login_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>>
     {
         let ctx = unsigned_sp()?.create_login_request(
@@ -691,6 +701,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn create_unsigned_login_request_post_is_base64() -> Result<(), Box<dyn std::error::Error>> {
         let ctx = unsigned_sp()?.create_login_request(
             &unsigned_idp()?,
@@ -703,6 +714,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn custom_tag_replacement_overrides_request() -> Result<(), Box<dyn std::error::Error>> {
         let replace = |_t: &str| {
             (
@@ -757,6 +769,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn parse_signed_response_extracts_name_id() -> Result<(), Box<dyn std::error::Error>> {
         let idp = IdentityProvider::from_config(
             &IdpMetadataConfig {
@@ -802,6 +815,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn create_signed_post_request_verifies() -> Result<(), Box<dyn std::error::Error>> {
         let sp = ServiceProvider::from_config(
             &SpMetadataConfig {
@@ -832,6 +846,7 @@ mod crypto_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn create_signed_redirect_request_has_signature() -> Result<(), Box<dyn std::error::Error>> {
         let sp = ServiceProvider::from_config(
             &SpMetadataConfig {
