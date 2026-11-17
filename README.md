@@ -22,6 +22,7 @@ cargo add saml-rs
 ```
 
 Rust 1.88 or newer. The import path is `saml_rs`.
+See the [MSRV policy](CONTRIBUTING.md#minimum-supported-rust-version-policy) for dependency resolution and Rust version updates.
 
 ## Quick start: service provider login
 

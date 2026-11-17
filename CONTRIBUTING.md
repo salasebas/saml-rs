@@ -13,6 +13,38 @@ All published workspace packages require Rust 1.88. The default
 `crypto-bergshamra` feature uses `bergshamra` 0.12 with `kryptering` 0.7 and
 preserves the RustCrypto-backed defaults.
 
+## Minimum supported Rust version policy
+
+The minimum supported Rust version (MSRV) is declared in each published
+package's `Cargo.toml`. CI checks the MSRV and the latest stable Rust release.
+The MSRV job resolves compatible dependencies, runs the `saml-rs` tests and
+doctests, and checks all targets of every published workspace package.
+The committed `Cargo.lock` tracks the latest dependencies for stable CI.
+
+The MSRV rises only when a required language or standard library feature
+demands it, or a dependency requirement has no version compatible with the
+current MSRV. The MSRV stays at least six stable releases behind the latest
+stable Rust release. An MSRV increase is a minor-release change. While the
+packages are pre-1.0, use a breaking Conventional Commit (`!`) so release-plz
+selects the next minor release. Add a note in the current
+[migration guide](docs/migrations/README.md).
+
+Each dependency requirement must allow at least one MSRV-compatible version.
+It can also allow newer versions that require newer Rust releases, as
+described in Cargo's [support expectations](https://doc.rust-lang.org/cargo/reference/rust-version.html#support-expectations).
+
+When building with the MSRV, use Cargo's Rust-version-aware dependency resolver.
+Cargo 1.84 or newer supports
+`CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`:
+
+```bash
+CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo update
+```
+
+Resolver `"3"`, implied by edition 2024, enables this policy by default.
+The resolver is a workspace setting controlled by the consuming project.
+See the [Cargo resolver guide](https://doc.rust-lang.org/edition-guide/rust-2024/cargo-resolver.html).
+
 ## How to run the checks
 
 Verify the package plus plausible side effects:
