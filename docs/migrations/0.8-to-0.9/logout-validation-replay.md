@@ -1,5 +1,7 @@
 # Upgrade logout, validation, and replay code
 
+[How to upgrade from 0.8 to 0.9](README.md)
+
 This guide covers typed API callers of `saml-rs`, `opensaml`, `samlify`, and
 `samlet`. Apply the sections that match your integration.
 

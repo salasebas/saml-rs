@@ -76,3 +76,5 @@ The software RSA key-transport compatibility opt-in stays off by default on
 RustCrypto because that backend is affected by RUSTSEC-2023-0071. AWS-LC and
 FIPS decrypt RSA-OAEP with default options. FIPS still rejects SHA-1
 `RSA_OAEP_MGF1P`.
+
+[All migration guides](../README.md)

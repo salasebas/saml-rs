@@ -71,15 +71,18 @@ Historical fixture provenance is recorded in
 
 Add a guide in the same change that forces consumers to change code, runtime
 behaviour, feature flags, or the minimum supported Rust version. Group new
-guides in a directory named after the version boundary, such as
-`docs/migrations/0.8-to-0.9/`. Put the upgrade overview in `README.md` and use
-focused files such as `metadata-api.md` for detailed changes. Cover the move
-from the latest patch of the source minor release. Existing flat guides can
-stay at their current paths.
+changes in a directory named for the upgrade, such as
+`docs/migrations/0.8-to-0.9/`. Cover the upgrade from the latest patch of the
+source minor release.
+
+Put the overview in `README.md`. If the guide covers several topics, put the
+details in topic files such as `metadata-api.md` and link to them from the
+overview. Keep a short guide for a single topic in `README.md`.
 
 In the guide, state what breaks, who must change, and the steps to upgrade.
-Leave compatible features out; the changelog records those. Link the new guide
-from [How to upgrade saml-rs](docs/migrations/README.md).
+The changelog records compatible features. Link the version's `README.md`
+from [How to upgrade saml-rs](docs/migrations/README.md). Use the title
+`How to upgrade from X to Y` for the link.
 
 ## How to open a pull request
 
