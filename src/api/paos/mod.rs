@@ -600,6 +600,10 @@ impl Saml<Sp> {
             limits,
             SP_UNDERSTOOD_HEADERS,
         )?;
+        crate::schema::validate(
+            &response.envelope,
+            self.raw_service_provider().setting.schema_validator,
+        )?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let request = HttpRequest::post(vec![(
             "SAMLResponse".into(),
@@ -657,6 +661,10 @@ impl Saml<Idp> {
     ) -> Result<crate::model::Received<AuthnRequest>, SamlError> {
         let limits = self.raw_identity_provider().setting.xml_limits;
         let body = read_soap_body(&request.envelope, "AuthnRequest", limits, &[])?;
+        crate::schema::validate(
+            &request.envelope,
+            self.raw_identity_provider().setting.schema_validator,
+        )?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let http = HttpRequest::post(vec![(
             "SAMLRequest".into(),

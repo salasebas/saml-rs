@@ -5,6 +5,9 @@
 
 #![cfg(crypto)]
 
+#[path = "paos_sso/schema_validation.rs"]
+mod schema_validation;
+
 #[path = "paos_sso/authn_context.rs"]
 mod authn_context;
 

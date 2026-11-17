@@ -58,7 +58,7 @@ fn decrypted(
     else {
         return Ok(None);
     };
-    crate::context::is_valid_xml_with_limits(&saml_content, setting.xml_limits)?;
+    crate::schema::document(&saml_content, setting.xml_limits, setting.schema_validator)?;
     crate::xml::validate_protocol_profile(
         &saml_content,
         ParserType::SamlRequest,

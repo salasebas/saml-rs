@@ -8,8 +8,6 @@ use crate::binding::{
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
 use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{Binding, ParserType};
-#[cfg(crypto)]
-use crate::context::is_valid_xml_with_limits;
 use crate::error::SamlError;
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
@@ -106,6 +104,8 @@ pub struct FlowOptions<'a> {
     pub redirect_inflate_max_bytes: usize,
     /// XML parser resource limits for decoded messages and DOM reparses.
     pub xml_limits: XmlLimits,
+    /// Optional schema validator for received and decrypted XML.
+    pub schema_validator: Option<crate::SchemaValidator>,
     /// Whether to require and verify a signature.
     pub check_signature: bool,
     /// Verify a signature when one is present, without requiring one.
@@ -166,6 +166,7 @@ impl<'a> Default for FlowOptions<'a> {
             parser_type: None,
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             xml_limits: XmlLimits::default(),
+            schema_validator: None,
             check_signature: false,
             verify_signature_if_present: false,
             require_audience_restriction: true,
@@ -537,7 +538,7 @@ fn verify_and_prepare(
                 decrypt_options,
                 opts.xml_limits,
             )?;
-            is_valid_xml_with_limits(&content, opts.xml_limits)?;
+            crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
             validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
             let assertion = first_login_assertion_xml(&content, opts.xml_limits)?;
             let mut verified_xml_signatures = evidence.verified_xml_signatures.clone();
@@ -582,7 +583,7 @@ fn verify_and_prepare(
         // encrypted-then-signed: decrypt first, then verify the result.
         let (content, _) =
             decrypt_assertions_with_limits(&xml, &load_keys()?, decrypt_options, opts.xml_limits)?;
-        is_valid_xml_with_limits(&content, opts.xml_limits)?;
+        crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
         validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
         let re_evidence = verify_embedded_signature(&content, opts)?;
         if !re_evidence.verified {
@@ -797,7 +798,7 @@ fn flow_inner(
         opts.redirect_inflate_max_bytes,
         opts.xml_limits,
     )?;
-    let document = crate::context::validated_document_with_limits(&xml, opts.xml_limits)?;
+    let document = crate::schema::document(&xml, opts.xml_limits, opts.schema_validator)?;
     validate_protocol_profile(&xml, parser_type, opts.xml_limits)?;
     if parser_type == ParserType::SamlResponse {
         if let Err(status) = check_status_with_limits(&xml, parser_type, opts.xml_limits) {

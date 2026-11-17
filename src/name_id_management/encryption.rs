@@ -61,6 +61,7 @@ fn decrypted(
     setting: &EntitySetting,
 ) -> Result<(Identifier, Change), SamlError> {
     let request = decrypt(xml, child, setting)?;
+    crate::schema::document(&request, setting.xml_limits, setting.schema_validator)?;
     identifier_and_change(&parse_saml_with_limits(&request, setting.xml_limits)?)
 }
 

@@ -219,6 +219,7 @@ fn parse_signed(
         now: Some(validation.now),
         redirect_inflate_max_bytes: setting.redirect_inflate_max_bytes,
         xml_limits: setting.xml_limits,
+        schema_validator: setting.schema_validator,
         expected_in_response_to,
         hmac_secret: validation.peer_hmac_secret,
         ..FlowOptions::default()

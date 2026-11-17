@@ -188,8 +188,12 @@ impl BrowserInput<LogoutRequest> {
         simple_sign_body_input(raw_body)
     }
 
-    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
-        logout_http_request(self, MessageField::Request, limits)
+    pub(crate) fn into_http_request(
+        self,
+        limits: XmlLimits,
+        schema_validator: Option<crate::SchemaValidator>,
+    ) -> Result<HttpRequest, SamlError> {
+        logout_http_request(self, MessageField::Request, limits, schema_validator)
     }
 }
 
@@ -231,8 +235,12 @@ impl BrowserInput<LogoutResponse> {
         simple_sign_body_input(raw_body)
     }
 
-    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
-        logout_http_request(self, MessageField::Response, limits)
+    pub(crate) fn into_http_request(
+        self,
+        limits: XmlLimits,
+        schema_validator: Option<crate::SchemaValidator>,
+    ) -> Result<HttpRequest, SamlError> {
+        logout_http_request(self, MessageField::Response, limits, schema_validator)
     }
 }
 
@@ -270,7 +278,7 @@ impl TryFrom<BrowserInput<LogoutRequest>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<LogoutRequest>) -> Result<Self, Self::Error> {
-        value.into_http_request(XmlLimits::default())
+        value.into_http_request(XmlLimits::default(), None)
     }
 }
 
@@ -278,7 +286,7 @@ impl TryFrom<BrowserInput<LogoutResponse>> for HttpRequest {
     type Error = SamlError;
 
     fn try_from(value: BrowserInput<LogoutResponse>) -> Result<Self, Self::Error> {
-        value.into_http_request(XmlLimits::default())
+        value.into_http_request(XmlLimits::default(), None)
     }
 }
 
@@ -332,9 +340,12 @@ fn logout_http_request<Message>(
     value: BrowserInput<Message>,
     expected_message: MessageField,
     limits: XmlLimits,
+    schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<HttpRequest, SamlError> {
     match value {
-        BrowserInput::Soap { envelope, .. } => soap_request(&envelope, expected_message, limits),
+        BrowserInput::Soap { envelope, .. } => {
+            soap_request(&envelope, expected_message, limits, schema_validator)
+        }
         other => http_request_from_input(other, true, expected_message, limits),
     }
 }
@@ -344,8 +355,10 @@ fn soap_request(
     envelope: &str,
     expected_message: MessageField,
     limits: XmlLimits,
+    schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<HttpRequest, SamlError> {
     let body = read_soap_body(envelope, limits, &[])?;
+    crate::schema::validate(envelope, schema_validator)?;
     Ok(HttpRequest::post(vec![(
         expected_message.param_name().to_string(),
         encode_base64(body.xml.as_bytes()),

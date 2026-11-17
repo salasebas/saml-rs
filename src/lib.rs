@@ -391,6 +391,8 @@ pub mod config;
 pub mod constants;
 #[doc(hidden)]
 pub mod context;
+mod schema;
+pub use schema::SchemaValidator;
 #[doc(hidden)]
 pub mod crypto;
 mod discovery;

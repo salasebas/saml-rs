@@ -120,6 +120,10 @@ export default defineConfig({
 									slug: 'reference/conformance/artifact-resolution',
 								},
 								{
+									label: 'XML schema validation',
+									slug: 'reference/conformance/xml-schema-validation',
+								},
+								{
 									label: 'XML signature processing',
 									slug: 'reference/conformance/xml-signature-processing',
 								},

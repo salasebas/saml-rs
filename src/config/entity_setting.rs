@@ -114,6 +114,7 @@ fn common_setting(
         additional_decryption_keys: credentials.additional_decryption_keys().to_vec(),
         redirect_inflate_max_bytes: xml.redirect_inflate_max_bytes,
         xml_limits: xml.limits,
+        schema_validator: xml.schema_validator,
         tag_prefix_protocol: templates.tag_prefix_protocol.clone(),
         tag_prefix_assertion: templates.tag_prefix_assertion.clone(),
         tag_prefix_encrypted_assertion: templates.tag_prefix_encrypted_assertion.clone(),

@@ -393,7 +393,29 @@ impl IdpDescriptor {
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        let metadata = IdpMetadata::from_xml(xml)?;
+        Self::from_metadata_xml_with_policy(
+            expected_entity_id,
+            xml,
+            trust,
+            &crate::XmlPolicy::default(),
+        )
+    }
+
+    /// Parse peer metadata with explicit XML limits and an optional schema validator.
+    ///
+    /// Encryption and Redirect limits in the policy do not affect metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] for malformed or rejected XML, an unexpected entity
+    /// ID, invalid metadata, or an unsatisfied trust policy.
+    pub fn from_metadata_xml_with_policy(
+        expected_entity_id: EntityId,
+        xml: &str,
+        trust: MetadataTrustPolicy<'_>,
+        xml_policy: &crate::XmlPolicy,
+    ) -> Result<Self, SamlError> {
+        let metadata = IdpMetadata::from_xml_with_policy(xml, xml_policy)?;
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;
@@ -485,7 +507,29 @@ impl SpDescriptor {
         xml: &str,
         trust: MetadataTrustPolicy<'_>,
     ) -> Result<Self, SamlError> {
-        let metadata = SpMetadata::from_xml(xml)?;
+        Self::from_metadata_xml_with_policy(
+            expected_entity_id,
+            xml,
+            trust,
+            &crate::XmlPolicy::default(),
+        )
+    }
+
+    /// Parse peer metadata with explicit XML limits and an optional schema validator.
+    ///
+    /// Encryption and Redirect limits in the policy do not affect metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] for malformed or rejected XML, an unexpected entity
+    /// ID, invalid metadata, or an unsatisfied trust policy.
+    pub fn from_metadata_xml_with_policy(
+        expected_entity_id: EntityId,
+        xml: &str,
+        trust: MetadataTrustPolicy<'_>,
+        xml_policy: &crate::XmlPolicy,
+    ) -> Result<Self, SamlError> {
+        let metadata = SpMetadata::from_xml_with_policy(xml, xml_policy)?;
         let actual_entity_id = metadata_entity_id(&metadata)?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
         let trust = ensure_metadata_trust(&metadata, trust)?;

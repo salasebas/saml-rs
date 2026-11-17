@@ -124,7 +124,15 @@ is out of scope, is in the [conformance records](docs/conformance/).
 - Issuer, audience, destination, recipient, bearer confirmation, time window,
   and `InResponseTo` checks on responses.
 - Bounded HTTP-Redirect DEFLATE output.
-- Optional schema validation through `context::set_schema_validator`.
+- Optional schema validation through `XmlPolicy::schema_validator`, scoped to
+  each local role. It covers received protocol XML, SOAP and PAOS envelopes,
+  and decrypted protocol documents. Import peer metadata with
+  `IdpDescriptor::from_metadata_xml_with_policy` or
+  `SpDescriptor::from_metadata_xml_with_policy` to apply it there too. The
+  callback runs after baseline parsing and can run multiple times per operation.
+  No schema validator is installed by default. See
+  [schema validation scope](docs/conformance/xml-schema-validation.md) and the
+  [migration guide](docs/migrations/0.8-to-0.9.md#8-move-schema-validation-into-xml-policy).
 
 To report a vulnerability, follow [SECURITY.md](SECURITY.md).
 

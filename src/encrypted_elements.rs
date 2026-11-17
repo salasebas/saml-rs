@@ -57,7 +57,6 @@ pub(crate) fn decrypt_verified_assertion_elements(
     opts: &FlowOptions<'_>,
 ) -> Result<(String, Option<String>), SamlError> {
     use crate::constants::ParserType;
-    use crate::context::is_valid_xml_with_limits;
     use crate::crypto::{
         enc::{decrypt_assertion_elements, AssertionDecryptionOptions},
         keys::load_decryption_keys,
@@ -77,7 +76,7 @@ pub(crate) fn decrypt_verified_assertion_elements(
         opts.assertion_elements,
         opts.received_encrypted_elements,
     )?;
-    is_valid_xml_with_limits(&content, opts.xml_limits)?;
+    crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
     validate_protocol_profile(&content, ParserType::SamlResponse, opts.xml_limits)?;
     let assertion = assertion
         .map(|assertion| {
@@ -199,7 +198,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
         },
         opts.xml_limits,
     )?;
-    crate::context::is_valid_xml_with_limits(&content, opts.xml_limits)?;
+    crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
     crate::xml::validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
     Ok(Some((content, assertions)))
 }

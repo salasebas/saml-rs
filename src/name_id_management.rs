@@ -167,12 +167,13 @@ impl<Response> RefusedNameIdManagement<Response> {
 ///
 /// Send [`Self::request`] to the service provider, then pass its SOAP response
 /// to [`Self::finish`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct StartedNameIdManagement {
     request: SoapRequest,
     request_id: String,
     service_provider: String,
     xml_limits: XmlLimits,
+    schema_validator: Option<crate::SchemaValidator>,
 }
 
 impl StartedNameIdManagement {
@@ -195,6 +196,7 @@ impl StartedNameIdManagement {
     /// request.
     pub fn finish(&self, response_envelope: &str) -> Result<(), SamlError> {
         let body = read_soap_body(response_envelope, self.xml_limits, &[])?;
+        crate::schema::validate(response_envelope, self.schema_validator)?;
         if body.local_name != "ManageNameIDResponse" || body.namespace != namespace::PROTOCOL {
             return Err(SamlError::ProtocolProfile(
                 "SOAP body must be a ManageNameIDResponse".into(),
@@ -276,6 +278,7 @@ pub(crate) fn start(
         request_id,
         service_provider: sp_entity_id.to_string(),
         xml_limits: idp.setting.xml_limits,
+        schema_validator: idp.setting.schema_validator,
     })
 }
 
@@ -289,6 +292,7 @@ pub(crate) fn receive(
     let locations = local_services(idp.metadata)?;
     require_channel(channel)?;
     let body = read_soap_body(request_envelope, idp.setting.xml_limits, &[])?;
+    crate::schema::validate(request_envelope, idp.setting.schema_validator)?;
     if body.local_name != "ManageNameIDRequest" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be a ManageNameIDRequest".into(),

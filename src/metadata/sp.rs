@@ -67,6 +67,23 @@ impl SpMetadata {
     /// `SPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
     /// limits, or SP-specific metadata extraction fails.
     pub fn from_xml_with_limits(xml: &str, limits: XmlLimits) -> Result<Self, SamlError> {
+        Self::from_xml_with_policy(
+            xml,
+            &crate::XmlPolicy {
+                limits,
+                ..crate::XmlPolicy::default()
+            },
+        )
+    }
+
+    /// Parse metadata with explicit XML limits and an optional schema validator.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] when XML is malformed, rejected by the schema
+    /// validator, or lacks a supported role descriptor.
+    pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
+        let limits = policy.limits;
         let extra = vec![
             ExtractorField::new("spSSODescriptor", &["EntityDescriptor", "SPSSODescriptor"])
                 .attrs(&["WantAssertionsSigned", "AuthnRequestsSigned"]),
@@ -87,11 +104,11 @@ impl SpMetadata {
             )
             .with_context(),
         ];
-        let mut inner = Metadata::parse_role_with_limits(
+        let mut inner = Metadata::parse_role_with_policy(
             xml,
             super::SsoDescriptorRole::ServiceProvider,
             extra,
-            limits,
+            policy,
         )?;
         let role_context = match &mut inner.meta {
             Value::Object(entries) => entries

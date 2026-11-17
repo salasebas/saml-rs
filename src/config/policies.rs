@@ -627,8 +627,10 @@ pub(crate) enum ReceivedEncryptedElements {
 /// # let _ = sp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct XmlPolicy {
+    /// Optional schema validation for received XML, including decrypted messages.
+    pub schema_validator: Option<crate::SchemaValidator>,
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
     /// HTTP-Redirect input.
     pub redirect_inflate_max_bytes: usize,
@@ -641,6 +643,7 @@ pub struct XmlPolicy {
 impl Default for XmlPolicy {
     fn default() -> Self {
         Self {
+            schema_validator: None,
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             limits: XmlLimits::default(),
             encryption: XmlEncryptionPolicy::default(),
