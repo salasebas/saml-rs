@@ -106,7 +106,7 @@ mapping is not implemented.
 | `SpConfig`, `IdpConfig`, their builders, and the checks `build()` runs | `src/config/builders.rs` |
 | `Credentials` | `src/config/credentials.rs` |
 | Typed config to raw `EntitySetting` | `src/config/entity_setting.rs` |
-| Typed config to the raw metadata config and provider that `build()` and `Saml::sp`/`Saml::idp` construct | `src/config/raw_provider.rs` |
+| Typed config to the metadata generator input and the internal provider that `build()` and `Saml::sp`/`Saml::idp` construct | `src/config/provider.rs` |
 | Metadata `validUntil` of a peer descriptor | `src/metadata/validity.rs` |
 | `validUntil` and `cacheDuration` on generated metadata | `src/metadata/lifetime.rs` |
 

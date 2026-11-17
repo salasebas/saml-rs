@@ -9,7 +9,7 @@ mod entity_setting;
 mod metadata_signature_shape;
 mod metadata_trust;
 mod policies;
-mod raw_provider;
+mod provider;
 
 pub use crate::entity::{SignatureAction, SignatureConfig};
 pub use crate::template::{

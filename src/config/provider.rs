@@ -1,10 +1,10 @@
-//! Typed configs to the raw metadata configs and providers the typed API runs on.
+//! Typed configs to the metadata generator input and the internal providers the typed API runs on.
 
 use crate::error::SamlError;
 use crate::idp::IdentityProvider;
 use crate::metadata::{
-    ArtifactResolutionEndpoint, IdpMetadataConfig as RawIdpMetadataConfig,
-    SpMetadataConfig as RawSpMetadataConfig,
+    ArtifactResolutionEndpoint, IdpMetadataConfig as IdpMetadataInput,
+    SpMetadataConfig as SpMetadataInput,
 };
 use crate::sp::ServiceProvider;
 
@@ -18,19 +18,19 @@ use super::policies::{
 
 impl SpConfig {
     pub(crate) fn to_service_provider(&self) -> Result<ServiceProvider, SamlError> {
-        ServiceProvider::from_config(&raw_sp_metadata_config(self), self.entity_setting())
+        ServiceProvider::from_config(&sp_metadata_input(self), self.entity_setting())
     }
 }
 
 impl IdpConfig {
     pub(crate) fn to_identity_provider(&self) -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(&raw_idp_metadata_config(self), self.entity_setting())
+        IdentityProvider::from_config(&idp_metadata_input(self), self.entity_setting())
     }
 }
 
-fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
+fn sp_metadata_input(config: &SpConfig) -> SpMetadataInput {
     let metadata = config.metadata();
-    RawSpMetadataConfig {
+    SpMetadataInput {
         entity_id: config.entity_id().as_str().to_string(),
         signing_certs: signing_certificates(config.credentials()),
         encrypt_certs: encryption_certificates(config.credentials()),
@@ -66,9 +66,9 @@ fn raw_sp_metadata_config(config: &SpConfig) -> RawSpMetadataConfig {
     }
 }
 
-fn raw_idp_metadata_config(config: &IdpConfig) -> RawIdpMetadataConfig {
+fn idp_metadata_input(config: &IdpConfig) -> IdpMetadataInput {
     let metadata = config.metadata();
-    RawIdpMetadataConfig {
+    IdpMetadataInput {
         entity_id: config.entity_id().as_str().to_string(),
         signing_certs: signing_certificates(config.credentials()),
         encrypt_certs: encryption_certificates(config.credentials()),
