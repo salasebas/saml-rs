@@ -72,7 +72,6 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
             ..SpValidationPolicy::recommended()
         })
         .xml(XmlPolicy {
-            clock_drifts: (-120_000, 180_000),
             limits,
             ..XmlPolicy::default()
         })
@@ -105,7 +104,6 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     assert!(setting.want_assertions_signed);
     assert!(setting.want_message_signed);
     assert!(setting.authn_requests_signed);
-    assert_eq!(setting.clock_drifts, (-120_000, 180_000));
     assert_eq!(setting.xml_limits, limits);
     assert_eq!(
         setting.request_signature_algorithm,

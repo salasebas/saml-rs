@@ -288,7 +288,7 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         ..AlgorithmPolicy::default()
     };
     let xml = XmlPolicy {
-        clock_drifts: (-1000, 2000),
+        redirect_inflate_max_bytes: 64 * 1024,
         ..XmlPolicy::default()
     };
     let templates = TemplatePolicy {
@@ -332,7 +332,7 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         ..AlgorithmPolicy::default()
     };
     let xml = XmlPolicy {
-        clock_drifts: (-2000, 3000),
+        redirect_inflate_max_bytes: 128 * 1024,
         ..XmlPolicy::default()
     };
     let templates = TemplatePolicy {

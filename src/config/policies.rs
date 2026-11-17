@@ -605,7 +605,10 @@ pub(crate) enum ReceivedEncryptedElements {
     DecryptReceived,
 }
 
-/// XML parser, redirect decompression, clock, and XML encryption policy.
+/// XML parser, redirect decompression, and XML encryption policy.
+///
+/// Clock skew tolerance is not part of the config. Set it per call with
+/// [`SamlValidationContext::with_clock_skew`](crate::SamlValidationContext::with_clock_skew).
 ///
 /// # Examples
 ///
@@ -626,8 +629,6 @@ pub(crate) enum ReceivedEncryptedElements {
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct XmlPolicy {
-    /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
-    pub clock_drifts: (i64, i64),
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
     /// HTTP-Redirect input.
     pub redirect_inflate_max_bytes: usize,
@@ -640,7 +641,6 @@ pub struct XmlPolicy {
 impl Default for XmlPolicy {
     fn default() -> Self {
         Self {
-            clock_drifts: (0, 0),
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             limits: XmlLimits::default(),
             encryption: XmlEncryptionPolicy::default(),

@@ -199,7 +199,6 @@ Rules:
 
 ```rust
 pub struct XmlPolicy {
-    pub clock_drifts: (i64, i64),
     pub redirect_inflate_max_bytes: usize,
     pub limits: XmlLimits,
     pub encryption: XmlEncryptionPolicy,
@@ -267,6 +266,9 @@ pub struct IdpValidationPolicy {
     logout: LogoutPolicy,
 }
 ```
+
+Configs carry no clock skew. Each typed receive operation takes it from the
+`SamlValidationContext` it is called with, next to the caller's clock.
 
 SAML V2.0 Approved Errata 05 E26/E93 clarifies that Web Browser SSO over
 HTTP-POST requires each Assertion to be protected by signing either the
