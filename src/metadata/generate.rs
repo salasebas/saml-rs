@@ -324,11 +324,6 @@ fn complete_elements_order<'a>(
     if let Some(order) = order {
         for name in order {
             let name = name.as_str();
-            if !groups.contains(&name) {
-                return Err(SamlError::Invalid(format!(
-                    "unknown metadata element order group {name}"
-                )));
-            }
             if completed.contains(&name) {
                 return Err(SamlError::Invalid(format!(
                     "duplicate metadata element order group {name}"
