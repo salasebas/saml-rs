@@ -36,15 +36,10 @@ stays constructible.
 
 ## Method names
 
-These rules apply when an API is added or redesigned. Rename an existing
-method in the change that owns its API.
+These rules apply when an API is added or redesigned.
 
-- A getter is `foo()` or `foo_mut()`, without `get_`. An in-place setter is
-  `set_foo(&mut self, value)`.
-- A dedicated builder configures with `foo(value)`. An owned value configures
-  with `with_foo(self, value) -> Self`, which leaves `foo()` for reading.
-- The primary constructor is `new`, or `try_new` when it can fail. A secondary
-  constructor is `new_with_foo`, a `from_foo` conversion, or a domain name.
+- A value that is not a dedicated builder configures with
+  `with_foo(self, value) -> Self`, which leaves `foo()` for reading.
 - A single-valued setter replaces its value. For a repeated element, the
   singular method appends one value and the plural appends an
   `impl IntoIterator<Item = T>`. Their doc comments start with `Replace`,
@@ -52,9 +47,6 @@ method in the change that owns its API.
 
 ## Configuration types
 
-- `SpConfig`, `IdpConfig`, their metadata configs, `Credentials`, and their
-  builders keep their fields private, so a built config cannot change after
-  `build()` validated it and a new field is not a breaking change.
 - An option that relaxes a rule is named for what it allows, such as
   `AllowUnsigned`, `AllowWeakAlgorithms`, or `DoNotSign`, not for why it
   exists.
@@ -68,9 +60,9 @@ method in the change that owns its API.
 
 ## Errors
 
-- A failure that callers handle differently has its own `SamlError` variant
-  with typed data, such as `Status`, `ReplayKey`, or `ResourceLimit`. Callers
-  match the variant, never its message.
+- A failure that callers handle differently gets its own `SamlError` variant
+  with typed data, such as `Status`, `ReplayKey`, or `ResourceLimit`, instead
+  of `Invalid(String)`. Callers match the variant, never its message.
 - A lower-level error is kept as the `source`, boxed as
   `Box<dyn Error + Send + Sync>`. A third-party type or a `From` impl from one
   never appears in `SamlError`.

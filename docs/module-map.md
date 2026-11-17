@@ -1,7 +1,6 @@
 # Module map
 
-Find a public item with `rg`, for example `rg 'pub fn finish_sso'`. This map
-lists the behaviour whose file name does not give it away.
+This map lists the behaviour whose file name does not give it away.
 
 | Behaviour | File |
 | --- | --- |

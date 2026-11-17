@@ -8,8 +8,8 @@ work in the repo, not restate the README.
 
 - `src/` contains the implementation. Put protocol, XML, metadata, binding,
   validation, logout, and crypto-adapter changes there.
-- Find code with `rg`. `docs/module-map.md` lists the behaviour whose file
-  name does not give it away.
+- `docs/module-map.md` lists the behaviour whose file name does not give it
+  away.
 - `tests/` contains integration tests and committed fixtures.
 - `src/tests/` holds the tests that build signed, encrypted, or malformed
   input with crate-private helpers. They import through `saml_rs::` like
@@ -97,6 +97,9 @@ cargo check -p saml-rs --no-default-features
 Do not use `--all-features`. Document-crypto providers are mutually exclusive.
 AWS-LC, FIPS, and provider-specific rustdoc run in the Linux `provider-matrix`
 job in `.github/workflows/ci.yml`.
+
+`codecov/patch` is a signal, not a merge gate. When it is red, the pull
+request names the changed lines that no test runs and says why.
 
 ## Rust Style
 
