@@ -112,7 +112,6 @@ fn common_setting(
             .and_then(|credential| credential.passphrase.as_ref())
             .map(|passphrase| passphrase.as_str().to_string()),
         additional_decryption_keys: credentials.additional_decryption_keys().to_vec(),
-        clock_drifts: xml.clock_drifts,
         redirect_inflate_max_bytes: xml.redirect_inflate_max_bytes,
         xml_limits: xml.limits,
         tag_prefix_protocol: templates.tag_prefix_protocol.clone(),
