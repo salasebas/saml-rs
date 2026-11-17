@@ -5,7 +5,7 @@ Facts for metadata trust and replay on the typed browser flows.
 store replay. `Default` and the config builders are
 Recommended. Raw settings keep their historical defaults. The preset
 distinction is recorded in
-[validation presets](../adr/0002-validation-presets.md).
+[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Metadata trust is `MetadataTrustPolicy`, passed to
 `IdpDescriptor::from_metadata_xml` and

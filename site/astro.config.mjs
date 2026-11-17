@@ -86,10 +86,6 @@ export default defineConfig({
 									slug: 'reference/conformance/idp-sp-operational-modes',
 								},
 								{
-									label: 'Extended and authority modes',
-									slug: 'reference/conformance/extended-and-authority-modes',
-								},
-								{
 									label: 'SSO acceptance',
 									slug: 'reference/conformance/web-browser-sso-acceptance',
 								},
@@ -122,10 +118,6 @@ export default defineConfig({
 								{
 									label: 'XML schema validation',
 									slug: 'reference/conformance/xml-schema-validation',
-								},
-								{
-									label: 'XML signature processing',
-									slug: 'reference/conformance/xml-signature-processing',
 								},
 								{
 									label: 'Algorithms',

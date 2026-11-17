@@ -11,7 +11,7 @@ and the same logout accept combination. `Default` and
 the config builders are Recommended. Recommended does not select the
 RSA-SHA2 XML-DSig profile. `compatibility()` is available by name. The
 preset distinction is recorded in
-[validation presets](../adr/0002-validation-presets.md).
+[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected
 by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.

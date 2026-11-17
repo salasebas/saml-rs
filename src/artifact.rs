@@ -268,8 +268,8 @@ impl IssuedArtifacts {
 
 /// Artifacts a receiver has already accepted for resolution.
 ///
-/// [`Self::enforce_single_use`] is the default. [`Self::allow_reuse`] relaxes
-/// the receiver single-use recommendation.
+/// Build it with [`Self::enforce_single_use`], which follows the receiver
+/// single-use recommendation, or with [`Self::allow_reuse`], which relaxes it.
 #[derive(Debug)]
 pub struct ArtifactUses {
     blocked: Option<BlockedArtifacts>,

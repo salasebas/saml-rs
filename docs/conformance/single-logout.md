@@ -7,7 +7,7 @@ combination below. `LogoutPolicy::recommended`, and the `logout` field of
 publish that accept combination. `Default` and the
 config builders are Recommended. Raw logout generation and parsing keep
 their existing validation defaults. The preset distinction is recorded in
-[validation presets](../adr/0002-validation-presets.md).
+[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected
 by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
@@ -52,7 +52,7 @@ matches it.
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
 | Set `NotOnOrAfter` | Session authority | Generate LogoutRequest | Mandatory. Core §3.7.3.2. Always emitted from the configured issuance lifetime and the same `IssueInstant`. It cannot be disabled. The five-minute lifetime is library policy, not an OASIS duration |
-| Compare `NotOnOrAfter` with the latest assertion `NotOnOrAfter` | Session authority | Generate LogoutRequest | Outside this operation. Core §3.7.3.2 `SHOULD` compares the request instant with the assertion most recently issued for the session. Typed `start_slo` does not receive that assertion. [ADR 0001](../adr/0001-session-authority-logout-expiration.md) records that the issuance lifetime does not claim that ordering. It is not a preset field and it has no relaxation switch |
+| Compare `NotOnOrAfter` with the latest assertion `NotOnOrAfter` | Session authority | Generate LogoutRequest | Outside this operation. Core §3.7.3.2 `SHOULD` compares the request instant with the assertion most recently issued for the session. Typed `start_slo` does not receive that assertion. [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records that the issuance lifetime does not claim that ordering. It is not a preset field and it has no relaxation switch |
 | Send the `NameID` with the attributes the principal is known by | Session authority | Generate LogoutRequest | Mandatory. Core §3.7.1. Same behaviour as the participant row, except for a `NameId` without a `Format`: the request carries the first configured NameID format, which is the `Format` `respond_sso` writes in the assertion for that `NameId`. With no configured format both omit `Format`: Core §1.3.2 does not allow an empty URI value, and Core §2.2.2 with Errata 05 E60 puts `unspecified` in effect when `Format` is omitted. Samlify-port `create_logout_request` omits it the same way. A `Format` that is not an absolute URI reference is `SamlError::Invalid`, as for the participant. `respond_sso` writes the `NameID` value, `Format`, and `SPProvidedID`, so the caller passes `NameQualifier` and `SPNameQualifier` only when its assertion carried them. The outbound check always runs for this role |
 | `SessionIndex` may be omitted | Session authority | Generate LogoutRequest | Optional. Profiles §4.4.4.1 / E38 says the session authority `MAY` omit every `SessionIndex` to end the principal's applicable sessions. The participant's `MUST` include one is not copied onto this role |
 | `Issuer`, `ID`, `Version` `2.0`, UTC `IssueInstant`, principal identifier, and no leap-second time | Session authority | Generate LogoutRequest | Mandatory. Same sources as the participant rows. Enforced by the existing session-authority outbound checks, with and without producer rules |

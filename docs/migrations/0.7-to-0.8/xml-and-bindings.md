@@ -378,4 +378,4 @@ helpers. Use `crypto::verify_signature` for other signed XML documents.
 These are library processing and coverage guarantees. They do not add general
 schema or protocol validation to the public verification functions. The exact
 standards scope and library policies are recorded in
-[XML signature processing](../../conformance/xml-signature-processing.md).
+[XML signature processing](../../conformance/xml-security-algorithms.md#reference-and-coverage-processing).

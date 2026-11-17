@@ -33,4 +33,4 @@ Without a crypto provider, select it or another policy that does not require
 signatures. Otherwise `try_new` and `builder().build()` return
 `SamlError::Unsupported`. `new` does not validate.
 Raw settings and individual field defaults are unchanged.
-See [validation presets](../../adr/0002-validation-presets.md) for policy details.
+See [validation presets](https://samlrs.vercel.app/explanation/validation-presets/) for policy details.

@@ -77,7 +77,7 @@ Three choices in this example matter in production:
 
 - **Validation preset.** `SpConfig::builder` starts on Recommended. Add
   hardenings as fields, or pick `compatibility()` by name. See
-  [validation presets](docs/adr/0002-validation-presets.md).
+  [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 - **Metadata trust.** `RequireSignature` pins the certificate that signs the
   IdP metadata. See
   [metadata trust](https://docs.rs/saml-rs/latest/saml_rs/#metadata-trust).
@@ -142,7 +142,7 @@ The default `crypto-bergshamra` feature uses RustCrypto. AWS-LC and FIPS are
 available with the default features off. Without a provider
 (`--no-default-features`), the crate builds and parses messages, and signing,
 verification, and encryption return `SamlError::Unsupported`. Details are in
-[crypto providers](docs/crypto-providers.md).
+[crypto providers](https://samlrs.vercel.app/guides/crypto-provider/).
 
 ## Documentation
 
@@ -153,7 +153,7 @@ verification, and encryption return `SamlError::Unsupported`. Details are in
 | Identity provider and logout examples | [`examples/sso.rs`](examples/sso.rs), [`examples/slo.rs`](examples/slo.rs) |
 | Upgrade an existing integration | [Migration guides](docs/migrations/README.md) |
 | Keep a `ServiceProvider` / `IdentityProvider` integration (deprecated; removed in the next minor release) | [`saml_rs::raw`](examples/raw_compat.rs) |
-| Choose a crypto provider | [Crypto providers](docs/crypto-providers.md) |
+| Choose a crypto provider | [Crypto providers](https://samlrs.vercel.app/guides/crypto-provider/) |
 | See the rules each flow claims | [Conformance records](docs/conformance/) |
 | Contribute | [Contributing](CONTRIBUTING.md) |
 

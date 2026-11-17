@@ -1,158 +1,27 @@
 # Module map
 
-Where a SAML behaviour is implemented. Conformance rows for the same public
-methods are in [`docs/conformance/`](conformance/). The typed-API design record
-is in [`docs/architecture/`](architecture/README.md).
-
-## Typed browser SSO
+Find a public item with `rg`, for example `rg 'pub fn finish_sso'`. This map
+lists the behaviour whose file name does not give it away.
 
 | Behaviour | File |
 | --- | --- |
-| SP `start_sso`, `finish_sso`, `accept_unsolicited_sso` | `src/api/sp.rs` |
-| IdP `receive_sso`, `respond_sso`, `initiate_sso` | `src/api/idp.rs` |
-| Assertion conditions on an accepted response | `src/assertion_acceptance.rs` |
-| `RequestedAuthnContext` of a received `AuthnRequest`, and the exact-comparison check of `RespondSso::authn_context` | `src/model/authn_context.rs`, `src/idp.rs` |
-| Requested context, passive SSO, and provider name on `StartSso` | `src/api/options.rs`, `src/sp/authn_request.rs` |
-| Accepted authentication context and subject locality per session | `src/model/authn_details.rs`, `src/model/session.rs` |
-| Typed `start_slo`, `receive_slo`, `respond_slo`, `finish_slo` | `src/api/slo.rs` |
-| IdP `issue_artifact`, `answer_artifact_resolve`; SP `resolve_artifact` | `src/api/artifact.rs`, `src/artifact.rs` |
-| IdP `respond_sso_artifact`, `initiate_sso_artifact` | `src/api/artifact.rs`, `src/api/idp.rs` |
-| `ArtifactDelivery`, `DeliveredArtifact` | `src/browser/artifact.rs` |
-| Raw response rendering for an artifact | `src/idp/posted_response.rs` |
-| SOAP 1.1 envelope, `SoapRequest`, `SoapResponse` | `src/soap.rs` |
-| Single Logout over SOAP: `StartSlo::soap`, `BrowserInput::soap`, `Outbound::soap_request` and `soap_response` | `src/api/slo.rs`, `src/browser/input.rs`, `src/browser/outbound.rs` |
-
-`finish_sso_with_outstanding_logout` and
-`accept_unsolicited_sso_with_outstanding_logout` are in `src/api/sp.rs`.
-`finish_sso` and `accept_unsolicited_sso` take a resolved artifact through
-`BrowserInput::artifact`.
-
-## Enhanced Client/Proxy SSO
-
-| Behaviour | File |
-| --- | --- |
-| SP `start_paos_sso`, `finish_paos_sso`, `finish_paos_sso_with_outstanding_logout` | `src/api/paos/mod.rs` |
-| IdP `receive_paos_sso`, `respond_paos_sso`, `reject_paos_sso`, `paos_soap_fault` | `src/api/paos/mod.rs` |
-| PAOS header and SOAP envelopes | `src/api/paos/protocol.rs` |
-| Raw PAOS AuthnRequest rendering | `src/sp/paos.rs` |
-| Raw PAOS response rendering | `src/idp/posted_response.rs` |
-
-The enhanced-client role is not a facade. The IdP and SP operational modes
-stay unclaimed.
-
-## Name identifier management
-
-| Behaviour | File |
-| --- | --- |
-| IdP `start_name_id_management`, `receive_name_id_management`, `respond_name_id_management` | `src/api/name_id_management.rs` |
-| `start_name_id_management_redirect`, `receive_name_id_management_redirect`, `respond_name_id_management_redirect`, `finish_name_id_management_redirect` on both roles | `src/api/name_id_management/redirect.rs` |
-| `ManageNameIdRequest`, `NameIdChange`, and SOAP messages | `src/name_id_management.rs` |
-| Request and response XML for both bindings, including the E14 transient rule | `src/name_id_management/xml.rs` |
-| HTTP-Redirect signing and parsing | `src/name_id_management/redirect.rs` |
-| `EncryptedID` and `NewEncryptedID` for both bindings | `src/name_id_management/encryption.rs` |
-| `PendingManageNameIdRequest` | `src/browser/pending.rs` |
-| `ManageNameIDService` in metadata | `src/metadata/mod.rs`, `src/metadata/generate.rs` |
-| Protocol elements read with their namespaces | `src/xml/protocol_element.rs` |
-
-The service provider has no SOAP name identifier management. Name identifier
-mapping is not implemented.
-
-## Identity Provider Discovery
-
-| Behaviour | File |
-| --- | --- |
-| IdP `remember_identity_provider` | `src/api/idp.rs`, `src/discovery.rs` |
-
-## SAML-defined identifiers
-
-| Behaviour | File |
-| --- | --- |
-| `AttributeNameFormat`, `Attribute` | `src/model/attributes.rs` |
-| Persistent and transient `NameId` constructors | `src/model/subject.rs` |
-| `RespondSso::attributes` and the `AttributeStatement` it writes | `src/api/options.rs`, `src/idp/login_response.rs` |
-| `NameFormat` of an accepted attribute | `src/xml/fields.rs`, `src/model/extract.rs` |
-| `xs:Name` and `xs:NCName` | `src/xml/name.rs` |
-| Absolute `xs:anyURI` name identifier formats | `src/xml/any_uri.rs`, `src/model/subject.rs` |
-
-## Raw login
-
-| Behaviour | File |
-| --- | --- |
-| Raw service provider | `src/sp.rs` |
-| Raw identity provider | `src/idp.rs` |
-| Login response construction | `src/idp/login_response.rs` |
-| Shared raw flow | `src/flow.rs` |
-| Detached HTTP-Redirect and SimpleSign signature verification | `src/flow/detached.rs` |
-| Checks on a login `Response` with an error status | `src/flow/error_response.rs` |
-
-## Validation and cryptography
-
-| Behaviour | File |
-| --- | --- |
-| XML signature verification | `src/crypto/verify.rs` |
-| Placement of embedded SAML signatures | `src/xml/signature_placement.rs` |
-| Algorithms and RSA key sizes each `XmlSignatureProfile` accepts | `src/crypto/signature_profile.rs` |
-| Protocol response roots that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
-| XML signature generation | `src/crypto/sign.rs` |
-| Algorithm variants and `AlgorithmPolicy` | `src/config/algorithms.rs`, `src/config/policies.rs` |
-| `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`, and `NewEncryptedID` encryption | `src/crypto/enc/encrypt.rs` |
-| `EncryptedAssertion`, `EncryptedID`, `EncryptedAttribute`, and `NewEncryptedID` decryption | `src/crypto/enc/decrypt.rs` |
-| Encrypted element kinds and their selection | `src/crypto/enc.rs` |
+| Decode, verify, extract, and validate a received message for every typed receive | `src/flow.rs` |
+| Detached HTTP-Redirect and SimpleSign signature checks | `src/flow/detached.rs` |
+| Checks on a login `Response` with an error status, before its status is reported | `src/flow/error_response.rs` |
+| `Issuer` of a login `Response` | `src/flow/response_issuer.rs` |
+| Assertion conditions, audience, and bearer confirmation of an accepted response | `src/assertion_acceptance.rs` |
 | Decryption of a verified response's encrypted children | `src/flow.rs`, `src/encrypted_elements.rs` |
-| `EncryptedID` in the requested `Subject` of a received `AuthnRequest` | `src/api/requested_subject.rs`, `src/crypto/enc/decrypt.rs` |
-| Clock, replay context, and message age | `src/model/validation.rs` |
-| Validation presets and named policies | `src/config/policies.rs` |
-| Peer descriptors | `src/config/descriptors.rs` |
-| `SpConfig`, `IdpConfig`, their builders, and the checks `build()` runs | `src/config/builders.rs` |
-| `Credentials` | `src/config/credentials.rs` |
+| Protocol responses that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
+| Algorithms and RSA key sizes each `XmlSignatureProfile` accepts | `src/crypto/signature_profile.rs` |
+| Response rendering for HTTP-Artifact and PAOS | `src/idp/posted_response.rs` |
+| A binding parameter that may occur once | `src/binding/parameters.rs` |
+| Protocol elements read with their namespaces, and their `Status` | `src/xml/protocol_element.rs` |
 | Typed config to raw `EntitySetting` | `src/config/entity_setting.rs` |
-| Typed config to the metadata generator input and the internal provider that `build()` and `Saml::sp`/`Saml::idp` construct | `src/config/provider.rs` |
-| Metadata `validUntil` of a peer descriptor | `src/metadata/validity.rs` |
-| `validUntil` and `cacheDuration` on generated metadata | `src/metadata/lifetime.rs` |
+| Typed config to the metadata generator input and the internal provider | `src/config/provider.rs` |
+| `EncryptedID` in the requested `Subject` of a received `AuthnRequest` | `src/api/requested_subject.rs` |
 
-## Logout
+`src/idp.rs`, `src/flow.rs`, `src/crypto/verify.rs`, and `src/sp.rs` are the
+largest files. Put a new behaviour in a focused module instead of growing them.
 
-| Behaviour | File |
-| --- | --- |
-| Logout request and response construction | `src/logout/creation.rs` |
-| Parsing | `src/logout/parsing.rs` |
-| Rendering | `src/logout/rendering.rs` |
-| Signing | `src/logout/signing.rs` |
-| `EncryptedID` in place of the `LogoutRequest` `NameID` | `src/logout/encrypted_id.rs`, `src/crypto/enc/encrypt.rs`, `src/crypto/enc/decrypt.rs` |
-
-Logout is the directory `src/logout/`.
-
-## Conformance rows
-
-| Flow | Page |
-| --- | --- |
-| Inbound Web Browser SSO | [`web-browser-sso-acceptance.md`](conformance/web-browser-sso-acceptance.md) |
-| Outbound Web Browser SSO | [`web-browser-sso-generation.md`](conformance/web-browser-sso-generation.md) |
-| Single Logout | [`single-logout.md`](conformance/single-logout.md) |
-| Enhanced Client/Proxy SSO over PAOS | [`enhanced-client-proxy.md`](conformance/enhanced-client-proxy.md) |
-| Identity Provider Discovery | [`identity-provider-discovery.md`](conformance/identity-provider-discovery.md) |
-| SAML-defined identifiers | [`identifiers.md`](conformance/identifiers.md) |
-| Web Browser SSO response over HTTP-Artifact | [`web-browser-sso-artifact.md`](conformance/web-browser-sso-artifact.md) |
-| Artifact resolution over SOAP | [`artifact-resolution.md`](conformance/artifact-resolution.md) |
-| Name identifier management | [`name-id-management.md`](conformance/name-id-management.md) |
-| Metadata trust and replay | [`metadata-and-replay.md`](conformance/metadata-and-replay.md) |
-| Optional XML schema validation | [`xml-schema-validation.md`](conformance/xml-schema-validation.md) |
-| Inbound XML signature processing and coverage | [`xml-signature-processing.md`](conformance/xml-signature-processing.md) |
-| XML Signature and XML Encryption algorithms | [`xml-security-algorithms.md`](conformance/xml-security-algorithms.md) |
-
-## Compatibility crates
-
-| Crate | Path |
-| --- | --- |
-| `opensaml`, `samlify`, `samlet` | `crates/<name>` |
-
-Workspace members are in the root `Cargo.toml`. Publish configuration is in
-`release-plz.toml` and `.github/workflows/ci.yml`.
-
-## Large modules
-
-- `src/flow.rs`
-- `src/idp.rs`
-- `src/sp.rs`
-- `src/crypto/verify.rs`
-- `src/logout/creation.rs`
+The compatibility crates `opensaml`, `samlify`, and `samlet` are in
+`crates/<name>` and re-export `saml-rs`.
