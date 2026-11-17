@@ -150,11 +150,11 @@ the variant in the right column:
 | `Invalid` for a full or poisoned `InMemoryReplayCache` | `ReplayCacheUnavailable` |
 | `Invalid` when the `with_recipient_endpoint` URL is not published | `RecipientEndpointNotPublished` |
 | `Invalid` when several receiving endpoints are published and none is selected | `RecipientEndpointAmbiguous` |
-| `Invalid` with `ERR_AMBIGUOUS_FLOW_INPUT`, `ambiguous form field`, `ambiguous Redirect field {name}`, `ambiguous SAMLart`, or `ambiguous RelayState` | `DuplicateBindingParameter { name }` |
-| `Invalid` with `missing form field {name}`, `missing Redirect field {name}`, or `missing SAMLart` | `MissingBindingParameter { name }` |
+| `Invalid` with `ERR_AMBIGUOUS_FLOW_INPUT`, `ambiguous form field`, `ambiguous Redirect field {name}`, `ambiguous SAMLart`, or `ambiguous RelayState` | `DuplicateBindingParameter { name, .. }` |
+| `Invalid` with `missing form field {name}`, `missing Redirect field {name}`, or `missing SAMLart` | `MissingBindingParameter { name, .. }` |
 | `Invalid` with `ERR_METADATA_CONFLICT_REQUEST_SIGNED_FLAG` | `AuthnRequestSigningRequired` |
 | `Xml` with `ERR_EMPTY_ASSERTION` | `AssertionMissing` |
-| `Crypto` with `ERR_UNDEFINED_ENCRYPTED_ASSERTION` | `EncryptionRequired { element: "Assertion" }` for a plaintext assertion, `AssertionMissing` for none |
+| `Crypto` with `ERR_UNDEFINED_ENCRYPTED_ASSERTION` | `EncryptionRequired { element: "Assertion", .. }` for a plaintext assertion, `AssertionMissing` for none |
 | `Crypto` for XML that signature verification or decryption could not parse | `Xml` with the parser error as `source` |
 
 Before the upgrade, a limit check compared text:
@@ -210,9 +210,9 @@ names the binding or the mistake:
 
 | Case | After |
 | --- | --- |
-| `SsoRequestBinding`, `SsoResponseBinding`, or `LogoutBinding` `try_from` a binding it does not support | `UnsupportedBinding { binding }` |
-| A `BrowserInput` or raw context whose binding the operation does not handle | `UnsupportedBinding { binding }` |
-| `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` on another binding | `OutboundBindingMismatch { actual }` |
+| `SsoRequestBinding`, `SsoResponseBinding`, or `LogoutBinding` `try_from` a binding it does not support | `UnsupportedBinding { binding, .. }` |
+| A `BrowserInput` or raw context whose binding the operation does not handle | `UnsupportedBinding { binding, .. }` |
+| `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` on another binding | `OutboundBindingMismatch { actual, .. }` |
 | A pending snapshot whose binding name is not a SAML binding | `Invalid` |
 
 `UndefinedStatus` is renamed `StatusMissing`. Its `Display` text is
