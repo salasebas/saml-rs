@@ -347,7 +347,7 @@ pub enum LogoutSigning {
     /// Sign this logout message.
     Sign,
     /// Send unsigned logout, preserving the samlify-port choice.
-    DoNotSignForCompatibility,
+    DoNotSign,
 }
 
 /// Whether typed Single Logout generation follows producer rules.
@@ -436,7 +436,7 @@ impl StartSlo {
     /// Start SLO over SOAP.
     ///
     /// The Single Logout generation rules always apply: the request carries
-    /// an XML signature, [`LogoutSigning::DoNotSignForCompatibility`] is
+    /// an XML signature, [`LogoutSigning::DoNotSign`] is
     /// rejected, and a service provider includes at least one `SessionIndex`.
     /// The request carries no RelayState, so a present
     /// [`Self::relay_state`] is rejected. The `https` check and
@@ -491,7 +491,7 @@ impl StartSlo {
     /// [`Self::redirect`], [`Self::post`], and [`Self::simple_sign`] leave this
     /// off, so existing generation is unchanged. When enabled, HTTP-Redirect,
     /// HTTP-POST, and HTTP-POST-SimpleSign requests are signed.
-    /// [`LogoutSigning::DoNotSignForCompatibility`] is rejected.
+    /// [`LogoutSigning::DoNotSign`] is rejected.
     /// A service provider, acting as a session participant, includes at least
     /// one `SessionIndex` and sends the user agent to an `https`
     /// `SingleLogoutService` unless

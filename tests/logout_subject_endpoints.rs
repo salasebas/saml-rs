@@ -29,7 +29,7 @@ const IDP_SLO_REQUEST: &str = "https://idp.example.com/slo/request";
 const IDP_SLO_RESPONSE: &str = "https://idp.example.com/slo/response";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn sp(validation_policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -68,12 +68,12 @@ fn descriptor_pair(
         SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?,
         IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             idp.metadata_xml(),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?,
     ))
 }
@@ -102,7 +102,7 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
         &format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{OTHER_SP_ENTITY_ID}"><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://other.example.com/slo"/><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://other.example.com/acs" index="0"/></SPSSODescriptor></EntityDescriptor>"#
         ),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     match identity_provider.respond_slo(&other, &received, RespondSlo::post()) {
         Err(SamlError::IssuerMismatch { expected, actual }) => {
@@ -124,7 +124,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
         &format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{IDP_ENTITY_ID}"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_SSO}"/><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_SLO_REQUEST}" ResponseLocation="{IDP_SLO_RESPONSE}"/></IDPSSODescriptor></EntityDescriptor>"#
         ),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let started = service_provider.start_slo(
         &idp_for_requests,
@@ -132,7 +132,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
             NameId::new("alice@example.com", None),
             SessionIndex::try_new("_session")?,
         ),
-        StartSlo::post().signing(LogoutSigning::DoNotSignForCompatibility),
+        StartSlo::post().signing(LogoutSigning::DoNotSign),
     )?;
     assert_eq!(
         started.outbound.post_form()?.action().as_str(),
@@ -144,12 +144,12 @@ fn logout_response_uses_response_location_and_request_uses_location(
         &format!(
             r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{SP_ENTITY_ID}"><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_SLO}" ResponseLocation="{SP_SLO_RESPONSE}"/><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_ACS}" index="0"/></SPSSODescriptor></EntityDescriptor>"#
         ),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let local_idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         identity_provider.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let request = service_provider.start_slo(
         &local_idp,
@@ -157,7 +157,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
             NameId::new("alice@example.com", None),
             SessionIndex::try_new("_session")?,
         ),
-        StartSlo::post().signing(LogoutSigning::DoNotSignForCompatibility),
+        StartSlo::post().signing(LogoutSigning::DoNotSign),
     )?;
     let received = identity_provider.receive_slo(
         &sp_for_responses,
@@ -178,7 +178,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
         let padded_peer = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             &padded_metadata,
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?;
         let response =
             identity_provider.respond_slo(&padded_peer, &received, RespondSlo::post())?;
@@ -195,7 +195,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
     let extension_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &extension_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let response = identity_provider.respond_slo(&extension_peer, &received, RespondSlo::post())?;
     assert_eq!(response.post_form()?.action().as_str(), SP_SLO);
@@ -218,7 +218,7 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &response_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let (_, idp_descriptor) = descriptor_pair(&service_provider, &identity_provider)?;
     let started = service_provider.start_slo(
@@ -277,7 +277,7 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         service_provider.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let logout_request = |destination: &str| {
         format!(
@@ -351,7 +351,7 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
                 r#"<IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{IDP_ROLE_OF_SP_SLO}"/><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/as-idp/sso"/></IDPSSODescriptor><SPSSODescriptor "#
             ),
         ),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -361,7 +361,7 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
                 r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_ROLE_OF_IDP_SLO}"/><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/as-sp/acs" index="0"/></SPSSODescriptor><IDPSSODescriptor "#
             ),
         ),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     let started = identity_provider.start_slo(

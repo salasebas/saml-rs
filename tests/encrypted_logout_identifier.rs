@@ -145,12 +145,12 @@ fn parties_with(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok(Parties {
         sp,
@@ -179,7 +179,7 @@ fn subject() -> Result<LogoutSubject, SamlError> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn start_options(binding: LogoutBinding) -> Result<StartSlo, SamlError> {
@@ -525,12 +525,12 @@ fn encrypted_id_requires_the_peer_encryption_key() -> Result<(), Box<dyn std::er
     let idp_without_keys = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &without_key_descriptors(parties.idp.metadata_xml())?,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let sp_without_keys = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &without_key_descriptors(parties.sp.metadata_xml())?,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     for started in [
         parties
@@ -563,7 +563,7 @@ fn unsigned_encrypted_id_stays_unread() -> Result<(), Box<dyn std::error::Error>
     for initiator in INITIATORS {
         for binding in [LogoutBinding::Post, LogoutBinding::Redirect] {
             let options = start_options(binding)?
-                .signing(LogoutSigning::DoNotSignForCompatibility)
+                .signing(LogoutSigning::DoNotSign)
                 .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
             let sent = start(&parties, initiator, options)?;
             assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));

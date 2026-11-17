@@ -286,7 +286,7 @@ impl Saml<Idp> {
     /// #     raw_query: String,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation =
-    ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
+    ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
     /// let input = BrowserInput::<ManageNameIdRequest>::redirect(raw_query);
     /// let received = idp.receive_name_id_management_redirect(
     ///     sp,

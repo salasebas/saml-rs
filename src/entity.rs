@@ -328,7 +328,7 @@ impl Default for EntitySetting {
             validate_audience: true,
             require_audience_restriction: true,
             want_message_signed: false,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             want_encrypted_cbc_response_signed: false,
             want_authn_requests_signed: false,
             verify_authn_request_signature_if_present: false,

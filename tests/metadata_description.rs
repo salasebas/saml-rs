@@ -159,12 +159,12 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
     let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     assert_eq!(sp_peer.metadata().organization()?, Some(organization()));
     assert_eq!(idp_peer.metadata().contacts()?, contacts());
@@ -354,7 +354,7 @@ fn malformed_optional_descriptions_do_not_change_import_acceptance() -> TestResu
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &xml,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok(())
 }

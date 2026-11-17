@@ -132,12 +132,12 @@ fn peers_with_profiles(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok(Peers {
         sp,
@@ -148,7 +148,7 @@ fn peers_with_profiles(
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, SamlError> {
@@ -459,7 +459,7 @@ fn redirect_and_post_authn_requests(
 fn strict_rsa_sha2_at_the_identity_provider_rejects_an_rsa_sha1_authn_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let strict = rsa_sha1_peers(
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
         XmlSignatureProfile::StrictRsaSha2,
     )?;
     for input in redirect_and_post_authn_requests(&strict)? {
@@ -472,8 +472,8 @@ fn strict_rsa_sha2_at_the_identity_provider_rejects_an_rsa_sha1_authn_request(
     }
 
     let provider_supported = rsa_sha1_peers(
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     for input in redirect_and_post_authn_requests(&provider_supported)? {
         provider_supported.idp.receive_sso(
@@ -491,15 +491,9 @@ fn strict_rsa_sha2_at_the_service_provider_rejects_an_rsa_sha1_sig_alg(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for (sp_xml_signatures, accepted) in [
         (XmlSignatureProfile::StrictRsaSha2, false),
-        (
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-            true,
-        ),
+        (XmlSignatureProfile::AllowWeakAlgorithms, true),
     ] {
-        let peers = rsa_sha1_peers(
-            sp_xml_signatures,
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-        )?;
+        let peers = rsa_sha1_peers(sp_xml_signatures, XmlSignatureProfile::AllowWeakAlgorithms)?;
         let started = peers.idp.start_slo(
             &peers.sp_descriptor,
             LogoutSubject::with_session_index(
@@ -560,8 +554,8 @@ fn recommended_identity_provider_rejects_an_md5_or_ripemd160_sig_alg(
             signer(),
             rsa(AlgorithmPolicy::default()),
             XmlPolicy::default(),
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            XmlSignatureProfile::AllowWeakAlgorithms,
+            XmlSignatureProfile::AllowWeakAlgorithms,
         )?;
         let input = redirect_authn_request(&compatible)?;
         compatible
@@ -611,8 +605,8 @@ fn recommended_identity_provider_does_not_verify_with_a_1024_bit_rsa_key(
         rsa_1024(),
         rsa(AlgorithmPolicy::default()),
         XmlPolicy::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     for input in redirect_and_post_authn_requests(&compatible)? {
         compatible
@@ -645,7 +639,7 @@ fn recommended_service_provider_does_not_verify_with_a_1024_bit_rsa_key(
         rsa(AlgorithmPolicy::default()),
         rsa_1024(),
         XmlPolicy::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
         IdpValidationPolicy::recommended().xml_signatures,
     )?;
     signed_redirect_request_then_post_response(&compatible, RespondSso::post())?;
@@ -743,12 +737,12 @@ fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn s
 fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dyn std::error::Error>>
 {
     for data_encryption in [
-        DataEncryptionAlgorithm::TripleDesForCompatibility,
-        DataEncryptionAlgorithm::Aes128,
-        DataEncryptionAlgorithm::Aes256,
+        DataEncryptionAlgorithm::TripleDesCbc,
+        DataEncryptionAlgorithm::Aes128Cbc,
+        DataEncryptionAlgorithm::Aes256Cbc,
     ] {
         for key_encryption in [
-            KeyEncryptionAlgorithm::Rsa15ForCompatibility,
+            KeyEncryptionAlgorithm::Rsa15,
             KeyEncryptionAlgorithm::RsaOaepMgf1p,
         ] {
             let expected = [
@@ -784,7 +778,7 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
 #[test]
 fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn std::error::Error>> {
     let rsa15 = AlgorithmPolicy {
-        key_encryption: KeyEncryptionAlgorithm::Rsa15ForCompatibility,
+        key_encryption: KeyEncryptionAlgorithm::Rsa15,
         ..AlgorithmPolicy::default()
     };
     for encryption in [

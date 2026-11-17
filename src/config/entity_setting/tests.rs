@@ -78,8 +78,8 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         })
         .algorithms(AlgorithmPolicy {
             signature: SignatureAlgorithm::RsaSha512,
-            data_encryption: DataEncryptionAlgorithm::Aes128,
-            key_encryption: KeyEncryptionAlgorithm::Rsa15ForCompatibility,
+            data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
+            key_encryption: KeyEncryptionAlgorithm::Rsa15,
             signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
             ..AlgorithmPolicy::default()
         })

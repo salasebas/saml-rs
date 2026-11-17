@@ -64,12 +64,12 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok(Parties {
         sp,
@@ -80,7 +80,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn subject() -> Subject {
@@ -171,7 +171,7 @@ fn post_authn_request_with_object_is_rejected_unless_the_compatibility_profile_i
         ));
     }
 
-    let parties = parties(XmlSignatureProfile::AllowProviderSupportedForCompatibility)?;
+    let parties = parties(XmlSignatureProfile::AllowWeakAlgorithms)?;
     let form = post_authn_request_with_object(&parties)?;
     parties.idp.receive_sso(
         &parties.sp_descriptor,

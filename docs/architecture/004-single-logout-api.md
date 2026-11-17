@@ -41,7 +41,7 @@ pub struct RespondSlo {
 pub enum LogoutSigning {
     FollowLocalPolicy,
     Sign,
-    DoNotSignForCompatibility,
+    DoNotSign,
 }
 ```
 

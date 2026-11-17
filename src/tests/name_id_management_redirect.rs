@@ -88,7 +88,7 @@ fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )
 }
 
@@ -96,12 +96,12 @@ fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> 
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn validation_with_cache(cache: &mut dyn ReplayCache) -> SamlValidationContext<'_> {
@@ -780,10 +780,8 @@ fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_stor
             .contains_key("manage_name_id_request_id:_manage1"));
     }
 
-    let unbounded = SamlValidationContext::new(
-        issued_at_plus(30 * 24 * 60 * 60)?,
-        ReplayPolicy::DisabledForCompatibility,
-    );
+    let unbounded =
+        SamlValidationContext::new(issued_at_plus(30 * 24 * 60 * 60)?, ReplayPolicy::Disabled);
     assert_eq!(
         unbounded.manage_name_id_request_age(),
         ManageNameIdRequestAgePolicy::Disabled
@@ -915,7 +913,7 @@ fn http_name_identifier_management_endpoint_needs_an_explicit_relaxation() -> Te
     let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         HTTP_SP_METADATA,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     match idp.start_name_id_management_redirect(
         &sp_peer,
@@ -1046,7 +1044,7 @@ fn request_goes_to_the_service_provider_role_of_a_dual_role_peer() -> TestResult
     let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &dual_role,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let started = idp()?.start_name_id_management_redirect(
         &sp_peer,

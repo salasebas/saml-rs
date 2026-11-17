@@ -14,7 +14,7 @@
 //! `Default` and the config builders start on Recommended.
 //!
 //! Where the compact flow examples below use
-//! [`ReplayPolicy::DisabledForCompatibility`] or unsigned metadata, treat those
+//! [`ReplayPolicy::Disabled`] or unsigned metadata, treat those
 //! as explicit interoperability choices. Production-shaped inbound flows should
 //! use [`ReplayPolicy::RequireCache`] with a caller-owned [`ReplayCache`] and,
 //! when protocol timestamps are not enough for expiry,
@@ -60,7 +60,7 @@
 //! let idp = IdpDescriptor::from_metadata_xml(
 //!     EntityId::try_new("https://idp.example.com/metadata")?,
 //!     idp_metadata_xml,
-//!     MetadataTrustPolicy::UnsignedForCompatibility,
+//!     MetadataTrustPolicy::AllowUnsigned,
 //! )?;
 //!
 //! let started = sp.start_sso(&idp, StartSso::redirect())?;
@@ -69,7 +69,7 @@
 //!
 //! let validation = SamlValidationContext::new(
 //!     SystemTime::now(),
-//!     ReplayPolicy::DisabledForCompatibility,
+//!     ReplayPolicy::Disabled,
 //! );
 //! let session = sp.finish_sso(
 //!     &idp,
@@ -110,7 +110,7 @@
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let validation = SamlValidationContext::new(
 //!     SystemTime::now(),
-//!     ReplayPolicy::DisabledForCompatibility,
+//!     ReplayPolicy::Disabled,
 //! );
 //! let session = sp.accept_unsolicited_sso(
 //!     idp,
@@ -141,7 +141,7 @@
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let validation = SamlValidationContext::new(
 //!     SystemTime::now(),
-//!     ReplayPolicy::DisabledForCompatibility,
+//!     ReplayPolicy::Disabled,
 //! );
 //! let request = idp.receive_sso(
 //!     sp,
@@ -203,7 +203,7 @@
 //!     let started = sp.start_slo(idp, subject, StartSlo::post())?;
 //!     let validation = SamlValidationContext::new(
 //!         SystemTime::now(),
-//!         ReplayPolicy::DisabledForCompatibility,
+//!         ReplayPolicy::Disabled,
 //!     );
 //!     let completed = sp.finish_slo(
 //!         idp,
@@ -260,13 +260,13 @@
 //!
 //! Metadata trust is explicit and caller-pinned. [`MetadataTrustPolicy`] can
 //! accept unsigned metadata with
-//! [`MetadataTrustPolicy::UnsignedForCompatibility`] to preserve a samlify-port
+//! [`MetadataTrustPolicy::AllowUnsigned`] to preserve a samlify-port
 //! or raw import, or require a signature from caller-provided certificates with
 //! [`MetadataTrustPolicy::RequireSignature`].
 //! [`MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization`]
 //! also accepts inclusive canonicalization. Both reject MD5 and RIPEMD-160
 //! signatures and RSA keys shorter than 2048 bits;
-//! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility`]
+//! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms`]
 //! accepts them. Prefer signed metadata with
 //! pinned certificates for production trust decisions; the crate does not treat
 //! the public web PKI CA store as SAML metadata trust.

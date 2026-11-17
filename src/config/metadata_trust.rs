@@ -21,7 +21,7 @@ use super::policies::XmlSignatureProfile;
 ///
 /// SAML metadata trust is caller-pinned or federation-driven; this type does
 /// not use a public web PKI CA store by default.
-/// [`UnsignedForCompatibility`](Self::UnsignedForCompatibility) preserves an
+/// [`AllowUnsigned`](Self::AllowUnsigned) preserves an
 /// unsigned samlify-port or raw metadata import. It is not the preferred
 /// production trust model.
 ///
@@ -51,7 +51,7 @@ pub enum MetadataTrustPolicy<'a> {
     /// Accept unsigned metadata to preserve a samlify-port or raw import.
     ///
     /// A signature on the document is not treated as verified.
-    UnsignedForCompatibility,
+    AllowUnsigned,
     /// Require a valid metadata signature from one of the pinned certificates.
     ///
     /// The signature must be an enveloped `#id` signature over the metadata
@@ -80,7 +80,7 @@ pub enum MetadataTrustPolicy<'a> {
     ///
     /// The signature shape and transform checks of [`Self::RequireSignature`]
     /// stay on. See `docs/conformance/metadata-and-replay.md`.
-    RequireSignatureAllowingWeakAlgorithmsForCompatibility {
+    RequireSignatureAllowingWeakAlgorithms {
         /// Caller-pinned certificates trusted to sign the metadata.
         trusted_certificates: &'a [CertificatePem],
     },
@@ -89,7 +89,7 @@ pub enum MetadataTrustPolicy<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(not(crypto), allow(dead_code))]
 pub(super) enum AppliedMetadataTrust {
-    UnsignedForCompatibility,
+    Unsigned,
     SignedByPinnedCertificates {
         signed_entity_descriptor_xml: String,
     },
@@ -124,9 +124,7 @@ where
     M: Deref<Target = Metadata>,
 {
     match trust {
-        MetadataTrustPolicy::UnsignedForCompatibility => {
-            Ok(AppliedMetadataTrust::UnsignedForCompatibility)
-        }
+        MetadataTrustPolicy::AllowUnsigned => Ok(AppliedMetadataTrust::Unsigned),
         MetadataTrustPolicy::RequireSignature {
             trusted_certificates,
         } => verify_pinned_metadata_signature(
@@ -143,13 +141,13 @@ where
             MetadataSignatureTransforms::AllowOtherCanonicalization,
             XmlSignatureProfile::ExcludeWeakAlgorithms,
         ),
-        MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility {
+        MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms {
             trusted_certificates,
         } => verify_pinned_metadata_signature(
             metadata,
             trusted_certificates,
             MetadataSignatureTransforms::Profile,
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            XmlSignatureProfile::AllowWeakAlgorithms,
         ),
     }
 }

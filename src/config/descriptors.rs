@@ -453,7 +453,7 @@ impl IdpDescriptor {
             AppliedMetadataTrust::SignedByPinnedCertificates {
                 signed_entity_descriptor_xml,
             } => Some(signed_entity_descriptor_xml.as_str()),
-            AppliedMetadataTrust::UnsignedForCompatibility => None,
+            AppliedMetadataTrust::Unsigned => None,
         }
     }
 }
@@ -545,7 +545,7 @@ impl SpDescriptor {
             AppliedMetadataTrust::SignedByPinnedCertificates {
                 signed_entity_descriptor_xml,
             } => Some(signed_entity_descriptor_xml.as_str()),
-            AppliedMetadataTrust::UnsignedForCompatibility => None,
+            AppliedMetadataTrust::Unsigned => None,
         }
     }
 }

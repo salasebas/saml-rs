@@ -46,7 +46,7 @@ fn encrypted_exchange(
 #[test]
 fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std::error::Error>> {
     for algorithm in [
-        DataEncryptionAlgorithm::Aes256,
+        DataEncryptionAlgorithm::Aes256Cbc,
         DataEncryptionAlgorithm::Custom("http://www.w3.org/2001/04/xmlenc#aes192-cbc".into()),
     ] {
         let exchange = encrypted_exchange(algorithm)?;
@@ -87,9 +87,9 @@ fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
         .build()?,
     )?;
     for algorithm in [
-        DataEncryptionAlgorithm::Aes128,
+        DataEncryptionAlgorithm::Aes128Cbc,
         DataEncryptionAlgorithm::Custom("http://www.w3.org/2001/04/xmlenc#aes192-cbc".into()),
-        DataEncryptionAlgorithm::Aes256,
+        DataEncryptionAlgorithm::Aes256Cbc,
     ] {
         let exchange = encrypted_exchange(algorithm)?;
         let fields = exchange.response_fields;

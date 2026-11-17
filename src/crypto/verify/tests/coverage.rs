@@ -9,7 +9,7 @@ fn detailed_verification_reports_one_signature_covering_response_and_assertion(
         &[SP_SIGNING_CERT.to_string()],
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
 
     let [signature] = result.verified_embedded_signatures() else {
@@ -87,7 +87,7 @@ fn protocol_responses_reject_subject_confirmation_wrapping(
                 &[],
                 None,
                 XmlLimits::default(),
-                XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+                XmlSignatureProfile::AllowWeakAlgorithms,
             )
             .map(|_| ()),
         ] {
@@ -132,7 +132,7 @@ fn substring_and_foreign_namespace_roots_skip_response_wrapping(
             &[],
             None,
             XmlLimits::default(),
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            XmlSignatureProfile::AllowWeakAlgorithms,
         )?;
         assert!(
             !detailed.verified() && !detailed.response_covered(),
@@ -179,7 +179,7 @@ fn assert_both_verifiers_agree(
         &certificates,
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     assert!(detailed.verified());
     assert_eq!(detailed.response_covered(), response_covered);
@@ -259,7 +259,7 @@ fn detailed_verification_aggregates_rolling_cert_coverage_after_first_signature_
         &[SP_SIGNING_CERT.to_string(), IDP_CERT.to_string()],
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     assert!(result.verified() && result.assertion_directly_covered() && result.response_covered());
     assert_eq!(result.verified_embedded_signatures().len(), 2);

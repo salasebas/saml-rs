@@ -392,7 +392,7 @@ impl SsoSession {
         let validation_now = validation.now_offset()?;
         let not_on_or_after_skew_ms = validation.clock_skew().not_on_or_after_millis();
         match validation.replay_policy() {
-            ReplayPolicy::DisabledForCompatibility => Ok(()),
+            ReplayPolicy::Disabled => Ok(()),
             ReplayPolicy::RequireCache(cache) => {
                 let replays =
                     crate::assertion_acceptance::assertion_replays(&self.raw_flow.saml_content)?;

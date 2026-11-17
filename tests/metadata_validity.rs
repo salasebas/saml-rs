@@ -76,7 +76,7 @@ fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> 
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )
 }
 
@@ -84,7 +84,7 @@ fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )
 }
 
@@ -101,7 +101,7 @@ fn soap_name_id_sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, Sa
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )
 }
 
@@ -171,7 +171,7 @@ fn receive_sso_compares_valid_until_with_the_context_clock(
     let sp = sp(Some(MetadataLifetime::ValidUntil(valid_until)))?;
     let idp = idp(None)?;
     let descriptor = sp_descriptor(&sp)?;
-    let context = |now| SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility);
+    let context = |now| SamlValidationContext::new(now, ReplayPolicy::Disabled);
 
     idp.receive_sso(
         &descriptor,
@@ -199,8 +199,7 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
     let current_sp = soap_name_id_sp_descriptor(&sp)?;
     let current_idp = idp_descriptor(&idp)?;
     let channel = SoapChannel::mutually_authenticated_confidential();
-    let now =
-        || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
+    let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
     let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
     let artifact = idp.issue_artifact(&current_sp, artifact_message()?, 0, &mut issued)?;
     let resolve_envelope = sp
@@ -290,7 +289,7 @@ fn an_elapsed_cache_duration_leaves_metadata_usable() -> Result<(), Box<dyn std:
     idp.receive_sso(
         &sp_descriptor(&sp)?,
         posted_authn_request(&sp, &idp)?,
-        SamlValidationContext::new(a_day_later, ReplayPolicy::DisabledForCompatibility),
+        SamlValidationContext::new(a_day_later, ReplayPolicy::Disabled),
     )?;
     Ok(())
 }
@@ -304,7 +303,7 @@ fn import_rejects_a_malformed_valid_until() -> Result<(), Box<dyn std::error::Er
     let imported = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &xml,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     );
 
     assert!(is_valid_until_error(&imported));
@@ -394,8 +393,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
     let (expired_sp, expired_idp) = browser_facades(at(Y2001))?;
     let expired_sp = sp_descriptor(&expired_sp)?;
     let expired_idp = idp_descriptor(&expired_idp)?;
-    let now =
-        || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
+    let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
     let name_id = NameId::new("alice", Some(NameIdFormat::EmailAddress));
     let subject =
         LogoutSubject::with_session_index(name_id.clone(), SessionIndex::try_new("_session")?);
@@ -507,8 +505,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
         let sp_peer = sp_descriptor(&sp)?;
         let idp_peer = idp_descriptor(&idp)?;
         for now in [valid_until - Duration::from_secs(1), valid_until] {
-            let validation =
-                || SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility);
+            let validation = || SamlValidationContext::new(now, ReplayPolicy::Disabled);
             let received_slo = [
                 (
                     "SP receive_slo",

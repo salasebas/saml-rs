@@ -164,7 +164,7 @@ impl Saml<Idp> {
     /// #     request_envelope: &str,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation =
-    ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
+    ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
     /// let received = idp.receive_name_id_management(
     ///     sp,
     ///     request_envelope,

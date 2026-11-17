@@ -26,7 +26,7 @@ pub enum AssertionSignaturePolicy {
     /// HTTP POST still requires the assertion to be protected by an Assertion
     /// signature or a Response signature.
     #[default]
-    AllowUnsignedForCompatibility,
+    AllowUnsigned,
 }
 
 /// Whether an accepting service provider requires a signature on the
@@ -123,7 +123,7 @@ pub enum XmlSignatureProfile {
     /// ignored when the first signature of the message verifies, and
     /// HTTP-Redirect and HTTP-POST-SimpleSign verify only the detached
     /// signature unless the Assertion must be signed.
-    AllowProviderSupportedForCompatibility,
+    AllowWeakAlgorithms,
 }
 
 /// Whether an SP signs outgoing AuthnRequests.
@@ -133,7 +133,7 @@ pub enum AuthnRequestSigningPolicy {
     Sign,
     /// Send unsigned AuthnRequests, preserving the samlify port.
     #[default]
-    DoNotSignForCompatibility,
+    DoNotSign,
 }
 
 /// Whether an identity provider requires a signed inbound `<AuthnRequest>`.
@@ -142,7 +142,7 @@ pub enum AuthnRequestSigningPolicy {
 /// [`Self::AllowUnsignedVerifyIfPresent`] verifies a signature that is present
 /// and accepts an unsigned request unless the service provider's metadata sets
 /// `AuthnRequestsSigned`.
-/// [`Self::AllowUnsignedForCompatibility`] does not verify a present signature.
+/// [`Self::AllowUnsigned`] does not verify a present signature.
 /// The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
@@ -161,7 +161,7 @@ pub enum AuthnRequestValidationPolicy {
     /// `AuthnRequestsSigned`.
     AllowUnsignedVerifyIfPresent,
     /// Accept unsigned AuthnRequests without verifying a signature that is present.
-    AllowUnsignedForCompatibility,
+    AllowUnsigned,
 }
 
 /// Whether logout messages require signatures.
@@ -171,14 +171,14 @@ pub enum LogoutSignaturePolicy {
     #[default]
     RequireSigned,
     /// Accept unsigned logout messages, preserving the samlify port.
-    AllowUnsignedForCompatibility,
+    AllowUnsigned,
 }
 
 /// Whether an accepting service provider evaluates `<AudienceRestriction>`.
 ///
 /// [`Self::EvaluatePresentRestrictions`] checks restrictions that are present.
 /// [`Self::Validate`] also rejects a bearer assertion that omits one.
-/// [`Self::SkipForCompatibility`] skips the check. The accept combination is
+/// [`Self::Skip`] skips the check. The accept combination is
 /// classified in `docs/conformance/web-browser-sso-acceptance.md`.
 ///
 /// The policy has no `Default`. Take it from a preset, such as
@@ -199,7 +199,7 @@ pub enum AudienceValidationPolicy {
     /// A bearer assertion that omits the element is not rejected.
     EvaluatePresentRestrictions,
     /// Skip audience evaluation, preserving the samlify port.
-    SkipForCompatibility,
+    Skip,
 }
 
 /// Whether SP AuthnRequests allow IdPs to create a new identifier.
@@ -260,10 +260,10 @@ impl SpValidationPolicy {
     /// ```
     pub fn recommended() -> Self {
         Self {
-            assertions: AssertionSignaturePolicy::AllowUnsignedForCompatibility,
+            assertions: AssertionSignaturePolicy::AllowUnsigned,
             responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
-            authn_requests: AuthnRequestSigningPolicy::DoNotSignForCompatibility,
+            authn_requests: AuthnRequestSigningPolicy::DoNotSign,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
             logout: LogoutPolicy::recommended(),
@@ -274,11 +274,11 @@ impl SpValidationPolicy {
     /// the raw API.
     pub fn compatibility() -> Self {
         Self {
-            assertions: AssertionSignaturePolicy::AllowUnsignedForCompatibility,
+            assertions: AssertionSignaturePolicy::AllowUnsigned,
             responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-            authn_requests: AuthnRequestSigningPolicy::DoNotSignForCompatibility,
-            audience: AudienceValidationPolicy::SkipForCompatibility,
+            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
+            authn_requests: AuthnRequestSigningPolicy::DoNotSign,
+            audience: AudienceValidationPolicy::Skip,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
             logout: LogoutPolicy::compatibility(),
         }
@@ -328,8 +328,8 @@ impl IdpValidationPolicy {
     /// present on an `AuthnRequest` is not verified.
     pub fn compatibility() -> Self {
         Self {
-            authn_requests: AuthnRequestValidationPolicy::AllowUnsignedForCompatibility,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
+            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             logout: LogoutPolicy::compatibility(),
         }
     }
@@ -374,8 +374,8 @@ impl LogoutPolicy {
     /// samlify-port hatch.
     pub fn compatibility() -> Self {
         Self {
-            requests: LogoutSignaturePolicy::AllowUnsignedForCompatibility,
-            responses: LogoutSignaturePolicy::AllowUnsignedForCompatibility,
+            requests: LogoutSignaturePolicy::AllowUnsigned,
+            responses: LogoutSignaturePolicy::AllowUnsigned,
         }
     }
 }
@@ -790,7 +790,7 @@ pub(super) fn encrypted_cbc_response_signature_required(policy: ResponseSignatur
 pub(super) fn logout_signature_required(policy: LogoutSignaturePolicy) -> bool {
     match policy {
         LogoutSignaturePolicy::RequireSigned => true,
-        LogoutSignaturePolicy::AllowUnsignedForCompatibility => false,
+        LogoutSignaturePolicy::AllowUnsigned => false,
     }
 }
 pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {

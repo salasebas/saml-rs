@@ -17,13 +17,17 @@ Recommended rather than collected into a third preset. One implementation-securi
 default is the exception: Recommended excludes MD5 and RIPEMD-160 signature and
 digest algorithms and RSA keys shorter than 2048 bits
 (`XmlSignatureProfile::ExcludeWeakAlgorithms`), and
-`AllowProviderSupportedForCompatibility` relaxes it. Signed metadata import
+`AllowWeakAlgorithms` relaxes it. Signed metadata import
 applies the same exclusion under `MetadataTrustPolicy::RequireSignature` and
 `RequireSignatureAllowingOtherCanonicalization`, and
-`RequireSignatureAllowingWeakAlgorithmsForCompatibility` relaxes it. A bundled strict
+`RequireSignatureAllowingWeakAlgorithms` relaxes it. A bundled strict
 preset was rejected because callers need those hardenings independently, and
 because a MAY is an optional capability rather than a stricter conformance
 level.
+
+A relaxed option is named after what it allows, such as `AllowUnsigned`,
+`AllowWeakAlgorithms`, or `DoNotSign`. The name does not record why the option
+exists, so it carries no `ForCompatibility` suffix.
 
 Web Browser SSO, Single Logout, metadata, and replay are classified under
 `docs/conformance/`. `recommended()` publishes that combination.

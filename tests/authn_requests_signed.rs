@@ -27,7 +27,7 @@ const IDP_SOAP: &str = "https://idp.example.com/sso/soap";
 const SOAP_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -61,12 +61,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }
@@ -109,7 +109,7 @@ fn envelope_for_idp(sp_soap: &str) -> Result<String, Box<dyn std::error::Error>>
 fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signing_sp = sp(AuthnRequestSigningPolicy::Sign)?;
-    let unsigned_sp = sp(AuthnRequestSigningPolicy::DoNotSignForCompatibility)?;
+    let unsigned_sp = sp(AuthnRequestSigningPolicy::DoNotSign)?;
     let idp = idp(IdpValidationPolicy::recommended())?;
     let (signing_descriptor, idp_descriptor) = descriptors(&signing_sp, &idp)?;
     assert!(signing_sp

@@ -21,9 +21,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_signing_key(PrivateKeyPem::new(privkey))
             .with_signing_certificate(CertificatePem::new(cert))
     };
-    // DisabledForCompatibility preserves the raw API, which has no replay cache.
-    let validation =
-        || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility);
+    // Disabled preserves the raw API, which has no replay cache.
+    let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
 
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
@@ -44,14 +43,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),
-        // UnsignedForCompatibility preserves an unsigned samlify-port metadata import.
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        // AllowUnsigned preserves an unsigned samlify-port metadata import.
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         idp.metadata_xml(),
-        // UnsignedForCompatibility preserves an unsigned samlify-port metadata import.
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        // AllowUnsigned preserves an unsigned samlify-port metadata import.
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     let sso = sp.start_sso(&idp_descriptor, StartSso::post())?;

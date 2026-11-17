@@ -289,10 +289,7 @@ mod tests {
         use crate::model::{ReplayPolicy, SamlValidationContext};
         use std::time::SystemTime;
 
-        let validation = SamlValidationContext::new(
-            SystemTime::UNIX_EPOCH,
-            ReplayPolicy::DisabledForCompatibility,
-        );
+        let validation = SamlValidationContext::new(SystemTime::UNIX_EPOCH, ReplayPolicy::Disabled);
         let now = OffsetDateTime::parse("2026-10-10T00:00:00Z", &Rfc3339)?;
         let drift = validation.clock_skew().as_millis();
         let never_expires = "9999-12-31T23:59:59Z";

@@ -555,7 +555,7 @@ fn detailed_verification_ignores_foreign_extension_certificate(
         &[SP_SIGNING_CERT.to_string()],
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     assert!(result.verified() && result.assertion_directly_covered());
     Ok(())
@@ -588,7 +588,7 @@ fn detailed_verification_rejects_invalid_first_signature_before_later_assertion_
         &[IDP_CERT.to_string()],
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     assert!(!result.verified() && !result.response_covered());
     assert!(result.verified_embedded_signatures().is_empty());
@@ -610,7 +610,7 @@ fn detailed_verification_excludes_untrusted_extra_signature_evidence(
         &[SP_SIGNING_CERT.to_string()],
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
 
     let [signature] = result.verified_embedded_signatures() else {
@@ -636,7 +636,7 @@ fn detailed_verification_excludes_valid_unrelated_signature_evidence(
         &[SP_SIGNING_CERT.to_string()],
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
 
     let [signature] = result.verified_embedded_signatures() else {
@@ -666,7 +666,7 @@ fn extra_response_signature_that_does_not_verify_is_ignored_only_by_the_compatib
         )
     };
 
-    let compatible = verify_under(XmlSignatureProfile::AllowProviderSupportedForCompatibility)?;
+    let compatible = verify_under(XmlSignatureProfile::AllowWeakAlgorithms)?;
     let [signature] = compatible.verified_embedded_signatures() else {
         return Err("expected only the trusted Assertion signature".into());
     };
@@ -713,7 +713,7 @@ fn strict_profile_rejects_foreign_xpath_transform_on_verified_assertion_signatur
         &[SP_SIGNING_CERT.to_string()],
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     let [signature] = compatible.verified_embedded_signatures() else {
         return Err("expected the assertion-covering signature".into());
@@ -760,10 +760,7 @@ fn excluding_weak_algorithms_rejects_md5_and_ripemd160_but_keeps_sha1(
         (RSA_SHA1, SHA1, false),
     ] {
         let signed = response_signed_over_assertion_with(algorithm, digest)?;
-        let compatible = verify_under(
-            &signed,
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-        )?;
+        let compatible = verify_under(&signed, XmlSignatureProfile::AllowWeakAlgorithms)?;
         assert!(compatible.verified() && compatible.assertion_directly_covered());
 
         let weak_excluded = verify_under(&signed, XmlSignatureProfile::ExcludeWeakAlgorithms);
@@ -844,7 +841,7 @@ fn detailed_rolling_cert_unloadable_peer_keeps_invalid_verdict(
             &certs,
             None,
             XmlLimits::default(),
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            XmlSignatureProfile::AllowWeakAlgorithms,
         )?;
         assert!(
             !result.verified()
@@ -895,7 +892,7 @@ fn rolling_cert_key_info_naming_another_trusted_cert_still_verifies(
             &certs,
             None,
             XmlLimits::default(),
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            XmlSignatureProfile::AllowWeakAlgorithms,
         )?;
         assert!(detailed.verified() && detailed.assertion_directly_covered());
     }
@@ -914,7 +911,7 @@ fn rolling_cert_rejects_signer_outside_the_trusted_keys() -> Result<(), Box<dyn 
         &certs,
         None,
         XmlLimits::default(),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )?;
     assert!(!detailed.verified());
     Ok(())
@@ -936,7 +933,7 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
             &certs,
             Some(&secret),
             XmlLimits::default(),
-            XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            XmlSignatureProfile::AllowWeakAlgorithms,
         )?
         .verified())
     };

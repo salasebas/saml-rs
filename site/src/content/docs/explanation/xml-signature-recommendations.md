@@ -34,13 +34,13 @@ The typed verification path does not take a `DsigContext` from the application. 
 
 The same path calls `with_insecure(true)`. That flag skips X.509 chain building and certificate time checks only. Metadata certificates are pinned key material, so saml-rs does not ask bergshamra to validate them as a public CA chain. Signature, digest, reference, duplicate-ID, and wrapping checks stay on. Do not replace this adapter with `DsigContext::new_permissive()`.
 
-`MetadataTrustPolicy::UnsignedForCompatibility` can still parse a signed document and does not record that signature as verified. A certificate inside a metadata `KeyDescriptor` is not a trust anchor. Errata 05 E69 says no trust follows from including one.
+`MetadataTrustPolicy::AllowUnsigned` can still parse a signed document and does not record that signature as verified. A certificate inside a metadata `KeyDescriptor` is not a trust anchor. Errata 05 E69 says no trust follows from including one.
 
 ## Your choices
 
 The adapter does not pick your peer. `recommended()` does not invent a trust anchor or a replay cache.
 
-- Import metadata with `MetadataTrustPolicy::RequireSignature` and the certificate you pinned out of band. `UnsignedForCompatibility` is the hatch the examples use so they compile alone.
+- Import metadata with `MetadataTrustPolicy::RequireSignature` and the certificate you pinned out of band. `AllowUnsigned` is the hatch the examples use so they compile alone.
 - Pass `ReplayPolicy::RequireCache` with a cache you own on browser SSO.
 - Start from `recommended()`, then add `AssertionSignaturePolicy::RequireSigned` or `XmlSignatureProfile::StrictRsaSha2` only when you want that hardening.
 - Leave RSA-v1.5 key-transport decryption off unless a peer cannot send RSA-OAEP. See [Security](../reference/security.md).

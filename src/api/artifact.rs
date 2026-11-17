@@ -172,12 +172,12 @@ impl Saml<Idp> {
     /// let sp_descriptor = SpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://sp.example.com/metadata")?,
     ///     sp.metadata_xml(),
-    ///     MetadataTrustPolicy::UnsignedForCompatibility,
+    ///     MetadataTrustPolicy::AllowUnsigned,
     /// )?;
     /// let idp_descriptor = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
-    ///     MetadataTrustPolicy::UnsignedForCompatibility,
+    ///     MetadataTrustPolicy::AllowUnsigned,
     /// )?;
     /// let message = IssuedMessage::web_browser_sso_response(
     ///     r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">artifact-message</samlp:Response>"#,

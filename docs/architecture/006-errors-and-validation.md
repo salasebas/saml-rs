@@ -118,7 +118,7 @@ pub struct SamlValidationContext<'a> {
 
 pub enum ReplayPolicy<'a> {
     RequireCache(&'a mut dyn ReplayCache),
-    DisabledForCompatibility,
+    Disabled,
 }
 
 pub trait ReplayCache {
@@ -145,7 +145,7 @@ LogoutRequest time errors preserve the standards/policy boundary:
 - an effective deadline that cannot be represented by the caller's
   `SystemTime` replay cache is `TimeWindowInvalid` for `ReplayExpiration`.
 
-`ReplayPolicy::DisabledForCompatibility` preserves the raw API, which has no
+`ReplayPolicy::Disabled` preserves the raw API, which has no
 replay cache. It skips storage only. It does not disable the LogoutRequest
 expiration policy.
 
@@ -209,7 +209,7 @@ Rules:
   reject an MD5 or RIPEMD-160 signature or digest algorithm with
   `AlgorithmUnsupported` on a build that verifies it, and do not verify with
   a pinned RSA certificate shorter than 2048 bits.
-  `RequireSignatureAllowingWeakAlgorithmsForCompatibility` accepts them.
+  `RequireSignatureAllowingWeakAlgorithms` accepts them.
 - It must prove that signed root is covered and preserve its XML as trust
   evidence.
 - If the signature shape or coverage cannot be determined, fail closed with

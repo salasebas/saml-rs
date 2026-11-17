@@ -169,7 +169,7 @@ impl<'a> Default for FlowOptions<'a> {
             check_signature: false,
             verify_signature_if_present: false,
             require_audience_restriction: true,
-            xml_signatures: XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             from_issuer: None,
             signing_certs: &[],
             hmac_secret: None,
