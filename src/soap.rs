@@ -8,7 +8,7 @@ use quick_xml::reader::NsReader;
 
 use crate::error::{xml_err, SamlError};
 use crate::model::EndpointUrl;
-use crate::xml::dom::{self, Node};
+use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::fragment::standalone_element;
 use crate::xml::write::XmlWriter;
 use crate::xml::XmlLimits;
@@ -416,7 +416,7 @@ fn scan_envelope(xml: &str, understood: &[UnderstoodHeader]) -> Result<SoapScan,
             }
             Ok(Event::Eof) => break,
             Ok(_) => {}
-            Err(err) => return Err(xml_err(err)),
+            Err(err) => return Err(reader_err(err)),
         }
         buf.clear();
     }

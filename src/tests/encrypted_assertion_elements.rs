@@ -427,7 +427,10 @@ fn service_provider_without_the_key_keeps_the_single_key_error(
             matches!(both_keys, SamlError::Crypto { .. }),
             "{both_keys:?}"
         );
-        assert_eq!(both_keys.to_string(), single_key.to_string());
+        assert_eq!(
+            std::error::Error::source(&both_keys).map(ToString::to_string),
+            std::error::Error::source(&single_key).map(ToString::to_string)
+        );
     }
     Ok(())
 }

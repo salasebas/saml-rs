@@ -369,7 +369,9 @@ pub enum SamlError {
     /// `SPNameQualifier`. An omitted `Format` is unspecified.
     #[error("assertions do not refer to one principal")]
     PrincipalMismatch,
-    /// A `<Response>` with status `Success` carries no assertion.
+    /// A `<Response>` with status `Success` carries no assertion to read: none
+    /// at all, or only `<EncryptedAssertion>` elements that were not
+    /// decrypted.
     #[error("response carries no assertion")]
     AssertionMissing,
     /// An `ArtifactResponse` did not contain the dereferenced protocol message.

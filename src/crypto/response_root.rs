@@ -1,7 +1,8 @@
 //! Recognition of SAML protocol response document elements.
 
 use crate::constants::namespace;
-use crate::error::{xml_err, SamlError};
+use crate::error::SamlError;
+use crate::xml::dom::reader_err;
 use quick_xml::events::Event;
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
@@ -36,7 +37,7 @@ fn document_element_name(xml: &str) -> Result<(String, String), SamlError> {
                 return Err(SamlError::xml("no document element"));
             }
             Ok(_) => {}
-            Err(error) => return Err(xml_err(error)),
+            Err(error) => return Err(reader_err(error)),
         }
         buffer.clear();
     }
