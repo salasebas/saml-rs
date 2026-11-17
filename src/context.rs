@@ -7,6 +7,8 @@
 use crate::error::SamlError;
 use crate::xml::XmlLimits;
 
+pub use crate::SchemaValidator;
+
 /// Validate XML with baseline parser hardening.
 #[deprecated(
     note = "`saml_rs::context` becomes crate-private in the next minor release; the typed API checks every message it receives"

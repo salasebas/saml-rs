@@ -167,6 +167,9 @@ impl<Response> RefusedNameIdManagement<Response> {
 ///
 /// Send [`Self::request`] to the service provider, then pass its SOAP response
 /// to [`Self::finish`].
+///
+/// Equality compares every data field and the stored schema callback address,
+/// with the function-address limitations documented on [`crate::XmlPolicy`].
 #[derive(Debug, Clone)]
 pub struct StartedNameIdManagement {
     request: SoapRequest,
@@ -175,6 +178,25 @@ pub struct StartedNameIdManagement {
     xml_limits: XmlLimits,
     schema_validator: Option<crate::SchemaValidator>,
 }
+
+impl PartialEq for StartedNameIdManagement {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            request,
+            request_id,
+            service_provider,
+            xml_limits,
+            schema_validator,
+        } = self;
+        request == &other.request
+            && request_id == &other.request_id
+            && service_provider == &other.service_provider
+            && xml_limits == &other.xml_limits
+            && crate::schema::validator_addresses_equal(*schema_validator, other.schema_validator)
+    }
+}
+
+impl Eq for StartedNameIdManagement {}
 
 impl StartedNameIdManagement {
     /// SOAP `ManageNameIDRequest` addressed to the service provider's
@@ -572,5 +594,41 @@ fn require_channel(channel: SoapChannel) -> Result<(), SamlError> {
         Ok(())
     } else {
         Err(SamlError::SoapChannelProtection)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schema_callback_participates_in_name_id_management_equality(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        fn validate(_: &str) -> Result<(), String> {
+            Ok(())
+        }
+        let unchecked = StartedNameIdManagement {
+            request: SoapProtocolMessage::request(
+                EndpointUrl::try_new("https://sp.example.com/manage")?,
+                r#"<samlp:ManageNameIDRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
+            )?,
+            request_id: "_request".into(),
+            service_provider: "https://sp.example.com/metadata".into(),
+            xml_limits: XmlLimits::default(),
+            schema_validator: None,
+        };
+        let checked = StartedNameIdManagement {
+            schema_validator: Some(validate),
+            ..unchecked.clone()
+        };
+        assert_ne!(unchecked, checked);
+        assert_ne!(checked, unchecked);
+        assert_eq!(checked.clone(), checked);
+        let other_request = StartedNameIdManagement {
+            request_id: "_other_request".into(),
+            ..checked.clone()
+        };
+        assert_ne!(checked, other_request);
+        Ok(())
     }
 }

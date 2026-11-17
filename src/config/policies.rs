@@ -610,6 +610,10 @@ pub(crate) enum ReceivedEncryptedElements {
 /// Clock skew tolerance is not part of the config. Set it per call with
 /// [`SamlValidationContext::with_clock_skew`](crate::SamlValidationContext::with_clock_skew).
 ///
+/// Equality compares every data field and the stored schema callback address.
+/// Address comparison uses [`std::ptr::fn_addr_eq`]. The same function can have
+/// multiple addresses, and equivalent functions can share an address.
+///
 /// # Examples
 ///
 /// Encrypt assertions and keep the other defaults:
@@ -639,6 +643,23 @@ pub struct XmlPolicy {
     /// XML encryption behavior.
     pub encryption: XmlEncryptionPolicy,
 }
+
+impl PartialEq for XmlPolicy {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            schema_validator,
+            redirect_inflate_max_bytes,
+            limits,
+            encryption,
+        } = self;
+        redirect_inflate_max_bytes == &other.redirect_inflate_max_bytes
+            && limits == &other.limits
+            && encryption == &other.encryption
+            && crate::schema::validator_addresses_equal(*schema_validator, other.schema_validator)
+    }
+}
+
+impl Eq for XmlPolicy {}
 
 impl Default for XmlPolicy {
     fn default() -> Self {

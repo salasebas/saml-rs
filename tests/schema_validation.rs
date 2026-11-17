@@ -154,3 +154,23 @@ fn schema_policy_covers_paos_envelope() -> Result<(), Box<dyn std::error::Error>
     self::idp(None)?.receive_paos_sso(&peer, &request, validation())?;
     Ok(())
 }
+
+#[test]
+fn schema_callback_participates_in_xml_policy_equality() {
+    let validator: saml_rs::context::SchemaValidator = reject_xml;
+    let unchecked = policy(None);
+    let checked = policy(Some(validator));
+    assert_ne!(unchecked, checked);
+    assert_ne!(checked, unchecked);
+    let copied = checked;
+    assert_eq!(checked, copied);
+
+    let different_limits = XmlPolicy {
+        limits: saml_rs::XmlLimits {
+            max_bytes: 128,
+            ..checked.limits
+        },
+        ..checked
+    };
+    assert_ne!(checked, different_limits);
+}

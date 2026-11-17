@@ -333,12 +333,7 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         Some(elements_order.as_slice())
     );
     assert_eq!(config.algorithms(), &algorithms);
-    assert_eq!(config.xml().limits, xml.limits);
-    assert_eq!(
-        config.xml().redirect_inflate_max_bytes,
-        xml.redirect_inflate_max_bytes
-    );
-    assert_eq!(config.xml().encryption, xml.encryption);
+    assert_eq!(config.xml(), &xml);
     assert_eq!(config.templates().relay_state, templates.relay_state);
     assert_eq!(
         config.templates().tag_prefix_protocol,
@@ -381,12 +376,7 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         Some(elements_order.as_slice())
     );
     assert_eq!(config.algorithms(), &algorithms);
-    assert_eq!(config.xml().limits, xml.limits);
-    assert_eq!(
-        config.xml().redirect_inflate_max_bytes,
-        xml.redirect_inflate_max_bytes
-    );
-    assert_eq!(config.xml().encryption, xml.encryption);
+    assert_eq!(config.xml(), &xml);
     assert_eq!(config.templates().relay_state, templates.relay_state);
     assert_eq!(
         config.templates().tag_prefix_assertion,

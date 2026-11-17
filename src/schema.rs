@@ -11,6 +11,17 @@ use crate::SamlError;
 /// No callback is installed by default. Built-in protocol checks always run.
 pub type SchemaValidator = fn(&str) -> Result<(), String>;
 
+pub(crate) fn validator_addresses_equal(
+    left: Option<SchemaValidator>,
+    right: Option<SchemaValidator>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => std::ptr::fn_addr_eq(left, right),
+        (None, Some(_)) | (Some(_), None) => false,
+    }
+}
+
 pub(crate) fn validate(xml: &str, validator: Option<SchemaValidator>) -> Result<(), SamlError> {
     if let Some(validate) = validator {
         validate(xml).map_err(SamlError::Invalid)?;
