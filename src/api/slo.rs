@@ -578,7 +578,8 @@ fn receive_slo_impl(
         &validation,
     )?;
     let receipt = LogoutReceipt::of_input(&input)?;
-    let request = input.into_http_request(local_setting.xml_limits)?;
+    let request =
+        input.into_http_request(local_setting.xml_limits, local_setting.schema_validator)?;
     let (flow, authentication) = parse_logout_request_at(
         local_setting,
         peer.metadata,
@@ -668,7 +669,8 @@ fn finish_slo_impl(
         }
     };
     let receipt = LogoutReceipt::of_input(&input)?;
-    let request = input.into_http_request(local_setting.xml_limits)?;
+    let request =
+        input.into_http_request(local_setting.xml_limits, local_setting.schema_validator)?;
     let flow = parse_logout_response_at(
         local_setting,
         peer.metadata,

@@ -8,6 +8,9 @@
 //! Config helpers select `compatibility()` so they build without a crypto
 //! provider. Name identifier management does not read that preset.
 
+#[path = "name_id_management/schema_validation.rs"]
+mod schema_validation;
+
 #[path = "common/replay_cache.rs"]
 mod replay_cache;
 

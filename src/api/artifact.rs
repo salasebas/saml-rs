@@ -216,6 +216,7 @@ impl Saml<Idp> {
             issued,
             channel,
             self.raw_identity_provider().setting.xml_limits,
+            self.raw_identity_provider().setting.schema_validator,
         )
     }
 }
@@ -255,6 +256,7 @@ impl Saml<Sp> {
             dereference,
             uses,
             self.raw_service_provider().setting.xml_limits,
+            self.raw_service_provider().setting.schema_validator,
         )
     }
 }

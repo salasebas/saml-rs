@@ -612,6 +612,7 @@ impl ServiceProvider {
                 now: options.now,
                 redirect_inflate_max_bytes: self.setting.redirect_inflate_max_bytes,
                 xml_limits: self.setting.xml_limits,
+                schema_validator: self.setting.schema_validator,
                 expected_audience: self.setting.validate_audience.then_some(audience.as_str()),
                 expected_in_response_to,
             },

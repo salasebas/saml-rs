@@ -66,6 +66,11 @@ const pages = {
 		description:
 			'Producer rules for typed Web Browser SSO generation: service-provider `start_sso`, and identity-provider `respond_sso` and `initiate_sso`. `SpValidationPolicy::recommended`...',
 	},
+	'xml-schema-validation.md': {
+		title: 'XML schema validation',
+		description:
+			'Scope of optional schema validation for received protocol XML, SOAP envelopes, decrypted documents, and metadata.',
+	},
 	'xml-signature-processing.md': {
 		title: 'XML signature processing',
 		description:

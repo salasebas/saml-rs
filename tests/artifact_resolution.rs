@@ -8,6 +8,9 @@
 //! Config helpers select `compatibility()` so they build without a crypto
 //! provider. Artifact resolution does not read that preset.
 
+#[path = "artifact_resolution/schema_validation.rs"]
+mod schema_validation;
+
 use std::time::Duration;
 
 use base64::engine::general_purpose::STANDARD;

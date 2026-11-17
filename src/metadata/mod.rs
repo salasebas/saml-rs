@@ -253,16 +253,39 @@ impl Metadata {
         extra: Vec<ExtractorField>,
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
-        Self::parse_role_with_limits(xml, SsoDescriptorRole::Any, extra, limits)
+        Self::parse_with_policy(
+            xml,
+            extra,
+            &crate::XmlPolicy {
+                limits,
+                ..crate::XmlPolicy::default()
+            },
+        )
     }
 
-    fn parse_role_with_limits(
+    /// Parse metadata using explicit XML limits and optional schema validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] when XML parsing, schema validation, extraction,
+    /// or the single-entity check fails.
+    pub fn parse_with_policy(
+        xml: &str,
+        extra: Vec<ExtractorField>,
+        policy: &crate::XmlPolicy,
+    ) -> Result<Self, SamlError> {
+        Self::parse_role_with_policy(xml, SsoDescriptorRole::Any, extra, policy)
+    }
+
+    fn parse_role_with_policy(
         xml: &str,
         role: SsoDescriptorRole,
         extra: Vec<ExtractorField>,
-        limits: XmlLimits,
+        policy: &crate::XmlPolicy,
     ) -> Result<Self, SamlError> {
+        let limits = policy.limits;
         let roots = dom::parse_all_roots(xml, limits)?;
+        crate::schema::validate(xml, policy.schema_validator)?;
         if roots
             .iter()
             .filter(|n| n.local_name == "EntityDescriptor")

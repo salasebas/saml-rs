@@ -390,7 +390,10 @@ impl AnsweredArtifact {
 }
 
 /// In-progress artifact resolution. Send [`Self::request`], then [`Self::finish`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Equality compares every data field and the stored schema callback address,
+/// with the function-address limitations documented on [`crate::XmlPolicy`].
+#[derive(Debug, Clone)]
 pub struct ArtifactResolution {
     request: SoapRequest,
     request_id: String,
@@ -398,7 +401,31 @@ pub struct ArtifactResolution {
     artifact: String,
     web_browser_sso: bool,
     xml_limits: XmlLimits,
+    schema_validator: Option<crate::SchemaValidator>,
 }
+
+impl PartialEq for ArtifactResolution {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            request,
+            request_id,
+            identity_provider,
+            artifact,
+            web_browser_sso,
+            xml_limits,
+            schema_validator,
+        } = self;
+        request == &other.request
+            && request_id == &other.request_id
+            && identity_provider == &other.identity_provider
+            && artifact == &other.artifact
+            && web_browser_sso == &other.web_browser_sso
+            && xml_limits == &other.xml_limits
+            && crate::schema::validator_addresses_equal(*schema_validator, other.schema_validator)
+    }
+}
+
+impl Eq for ArtifactResolution {}
 
 impl ArtifactResolution {
     /// SOAP `ArtifactResolve` addressed to the peer `ArtifactResolutionService`.
@@ -416,6 +443,7 @@ impl ArtifactResolution {
     /// and the dereference is not [`ArtifactDereference::web_browser_sso`].
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
         let body = read_soap_body(response_envelope, self.xml_limits, &[])?;
+        crate::schema::validate(response_envelope, self.schema_validator)?;
         if body.local_name != "ArtifactResponse" || body.namespace != namespace::PROTOCOL {
             return Err(SamlError::ProtocolProfile(
                 "SOAP body must be an ArtifactResponse".into(),
@@ -558,6 +586,7 @@ pub(crate) fn resolve(
     dereference: ArtifactDereference,
     uses: &mut ArtifactUses,
     xml_limits: XmlLimits,
+    schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<ArtifactResolution, SamlError> {
     require_channel(dereference.channel, dereference.web_browser_sso)?;
     let idp_entity_id = identity_provider.entity_id().as_str();
@@ -593,6 +622,7 @@ pub(crate) fn resolve(
         artifact: artifact.as_str().to_string(),
         web_browser_sso: dereference.web_browser_sso,
         xml_limits,
+        schema_validator,
     })
 }
 
@@ -603,12 +633,14 @@ pub(crate) fn answer(
     issued: &mut IssuedArtifacts,
     channel: SoapChannel,
     xml_limits: XmlLimits,
+    schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<AnsweredArtifact, SamlError> {
     let entity_id = metadata
         .get_entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();
     let body = read_soap_body(request_envelope, xml_limits, &[])?;
+    crate::schema::validate(request_envelope, schema_validator)?;
     if body.local_name != "ArtifactResolve" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be an ArtifactResolve".into(),
@@ -854,6 +886,39 @@ fn protocol_payload(response: &SamlElement) -> Result<Option<&SamlElement>, Saml
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn schema_callback_participates_in_artifact_resolution_equality(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        fn validate(_: &str) -> Result<(), String> {
+            Ok(())
+        }
+        let unchecked = ArtifactResolution {
+            request: SoapProtocolMessage::request(
+                crate::EndpointUrl::try_new("https://idp.example.com/artifact")?,
+                r#"<samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
+            )?,
+            request_id: "_request".into(),
+            identity_provider: "https://idp.example.com/metadata".into(),
+            artifact: "artifact".into(),
+            web_browser_sso: true,
+            xml_limits: XmlLimits::default(),
+            schema_validator: None,
+        };
+        let checked = ArtifactResolution {
+            schema_validator: Some(validate),
+            ..unchecked.clone()
+        };
+        assert_ne!(unchecked, checked);
+        assert_ne!(checked, unchecked);
+        assert_eq!(checked.clone(), checked);
+        let other_request = ArtifactResolution {
+            request_id: "_other_request".into(),
+            ..checked.clone()
+        };
+        assert_ne!(checked, other_request);
+        Ok(())
+    }
 
     #[test]
     fn single_use_blocks_an_artifact_only_for_the_period() -> Result<(), Box<dyn std::error::Error>>

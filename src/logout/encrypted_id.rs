@@ -83,7 +83,7 @@ pub(crate) fn decrypt_encrypted_id(
     let Some(saml_content) = decrypt(&flow.saml_content, key_pem, setting)? else {
         return Ok(request);
     };
-    crate::context::is_valid_xml_with_limits(&saml_content, setting.xml_limits)?;
+    crate::schema::document(&saml_content, setting.xml_limits, setting.schema_validator)?;
     crate::xml::validate_protocol_profile(
         &saml_content,
         ParserType::LogoutRequest,

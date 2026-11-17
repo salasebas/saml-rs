@@ -112,6 +112,8 @@ pub struct EntitySetting {
     pub redirect_inflate_max_bytes: usize,
     /// XML parser resource limits for inbound messages and metadata parsing.
     pub xml_limits: XmlLimits,
+    /// Optional schema validator for received and decrypted XML.
+    pub schema_validator: Option<crate::SchemaValidator>,
     /// IdP: protocol tag prefix for generated IdP messages (default `samlp`).
     ///
     /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
@@ -243,6 +245,7 @@ impl fmt::Debug for EntitySetting {
                 &self.redirect_inflate_max_bytes,
             )
             .field("xml_limits", &self.xml_limits)
+            .field("schema_validator", &self.schema_validator)
             .field("tag_prefix_protocol", &self.tag_prefix_protocol)
             .field("tag_prefix_assertion", &self.tag_prefix_assertion)
             .field(
@@ -346,6 +349,7 @@ impl Default for EntitySetting {
             clock_drifts: (0, 0),
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             xml_limits: XmlLimits::default(),
+            schema_validator: None,
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
             tag_prefix_encrypted_assertion: "saml".to_string(),

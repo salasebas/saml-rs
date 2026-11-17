@@ -1,6 +1,9 @@
 //! Compatibility is the legacy permissive preset.
 #![cfg(crypto)]
 
+#[path = "typed_slo/schema_validation.rs"]
+mod schema_validation;
+
 use super::common;
 
 #[cfg(feature = "crypto-rustcrypto")]

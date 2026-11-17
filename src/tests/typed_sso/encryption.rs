@@ -284,3 +284,44 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())
 }
+
+#[test]
+fn schema_validator_rejects_the_decrypted_response() -> Result<(), Box<dyn std::error::Error>> {
+    fn reject_plain_assertion(xml: &str) -> Result<(), String> {
+        let document = roxmltree::Document::parse(xml).map_err(|error| error.to_string())?;
+        if document
+            .descendants()
+            .any(|node| node.has_tag_name(("urn:oasis:names:tc:SAML:2.0:assertion", "Assertion")))
+        {
+            return Err("schema rejected decrypted assertion".into());
+        }
+        Ok(())
+    }
+
+    let exchange = encrypted_exchange(DataEncryptionAlgorithm::Aes256Gcm)?;
+    let rejecting = Saml::sp(
+        sp_with_validation_and_xml(recommended_sso_accept_validation())?
+            .xml(XmlPolicy {
+                schema_validator: Some(reject_plain_assertion),
+                ..encrypted_xml_policy()
+            })
+            .build()?,
+    )?;
+    let result = rejecting.finish_sso(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<SsoResponse>::post(exchange.response_fields.clone()),
+        validation(),
+    );
+    assert!(
+        matches!(result, Err(SamlError::Invalid(ref reason)) if reason == "schema rejected decrypted assertion"),
+        "expected rejection after decryption, got {result:?}"
+    );
+    exchange.sp.finish_sso(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        validation(),
+    )?;
+    Ok(())
+}
