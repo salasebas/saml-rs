@@ -10,9 +10,10 @@ use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::validator::check_status;
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::SamlError;
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");

@@ -19,11 +19,8 @@ pub use deflate::{
 pub use encoding::base64_decode_with_limit;
 pub(crate) use encoding::{decode_base64, encode_base64};
 pub use escape::{html_escape, xml_escape};
-pub(crate) use post_form::{
-    build_simplesign_octet, saml_post_binding_form_with_signature,
-    try_saml_post_binding_form_with_signature,
-};
-pub use post_form::{saml_post_binding_form, try_saml_post_binding_form};
+pub use post_form::saml_post_binding_form;
+pub(crate) use post_form::{build_simplesign_octet, saml_post_binding_form_with_signature};
 pub(crate) use redirect::append_redirect_query;
 pub use redirect::{
     append_signature, build_redirect_octet, build_redirect_url, redirect_binding_query,

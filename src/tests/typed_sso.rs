@@ -28,18 +28,19 @@ use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::create_logout_request;
 use saml_rs::raw::Binding;
+use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::xml::dom::parse_document;
 use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestAgePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput,
-    CertificatePem, ClockSkew, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, LogoutRequest, MetadataTrustPolicy, NameId, NameIdFormat,
-    Outbound, PendingAuthnRequest, PendingSnapshot, Received, RelayStateParam, ReplayCache,
-    ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext,
-    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, SsoResponseBinding, StartSso, Status, Subject, SubordinateStatusCode,
-    TemplatePolicy, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
+    CertificatePem, ClockSkew, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, LogoutRequest, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
+    PendingAuthnRequest, PendingSnapshot, Received, RelayStateParam, ReplayCache, ReplayPolicy,
+    RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
+    StartSso, Status, Subject, SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage,
+    XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
@@ -1615,7 +1616,8 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
     let local_idp = IdentityProvider::from_metadata(idp.metadata_xml(), EntitySetting::default())?;
     let local_sp = ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
 
-    let request = peer_sp.create_login_request(&local_idp, Binding::Post, None)?;
+    let request =
+        peer_sp.create_login_request(&local_idp, Binding::Post, &LoginRequestOptions::default())?;
     let received = idp.receive_sso(
         &peer_sp_descriptor,
         BrowserInput::<AuthnRequest>::post(vec![FormField::new("SAMLRequest", request.context)]),

@@ -11,9 +11,9 @@ use crate::artifact::ResolvedProtocolMessage;
 use crate::binding::{base64_decode_with_limit, build_simplesign_octet, encode_base64};
 use crate::constants::url_params;
 use crate::error::SamlError;
+use crate::flow::HttpRequest;
 use crate::model::{AuthnRequest, LogoutRequest, LogoutResponse, SsoResponse};
 use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
-use crate::raw::HttpRequest;
 use crate::soap::{read_soap_body, SoapChannel};
 use crate::xml::XmlLimits;
 

@@ -7,7 +7,7 @@ use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::{IdentityProvider, ServiceProvider};
+use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 
 fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
     ServiceProvider::from_config(
@@ -58,7 +58,7 @@ fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::erro
         },
         EntitySetting::default(),
     )?;
-    let ctx = sp.create_login_request(&idp, Binding::Redirect, None)?;
+    let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     let url = url::Url::parse(&ctx.context)?;
     let (_, value) = url
         .query_pairs()

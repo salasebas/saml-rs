@@ -9,15 +9,15 @@ use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, BrowserInput, CertificatePem, EntityId, IdentityProvider,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutSignaturePolicy, LogoutSigning,
-    LogoutSubject, MetadataTrustPolicy, NameId, RelayStateParam, ReplayPolicy,
-    ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, ServiceProvider, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso,
-    XmlEncryptionPolicy, XmlPolicy,
+    AuthnRequestValidationPolicy, BrowserInput, CertificatePem, EntityId, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
+    NameId, RelayStateParam, ReplayPolicy, ResponseSignaturePolicy, Saml, SamlError,
+    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -353,7 +353,11 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 
 #[test]
 fn unsigned_login_request_creation_still_works() -> Result<(), Box<dyn std::error::Error>> {
-    let ctx = sp(false)?.create_login_request(&idp(false)?, Binding::Post, None)?;
+    let ctx = sp(false)?.create_login_request(
+        &idp(false)?,
+        Binding::Post,
+        &LoginRequestOptions::default(),
+    )?;
     let xml = String::from_utf8(STANDARD.decode(&ctx.context)?)?;
     assert!(xml.contains("<samlp:AuthnRequest"));
     assert!(ctx.signature.is_none());
@@ -363,7 +367,11 @@ fn unsigned_login_request_creation_still_works() -> Result<(), Box<dyn std::erro
 #[test]
 fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn std::error::Error>>
 {
-    let ctx = sp(false)?.create_login_request(&idp(false)?, Binding::Redirect, None)?;
+    let ctx = sp(false)?.create_login_request(
+        &idp(false)?,
+        Binding::Redirect,
+        &LoginRequestOptions::default(),
+    )?;
     let url = url::Url::parse(&ctx.context)?;
     let (_, encoded) = url
         .query_pairs()
@@ -376,7 +384,11 @@ fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn 
 
 #[test]
 fn signing_login_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
-    assert_unsupported(sp(true)?.create_login_request(&idp(true)?, Binding::Post, None));
+    assert_unsupported(sp(true)?.create_login_request(
+        &idp(true)?,
+        Binding::Post,
+        &LoginRequestOptions::default(),
+    ));
     Ok(())
 }
 

@@ -330,7 +330,7 @@ mod tests {
             ParserType::SamlRequest.query_param(),
             &b64,
             None,
-        );
+        )?;
         assert!(form.contains("name=\"SAMLRequest\""));
         assert!(form.contains(&b64));
         Ok(())

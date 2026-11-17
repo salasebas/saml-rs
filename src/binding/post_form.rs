@@ -89,19 +89,20 @@ pub(crate) fn build_simplesign_octet(
 ///
 /// `param_name` is `SAMLRequest` or `SAMLResponse`; `b64_value` is the
 /// base64-encoded message. An optional `relay_state` is added as a hidden
-/// field. All values are HTML-escaped.
+/// field. All values are HTML-escaped. The form `action` must be an absolute
+/// `http` or `https` URL.
 ///
-/// This compatibility helper does not validate the `action` URL. Prefer
-/// [`try_saml_post_binding_form`] when rendering a browser-bound response from
-/// configurable or otherwise untrusted endpoints.
+/// # Errors
+///
+/// Returns [`SamlError::Invalid`] when `action` is not an absolute HTTP(S)
+/// URL.
 pub fn saml_post_binding_form(
     action: &str,
     param_name: &str,
     b64_value: &str,
     relay_state: Option<&str>,
-) -> String {
-    let fields = binding_fields(param_name, b64_value, relay_state, None, None);
-    render_post_form(action, &fields)
+) -> Result<String, SamlError> {
+    saml_post_binding_form_with_signature(action, param_name, b64_value, relay_state, None, None)
 }
 
 pub(crate) fn saml_post_binding_form_with_signature(
@@ -111,54 +112,11 @@ pub(crate) fn saml_post_binding_form_with_signature(
     relay_state: Option<&str>,
     sig_alg: Option<&str>,
     signature: Option<&str>,
-) -> String {
-    let fields = binding_fields(param_name, b64_value, relay_state, sig_alg, signature);
-    render_post_form(action, &fields)
-}
-
-/// Build a self-submitting HTML form after validating the action URL.
-///
-/// This is the safe browser path for SAML POST forms. It accepts only absolute
-/// `http` and `https` URLs for the form `action`.
-///
-/// # Errors
-///
-/// Returns [`SamlError::Invalid`] when `action` is not an absolute HTTP(S)
-/// URL.
-pub fn try_saml_post_binding_form(
-    action: &str,
-    param_name: &str,
-    b64_value: &str,
-    relay_state: Option<&str>,
-) -> Result<String, SamlError> {
-    try_saml_post_binding_form_with_signature(
-        action,
-        param_name,
-        b64_value,
-        relay_state,
-        None,
-        None,
-    )
-}
-
-pub(crate) fn try_saml_post_binding_form_with_signature(
-    action: &str,
-    param_name: &str,
-    b64_value: &str,
-    relay_state: Option<&str>,
-    sig_alg: Option<&str>,
-    signature: Option<&str>,
 ) -> Result<String, SamlError> {
     validate_post_form_action(action)?;
     validate_signature_fields(sig_alg, signature)?;
-    Ok(saml_post_binding_form_with_signature(
-        action,
-        param_name,
-        b64_value,
-        relay_state,
-        sig_alg,
-        signature,
-    ))
+    let fields = binding_fields(param_name, b64_value, relay_state, sig_alg, signature);
+    Ok(render_post_form(action, &fields))
 }
 
 fn validate_post_form_action(action: &str) -> Result<(), SamlError> {

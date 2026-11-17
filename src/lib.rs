@@ -276,9 +276,9 @@
 //! The [`raw`] module is the samlify-port surface. [`SpValidationPolicy::compatibility`]
 //! keeps that behavior when leaving the raw API. The two surfaces keep their
 //! own defaults. `Default` and the config builders start
-//! on Recommended. Advanced callers should import
-//! [`raw::ServiceProvider`], [`raw::IdentityProvider`], [`raw::HttpRequest`],
-//! and [`raw::BindingContext`] from there rather than using the root re-exports.
+//! on Recommended. Import [`raw::ServiceProvider`], [`raw::IdentityProvider`],
+//! [`raw::EntitySetting`], [`raw::HttpRequest`], and [`raw::BindingContext`]
+//! from [`raw`]; the crate root does not re-export them.
 //!
 //! Visible docs.rs modules and crate-root re-exports are the supported public
 //! documentation surface. The [`raw`] module is the supported samlify-port
@@ -458,10 +458,6 @@ pub use crypto::{
     CryptoProviderInfo,
 };
 pub use discovery::{CommonDomainCookie, CommonDomainCookieLifetime, RememberIdentityProvider};
-#[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::EntitySetting`."]
-pub use entity::EntitySetting;
-#[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::IdentityProvider`."]
-pub use idp::IdentityProvider;
 #[cfg(crypto)]
 pub use metadata::MetadataSignatureVerification;
 pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};
@@ -485,5 +481,3 @@ pub use soap::{
     MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
     SoapProtocolMessage, SoapRequest, SoapResponse,
 };
-#[doc = "Re-export kept for older crate-root imports of the raw samlify-port API. Use `Saml` for new integrations; advanced raw callers should import `raw::ServiceProvider`."]
-pub use sp::ServiceProvider;

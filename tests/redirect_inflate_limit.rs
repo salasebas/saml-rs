@@ -5,8 +5,9 @@ use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+use saml_rs::SamlError;
 use saml_rs::XmlLimits;
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
 use url::Url;
 
 const LIMIT_ERROR: &str = "ERR_DEFLATE_OUTPUT_LIMIT_EXCEEDED";
@@ -118,7 +119,7 @@ fn entity_setting_custom_redirect_compressed_limit_is_enforced(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = unsigned_sp()?;
     let mut idp = unsigned_idp(EntitySetting::default())?;
-    let ctx = sp.create_login_request(&idp, Binding::Redirect, None)?;
+    let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     let request = redirect_request(&ctx.context)?;
     idp.setting.redirect_inflate_max_bytes = 8;
 

@@ -10,7 +10,7 @@ use crate::browser::SsoResponseBinding;
 use crate::config::EntityId;
 use crate::constants::Binding;
 use crate::error::SamlError;
-use crate::raw::FlowResult;
+use crate::flow::FlowResult;
 use crate::xml::{parse_saml_utc_date_time, xs_boolean};
 
 /// `ForceAuthn` on an `<AuthnRequest>` (Core §3.4.1).

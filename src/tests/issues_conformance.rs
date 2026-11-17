@@ -6,9 +6,8 @@ use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::metadata::{generate_sp_metadata, Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::raw::Value;
+use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider, Value};
 use saml_rs::xml::{extract, ExtractorField};
-use saml_rs::{IdentityProvider, ServiceProvider};
 
 const DUMPES_ISSUER: &str = include_str!("../../tests/fixtures/misc/dumpes_issuer_response.xml");
 #[cfg(crypto)]
@@ -206,7 +205,7 @@ fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::
         },
         EntitySetting::default(),
     )?;
-    let ctx = sp.create_login_request(&idp, Binding::Redirect, None)?;
+    let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     let url = url::Url::parse(&ctx.context)?;
     let (_, value) = url
         .query_pairs()

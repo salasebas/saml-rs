@@ -4,7 +4,8 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::logout::create_logout_request;
 use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-use saml_rs::{IdentityProvider, SamlError, ServiceProvider};
+use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+use saml_rs::SamlError;
 
 const PRIVATE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERTIFICATE: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -35,17 +36,17 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
         )?;
 
         assert!(matches!(
-            sp.create_login_request(&idp, binding, None),
+            sp.create_login_request(&idp, binding, &LoginRequestOptions::default()),
             Err(SamlError::MissingKey(key)) if key == "private_key"
         ));
         sp.setting.private_key = Some(PRIVATE_KEY.into());
         assert!(matches!(
-            sp.create_login_request(&idp, binding, None),
+            sp.create_login_request(&idp, binding, &LoginRequestOptions::default()),
             Err(SamlError::MissingKey(key)) if key == "signing_cert"
         ));
         sp.setting.signing_cert = Some(CERTIFICATE.into());
         assert!(matches!(
-            sp.create_login_request(&idp, binding, None),
+            sp.create_login_request(&idp, binding, &LoginRequestOptions::default()),
             Err(SamlError::UnsupportedBinding { binding: rejected }) if rejected == binding
         ));
     }

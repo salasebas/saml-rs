@@ -9,10 +9,10 @@
 #[cfg(crypto)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::constants::signature_algorithm::RSA_SHA256;
-    use saml_rs::raw::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+    use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
     use saml_rs::raw::{
-        Binding, EntitySetting, HttpRequest, IdentityProvider, LoginResponseOptions,
-        ServiceProvider, User,
+        Binding, EntitySetting, HttpRequest, IdentityProvider, LoginRequestOptions,
+        LoginResponseOptions, ServiceProvider, User,
     };
 
     let privkey = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         signing(),
     )?;
 
-    let request = sp.create_login_request(&idp, Binding::Post, None)?;
+    let request = sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
     let parsed = idp.parse_login_request(
         &sp,
         Binding::Post,

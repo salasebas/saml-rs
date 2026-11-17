@@ -21,8 +21,10 @@
 //! no local endpoint context.
 //!
 //! ```no_run
-//! use saml_rs::raw::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
-//! use saml_rs::raw::{Binding, EntitySetting, IdentityProvider, ServiceProvider};
+//! use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+//! use saml_rs::raw::{
+//!     Binding, EntitySetting, IdentityProvider, LoginRequestOptions, ServiceProvider,
+//! };
 //!
 //! # fn main() -> Result<(), saml_rs::SamlError> {
 //! let idp = IdentityProvider::from_config(
@@ -48,7 +50,8 @@
 //!     EntitySetting::default(),
 //! )?;
 //!
-//! let request = sp.create_login_request(&idp, Binding::Redirect, None)?;
+//! let request =
+//!     sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
 //! # let _ = request;
 //! # Ok(()) }
 //! ```
@@ -58,7 +61,6 @@ pub use crate::entity::{BindingContext, EntitySetting, User};
 pub use crate::flow::{flow, FlowOptions, FlowResult, HttpRequest};
 pub use crate::idp::{IdentityProvider, LoginResponseOptions};
 pub use crate::logout;
-pub use crate::metadata;
 pub use crate::sp::{LoginRequestOptions, ServiceProvider};
 pub use crate::util::Value;
 pub use crate::xml::{ExtractorField, LocalPath};
