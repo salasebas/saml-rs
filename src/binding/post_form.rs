@@ -4,8 +4,9 @@ use super::escape::html_escape;
 use crate::error::SamlError;
 use url::Url;
 
-const UNSAFE_POST_BINDING_ACTION_URL: &str = "ERR_UNSAFE_POST_BINDING_ACTION_URL";
-const PARTIAL_POST_BINDING_SIGNATURE: &str = "ERR_PARTIAL_POST_BINDING_SIGNATURE";
+const UNSAFE_POST_BINDING_ACTION_URL: &str = "POST form action must be an absolute HTTP(S) URL";
+const PARTIAL_POST_BINDING_SIGNATURE: &str =
+    "POST form needs both SigAlg and Signature, or neither";
 
 struct HiddenField<'a> {
     name: &'a str,

@@ -6,7 +6,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
 
-use crate::error::SamlError;
+use crate::error::{xml_err, SamlError};
 use crate::model::EndpointUrl;
 use crate::xml::dom::{self, Node};
 use crate::xml::fragment::standalone_element;
@@ -300,18 +300,18 @@ pub(crate) fn read_soap_body(
     let scan = scan_envelope(envelope, understood)?;
     let child_namespace = scan
         .child
-        .ok_or_else(|| SamlError::Xml("SOAP body must contain one SAML protocol element".into()))?;
+        .ok_or_else(|| SamlError::xml("SOAP body must contain one SAML protocol element"))?;
     let parts = envelope_parts(&document.root)?;
     let child = single_element_child(parts.body)?;
     if child.local_name != child_namespace.local_name {
-        return Err(SamlError::Xml(
-            "SOAP body element does not match its namespace declaration".into(),
+        return Err(SamlError::xml(
+            "SOAP body element does not match its namespace declaration",
         ));
     }
     let header_children = parts.header.map_or(&[][..], |header| &header.children);
     if header_children.len() != scan.header_namespaces.len() {
-        return Err(SamlError::Xml(
-            "SOAP header entries do not match their namespace declarations".into(),
+        return Err(SamlError::xml(
+            "SOAP header entries do not match their namespace declarations",
         ));
     }
     let header = scan
@@ -364,7 +364,7 @@ fn envelope(element_xml: &str) -> Result<String, SamlError> {
 fn single_element(xml: &str) -> Result<String, SamlError> {
     let document = dom::parse_document(xml, crate::XmlLimits::default())?;
     if document.root.end < document.root.start || document.root.end > xml.len() {
-        return Err(SamlError::Xml("protocol element is incomplete".into()));
+        return Err(SamlError::xml("protocol element is incomplete"));
     }
     Ok(xml[document.root.start..document.root.end].to_string())
 }
@@ -378,7 +378,7 @@ fn single_element_child(body: &Node) -> Result<&Node, SamlError> {
     let mut children = body.children.iter();
     let child = children
         .next()
-        .ok_or_else(|| SamlError::Xml("SOAP body must contain one SAML protocol element".into()))?;
+        .ok_or_else(|| SamlError::xml("SOAP body must contain one SAML protocol element"))?;
     if children.next().is_some() {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must contain exactly one SAML protocol element".into(),
@@ -412,18 +412,18 @@ fn scan_envelope(xml: &str, understood: &[UnderstoodHeader]) -> Result<SoapScan,
                 depth = depth.saturating_sub(1);
             }
             Ok(Event::DocType(_)) => {
-                return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
+                return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
             Ok(Event::Eof) => break,
             Ok(_) => {}
-            Err(err) => return Err(SamlError::Xml(err.to_string())),
+            Err(err) => return Err(xml_err(err)),
         }
         buf.clear();
     }
 
     if !scan.saw_envelope {
-        return Err(SamlError::Xml(
-            "SOAP message must use the SOAP 1.1 envelope namespace".into(),
+        return Err(SamlError::xml(
+            "SOAP message must use the SOAP 1.1 envelope namespace",
         ));
     }
     Ok(scan)
@@ -455,8 +455,8 @@ fn observe_start(
 
     if depth == 1 {
         if local_name != "Envelope" || namespace != Some(SOAP_NAMESPACE) {
-            return Err(SamlError::Xml(
-                "SOAP message must use the SOAP 1.1 envelope namespace".into(),
+            return Err(SamlError::xml(
+                "SOAP message must use the SOAP 1.1 envelope namespace",
             ));
         }
         scan.saw_envelope = true;
@@ -465,8 +465,8 @@ fn observe_start(
 
     if depth == 2 && scan.saw_envelope {
         if namespace != Some(SOAP_NAMESPACE) {
-            return Err(SamlError::Xml(
-                "SOAP Header and Body must use the SOAP 1.1 namespace".into(),
+            return Err(SamlError::xml(
+                "SOAP Header and Body must use the SOAP 1.1 namespace",
             ));
         }
         match local_name.as_str() {
@@ -479,8 +479,8 @@ fn observe_start(
                 scan.body_depth = depth;
             }
             _ => {
-                return Err(SamlError::Xml(
-                    "SOAP envelope contains an element other than Header or Body".into(),
+                return Err(SamlError::xml(
+                    "SOAP envelope contains an element other than Header or Body",
                 ));
             }
         }
@@ -518,7 +518,7 @@ fn reject_must_understand(
     element: &BytesStart<'_>,
 ) -> Result<(), SamlError> {
     for attribute in element.attributes() {
-        let attribute = attribute.map_err(|err| SamlError::Xml(err.to_string()))?;
+        let attribute = attribute.map_err(xml_err)?;
         let (namespace, local_name) = reader.resolver().resolve_attribute(attribute.key);
         if local_name.as_ref() != "mustUnderstand" {
             continue;
@@ -529,10 +529,10 @@ fn reject_must_understand(
         }
         let value = attribute
             .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-            .map_err(|err| SamlError::Xml(err.to_string()))?;
+            .map_err(xml_err)?;
         if matches!(value.trim(), "1" | "true") {
-            return Err(SamlError::Xml(
-                "SOAP header requires processing this responder does not provide".into(),
+            return Err(SamlError::xml(
+                "SOAP header requires processing this responder does not provide",
             ));
         }
     }
@@ -587,7 +587,7 @@ mod tests {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><extra soap:mustUnderstand=" 1 ">note</extra></soap:Header><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
         assert!(matches!(
             SoapProtocolMessage::from_envelope(envelope),
-            Err(SamlError::Xml(_))
+            Err(SamlError::Xml { .. })
         ));
     }
 
@@ -627,7 +627,7 @@ mod tests {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><extra mustUnderstand="1">note</extra></soap:Header><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
         assert!(matches!(
             SoapProtocolMessage::from_envelope(envelope),
-            Err(SamlError::Xml(_))
+            Err(SamlError::Xml { .. })
         ));
     }
 }

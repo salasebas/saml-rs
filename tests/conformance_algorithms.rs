@@ -570,7 +570,7 @@ fn rsa_1024() -> Side {
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 fn is_short_rsa_key_error(error: &SamlError) -> bool {
-    matches!(error, SamlError::Crypto(message) if message.contains("1024-bit RSA key"))
+    matches!(error, SamlError::Crypto { message, .. } if message.contains("1024-bit RSA key"))
 }
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]

@@ -70,8 +70,14 @@ fn provider_info(info: bergshamra::BackendInfo) -> CryptoProviderInfo {
     CryptoProviderInfo { provider, fips }
 }
 
-fn provider_error(action: &str, error: impl fmt::Display) -> SamlError {
-    SamlError::Crypto(format!("crypto provider {action} failed: {error}"))
+fn provider_error(
+    action: &str,
+    error: impl std::error::Error + Send + Sync + 'static,
+) -> SamlError {
+    SamlError::Crypto {
+        message: format!("crypto provider {action} failed"),
+        source: Some(Box::new(error)),
+    }
 }
 
 /// Inspect the selected provider without triggering initialization.

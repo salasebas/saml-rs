@@ -7,13 +7,9 @@ use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
-use saml_rs::SamlError;
 use saml_rs::XmlLimits;
+use saml_rs::{ResourceLimit, SamlError};
 use url::Url;
-
-const LIMIT_ERROR: &str = "ERR_DEFLATE_OUTPUT_LIMIT_EXCEEDED";
-const BASE64_LIMIT_ERROR: &str = "ERR_BASE64_OUTPUT_LIMIT_EXCEEDED";
-const XML_LIMIT_ERROR: &str = "ERR_XML_LIMIT_EXCEEDED";
 
 fn oversized_deflate_payload() -> Result<Vec<u8>, SamlError> {
     let oversized = vec![b'A'; MAX_DEFLATE_RAW_DECODE_BYTES + 1];
@@ -61,7 +57,10 @@ fn deflate_raw_decode_rejects_oversized_output() -> Result<(), Box<dyn std::erro
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message == LIMIT_ERROR
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::InflatedBytes,
+            ..
+        }
     ));
     Ok(())
 }
@@ -82,7 +81,10 @@ fn redirect_flow_rejects_oversized_compressed_input_before_inflate(
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message == BASE64_LIMIT_ERROR
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::Base64DecodedBytes,
+            ..
+        }
     ));
     Ok(())
 }
@@ -110,7 +112,10 @@ fn flow_options_custom_redirect_inflate_limit_is_enforced() -> Result<(), Box<dy
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message == LIMIT_ERROR
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::InflatedBytes,
+            ..
+        }
     ));
     Ok(())
 }
@@ -131,7 +136,10 @@ fn entity_setting_custom_redirect_compressed_limit_is_enforced(
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message == BASE64_LIMIT_ERROR
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::Base64DecodedBytes,
+            ..
+        }
     ));
     Ok(())
 }
@@ -153,7 +161,10 @@ fn redirect_flow_rejects_oversized_inflated_message() -> Result<(), Box<dyn std:
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message == LIMIT_ERROR
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::InflatedBytes,
+            ..
+        }
     ));
     Ok(())
 }
@@ -178,7 +189,10 @@ fn post_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message == BASE64_LIMIT_ERROR
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::Base64DecodedBytes,
+            ..
+        }
     ));
     Ok(())
 }
@@ -203,7 +217,10 @@ fn simplesign_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::e
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message == BASE64_LIMIT_ERROR
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::Base64DecodedBytes,
+            ..
+        }
     ));
     Ok(())
 }
@@ -230,7 +247,10 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
 
     assert!(matches!(
         err,
-        SamlError::Invalid(message) if message.contains(XML_LIMIT_ERROR)
+        SamlError::LimitExceeded {
+            limit: ResourceLimit::XmlNodes,
+            ..
+        }
     ));
     Ok(())
 }

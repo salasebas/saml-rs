@@ -88,7 +88,7 @@ pub(super) fn namespaced_element(
             .children
             .into_iter()
             .find(|child| child.span.start <= entity.start && entity.end <= child.span.end)
-            .ok_or_else(|| SamlError::Xml("EntityDescriptor is not in the document".into()))?;
+            .ok_or_else(|| SamlError::xml("EntityDescriptor is not in the document"))?;
         element = child;
     }
     Ok(element)

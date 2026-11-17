@@ -25,6 +25,18 @@ enum OutboundAction {
     SoapResponse(SoapResponse),
 }
 
+impl OutboundAction {
+    fn binding_mismatch(&self) -> SamlError {
+        let actual = match self {
+            Self::Redirect(_) => Binding::Redirect,
+            Self::Post(_) => Binding::Post,
+            Self::SimpleSignPost(_) => Binding::SimpleSign,
+            Self::SoapRequest(_) | Self::SoapResponse(_) => Binding::Soap,
+        };
+        SamlError::OutboundBindingMismatch { actual }
+    }
+}
+
 /// Typed outbound browser action, or the SOAP message of a back-channel
 /// exchange.
 ///
@@ -92,14 +104,15 @@ impl<Message> Outbound<Message> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::UndefinedBinding`] when this action is not Redirect.
+    /// Returns [`SamlError::OutboundBindingMismatch`] when this action is not
+    /// Redirect.
     pub fn redirect_url(&self) -> Result<&str, SamlError> {
         match &self.action {
             OutboundAction::Redirect(url) => Ok(url),
             OutboundAction::Post(_)
             | OutboundAction::SimpleSignPost(_)
             | OutboundAction::SoapRequest(_)
-            | OutboundAction::SoapResponse(_) => Err(SamlError::UndefinedBinding),
+            | OutboundAction::SoapResponse(_) => Err(self.action.binding_mismatch()),
         }
     }
 
@@ -108,14 +121,14 @@ impl<Message> Outbound<Message> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::UndefinedBinding`] when this action is a redirect
-    /// or a SOAP message.
+    /// Returns [`SamlError::OutboundBindingMismatch`] when this action is a
+    /// redirect or a SOAP message.
     pub fn post_form(&self) -> Result<&PostForm, SamlError> {
         match &self.action {
             OutboundAction::Post(form) | OutboundAction::SimpleSignPost(form) => Ok(form),
             OutboundAction::Redirect(_)
             | OutboundAction::SoapRequest(_)
-            | OutboundAction::SoapResponse(_) => Err(SamlError::UndefinedBinding),
+            | OutboundAction::SoapResponse(_) => Err(self.action.binding_mismatch()),
         }
     }
 
@@ -138,15 +151,15 @@ impl Outbound<LogoutRequest> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::UndefinedBinding`] when this request uses another
-    /// binding.
+    /// Returns [`SamlError::OutboundBindingMismatch`] when this request uses
+    /// another binding.
     pub fn soap_request(&self) -> Result<&SoapRequest, SamlError> {
         match &self.action {
             OutboundAction::SoapRequest(request) => Ok(request),
             OutboundAction::Redirect(_)
             | OutboundAction::Post(_)
             | OutboundAction::SimpleSignPost(_)
-            | OutboundAction::SoapResponse(_) => Err(SamlError::UndefinedBinding),
+            | OutboundAction::SoapResponse(_) => Err(self.action.binding_mismatch()),
         }
     }
 }
@@ -156,15 +169,15 @@ impl Outbound<LogoutResponse> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::UndefinedBinding`] when this response uses another
-    /// binding.
+    /// Returns [`SamlError::OutboundBindingMismatch`] when this response uses
+    /// another binding.
     pub fn soap_response(&self) -> Result<&SoapResponse, SamlError> {
         match &self.action {
             OutboundAction::SoapResponse(response) => Ok(response),
             OutboundAction::Redirect(_)
             | OutboundAction::Post(_)
             | OutboundAction::SimpleSignPost(_)
-            | OutboundAction::SoapRequest(_) => Err(SamlError::UndefinedBinding),
+            | OutboundAction::SoapRequest(_) => Err(self.action.binding_mismatch()),
         }
     }
 }
@@ -404,7 +417,9 @@ fn outbound_from_context<Message>(
     match raw_context.binding {
         Binding::Redirect => {
             if !allow_redirect {
-                return Err(SamlError::UndefinedBinding);
+                return Err(SamlError::UnsupportedBinding {
+                    binding: Binding::Redirect,
+                });
             }
             EndpointUrl::try_new(raw_context.context.clone())?;
             validate_redirect_message_kind(&raw_context.context, expected_message)?;
@@ -441,7 +456,9 @@ fn outbound_from_context<Message>(
                 _message: PhantomData,
             })
         }
-        Binding::Artifact | Binding::Soap => Err(SamlError::UndefinedBinding),
+        binding @ (Binding::Artifact | Binding::Soap) => {
+            Err(SamlError::UnsupportedBinding { binding })
+        }
     }
 }
 
@@ -480,12 +497,12 @@ fn validate_redirect_message_kind(
 
     match (expected_count, opposite_count) {
         (1, 0) => Ok(()),
-        (0, 0) => Err(SamlError::Invalid(format!(
-            "missing Redirect field {expected_name}"
-        ))),
-        (count, 0) if count > 1 => Err(SamlError::Invalid(format!(
-            "ambiguous Redirect field {expected_name}"
-        ))),
+        (0, 0) => Err(SamlError::MissingBindingParameter {
+            name: expected_name,
+        }),
+        (count, 0) if count > 1 => Err(SamlError::DuplicateBindingParameter {
+            name: expected_name,
+        }),
         (_, _) => Err(SamlError::Invalid(format!(
             "expected Redirect field {expected_name}, found {opposite_name}"
         ))),

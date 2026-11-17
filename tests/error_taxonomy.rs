@@ -406,11 +406,43 @@ fn error_taxonomy_signed_repeated_conditions_are_rejected() -> Result<(), Box<dy
 fn error_taxonomy_non_success_status_returns_status_not_success(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match check_status(FAILED, ParserType::SamlResponse) {
-        Err(SamlError::StatusNotSuccess { top, second }) => {
-            assert_eq!(top, status_code::REQUESTER);
-            assert_eq!(second.as_deref(), Some(status_code::INVALID_NAME_ID_POLICY));
+        Err(SamlError::StatusNotSuccess { status }) => {
+            assert_eq!(status.top_level().as_uri(), status_code::REQUESTER);
+            assert_eq!(
+                status
+                    .subordinate()
+                    .map(saml_rs::SubordinateStatusCode::as_uri),
+                Some(status_code::INVALID_NAME_ID_POLICY)
+            );
             Ok(())
         }
         other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
+}
+
+#[test]
+fn error_taxonomy_malformed_xml_keeps_the_parser_error_as_its_source(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let error = match saml_rs::IdpDescriptor::from_metadata_xml(
+        saml_rs::EntityId::try_new("https://idp.example.com/metadata")?,
+        "<md:EntityDescriptor xmlns:md=\"urn:oasis:names:tc:SAML:2.0:metadata\"></md:Other>",
+        saml_rs::MetadataTrustPolicy::AllowUnsigned,
+    ) {
+        Err(error) => error,
+        Ok(_) => return Err("malformed metadata was accepted".into()),
+    };
+
+    assert!(
+        matches!(
+            error,
+            SamlError::Xml {
+                source: Some(_),
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+    let source = std::error::Error::source(&error).ok_or("the parser error was dropped")?;
+    assert!(!source.to_string().is_empty());
+    Ok(())
 }

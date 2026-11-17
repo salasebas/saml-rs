@@ -473,7 +473,7 @@ fn exclusive_canonicalization_with_comments_is_part_of_the_profile(
         Err(SamlError::SignedReferenceMismatch) => {
             Err("exclusive canonicalization with comments was rejected as another transform".into())
         }
-        Err(SamlError::SignatureVerification { .. } | SamlError::Crypto(_)) => Ok(()),
+        Err(SamlError::SignatureVerification { .. } | SamlError::Crypto { .. }) => Ok(()),
         other => Err(format!("expected cryptographic rejection, got {other:?}").into()),
     }
 }
@@ -564,8 +564,8 @@ fn entities_descriptor_import_rejects_two_entities() -> Result<(), Box<dyn std::
         &xml,
         MetadataTrustPolicy::AllowUnsigned,
     ) {
-        Err(SamlError::Xml(message))
-            if message.contains("ERR_MULTIPLE_METADATA_ENTITYDESCRIPTOR") =>
+        Err(SamlError::Xml { message, .. })
+            if message == "metadata has more than one EntityDescriptor" =>
         {
             Ok(())
         }
@@ -716,7 +716,7 @@ fn require_signature_does_not_verify_with_a_1024_bit_rsa_key(
         trust_allowing_other_transforms(only_short),
     ] {
         match import_idp(&signed, policy).map(|idp| idp.metadata_signature_verified()) {
-            Err(SamlError::Crypto(message)) if message.contains("1024-bit RSA key") => {}
+            Err(SamlError::Crypto { message, .. }) if message.contains("1024-bit RSA key") => {}
             other => return Err(format!("{policy:?}: {other:?}").into()),
         }
     }

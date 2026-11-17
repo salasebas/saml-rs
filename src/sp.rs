@@ -239,10 +239,7 @@ impl ServiceProvider {
     ) -> Result<BindingContext, SamlError> {
         preferences.validate()?;
         if idp.metadata.want_authn_requests_signed() && !self.metadata.authn_requests_signed() {
-            return Err(SamlError::Invalid(
-                "ERR_METADATA_CONFLICT_REQUEST_SIGNED_FLAG: SP AuthnRequestsSigned=false but IdP WantAuthnRequestsSigned=true"
-                    .into(),
-            ));
+            return Err(SamlError::AuthnRequestSigningRequired);
         }
         let destination = idp
             .metadata

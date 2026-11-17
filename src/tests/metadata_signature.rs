@@ -121,9 +121,7 @@ fn metadata_signature_bool_wrapper_uses_detailed_coverage() -> Result<(), Box<dy
         verify_metadata_signature_detailed_with_limits(&signed, &[CERT.to_string()], limits)
             .map(|verification| verification.verified()),
     ] {
-        assert!(
-            matches!(result, Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
-        );
+        assert!(matches!(result, Err(SamlError::LimitExceeded { .. })));
     }
 
     let oversized = format!(
@@ -136,9 +134,7 @@ fn metadata_signature_bool_wrapper_uses_detailed_coverage() -> Result<(), Box<dy
         verify_metadata_signature_detailed(&oversized, &[CERT.to_string()])
             .map(|verification| verification.verified()),
     ] {
-        assert!(
-            matches!(result, Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
-        );
+        assert!(matches!(result, Err(SamlError::LimitExceeded { .. })));
     }
     Ok(())
 }

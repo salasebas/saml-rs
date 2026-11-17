@@ -131,7 +131,13 @@ fn other_inbound_encrypted_elements_preflight_the_document(
             .map(|_| ()),
         ] {
             assert_eq!(
-                matches!(result, Err(SamlError::Invalid(message)) if message.contains("ERR_DECRYPTION_LIMIT_EXCEEDED")),
+                matches!(
+                    result,
+                    Err(SamlError::LimitExceeded {
+                        limit: saml_rs::ResourceLimit::DecryptionWork,
+                        ..
+                    })
+                ),
                 exceeds,
                 "inbound entry point did not honor the configured work allowance"
             );

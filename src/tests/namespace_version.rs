@@ -703,7 +703,7 @@ fn unbound_root_prefix_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let xml =
         r#"<p:AuthnRequest ID="_request" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#;
     match run_flow(xml, ParserType::SamlRequest) {
-        Err(SamlError::Xml(message))
+        Err(SamlError::Xml { message, .. })
             if message.contains("namespace prefix `p` is not declared") =>
         {
             Ok(())
@@ -994,7 +994,10 @@ fn decrypted_assertion_honors_xml_depth_limit_before_profile(
 
     options.decrypt_key = Some(PRIVATE_KEY);
     match flow(&options, &request) {
-        Err(SamlError::Invalid(message)) if message.contains("max XML depth") => Ok(()),
+        Err(SamlError::LimitExceeded {
+            limit: saml_rs::ResourceLimit::XmlDepth,
+            ..
+        }) => Ok(()),
         other => Err(format!("expected decrypted max-depth rejection, got {other:?}").into()),
     }
 }

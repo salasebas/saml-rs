@@ -719,7 +719,7 @@ fn typed_validation_context_duplicate_response_id_replay_returns_semantic_error(
     let mut validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
     match session.check_and_store_replay(&mut validation) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, "response_id:_response123");
+            assert_eq!(key.cache_key(), "response_id:_response123");
             Ok(())
         }
         other => Err(format!("expected ReplayDetected, got {other:?}").into()),
@@ -742,7 +742,7 @@ fn typed_validation_context_duplicate_assertion_id_replay_returns_semantic_error
     let mut validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
     match second.check_and_store_replay(&mut validation) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, "assertion_id:_assertion123");
+            assert_eq!(key.cache_key(), "assertion_id:_assertion123");
             Ok(())
         }
         other => Err(format!("expected ReplayDetected, got {other:?}").into()),

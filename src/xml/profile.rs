@@ -1,6 +1,6 @@
 use crate::constants::{name_id_format, namespace, ParserType};
-use crate::error::SamlError;
-use crate::xml::dom::XmlLimits;
+use crate::error::{xml_err, SamlError};
+use crate::xml::dom::{reader_err, XmlLimits};
 use crate::xml::parse_saml_utc_date_time;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::ResolveResult;
@@ -92,7 +92,7 @@ fn validate_attributes(
 ) -> Result<Vec<(Vec<u8>, String)>, SamlError> {
     let mut values = Vec::new();
     for attribute in element.attributes() {
-        let attribute = attribute.map_err(|error| SamlError::Xml(error.to_string()))?;
+        let attribute = attribute.map_err(xml_err)?;
         if attribute.key.as_namespace_binding().is_some() {
             continue;
         }
@@ -116,7 +116,7 @@ fn validate_attributes(
         }
         let value = attribute
             .normalized_value(XmlVersion::Implicit1_0)
-            .map_err(|error| SamlError::Xml(error.to_string()))?
+            .map_err(xml_err)?
             .into_owned();
         values.push((local.into_inner().as_bytes().to_vec(), value));
     }
@@ -281,9 +281,7 @@ fn validate_outbound_stream<E, S: Default>(
     let mut stack = Vec::new();
     let mut state = S::default();
     loop {
-        let (resolved, event) = reader
-            .read_resolved_event()
-            .map_err(|error| SamlError::Xml(error.to_string()))?;
+        let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
         let element_namespace = classify_namespace(resolved);
         let in_structural = stack.last().is_some_and(&is_structural);
         match event {
@@ -298,7 +296,7 @@ fn validate_outbound_stream<E, S: Default>(
             Event::End(_) => {
                 let current = stack
                     .pop()
-                    .ok_or_else(|| SamlError::Xml("unexpected closing element".into()))?;
+                    .ok_or_else(|| SamlError::xml("unexpected closing element"))?;
                 finish(&current, &state)?;
             }
             Event::Text(text) => {
@@ -314,16 +312,14 @@ fn validate_outbound_stream<E, S: Default>(
             Event::GeneralRef(reference) => {
                 if in_structural
                     && !matches!(
-                        reference
-                            .resolve_char_ref()
-                            .map_err(|error| SamlError::Xml(error.to_string()))?,
+                        reference.resolve_char_ref().map_err(xml_err)?,
                         Some(' ' | '\t' | '\r' | '\n')
                     )
                 {
                     return Err(text_error());
                 }
             }
-            Event::DocType(_) => return Err(SamlError::Xml("DOCTYPE is not allowed".into())),
+            Event::DocType(_) => return Err(SamlError::xml("DOCTYPE is not allowed")),
             Event::Eof => break,
             Event::Decl(_) | Event::Comment(_) | Event::PI(_) => {}
         }
@@ -613,9 +609,7 @@ pub(crate) fn validate_protocol_profile(
     let mut saw_root = false;
 
     loop {
-        let (resolved, event) = reader
-            .read_resolved_event()
-            .map_err(|error| SamlError::Xml(error.to_string()))?;
+        let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
         let element_namespace = classify_namespace(resolved);
         match event {
             Event::Start(element) => {
@@ -669,7 +663,10 @@ mod tests {
     fn namespace_binding_limit(result: Result<(), SamlError>) -> bool {
         matches!(
             result,
-            Err(SamlError::Xml(message)) if message.contains("namespace bindings in scope")
+            Err(SamlError::LimitExceeded {
+                limit: crate::ResourceLimit::XmlNamespaceBindings,
+                ..
+            })
         )
     }
 

@@ -4,14 +4,14 @@
 use std::ops::Range;
 
 use super::{
-    assertion_children, assertion_elements, crypto_err, namespace_complete, node_range,
-    parse_xml_document, root_children, selected_kinds, splice, EncryptedElementKind, ENC,
-    ENCRYPTED_ASSERTION, ENCRYPTED_ATTRIBUTE, ENCRYPTED_ID, LOGOUT_REQUEST_ENCRYPTED_ID,
+    assertion_children, assertion_elements, namespace_complete, node_range, parse_xml_document,
+    root_children, selected_kinds, splice, EncryptedElementKind, ENC, ENCRYPTED_ASSERTION,
+    ENCRYPTED_ATTRIBUTE, ENCRYPTED_ID, LOGOUT_REQUEST_ENCRYPTED_ID,
 };
 use super::{policy::encrypted_data_algorithm, work};
 use crate::config::{AssertionElementEncryption, DecryptionCredential, ReceivedEncryptedElements};
 use crate::constants::{key_encryption_algorithm, namespace};
-use crate::error::SamlError;
+use crate::error::{crypto_err, utf8_err, xml_err, SamlError};
 use crate::xml::dom::{self, XmlLimits};
 use bergshamra::keys::Key;
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeKind};
@@ -79,7 +79,7 @@ fn decrypt_with_keys(
 /// naming RSA-v1.5. `bergshamra` parses the same text with `uppsala` and reads
 /// `Algorithm` by local name, so every such attribute is checked.
 fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
-    let document = uppsala::parse(xml).map_err(crypto_err)?;
+    let document = uppsala::parse(xml).map_err(xml_err)?;
     Ok(document
         .descendants(document.root())
         .into_iter()
@@ -111,7 +111,8 @@ fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
 /// anything other than one `<xenc:EncryptedData>` followed only by
 /// `<xenc:EncryptedKey>` elements, or when its plaintext is not one
 /// `<Assertion>`. Returns [`SamlError::Unsupported`] for a refused key
-/// transport, [`SamlError::Invalid`] with `ERR_DECRYPTION_LIMIT_EXCEEDED`
+/// transport, [`SamlError::LimitExceeded`] with
+/// [`ResourceLimit::DecryptionWork`](crate::ResourceLimit::DecryptionWork)
 /// when `options.max_decryption_work` is exceeded, and another
 /// [`SamlError`] when decryption fails.
 #[deprecated(
@@ -129,7 +130,8 @@ pub fn decrypt_assertion(
 ///
 /// # Errors
 ///
-/// As `decrypt_assertion`, and [`SamlError::Invalid`] when a limit is exceeded.
+/// As `decrypt_assertion`, and [`SamlError::LimitExceeded`] when a limit is
+/// exceeded.
 pub fn decrypt_assertion_with_limits(
     xml: &str,
     enc_key: &Key,
@@ -141,7 +143,7 @@ pub fn decrypt_assertion_with_limits(
     let assertion = assertions
         .into_iter()
         .next()
-        .ok_or_else(undefined_encrypted_assertion)?;
+        .ok_or(SamlError::AssertionMissing)?;
     Ok((response, assertion))
 }
 
@@ -157,7 +159,13 @@ pub(crate) fn decrypt_assertions_with_limits(
     let response = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let encrypted = root_children(document, namespace::ASSERTION, "EncryptedAssertion")?;
         if encrypted.is_empty() {
-            return Ok(None);
+            return Err(if super::assertions(document)?.is_empty() {
+                SamlError::AssertionMissing
+            } else {
+                SamlError::EncryptionRequired {
+                    element: "Assertion",
+                }
+            });
         }
         let replacements = encrypted
             .into_iter()
@@ -178,12 +186,8 @@ pub(crate) fn decrypt_assertions_with_limits(
             .collect();
         Ok(Some(replacements))
     })?
-    .ok_or_else(undefined_encrypted_assertion)?;
+    .ok_or(SamlError::AssertionMissing)?;
     Ok((response, assertions))
-}
-
-fn undefined_encrypted_assertion() -> SamlError {
-    SamlError::Crypto("ERR_UNDEFINED_ENCRYPTED_ASSERTION".into())
 }
 
 /// Replace the one `kind.encrypted` child of the document element of `xml`
@@ -466,8 +470,7 @@ pub(super) fn encrypted_wrapper(
 ) -> Result<String, SamlError> {
     // The whole wrapper is decrypted so that an `EncryptedKey` beside
     // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
-    String::from_utf8(namespace_complete(document, element)?)
-        .map_err(|error| SamlError::Xml(error.to_string()))
+    String::from_utf8(namespace_complete(document, element)?).map_err(utf8_err)
 }
 
 /// `EncryptedElementType`: one `EncryptedData`, then any `EncryptedKey`.

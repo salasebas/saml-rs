@@ -38,7 +38,11 @@ fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, Saml
     Ok(match binding {
         SsoResponseBinding::Post => SsoResponseBinding::SimpleSign,
         SsoResponseBinding::SimpleSign | SsoResponseBinding::Artifact => SsoResponseBinding::Post,
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => {
+            return Err(SamlError::UnsupportedBinding {
+                binding: binding.as_binding(),
+            })
+        }
     })
 }
 
@@ -196,7 +200,7 @@ fn a_supplied_consumer_not_published_for_the_binding_is_rejected(
             Err(error) => assert!(
                 matches!(
                     error.downcast_ref::<SamlError>(),
-                    Some(SamlError::Invalid(_))
+                    Some(SamlError::RecipientEndpointNotPublished)
                 ),
                 "{binding:?}: {error:?}"
             ),

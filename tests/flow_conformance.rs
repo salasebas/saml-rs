@@ -106,7 +106,7 @@ fn response_request(binding: Binding, ctx: &BindingContext) -> Result<HttpReques
         Binding::Post => HttpRequest::post(vec![("SAMLResponse".into(), ctx.context.clone())]),
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::SimpleSign => simplesign_request("SAMLResponse", ctx)?,
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => return Err(SamlError::UnsupportedBinding { binding }),
     })
 }
 
@@ -137,8 +137,10 @@ fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
 }
 
 fn simplesign_request(param: &str, ctx: &BindingContext) -> Result<HttpRequest, SamlError> {
-    let raw_xml = String::from_utf8(STANDARD.decode(&ctx.context)?)
-        .map_err(|e| SamlError::Xml(e.to_string()))?;
+    let decoded = STANDARD
+        .decode(&ctx.context)
+        .map_err(|e| SamlError::Invalid(e.to_string()))?;
+    let raw_xml = String::from_utf8(decoded).map_err(|e| SamlError::Invalid(e.to_string()))?;
     let sig_alg = ctx.sig_alg.clone().unwrap_or_default();
     let octet = match ctx.relay_state.as_deref() {
         Some(relay_state) => format!("{param}={raw_xml}&RelayState={relay_state}&SigAlg={sig_alg}"),
@@ -176,12 +178,14 @@ fn form_hidden_fields(form: &str) -> Result<Vec<(String, String)>, SamlError> {
     Ok(fields)
 }
 
-fn simplesign_form_request(param: &str, ctx: &BindingContext) -> Result<HttpRequest, SamlError> {
+fn simplesign_form_request(
+    param: &str,
+    ctx: &BindingContext,
+) -> Result<HttpRequest, Box<dyn std::error::Error>> {
     let form = ctx.post_form()?;
     let mut request = HttpRequest::post(form_hidden_fields(&form)?);
     let encoded = body_param(&request, param)?.to_string();
-    let raw_xml =
-        String::from_utf8(STANDARD.decode(&encoded)?).map_err(|e| SamlError::Xml(e.to_string()))?;
+    let raw_xml = String::from_utf8(STANDARD.decode(&encoded)?)?;
     let relay_state = body_param(&request, "RelayState")?.to_string();
     let sig_alg = body_param(&request, "SigAlg")?.to_string();
     let _signature = body_param(&request, "Signature")?.to_string();
@@ -340,7 +344,7 @@ fn flow_conformance_unsigned_sp_against_requiring_idp() -> Result<(), Box<dyn st
         Binding::Redirect,
         &LoginRequestOptions::default(),
     ) {
-        Err(SamlError::Invalid(m)) if m.contains("CONFLICT") => Ok(()),
+        Err(SamlError::AuthnRequestSigningRequired) => Ok(()),
         other => Err(format!("expected conflict, got {other:?}").into()),
     }
 }
@@ -1267,24 +1271,24 @@ fn logout_request_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn std
 fn logout_request_to_http(
     binding: Binding,
     ctx: &BindingContext,
-) -> Result<HttpRequest, SamlError> {
+) -> Result<HttpRequest, Box<dyn std::error::Error>> {
     Ok(match binding {
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
         Binding::SimpleSign => simplesign_request("SAMLRequest", ctx)?,
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => return Err(SamlError::UnsupportedBinding { binding }.into()),
     })
 }
 
 fn logout_response_to_http(
     binding: Binding,
     ctx: &BindingContext,
-) -> Result<HttpRequest, SamlError> {
+) -> Result<HttpRequest, Box<dyn std::error::Error>> {
     Ok(match binding {
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::Post => HttpRequest::post(vec![("SAMLResponse".into(), ctx.context.clone())]),
         Binding::SimpleSign => simplesign_request("SAMLResponse", ctx)?,
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => return Err(SamlError::UnsupportedBinding { binding }.into()),
     })
 }
 
@@ -1314,13 +1318,12 @@ fn tamper_body_message(
     param: &str,
     from: &str,
     to: &str,
-) -> Result<(), SamlError> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let encoded = body_param_mut(request, param)?;
-    let xml = String::from_utf8(STANDARD.decode(encoded.as_str())?)
-        .map_err(|e| SamlError::Xml(e.to_string()))?;
+    let xml = String::from_utf8(STANDARD.decode(encoded.as_str())?)?;
     let tampered = xml.replace(from, to);
     if tampered == xml {
-        return Err(SamlError::Invalid("tamper target not found".into()));
+        return Err("tamper target not found".into());
     }
     *encoded = STANDARD.encode(tampered.as_bytes());
     Ok(())

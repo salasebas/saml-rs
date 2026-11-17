@@ -248,7 +248,10 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
         response_input()?,
         validation(),
     );
-    assert!(matches!(ambiguous, Err(SamlError::Invalid(_))));
+    assert!(matches!(
+        ambiguous,
+        Err(SamlError::RecipientEndpointAmbiguous)
+    ));
     service_provider.finish_slo(
         &idp_descriptor,
         &started.pending,
@@ -324,7 +327,10 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
         input(&logout_request(IDP_SLO_SECOND)),
         validation(),
     );
-    assert!(matches!(ambiguous, Err(SamlError::Invalid(_))));
+    assert!(matches!(
+        ambiguous,
+        Err(SamlError::RecipientEndpointAmbiguous)
+    ));
     Ok(())
 }
 

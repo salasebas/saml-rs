@@ -423,7 +423,10 @@ fn service_provider_without_the_key_keeps_the_single_key_error(
         let (Err(single_key), Err(both_keys)) = (single_key, both_keys) else {
             return Err("a key that is not configured decrypted".into());
         };
-        assert!(matches!(both_keys, SamlError::Crypto(_)), "{both_keys:?}");
+        assert!(
+            matches!(both_keys, SamlError::Crypto { .. }),
+            "{both_keys:?}"
+        );
         assert_eq!(both_keys.to_string(), single_key.to_string());
     }
     Ok(())
@@ -550,6 +553,21 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         assert_eq!(session.attributes(), &attributes(), "{sp_encryption:?}");
     }
     Ok(())
+}
+
+#[test]
+fn service_provider_that_selects_encrypted_assertions_rejects_a_plaintext_assertion(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange(
+        XmlEncryptionPolicy::default(),
+        XmlEncryptionPolicy::encrypt_assertions(),
+    )?;
+    match exchange.session {
+        Err(SamlError::EncryptionRequired {
+            element: "Assertion",
+        }) => Ok(()),
+        other => Err(format!("expected EncryptionRequired for Assertion, got {other:?}").into()),
+    }
 }
 
 #[test]

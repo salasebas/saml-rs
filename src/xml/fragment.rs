@@ -4,7 +4,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::PrefixDeclaration;
 use quick_xml::Reader;
 
-use crate::error::SamlError;
+use crate::error::{xml_err, SamlError};
 use crate::xml::utf8_bom_len;
 
 struct Declaration {
@@ -30,14 +30,14 @@ struct Declaration {
 pub(crate) fn standalone_element(xml: &str, start: usize, end: usize) -> Result<String, SamlError> {
     let element = xml
         .get(start..end)
-        .ok_or_else(|| SamlError::Xml("element is outside the document".into()))?;
+        .ok_or_else(|| SamlError::xml("element is outside the document"))?;
     let inherited = inherited_declarations(xml, start)?;
     if inherited.is_empty() {
         return Ok(element.to_string());
     }
     let name_end = element
         .find(|ch: char| ch.is_ascii_whitespace() || ch == '/' || ch == '>')
-        .ok_or_else(|| SamlError::Xml("element start tag is incomplete".into()))?;
+        .ok_or_else(|| SamlError::xml("element start tag is incomplete"))?;
     let mut standalone = String::with_capacity(element.len());
     standalone.push_str(&element[..name_end]);
     for declaration in &inherited {
@@ -62,9 +62,7 @@ fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, S
     let mut ancestors: Vec<Vec<Declaration>> = Vec::new();
     loop {
         let before = bom_len + reader.buffer_position() as usize;
-        let event = reader
-            .read_event()
-            .map_err(|err| SamlError::Xml(err.to_string()))?;
+        let event = reader.read_event().map_err(xml_err)?;
         let after = bom_len + reader.buffer_position() as usize;
         match event {
             Event::Start(element) | Event::Empty(element) if (before..after).contains(&start) => {
@@ -75,10 +73,10 @@ fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, S
                 ancestors.pop();
             }
             Event::DocType(_) => {
-                return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
+                return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
             Event::Eof => {
-                return Err(SamlError::Xml("element is outside the document".into()));
+                return Err(SamlError::xml("element is outside the document"));
             }
             Event::Empty(_)
             | Event::Text(_)
@@ -94,7 +92,7 @@ fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, S
 fn declarations(element: &BytesStart<'_>) -> Result<Vec<Declaration>, SamlError> {
     let mut declared = Vec::new();
     for attribute in element.attributes() {
-        let attribute = attribute.map_err(|err| SamlError::Xml(err.to_string()))?;
+        let attribute = attribute.map_err(xml_err)?;
         let prefix = match attribute.key.as_namespace_binding() {
             Some(PrefixDeclaration::Default) => String::new(),
             Some(PrefixDeclaration::Named(prefix)) => prefix.to_string(),
@@ -134,7 +132,7 @@ mod tests {
             .children
             .first()
             .and_then(|child| child.children.first())
-            .ok_or_else(|| SamlError::Xml("fixture has no grandchild".into()))?;
+            .ok_or_else(|| SamlError::xml("fixture has no grandchild"))?;
         standalone_element(xml, node.start, node.end)
     }
 
@@ -211,7 +209,7 @@ mod tests {
         let xml = r#"<a:Root xmlns:a="urn:a">text</a:Root>"#;
         assert!(matches!(
             standalone_element(xml, xml.len(), xml.len()),
-            Err(SamlError::Xml(_))
+            Err(SamlError::Xml { .. })
         ));
     }
 }

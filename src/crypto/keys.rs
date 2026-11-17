@@ -2,15 +2,11 @@
 //! provider.
 
 use crate::config::{DecryptionCredential, HmacSecret};
-use crate::error::SamlError;
+use crate::error::{crypto_err, SamlError};
 use crate::util::normalize_cert_string;
 use bergshamra::keys::keyinfo::build_x509_key_info;
 use bergshamra::keys::loader::{load_hmac_key, load_pem_auto, load_x509_cert_pem};
 use bergshamra::keys::Key;
-
-fn crypto_err(err: impl std::fmt::Display) -> SamlError {
-    SamlError::Crypto(err.to_string())
-}
 
 /// Load a private key from PEM using the formats supported by the selected
 /// crypto provider.
@@ -58,9 +54,7 @@ fn to_cert_pem(cert: &str) -> Result<String, SamlError> {
     }
     let b64 = normalize_cert_string(cert);
     if !b64.is_ascii() {
-        return Err(SamlError::Crypto(
-            "certificate is not base64 text".to_string(),
-        ));
+        return Err(SamlError::crypto("certificate is not base64 text"));
     }
     let mut body = String::new();
     let mut i = 0;
@@ -167,7 +161,7 @@ mod tests {
         let cert = format!("{}\u{a0}AAAA", "A".repeat(63));
         assert!(matches!(
             load_certificate(&cert),
-            Err(SamlError::Crypto(message)) if message == "certificate is not base64 text"
+            Err(SamlError::Crypto { message, .. }) if message == "certificate is not base64 text"
         ));
         Ok(())
     }

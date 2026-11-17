@@ -16,14 +16,14 @@ use crate::constants::{namespace, status_code};
 use crate::entity::{generate_id, now_iso8601};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
-use crate::model::EndpointUrl;
+use crate::model::{EndpointUrl, ReplayKey};
 use crate::soap::{
     read_soap_body, MessageConfidentiality, SoapChannel, SoapProtocolMessage, SoapRequest,
 };
 use crate::xml::fragment::standalone_element;
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, status_codes, PartyName,
+    issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, read_status, PartyName,
     SamlElement,
 };
 use crate::xml::write::XmlWriter;
@@ -34,7 +34,7 @@ const ARTIFACT_LEN: usize = 44;
 const SOURCE_ID_LEN: usize = 20;
 
 /// SAML V2.0 type 0x0004 artifact.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Artifact {
     encoded: String,
     endpoint_index: u16,
@@ -306,7 +306,7 @@ impl ArtifactUses {
         Self { blocked: None }
     }
 
-    fn record(&mut self, artifact: &str, now: Instant) -> Result<(), SamlError> {
+    fn record(&mut self, artifact: &Artifact, now: Instant) -> Result<(), SamlError> {
         let Some(blocked) = &mut self.blocked else {
             return Ok(());
         };
@@ -319,12 +319,14 @@ impl ArtifactUses {
                 blocked.values.remove(&expired);
             }
         }
-        if !blocked.values.insert(artifact.to_string()) {
+        if !blocked.values.insert(artifact.as_str().to_string()) {
             return Err(SamlError::ReplayDetected {
-                key: artifact.to_string(),
+                key: ReplayKey::Artifact(artifact.clone()),
             });
         }
-        blocked.oldest_first.push_back((now, artifact.to_string()));
+        blocked
+            .oldest_first
+            .push_back((now, artifact.as_str().to_string()));
         Ok(())
     }
 }
@@ -483,10 +485,7 @@ impl ArtifactResolution {
                 "ArtifactResponse Issuer Format must be omitted or entity".into(),
             ));
         }
-        let (top, second) = status_codes(&response)?;
-        if top != status_code::SUCCESS {
-            return Err(SamlError::StatusNotSuccess { top, second });
-        }
+        read_status(&response)?.require_success()?;
         let Some(message) = protocol_payload(&response)? else {
             return Err(SamlError::ArtifactNotReturned);
         };
@@ -615,7 +614,7 @@ pub(crate) fn resolve(
     writer.end("samlp:ArtifactResolve");
     let request =
         SoapProtocolMessage::request(EndpointUrl::try_new(service.location())?, &writer.finish())?;
-    uses.record(artifact.as_str(), Instant::now())?;
+    uses.record(artifact, Instant::now())?;
     Ok(ArtifactResolution {
         request,
         request_id,
@@ -928,15 +927,24 @@ mod tests {
         let period = Duration::from_secs(60);
         let start = Instant::now();
         let mut uses = ArtifactUses::enforce_single_use(period);
+        let artifact = |n: u32| {
+            let mut handle = [0u8; SOURCE_ID_LEN];
+            handle[..4].copy_from_slice(&n.to_be_bytes());
+            Artifact::try_from_encoded(encode_artifact(0, [0u8; SOURCE_ID_LEN], handle))
+        };
         for n in 0u32..1_000 {
-            uses.record(&n.to_string(), start)?;
+            uses.record(&artifact(n)?, start)?;
         }
-        let repeated = uses.record("0", start + period - Duration::from_secs(1));
-        assert!(matches!(repeated, Err(SamlError::ReplayDetected { key }) if key == "0"));
+        let first = artifact(0)?;
+        let repeated = uses.record(&first, start + period - Duration::from_secs(1));
+        assert!(matches!(
+            repeated,
+            Err(SamlError::ReplayDetected { key: ReplayKey::Artifact(replayed) }) if replayed == first
+        ));
 
-        uses.record("0", start + period)?;
+        uses.record(&first, start + period)?;
         let blocked = uses.blocked.as_ref().ok_or("single use is enforced")?;
-        assert_eq!(blocked.values, HashSet::from(["0".to_string()]));
+        assert_eq!(blocked.values, HashSet::from([first.as_str().to_string()]));
         assert_eq!(blocked.oldest_first.len(), 1);
         Ok(())
     }

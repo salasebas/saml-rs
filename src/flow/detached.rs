@@ -131,7 +131,7 @@ pub(super) fn verify_detached(
     opts: &FlowOptions<'_>,
     xml: &str,
 ) -> Result<String, SamlError> {
-    let get = |k: &str| -> Result<Option<&str>, SamlError> {
+    let get = |k: &'static str| -> Result<Option<&str>, SamlError> {
         match binding {
             Binding::Redirect => request.query_get(k),
             _ => request.body_get(k),
@@ -178,7 +178,7 @@ pub(super) fn verify_detached(
         ) {
             Ok(true) => return Ok(sig_alg.to_string()),
             Ok(false) => tried_invalid = true,
-            Err(error @ SamlError::Crypto(_)) => {
+            Err(error @ SamlError::Crypto { .. }) => {
                 provider_error.get_or_insert(error);
             }
             Err(_) => {}

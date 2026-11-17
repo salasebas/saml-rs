@@ -185,7 +185,11 @@ fn start_options(binding: LogoutBinding) -> Result<StartSlo, SamlError> {
         LogoutBinding::Redirect => StartSlo::redirect(),
         LogoutBinding::SimpleSign => StartSlo::simple_sign(),
         LogoutBinding::Soap => StartSlo::soap(),
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => {
+            return Err(SamlError::UnsupportedBinding {
+                binding: binding.as_binding(),
+            })
+        }
     })
 }
 
@@ -195,7 +199,11 @@ fn respond_options(binding: LogoutBinding) -> Result<RespondSlo, SamlError> {
         LogoutBinding::Redirect => RespondSlo::redirect(),
         LogoutBinding::SimpleSign => RespondSlo::simple_sign(),
         LogoutBinding::Soap => RespondSlo::soap(),
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => {
+            return Err(SamlError::UnsupportedBinding {
+                binding: binding.as_binding(),
+            })
+        }
     })
 }
 
@@ -226,7 +234,11 @@ fn request_input(
         LogoutBinding::Soap => {
             BrowserInput::<LogoutRequest>::soap(outbound.soap_request()?.envelope())
         }
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => {
+            return Err(SamlError::UnsupportedBinding {
+                binding: binding.as_binding(),
+            })
+        }
     })
 }
 
@@ -245,7 +257,11 @@ fn response_input(
         LogoutBinding::Soap => {
             BrowserInput::<LogoutResponse>::soap(outbound.soap_response()?.envelope())
         }
-        _ => return Err(SamlError::UndefinedBinding),
+        binding => {
+            return Err(SamlError::UnsupportedBinding {
+                binding: binding.as_binding(),
+            })
+        }
     })
 }
 
@@ -472,10 +488,16 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
             response_input(&response, binding)?,
             validation(),
         ) {
-            Err(SamlError::StatusNotSuccess { top, second }) => {
-                assert_eq!(top, status_code::REQUESTER, "{binding:?}");
+            Err(SamlError::StatusNotSuccess { status }) => {
                 assert_eq!(
-                    second.as_deref(),
+                    status.top_level().as_uri(),
+                    status_code::REQUESTER,
+                    "{binding:?}"
+                );
+                assert_eq!(
+                    status
+                        .subordinate()
+                        .map(saml_rs::SubordinateStatusCode::as_uri),
                     Some(status_code::UNKNOWN_PRINCIPAL),
                     "{binding:?}"
                 );
@@ -681,7 +703,7 @@ fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
     ) {
         Err(SamlError::ReplayDetected { key }) => {
             assert_eq!(
-                key,
+                key.cache_key(),
                 format!("logout_request_id:{}", sent.outbound.id().as_str())
             );
             Ok(())

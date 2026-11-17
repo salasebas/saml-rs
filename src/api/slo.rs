@@ -2,7 +2,6 @@ use crate::browser::{BrowserInput, LogoutBinding, Outbound, PendingLogoutRequest
 use crate::config::{IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
-use crate::error::SamlError as Error;
 use crate::logout::{
     create_logout_request_for_subject_inner, create_logout_response_inner, decrypt_encrypted_id,
     parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
@@ -472,7 +471,7 @@ fn start_slo_impl(
     options.relay_state.validate()?;
     let follows_rules = options.follows_generation_rules();
     if follows_rules && matches!(options.signing, LogoutSigning::DoNotSign) {
-        return Err(Error::ProtocolProfile(
+        return Err(SamlError::ProtocolProfile(
             "a LogoutRequest signature cannot be disabled when Single Logout generation rules apply".into(),
         ));
     }
@@ -726,7 +725,7 @@ fn peer_logout_endpoint(
 ) -> Result<String, SamlError> {
     peer_metadata
         .single_logout_service_location(binding, direction)
-        .ok_or_else(|| Error::MissingMetadata("SingleLogoutService".into()))
+        .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))
 }
 
 fn logout_request_signing(setting: &EntitySetting, signing: LogoutSigning) -> bool {
@@ -741,8 +740,7 @@ fn logout_response_binding(
     actual: Binding,
     request: LogoutBinding,
 ) -> Result<LogoutBinding, SamlError> {
-    let unsupported = || Error::UnsupportedBinding { binding: actual };
-    let response = LogoutBinding::try_from(actual).map_err(|_| unsupported())?;
+    let response = LogoutBinding::try_from(actual)?;
     match (request, response) {
         (LogoutBinding::Soap, LogoutBinding::Soap)
         | (
@@ -756,7 +754,7 @@ fn logout_response_binding(
         | (
             LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign,
             LogoutBinding::Soap,
-        ) => Err(unsupported()),
+        ) => Err(SamlError::UnsupportedBinding { binding: actual }),
     }
 }
 
@@ -768,7 +766,7 @@ fn logout_recipient_endpoint(
 ) -> Result<String, SamlError> {
     let locations = local_metadata.single_logout_service_locations(binding.as_binding(), direction);
     if locations.is_empty() {
-        return Err(Error::MissingMetadata("SingleLogoutService".into()));
+        return Err(SamlError::MissingMetadata("SingleLogoutService".into()));
     }
     validation.resolve_recipient_endpoint(&locations)
 }

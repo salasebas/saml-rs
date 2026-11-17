@@ -1283,7 +1283,7 @@ fn typed_facade_receive_slo_checks_logout_request_replay() -> Result<(), Box<dyn
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, replay_key);
+            assert_eq!(key.cache_key(), replay_key);
             Ok(())
         }
         other => Err(format!("expected LogoutRequest ReplayDetected, got {other:?}").into()),
@@ -1647,7 +1647,7 @@ fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
         SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
             .with_clock_skew(skew),
     ) {
-        Err(SamlError::ReplayDetected { key }) => assert_eq!(key, replay_key),
+        Err(SamlError::ReplayDetected { key }) => assert_eq!(key.cache_key(), replay_key),
         other => return Err(format!("expected skew-retained replay, got {other:?}").into()),
     }
 
@@ -1741,7 +1741,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         BrowserInput::<LogoutRequest>::post(request_fields),
         validation_with_cache(&mut request_cache),
     ) {
-        Err(SamlError::ReplayDetected { key }) => assert_eq!(key, request_key),
+        Err(SamlError::ReplayDetected { key }) => assert_eq!(key.cache_key(), request_key),
         other => {
             return Err(format!(
                 "expected LogoutRequest ReplayDetected from the caller cache, got {other:?}"
@@ -1782,7 +1782,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         validation_with_cache(&mut response_cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, response_key);
+            assert_eq!(key.cache_key(), response_key);
             Ok(())
         }
         other => Err(format!(
@@ -1815,7 +1815,7 @@ fn typed_facade_finish_slo_checks_logout_response_replay() -> Result<(), Box<dyn
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
-            assert_eq!(key, replay_key);
+            assert_eq!(key.cache_key(), replay_key);
             Ok(())
         }
         other => Err(format!("expected LogoutResponse ReplayDetected, got {other:?}").into()),
@@ -2564,7 +2564,7 @@ fn assert_session_authority_template_rejected_before_signing(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match start_idp_slo_with_template(template)? {
         StartedSloResult::Failed(
-            SamlError::ProtocolProfile(_) | SamlError::Xml(_) | SamlError::Invalid(_),
+            SamlError::ProtocolProfile(_) | SamlError::Xml { .. } | SamlError::Invalid(_),
         ) => Ok(()),
         StartedSloResult::Failed(other) => Err(format!(
             "expected template validation failure before signing, got {other:?}"
@@ -2901,10 +2901,15 @@ fn typed_facade_finish_slo_reports_signed_correlated_error_status(
         BrowserInput::<LogoutResponse>::post(exchange.response_fields),
         validation(),
     ) {
-        Err(SamlError::StatusNotSuccess { top, second }) => {
-            assert_eq!(top, saml_rs::constants::status_code::RESPONDER);
+        Err(SamlError::StatusNotSuccess { status }) => {
             assert_eq!(
-                second.as_deref(),
+                status.top_level().as_uri(),
+                saml_rs::constants::status_code::RESPONDER
+            );
+            assert_eq!(
+                status
+                    .subordinate()
+                    .map(saml_rs::SubordinateStatusCode::as_uri),
                 Some(saml_rs::constants::status_code::PARTIAL_LOGOUT)
             );
             Ok(())
@@ -3104,7 +3109,10 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
         BrowserInput::<LogoutRequest>::post(request_fields),
         validation(),
     ) {
-        Err(SamlError::Invalid(message)) if message.contains("receive limit") => {}
+        Err(SamlError::LimitExceeded {
+            limit: saml_rs::ResourceLimit::RelayStateBytes,
+            ..
+        }) => {}
         other => {
             return Err(format!("expected the RelayState receive limit, got {other:?}").into())
         }
@@ -3124,7 +3132,10 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
         BrowserInput::<LogoutResponse>::post(response_fields),
         validation(),
     ) {
-        Err(SamlError::Invalid(message)) if message.contains("receive limit") => Ok(()),
+        Err(SamlError::LimitExceeded {
+            limit: saml_rs::ResourceLimit::RelayStateBytes,
+            ..
+        }) => Ok(()),
         other => Err(format!("expected the RelayState receive limit, got {other:?}").into()),
     }
 }
@@ -3163,7 +3174,7 @@ fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
             BrowserInput::<LogoutRequest>::redirect(format!("{request_query}&{repeated}")),
             validation(),
         ) {
-            Err(SamlError::Invalid(message)) if message == "ambiguous form field" => {}
+            Err(SamlError::DuplicateBindingParameter { name: "RelayState" }) => {}
             other => {
                 return Err(
                     format!("expected receive_slo to refuse {repeated}, got {other:?}").into(),
@@ -3176,7 +3187,7 @@ fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
             BrowserInput::<LogoutResponse>::redirect(format!("{response_query}&{repeated}")),
             validation(),
         ) {
-            Err(SamlError::Invalid(message)) if message == "ambiguous form field" => {}
+            Err(SamlError::DuplicateBindingParameter { name: "RelayState" }) => {}
             other => {
                 return Err(
                     format!("expected finish_slo to refuse {repeated}, got {other:?}").into(),
@@ -4058,7 +4069,9 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
     assert_eq!(started.outbound.relay_state(), None);
     assert!(matches!(
         started.outbound.redirect_url(),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::OutboundBindingMismatch {
+            actual: saml_rs::constants::Binding::Soap
+        })
     ));
     let request_xml = soap_body_xml(request.envelope())?;
     assert!(root_has_signature(&request_xml)?);
@@ -4446,7 +4459,13 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
         validation(),
     );
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
 
@@ -4468,7 +4487,13 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
         validation(),
     );
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
     sp.finish_slo(

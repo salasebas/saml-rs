@@ -3,9 +3,7 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _;
 
-use crate::error::SamlError;
-
-const BASE64_OUTPUT_LIMIT_EXCEEDED: &str = "ERR_BASE64_OUTPUT_LIMIT_EXCEEDED";
+use crate::error::{ResourceLimit, SamlError};
 
 pub(crate) fn encode_base64(input: &[u8]) -> String {
     STANDARD.encode(input)
@@ -17,7 +15,7 @@ pub(crate) fn encode_base64(input: &[u8]) -> String {
 /// return. Any other byte outside the base64 alphabet is rejected.
 pub(crate) fn decode_base64(input: &str) -> Result<Vec<u8>, SamlError> {
     let normalized: Vec<u8> = non_whitespace_bytes(input).collect();
-    Ok(STANDARD.decode(normalized)?)
+    STANDARD.decode(normalized).map_err(base64_error)
 }
 
 /// Decode standard base64, rejecting inputs whose decoded output would exceed
@@ -32,17 +30,27 @@ pub fn base64_decode_with_limit(input: &str, max_output_len: usize) -> Result<Ve
         .saturating_add(2)
         .saturating_div(3)
         .saturating_mul(4);
+    let limit_exceeded = SamlError::LimitExceeded {
+        limit: ResourceLimit::Base64DecodedBytes,
+        maximum: max_output_len,
+    };
     if normalized_len > max_encoded_len {
-        return Err(SamlError::Invalid(BASE64_OUTPUT_LIMIT_EXCEEDED.into()));
+        return Err(limit_exceeded);
     }
 
     let mut normalized = Vec::with_capacity(normalized_len);
     normalized.extend(non_whitespace_bytes(input));
-    let out = STANDARD.decode(normalized)?;
+    let out = STANDARD.decode(normalized).map_err(base64_error)?;
     if out.len() > max_output_len {
-        return Err(SamlError::Invalid(BASE64_OUTPUT_LIMIT_EXCEEDED.into()));
+        return Err(limit_exceeded);
     }
     Ok(out)
+}
+
+pub(crate) fn base64_error(source: base64::DecodeError) -> SamlError {
+    SamlError::Base64 {
+        source: Box::new(source),
+    }
 }
 
 fn non_whitespace_bytes(input: &str) -> impl Iterator<Item = u8> + '_ {
@@ -65,7 +73,10 @@ mod tests {
         assert_eq!(decode_base64("Q Q\n=\t=\r\u{000c}")?, b"A");
         assert_eq!(decode_base64(" \n\t\r\u{000c}")?, b"");
         match base64_decode_with_limit("QUFBQQ==", 1) {
-            Err(SamlError::Invalid(message)) if message == BASE64_OUTPUT_LIMIT_EXCEEDED => Ok(()),
+            Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::Base64DecodedBytes,
+                maximum: 1,
+            }) => Ok(()),
             other => Err(format!("expected an output-limit error, got {other:?}").into()),
         }
     }
@@ -87,7 +98,7 @@ mod tests {
                 ("decode_base64", decode_base64(input)),
             ] {
                 match result {
-                    Err(SamlError::Base64(_)) => {}
+                    Err(SamlError::Base64 { .. }) => {}
                     other => {
                         return Err(format!("{decoder} input {input:?} produced {other:?}").into());
                     }

@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::config::{EntityId, IdentifierEncryptionPolicy, SpDescriptor};
-use crate::constants::{namespace, status_code, Binding};
+use crate::constants::{namespace, Binding};
 use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::{EndpointDirection, Metadata};
@@ -17,7 +17,7 @@ use crate::model::{
 use crate::soap::{read_soap_body, SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse};
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
-    issuer, issuer_format_is_entity, parse_saml_with_limits, status_codes, SamlElement,
+    issuer, issuer_format_is_entity, parse_saml_with_limits, read_status, SamlElement,
 };
 use crate::xml::XmlLimits;
 
@@ -241,11 +241,7 @@ impl StartedNameIdManagement {
         }
         require_peer_issuer(&response, &self.service_provider)?;
         require_one_status_code(&response)?;
-        let (top, second) = status_codes(&response)?;
-        if top != status_code::SUCCESS {
-            return Err(SamlError::StatusNotSuccess { top, second });
-        }
-        Ok(())
+        read_status(&response)?.require_success()
     }
 }
 

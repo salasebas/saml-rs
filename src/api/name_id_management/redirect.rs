@@ -3,7 +3,6 @@ use crate::browser::{
 };
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::entity::{generate_id, EntitySetting};
-use crate::error::SamlError as Error;
 use crate::flow::HttpRequest;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
@@ -379,7 +378,7 @@ impl Local<'_> {
             .entity_id
             .clone()
             .or_else(|| self.metadata.entity_id().map(str::to_string))
-            .ok_or_else(|| Error::MissingMetadata("entityID".into()))
+            .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))
     }
 }
 
@@ -590,7 +589,7 @@ fn require_redirect_input<Message>(input: &BrowserInput<Message>) -> Result<(), 
     if binding == NameIdManagementBinding::Redirect.as_binding() {
         return Ok(());
     }
-    Err(Error::UnsupportedBinding { binding })
+    Err(SamlError::UnsupportedBinding { binding })
 }
 
 fn peer_location(peer: &RawPeer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {
@@ -598,7 +597,7 @@ fn peer_location(peer: &RawPeer<'_>, direction: EndpointDirection) -> Result<Str
         .manage_name_id_service_locations(NameIdManagementBinding::Redirect.as_binding(), direction)
         .into_iter()
         .next()
-        .ok_or_else(|| Error::MissingMetadata("ManageNameIDService".into()))
+        .ok_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into()))
 }
 
 fn local_locations(
@@ -610,7 +609,7 @@ fn local_locations(
         direction,
     );
     if locations.is_empty() {
-        return Err(Error::MissingMetadata("ManageNameIDService".into()));
+        return Err(SamlError::MissingMetadata("ManageNameIDService".into()));
     }
     Ok(locations)
 }

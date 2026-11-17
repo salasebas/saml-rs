@@ -26,10 +26,12 @@ fn typed_bindings_sso_request_binding_accepts_browser_request_bindings(
 }
 
 #[test]
-fn typed_bindings_sso_request_binding_uses_undefined_binding_until_artifact_is_supported() {
+fn typed_bindings_sso_request_binding_rejects_artifact() {
     assert!(matches!(
         SsoRequestBinding::try_from(Binding::Artifact),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact
+        })
     ));
 }
 
@@ -53,10 +55,12 @@ fn typed_bindings_sso_response_binding_accepts_post_simplesign_and_artifact(
 }
 
 #[test]
-fn typed_bindings_sso_response_binding_uses_undefined_binding_for_redirect() {
+fn typed_bindings_sso_response_binding_rejects_redirect() {
     assert!(matches!(
         SsoResponseBinding::try_from(Binding::Redirect),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Redirect
+        })
     ));
 }
 
@@ -76,10 +80,12 @@ fn typed_bindings_logout_binding_accepts_supported_logout_bindings(
 }
 
 #[test]
-fn typed_bindings_logout_binding_uses_undefined_binding_until_artifact_is_supported() {
+fn typed_bindings_logout_binding_rejects_artifact() {
     assert!(matches!(
         LogoutBinding::try_from(Binding::Artifact),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact
+        })
     ));
 }
 
@@ -118,7 +124,9 @@ fn typed_bindings_redirect_acs_endpoint_narrowing_fails() {
 
     assert!(matches!(
         AcsEndpoint::try_from_raw(raw),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Redirect
+        })
     ));
 }
 
@@ -155,7 +163,9 @@ fn typed_bindings_sso_endpoint_rejects_artifact_until_artifact_is_supported() {
 
     assert!(matches!(
         SsoEndpoint::try_from_raw(raw),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact
+        })
     ));
 }
 
@@ -165,7 +175,9 @@ fn typed_bindings_slo_endpoint_rejects_artifact_until_artifact_is_supported() {
 
     assert!(matches!(
         SloEndpoint::try_from_raw(raw),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact
+        })
     ));
 }
 
@@ -394,7 +406,9 @@ fn typed_bindings_pending_snapshot_validates_expected_binding() {
 
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Redirect
+        })
     ));
 }
 
@@ -417,7 +431,7 @@ fn typed_bindings_pending_snapshot_rejects_missing_acs_fields() {
 
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
-        Err(SamlError::Invalid(_) | SamlError::UndefinedBinding)
+        Err(SamlError::Invalid(_))
     ));
 }
 
@@ -428,7 +442,9 @@ fn typed_bindings_pending_snapshot_validates_acs_binding() {
 
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Redirect
+        })
     ));
 }
 

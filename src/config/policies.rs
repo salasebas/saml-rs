@@ -507,9 +507,10 @@ impl XmlEncryptionPolicy {
     ///
     /// Defaults to [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK),
     /// currently 16. Zero refuses all encrypted input. Exceeding the allowance
-    /// returns [`SamlError::Invalid`](crate::SamlError::Invalid) containing
-    /// `ERR_DECRYPTION_LIMIT_EXCEEDED`. The limit is an estimate of possible
-    /// work, not a count of actual operations or a CPU-time guarantee.
+    /// returns [`SamlError::LimitExceeded`](crate::SamlError::LimitExceeded)
+    /// with [`ResourceLimit::DecryptionWork`](crate::ResourceLimit::DecryptionWork).
+    /// The limit is an estimate of possible work, not a count of actual
+    /// operations or a CPU-time guarantee.
     pub fn with_max_decryption_work(mut self, maximum: usize) -> Self {
         self.max_decryption_work = maximum;
         self

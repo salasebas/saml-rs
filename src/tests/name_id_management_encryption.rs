@@ -455,7 +455,7 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
     );
     assert!(refused.response().redirect_url()?.starts_with(IDP_MANAGE));
     assert!(
-        matches!(refused.decryption_error(), Some(SamlError::Crypto(_))),
+        matches!(refused.decryption_error(), Some(SamlError::Crypto { .. })),
         "{:?}",
         refused.decryption_error()
     );
@@ -467,9 +467,12 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
         validation(),
     );
     match error {
-        Err(SamlError::StatusNotSuccess { top, second })
-            if top == status_code::REQUESTER
-                && second.as_deref() == Some(status_code::UNKNOWN_PRINCIPAL) => {}
+        Err(SamlError::StatusNotSuccess { status })
+            if status.top_level().as_uri() == status_code::REQUESTER
+                && status
+                    .subordinate()
+                    .map(saml_rs::SubordinateStatusCode::as_uri)
+                    == Some(status_code::UNKNOWN_PRINCIPAL) => {}
         other => return Err(format!("expected Requester/UnknownPrincipal, got {other:?}").into()),
     }
     Ok(())

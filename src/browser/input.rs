@@ -8,9 +8,11 @@ use super::artifact::DeliveredArtifact;
 use super::forms::FormField;
 use super::MessageField;
 use crate::artifact::ResolvedProtocolMessage;
-use crate::binding::{base64_decode_with_limit, build_simplesign_octet, encode_base64};
-use crate::constants::url_params;
-use crate::error::SamlError;
+use crate::binding::{
+    base64_decode_with_limit, build_simplesign_octet, encode_base64, single_parameter,
+};
+use crate::constants::{url_params, Binding};
+use crate::error::{utf8_err, SamlError};
 use crate::flow::HttpRequest;
 use crate::model::{AuthnRequest, LogoutRequest, LogoutResponse, SsoResponse};
 use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
@@ -384,7 +386,9 @@ fn http_request_from_input<Message>(
     match value {
         BrowserInput::Redirect { raw_query, .. } => {
             if !allow_redirect {
-                return Err(SamlError::UndefinedBinding);
+                return Err(SamlError::UnsupportedBinding {
+                    binding: Binding::Redirect,
+                });
             }
             let raw_query = raw_query.trim_start_matches('?').to_string();
             let octet_string = redirect_octet_from_raw_query(&raw_query, expected_message)?;
@@ -412,9 +416,12 @@ fn http_request_from_input<Message>(
             request.octet_string = Some(octet_string);
             Ok(request)
         }
-        BrowserInput::Artifact { .. } | BrowserInput::Soap { .. } => {
-            Err(SamlError::UndefinedBinding)
-        }
+        BrowserInput::Artifact { .. } => Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact,
+        }),
+        BrowserInput::Soap { .. } => Err(SamlError::UnsupportedBinding {
+            binding: Binding::Soap,
+        }),
     }
 }
 
@@ -441,19 +448,12 @@ fn raw_query_params(raw_query: &str) -> impl Iterator<Item = RawQueryParam<'_>> 
 
 fn unique_encoded_query_value<'a>(
     params: &'a [RawQueryParam<'a>],
-    name: &str,
+    name: &'static str,
 ) -> Result<Option<&'a str>, SamlError> {
-    let mut values = params
-        .iter()
-        .filter(|param| param.name == name)
-        .map(|param| param.encoded_value);
-    let first = values.next();
-    if values.next().is_some() {
-        return Err(SamlError::Invalid(format!(
-            "ambiguous Redirect field {name}"
-        )));
-    }
-    Ok(first)
+    single_parameter(
+        params.iter().map(|param| (param.name, param.encoded_value)),
+        name,
+    )
 }
 
 fn validate_query_message_kind<'a>(
@@ -466,9 +466,9 @@ fn validate_query_message_kind<'a>(
     let opposite = unique_encoded_query_value(params, opposite_name)?;
     match (expected, opposite) {
         (Some(value), None) => Ok(value),
-        (None, None) => Err(SamlError::Invalid(format!(
-            "missing Redirect field {expected_name}"
-        ))),
+        (None, None) => Err(SamlError::MissingBindingParameter {
+            name: expected_name,
+        }),
         (None, Some(_)) | (Some(_), Some(_)) => Err(SamlError::Invalid(format!(
             "expected Redirect field {expected_name}, found {opposite_name}"
         ))),
@@ -523,17 +523,12 @@ fn fields_to_pairs(fields: Vec<FormField>) -> Vec<(String, String)> {
 
 pub(crate) fn field_value<'a>(
     fields: &'a [FormField],
-    name: &str,
+    name: &'static str,
 ) -> Result<Option<&'a str>, SamlError> {
-    let mut values = fields
-        .iter()
-        .filter(|field| field.name() == name)
-        .map(FormField::value);
-    let first = values.next();
-    if values.next().is_some() {
-        return Err(SamlError::Invalid("ambiguous form field".into()));
-    }
-    Ok(first)
+    single_parameter(
+        fields.iter().map(|field| (field.name(), field.value())),
+        name,
+    )
 }
 
 fn validate_form_message_kind(
@@ -546,9 +541,9 @@ fn validate_form_message_kind(
     let opposite = field_value(fields, opposite_name)?;
     match (expected, opposite) {
         (Some(value), None) => Ok(value),
-        (None, None) => Err(SamlError::Invalid(format!(
-            "missing form field {expected_name}"
-        ))),
+        (None, None) => Err(SamlError::MissingBindingParameter {
+            name: expected_name,
+        }),
         (None, Some(_)) | (Some(_), Some(_)) => Err(SamlError::Invalid(format!(
             "expected form field {expected_name}, found {opposite_name}"
         ))),
@@ -563,7 +558,7 @@ fn simplesign_octet_from_fields(
     let message_name = expected_message.param_name();
     let encoded = validate_form_message_kind(fields, expected_message)?;
     let raw_xml = String::from_utf8(base64_decode_with_limit(encoded, limits.max_bytes)?)
-        .map_err(|err| SamlError::Xml(err.to_string()))?;
+        .map_err(utf8_err)?;
     let sig_alg =
         field_value(fields, url_params::SIG_ALG)?.ok_or(SamlError::MissingBindingParameter {
             name: url_params::SIG_ALG,

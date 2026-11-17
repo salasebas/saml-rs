@@ -10,7 +10,7 @@ use crate::flow::FlowOptions;
 use crate::model::{authn_statement_not_on_or_after_values, earliest_authn_session_expiration};
 use crate::util::Value;
 use crate::validator::{conditions_time_bounds, verify_time_at};
-use crate::xml::dom::{self, Node};
+use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::{extract_with_limits, fields, XmlLimits};
 use quick_xml::events::Event;
 use quick_xml::reader::NsReader;
@@ -53,7 +53,7 @@ pub(crate) fn accept_response_assertions(
     let document = dom::parse_document(response_xml, opts.xml_limits)?;
     let assertions = direct_assertions(&document.root);
     if assertions.is_empty() {
-        return Err(SamlError::Xml("ERR_EMPTY_ASSERTION".into()));
+        return Err(SamlError::AssertionMissing);
     }
 
     let mut saw_bearer = false;
@@ -355,9 +355,7 @@ fn unrecognized_condition_name(
         .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut stack = Vec::new();
     loop {
-        let (resolved, event) = reader
-            .read_resolved_event()
-            .map_err(|error| SamlError::Xml(error.to_string()))?;
+        let (resolved, event) = reader.read_resolved_event().map_err(reader_err)?;
         let namespace = element_namespace(resolved);
         match event {
             Event::Start(element) => {

@@ -417,6 +417,9 @@ fn sso_destination_matches_the_actual_published_receiving_endpoint(
         post_authn_request(&authn_request(IDP_SSO_SECOND)),
         validation(),
     );
-    assert!(matches!(ambiguous, Err(SamlError::Invalid(_))));
+    assert!(matches!(
+        ambiguous,
+        Err(SamlError::RecipientEndpointAmbiguous)
+    ));
     Ok(())
 }

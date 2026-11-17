@@ -23,7 +23,10 @@ pub use config::{
     XmlPolicy,
 };
 pub use descriptor::{IdpDescriptor, SpDescriptor};
-pub use error::SamlError;
+pub use error::{
+    ReferenceResolutionReason, ResourceLimit, SamlError, SignatureVerificationReason,
+    SubjectConfirmationReason, TimeWindowField,
+};
 pub use metadata::{MetadataTrustPolicy, VerifiedIdpMetadata, VerifiedSpMetadata};
 pub use model::{
     AcsEndpoint, AuthnRequest, AuthnSession, BrowserInput, LogoutBinding,

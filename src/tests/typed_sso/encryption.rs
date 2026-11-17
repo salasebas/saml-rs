@@ -134,7 +134,7 @@ fn recommended_sso_accept_rejects_missing_and_unknown_data_methods(
         ),
         (
             xml.replacen(&format!("Algorithm=\"{algorithm}\""), "", 1),
-            SamlError::Crypto("missing EncryptionMethod Algorithm".into()),
+            SamlError::crypto("missing EncryptionMethod Algorithm"),
         ),
         (
             xml.replacen(
@@ -142,7 +142,7 @@ fn recommended_sso_accept_rejects_missing_and_unknown_data_methods(
                 "",
                 1,
             ),
-            SamlError::Crypto("missing EncryptionMethod Algorithm".into()),
+            SamlError::crypto("missing EncryptionMethod Algorithm"),
         ),
     ] {
         let result = exchange.sp.finish_sso(
@@ -230,7 +230,13 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
                 assert_eq!(result?.name_id().value(), "alice@example.com");
             } else {
                 assert!(
-                    matches!(result, Err(SamlError::Invalid(message)) if message.contains("ERR_DECRYPTION_LIMIT_EXCEEDED")),
+                    matches!(
+                        result,
+                        Err(SamlError::LimitExceeded {
+                            limit: saml_rs::ResourceLimit::DecryptionWork,
+                            ..
+                        })
+                    ),
                     "excess rollover work was not refused"
                 );
             }

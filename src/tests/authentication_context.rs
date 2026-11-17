@@ -125,7 +125,7 @@ fn request_input(
         Binding::SimpleSign => Ok(BrowserInput::<AuthnRequest>::simple_sign(
             outbound.post_form()?.fields().to_vec(),
         )),
-        _ => Err(SamlError::UndefinedBinding),
+        binding => Err(SamlError::UnsupportedBinding { binding }),
     }
 }
 

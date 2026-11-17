@@ -3,7 +3,7 @@ use super::extract::{
     session_indexes_from_value,
 };
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
-use super::status::{Status, SubordinateStatusCode, TopLevelStatusCode};
+use super::status::Status;
 use super::subject::NameId;
 use super::{EndpointUrl, RelayStateParam};
 use crate::config::EntityId;
@@ -272,16 +272,7 @@ fn status_from_extract(extract: &crate::util::Value) -> Result<Status, SamlError
     let top_level = extract.get_str("statusCode").ok_or_else(|| {
         SamlError::ProtocolProfile("LogoutResponse is missing required Status/StatusCode".into())
     })?;
-    let top_level = TopLevelStatusCode::from_uri(top_level).ok_or_else(|| {
-        SamlError::ProtocolProfile(format!(
-            "LogoutResponse top-level StatusCode {top_level} is not a SAML top-level status code"
-        ))
-    })?;
-    let status = Status::from_top_level(top_level);
-    Ok(match extract.get_str("subordinateStatusCode") {
-        Some(subordinate) => status.with_subordinate(SubordinateStatusCode::received(subordinate)),
-        None => status,
-    })
+    Status::received(top_level, extract.get_str("subordinateStatusCode"))
 }
 
 fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstant, SamlError> {

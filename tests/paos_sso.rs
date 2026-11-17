@@ -1002,7 +1002,9 @@ fn protocol_binding_naming_http_artifact_is_not_received() -> Result<(), Box<dyn
             &PaosAuthnRequest::from_envelope(with_binding, IDP_SOAP)?,
             validation(),
         ),
-        Err(SamlError::UndefinedBinding)
+        Err(SamlError::UnsupportedBinding {
+            binding: saml_rs::constants::Binding::Artifact
+        })
     ));
     Ok(())
 }
@@ -1254,7 +1256,7 @@ fn identity_provider_refuses_a_header_it_must_understand_and_does_not_process(
         Err(error) => error,
         Ok(_) => return Err("an unprocessed mustUnderstand header is refused".into()),
     };
-    assert!(matches!(error, SamlError::Xml(_)), "{error:?}");
+    assert!(matches!(error, SamlError::Xml { .. }), "{error:?}");
     Ok(())
 }
 
@@ -1291,7 +1293,7 @@ fn service_provider_refuses_a_header_it_must_understand_and_does_not_process(
         Err(error) => error,
         Ok(_) => return Err("an unprocessed mustUnderstand header is refused".into()),
     };
-    assert!(matches!(error, SamlError::Xml(_)), "{error:?}");
+    assert!(matches!(error, SamlError::Xml { .. }), "{error:?}");
     Ok(())
 }
 

@@ -98,10 +98,10 @@ fn preflight_signature(
         dsig = namespace::DSIG,
         references = reference.repeat(references),
     );
-    let document = uppsala::parse(&xml).map_err(|error| SamlError::Crypto(error.to_string()))?;
+    let document = uppsala::parse(&xml).map_err(crate::error::xml_err)?;
     let root = document
         .document_element()
-        .ok_or_else(|| SamlError::Crypto("profile fixture is missing a document element".into()))?;
+        .ok_or_else(|| SamlError::xml("profile fixture is missing a document element"))?;
     let signature = document
         .first_child_element_by_name_ns(root, bergshamra_ns::DSIG, bergshamra_ns::node::SIGNATURE)
         .ok_or(SamlError::SignedReferenceMismatch)?;
@@ -965,7 +965,7 @@ fn rejects_multi_root_wrapping_attack_before_signature_verification(
     // attack_response_signed.xml places a forged NameID before the signed
     // response. Reject the multi-root document before signature processing.
     match verify_signature(ATTACK, &[IDP_CERT.to_string()]) {
-        Err(SamlError::Xml(message)) if message == "multiple document elements" => Ok(()),
+        Err(SamlError::Xml { message, .. }) if message == "multiple document elements" => Ok(()),
         other => Err(format!("expected multi-root XML rejection, got {other:?}").into()),
     }
 }

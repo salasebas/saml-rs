@@ -1,4 +1,4 @@
-use crate::error::SamlError;
+use crate::error::{ResourceLimit, SamlError};
 
 /// SAML Bindings 2.0 prohibits a RelayState value longer than 80 bytes.
 ///
@@ -9,7 +9,8 @@ pub const MAX_RELAY_STATE_BYTES: usize = 80;
 /// Longest RelayState a typed receive path accepts from a peer.
 ///
 /// A received value up to this length is kept and returned unchanged in the
-/// response to it. A longer received value returns [`SamlError::Invalid`].
+/// response to it. A longer received value returns
+/// [`SamlError::LimitExceeded`] with [`ResourceLimit::RelayStateBytes`].
 pub const MAX_RECEIVED_RELAY_STATE_BYTES: usize = 4096;
 
 /// RelayState value when a browser message carries the parameter.
@@ -37,9 +38,10 @@ impl RelayState {
 
     pub(crate) fn received(value: String) -> Result<Self, SamlError> {
         if value.len() > MAX_RECEIVED_RELAY_STATE_BYTES {
-            return Err(SamlError::Invalid(format!(
-                "received RelayState exceeds the {MAX_RECEIVED_RELAY_STATE_BYTES}-byte receive limit"
-            )));
+            return Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::RelayStateBytes,
+                maximum: MAX_RECEIVED_RELAY_STATE_BYTES,
+            });
         }
         Ok(Self(value))
     }

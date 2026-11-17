@@ -303,8 +303,8 @@ fn a_service_provider_error_status_is_returned_to_the_caller() -> TestResult {
 
     assert!(matches!(
         result,
-        Err(SamlError::StatusNotSuccess { top, second })
-            if top == REQUESTER && second.as_deref() == Some(UNKNOWN_PRINCIPAL)
+        Err(SamlError::StatusNotSuccess { status })
+            if status.top_level().as_uri() == REQUESTER && status.subordinate().map(saml_rs::SubordinateStatusCode::as_uri) == Some(UNKNOWN_PRINCIPAL)
     ));
     Ok(())
 }
@@ -894,7 +894,13 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
         validation(),
     );
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
     received_request(idp.receive_name_id_management(
@@ -926,7 +932,13 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
     let response = sp_response(request_id, SP_ENTITY_ID, &success_status())?;
     let refused = started.finish(&response.replacen("<soap:Body>", deep_header, 1));
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
     started.finish(&response)?;

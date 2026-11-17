@@ -23,9 +23,9 @@ use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, BrowserInput, EntityId, FormField,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
-    Subject, VerifiedXmlSignatureCoverage,
+    PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
+    SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -696,6 +696,22 @@ fn an_unsigned_sibling_assertion_is_rejected() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+fn a_success_response_without_an_assertion_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let xml = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?;
+    let start = xml.find("<saml:Assertion").ok_or("missing assertion")?;
+    let end = xml
+        .find("</saml:Assertion>")
+        .ok_or("unterminated assertion")?
+        + "</saml:Assertion>".len();
+    let mut without_assertion = xml.clone();
+    without_assertion.replace_range(start..end, "");
+    expect_error(accept(&exchange, &resigned(&without_assertion)?), |error| {
+        matches!(error, SamlError::AssertionMissing)
+    })
+}
+
+#[test]
 fn an_unknown_condition_is_rejected_when_its_namespace_is_inherited(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
@@ -883,9 +899,9 @@ fn replay_stores_every_assertion_identifier() -> Result<(), Box<dyn std::error::
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache)),
     ) {
         Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::ReplayDetected { key }) if key == "assertion_id:_second_assertion" => {
-                Ok(())
-            }
+            Some(SamlError::ReplayDetected {
+                key: ReplayKey::Assertion(id),
+            }) if id.as_str() == "_second_assertion" => Ok(()),
             _ => Err(format!("expected ReplayDetected, got {error}").into()),
         },
         Ok(_) => Err("expected ReplayDetected".into()),
@@ -1118,7 +1134,7 @@ mod encrypted_assertions {
         let first = encrypt_first(&two_assertions(&exchange)?, AES_256, CERT)?;
         let xml = resign_response(&encrypt_first(&first, AES_256, OTHER_RECIPIENT_CERT)?)?;
         expect_error(accept(&exchange, &xml), |error| {
-            matches!(error, SamlError::Crypto(_))
+            matches!(error, SamlError::Crypto { .. })
         })
     }
 

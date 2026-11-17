@@ -727,7 +727,7 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
         parties
             .idp
             .answer_artifact_resolve(&parties.sp_metadata, &required, &mut issued, channel);
-    assert!(matches!(refused, Err(SamlError::Xml(_))));
+    assert!(matches!(refused, Err(SamlError::Xml { .. })));
 
     let optional = resolution.request().envelope().replacen(
         "<soap:Body>",
@@ -858,20 +858,14 @@ fn a_release_that_cannot_be_built_leaves_the_artifact_outstanding(
         &mut issued,
         channel,
     );
-    assert!(matches!(
-        &first,
-        Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED")
-    ));
+    assert!(matches!(&first, Err(SamlError::LimitExceeded { .. })));
     let second = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
         &mut issued,
         channel,
     );
-    assert!(matches!(
-        second,
-        Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED")
-    ));
+    assert!(matches!(second, Err(SamlError::LimitExceeded { .. })));
     Ok(())
 }
 
@@ -1258,7 +1252,13 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
         channel,
     );
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
 
@@ -1276,7 +1276,13 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
     let deep_response = answer.envelope().replacen("<soap:Body>", deep_header, 1);
     let refused = resolution.finish(&deep_response);
     assert!(
-        matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("max XML depth")),
+        matches!(
+            &refused,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::XmlDepth,
+                ..
+            })
+        ),
         "{refused:?}"
     );
     assert!(resolution

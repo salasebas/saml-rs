@@ -90,7 +90,9 @@ impl LogoutReceipt {
                 },
                 signed_destination: SignedMessageDestination::Optional,
             }),
-            BrowserInput::Artifact { .. } => Err(SamlError::UndefinedBinding),
+            BrowserInput::Artifact { .. } => Err(SamlError::UnsupportedBinding {
+                binding: Binding::Artifact,
+            }),
         }
     }
 

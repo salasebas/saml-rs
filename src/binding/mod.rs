@@ -4,6 +4,7 @@
 mod deflate;
 mod encoding;
 mod escape;
+mod parameters;
 mod post_form;
 mod redirect;
 #[cfg(crypto)]
@@ -19,6 +20,7 @@ pub use deflate::{
 pub use encoding::base64_decode_with_limit;
 pub(crate) use encoding::{decode_base64, encode_base64};
 pub use escape::{html_escape, xml_escape};
+pub(crate) use parameters::single_parameter;
 pub use post_form::saml_post_binding_form;
 pub(crate) use post_form::{build_simplesign_octet, saml_post_binding_form_with_signature};
 pub(crate) use redirect::append_redirect_query;
@@ -60,7 +62,7 @@ mod tests {
         assert_eq!(base64_decode("Q Q\n=\t=\r\u{000c}")?, b"A");
         assert!(matches!(
             base64_decode("QQ==\u{00a0}"),
-            Err(crate::error::SamlError::Base64(_))
+            Err(crate::error::SamlError::Base64 { .. })
         ));
         Ok(())
     }

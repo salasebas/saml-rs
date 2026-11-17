@@ -154,7 +154,7 @@ fn xsw_reference_must_cover_returned_assertion() -> Result<(), Box<dyn std::erro
 fn xsw_multi_root_wrapping_rejected_before_signature_verification(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match verify_signature(ATTACK, &[CERT.to_string()]) {
-        Err(SamlError::Xml(message)) if message == "multiple document elements" => Ok(()),
+        Err(SamlError::Xml { message, .. }) if message == "multiple document elements" => Ok(()),
         Ok(result) => Err(format!("multi-root wrapper must not verify: {result:?}").into()),
         Err(other) => Err(format!("unexpected error: {other:?}").into()),
     }

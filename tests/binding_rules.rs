@@ -287,7 +287,10 @@ fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
         BrowserInput::<AuthnRequest>::redirect(format!("{query}&RelayState={too_long}")),
         validation(),
     ) {
-        Err(SamlError::Invalid(message)) if message.contains("receive limit") => {}
+        Err(SamlError::LimitExceeded {
+            limit: saml_rs::ResourceLimit::RelayStateBytes,
+            ..
+        }) => {}
         other => {
             return Err(format!("expected the RelayState receive limit, got {other:?}").into())
         }
@@ -301,7 +304,10 @@ fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
         BrowserInput::<SsoResponse>::post(fields),
         validation(),
     ) {
-        Err(SamlError::Invalid(message)) if message.contains("receive limit") => Ok(()),
+        Err(SamlError::LimitExceeded {
+            limit: saml_rs::ResourceLimit::RelayStateBytes,
+            maximum: saml_rs::MAX_RECEIVED_RELAY_STATE_BYTES,
+        }) => Ok(()),
         other => Err(format!("expected the RelayState receive limit, got {other:?}").into()),
     }
 }
@@ -311,7 +317,7 @@ fn expect_ambiguous_relay_state<T: std::fmt::Debug>(
     result: Result<T, SamlError>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match result {
-        Err(SamlError::Invalid(message)) if message == "ambiguous form field" => Ok(()),
+        Err(SamlError::DuplicateBindingParameter { name: "RelayState" }) => Ok(()),
         other => Err(format!(
             "expected {entry_point} to refuse a repeated RelayState, got {other:?}"
         )

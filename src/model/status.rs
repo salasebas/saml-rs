@@ -148,6 +148,34 @@ impl Status {
         }
     }
 
+    /// Status read from a received message.
+    ///
+    /// An empty subordinate value is read as absent.
+    pub(crate) fn received(top_level: &str, subordinate: Option<&str>) -> Result<Self, SamlError> {
+        let top_level = TopLevelStatusCode::from_uri(top_level).ok_or_else(|| {
+            SamlError::ProtocolProfile(format!(
+                "top-level StatusCode {top_level} is not a SAML top-level status code"
+            ))
+        })?;
+        Ok(Self {
+            top_level,
+            subordinate: subordinate
+                .filter(|subordinate| !subordinate.is_empty())
+                .map(SubordinateStatusCode::received),
+        })
+    }
+
+    pub(crate) fn require_success(self) -> Result<(), SamlError> {
+        match self.top_level {
+            TopLevelStatusCode::Success => Ok(()),
+            TopLevelStatusCode::Requester
+            | TopLevelStatusCode::Responder
+            | TopLevelStatusCode::VersionMismatch => {
+                Err(SamlError::StatusNotSuccess { status: self })
+            }
+        }
+    }
+
     /// Nest a subordinate `StatusCode` under the top-level code.
     ///
     /// A later call replaces the previous subordinate code.

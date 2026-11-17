@@ -3,14 +3,15 @@
 
 use crate::assertion_acceptance::first_login_assertion_xml;
 use crate::binding::{
-    base64_decode_with_limit, deflate_raw_decode_with_limit, MAX_DEFLATE_RAW_DECODE_BYTES,
+    base64_decode_with_limit, deflate_raw_decode_with_limit, single_parameter,
+    MAX_DEFLATE_RAW_DECODE_BYTES,
 };
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
 use crate::config::{DecryptionCredential, HmacSecret};
 use crate::constants::{Binding, ParserType};
-use crate::error::SamlError;
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
+use crate::error::{utf8_err, SamlError};
 use crate::util::Value;
 use crate::validator::{check_status_with_limits, logout_request_not_on_or_after_deadline};
 use crate::xml::signature_placement::saml_signature_candidates;
@@ -59,28 +60,25 @@ impl HttpRequest {
         }
     }
 
-    fn query_get(&self, key: &str) -> Result<Option<&str>, SamlError> {
+    fn query_get(&self, key: &'static str) -> Result<Option<&str>, SamlError> {
         single_param(&self.query, key)
     }
 
-    fn body_get(&self, key: &str) -> Result<Option<&str>, SamlError> {
+    fn body_get(&self, key: &'static str) -> Result<Option<&str>, SamlError> {
         single_param(&self.body, key)
     }
 }
 
 fn single_param<'a>(
     params: &'a [(String, String)],
-    key: &str,
+    key: &'static str,
 ) -> Result<Option<&'a str>, SamlError> {
-    let mut values = params
-        .iter()
-        .filter(|(candidate, _)| candidate == key)
-        .map(|(_, value)| value.as_str());
-    let first = values.next();
-    if values.next().is_some() {
-        return Err(SamlError::Invalid("ERR_AMBIGUOUS_FLOW_INPUT".into()));
-    }
-    Ok(first)
+    single_parameter(
+        params
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str())),
+        key,
+    )
 }
 
 fn missing_binding_parameter(name: &'static str) -> SamlError {
@@ -316,8 +314,7 @@ fn default_fields(
     Ok(match parser_type {
         ParserType::SamlRequest => fields::login_request_fields(),
         ParserType::SamlResponse => {
-            let assertion =
-                assertion.ok_or_else(|| SamlError::Xml("ERR_EMPTY_ASSERTION".into()))?;
+            let assertion = assertion.ok_or(SamlError::AssertionMissing)?;
             fields::login_response_fields(assertion)
         }
         ParserType::LogoutRequest => fields::logout_request_fields(),
@@ -353,7 +350,7 @@ fn decode_message(
         Binding::Artifact | Binding::Soap => return Err(unsupported_binding(binding)),
     };
     xml_limits.check_input_bytes(bytes.len())?;
-    String::from_utf8(bytes).map_err(|e| SamlError::Xml(e.to_string()))
+    String::from_utf8(bytes).map_err(utf8_err)
 }
 
 #[cfg(crypto)]
@@ -707,6 +704,12 @@ fn validate_context(
     if let Some(expected) = opts.from_issuer {
         let actual = extracted.get_str("issuer");
         if actual != Some(expected) {
+            if parser_type == ParserType::SamlResponse
+                && actual.is_none()
+                && first_login_assertion_xml(saml_content, opts.xml_limits)?.is_none()
+            {
+                return Err(SamlError::AssertionMissing);
+            }
             return Err(SamlError::issuer_mismatch(expected, actual));
         }
         if parser_type == ParserType::SamlResponse {
@@ -789,7 +792,7 @@ fn flow_inner(
         .ok_or_else(|| missing_binding_parameter("binding"))?;
     let parser_type = opts
         .parser_type
-        .ok_or_else(|| SamlError::Invalid("ERR_UNDEFINED_PARSERTYPE".into()))?;
+        .ok_or_else(|| SamlError::Invalid("flow options name no parser type".into()))?;
 
     let xml = decode_message(
         binding,
@@ -1041,7 +1044,7 @@ mod tests {
                 &options,
                 "<samlp:AuthnRequest/>",
             ),
-            Err(SamlError::Crypto(_))
+            Err(SamlError::Crypto { .. })
         ));
     }
 

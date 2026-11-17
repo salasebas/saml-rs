@@ -102,7 +102,7 @@ fn fips_provider_rejects_sha1_rsa_oaep_key_transport() -> Result<(), Box<dyn std
 
     assert!(matches!(
         encrypt_assertion(RESPONSE, CERTIFICATE, AES_256, RSA_OAEP_MGF1P, "saml",),
-        Err(SamlError::Crypto(_))
+        Err(SamlError::Crypto { .. })
     ));
     Ok(())
 }
@@ -125,7 +125,7 @@ fn aws_lc_providers_reject_signing_rsa_sha1() -> Result<(), Box<dyn std::error::
 
     assert!(matches!(
         sign_octet_string(RSA_SHA1_OCTETS, &key, RSA_SHA1),
-        Err(SamlError::Crypto(_))
+        Err(SamlError::Crypto { .. })
     ));
     Ok(())
 }
@@ -163,11 +163,11 @@ fn fips_provider_rejects_verifying_rsa_sha1() -> Result<(), Box<dyn std::error::
 
     assert!(matches!(
         verify_octet_string_signature(RSA_SHA1_OCTETS, RSA_SHA1_SIGNATURE, CERTIFICATE, RSA_SHA1),
-        Err(SamlError::Crypto(_))
+        Err(SamlError::Crypto { .. })
     ));
     assert!(matches!(
         verify_signature(RESPONSE_SIGNED_SHA1, &[CERTIFICATE.to_string()]),
-        Err(SamlError::Crypto(_))
+        Err(SamlError::Crypto { .. })
     ));
     Ok(())
 }
@@ -184,11 +184,11 @@ fn providers_reject_a_512_bit_rsa_certificate_for_signature_verification(
             RSA_512_CERTIFICATE,
             RSA_SHA256,
         ),
-        Err(SamlError::Crypto(_))
+        Err(SamlError::Crypto { .. })
     ));
     assert!(matches!(
         verify_signature(RSA_512_RESPONSE_SIGNED, &[RSA_512_CERTIFICATE.to_string()]),
-        Err(SamlError::Crypto(_))
+        Err(SamlError::Crypto { .. })
     ));
     Ok(())
 }
@@ -200,7 +200,7 @@ fn aws_lc_providers_reject_a_512_bit_rsa_private_key() -> Result<(), Box<dyn std
 
     assert!(matches!(
         read_private_key(RSA_512_PRIVATE_KEY, None),
-        Err(SamlError::Crypto(_))
+        Err(SamlError::Crypto { .. })
     ));
     Ok(())
 }
