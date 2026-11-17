@@ -436,8 +436,9 @@ impl Metadata {
     ///
     /// Returns `Ok(false)` when the document is unsigned or its signature does
     /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies,
-    /// including MD5, RIPEMD-160, and RSA keys shorter than 2048 bits.
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
     ///
     /// # Errors
     ///
@@ -461,8 +462,9 @@ impl Metadata {
     ///
     /// Returns `Ok(false)` when the document is unsigned or its signature does
     /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies,
-    /// including MD5, RIPEMD-160, and RSA keys shorter than 2048 bits.
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
     ///
     /// # Errors
     ///
@@ -491,8 +493,9 @@ impl Metadata {
     ///
     /// Returns an unverified result when the document is unsigned or its signature does
     /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies,
-    /// including MD5, RIPEMD-160, and RSA keys shorter than 2048 bits.
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
     ///
     /// # Errors
     ///
@@ -519,8 +522,9 @@ impl Metadata {
     ///
     /// Returns an unverified result when the document is unsigned or its signature does
     /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies,
-    /// including MD5, RIPEMD-160, and RSA keys shorter than 2048 bits.
+    /// and digest algorithm and RSA key size the crypto provider verifies, so
+    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
+    /// provider supports them.
     ///
     /// # Errors
     ///
