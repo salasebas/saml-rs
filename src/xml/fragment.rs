@@ -5,6 +5,7 @@ use quick_xml::name::PrefixDeclaration;
 use quick_xml::Reader;
 
 use crate::error::SamlError;
+use crate::xml::utf8_bom_len;
 
 struct Declaration {
     /// Declared prefix. Empty for the default namespace.
@@ -57,13 +58,14 @@ pub(crate) fn standalone_element(xml: &str, start: usize, end: usize) -> Result<
 /// the element does not declare itself, outermost first.
 fn inherited_declarations(xml: &str, start: usize) -> Result<Vec<Declaration>, SamlError> {
     let mut reader = Reader::from_str(xml);
+    let bom_len = utf8_bom_len(xml);
     let mut ancestors: Vec<Vec<Declaration>> = Vec::new();
     loop {
-        let before = reader.buffer_position() as usize;
+        let before = bom_len + reader.buffer_position() as usize;
         let event = reader
             .read_event()
             .map_err(|err| SamlError::Xml(err.to_string()))?;
-        let after = reader.buffer_position() as usize;
+        let after = bom_len + reader.buffer_position() as usize;
         match event {
             Event::Start(element) | Event::Empty(element) if (before..after).contains(&start) => {
                 return Ok(in_scope(ancestors, &declarations(&element)?));
@@ -190,6 +192,16 @@ mod tests {
         assert_eq!(
             first_grandchild(xml)?,
             r#"<a:Leaf xmlns:a="urn:&quot;inner&quot;"/>"#
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_byte_order_mark_does_not_shift_the_element() -> Result<(), SamlError> {
+        let xml = "\u{feff}<r xmlns:p=\"urn:outer\"><m><g><p:c xmlns:p=\"urn:inner\"/></g></m></r>";
+        assert_eq!(
+            first_grandchild(xml)?,
+            r#"<g xmlns:p="urn:outer"><p:c xmlns:p="urn:inner"/></g>"#
         );
         Ok(())
     }

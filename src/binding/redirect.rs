@@ -8,6 +8,7 @@ use crate::constants::namespace;
 use crate::constants::ParserType;
 use crate::error::SamlError;
 use crate::xml::dom::XmlLimits;
+use crate::xml::utf8_bom_len;
 use quick_xml::events::Event;
 use quick_xml::name::ResolveResult;
 use quick_xml::NsReader;
@@ -105,6 +106,7 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
     let limits = XmlLimits::default();
     limits.check_input_bytes(xml.len())?;
     let mut reader = NsReader::from_str(xml);
+    let bom_len = utf8_bom_len(xml);
     reader
         .resolver_mut()
         .set_max_namespace_bindings(limits.max_attributes_per_element);
@@ -120,7 +122,7 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
                 .map_err(|error| SamlError::Xml(error.to_string()))?;
             RedirectTag::from_event(resolved, &event)
         };
-        let end = reader.buffer_position() as usize;
+        let end = bom_len + reader.buffer_position() as usize;
         match tag {
             RedirectTag::DocType => {
                 return Err(SamlError::Xml("DOCTYPE is not allowed".into()));
@@ -380,10 +382,8 @@ mod tests {
             .find(|(name, _)| name == "SAMLRequest")
             .map(|(_, value)| value.into_owned())
             .ok_or("missing encoded request")?;
-        let inflated = String::from_utf8(deflate_raw_decode(&decode_base64(&encoded)?)?)?;
-        crate::xml::dom::parse_document(&inflated, crate::XmlLimits::default())?;
-        assert!(!inflated.contains("protocol-signature"));
-        assert!(inflated.contains("assertion-signature"));
+        let inflated_with_bom = String::from_utf8(deflate_raw_decode(&decode_base64(&encoded)?)?)?;
+        assert_eq!(inflated_with_bom, format!("\u{feff}{inflated}"));
         Ok(())
     }
 }
