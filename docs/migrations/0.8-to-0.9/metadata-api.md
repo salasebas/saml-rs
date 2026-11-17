@@ -13,6 +13,8 @@ Before:
 
 ```rust,ignore
 let metadata = Metadata::parse(xml, Vec::new())?;
+let limited = Metadata::parse_with_limits(xml, Vec::new(), limits)?;
+let checked = Metadata::parse_with_policy(xml, Vec::new(), &policy)?;
 ```
 
 After:
@@ -20,7 +22,12 @@ After:
 ```rust
 # fn run(xml: &str) -> Result<(), saml_rs::SamlError> {
 use saml_rs::metadata::Metadata;
+use saml_rs::{XmlLimits, XmlPolicy};
+let limits = XmlLimits::default();
+let policy = XmlPolicy { limits, ..XmlPolicy::default() };
 let metadata = Metadata::parse(xml)?;
+let limited = Metadata::parse_with_limits(xml, limits)?;
+let checked = Metadata::parse_with_policy(xml, &policy)?;
 # Ok(()) }
 ```
 
@@ -49,6 +56,8 @@ let sso: Option<EndpointUrl> = idp.single_sign_on_location(SsoRequestBinding::Po
 let acs = sp.assertion_consumer_location(SsoResponseBinding::Post)?;
 let logout = idp.single_logout_location(LogoutBinding::Post)?;
 let response = idp.single_logout_response_location(LogoutBinding::Post)?;
+let sp_logout = sp.single_logout_location(LogoutBinding::Post)?;
+let sp_response = sp.single_logout_response_location(LogoutBinding::Post)?;
 # Ok(()) }
 ```
 
@@ -60,8 +69,15 @@ identify the metadata element and binding. For SOAP, the logout response
 location is descriptive metadata only; the response returns on the HTTP
 exchange rather than being sent to that URL.
 
-Both descriptors also expose `name_id_formats()`, `organization()`, and
-`contacts()`. `metadata_xml()` still returns the original XML. For raw
+The following replacements apply to both peer descriptors:
+
+| Before | After |
+| --- | --- |
+| `peer.metadata().get_name_id_format()` | `peer.name_id_formats()`, returning `Vec<NameIdFormat>` |
+| `peer.metadata().organization()?` | `peer.organization()?` |
+| `peer.metadata().contacts()?` | `peer.contacts()?` |
+
+`metadata_xml()` still returns the original XML. For raw
 metadata inspection, parse that XML with `metadata::IdpMetadata` or
 `metadata::SpMetadata`. Reuse the import policy when you used custom XML limits
 or a schema validator:
@@ -125,7 +141,9 @@ After:
 # fn run(metadata: &saml_rs::metadata::Metadata, path: &std::path::Path) -> Result<(), std::io::Error> {
 use saml_rs::constants::CertUse;
 let certificates = metadata.x509_certificates(CertUse::Signing);
-let first = certificates.first();
+let first: Option<&String> = certificates.first();
+let owned_first: Option<String> = certificates.first().cloned();
+let owned_certificates: Vec<String> = certificates.to_vec();
 std::fs::write(path, metadata.metadata_xml())?;
 # Ok(()) }
 ```
@@ -135,7 +153,19 @@ The certificate strings remain the raw metadata values, not newly encoded PEM.
 ## Import items from their public module
 
 The `metadata::sp`, `metadata::idp`, and `metadata::generate` modules are
-private. Import their public items directly from `saml_rs::metadata`.
+private. Use these public paths:
+
+| Before | After |
+| --- | --- |
+| `metadata::sp::SpMetadata` | `metadata::SpMetadata` |
+| `metadata::idp::IdpMetadata` | `metadata::IdpMetadata` |
+| `metadata::idp::ArtifactResolutionServiceEndpoint` | `metadata::ArtifactResolutionServiceEndpoint` |
+| `metadata::generate::Endpoint` | `metadata::Endpoint` |
+| `metadata::generate::generate_sp_metadata` | `metadata::generate_sp_metadata` |
+| `metadata::generate::generate_idp_metadata` | `metadata::generate_idp_metadata` |
+| `metadata::generate::SpMetadataConfig` | `metadata::SpMetadataInput` |
+| `metadata::generate::IdpMetadataConfig` | `metadata::IdpMetadataInput` |
+| `metadata::generate::ArtifactResolutionEndpoint` | crate-root `ArtifactResolutionService` |
 
 Replace `metadata::ArtifactResolutionEndpoint` with the existing crate-root
 `ArtifactResolutionService`. Both raw and typed publishing use it:
@@ -160,13 +190,23 @@ resolution still refuses a selected non-SOAP binding.
 
 ## Verify signatures when importing peers
 
-The four deprecated `Metadata::verify_signature*` methods are removed.
+These four `Metadata` methods are removed, including access through the raw
+IdP and SP readers:
+
+- `verify_signature(certificates)`
+- `verify_signature_with_limits(certificates, limits)`
+- `verify_signature_detailed(certificates)`
+- `verify_signature_detailed_with_limits(certificates, limits)`
 Import with `IdpDescriptor::from_metadata_xml` or
 `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`.
 A failed verification then returns an error that `?` propagates. See
-[Verify signed metadata on import](0.8-to-0.9.md#7-verify-signed-metadata-on-import)
+[Verify signed metadata on import](README.md#7-verify-signed-metadata-on-import)
 for the replacement. The separate deprecated `crypto::verify_metadata_signature*`
-functions remain for their own removal task.
+functions remain for their own removal task. For the former limited variants,
+configure `XmlPolicy::limits` and import with `from_metadata_xml_with_policy`.
+For the former detailed variants, read `signed_metadata_xml()` from the
+imported descriptor. The import contract also checks expected identity and
+its selected signature policy; it is not just a rename of the old verifier.
 
 ## Borrow common fields explicitly from raw readers
 
@@ -239,7 +279,8 @@ let xml = generate_sp_metadata(&input)?;
 
 The typed config readers expose the former `name_id_format` field through
 `name_id_formats()`. The builder setter stays `name_id_format(format)` because
-it adds one format per call.
+it adds one format per call. Code using the earlier unreleased getter
+`config.metadata().name_id_format()` must use the plural getter too.
 
 Before:
 

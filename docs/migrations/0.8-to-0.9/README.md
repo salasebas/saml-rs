@@ -3,7 +3,7 @@
 This guide moves an integration of `saml-rs`, `opensaml`, `samlify`, or
 `samlet` from the latest `0.8.x` release to `0.9.x`. The compatibility crates
 re-export the same API, so every step applies to them too. Compatible
-additions are in the [changelog](../../CHANGELOG.md).
+additions are in the [changelog](../../../CHANGELOG.md).
 
 Each section starts with **Affects**. Skip the section when it does not
 describe your integration.
@@ -976,7 +976,7 @@ The import checks more than the deprecated `crypto` functions:
   key shorter than 2048 bits. Until the publisher signs with stronger
   algorithms, use `RequireSignatureAllowingWeakAlgorithms`, which accepts
   them where the crypto provider verifies them. See the
-  [metadata trust](../conformance/metadata-and-replay.md#metadata-trust) rows.
+  [metadata trust](../../conformance/metadata-and-replay.md#metadata-trust) rows.
 - `from_metadata_xml` parses with the default `XmlLimits`. Use
   `from_metadata_xml_with_policy` to supply other limits and an optional schema
   validator.
