@@ -53,7 +53,7 @@ fn builder_entrypoints_construct_facades_without_raw_mutation(
     assert_eq!(sso.pending.request_id(), sso.outbound.id());
     assert_eq!(sso.pending.idp_entity_id().as_str(), IDP_ENTITY_ID);
 
-    let logout_subject = LogoutSubject::from_name_id(NameId::new("alice@example.com", None));
+    let logout_subject = LogoutSubject::new(NameId::new("alice@example.com", None));
     let slo = sp.start_slo(&idp_descriptor, logout_subject, StartSlo::post())?;
     assert_eq!(slo.outbound.post_form()?.action().as_str(), IDP_SLO_POST);
     assert_eq!(slo.pending.id(), slo.outbound.id());

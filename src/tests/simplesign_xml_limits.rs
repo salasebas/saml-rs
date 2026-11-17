@@ -195,10 +195,8 @@ fn receive_padded_logout_request(padding: usize) -> TestResult<Result<(), SamlEr
     let parties = parties()?;
     let started = parties.sp.start_slo(
         &parties.idp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session123")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session123")?),
         StartSlo::simple_sign(),
     )?;
     let fields = padded(

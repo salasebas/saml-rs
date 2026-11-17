@@ -34,10 +34,10 @@ use saml_rs::xml::dom::parse_document;
 use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestAgePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput,
-    CertificatePem, ClockSkew, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, LogoutRequest, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
-    PendingAuthnRequest, PendingSnapshot, Received, RelayStateParam, ReplayCache, ReplayPolicy,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
+    ClockSkew, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    LogoutRequest, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PendingAuthnRequest,
+    PendingSnapshot, Received, RelayStateParam, ReplayCache, ReplayPolicy, RequestAgePolicy,
     RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
     StartSso, Status, Subject, SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage,
@@ -729,7 +729,7 @@ fn bounded_authn_request_age(
 ) -> SamlValidationContext<'static> {
     SamlValidationContext::new(now, ReplayPolicy::Disabled)
         .with_clock_skew(skew)
-        .with_authn_request_age(AuthnRequestAgePolicy::Bounded { max_age })
+        .with_authn_request_age(RequestAgePolicy::Bounded { max_age })
 }
 
 fn bounded_authn_request_age_with_cache(
@@ -738,7 +738,7 @@ fn bounded_authn_request_age_with_cache(
 ) -> SamlValidationContext<'_> {
     SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache))
         .with_clock_skew(ClockSkew::strict())
-        .with_authn_request_age(AuthnRequestAgePolicy::Bounded {
+        .with_authn_request_age(RequestAgePolicy::Bounded {
             max_age: Duration::from_secs(60 * 60),
         })
         .with_replay_retention(Duration::from_secs(5 * 60))
@@ -804,10 +804,7 @@ fn disabled_authn_request_age_ignores_clock_skew_at_a_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now = authn_request_age_now()?;
     let validation = SamlValidationContext::new(now, ReplayPolicy::Disabled);
-    assert_eq!(
-        validation.authn_request_age(),
-        AuthnRequestAgePolicy::Disabled
-    );
+    assert_eq!(validation.authn_request_age(), RequestAgePolicy::Disabled);
     assert_eq!(validation.clock_skew(), ClockSkew::five_minutes());
 
     let issued = issued_authn_request_for_recommended_idp()?;
@@ -1060,7 +1057,7 @@ fn signed_authn_request_age_check_does_not_replace_signature_verification(
         ReplayPolicy::RequireCache(&mut cache),
     )
     .with_clock_skew(ClockSkew::strict())
-    .with_authn_request_age(AuthnRequestAgePolicy::Bounded {
+    .with_authn_request_age(RequestAgePolicy::Bounded {
         max_age: Duration::from_secs(60),
     })
     .with_replay_retention(Duration::from_secs(5 * 60));

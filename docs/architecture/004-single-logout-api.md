@@ -240,3 +240,17 @@ pub struct LogoutCompleted {
     raw_flow: raw::FlowResult,
 }
 ```
+
+## Completion model after the API cleanup
+
+`LogoutCompleted` owns a mandatory `LogoutResponse` and the received
+RelayState. The peer is the response issuer. `response()` and `raw_flow()`
+return references, and the typed status is read through `response().status()`.
+There is no response-less completion, public result constructor, or peer-only
+equality. `finish_slo` authenticates and correlates the exchange before
+constructing the response and received RelayState together.
+
+`LogoutSubject::new(name_id)` starts with no session indexes.
+`with_session_index(index)` appends one selection to the subject.
+`with_session_indexes(indexes)` appends a collection in iteration order,
+preserving existing selections and duplicates.

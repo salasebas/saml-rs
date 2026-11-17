@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::Mutex,
+    fmt,
+    sync::{Arc, Mutex},
     time::SystemTime,
 };
 
@@ -18,9 +19,12 @@ use crate::error::SamlError;
 /// storage implementing [`ReplayCache`]. Use the same time source as your
 /// [`super::SamlValidationContext`].
 ///
+/// `Debug` reports the stored entry count and capacity without identifiers.
+/// Formatting does not read the caller's clock.
+///
 /// # Examples
 ///
-/// A shared reference to the mutex implements [`ReplayCache`], locking only
+/// An `Arc<Mutex<InMemoryReplayCache>>` implements [`ReplayCache`], locking only
 /// during each check and store. A poisoned lock fails closed with
 /// [`SamlError::Invalid`]; it does not reset the cache.
 ///
@@ -28,12 +32,11 @@ use crate::error::SamlError;
 /// use std::{sync::{Arc, Mutex}, time::SystemTime};
 /// use saml_rs::{InMemoryReplayCache, ReplayPolicy, SamlValidationContext};
 ///
-/// let cache = Arc::new(Mutex::new(
+/// let mut cache = Arc::new(Mutex::new(
 ///     InMemoryReplayCache::new().with_max_entries(10_000),
 /// ));
-/// let mut shared_cache = cache.as_ref();
 /// let validation = SamlValidationContext::new(
-///     SystemTime::now(), ReplayPolicy::RequireCache(&mut shared_cache),
+///     SystemTime::now(), ReplayPolicy::RequireCache(&mut cache),
 /// );
 /// # let _ = validation;
 /// ```
@@ -42,6 +45,15 @@ pub struct InMemoryReplayCache {
     expirations: BTreeMap<SystemTime, Vec<ReplayKey>>,
     max_entries: Option<usize>,
     clock: Box<dyn Fn() -> SystemTime + Send + Sync>,
+}
+
+impl fmt::Debug for InMemoryReplayCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InMemoryReplayCache")
+            .field("stored_entries", &self.entries.len())
+            .field("max_entries", &self.max_entries)
+            .finish_non_exhaustive()
+    }
 }
 
 impl InMemoryReplayCache {
@@ -134,5 +146,17 @@ impl ReplayCache for &Mutex<InMemoryReplayCache> {
         self.lock()
             .map_err(|_| SamlError::Invalid("in-memory replay cache lock poisoned".into()))?
             .check_and_store(key, expires_at)
+    }
+}
+
+impl ReplayCache for Arc<Mutex<InMemoryReplayCache>> {
+    /// Check and store with the lock held only for this call.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] if the mutex is poisoned, or the cache's
+    /// error if the key is a duplicate or its entry limit prevents storage.
+    fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
+        self.as_ref().check_and_store(key, expires_at)
     }
 }

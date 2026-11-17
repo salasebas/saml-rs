@@ -496,10 +496,8 @@ fn strict_rsa_sha2_at_the_service_provider_rejects_an_rsa_sha1_sig_alg(
         let peers = rsa_sha1_peers(sp_xml_signatures, XmlSignatureProfile::AllowWeakAlgorithms)?;
         let started = peers.idp.start_slo(
             &peers.sp_descriptor,
-            LogoutSubject::with_session_index(
-                NameId::new("alice@example.com", None),
-                SessionIndex::try_new("_session")?,
-            ),
+            LogoutSubject::new(NameId::new("alice@example.com", None))
+                .with_session_index(SessionIndex::try_new("_session")?),
             StartSlo::redirect(),
         )?;
         let url = Url::parse(started.outbound.redirect_url()?)?;
@@ -710,10 +708,8 @@ fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn s
 
     let started = peers.idp.start_slo(
         &peers.sp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::soap(),
     )?;
     let envelope = started.outbound.soap_request()?.envelope();
@@ -882,10 +878,8 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
 
     let started = peers.sp.start_slo(
         &peers.idp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::redirect(),
     )?;
     let url = Url::parse(started.outbound.redirect_url()?)?;
@@ -901,10 +895,8 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
 
     let started = peers.sp.start_slo(
         &peers.idp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::soap(),
     )?;
     let envelope = started.outbound.soap_request()?.envelope();

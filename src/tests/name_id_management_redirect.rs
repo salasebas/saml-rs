@@ -28,12 +28,12 @@ use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, BrowserInput, ClockSkew, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, ManageNameIdRequest, ManageNameIdRequestAgePolicy, ManageNameIdResponse,
-    ManageNameIdService, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
-    NameIdManagementRefusal, Outbound, Pending, PendingManageNameIdRequest,
-    ReceiveNameIdManagement, Received, ReceivedNameIdManagement, ReceivedNameIdManagementRedirect,
-    RelayState, RelayStateParam, ReplayCache, ReplayPolicy, RespondNameIdManagement, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    IdpValidationPolicy, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
+    MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound,
+    Pending, PendingManageNameIdRequest, ReceiveNameIdManagement, Received,
+    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayState, RelayStateParam,
+    ReplayCache, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
@@ -724,7 +724,7 @@ fn one_hour_request_age(now: SystemTime, cache: &mut dyn ReplayCache) -> SamlVal
     SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache))
         .with_clock_skew(ClockSkew::strict())
         .with_replay_retention(Duration::from_secs(300))
-        .with_manage_name_id_request_age(ManageNameIdRequestAgePolicy::Bounded {
+        .with_manage_name_id_request_age(RequestAgePolicy::Bounded {
             max_age: Duration::from_secs(60 * 60),
         })
 }
@@ -784,7 +784,7 @@ fn a_bounded_request_age_rejects_a_request_outside_the_window_before_replay_stor
         SamlValidationContext::new(issued_at_plus(30 * 24 * 60 * 60)?, ReplayPolicy::Disabled);
     assert_eq!(
         unbounded.manage_name_id_request_age(),
-        ManageNameIdRequestAgePolicy::Disabled
+        RequestAgePolicy::Disabled
     );
     request(sp.receive_name_id_management_redirect(
         &idp_peer,

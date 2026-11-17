@@ -31,7 +31,7 @@ let completed = sp.finish_slo(
     BrowserInput::<LogoutResponse>::post(response_fields),
     validation,
 )?;
-let status = completed.status();
+let status = completed.response().status();
 ```
 
 `redirect()`, `post()`, and `simple_sign()` leave the logout generation rules off until you call `apply_single_logout_generation_rules()`. With those rules selected, a session participant signs the request and sends the browser to an `https` logout URL. `StartSlo::allow_http_single_logout()` relaxes the `https` recommendation only.

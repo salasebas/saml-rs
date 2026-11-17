@@ -197,3 +197,41 @@ pub struct FormField;
 `Identity` is intentionally not the preferred result name because "identity" is
 too broad for a SAML login session. `SsoSession` communicates that this is the
 validated result of browser SSO.
+
+## Configuration method names
+
+These rules distinguish the roles of similarly named methods. They apply when
+an API is introduced or redesigned. Existing names are reviewed within the
+change that owns that API, rather than renamed across unrelated operations.
+
+- Read accessors use `foo()` or `foo_mut()`, without `get_`. In-place setters
+  use `set_foo(&mut self, value)`.
+- A dedicated builder uses `foo(value)` for chained configuration.
+- An owned value uses `with_foo(self, value) -> Self` for chained
+  configuration, leaving `foo()` available for reading. This is the crate's
+  convention, not a universal Rust naming requirement.
+- Primary constructors use `new`, or `try_new` when fallible. New secondary
+  associated constructors use `new_with_foo`, a `from_foo` conversion, or a
+  domain name. Reserve a new bare `with_foo` name for the method taking `self`.
+- A single-valued configuration method replaces its value. For repeated
+  elements, the singular method appends one and the plural appends an
+  iterable. Start their doc comments with `Replace`, `Set`, or `Append`.
+  Preserve `with_additional_foo` where a primary slot and extra values differ.
+- When callers naturally hold a collection, accept it directly. A useful
+  singular and plural pair is not redundant. Use `impl IntoIterator<Item = T>`
+  when storing each owned item. Do not require callers to reconstruct bulk
+  input with a fold or loop.
+
+The [Rust API Guidelines' getter rules](https://rust-lang.github.io/api-guidelines/naming.html#getter-names-follow-rust-convention-c-getter)
+cover accessors. Their [constructor rules](https://rust-lang.github.io/api-guidelines/predictability.html#constructors-are-static-inherent-methods-c-ctor)
+apply to associated functions without `self`. Their
+[builder example](https://rust-lang.github.io/api-guidelines/type-safety.html#builders-enable-construction-of-complex-values-c-builder)
+uses bare methods and pairs singular `arg` with plural `args`.
+
+[Google's Rust Style Guide](https://google.github.io/styleguide/rustguide.html#getters-and-setters)
+uses `with_foo` for closure accessors, a separate pattern. Google's
+[copy-and-set naming example](https://google.github.io/comprehensive-rust/idiomatic/foundations-api-design/predictable-api/naming-conventions/with-copy-setter.html)
+is related prior art for value configuration; it does not mandate this crate's
+consuming method convention. Google's
+[iterator parameter rule](https://google.github.io/styleguide/rustguide.html#iterators-vs-slices-in-function-parameters)
+supports the plural input shape.

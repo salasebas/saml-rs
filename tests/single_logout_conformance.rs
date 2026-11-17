@@ -85,14 +85,12 @@ fn descriptors(
 }
 
 fn subject_with_session() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::with_session_index(
-        NameId::new("alice@example.com", None),
-        SessionIndex::try_new("_session")?,
-    ))
+    Ok(LogoutSubject::new(NameId::new("alice@example.com", None))
+        .with_session_index(SessionIndex::try_new("_session")?))
 }
 
 fn subject_without_session() -> LogoutSubject {
-    LogoutSubject::from_name_id(NameId::new("alice@example.com", None))
+    LogoutSubject::new(NameId::new("alice@example.com", None))
 }
 
 fn post_xml<Message>(outbound: &Outbound<Message>) -> Result<String, Box<dyn std::error::Error>> {
@@ -454,7 +452,11 @@ fn finish_rejects_unsigned_response(role: LocalRole) -> Result<(), Box<dyn std::
             validation(),
         )?,
     };
-    assert!(completed.response().is_some());
+    let expected_issuer = match role {
+        LocalRole::Sp => IDP_ENTITY_ID,
+        LocalRole::Idp => SP_ENTITY_ID,
+    };
+    assert_eq!(completed.response().issuer().as_str(), expected_issuer);
     Ok(())
 }
 

@@ -7,7 +7,10 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use saml_rs::{AssertionId, InMemoryReplayCache, MessageId, ReplayCache, ReplayKey, SamlError};
+use saml_rs::{
+    AssertionId, InMemoryReplayCache, MessageId, ReplayCache, ReplayKey, ReplayPolicy, SamlError,
+    SamlValidationContext,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -16,7 +19,7 @@ fn at(seconds: u64) -> SystemTime {
 }
 
 fn key(value: &str) -> Result<ReplayKey, SamlError> {
-    Ok(ReplayKey::AssertionId(AssertionId::try_new(value)?))
+    Ok(ReplayKey::Assertion(AssertionId::try_new(value)?))
 }
 
 #[test]
@@ -99,24 +102,28 @@ fn already_expired_keys_do_not_consume_capacity() -> TestResult {
 fn key_families_are_independent() -> TestResult {
     let mut cache = InMemoryReplayCache::with_clock(|| at(0));
     cache.check_and_store(key("_same")?, at(10))?;
-    cache.check_and_store(ReplayKey::ResponseId(MessageId::try_new("_same")?), at(10))?;
+    cache.check_and_store(ReplayKey::SsoResponse(MessageId::try_new("_same")?), at(10))?;
     Ok(())
 }
 
 #[test]
 fn shared_mutex_accepts_a_key_only_once_across_threads() -> TestResult {
-    let cache = Arc::new(Mutex::new(InMemoryReplayCache::new()));
+    let now = at(0);
+    let cache = Arc::new(Mutex::new(InMemoryReplayCache::with_clock(move || now)));
     let barrier = Arc::new(Barrier::new(8));
-    let expires_at = SystemTime::now() + Duration::from_secs(60);
+    let expires_at = now + Duration::from_secs(60);
     let mut workers = Vec::new();
-    for _ in 0..8 {
-        let cache = Arc::clone(&cache);
+    for worker_index in 0..8 {
+        let mut cache = Arc::clone(&cache);
         let barrier = Arc::clone(&barrier);
         let replay_key = key("_concurrent")?;
         workers.push(thread::spawn(move || {
             barrier.wait();
-            let mut shared_cache = cache.as_ref();
-            shared_cache.check_and_store(replay_key, expires_at)
+            if worker_index % 2 == 0 {
+                cache.check_and_store(replay_key, expires_at)
+            } else {
+                cache.as_ref().check_and_store(replay_key, expires_at)
+            }
         }));
     }
     let mut accepted = 0;
@@ -143,13 +150,52 @@ fn a_poisoned_mutex_refuses_cache_access() -> TestResult {
         std::panic::resume_unwind(Box::new("poison cache"));
     });
     assert!(worker.join().is_err());
-    let mut shared_cache = cache.as_ref();
+    let mut owned_cache = Arc::clone(&cache);
+    let mut borrowed_cache = cache.as_ref();
+    let adapters: [&mut dyn ReplayCache; 2] = [&mut owned_cache, &mut borrowed_cache];
+    for shared_cache in adapters {
+        assert!(matches!(
+            shared_cache.check_and_store(
+                key("_poisoned")?,
+                SystemTime::now() + Duration::from_secs(60)
+            ),
+            Err(SamlError::Invalid(_))
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn replay_debug_omits_identifiers_and_does_not_read_the_clock() -> TestResult {
+    let clock_reads = Arc::new(AtomicU64::new(0));
+    let reads = Arc::clone(&clock_reads);
+    let mut cache = InMemoryReplayCache::with_clock(move || {
+        reads.fetch_add(1, Ordering::SeqCst);
+        at(0)
+    })
+    .with_max_entries(2);
+    let sensitive_id = "_private_assertion_identifier";
+    cache.check_and_store(key(sensitive_id)?, at(20))?;
+
+    let cache_debug = format!("{cache:?}");
+    assert!(cache_debug.contains("InMemoryReplayCache"));
+    assert!(!cache_debug.contains(sensitive_id));
+    for (replay, policy_name) in [
+        (ReplayPolicy::Disabled, "Disabled"),
+        (ReplayPolicy::RequireCache(&mut cache), "RequireCache"),
+    ] {
+        let policy_debug = format!("{replay:?}");
+        assert!(policy_debug.contains(policy_name));
+        assert!(!policy_debug.contains(sensitive_id));
+        let validation = SamlValidationContext::new(at(0), replay);
+        let context_debug = format!("{validation:?}");
+        assert!(context_debug.contains(&format!("replay: {policy_name}")));
+        assert!(!context_debug.contains(sensitive_id));
+    }
+    assert_eq!(clock_reads.load(Ordering::SeqCst), 1);
     assert!(matches!(
-        shared_cache.check_and_store(
-            key("_poisoned")?,
-            SystemTime::now() + Duration::from_secs(60)
-        ),
-        Err(SamlError::Invalid(_))
+        cache.check_and_store(key(sensitive_id)?, at(20)),
+        Err(SamlError::ReplayDetected { .. })
     ));
     Ok(())
 }

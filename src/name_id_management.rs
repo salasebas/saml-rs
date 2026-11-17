@@ -357,7 +357,7 @@ pub(crate) fn receive(
     }
     let (identifier, change) = identifier_and_change(&request)?;
     validation.check_manage_name_id_request_issue_instant(&issue_instant)?;
-    validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequestId(id.clone()))?;
+    validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequest(id.clone()))?;
     match plaintext_content(&body.xml, identifier, change, idp.setting) {
         Ok((name_id, change)) => Ok(ReceivedNameIdManagement::Request(Box::new(Received::new(
             ManageNameIdRequest {

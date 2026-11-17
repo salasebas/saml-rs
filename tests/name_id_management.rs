@@ -21,9 +21,9 @@ use std::time::{Duration, SystemTime};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, EndpointUrl, EntityId, IdentifierEncryptionPolicy, Idp, IdpConfig,
-    ManageNameIdRequestAgePolicy, ManageNameIdService, MessageConfidentiality, MessageIntegrity,
-    MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal,
-    PartyAuthentication, ReceivedNameIdManagement, ReplayPolicy, Saml, SamlError,
+    ManageNameIdService, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
+    NameIdChange, NameIdFormat, NameIdManagementRefusal, PartyAuthentication,
+    ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy, Saml, SamlError,
     SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, Status, SubordinateStatusCode,
 };
@@ -782,7 +782,7 @@ fn a_bounded_request_age_rejects_an_old_request_before_replay_storage() -> TestR
         let mut cache = RecordingReplayCache::default();
         let validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
             .with_replay_retention(Duration::from_secs(300))
-            .with_manage_name_id_request_age(ManageNameIdRequestAgePolicy::Bounded { max_age });
+            .with_manage_name_id_request_age(RequestAgePolicy::Bounded { max_age });
         let received = idp.receive_name_id_management(&sp, &envelope, authenticated(), validation);
         if accepted {
             received_request(received?)?;

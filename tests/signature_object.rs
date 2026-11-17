@@ -91,10 +91,8 @@ fn subject() -> Subject {
 }
 
 fn logout_subject() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::with_session_index(
-        NameId::new("alice@example.com", None),
-        SessionIndex::try_new("_session123")?,
-    ))
+    Ok(LogoutSubject::new(NameId::new("alice@example.com", None))
+        .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
 fn with_object(xml: &str) -> Result<String, Box<dyn std::error::Error>> {

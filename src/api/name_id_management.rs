@@ -115,7 +115,7 @@ impl Saml<Idp> {
     /// authenticate both parties and protect integrity. Returns another
     /// [`SamlError`] when the envelope is not a SOAP 1.1
     /// `ManageNameIDRequest` from `sp`, its `Destination` is not the receiving
-    /// endpoint, an enabled [`crate::ManageNameIdRequestAgePolicy`] rejects
+    /// endpoint, an enabled [`crate::RequestAgePolicy`] rejects
     /// `IssueInstant`, or replay validation detects a duplicate. The
     /// deployment can answer those with an HTTP error or a SOAP fault.
     pub fn receive_name_id_management(

@@ -599,7 +599,7 @@ fn receive_slo_impl(
     )?;
     let logout = LogoutRequest::try_from(flow)?;
     validation.check_and_store_message_replay_until(
-        ReplayKey::LogoutRequestId(logout.id().clone()),
+        ReplayKey::LogoutRequest(logout.id().clone()),
         replay_deadline,
     )?;
     let logout = decrypt_encrypted_id(logout, local_setting, authentication)?;
@@ -685,12 +685,8 @@ fn finish_slo_impl(
         ),
     )?;
     let response = LogoutResponse::try_from(flow)?;
-    validation
-        .check_and_store_message_replay(ReplayKey::LogoutResponseId(response.id().clone()))?;
-    Ok(
-        LogoutCompleted::from_response(peer.entity_id.clone(), response)
-            .with_relay_state(relay_state),
-    )
+    validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
+    Ok(LogoutCompleted::new(response, relay_state))
 }
 
 #[derive(Debug, Clone, Copy)]

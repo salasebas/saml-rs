@@ -13,10 +13,10 @@ use saml_rs::{
     template::{LoginResponseAttribute, LoginResponseTemplate},
 };
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, EndpointUrl, EntityId, FormField, LogoutCompleted,
-    LogoutRequest, LogoutResponse, MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy,
-    Outbound, PendingAuthnRequest, RelayState, RelayStateParam, SamlError, SamlInstant,
-    SsoRequestBinding, SsoResponse, SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
+    AcsEndpoint, AuthnRequest, BrowserInput, EndpointUrl, FormField, LogoutRequest, LogoutResponse,
+    MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, PendingAuthnRequest,
+    RelayState, RelayStateParam, SamlError, SamlInstant, SsoRequestBinding, SsoResponse,
+    SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
 };
 
 #[cfg(crypto)]
@@ -1555,18 +1555,6 @@ fn typed_models_logout_response_rejects_malformed_issue_instant_with_profile_con
         Err(SamlError::ProtocolProfile(message))
             if message.contains("LogoutResponse IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z")
     ));
-}
-
-#[test]
-fn typed_models_logout_completed_equality_uses_peer_entity_id(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let first = LogoutCompleted::new(EntityId::try_new("https://idp.example.com/metadata")?);
-    let second = LogoutCompleted::new(EntityId::try_new("https://idp.example.com/metadata")?);
-    let other = LogoutCompleted::new(EntityId::try_new("https://other.example.com/metadata")?);
-
-    assert_eq!(first, second);
-    assert_ne!(first, other);
-    Ok(())
 }
 
 fn sp(setting: EntitySetting) -> Result<ServiceProvider, SamlError> {

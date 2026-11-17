@@ -17,7 +17,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// does not store it. NameID values must be equal. A `Format` on the logout
 /// must match; an omitted or `unspecified` `Format` compares values only. An
 /// empty session list
-/// applies to every session of that principal. The classification is in
+/// applies to every session of that NameID. The classification is in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
 /// [`Saml<Sp>::finish_sso_with_outstanding_logout`]: crate::Saml::finish_sso_with_outstanding_logout
@@ -42,26 +42,26 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutstandingLogout {
-    principal: NameId,
-    sessions: Vec<SessionIndex>,
+    name_id: NameId,
+    session_indexes: Vec<SessionIndex>,
     not_on_or_after: SamlInstant,
     deadline: OffsetDateTime,
 }
 
 impl OutstandingLogout {
-    /// Create an outstanding logout from the principal, sessions, and
+    /// Create an outstanding logout from the NameID, session indexes, and
     /// `NotOnOrAfter` the caller accepted.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when the principal value is empty or
+    /// Returns [`SamlError::Invalid`] when the NameID value is empty or
     /// `not_on_or_after` is not a representable SAML UTC `xs:dateTime`.
     pub fn try_new(
-        principal: NameId,
-        sessions: Vec<SessionIndex>,
+        name_id: NameId,
+        session_indexes: Vec<SessionIndex>,
         not_on_or_after: SamlInstant,
     ) -> Result<Self, SamlError> {
-        if principal.value().trim().is_empty() {
+        if name_id.value().trim().is_empty() {
             return Err(SamlError::Invalid(
                 "outstanding logout principal must not be empty".into(),
             ));
@@ -78,23 +78,23 @@ impl OutstandingLogout {
         })?;
         let not_on_or_after = SamlInstant::try_new(normalized)?;
         Ok(Self {
-            principal,
-            sessions,
+            name_id,
+            session_indexes,
             not_on_or_after,
             deadline,
         })
     }
 
     /// Principal named by the accepted logout.
-    pub fn principal(&self) -> &NameId {
-        &self.principal
+    pub fn name_id(&self) -> &NameId {
+        &self.name_id
     }
 
     /// Sessions named by the accepted logout.
     ///
     /// Empty means the logout carried no `SessionIndex`.
-    pub fn sessions(&self) -> &[SessionIndex] {
-        &self.sessions
+    pub fn session_indexes(&self) -> &[SessionIndex] {
+        &self.session_indexes
     }
 
     /// `NotOnOrAfter` from the accepted logout, normalized as a SAML UTC instant.
@@ -107,7 +107,7 @@ impl OutstandingLogout {
         session: &SsoSession,
         validation: &SamlValidationContext<'_>,
     ) -> Result<bool, SamlError> {
-        if !self.same_principal(session.name_id()) || !self.same_session(session) {
+        if !self.same_name_id(session.name_id()) || !self.same_session(session) {
             return Ok(false);
         }
         let now = validation.now_offset()?;
@@ -118,12 +118,12 @@ impl OutstandingLogout {
         Ok(now < effective)
     }
 
-    fn same_principal(&self, name_id: &NameId) -> bool {
-        if self.principal.value() != name_id.value() {
+    fn same_name_id(&self, name_id: &NameId) -> bool {
+        if self.name_id.value() != name_id.value() {
             return false;
         }
         let collapsed_uri = |format: &NameIdFormat| collapse_whitespace(format.as_uri());
-        self.principal
+        self.name_id
             .format()
             .map(collapsed_uri)
             .is_none_or(|format| {
@@ -133,13 +133,13 @@ impl OutstandingLogout {
     }
 
     fn same_session(&self, session: &SsoSession) -> bool {
-        if self.sessions.is_empty() {
+        if self.session_indexes.is_empty() {
             return true;
         }
         session.authn_sessions().iter().any(|authn| {
             authn
                 .session_index()
-                .is_some_and(|index| self.sessions.contains(index))
+                .is_some_and(|index| self.session_indexes.contains(index))
         })
     }
 }

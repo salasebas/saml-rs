@@ -1,6 +1,9 @@
 use super::{AssertionId, EndpointUrl, MessageId, SamlInstant};
 use crate::error::{SamlError, TimeWindowField};
-use std::time::{Duration, SystemTime};
+use std::{
+    fmt,
+    time::{Duration, SystemTime},
+};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// Clock skew applied to SAML time-window checks.
@@ -31,24 +34,13 @@ impl ClockSkew {
     /// Build clock skew from the raw SAML drift values, in milliseconds.
     ///
     /// The first argument applies to `NotBefore`; the second applies to
-    /// `NotOnOrAfter`.
+    /// `NotOnOrAfter`. A negative `NotBefore` value permits early acceptance;
+    /// a positive `NotOnOrAfter` value permits late acceptance.
     pub fn from_millis(not_before_ms: i64, not_on_or_after_ms: i64) -> Self {
         Self {
             not_before_ms,
             not_on_or_after_ms,
         }
-    }
-
-    /// Return a copy with the `NotBefore` skew, in milliseconds.
-    pub fn with_not_before_millis(mut self, not_before_ms: i64) -> Self {
-        self.not_before_ms = not_before_ms;
-        self
-    }
-
-    /// Return a copy with the `NotOnOrAfter` skew, in milliseconds.
-    pub fn with_not_on_or_after_millis(mut self, not_on_or_after_ms: i64) -> Self {
-        self.not_on_or_after_ms = not_on_or_after_ms;
-        self
     }
 
     /// `NotBefore` skew, in milliseconds.
@@ -62,66 +54,55 @@ impl ClockSkew {
     }
 
     /// Return the raw `(NotBefore, NotOnOrAfter)` drift tuple.
-    pub fn as_millis(self) -> (i64, i64) {
+    pub(crate) fn as_millis(self) -> (i64, i64) {
         (self.not_before_ms, self.not_on_or_after_ms)
-    }
-}
-
-impl Default for ClockSkew {
-    /// Zero skew. [`SamlValidationContext::new`] does not use this.
-    fn default() -> Self {
-        Self::strict()
     }
 }
 
 /// Replay cache key derived from a validated SAML message.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[expect(
-    clippy::enum_variant_names,
-    reason = "variants name the exact SAML identifier family used in stable cache keys"
-)]
 pub enum ReplayKey {
     /// SAML AuthnRequest ID.
-    AuthnRequestId(MessageId),
+    AuthnRequest(MessageId),
     /// SAML LogoutRequest ID.
-    LogoutRequestId(MessageId),
+    LogoutRequest(MessageId),
     /// SAML LogoutResponse ID.
-    LogoutResponseId(MessageId),
+    LogoutResponse(MessageId),
     /// SAML ManageNameIDRequest ID.
-    ManageNameIdRequestId(MessageId),
+    ManageNameIdRequest(MessageId),
     /// SAML ManageNameIDResponse ID.
-    ManageNameIdResponseId(MessageId),
-    /// SAML protocol response ID.
-    ResponseId(MessageId),
+    ManageNameIdResponse(MessageId),
+    /// SAML Response ID from a Web Browser SSO or ECP login.
+    SsoResponse(MessageId),
     /// SAML assertion ID.
-    AssertionId(AssertionId),
+    Assertion(AssertionId),
 }
 
 impl ReplayKey {
     /// Stable key family.
     pub fn kind(&self) -> &'static str {
         match self {
-            Self::AuthnRequestId(_) => "authn_request_id",
-            Self::LogoutRequestId(_) => "logout_request_id",
-            Self::LogoutResponseId(_) => "logout_response_id",
-            Self::ManageNameIdRequestId(_) => "manage_name_id_request_id",
-            Self::ManageNameIdResponseId(_) => "manage_name_id_response_id",
-            Self::ResponseId(_) => "response_id",
-            Self::AssertionId(_) => "assertion_id",
+            Self::AuthnRequest(_) => "authn_request_id",
+            Self::LogoutRequest(_) => "logout_request_id",
+            Self::LogoutResponse(_) => "logout_response_id",
+            Self::ManageNameIdRequest(_) => "manage_name_id_request_id",
+            Self::ManageNameIdResponse(_) => "manage_name_id_response_id",
+            Self::SsoResponse(_) => "response_id",
+            Self::Assertion(_) => "assertion_id",
         }
     }
 
     /// Raw SAML identifier value.
     pub fn value(&self) -> &str {
         match self {
-            Self::AuthnRequestId(id)
-            | Self::LogoutRequestId(id)
-            | Self::LogoutResponseId(id)
-            | Self::ManageNameIdRequestId(id)
-            | Self::ManageNameIdResponseId(id) => id.as_str(),
-            Self::ResponseId(id) => id.as_str(),
-            Self::AssertionId(id) => id.as_str(),
+            Self::AuthnRequest(id)
+            | Self::LogoutRequest(id)
+            | Self::LogoutResponse(id)
+            | Self::ManageNameIdRequest(id)
+            | Self::ManageNameIdResponse(id)
+            | Self::SsoResponse(id) => id.as_str(),
+            Self::Assertion(id) => id.as_str(),
         }
     }
 
@@ -166,6 +147,8 @@ pub trait ReplayCache {
 
 /// Replay behavior for typed inbound browser flows.
 ///
+/// `Debug` identifies the selected policy without exposing cache contents.
+///
 /// This is a caller argument on [`SamlValidationContext::new`], not a field of
 /// [`crate::SpValidationPolicy`] or [`crate::IdpValidationPolicy`]. There is
 /// no `recommended()` constructor. The classification is
@@ -178,32 +161,25 @@ pub enum ReplayPolicy<'a> {
     RequireCache(&'a mut dyn ReplayCache),
 }
 
-/// Maximum age for an inbound `AuthnRequest` `IssueInstant`.
+impl fmt::Debug for ReplayPolicy<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Disabled => f.write_str("Disabled"),
+            Self::RequireCache(_) => f.debug_tuple("RequireCache").finish_non_exhaustive(),
+        }
+    }
+}
+
+/// Maximum age for an inbound authentication or name identifier management request.
 ///
 /// [`Self::Disabled`] skips the comparison. [`Self::Bounded`] accepts an
 /// instant inside an inclusive window of `max_age`, widened by the context
 /// clock skew. The classification is
-/// `docs/conformance/web-browser-sso-acceptance.md`.
+/// `docs/conformance/web-browser-sso-acceptance.md` and
+/// `docs/conformance/name-id-management.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuthnRequestAgePolicy {
-    /// Do not compare `IssueInstant` with the validation clock.
-    Disabled,
-    /// Accept an `IssueInstant` inside an inclusive window of `max_age`.
-    Bounded {
-        /// Maximum age before clock-skew tolerance is applied.
-        ///
-        /// Zero leaves only the skew neighborhood.
-        max_age: Duration,
-    },
-}
-
-/// Maximum age for a received `ManageNameIDRequest` `IssueInstant`.
-///
-/// [`Self::Disabled`] skips the comparison. [`Self::Bounded`] accepts an
-/// instant inside the window [`AuthnRequestAgePolicy::Bounded`] uses. The
-/// classification is `docs/conformance/name-id-management.md`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ManageNameIdRequestAgePolicy {
+#[non_exhaustive]
+pub enum RequestAgePolicy {
     /// Do not compare `IssueInstant` with the validation clock.
     Disabled,
     /// Accept an `IssueInstant` inside an inclusive window of `max_age`.
@@ -216,12 +192,13 @@ pub enum ManageNameIdRequestAgePolicy {
 }
 
 /// Caller-owned validation context for typed inbound SAML messages.
+#[derive(Debug)]
 pub struct SamlValidationContext<'a> {
     now: SystemTime,
     recipient_endpoint: Option<EndpointUrl>,
     clock_skew: ClockSkew,
-    authn_request_age: AuthnRequestAgePolicy,
-    manage_name_id_request_age: ManageNameIdRequestAgePolicy,
+    authn_request_age: RequestAgePolicy,
+    manage_name_id_request_age: RequestAgePolicy,
     replay: ReplayPolicy<'a>,
     replay_retention: Option<Duration>,
 }
@@ -237,8 +214,8 @@ impl<'a> SamlValidationContext<'a> {
             now,
             recipient_endpoint: None,
             clock_skew: ClockSkew::five_minutes(),
-            authn_request_age: AuthnRequestAgePolicy::Disabled,
-            manage_name_id_request_age: ManageNameIdRequestAgePolicy::Disabled,
+            authn_request_age: RequestAgePolicy::Disabled,
+            manage_name_id_request_age: RequestAgePolicy::Disabled,
             replay,
             replay_retention: None,
         }
@@ -293,14 +270,14 @@ impl<'a> SamlValidationContext<'a> {
 
     /// Select the maximum age of an inbound `AuthnRequest` `IssueInstant`.
     ///
-    /// [`AuthnRequestAgePolicy::Disabled`] skips the comparison.
-    /// [`AuthnRequestAgePolicy::Bounded`] accepts an instant at or after
+    /// [`RequestAgePolicy::Disabled`] skips the comparison.
+    /// [`RequestAgePolicy::Bounded`] accepts an instant at or after
     /// `now - max_age - past_tolerance` and at or before
     /// `now + future_tolerance`. Both edges are inclusive. Past tolerance is
     /// the positive `NotOnOrAfter` skew. Future tolerance is the magnitude of
     /// a negative `NotBefore` skew. Zero skew and inverted skew do not shrink
     /// `max_age`.
-    pub fn with_authn_request_age(mut self, authn_request_age: AuthnRequestAgePolicy) -> Self {
+    pub fn with_authn_request_age(mut self, authn_request_age: RequestAgePolicy) -> Self {
         self.authn_request_age = authn_request_age;
         self
     }
@@ -309,14 +286,14 @@ impl<'a> SamlValidationContext<'a> {
     /// received by `receive_name_id_management` or
     /// `receive_name_id_management_redirect`.
     ///
-    /// [`ManageNameIdRequestAgePolicy::Bounded`] accepts the window described
+    /// [`RequestAgePolicy::Bounded`] accepts the window described
     /// on [`Self::with_authn_request_age`]. A request outside it is
     /// [`SamlError::TimeWindowInvalid`] with
     /// [`TimeWindowField::ManageNameIdRequestIssueInstant`], and its `ID` is
     /// not stored for replay detection.
     pub fn with_manage_name_id_request_age(
         mut self,
-        manage_name_id_request_age: ManageNameIdRequestAgePolicy,
+        manage_name_id_request_age: RequestAgePolicy,
     ) -> Self {
         self.manage_name_id_request_age = manage_name_id_request_age;
         self
@@ -340,19 +317,14 @@ impl<'a> SamlValidationContext<'a> {
     }
 
     /// Maximum age policy for an inbound `AuthnRequest` `IssueInstant`.
-    pub fn authn_request_age(&self) -> AuthnRequestAgePolicy {
+    pub fn authn_request_age(&self) -> RequestAgePolicy {
         self.authn_request_age
     }
 
     /// Maximum age policy for a received `ManageNameIDRequest`
     /// `IssueInstant`.
-    pub fn manage_name_id_request_age(&self) -> ManageNameIdRequestAgePolicy {
+    pub fn manage_name_id_request_age(&self) -> RequestAgePolicy {
         self.manage_name_id_request_age
-    }
-
-    /// Replay retention for protocol message IDs without SAML expiry.
-    pub fn replay_retention(&self) -> Option<Duration> {
-        self.replay_retention
     }
 
     pub(crate) fn now_offset(&self) -> Result<OffsetDateTime, SamlError> {
@@ -367,12 +339,9 @@ impl<'a> SamlValidationContext<'a> {
         &self,
         issue_instant: &SamlInstant,
     ) -> Result<(), SamlError> {
-        let AuthnRequestAgePolicy::Bounded { max_age } = self.authn_request_age else {
-            return Ok(());
-        };
         self.check_issue_instant_age(
             issue_instant,
-            max_age,
+            self.authn_request_age,
             TimeWindowField::AuthnRequestIssueInstant,
         )
     }
@@ -381,13 +350,9 @@ impl<'a> SamlValidationContext<'a> {
         &self,
         issue_instant: &SamlInstant,
     ) -> Result<(), SamlError> {
-        let ManageNameIdRequestAgePolicy::Bounded { max_age } = self.manage_name_id_request_age
-        else {
-            return Ok(());
-        };
         self.check_issue_instant_age(
             issue_instant,
-            max_age,
+            self.manage_name_id_request_age,
             TimeWindowField::ManageNameIdRequestIssueInstant,
         )
     }
@@ -395,9 +360,13 @@ impl<'a> SamlValidationContext<'a> {
     fn check_issue_instant_age(
         &self,
         issue_instant: &SamlInstant,
-        max_age: Duration,
+        policy: RequestAgePolicy,
         field: TimeWindowField,
     ) -> Result<(), SamlError> {
+        let max_age = match policy {
+            RequestAgePolicy::Disabled => return Ok(()),
+            RequestAgePolicy::Bounded { max_age } => max_age,
+        };
         let outside_window = || SamlError::TimeWindowInvalid { field };
         let past_tolerance = positive_millis(self.clock_skew.not_on_or_after_millis());
         let future_tolerance = negative_millis_magnitude(self.clock_skew.not_before_millis());

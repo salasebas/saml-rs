@@ -172,10 +172,7 @@ fn principal() -> NameId {
 }
 
 fn subject() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::with_session_index(
-        principal(),
-        SessionIndex::try_new("_session")?,
-    ))
+    Ok(LogoutSubject::new(principal()).with_session_index(SessionIndex::try_new("_session")?))
 }
 
 fn validation() -> SamlValidationContext<'static> {
@@ -367,7 +364,15 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
                     )?
                 }
             };
-            assert!(completed.response().is_some(), "{initiator:?} {binding:?}");
+            let expected_issuer = match initiator {
+                Initiator::Sp => IDP_ENTITY_ID,
+                Initiator::Idp => SP_ENTITY_ID,
+            };
+            assert_eq!(
+                completed.response().issuer().as_str(),
+                expected_issuer,
+                "{initiator:?} {binding:?}"
+            );
         }
     }
     Ok(())
@@ -609,7 +614,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
 
     let started_slo = parties.idp.start_slo(
         &parties.sp_descriptor,
-        LogoutSubject::from_name_id(principal()),
+        LogoutSubject::new(principal()),
         StartSlo::redirect().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers),
     )?;
     let received = parties.sp.receive_slo(

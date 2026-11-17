@@ -170,7 +170,7 @@ impl AuthnRequest {
         &self,
         validation: &mut SamlValidationContext<'_>,
     ) -> Result<(), SamlError> {
-        validation.check_and_store_message_replay(ReplayKey::AuthnRequestId(self.id.clone()))
+        validation.check_and_store_message_replay(ReplayKey::AuthnRequest(self.id.clone()))
     }
 
     /// Raw validated flow result.

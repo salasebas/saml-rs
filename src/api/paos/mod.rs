@@ -694,7 +694,7 @@ impl Saml<Idp> {
         }
         let mut validation = validation;
         validation.check_authn_request_issue_instant(authn.issue_instant())?;
-        validation.check_and_store_message_replay(crate::model::ReplayKey::AuthnRequestId(
+        validation.check_and_store_message_replay(crate::model::ReplayKey::AuthnRequest(
             authn.id().clone(),
         ))?;
         Ok(crate::model::Received::new(authn))
