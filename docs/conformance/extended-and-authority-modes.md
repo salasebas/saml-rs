@@ -42,7 +42,7 @@ Table 3. An extended mode is an IdP or SP mode of Table 2 plus both rows.
 
 | Feature | IdP Extended | SP Extended | Disposition |
 | --- | --- | --- | --- |
-| Identity Provider proxy (Core §3.4.1.5) | `MUST` | `MUST` | Open issue: [#277](https://github.com/salasebas/saml-rs/issues/277). The identity provider accepts a request that carries `<Scoping>` and never proxies, which Core §3.4.1.5.1 leaves to local policy. An application that proxies cannot yet read the received `ProxyCount`, `<IDPList>`, and `<RequesterID>`, or write them on its own `<AuthnRequest>` |
+| Identity Provider proxy (Core §3.4.1.5) | `MUST` | `MUST` | Open issue. The identity provider accepts a request that carries `<Scoping>` and never proxies, which Core §3.4.1.5.1 leaves to local policy. An application that proxies cannot yet read the received `ProxyCount`, `<IDPList>`, and `<RequesterID>`, or write them on its own `<AuthnRequest>` |
 | Name identifier mapping, SOAP (Core §3.8, Profiles §7) | `MUST` | `MUST` | Exclusion, mode not claimed. No `<NameIDMappingRequest>` or `<NameIDMappingResponse>` is generated or processed |
 
 ## SAML authorities and requester
@@ -53,7 +53,7 @@ Assertion Query/Request profile (Profiles §6) over the SOAP binding.
 | Feature | Authentication Authority | Attribute Authority | Authorization Decision Authority | Requester | Disposition |
 | --- | --- | --- | --- | --- | --- |
 | Authentication Query, SOAP (Core §3.3.2.2) | `MUST` | N/A | N/A | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthnQuery>` is generated or answered |
-| Attribute Query, SOAP (Core §3.3.2.3) | N/A | `MUST` | N/A | `OPTIONAL` | Open issue: [#278](https://github.com/salasebas/saml-rs/issues/278). Shibboleth IdP 5 answers it, and Shibboleth SP 4 and crewjam/saml send it |
+| Attribute Query, SOAP (Core §3.3.2.3) | N/A | `MUST` | N/A | `OPTIONAL` | Open issue. Shibboleth IdP 5 answers it, and Shibboleth SP 4 and crewjam/saml send it |
 | Authorization Decision Query, SOAP (Core §3.3.2.4) | N/A | N/A | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthzDecisionQuery>` is generated or answered |
 | Request for Assertion by Identifier, SOAP (Core §3.3.1) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AssertionIDRequest>` is generated or answered. The same feature is the `OPTIONAL` IdP row of Table 2 (Errata 05 E29). SimpleSAMLphp and crewjam/saml read and write `<md:AssertionIDRequestService>` in metadata only |
 | SAML URI Binding (Bindings §3.7) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No assertion is served by URI reference |
