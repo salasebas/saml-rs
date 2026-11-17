@@ -72,6 +72,8 @@ pub struct SpMetadataConfig {
     /// `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::DEFAULT`]).
+    /// Missing groups are inserted in schema-relative positions. Unknown or
+    /// repeated names are invalid. Explicit names retain their relative order.
     pub elements_order: Option<Vec<String>>,
     /// `validUntil` and `cacheDuration` on the `EntityDescriptor`. `None`
     /// writes neither.
@@ -106,6 +108,8 @@ pub struct IdpMetadataConfig {
     /// `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::idp::DEFAULT`]).
+    /// Missing groups are inserted in schema-relative positions. Unknown or
+    /// repeated names are invalid. Explicit names retain their relative order.
     pub elements_order: Option<Vec<String>>,
     /// `validUntil` and `cacheDuration` on the `EntityDescriptor`. `None`
     /// writes neither.
@@ -279,7 +283,12 @@ fn write_sp_group(
         "AssertionConsumerService" => {
             write_assertion_consumer_service(w, &cfg.assertion_consumer_service)?
         }
-        _ => {}
+        "AttributeConsumingService" => {}
+        _ => {
+            return Err(SamlError::Invalid(format!(
+                "unknown metadata element order group {name}"
+            )))
+        }
     }
     Ok(())
 }
@@ -298,17 +307,41 @@ fn write_idp_group(
             write_artifact_resolution_service(w, &cfg.artifact_resolution_service)
         }
         "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
-        _ => {}
+        _ => {
+            return Err(SamlError::Invalid(format!(
+                "unknown metadata element order group {name}"
+            )))
+        }
     }
     Ok(())
 }
 
-fn elements_order_or_default(order: &Option<Vec<String>>, default: &[&str]) -> Vec<String> {
+fn complete_elements_order<'a>(
+    order: Option<&'a [String]>,
+    groups: &[&'a str],
+) -> Result<Vec<&'a str>, SamlError> {
+    let mut completed = Vec::new();
     if let Some(order) = order {
-        order.clone()
-    } else {
-        default.iter().map(|s| s.to_string()).collect()
+        for name in order {
+            let name = name.as_str();
+            if completed.contains(&name) {
+                return Err(SamlError::Invalid(format!(
+                    "duplicate metadata element order group {name}"
+                )));
+            }
+            completed.push(name);
+        }
     }
+    for (index, name) in groups.iter().enumerate() {
+        if !completed.contains(name) {
+            let position = completed
+                .iter()
+                .position(|ordered| groups[index + 1..].contains(ordered))
+                .unwrap_or(completed.len());
+            completed.insert(position, name);
+        }
+    }
+    Ok(completed)
 }
 
 fn bool_str(value: bool) -> &'static str {
@@ -317,22 +350,6 @@ fn bool_str(value: bool) -> &'static str {
     } else {
         "false"
     }
-}
-
-fn insert_manage_name_id_service(order: &mut Vec<String>) {
-    let before_role_elements = order
-        .iter()
-        .position(|ordered| {
-            matches!(
-                ordered.as_str(),
-                "NameIDFormat"
-                    | "SingleSignOnService"
-                    | "AssertionConsumerService"
-                    | "AttributeConsumingService"
-            )
-        })
-        .unwrap_or(order.len());
-    order.insert(before_role_elements, "ManageNameIDService".into());
 }
 
 /// Generate SP metadata XML.
@@ -348,6 +365,7 @@ fn insert_manage_name_id_service(order: &mut Vec<String>) {
 /// than `unsignedShort` indexes. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
+/// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
 pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError> {
     if cfg.assertion_consumer_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -360,11 +378,17 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
         &cfg.contacts,
         cfg.error_url.as_deref(),
     )?;
-    let is_custom_order = cfg.elements_order.is_some();
-    let mut order = elements_order_or_default(&cfg.elements_order, elements_order::DEFAULT);
-    if !order.iter().any(|ordered| ordered == "ManageNameIDService") {
-        insert_manage_name_id_service(&mut order);
-    }
+    let order = complete_elements_order(
+        cfg.elements_order.as_deref(),
+        &[
+            "KeyDescriptor",
+            "SingleLogoutService",
+            "ManageNameIDService",
+            "NameIDFormat",
+            "AssertionConsumerService",
+            "AttributeConsumingService",
+        ],
+    )?;
     let mut w = MetadataWriter::new();
     write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
     let mut role_attributes = vec![
@@ -378,13 +402,6 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
     w.start("SPSSODescriptor", &role_attributes);
     for name in &order {
         write_sp_group(&mut w, cfg, name)?;
-    }
-    if is_custom_order
-        && !order
-            .iter()
-            .any(|ordered| ordered == "AssertionConsumerService")
-    {
-        write_sp_group(&mut w, cfg, "AssertionConsumerService")?;
     }
     w.end("SPSSODescriptor");
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
@@ -403,6 +420,7 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
 /// is not an absolute URI reference. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
+/// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
 pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -415,30 +433,8 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlErro
         &cfg.contacts,
         cfg.error_url.as_deref(),
     )?;
-    let is_custom_order = cfg.elements_order.is_some();
-    let mut order = elements_order_or_default(&cfg.elements_order, elements_order::idp::DEFAULT);
-    if is_custom_order
-        && !order
-            .iter()
-            .any(|ordered| ordered == "ArtifactResolutionService")
-    {
-        let after_key_descriptor = order
-            .iter()
-            .position(|ordered| ordered == "KeyDescriptor")
-            .map_or(0, |position| position + 1);
-        order.insert(after_key_descriptor, "ArtifactResolutionService".into());
-    }
-    if is_custom_order && !order.iter().any(|ordered| ordered == "ManageNameIDService") {
-        insert_manage_name_id_service(&mut order);
-    }
-    let descriptors = [
-        "KeyDescriptor",
-        "NameIDFormat",
-        "ArtifactResolutionService",
-        "SingleSignOnService",
-        "SingleLogoutService",
-        "ManageNameIDService",
-    ];
+    let order =
+        complete_elements_order(cfg.elements_order.as_deref(), elements_order::idp::DEFAULT)?;
     let mut w = MetadataWriter::new();
     write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
     let mut role_attributes = vec![
@@ -454,17 +450,6 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlErro
     w.start("IDPSSODescriptor", &role_attributes);
     for name in &order {
         write_idp_group(&mut w, cfg, name)?;
-    }
-    if is_custom_order {
-        if !order.iter().any(|ordered| ordered == "SingleSignOnService") {
-            write_idp_group(&mut w, cfg, "SingleSignOnService")?;
-        }
-    } else {
-        for name in descriptors {
-            if !order.iter().any(|ordered| ordered == name) {
-                write_idp_group(&mut w, cfg, name)?;
-            }
-        }
     }
     w.end("IDPSSODescriptor");
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);

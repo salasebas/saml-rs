@@ -126,6 +126,7 @@ fn sp_metadata_with_default_elements_order() -> Result<(), Box<dyn std::error::E
 #[test]
 fn sp_metadata_with_onelogin_elements_order() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = SpMetadataConfig {
+        manage_name_id_service: vec![Endpoint::new(Binding::Redirect, "https://sp/nameid")],
         elements_order: Some(
             elements_order::ONELOGIN
                 .iter()
@@ -135,11 +136,27 @@ fn sp_metadata_with_onelogin_elements_order() -> Result<(), Box<dyn std::error::
         ..order_base_config()
     };
     let xml = generate_sp_metadata(&cfg)?;
-    let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
-    let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
-    let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
-    let acs = xml.find("AssertionConsumerService").unwrap_or(0);
-    assert!(key < nid && nid < slo && slo < acs);
+    let doc = roxmltree::Document::parse(&xml)?;
+    let groups: Vec<_> = doc
+        .descendants()
+        .find(|node| {
+            node.has_tag_name((saml_rs::constants::namespace::METADATA, "SPSSODescriptor"))
+        })
+        .ok_or("missing SPSSODescriptor")?
+        .children()
+        .filter(roxmltree::Node::is_element)
+        .map(|node| node.tag_name().name())
+        .collect();
+    assert_eq!(
+        groups,
+        [
+            "KeyDescriptor",
+            "ManageNameIDService",
+            "NameIDFormat",
+            "SingleLogoutService",
+            "AssertionConsumerService"
+        ]
+    );
     Ok(())
 }
 

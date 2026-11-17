@@ -93,12 +93,7 @@ fn raw_metadata_writes_descriptions_after_roles_with_every_order_profile() -> Te
         Some(elements_order::DEFAULT),
         Some(elements_order::ONELOGIN),
         Some(elements_order::SHIBBOLETH),
-        Some(&[
-            "ContactPerson",
-            "Organization",
-            "NameIDFormat",
-            "AssertionConsumerService",
-        ]),
+        Some(&["NameIDFormat", "AssertionConsumerService"]),
     ] {
         let mut cfg = raw_sp();
         cfg.elements_order =
@@ -114,12 +109,7 @@ fn raw_metadata_writes_descriptions_after_roles_with_every_order_profile() -> Te
         Some(elements_order::idp::DEFAULT),
         Some(elements_order::idp::ONELOGIN),
         Some(elements_order::idp::SHIBBOLETH),
-        Some(&[
-            "ContactPerson",
-            "Organization",
-            "NameIDFormat",
-            "SingleSignOnService",
-        ]),
+        Some(&["NameIDFormat", "SingleSignOnService"]),
     ] {
         let mut cfg = raw_idp();
         cfg.elements_order =
