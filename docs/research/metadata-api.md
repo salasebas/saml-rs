@@ -24,9 +24,10 @@ Metadata §4.3.3 describes several trust mechanisms. It does not require every m
 
 ## Keep import permissive and validate selected values on access
 
-The SAML type permits `anyURI`; it does not require every endpoint to be an HTTP(S) URL. Typed SP and IdP descriptor accessors can return an `EndpointUrl` and report an error when the selected endpoint is not absolute HTTP(S), while metadata import keeps unknown bindings and URI values. That HTTP(S) filter is a library API policy for the supported flow. It must not become an import-time protocol rejection. Read organization, contact, and `NameIDFormat` values without narrowing the imported XML. Report accessor-specific interpretation errors only when callers request those values. The only planned behavior change is requiring the raw artifact publisher to receive a typed HTTP(S) URL. It does not change protocol acceptance on import.
+The SAML type permits `anyURI`; it does not require every endpoint to be an HTTP(S) URL. Typed SP and IdP descriptor accessors can return an `EndpointUrl` and report an error when the selected endpoint is not absolute HTTP(S), while metadata import keeps unknown bindings and URI values. That HTTP(S) filter is a library API policy for the supported flow. It must not become an import-time protocol rejection. Read organization, contact, and `NameIDFormat` values without narrowing the imported XML. Report accessor-specific interpretation errors only when callers request those values. The raw artifact publisher requires a typed HTTP(S) URL. Imported NameID formats now apply XML Schema whitespace collapse before typed mapping and before raw providers use them in messages. These changes do not add an import-time rejection. The original XML and signed evidence are preserved.
 
 Hiding the extractor argument and keeping `metadata::{sp,idp,generate}` private behind deliberate reexports are API encapsulation choices, not SAML requirements. Removing filesystem export is also an API cleanup, not a conformance change. The change removes the extractor arguments, raw descriptor accessors, singular certificate getter, filesystem writer, and duplicate submodule paths. These are library API changes, not newly discovered SAML protocol defects.
+
 ## Explicit raw composition and final names
 
 The raw role readers borrow their shared fields through `as_metadata()`.
@@ -45,3 +46,24 @@ separate those passive inputs from the typed config readers. List getters use
 `signed_metadata_xml()` names evidence that may cover an `EntitiesDescriptor`.
 Neither method claims that metadata is unexpired or that the default algorithm
 policy was selected.
+
+## Peer implementations are comparisons, not authorities
+
+- [crewjam/saml metadata](https://github.com/crewjam/saml/blob/main/metadata.go)
+  models repeated endpoints and NameID formats as collections. Its
+  [service provider helpers](https://github.com/crewjam/saml/blob/main/service_provider.go)
+  select locations by binding and gather multiple signing certificates. This
+  supports keeping complete lists available while making selection explicit.
+- [samael metadata](https://github.com/njaremko/samael/blob/master/src/metadata/mod.rs)
+  reexports metadata types from private leaf modules. Its schema-shaped model
+  differs from this crate's typed peer descriptors, but the module organization
+  provides useful prior art for hiding implementation paths.
+- [python3-saml's IdP parser](https://github.com/SAML-Toolkits/python3-saml/blob/master/src/onelogin/saml2/idp_metadata_parser.py)
+  selects the requested SSO and logout bindings, returns the first matching
+  endpoint and NameID format, and groups signing and encryption certificates.
+  This crate preserves every declared NameID format rather than adopting that
+  first-format selection.
+
+These are examples of API organization and selection behavior. OASIS and XML
+Schema determine the wire semantics. None of these libraries establishes a
+Rust API convention or justifies narrowing metadata acceptance here.

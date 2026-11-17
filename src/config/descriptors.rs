@@ -782,9 +782,13 @@ fn endpoint_location(
         .map(EndpointUrl::try_new)
         .transpose()
         .map_err(|error| {
-            SamlError::Invalid(format!(
-                "{element} location for binding {}: {error}",
-                binding.urn()
-            ))
+            if let SamlError::Invalid(detail) = error {
+                SamlError::Invalid(format!(
+                    "{element} location for binding {}: {detail}",
+                    binding.urn()
+                ))
+            } else {
+                error
+            }
         })
 }

@@ -237,14 +237,14 @@ let xml = generate_sp_metadata(&input)?;
 # Ok(()) }
 ```
 
-The typed config readers rename their list getter `name_id_format()` to
+The typed config readers expose the former `name_id_format` field through
 `name_id_formats()`. The builder setter stays `name_id_format(format)` because
 it adds one format per call.
 
 Before:
 
 ```rust,ignore
-let formats = config.metadata().name_id_format();
+let formats = config.metadata.name_id_format;
 ```
 
 After:
