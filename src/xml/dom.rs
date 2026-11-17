@@ -5,8 +5,8 @@
 //! canonicalisation concerns — verification is delegated to bergshamra).
 
 use crate::error::SamlError;
-use crate::xml::is_xml_char;
 use crate::xml::name::is_ncname;
+use crate::xml::{is_xml_char, utf8_bom_len};
 use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::{BytesRef, BytesStart, Event};
 use quick_xml::name::{
@@ -347,14 +347,6 @@ fn read_attrs<'a>(
     Ok(out)
 }
 
-fn find_lt(bytes: &[u8], before: usize, after: usize) -> usize {
-    bytes[before..after]
-        .iter()
-        .position(|&b| b == b'<')
-        .map(|p| before + p)
-        .unwrap_or(before)
-}
-
 fn push_child(stack: &mut [Node], roots: &mut Vec<Node>, node: Node) {
     match stack.last_mut() {
         Some(parent) => parent.children.push(node),
@@ -488,43 +480,41 @@ fn parse_roots_inner(
     reader.config_mut().check_comments = true;
     let mut resolver = NamespaceResolver::default();
     resolver.set_max_namespace_bindings(limits.max_attributes_per_element);
-    let bytes = xml.as_bytes();
+    let bom_len = utf8_bom_len(xml);
     let mut stack: Vec<Node> = Vec::new();
     let mut roots: Vec<Node> = Vec::new();
     let mut node_count = 0usize;
 
     loop {
-        let before = reader.buffer_position() as usize;
+        let before = bom_len + reader.buffer_position() as usize;
         let event = reader
             .read_event()
             .map_err(|err| SamlError::Xml(err.to_string()))?;
-        let after = reader.buffer_position() as usize;
+        let after = bom_len + reader.buffer_position() as usize;
         match event {
             Event::Start(e) => {
                 limits.count_element(&mut node_count)?;
                 limits.check_depth(stack.len().saturating_add(1))?;
-                let start = find_lt(bytes, before, after);
                 let (local_name, attrs) = read_element(&e, &mut resolver, limits, mode)?;
                 stack.push(Node {
                     local_name,
                     attrs,
                     children: Vec::new(),
                     text: String::new(),
-                    start,
+                    start: before,
                     end: 0,
                 });
             }
             Event::Empty(e) => {
                 limits.count_element(&mut node_count)?;
                 limits.check_depth(stack.len().saturating_add(1))?;
-                let start = find_lt(bytes, before, after);
                 let (local_name, attrs) = read_element(&e, &mut resolver, limits, mode)?;
                 let node = Node {
                     local_name,
                     attrs,
                     children: Vec::new(),
                     text: String::new(),
-                    start,
+                    start: before,
                     end: after,
                 };
                 resolver.pop();
@@ -571,7 +561,7 @@ fn parse_roots_inner(
                     "xml-stylesheet processing instructions are not allowed".into(),
                 ));
             }
-            Event::Decl(_) if before != 0 => {
+            Event::Decl(_) if before != bom_len => {
                 return Err(SamlError::Xml(
                     "an XML declaration is allowed only at the start of the input".into(),
                 ));
@@ -688,6 +678,25 @@ mod tests {
         assert_eq!(&xml[child.start..child.end], "<b>x\r\ny</b>");
         assert_eq!(child.text, "x\ny");
         assert_eq!(&xml[doc.root.start..doc.root.end], xml);
+        Ok(())
+    }
+
+    #[test]
+    fn a_byte_order_mark_keeps_source_offsets() -> Result<(), SamlError> {
+        for xml in [
+            "\u{feff}<a><b/>text</a>",
+            "\u{feff}<?xml version=\"1.0\"?>\n<a><b/>text</a>",
+        ] {
+            let doc = parse_document(xml, XmlLimits::default())?;
+
+            assert_eq!(
+                &xml[doc.root.start..doc.root.end],
+                "<a><b/>text</a>",
+                "{xml:?}"
+            );
+            let child = &doc.root.children[0];
+            assert_eq!(&xml[child.start..child.end], "<b/>", "{xml:?}");
+        }
         Ok(())
     }
 

@@ -3212,3 +3212,33 @@ fn idp_receive_rejects_authenticated_request_without_destination(
     assert_eq!(received.message().destination(), None);
     Ok(())
 }
+
+#[test]
+fn typed_facade_accepts_metadata_and_response_that_start_with_a_byte_order_mark(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = start_receive_respond()?;
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        &format!("\u{feff}{}", exchange.idp.metadata_xml()),
+        MetadataTrustPolicy::AllowUnsigned,
+    )?;
+    let xml = format!(
+        "\u{feff}{}",
+        response_xml_from_fields(&exchange.response_fields)?
+    );
+    let fields = response_fields_with_xml(exchange.response_fields, &xml)?;
+
+    let session = exchange.sp.finish_sso(
+        &idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<SsoResponse>::post(fields),
+        validation(),
+    )?;
+
+    assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
+    assert_eq!(
+        session.in_response_to(),
+        Some(exchange.pending.request_id())
+    );
+    Ok(())
+}

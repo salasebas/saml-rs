@@ -25,6 +25,19 @@ pub(crate) use profile::{
 };
 pub(crate) use schema_value::{xs_boolean, xs_unsigned_short};
 
+/// Length of the UTF-8 byte order mark that starts `xml`, or 0.
+///
+/// quick-xml skips a leading byte order mark without counting it, so
+/// `Reader::buffer_position` is this many bytes behind the source offset.
+pub(crate) fn utf8_bom_len(xml: &str) -> usize {
+    const BOM: char = '\u{feff}';
+    if xml.starts_with(BOM) {
+        BOM.len_utf8()
+    } else {
+        0
+    }
+}
+
 pub(crate) fn is_xml_char(character: char) -> bool {
     matches!(
         character,
