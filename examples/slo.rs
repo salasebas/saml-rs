@@ -92,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     println!(
         "SP  <- LogoutResponse status = {}",
-        completed.status().unwrap_or("missing")
+        completed.response().status().top_level().as_uri()
     );
     Ok(())
 }

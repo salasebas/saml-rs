@@ -38,6 +38,11 @@ describe your integration.
 | `context::set_schema_validator` | Configure `XmlPolicy::schema_validator` | [9.1](#91-configure-each-local-role) |
 | A full struct literal of `XmlPolicy` | Has a new `schema_validator` field | [9.1](#91-configure-each-local-role) |
 | `Metadata::parse` and its variants, raw metadata `Deref`, generation config names, signature evidence names, raw `get_*` and signing flag getters, `x509_certificates()`, `export_metadata()`, descriptor `metadata()`, `metadata::{sp,idp,generate}` paths, `ArtifactResolutionEndpoint`, or `Metadata::verify_signature*` | Parser arguments, getter names and types, endpoint publishing, and public paths changed; obsolete methods removed | [10](#10-update-metadata-imports-and-accessors) |
+| `AuthnRequestAgePolicy` or `ManageNameIdRequestAgePolicy` | Both become `RequestAgePolicy` | [Request age policy](logout-validation-replay.md#use-one-request-age-policy-type) |
+| `ClockSkew::default()`, the component setters, or `as_millis()` | Select skew explicitly and use named getters | [Clock skew](logout-validation-replay.md#select-and-read-clock-skew-explicitly) |
+| `LogoutSubject` constructors or `session_index()`, `OutstandingLogout::principal()` or `sessions()` | Use `LogoutSubject::new(name_id)`, the append methods, and the renamed getters | [Logout subjects](logout-validation-replay.md#build-a-logout-subject-with-session-indexes) |
+| `LogoutCompleted` constructors, `status()`, optional `response()` or `raw_flow()`, or equality | Obtain the completion from `finish_slo` and read the response directly | [Logout completions](logout-validation-replay.md#obtain-the-completed-response-through-finish_slo) |
+| `ReplayKey` variants ending in `Id` or `SamlValidationContext::replay_retention()` | Rename variants and keep the retention duration in your configuration | [Replay keys and cache](logout-validation-replay.md#update-replay-keys-and-cache-access) |
 
 ### 1.1 Pass the expected entity ID to `from_metadata_xml`
 

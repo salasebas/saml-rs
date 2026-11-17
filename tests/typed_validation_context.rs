@@ -41,7 +41,10 @@ fn parse_response_at(
     options.binding = Some(Binding::Post);
     options.parser_type = Some(ParserType::SamlResponse);
     options.now = Some(validation.now());
-    options.clock_drifts = validation.clock_skew().as_millis();
+    options.clock_drifts = (
+        validation.clock_skew().not_before_millis(),
+        validation.clock_skew().not_on_or_after_millis(),
+    );
     flow(&options, &response_request(xml))
 }
 
@@ -271,7 +274,7 @@ fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
         );
     let validation =
         SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
-            .with_clock_skew(ClockSkew::strict().with_not_on_or_after_millis(60_000));
+            .with_clock_skew(ClockSkew::from_millis(0, 60_000));
 
     parse_response_at(&xml, &validation)?;
     Ok(())
@@ -315,13 +318,10 @@ fn typed_validation_context_invalid_timestamp_fails_closed_at_fixed_clock(
 #[test]
 fn typed_validation_context_clock_skew_exposes_named_millis(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let clock_skew = ClockSkew::strict()
-        .with_not_before_millis(-30_000)
-        .with_not_on_or_after_millis(120_000);
+    let clock_skew = ClockSkew::from_millis(-30_000, 120_000);
 
     assert_eq!(clock_skew.not_before_millis(), -30_000);
     assert_eq!(clock_skew.not_on_or_after_millis(), 120_000);
-    assert_eq!(clock_skew.as_millis(), (-30_000, 120_000));
     Ok(())
 }
 
@@ -329,7 +329,13 @@ fn typed_validation_context_clock_skew_exposes_named_millis(
 fn new_validation_context_allows_five_minutes_on_not_before_and_not_on_or_after(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let validation = context_at(SKEW_NOW)?;
-    assert_eq!(validation.clock_skew().as_millis(), (-300_000, 300_000));
+    assert_eq!(
+        (
+            validation.clock_skew().not_before_millis(),
+            validation.clock_skew().not_on_or_after_millis()
+        ),
+        (-300_000, 300_000)
+    );
 
     parse_response_at(
         &xml_with_time_window("2026-07-15T12:05:00Z", FAR_FUTURE, FAR_FUTURE, FAR_FUTURE),
@@ -561,7 +567,7 @@ fn typed_validation_context_replay_cache_stores_new_keys() -> Result<(), Box<dyn
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
     )
-    .with_clock_skew(ClockSkew::strict().with_not_on_or_after_millis(1_000));
+    .with_clock_skew(ClockSkew::from_millis(0, 1_000));
 
     session.check_and_store_replay(&mut validation)?;
     assert_eq!(cache.seen.len(), 2);
@@ -754,7 +760,7 @@ fn typed_validation_context_replay_expiration_uses_conditions_fallback(
         instant("2026-07-04T12:05:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
     )
-    .with_clock_skew(ClockSkew::strict().with_not_on_or_after_millis(2_000));
+    .with_clock_skew(ClockSkew::from_millis(0, 2_000));
 
     session.check_and_store_replay(&mut validation)?;
     assert_eq!(

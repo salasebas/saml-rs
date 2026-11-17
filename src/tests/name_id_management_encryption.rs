@@ -20,10 +20,10 @@ use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, BrowserInput, CertificatePem, Credentials, DecryptionCredential, EndpointUrl,
     EntityId, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    InMemoryReplayCache, ManageNameIdRequest, ManageNameIdRequestAgePolicy, ManageNameIdResponse,
-    ManageNameIdService, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
-    NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound, PartyAuthentication,
-    PrivateKeyPem, ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy,
+    InMemoryReplayCache, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
+    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
+    NameIdFormat, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
+    ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy,
     RespondNameIdManagement, Saml, SamlError, SamlValidationContext, SoapChannel,
     SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartNameIdManagement,
@@ -494,7 +494,7 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
             ReceiveNameIdManagement::redirect(),
             SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache))
                 .with_replay_retention(Duration::from_secs(300))
-                .with_manage_name_id_request_age(ManageNameIdRequestAgePolicy::Bounded {
+                .with_manage_name_id_request_age(RequestAgePolicy::Bounded {
                     max_age: Duration::from_secs(60),
                 }),
         )

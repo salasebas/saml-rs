@@ -19,32 +19,37 @@ pub struct LogoutSubject {
 }
 
 impl LogoutSubject {
-    /// Create logout subject data from a NameID and SessionIndex values.
-    pub fn new(name_id: NameId, session_indexes: Vec<SessionIndex>) -> Self {
+    /// Create logout subject data with no SessionIndex values.
+    ///
+    /// With no indexes, the request targets every session for the NameID.
+    /// Use [`Self::with_session_index`] to select individual sessions.
+    pub fn new(name_id: NameId) -> Self {
         Self {
             name_id,
-            session_indexes,
+            session_indexes: Vec::new(),
         }
     }
 
-    /// Create logout subject data with no SessionIndex values.
-    pub fn from_name_id(name_id: NameId) -> Self {
-        Self::new(name_id, Vec::new())
+    /// Append a SessionIndex to include in the logout request.
+    pub fn with_session_index(mut self, session_index: SessionIndex) -> Self {
+        self.session_indexes.push(session_index);
+        self
     }
 
-    /// Create logout subject data with one SessionIndex.
-    pub fn with_session_index(name_id: NameId, session_index: SessionIndex) -> Self {
-        Self::new(name_id, vec![session_index])
+    /// Append session indexes in iteration order, preserving existing selections and duplicates.
+    ///
+    /// An empty iterator leaves the selection unchanged.
+    pub fn with_session_indexes(
+        mut self,
+        session_indexes: impl IntoIterator<Item = SessionIndex>,
+    ) -> Self {
+        self.session_indexes.extend(session_indexes);
+        self
     }
 
     /// Subject NameID.
     pub fn name_id(&self) -> &NameId {
         &self.name_id
-    }
-
-    /// First SessionIndex to include in the logout request, when present.
-    pub fn session_index(&self) -> Option<&SessionIndex> {
-        self.session_indexes.first()
     }
 
     /// SessionIndex values to include in the logout request.
@@ -294,78 +299,42 @@ fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstan
     SamlInstant::try_new(issue_instant)
 }
 
-/// Marker result for completed logout flows.
+/// Result of a completed logout exchange, including the responder's status.
 #[derive(Debug, Clone)]
 pub struct LogoutCompleted {
-    peer_entity_id: EntityId,
-    response: Option<LogoutResponse>,
+    response: LogoutResponse,
     relay_state: RelayStateParam,
 }
 
-impl PartialEq for LogoutCompleted {
-    fn eq(&self, other: &Self) -> bool {
-        self.peer_entity_id == other.peer_entity_id
-    }
-}
-
-impl Eq for LogoutCompleted {}
-
 impl LogoutCompleted {
-    /// Create a completed logout marker.
-    pub fn new(peer_entity_id: EntityId) -> Self {
+    pub(crate) fn new(response: LogoutResponse, relay_state: RelayStateParam) -> Self {
         Self {
-            peer_entity_id,
-            response: None,
-            relay_state: RelayStateParam::Absent,
+            response,
+            relay_state,
         }
     }
 
-    /// Create a completed logout marker from a validated LogoutResponse.
-    pub fn from_response(peer_entity_id: EntityId, response: LogoutResponse) -> Self {
-        Self {
-            peer_entity_id,
-            response: Some(response),
-            relay_state: RelayStateParam::Absent,
-        }
-    }
-
-    pub(crate) fn with_relay_state(mut self, relay_state: RelayStateParam) -> Self {
-        self.relay_state = relay_state;
-        self
-    }
-
-    /// Peer entity ID involved in the completed logout.
+    /// Peer entity ID from the completed logout response's issuer.
     pub fn peer_entity_id(&self) -> &EntityId {
-        &self.peer_entity_id
+        self.response.issuer()
     }
 
-    /// Validated LogoutResponse, when this completion came from a front-channel response.
-    pub fn response(&self) -> Option<&LogoutResponse> {
-        self.response.as_ref()
+    /// LogoutResponse received by the completed exchange.
+    pub fn response(&self) -> &LogoutResponse {
+        &self.response
     }
 
     /// RelayState received with the LogoutResponse.
     ///
     /// When the request carried RelayState, this is the same value. When it
     /// carried none, this is whatever the responder supplied, which the caller
-    /// interprets by prior agreement. [`Self::new`] and [`Self::from_response`]
-    /// report [`RelayStateParam::Absent`].
+    /// interprets by prior agreement.
     pub fn relay_state(&self) -> &RelayStateParam {
         &self.relay_state
     }
 
-    /// Top-level SAML status URI of the completed logout response.
-    ///
-    /// [`LogoutResponse::status`] also carries a subordinate code such as
-    /// `PartialLogout`.
-    pub fn status(&self) -> Option<&str> {
-        self.response
-            .as_ref()
-            .map(|response| response.status().top_level().as_uri())
-    }
-
     /// Underlying raw compatibility flow result for the LogoutResponse.
-    pub fn raw_flow(&self) -> Option<&FlowResult> {
-        self.response.as_ref().map(LogoutResponse::raw_flow)
+    pub fn raw_flow(&self) -> &FlowResult {
+        self.response.raw_flow()
     }
 }

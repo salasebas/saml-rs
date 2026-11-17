@@ -86,10 +86,8 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
     let (sp_descriptor, idp_descriptor) = descriptor_pair(&service_provider, &identity_provider)?;
     let started = service_provider.start_slo(
         &idp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::post(),
     )?;
     let received = identity_provider.receive_slo(
@@ -128,10 +126,8 @@ fn logout_response_uses_response_location_and_request_uses_location(
     )?;
     let started = service_provider.start_slo(
         &idp_for_requests,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::post().signing(LogoutSigning::DoNotSign),
     )?;
     assert_eq!(
@@ -153,10 +149,8 @@ fn logout_response_uses_response_location_and_request_uses_location(
     )?;
     let request = service_provider.start_slo(
         &local_idp,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::post().signing(LogoutSigning::DoNotSign),
     )?;
     let received = identity_provider.receive_slo(
@@ -223,10 +217,8 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
     let (_, idp_descriptor) = descriptor_pair(&service_provider, &identity_provider)?;
     let started = service_provider.start_slo(
         &idp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::post(),
     )?;
     let received = identity_provider.receive_slo(
@@ -366,10 +358,8 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
 
     let started = identity_provider.start_slo(
         &sp_peer,
-        LogoutSubject::with_session_index(
-            NameId::new("alice@example.com", None),
-            SessionIndex::try_new("_session")?,
-        ),
+        LogoutSubject::new(NameId::new("alice@example.com", None))
+            .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::post(),
     )?;
     let request = started.outbound.post_form()?;

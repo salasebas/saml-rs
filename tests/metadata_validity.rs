@@ -396,7 +396,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
     let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
     let name_id = NameId::new("alice", Some(NameIdFormat::EmailAddress));
     let subject =
-        LogoutSubject::with_session_index(name_id.clone(), SessionIndex::try_new("_session")?);
+        LogoutSubject::new(name_id.clone()).with_session_index(SessionIndex::try_new("_session")?);
     let started = sp.start_slo(&current_idp, subject.clone(), StartSlo::redirect())?;
     let logout = idp.receive_slo(
         &current_sp,

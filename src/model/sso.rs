@@ -341,14 +341,13 @@ impl SsoSession {
             .authn_sessions
             .iter()
             .filter_map(AuthnSession::session_index)
-            .cloned()
-            .collect();
-        Some(LogoutSubject::new(self.name_id().clone(), session_indexes))
+            .cloned();
+        Some(LogoutSubject::new(self.name_id().clone()).with_session_indexes(session_indexes))
     }
 
     /// Replay keys available from this validated SSO session.
     pub fn replay_keys(&self) -> Vec<ReplayKey> {
-        let mut keys = vec![ReplayKey::ResponseId(self.response_id.clone())];
+        let mut keys = vec![ReplayKey::SsoResponse(self.response_id.clone())];
         let mut ids = crate::assertion_acceptance::assertion_ids(&self.raw_flow.saml_content)
             .unwrap_or_default();
         if !ids.iter().any(|id| id == self.assertion_id.as_str()) {
@@ -356,7 +355,7 @@ impl SsoSession {
         }
         for id in ids {
             if let Ok(id) = AssertionId::try_new(id) {
-                keys.push(ReplayKey::AssertionId(id));
+                keys.push(ReplayKey::Assertion(id));
             }
         }
         keys
@@ -407,11 +406,11 @@ impl SsoSession {
                     not_on_or_after_skew_ms,
                 )?)?;
                 cache.check_and_store(
-                    ReplayKey::ResponseId(self.response_id.clone()),
+                    ReplayKey::SsoResponse(self.response_id.clone()),
                     response_expires,
                 )?;
                 cache.check_and_store(
-                    ReplayKey::AssertionId(self.assertion_id.clone()),
+                    ReplayKey::Assertion(self.assertion_id.clone()),
                     assertion_expires,
                 )?;
                 for replay in replays {
@@ -427,7 +426,7 @@ impl SsoSession {
                         None => assertion_expires,
                     };
                     cache.check_and_store(
-                        ReplayKey::AssertionId(AssertionId::try_new(replay.id)?),
+                        ReplayKey::Assertion(AssertionId::try_new(replay.id)?),
                         expires_at,
                     )?;
                 }

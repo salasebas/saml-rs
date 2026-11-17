@@ -326,10 +326,8 @@ fn descriptors(
 }
 
 fn subject() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::with_session_index(
-        NameId::new("alice@example.com", None),
-        SessionIndex::try_new("_session123")?,
-    ))
+    Ok(LogoutSubject::new(NameId::new("alice@example.com", None))
+        .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
 fn validation() -> SamlValidationContext<'static> {
@@ -1020,7 +1018,7 @@ fn typed_slo_logout_request_session_index_follows_subject() -> Result<(), Box<dy
 
     let without_session = sp.start_slo(
         &idp_descriptor,
-        LogoutSubject::from_name_id(NameId::new("alice@example.com", None)),
+        LogoutSubject::new(NameId::new("alice@example.com", None)),
         StartSlo::post(),
     )?;
     let without_session_xml = outbound_xml(&without_session.outbound, "SAMLRequest")?;
@@ -1185,10 +1183,10 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
     assert_eq!(completed.peer_entity_id().as_str(), IDP_ENTITY_ID);
     assert_eq!(completed.relay_state(), exchange.pending.relay_state());
     assert_eq!(
-        completed.status(),
-        Some(saml_rs::constants::status_code::SUCCESS)
+        completed.response().status().top_level().as_uri(),
+        saml_rs::constants::status_code::SUCCESS
     );
-    let response = completed.response().ok_or("missing logout response")?;
+    let response = completed.response();
     assert_eq!(response.status(), &Status::success());
     assert_eq!(response.in_response_to(), Some(exchange.pending.id()));
     assert_eq!(
@@ -1196,11 +1194,7 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
         response.issue_instant().as_str().trim()
     );
     assert!(response.issue_instant().as_str().ends_with('Z'));
-    assert!(!completed
-        .raw_flow()
-        .ok_or("missing raw flow")?
-        .saml_content
-        .is_empty());
+    assert!(!completed.raw_flow().saml_content.is_empty());
     assert_eq!(exchange.received.message().id(), exchange.pending.id());
     assert_eq!(exchange.sp_descriptor.entity_id().as_str(), SP_ENTITY_ID);
     assert_eq!(
@@ -1213,6 +1207,34 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
         Some(IDP_ENTITY_ID)
     );
     Ok(())
+}
+
+#[test]
+fn typed_facade_finish_slo_rejects_a_signed_response_from_a_foreign_issuer(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
+    let foreign_issuer = "https://foreign.example.com/metadata";
+    let xml = logout_response_xml(
+        "_foreign_issuer_response",
+        foreign_issuer,
+        started.pending.id().as_str(),
+        Some(SP_SLO_POST),
+    );
+    let input = signed_logout_response_input(&xml, LogoutBinding::Post)?;
+
+    match sp.finish_slo(&idp_descriptor, &started.pending, input, validation()) {
+        Err(SamlError::IssuerMismatch { expected, actual }) => {
+            assert_eq!(expected, IDP_ENTITY_ID);
+            assert_eq!(actual.as_deref(), Some(foreign_issuer));
+            Ok(())
+        }
+        Err(error) => {
+            Err(format!("expected foreign response issuer rejection, got {error}").into())
+        }
+        Ok(_) => Err("accepted a signed logout response from a foreign issuer".into()),
+    }
 }
 
 #[test]
@@ -1360,7 +1382,7 @@ fn explicit_clock_skew_replaces_logout_request_five_minute_default(
     let within = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T11:59:01Z"));
     let beyond = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T11:59:00Z"));
     let now = system_time("2026-07-15T12:00:00Z")?;
-    let skew = ClockSkew::strict().with_not_on_or_after_millis(60_000);
+    let skew = ClockSkew::from_millis(0, 60_000);
 
     receive_custom_logout_request(
         &within,
@@ -1553,7 +1575,7 @@ fn typed_facade_receive_slo_uses_not_on_or_after_deadline_without_generic_retent
         system_time("2026-07-15T12:00:00Z")?,
         ReplayPolicy::RequireCache(&mut cache),
     )
-    .with_clock_skew(ClockSkew::strict().with_not_on_or_after_millis(30_000));
+    .with_clock_skew(ClockSkew::from_millis(0, 30_000));
 
     let received = receive_custom_logout_request(
         &template,
@@ -1600,7 +1622,7 @@ fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
             SystemTime::UNIX_EPOCH
                 + Duration::from_secs(cache_clock.load(std::sync::atomic::Ordering::SeqCst))
         }));
-    let skew = ClockSkew::strict().with_not_on_or_after_millis(30_000);
+    let skew = ClockSkew::from_millis(0, 30_000);
 
     let received = idp.receive_slo(
         &sp_descriptor,
@@ -1750,11 +1772,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         BrowserInput::<LogoutResponse>::post(response_fields.clone()),
         validation_with_cache(&mut response_cache),
     )?;
-    let response_id = completed
-        .response()
-        .ok_or("missing logout response")?
-        .id()
-        .as_str();
+    let response_id = completed.response().id().as_str();
     let response_key = format!("logout_response_id:{response_id}");
     assert!(response_cache.seen.contains_key(&response_key));
     match sp.finish_slo(
@@ -1786,7 +1804,7 @@ fn typed_facade_finish_slo_checks_logout_response_replay() -> Result<(), Box<dyn
         BrowserInput::<LogoutResponse>::post(exchange.response_fields.clone()),
         validation_with_cache(&mut cache),
     )?;
-    let response = completed.response().ok_or("missing logout response")?;
+    let response = completed.response();
     let replay_key = format!("logout_response_id:{}", response.id().as_str());
     assert!(cache.seen.contains_key(&replay_key));
 
@@ -1818,10 +1836,7 @@ fn typed_facades_accept_matching_logout_response_destination_for_all_bindings(
                 validation(),
             )?;
             assert_eq!(
-                completed
-                    .response()
-                    .and_then(LogoutResponse::destination)
-                    .map(|url| url.as_str()),
+                completed.response().destination().map(|url| url.as_str()),
                 Some(endpoint)
             );
         }
@@ -1933,10 +1948,7 @@ fn typed_facades_allow_unsigned_logout_response_without_destination_in_compatibi
                 ResponseProtection::UnsignedCompatibility,
                 validation(),
             )?;
-            assert_eq!(
-                completed.response().and_then(LogoutResponse::destination),
-                None
-            );
+            assert_eq!(completed.response().destination(), None);
         }
     }
     Ok(())
@@ -1989,9 +2001,7 @@ fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error
 
     assert_eq!(completed.peer_entity_id().as_str(), SP_ENTITY_ID);
     assert_eq!(
-        completed
-            .response()
-            .and_then(LogoutResponse::in_response_to),
+        completed.response().in_response_to(),
         Some(started.pending.id())
     );
     Ok(())
@@ -2360,10 +2370,8 @@ fn typed_session_authority_custom_logout_template_escapes_subject_values(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let name_id = "alice<&\"'@example.com";
     let session_index = "session<&\"'index";
-    let subject = LogoutSubject::with_session_index(
-        NameId::new(name_id, None),
-        SessionIndex::try_new(session_index)?,
-    );
+    let subject = LogoutSubject::new(NameId::new(name_id, None))
+        .with_session_index(SessionIndex::try_new(session_index)?);
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(idp_config_with_issuance(
         Duration::from_secs(7 * 60),
@@ -2692,10 +2700,7 @@ fn typed_facade_finish_slo_accepts_another_front_channel_response_binding(
                     )
                 })?;
             assert_eq!(
-                completed
-                    .response()
-                    .and_then(LogoutResponse::destination)
-                    .map(|url| url.as_str()),
+                completed.response().destination().map(|url| url.as_str()),
                 Some(sp_slo_endpoint(response_binding)?)
             );
         }
@@ -2877,16 +2882,10 @@ fn typed_facade_finish_slo_returns_partial_logout_under_success(
     )?;
 
     assert_eq!(
-        completed.status(),
-        Some(saml_rs::constants::status_code::SUCCESS)
+        completed.response().status().top_level().as_uri(),
+        saml_rs::constants::status_code::SUCCESS
     );
-    assert_eq!(
-        completed
-            .response()
-            .ok_or("missing logout response")?
-            .status(),
-        &partial_logout
-    );
+    assert_eq!(completed.response().status(), &partial_logout);
     Ok(())
 }
 
@@ -3526,13 +3525,12 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
         Some(SP_ENTITY_ID.to_string()),
         Some("alice-at-sp".to_string()),
     );
-    let subject = LogoutSubject::new(
-        name_id.clone(),
-        vec![
-            SessionIndex::try_new("_session-one")?,
+    let subject = LogoutSubject::new(name_id.clone())
+        .with_session_index(SessionIndex::try_new("_session-one")?)
+        .with_session_indexes(vec![
             SessionIndex::try_new("_session-two")?,
-        ],
-    );
+            SessionIndex::try_new("_session-three")?,
+        ]);
 
     let from_participant = sp.start_slo(&idp_descriptor, subject.clone(), StartSlo::post())?;
     let received_by_authority = idp.receive_slo(
@@ -3548,7 +3546,7 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
             .iter()
             .map(SessionIndex::as_str)
             .collect::<Vec<_>>(),
-        vec!["_session-one", "_session-two"]
+        vec!["_session-one", "_session-two", "_session-three"]
     );
 
     let from_authority = idp.start_slo(&sp_descriptor, subject, StartSlo::post())?;
@@ -3565,7 +3563,7 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
             .iter()
             .map(SessionIndex::as_str)
             .collect::<Vec<_>>(),
-        vec!["_session-one", "_session-two"]
+        vec!["_session-one", "_session-two", "_session-three"]
     );
     Ok(())
 }
@@ -3629,16 +3627,14 @@ const QUALIFIED_LOGOUT_REQUEST_TEMPLATE: &str = r#"
 "#;
 
 fn qualified_subject() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::with_session_index(
-        NameId::with_qualifiers(
-            QUALIFIED_NAME_ID,
-            Some(NameIdFormat::Persistent),
-            Some(QUALIFIED_NAME_QUALIFIER.to_string()),
-            Some(QUALIFIED_SP_NAME_QUALIFIER.to_string()),
-            Some(QUALIFIED_SP_PROVIDED_ID.to_string()),
-        ),
-        SessionIndex::try_new("_session123")?,
+    Ok(LogoutSubject::new(NameId::with_qualifiers(
+        QUALIFIED_NAME_ID,
+        Some(NameIdFormat::Persistent),
+        Some(QUALIFIED_NAME_QUALIFIER.to_string()),
+        Some(QUALIFIED_SP_NAME_QUALIFIER.to_string()),
+        Some(QUALIFIED_SP_PROVIDED_ID.to_string()),
     ))
+    .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
 fn qualified_name_id_attrs() -> Vec<(String, String)> {
@@ -3753,13 +3749,11 @@ fn typed_session_authority_logout_request_without_subject_format_sends_configure
 }
 
 fn custom_format_subject(format: &str) -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::with_session_index(
-        NameId::new(
-            "alice@example.com",
-            Some(NameIdFormat::Custom(format.to_string())),
-        ),
-        SessionIndex::try_new("_session123")?,
+    Ok(LogoutSubject::new(NameId::new(
+        "alice@example.com",
+        Some(NameIdFormat::Custom(format.to_string())),
     ))
+    .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
 #[test]
@@ -3938,10 +3932,11 @@ fn typed_slo_logout_request_template_renders_name_id_qualifiers(
 
     let started = idp.start_slo(
         &sp_descriptor,
-        LogoutSubject::with_session_index(
-            NameId::new(QUALIFIED_NAME_ID, Some(NameIdFormat::Persistent)),
-            SessionIndex::try_new("_session123")?,
-        ),
+        LogoutSubject::new(NameId::new(
+            QUALIFIED_NAME_ID,
+            Some(NameIdFormat::Persistent),
+        ))
+        .with_session_index(SessionIndex::try_new("_session123")?),
         StartSlo::post(),
     )?;
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
@@ -4102,10 +4097,10 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
         validation(),
     )?;
     assert_eq!(
-        completed.status(),
-        Some(saml_rs::constants::status_code::SUCCESS)
+        completed.response().status().top_level().as_uri(),
+        saml_rs::constants::status_code::SUCCESS
     );
-    let response = completed.response().ok_or("missing logout response")?;
+    let response = completed.response();
     assert_eq!(response.in_response_to(), Some(pending.id()));
     Ok(())
 }
@@ -4154,8 +4149,8 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
     )?;
     assert_eq!(completed.peer_entity_id().as_str(), SP_ENTITY_ID);
     assert_eq!(
-        completed.status(),
-        Some(saml_rs::constants::status_code::SUCCESS)
+        completed.response().status().top_level().as_uri(),
+        saml_rs::constants::status_code::SUCCESS
     );
     Ok(())
 }
@@ -4292,7 +4287,7 @@ fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn st
     let (sp, idp) = facades()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
-    let without_session_index = LogoutSubject::new(NameId::new("alice@example.com", None), vec![]);
+    let without_session_index = LogoutSubject::new(NameId::new("alice@example.com", None));
     let cases = [
         (subject()?, StartSlo::soap().relay_state(relay_state)),
         (

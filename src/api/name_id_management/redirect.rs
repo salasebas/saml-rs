@@ -115,7 +115,7 @@ impl Saml<Sp> {
     /// receiving `ManageNameIDService`, this service provider publishes no
     /// HTTP-Redirect `ManageNameIDService` or several without
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
-    /// malformed, an enabled [`crate::ManageNameIdRequestAgePolicy`] rejects
+    /// malformed, an enabled [`crate::RequestAgePolicy`] rejects
     /// `IssueInstant`, or replay validation detects a duplicate. Returns
     /// [`SamlError::ProtocolProfile`] when a refused request would be answered
     /// at an `http` endpoint and
@@ -269,7 +269,7 @@ impl Saml<Idp> {
     /// Returns the errors documented on
     /// [`Saml::<Sp>::receive_name_id_management_redirect`], with the service
     /// provider as the peer, including when an enabled
-    /// [`crate::ManageNameIdRequestAgePolicy`] rejects `IssueInstant`.
+    /// [`crate::RequestAgePolicy`] rejects `IssueInstant`.
     ///
     /// # Examples
     ///
@@ -461,7 +461,7 @@ fn receive(
     ensure_entity_id(&request.issuer, peer.entity_id)?;
     validation.check_manage_name_id_request_issue_instant(&request.issue_instant)?;
     validation
-        .check_and_store_message_replay(ReplayKey::ManageNameIdRequestId(request.id.clone()))?;
+        .check_and_store_message_replay(ReplayKey::ManageNameIdRequest(request.id.clone()))?;
     let id = request.id.clone();
     match request.decrypt(&flow, local.setting) {
         ParsedRequest::Plain(message) => Ok(ReceivedNameIdManagement::Request(Box::new(
@@ -579,7 +579,7 @@ fn finish(
             clock_drifts: validation.clock_skew().as_millis(),
         },
     )?;
-    validation.check_and_store_message_replay(ReplayKey::ManageNameIdResponseId(
+    validation.check_and_store_message_replay(ReplayKey::ManageNameIdResponse(
         response_id_from_flow(&flow, local.setting.xml_limits)?,
     ))?;
     Ok(relay_state)

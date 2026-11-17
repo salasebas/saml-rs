@@ -51,6 +51,5 @@ pub use subject::{
     Subject, SubjectConfirmation,
 };
 pub use validation::{
-    AuthnRequestAgePolicy, ClockSkew, ManageNameIdRequestAgePolicy, ReplayCache, ReplayKey,
-    ReplayPolicy, SamlValidationContext,
+    ClockSkew, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy, SamlValidationContext,
 };

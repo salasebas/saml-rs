@@ -49,7 +49,7 @@ impl Saml<Idp> {
     /// does not match the receiving `SingleSignOnService` location for the
     /// binding, the receiving URL is unpublished, multiple local endpoints
     /// have no explicit receiving URL,
-    /// an enabled [`crate::AuthnRequestAgePolicy`]
+    /// an enabled [`crate::RequestAgePolicy`]
     /// rejects `IssueInstant`, or replay validation detects a duplicate or
     /// expired request.
     ///
@@ -119,7 +119,7 @@ impl Saml<Idp> {
         }
         let mut validation = validation;
         validation.check_authn_request_issue_instant(authn.issue_instant())?;
-        validation.check_and_store_message_replay(ReplayKey::AuthnRequestId(authn.id().clone()))?;
+        validation.check_and_store_message_replay(ReplayKey::AuthnRequest(authn.id().clone()))?;
         Ok(Received::new(authn).with_relay_state(relay_state))
     }
 

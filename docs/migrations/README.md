@@ -13,7 +13,7 @@ compatible additions.
 - [How to upgrade from 0.5 to 0.6](0.5-to-0.6.md)
 - [How to upgrade from 0.6 to 0.7](0.6-to-0.7.md)
 - [How to upgrade from 0.7 to 0.8](0.7-to-0.8.md)
-- [How to upgrade from 0.8 to 0.9](0.8-to-0.9/README.md), including [metadata API changes](0.8-to-0.9/metadata-api.md)
+- [How to upgrade from 0.8 to 0.9](0.8-to-0.9/README.md), including [metadata API changes](0.8-to-0.9/metadata-api.md) and [logout, validation, and replay changes](0.8-to-0.9/logout-validation-replay.md)
 
 Someone shipping a breaking change adds the next guide from
 [Contributing](../../CONTRIBUTING.md#how-to-add-a-migration-guide).
