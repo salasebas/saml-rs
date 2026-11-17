@@ -332,14 +332,23 @@ fn typed_models_outbound_redirect_rejects_marker_url_field_mismatch(
 }
 
 #[test]
-fn typed_models_outbound_redirect_rejects_duplicate_message_field(
+fn typed_models_outbound_redirect_rejects_a_missing_or_duplicate_message_field(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut context = binding_context(Binding::Redirect)?;
-    context.context = "https://idp.example.com/sso?SAMLRequest=abc&SAMLRequest=def".to_string();
+    let mut duplicate = binding_context(Binding::Redirect)?;
+    duplicate.context = "https://idp.example.com/sso?SAMLRequest=abc&SAMLRequest=def".to_string();
+    let mut missing = binding_context(Binding::Redirect)?;
+    missing.context = "https://idp.example.com/sso?RelayState=relay".to_string();
 
     assert!(matches!(
-        Outbound::<LogoutRequest>::try_from(context),
+        Outbound::<LogoutRequest>::try_from(duplicate),
         Err(SamlError::DuplicateBindingParameter {
+            name: "SAMLRequest",
+            ..
+        })
+    ));
+    assert!(matches!(
+        Outbound::<LogoutRequest>::try_from(missing),
+        Err(SamlError::MissingBindingParameter {
             name: "SAMLRequest",
             ..
         })
@@ -378,6 +387,20 @@ fn typed_models_slo_outbound_accepts_logout_bindings() -> Result<(), Box<dyn std
 
         assert_eq!(request.raw_context().binding, binding);
         assert_eq!(response.raw_context().binding, binding);
+        assert!(
+            matches!(
+                request.soap_request(),
+                Err(SamlError::OutboundBindingMismatch { actual, .. }) if actual == binding
+            ),
+            "{binding:?}"
+        );
+        assert!(
+            matches!(
+                response.soap_response(),
+                Err(SamlError::OutboundBindingMismatch { actual, .. }) if actual == binding
+            ),
+            "{binding:?}"
+        );
     }
     Ok(())
 }
