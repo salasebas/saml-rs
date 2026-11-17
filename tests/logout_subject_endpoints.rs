@@ -103,7 +103,9 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     match identity_provider.respond_slo(&other, &received, RespondSlo::post()) {
-        Err(SamlError::IssuerMismatch { expected, actual }) => {
+        Err(SamlError::IssuerMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, SP_ENTITY_ID);
             assert_eq!(actual.as_deref(), Some(OTHER_SP_ENTITY_ID));
         }
@@ -302,7 +304,9 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
         validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO)?),
     );
     match rejected {
-        Err(SamlError::DestinationMismatch { expected, actual }) => {
+        Err(SamlError::DestinationMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, IDP_SLO);
             assert_eq!(
                 actual.as_deref(),

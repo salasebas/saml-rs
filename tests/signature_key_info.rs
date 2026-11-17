@@ -135,7 +135,8 @@ fn authn_request_signed_by_a_key_outside_metadata_is_rejected_with_or_without_ke
             matches!(
                 rejected,
                 Err(SamlError::SignatureVerification {
-                    reason: SignatureVerificationReason::XmlSignature
+                    reason: SignatureVerificationReason::XmlSignature,
+                    ..
                 })
             ),
             "{rejected:?}"

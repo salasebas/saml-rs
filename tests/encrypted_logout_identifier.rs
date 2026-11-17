@@ -186,9 +186,9 @@ fn start_options(binding: LogoutBinding) -> Result<StartSlo, SamlError> {
         LogoutBinding::SimpleSign => StartSlo::simple_sign(),
         LogoutBinding::Soap => StartSlo::soap(),
         binding => {
-            return Err(SamlError::UnsupportedBinding {
-                binding: binding.as_binding(),
-            })
+            return Err(SamlError::Invalid(format!(
+                "test helper has no {binding:?} case"
+            )))
         }
     })
 }
@@ -200,9 +200,9 @@ fn respond_options(binding: LogoutBinding) -> Result<RespondSlo, SamlError> {
         LogoutBinding::SimpleSign => RespondSlo::simple_sign(),
         LogoutBinding::Soap => RespondSlo::soap(),
         binding => {
-            return Err(SamlError::UnsupportedBinding {
-                binding: binding.as_binding(),
-            })
+            return Err(SamlError::Invalid(format!(
+                "test helper has no {binding:?} case"
+            )))
         }
     })
 }
@@ -235,9 +235,9 @@ fn request_input(
             BrowserInput::<LogoutRequest>::soap(outbound.soap_request()?.envelope())
         }
         binding => {
-            return Err(SamlError::UnsupportedBinding {
-                binding: binding.as_binding(),
-            })
+            return Err(SamlError::Invalid(format!(
+                "test helper has no {binding:?} case"
+            )))
         }
     })
 }
@@ -258,9 +258,9 @@ fn response_input(
             BrowserInput::<LogoutResponse>::soap(outbound.soap_response()?.envelope())
         }
         binding => {
-            return Err(SamlError::UnsupportedBinding {
-                binding: binding.as_binding(),
-            })
+            return Err(SamlError::Invalid(format!(
+                "test helper has no {binding:?} case"
+            )))
         }
     })
 }
@@ -488,7 +488,7 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
             response_input(&response, binding)?,
             validation(),
         ) {
-            Err(SamlError::StatusNotSuccess { status }) => {
+            Err(SamlError::StatusNotSuccess { status, .. }) => {
                 assert_eq!(
                     status.top_level().as_uri(),
                     status_code::REQUESTER,

@@ -360,7 +360,9 @@ fn a_response_is_not_sent_to_an_unpublished_request_acs() -> Result<(), Box<dyn 
     );
     let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
     match idp.respond_sso(&sp_descriptor, &request, subject(), RespondSso::post()) {
-        Err(SamlError::DestinationMismatch { expected, actual }) => {
+        Err(SamlError::DestinationMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, unpublished);
             assert_eq!(actual.as_deref(), Some(DEFAULT_ACS));
         }
@@ -392,7 +394,9 @@ fn sso_destination_matches_the_actual_published_receiving_endpoint(
         validation().with_recipient_endpoint(EndpointUrl::try_new(IDP_SSO_FIRST)?),
     );
     match rejected {
-        Err(SamlError::DestinationMismatch { expected, actual }) => {
+        Err(SamlError::DestinationMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, IDP_SSO_FIRST);
             assert_eq!(
                 actual.as_deref(),

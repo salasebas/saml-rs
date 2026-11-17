@@ -199,7 +199,11 @@ impl fmt::Display for ResourceLimit {
 /// [`std::error::Error::source`]. Its type is not part of the API.
 ///
 /// This enum is `#[non_exhaustive]`; downstream callers should include a
-/// fallback arm when matching.
+/// fallback arm when matching. Each variant with named fields is
+/// `#[non_exhaustive]` too, so a pattern on it ends with `..` and a field can
+/// be added later. [`Self::ReplayDetected`] and
+/// [`Self::ReplayCacheUnavailable`] stay constructible, because a
+/// [`crate::ReplayCache`] implementation returns them.
 ///
 /// # Examples
 ///
@@ -210,7 +214,7 @@ impl fmt::Display for ResourceLimit {
 ///     match error {
 ///         SamlError::LimitExceeded { .. } => 413,
 ///         SamlError::ReplayCacheUnavailable { .. } => 503,
-///         SamlError::StatusNotSuccess { status }
+///         SamlError::StatusNotSuccess { status, .. }
 ///             if status.top_level() == TopLevelStatusCode::Responder =>
 ///         {
 ///             502
@@ -226,18 +230,21 @@ pub enum SamlError {
     // Wire / XML errors.
     /// Raw DEFLATE data could not be compressed or inflated.
     #[error("deflate error")]
+    #[non_exhaustive]
     Deflate {
         /// Compression library error.
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// Base64 decoding failed.
     #[error("base64 decode error")]
+    #[non_exhaustive]
     Base64 {
         /// Decoder error.
         source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// Input exceeded a resource limit.
     #[error("{limit} limit exceeded (maximum {maximum})")]
+    #[non_exhaustive]
     LimitExceeded {
         /// Limit that stopped reading.
         limit: ResourceLimit,
@@ -246,6 +253,7 @@ pub enum SamlError {
     },
     /// Malformed or unexpected XML.
     #[error("xml error: {message}")]
+    #[non_exhaustive]
     Xml {
         /// What could not be read.
         message: String,
@@ -261,12 +269,14 @@ pub enum SamlError {
     ProtocolProfile(String),
     /// A binding parameter or form field occurs more than once.
     #[error("binding parameter occurs more than once: {name}")]
+    #[non_exhaustive]
     DuplicateBindingParameter {
         /// Binding parameter name.
         name: &'static str,
     },
     /// Required binding parameter is absent.
     #[error("required binding parameter missing: {name}")]
+    #[non_exhaustive]
     MissingBindingParameter {
         /// Binding parameter name.
         name: &'static str,
@@ -278,6 +288,7 @@ pub enum SamlError {
     Unsupported(String),
     /// The called operation does not handle this binding.
     #[error("unsupported binding: {binding:?}")]
+    #[non_exhaustive]
     UnsupportedBinding {
         /// Binding that reached the operation.
         binding: Binding,
@@ -285,6 +296,7 @@ pub enum SamlError {
     /// An [`crate::Outbound`] accessor was called for a binding the message
     /// does not use.
     #[error("outbound message uses binding {actual:?}, not the one this accessor reads")]
+    #[non_exhaustive]
     OutboundBindingMismatch {
         /// Binding of the outbound message.
         actual: Binding,
@@ -293,6 +305,7 @@ pub enum SamlError {
     // SAML protocol validation.
     /// Issuer in the message does not match the expected peer entity ID.
     #[error("issuer mismatch: expected {expected}, got {actual:?}")]
+    #[non_exhaustive]
     IssuerMismatch {
         /// Expected peer entity ID.
         expected: String,
@@ -301,6 +314,7 @@ pub enum SamlError {
     },
     /// Response `Destination` does not match the expected recipient URL.
     #[error("destination mismatch: expected {expected}, got {actual:?}")]
+    #[non_exhaustive]
     DestinationMismatch {
         /// Expected recipient URL.
         expected: String,
@@ -319,6 +333,7 @@ pub enum SamlError {
     RecipientEndpointAmbiguous,
     /// `InResponseTo` does not match the expected request ID.
     #[error("inResponseTo mismatch: expected {expected:?}, got {actual:?}")]
+    #[non_exhaustive]
     InResponseToMismatch {
         /// Expected request ID. `None` means no request correlation was expected.
         expected: Option<String>,
@@ -327,6 +342,7 @@ pub enum SamlError {
     },
     /// RelayState does not match the pending message correlation state.
     #[error("relay state mismatch")]
+    #[non_exhaustive]
     RelayStateMismatch {
         /// Expected RelayState presence and value.
         expected: RelayStateParam,
@@ -335,12 +351,14 @@ pub enum SamlError {
     },
     /// `<Audience>` does not include the expected Service Provider entity ID.
     #[error("audience restriction not satisfied: expected {expected}")]
+    #[non_exhaustive]
     AudienceMismatch {
         /// Expected SP entity ID.
         expected: String,
     },
     /// A `<Conditions>` child is not one this service provider can evaluate.
     #[error("assertion condition is not understood: {element}")]
+    #[non_exhaustive]
     UnrecognizedCondition {
         /// Local name of the unrecognized condition element.
         element: String,
@@ -372,18 +390,21 @@ pub enum SamlError {
         status.top_level().as_uri(),
         status.subordinate().map(SubordinateStatusCode::as_uri)
     )]
+    #[non_exhaustive]
     StatusNotSuccess {
         /// Top-level and subordinate status codes.
         status: Status,
     },
     /// A SAML message, assertion, session, or replay time bound is not satisfied.
     #[error("SAML time window is invalid for {field}")]
+    #[non_exhaustive]
     TimeWindowInvalid {
         /// SAML field or validation scope whose time window failed.
         field: TimeWindowField,
     },
     /// Bearer subject confirmation requirements are not satisfied.
     #[error("subject confirmation is not satisfied: {reason}")]
+    #[non_exhaustive]
     SubjectConfirmationInvalid {
         /// Stable validation reason for callers and logs.
         reason: SubjectConfirmationReason,
@@ -416,12 +437,14 @@ pub enum SamlError {
     AuthnRequestSigningRequired,
     /// Signature verification failed for a semantic SAML validation reason.
     #[error("signature verification failed: {reason}")]
+    #[non_exhaustive]
     SignatureVerification {
         /// Stable verification reason for callers and logs.
         reason: SignatureVerificationReason,
     },
     /// Signed reference could not be resolved safely.
     #[error("signed reference could not be resolved: {reason}")]
+    #[non_exhaustive]
     ReferenceResolution {
         /// Stable reference-resolution reason for callers and logs.
         reason: ReferenceResolutionReason,
@@ -435,6 +458,7 @@ pub enum SamlError {
     /// The selected `XmlEncryptionPolicy` requires this assertion element in
     /// encrypted form, and the message carries it in plaintext.
     #[error("{element} must be encrypted")]
+    #[non_exhaustive]
     EncryptionRequired {
         /// Local name of the plaintext element: `Assertion`, `NameID`, or
         /// `Attribute`.
@@ -469,6 +493,7 @@ pub enum SamlError {
     MissingKey(String),
     /// A delegated cryptographic operation failed.
     #[error("crypto error: {message}")]
+    #[non_exhaustive]
     Crypto {
         /// What failed.
         message: String,

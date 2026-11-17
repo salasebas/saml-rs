@@ -211,9 +211,10 @@ fn describe(error: &SamlError) -> &'static str {
         // Before: SamlError::FailedToVerifySignature
         SamlError::SignatureVerification {
             reason: SignatureVerificationReason::XmlSignature,
+            ..
         } => "untrusted XML signature",
         // Before: SamlError::MissingSigAlg
-        SamlError::MissingBindingParameter { name: "SigAlg" } => "missing SigAlg",
+        SamlError::MissingBindingParameter { name: "SigAlg", .. } => "missing SigAlg",
         _ => "other",
     }
 }

@@ -106,7 +106,11 @@ fn response_request(binding: Binding, ctx: &BindingContext) -> Result<HttpReques
         Binding::Post => HttpRequest::post(vec![("SAMLResponse".into(), ctx.context.clone())]),
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::SimpleSign => simplesign_request("SAMLResponse", ctx)?,
-        binding => return Err(SamlError::UnsupportedBinding { binding }),
+        binding => {
+            return Err(SamlError::Invalid(format!(
+                "test helper has no {binding:?} case"
+            )))
+        }
     })
 }
 
@@ -269,6 +273,7 @@ fn assert_failed_message_signature(
     match result {
         Err(SamlError::SignatureVerification {
             reason: SignatureVerificationReason::DetachedMessageSignature,
+            ..
         }) => Ok(()),
         other => {
             Err(format!("expected detached signature verification failure, got {other:?}").into())
@@ -462,7 +467,9 @@ fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
     *relay_state = "relay-actual".to_string();
 
     match idp.parse_login_request(&sp, Binding::Redirect, &request) {
-        Err(SamlError::RelayStateMismatch { expected, actual }) => {
+        Err(SamlError::RelayStateMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected.as_deref(), Some("relay-expected"));
             assert_eq!(actual.as_deref(), Some("relay-actual"));
             Ok(())
@@ -516,6 +523,7 @@ fn flow_conformance_login_response_undefined_binding() -> Result<(), Box<dyn std
     match idp.create_login_response(&sp, Binding::Artifact, &User::new("a@e.com"), &opts("_r")) {
         Err(SamlError::UnsupportedBinding {
             binding: Binding::Artifact,
+            ..
         }) => Ok(()),
         other => Err(format!("expected UnsupportedBinding(Artifact), got {other:?}").into()),
     }
@@ -644,6 +652,7 @@ fn flow_conformance_logout_response_undefined_binding() -> Result<(), Box<dyn st
     ) {
         Err(SamlError::UnsupportedBinding {
             binding: Binding::Artifact,
+            ..
         }) => Ok(()),
         other => Err(format!("expected UnsupportedBinding(Artifact), got {other:?}").into()),
     }
@@ -910,6 +919,7 @@ fn signed_response_without_destination_is_rejected(
         Err(SamlError::DestinationMismatch {
             expected,
             actual: None,
+            ..
         }) if expected == "https://sp/acs" => Ok(()),
         other => Err(format!("expected missing Destination error, got {other:?}").into()),
     }
@@ -1276,7 +1286,7 @@ fn logout_request_to_http(
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
         Binding::SimpleSign => simplesign_request("SAMLRequest", ctx)?,
-        binding => return Err(SamlError::UnsupportedBinding { binding }.into()),
+        binding => return Err(format!("test helper has no {binding:?} case").into()),
     })
 }
 
@@ -1288,7 +1298,7 @@ fn logout_response_to_http(
         Binding::Redirect => redirect_request(&ctx.context)?,
         Binding::Post => HttpRequest::post(vec![("SAMLResponse".into(), ctx.context.clone())]),
         Binding::SimpleSign => simplesign_request("SAMLResponse", ctx)?,
-        binding => return Err(SamlError::UnsupportedBinding { binding }.into()),
+        binding => return Err(format!("test helper has no {binding:?} case").into()),
     })
 }
 

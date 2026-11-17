@@ -1003,7 +1003,8 @@ fn protocol_binding_naming_http_artifact_is_not_received() -> Result<(), Box<dyn
             validation(),
         ),
         Err(SamlError::UnsupportedBinding {
-            binding: saml_rs::constants::Binding::Artifact
+            binding: saml_rs::constants::Binding::Artifact,
+            ..
         })
     ));
     Ok(())

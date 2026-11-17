@@ -128,7 +128,8 @@ fn is_valid_until_error<T>(result: &Result<T, SamlError>) -> bool {
     matches!(
         result,
         Err(SamlError::TimeWindowInvalid {
-            field: TimeWindowField::MetadataValidUntil
+            field: TimeWindowField::MetadataValidUntil,
+            ..
         })
     )
 }
@@ -572,7 +573,8 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                         matches!(
                             result,
                             Err(SamlError::UnsupportedBinding {
-                                binding: Binding::Post
+                                binding: Binding::Post,
+                                ..
                             })
                         ),
                         "{operation}: {result:?}"

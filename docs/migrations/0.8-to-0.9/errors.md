@@ -17,6 +17,7 @@ gone.
 | `UndefinedBinding`, `UndefinedStatus` | Removed or renamed | [Replace the binding and status variants](#replace-the-binding-and-status-variants) |
 | `Xml(message)`, `Crypto(message)` | Struct variants with a source | [Read the cause](#read-the-cause-from-source) |
 | `Base64(error)`, `Deflate(error)`, or `?` on a `base64::DecodeError` or `std::io::Error` | Opaque sources, no `From` | [Convert the errors yourself](#convert-base64-and-io-errors-yourself) |
+| A pattern that lists every field of a `SamlError` variant, or code that builds a variant such as `SamlError::IssuerMismatch { .. }` | Variants with fields are non-exhaustive | [End field patterns with `..`](#end-field-patterns-with-) |
 | `saml_rs::error::SignatureVerificationReason` and the other reason enums | Also exported at the crate root | [Import the reason enums](#import-the-reason-enums-from-the-crate-root) |
 
 ## Read the status from `StatusNotSuccess`
@@ -42,7 +43,7 @@ use saml_rs::{SamlError, SubordinateStatusCode, TopLevelStatusCode};
 fn authentication_failed(error: &SamlError) -> bool {
 	matches!(
 		error,
-		SamlError::StatusNotSuccess { status }
+		SamlError::StatusNotSuccess { status, .. }
 			if status.top_level() == TopLevelStatusCode::Responder
 				&& status.subordinate().map(SubordinateStatusCode::as_uri)
 					== Some(saml_rs::constants::status_code::AUTH_FAILED)
@@ -226,6 +227,7 @@ fn redirect_location(outbound: &Outbound<AuthnRequest>) -> Result<&str, String> 
 		Ok(url) => Ok(url),
 		Err(SamlError::OutboundBindingMismatch {
 			actual: Binding::Post,
+			..
 		}) => Err("this request is an HTTP-POST form; render post_form() instead".into()),
 		Err(error) => Err(error.to_string()),
 	}
@@ -291,6 +293,39 @@ fn decode(field: &str) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Syn
 	Ok(STANDARD.decode(field)?)
 }
 ```
+
+## End field patterns with `..`
+
+Every `SamlError` variant with named fields is `#[non_exhaustive]`, except
+`ReplayDetected` and `ReplayCacheUnavailable`. A later release can add a field
+to such a variant without breaking you. Outside `saml-rs`, a pattern on one of
+these variants ends with `..`, and code cannot build one.
+
+Before the upgrade, a pattern could list every field:
+
+```rust,ignore
+SamlError::IssuerMismatch { expected, actual } => log_issuer(expected, actual),
+```
+
+After the upgrade:
+
+```rust
+use saml_rs::SamlError;
+
+fn issuer(error: &SamlError) -> Option<(&str, Option<&str>)> {
+	match error {
+		SamlError::IssuerMismatch {
+			expected, actual, ..
+		} => Some((expected, actual.as_deref())),
+		_ => None,
+	}
+}
+```
+
+A test that built one of these variants as a fake error builds its own error
+type instead. A `ReplayCache` implementation still returns
+`SamlError::ReplayDetected { key }` and
+`SamlError::ReplayCacheUnavailable { source }` directly.
 
 ## Import the reason enums from the crate root
 

@@ -303,7 +303,7 @@ fn a_service_provider_error_status_is_returned_to_the_caller() -> TestResult {
 
     assert!(matches!(
         result,
-        Err(SamlError::StatusNotSuccess { status })
+        Err(SamlError::StatusNotSuccess { status, .. })
             if status.top_level().as_uri() == REQUESTER && status.subordinate().map(saml_rs::SubordinateStatusCode::as_uri) == Some(UNKNOWN_PRINCIPAL)
     ));
     Ok(())
@@ -790,7 +790,8 @@ fn a_bounded_request_age_rejects_an_old_request_before_replay_storage() -> TestR
             assert!(matches!(
                 received,
                 Err(SamlError::TimeWindowInvalid {
-                    field: TimeWindowField::ManageNameIdRequestIssueInstant
+                    field: TimeWindowField::ManageNameIdRequestIssueInstant,
+                    ..
                 })
             ));
         }

@@ -39,9 +39,9 @@ fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, Saml
         SsoResponseBinding::Post => SsoResponseBinding::SimpleSign,
         SsoResponseBinding::SimpleSign | SsoResponseBinding::Artifact => SsoResponseBinding::Post,
         binding => {
-            return Err(SamlError::UnsupportedBinding {
-                binding: binding.as_binding(),
-            })
+            return Err(SamlError::Invalid(format!(
+                "test helper has no {binding:?} case"
+            )))
         }
     })
 }
@@ -176,7 +176,9 @@ fn a_response_to_another_consumer_than_the_supplied_one_is_rejected(
     for binding in BINDINGS {
         match accept(binding, ACS_A, at(ACS_B)?) {
             Err(error) => match error.downcast_ref::<SamlError>() {
-                Some(SamlError::DestinationMismatch { expected, actual }) => {
+                Some(SamlError::DestinationMismatch {
+                    expected, actual, ..
+                }) => {
                     assert_eq!(expected, ACS_B, "{binding:?}");
                     assert_eq!(actual.as_deref(), Some(ACS_A), "{binding:?}");
                 }

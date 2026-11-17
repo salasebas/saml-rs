@@ -14,7 +14,7 @@ fn assert_limit(result: Result<String, SamlError>, limit: ResourceLimit, maximum
     assert!(
         matches!(
             &result,
-            Err(SamlError::LimitExceeded { limit: actual, maximum: actual_maximum })
+            Err(SamlError::LimitExceeded { limit: actual, maximum: actual_maximum, .. })
                 if *actual == limit && *actual_maximum == maximum
         ),
         "expected {limit} limit of {maximum}, got {result:?}"

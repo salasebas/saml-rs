@@ -30,7 +30,8 @@ fn typed_bindings_sso_request_binding_rejects_artifact() {
     assert!(matches!(
         SsoRequestBinding::try_from(Binding::Artifact),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact
+            binding: Binding::Artifact,
+            ..
         })
     ));
 }
@@ -59,7 +60,8 @@ fn typed_bindings_sso_response_binding_rejects_redirect() {
     assert!(matches!(
         SsoResponseBinding::try_from(Binding::Redirect),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect
+            binding: Binding::Redirect,
+            ..
         })
     ));
 }
@@ -84,7 +86,8 @@ fn typed_bindings_logout_binding_rejects_artifact() {
     assert!(matches!(
         LogoutBinding::try_from(Binding::Artifact),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact
+            binding: Binding::Artifact,
+            ..
         })
     ));
 }
@@ -125,7 +128,8 @@ fn typed_bindings_redirect_acs_endpoint_narrowing_fails() {
     assert!(matches!(
         AcsEndpoint::try_from_raw(raw),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect
+            binding: Binding::Redirect,
+            ..
         })
     ));
 }
@@ -164,7 +168,8 @@ fn typed_bindings_sso_endpoint_rejects_artifact_until_artifact_is_supported() {
     assert!(matches!(
         SsoEndpoint::try_from_raw(raw),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact
+            binding: Binding::Artifact,
+            ..
         })
     ));
 }
@@ -176,7 +181,8 @@ fn typed_bindings_slo_endpoint_rejects_artifact_until_artifact_is_supported() {
     assert!(matches!(
         SloEndpoint::try_from_raw(raw),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact
+            binding: Binding::Artifact,
+            ..
         })
     ));
 }
@@ -407,7 +413,8 @@ fn typed_bindings_pending_snapshot_validates_expected_binding() {
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect
+            binding: Binding::Redirect,
+            ..
         })
     ));
 }
@@ -443,7 +450,8 @@ fn typed_bindings_pending_snapshot_validates_acs_binding() {
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect
+            binding: Binding::Redirect,
+            ..
         })
     ));
 }

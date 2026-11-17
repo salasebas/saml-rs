@@ -80,7 +80,11 @@ fn binding_context(binding: Binding) -> Result<BindingContext, SamlError> {
             Binding::Post | Binding::SimpleSign => "PHNhbWxwOkF1dGhuUmVxdWVzdC8+".to_string(),
             Binding::Artifact => "artifact".to_string(),
             Binding::Soap => "<samlp:LogoutRequest/>".to_string(),
-            binding => return Err(SamlError::UnsupportedBinding { binding }),
+            binding => {
+                return Err(SamlError::Invalid(format!(
+                    "test helper has no {binding:?} case"
+                )))
+            }
         },
         relay_state: Some("relay".to_string()),
         entity_endpoint: "https://idp.example.com/sso".to_string(),
@@ -99,7 +103,11 @@ fn response_binding_context(binding: Binding) -> Result<BindingContext, SamlErro
             Binding::Post | Binding::SimpleSign => "PHNhbWxwOlJlc3BvbnNlLz4=".to_string(),
             Binding::Artifact => "artifact".to_string(),
             Binding::Soap => "<samlp:LogoutRequest/>".to_string(),
-            binding => return Err(SamlError::UnsupportedBinding { binding }),
+            binding => {
+                return Err(SamlError::Invalid(format!(
+                    "test helper has no {binding:?} case"
+                )))
+            }
         },
         relay_state: Some("relay".to_string()),
         entity_endpoint: "https://sp.example.com/acs".to_string(),
@@ -153,7 +161,8 @@ fn typed_models_redirect_outbound_exposes_only_redirect_url(
     assert!(matches!(
         outbound.post_form(),
         Err(SamlError::OutboundBindingMismatch {
-            actual: Binding::Redirect
+            actual: Binding::Redirect,
+            ..
         })
     ));
     assert_eq!(
@@ -176,7 +185,8 @@ fn typed_models_post_outbound_exposes_post_form() -> Result<(), Box<dyn std::err
     assert!(matches!(
         outbound.redirect_url(),
         Err(SamlError::OutboundBindingMismatch {
-            actual: Binding::Post
+            actual: Binding::Post,
+            ..
         })
     ));
     Ok(())
@@ -232,7 +242,8 @@ fn typed_models_artifact_outbound_is_rejected() -> Result<(), Box<dyn std::error
     assert!(matches!(
         result,
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact
+            binding: Binding::Artifact,
+            ..
         })
     ));
     Ok(())
@@ -245,7 +256,8 @@ fn typed_models_sso_response_outbound_rejects_redirect() -> Result<(), Box<dyn s
     assert!(matches!(
         result,
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect
+            binding: Binding::Redirect,
+            ..
         })
     ));
     Ok(())
@@ -328,7 +340,8 @@ fn typed_models_outbound_redirect_rejects_duplicate_message_field(
     assert!(matches!(
         Outbound::<LogoutRequest>::try_from(context),
         Err(SamlError::DuplicateBindingParameter {
-            name: "SAMLRequest"
+            name: "SAMLRequest",
+            ..
         })
     ));
     Ok(())
@@ -415,7 +428,8 @@ fn typed_models_sso_response_browser_input_rejects_redirect() {
     assert!(matches!(
         result,
         Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect
+            binding: Binding::Redirect,
+            ..
         })
     ));
 }
@@ -475,7 +489,7 @@ fn typed_models_redirect_browser_input_rejects_duplicate_signed_fields() {
         assert!(
             matches!(
                 result,
-                Err(SamlError::DuplicateBindingParameter { name: duplicate }) if duplicate == name
+                Err(SamlError::DuplicateBindingParameter { name: duplicate, .. }) if duplicate == name
             ),
             "expected duplicate {name} to fail, got {result:?}"
         );
@@ -489,7 +503,8 @@ fn typed_models_redirect_browser_input_rejects_missing_or_both_message_fields() 
             "RelayState=relay&SigAlg=alg&Signature=sig",
         )),
         Some(SamlError::MissingBindingParameter {
-            name: "SAMLRequest"
+            name: "SAMLRequest",
+            ..
         })
     ));
     assert_browser_input_invalid(BrowserInput::<AuthnRequest>::redirect(
@@ -571,7 +586,8 @@ fn typed_models_post_browser_input_rejects_missing_duplicate_or_both_message_fie
             "relay",
         )])),
         Some(SamlError::MissingBindingParameter {
-            name: "SAMLRequest"
+            name: "SAMLRequest",
+            ..
         })
     ));
     assert!(matches!(
@@ -580,7 +596,8 @@ fn typed_models_post_browser_input_rejects_missing_duplicate_or_both_message_fie
             FormField::new("SAMLRequest", "def"),
         ])),
         Some(SamlError::DuplicateBindingParameter {
-            name: "SAMLRequest"
+            name: "SAMLRequest",
+            ..
         })
     ));
     assert_browser_input_invalid(BrowserInput::<AuthnRequest>::post(vec![
@@ -671,7 +688,8 @@ fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_messa
             FormField::new("Signature", "sig"),
         ])),
         Some(SamlError::MissingBindingParameter {
-            name: "SAMLRequest"
+            name: "SAMLRequest",
+            ..
         })
     ));
     assert!(matches!(
@@ -682,7 +700,8 @@ fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_messa
             FormField::new("Signature", "sig"),
         ])),
         Some(SamlError::DuplicateBindingParameter {
-            name: "SAMLRequest"
+            name: "SAMLRequest",
+            ..
         })
     ));
     assert_browser_input_invalid(BrowserInput::<AuthnRequest>::simple_sign(vec![
@@ -1909,7 +1928,8 @@ fn typed_models_soap_authn_request_input_is_not_a_raw_http_request() {
     assert!(matches!(
         browser_input_error(input),
         Some(SamlError::UnsupportedBinding {
-            binding: Binding::Soap
+            binding: Binding::Soap,
+            ..
         })
     ));
 }
