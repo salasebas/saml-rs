@@ -38,8 +38,11 @@ pub(crate) use sign::SigningCredential;
 #[cfg(crypto)]
 pub use sign::*;
 #[cfg(crypto)]
+pub use verify::MetadataSignatureVerification;
+#[cfg(crypto)]
+#[allow(deprecated)]
 pub use verify::{
     verify_metadata_signature, verify_metadata_signature_detailed,
     verify_metadata_signature_detailed_with_limits, verify_metadata_signature_with_limits,
-    verify_signature, verify_signature_with_limits, MetadataSignatureVerification,
+    verify_signature, verify_signature_with_limits,
 };

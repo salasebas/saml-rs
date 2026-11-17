@@ -739,6 +739,7 @@ mod tests {
 }
 
 #[cfg(all(test, crypto))]
+#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 mod crypto_tests {
     use super::*;
     use crate::binding::decode_base64;
