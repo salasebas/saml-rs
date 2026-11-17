@@ -273,16 +273,22 @@ fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn try_generate_idp_metadata_rejects_missing_sso() {
-    let cfg = IdpMetadataConfig {
+fn metadata_is_not_generated_without_the_role_endpoint_the_schema_requires() {
+    let sp = generate_sp_metadata(&SpMetadataConfig {
+        entity_id: "https://sp.example.com/metadata".into(),
+        ..Default::default()
+    });
+    let idp = generate_idp_metadata(&IdpMetadataConfig {
         entity_id: "https://idp.example.com/metadata".into(),
         ..Default::default()
-    };
-
-    let result = try_generate_idp_metadata(&cfg);
+    });
 
     assert!(matches!(
-        result,
+        sp,
+        Err(SamlError::MissingMetadata(name)) if name == "AssertionConsumerService"
+    ));
+    assert!(matches!(
+        idp,
         Err(SamlError::MissingMetadata(name)) if name == "SingleSignOnService"
     ));
 }
@@ -392,7 +398,7 @@ fn idp_metadata_escapes_endpoint_location_attribute_markup() -> TestResult {
         ..Default::default()
     };
 
-    let xml = try_generate_idp_metadata(&cfg)?;
+    let xml = generate_idp_metadata(&cfg)?;
     let parsed = IdpMetadata::from_xml(&xml)?;
 
     assert!(!xml.contains("<SingleLogoutService"));

@@ -20,7 +20,7 @@ use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
 use saml_rs::entity::iso8601_offset;
 use saml_rs::metadata::{
-    generate_idp_metadata, generate_sp_metadata, IdpMetadataConfig, SpMetadataConfig,
+    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataConfig, SpMetadataConfig,
 };
 use saml_rs::raw::{Binding, LoginRequestOptions, LoginResponseOptions, User};
 use saml_rs::template::replace_tags_by_value;
@@ -1179,20 +1179,20 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for format in INVALID_FORMATS {
         let custom = NameIdFormat::Custom(format.into());
-        expect_name_id_format_error(Saml::sp(
+        expect_name_id_format_error(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
                 .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
                 .credentials(signing_credentials())
                 .name_id_format(custom.clone())
-                .build()?,
-        ))?;
-        expect_name_id_format_error(Saml::idp(
+                .build(),
+        )?;
+        expect_name_id_format_error(
             IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
                 .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
                 .credentials(signing_credentials())
                 .name_id_format(custom)
-                .build()?,
-        ))?;
+                .build(),
+        )?;
 
         // Every advertised format is checked, not only the first.
         let formats = vec![
@@ -1200,14 +1200,12 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
             format.to_string(),
         ];
         expect_name_id_format_error(generate_sp_metadata(&SpMetadataConfig {
-            entity_id: SP_ENTITY_ID.into(),
             name_id_format: formats.clone(),
-            ..SpMetadataConfig::default()
+            ..raw_sp_metadata_config(SP_ENTITY_ID)
         }))?;
         expect_name_id_format_error(generate_idp_metadata(&IdpMetadataConfig {
-            entity_id: IDP_ENTITY_ID.into(),
             name_id_format: formats,
-            ..IdpMetadataConfig::default()
+            ..raw_idp_metadata_config(IDP_ENTITY_ID)
         }))?;
     }
     Ok(())
@@ -1221,25 +1219,32 @@ fn metadata_is_not_generated_for_an_entity_id_that_is_not_a_uri_of_at_most_1024_
         "not a uri".into(),
         format!("https://sp.example.com/{}", "a".repeat(1002)),
     ] {
-        let sp = generate_sp_metadata(&SpMetadataConfig {
-            entity_id: entity_id.clone(),
-            ..SpMetadataConfig::default()
-        });
-        let idp = generate_idp_metadata(&IdpMetadataConfig {
-            entity_id: entity_id.clone(),
-            ..IdpMetadataConfig::default()
-        });
+        let sp = generate_sp_metadata(&raw_sp_metadata_config(&entity_id));
+        let idp = generate_idp_metadata(&raw_idp_metadata_config(&entity_id));
 
         assert!(matches!(sp, Err(SamlError::Invalid(_))), "{entity_id}");
         assert!(matches!(idp, Err(SamlError::Invalid(_))), "{entity_id}");
     }
     let longest = format!("https://sp.example.com/{}", "a".repeat(1001));
-    let sp = generate_sp_metadata(&SpMetadataConfig {
-        entity_id: longest.clone(),
-        ..SpMetadataConfig::default()
-    })?;
+    let sp = generate_sp_metadata(&raw_sp_metadata_config(&longest))?;
     assert!(sp.contains(&format!("entityID=\"{longest}\"")));
     Ok(())
+}
+
+fn raw_sp_metadata_config(entity_id: &str) -> SpMetadataConfig {
+    SpMetadataConfig {
+        entity_id: entity_id.into(),
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, SP_ACS)],
+        ..SpMetadataConfig::default()
+    }
+}
+
+fn raw_idp_metadata_config(entity_id: &str) -> IdpMetadataConfig {
+    IdpMetadataConfig {
+        entity_id: entity_id.into(),
+        single_sign_on_service: vec![Endpoint::new(Binding::Post, IDP_SSO_POST)],
+        ..IdpMetadataConfig::default()
+    }
 }
 
 #[test]

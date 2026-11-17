@@ -3,6 +3,7 @@ use std::time::Duration;
 use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
 use crate::metadata::MetadataLifetime;
+use crate::template::validate_tag_prefixes;
 
 use super::algorithms::{NameIdFormat, SignatureAlgorithm};
 use super::credentials::Credentials;
@@ -216,8 +217,14 @@ impl SpConfigBuilder {
     /// `ManageNameIDService` is set, the organization, contacts, or error URI
     /// are invalid, an additional decryption key has no primary one, the
     /// selected policy needs credentials that are not set, the algorithm
-    /// policy is not supported, or the selected policy requires crypto in a
-    /// build without a crypto provider.
+    /// policy is not supported, the selected policy requires crypto in a
+    /// build without a crypto provider, or the protocol and assertion tag
+    /// prefixes are not two different XML NCNames other than `xml` and
+    /// `xmlns`. Also returns the errors of generating SP metadata from the
+    /// config: a NameID format that is not an absolute URI reference, two ACS
+    /// endpoints with the same index, more ACS endpoints than `unsignedShort`
+    /// indexes, or a `validUntil` outside the years 0001 through 9999.
+    /// [`Saml::sp`](crate::Saml::sp) accepts every config this returns.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         validate_entity_id_syntax(self.entity_id.as_str())?;
         self.metadata.validate()?;
@@ -231,6 +238,7 @@ impl SpConfigBuilder {
             templates: self.templates,
         };
         validate_sp_policy(&config)?;
+        config.to_service_provider()?;
         Ok(config)
     }
 }
@@ -473,8 +481,13 @@ impl IdpConfigBuilder {
     /// `ArtifactResolutionService` endpoints share an index, the organization,
     /// contacts, or error URI are invalid, an additional decryption key has no
     /// primary one, the issuance lifetime is zero or outside the internal
-    /// supported range, the algorithm policy is not supported, or the selected
-    /// policy requires crypto in a build without a crypto provider.
+    /// supported range, the algorithm policy is not supported, the selected
+    /// policy requires crypto in a build without a crypto provider, or the
+    /// protocol and assertion tag prefixes are not two different XML NCNames
+    /// other than `xml` and `xmlns`. Also returns the errors of generating
+    /// IdP metadata from the config: a NameID format that is not an absolute
+    /// URI reference, or a `validUntil` outside the years 0001 through 9999.
+    /// [`Saml::idp`](crate::Saml::idp) accepts every config this returns.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         validate_entity_id_syntax(self.entity_id.as_str())?;
         self.metadata.validate()?;
@@ -489,6 +502,7 @@ impl IdpConfigBuilder {
             templates: self.templates,
         };
         validate_idp_policy(&config)?;
+        config.to_identity_provider()?;
         Ok(config)
     }
 }
@@ -504,6 +518,10 @@ fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
     validate_sp_crypto_support(config)?;
     super::encryption::validate_algorithms(&config.algorithms)?;
     validate_common_credentials(&config.credentials)?;
+    validate_tag_prefixes(
+        &config.templates.tag_prefix_protocol,
+        &config.templates.tag_prefix_assertion,
+    )?;
     if matches!(
         config.validation.authn_requests,
         AuthnRequestSigningPolicy::Sign
@@ -519,7 +537,11 @@ fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
 fn validate_idp_policy(config: &IdpConfig) -> Result<(), SamlError> {
     validate_idp_crypto_support(config)?;
     super::encryption::validate_algorithms(&config.algorithms)?;
-    validate_common_credentials(&config.credentials)
+    validate_common_credentials(&config.credentials)?;
+    validate_tag_prefixes(
+        &config.templates.tag_prefix_protocol,
+        &config.templates.tag_prefix_assertion,
+    )
 }
 
 fn validated_idp_issuance_lifetime(

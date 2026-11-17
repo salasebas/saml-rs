@@ -8,7 +8,7 @@ use crate::entity::{
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest};
-use crate::metadata::{try_generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
+use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataConfig};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
     NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
@@ -144,7 +144,7 @@ impl IdentityProvider {
         config: &IdpMetadataConfig,
         setting: EntitySetting,
     ) -> Result<Self, SamlError> {
-        let metadata_xml = try_generate_idp_metadata(config)?;
+        let metadata_xml = generate_idp_metadata(config)?;
         Self::from_metadata(&metadata_xml, setting)
     }
 

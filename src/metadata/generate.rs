@@ -67,7 +67,7 @@ pub struct SpMetadataConfig {
     pub name_id_format: Vec<String>,
     /// `SingleLogoutService` endpoints.
     pub single_logout_service: Vec<Endpoint>,
-    /// `AssertionConsumerService` endpoints.
+    /// `AssertionConsumerService` endpoints (required by SAML).
     pub assertion_consumer_service: Vec<Endpoint>,
     /// `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<Endpoint>,
@@ -339,6 +339,8 @@ fn insert_manage_name_id_service(order: &mut Vec<String>) {
 ///
 /// # Errors
 ///
+/// Returns [`SamlError::MissingMetadata`] when the config has no
+/// `AssertionConsumerService` endpoint.
 /// Returns [`SamlError::Invalid`] when the `entityID` is not an absolute URI
 /// reference of at most 1024 characters, when a `<NameIDFormat>` it writes is
 /// not an absolute URI reference, when two `AssertionConsumerService`
@@ -347,6 +349,11 @@ fn insert_manage_name_id_service(order: &mut Vec<String>) {
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
 pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError> {
+    if cfg.assertion_consumer_service.is_empty() {
+        return Err(SamlError::MissingMetadata(
+            "AssertionConsumerService".to_string(),
+        ));
+    }
     validate_entity_id_syntax(&cfg.entity_id)?;
     validate_description(
         cfg.organization.as_ref(),
@@ -389,12 +396,19 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
 ///
 /// # Errors
 ///
+/// Returns [`SamlError::MissingMetadata`] when the config has no
+/// `SingleSignOnService` endpoint.
 /// Returns [`SamlError::Invalid`] when the `entityID` is not an absolute URI
 /// reference of at most 1024 characters, or when a `<NameIDFormat>` it writes
 /// is not an absolute URI reference. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
 pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
+    if cfg.single_sign_on_service.is_empty() {
+        return Err(SamlError::MissingMetadata(
+            "SingleSignOnService".to_string(),
+        ));
+    }
     validate_entity_id_syntax(&cfg.entity_id)?;
     validate_description(
         cfg.organization.as_ref(),
@@ -456,22 +470,6 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlErro
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
     w.end("EntityDescriptor");
     Ok(w.finish())
-}
-
-/// Generate IdP metadata XML, validating required config-driven metadata first.
-///
-/// # Errors
-///
-/// Returns [`SamlError::MissingMetadata`] when the config does not include at
-/// least one `SingleSignOnService` endpoint, and the errors of
-/// [`generate_idp_metadata`].
-pub fn try_generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
-    if cfg.single_sign_on_service.is_empty() {
-        return Err(SamlError::MissingMetadata(
-            "SingleSignOnService".to_string(),
-        ));
-    }
-    generate_idp_metadata(cfg)
 }
 
 #[cfg(test)]

@@ -152,7 +152,8 @@ impl ServiceProvider {
     ///
     /// # Errors
     ///
-    /// Returns an error if `config.entity_id` is not an absolute URI reference
+    /// Returns an error if `config` has no `AssertionConsumerService`
+    /// endpoint, if `config.entity_id` is not an absolute URI reference
     /// of at most 1024 characters with collapsed whitespace, if a configured
     /// `<NameIDFormat>` is not an absolute URI
     /// reference, if two `AssertionConsumerService` endpoints set the same

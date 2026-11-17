@@ -10,12 +10,12 @@ use saml_rs::{
     EntityId, IdpConfig, IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy,
     LogoutSignaturePolicy, MaskGenerationFunction, NameIdCreationPolicy, PrivateKeyPem,
     ResponseSignaturePolicy, SamlError, SignatureAlgorithm, SpConfig, SpValidationPolicy,
-    SsoEndpoint, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
+    SsoEndpoint, TemplatePolicy, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
 
 use saml_rs::raw::EntitySetting;
 #[cfg(crypto)]
-use saml_rs::{TemplatePolicy, XmlEncryptionPolicy};
+use saml_rs::XmlEncryptionPolicy;
 
 #[test]
 fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
@@ -467,6 +467,46 @@ fn idp_builder_rejects_missing_sso() -> Result<(), Box<dyn std::error::Error>> {
     let result = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?).build();
 
     assert_missing_metadata(result, "SingleSignOnService");
+    Ok(())
+}
+
+#[test]
+fn sp_builder_rejects_two_acs_endpoints_with_the_same_index(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let result = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.with_index(1))
+        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs-2")?.with_index(1))
+        .validation(SpValidationPolicy::compatibility())
+        .build();
+
+    assert!(matches!(
+        result,
+        Err(SamlError::Invalid(message)) if message == "duplicate AssertionConsumerService index 1"
+    ));
+    Ok(())
+}
+
+#[test]
+fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let templates = TemplatePolicy {
+        tag_prefix_protocol: "saml:p".into(),
+        ..TemplatePolicy::default()
+    };
+    let sp = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
+        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+        .validation(SpValidationPolicy::compatibility())
+        .templates(templates.clone())
+        .build();
+    let idp = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
+        .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+        .validation(IdpValidationPolicy::compatibility())
+        .templates(templates)
+        .build();
+
+    let expected = "protocol tag prefix must be an XML NCName";
+    assert!(matches!(sp, Err(SamlError::Invalid(message)) if message == expected));
+    assert!(matches!(idp, Err(SamlError::Invalid(message)) if message == expected));
     Ok(())
 }
 

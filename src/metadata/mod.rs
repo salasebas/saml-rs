@@ -15,8 +15,8 @@ mod write;
 pub use crate::crypto::MetadataSignatureVerification;
 pub use description::{ContactPerson, ContactType, LocalizedValue, Organization};
 pub use generate::{
-    generate_idp_metadata, generate_sp_metadata, try_generate_idp_metadata,
-    ArtifactResolutionEndpoint, Endpoint, IdpMetadataConfig, SpMetadataConfig,
+    generate_idp_metadata, generate_sp_metadata, ArtifactResolutionEndpoint, Endpoint,
+    IdpMetadataConfig, SpMetadataConfig,
 };
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
