@@ -5,7 +5,7 @@ lists the behaviour whose file name does not give it away.
 
 | Behaviour | File |
 | --- | --- |
-| Decode, verify, extract, and validate a received message for every typed receive | `src/flow.rs` |
+| Shared processing of a received browser message: decode, verify, extract, and validate | `src/flow.rs` |
 | Detached HTTP-Redirect and SimpleSign signature checks | `src/flow/detached.rs` |
 | Checks on a login `Response` with an error status, before its status is reported | `src/flow/error_response.rs` |
 | `Issuer` of a login `Response` | `src/flow/response_issuer.rs` |

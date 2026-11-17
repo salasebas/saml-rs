@@ -34,10 +34,11 @@ work in the repo, not restate the README.
 - If a user has local changes, preserve them and work around them.
 - Keep non-mechanical diffs reviewable. If a change grows large, split it into
   the smallest coherent stages.
-- Code, rustdoc, and tests describe current behaviour. A doc in `docs/` that
-  disagrees with them is stale: fix it in the same change or report it. A
-  rule, design choice, or conformance row without a stated reason is an open
-  question: report it instead of following or defending it.
+- Code, rustdoc, and tests describe current behaviour. A doc that claims to
+  describe current behaviour and disagrees with them is stale: fix it in the
+  same change or report it. Migration guides describe past releases.
+- Report a rule or design choice without a stated reason as an open question
+  instead of following or defending it.
 - API design, naming, error, and review rules are in `CODING_STANDARDS.md`.
 
 ## Standards Conformance

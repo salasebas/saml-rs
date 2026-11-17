@@ -30,8 +30,8 @@ A rule for one actor does not create a rule for another. A producer `MUST`,
 `MUST NOT`, or `SHOULD` does not make a receiver reject the other forms. A
 receiver rejects only when a schema, a processing rule, a binding, a profile,
 or a conformance requirement makes the input invalid or tells the receiver to
-reject it. A conditional rule is mandatory whenever its condition holds: an
-optional `Destination` is still compared when it is present.
+reject it. When a rule's condition holds, apply the rule at its stated level: a
+receiver still compares an optional `Destination` when it is present.
 
 ## Implement the level
 
@@ -40,7 +40,8 @@ optional `Destination` is still compared when it is present.
   rejection fails closed with an explicit `SamlError`.
 - **Recommended** (`SHOULD`, `RECOMMENDED`, and their negations): on by
   default. A deviation is an explicit, narrowly named option that says what it
-  allows.
+  allows, and its rustdoc states the interoperability or security
+  consequence.
 - **Optional** (`MAY`, `OPTIONAL`): an intentional API, option, or feature.
   Naming a capability in the specification does not mean the crate implements
   it.

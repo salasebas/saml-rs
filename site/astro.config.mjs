@@ -20,6 +20,12 @@ function docLinks() {
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://samlrs.vercel.app',
+	redirects: {
+		'/reference/conformance/xml-signature-processing':
+			'/reference/conformance/xml-security-algorithms/#reference-and-coverage-processing',
+		'/reference/conformance/extended-and-authority-modes':
+			'/reference/conformance/idp-sp-operational-modes/#extended-authority-and-requester-modes',
+	},
 	integrations: [
 		conformancePages(),
 		starlight({
