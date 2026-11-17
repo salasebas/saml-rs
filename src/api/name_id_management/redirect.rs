@@ -186,7 +186,7 @@ impl Saml<Sp> {
         let sp = self.raw_service_provider();
         Local {
             setting: &sp.setting,
-            metadata: &sp.metadata,
+            metadata: sp.metadata.as_metadata(),
             requester: Requester::ServiceProvider,
         }
     }
@@ -360,7 +360,7 @@ impl Saml<Idp> {
         let idp = self.raw_identity_provider();
         Local {
             setting: &idp.setting,
-            metadata: &idp.metadata,
+            metadata: idp.metadata.as_metadata(),
             requester: Requester::IdentityProvider,
         }
     }
@@ -378,7 +378,7 @@ impl Local<'_> {
         self.setting
             .entity_id
             .clone()
-            .or_else(|| self.metadata.get_entity_id().map(str::to_string))
+            .or_else(|| self.metadata.entity_id().map(str::to_string))
             .ok_or_else(|| Error::MissingMetadata("entityID".into()))
     }
 }

@@ -16,7 +16,7 @@ impl SpConfig {
     pub(crate) fn entity_setting(&self) -> EntitySetting {
         let mut setting = common_setting(
             self.entity_id(),
-            self.metadata().name_id_format(),
+            self.metadata().name_id_formats(),
             self.credentials(),
             self.algorithms(),
             self.xml(),
@@ -43,7 +43,7 @@ impl IdpConfig {
     pub(crate) fn entity_setting(&self) -> EntitySetting {
         let mut setting = common_setting(
             self.entity_id(),
-            self.metadata().name_id_format(),
+            self.metadata().name_id_formats(),
             self.credentials(),
             self.algorithms(),
             self.xml(),

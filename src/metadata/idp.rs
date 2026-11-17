@@ -5,7 +5,6 @@ use crate::constants::{Binding, SOAP_BINDING_URN};
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::{ExtractorField, XmlLimits};
-use std::ops::Deref;
 
 /// One `ArtifactResolutionService` endpoint read from IdP metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,13 +36,18 @@ impl ArtifactResolutionServiceEndpoint {
     }
 }
 
-/// Parsed IdP metadata. Derefs to [`Metadata`] for the shared accessors.
+/// Parsed IdP metadata. Use [`Self::as_metadata`] for role-scoped shared fields.
 #[derive(Debug, Clone)]
 pub struct IdpMetadata {
     inner: Metadata,
 }
 
 impl IdpMetadata {
+    /// Borrow shared metadata fields selected from this SAML 2.0 role.
+    pub fn as_metadata(&self) -> &Metadata {
+        &self.inner
+    }
+
     /// Parse IdP metadata XML.
     ///
     /// Keys, flags, and endpoints are read from the entity's `IDPSSODescriptor`
@@ -148,14 +152,14 @@ impl IdpMetadata {
     /// `WantAuthnRequestsSigned` flag.
     ///
     /// `true` and `1` are true. An absent attribute or another value is false.
-    pub fn is_want_authn_requests_signed(&self) -> bool {
+    pub fn want_authn_requests_signed(&self) -> bool {
         crate::xml::xs_boolean(self.inner.meta.get_str("wantAuthnRequestsSigned")) == Some(true)
     }
 
     /// First non-empty `SingleSignOnService` `Location` for `binding`.
     ///
     /// AuthnRequests are sent to this URL.
-    pub fn get_single_sign_on_service(&self, binding: Binding) -> Option<String> {
+    pub fn single_sign_on_location(&self, binding: Binding) -> Option<String> {
         super::first_published_location(
             self.inner.meta.get("singleSignOnService"),
             binding,
@@ -229,11 +233,4 @@ fn required_artifact_attribute(value: &Value, name: &str) -> Result<String, Saml
         .filter(|text| !text.is_empty())
         .map(str::to_string)
         .ok_or_else(|| SamlError::Invalid(format!("ArtifactResolutionService is missing {name}")))
-}
-
-impl Deref for IdpMetadata {
-    type Target = Metadata;
-    fn deref(&self) -> &Metadata {
-        &self.inner
-    }
 }

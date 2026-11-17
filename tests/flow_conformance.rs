@@ -20,7 +20,7 @@ use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{
     create_logout_request, create_logout_response, parse_logout_request, parse_logout_response,
 };
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::template::replace_tags_by_value;
@@ -39,8 +39,8 @@ fn signing() -> EntitySetting {
     setting
 }
 
-fn idp_config(want_authn_signed: bool) -> IdpMetadataConfig {
-    IdpMetadataConfig {
+fn idp_config(want_authn_signed: bool) -> IdpMetadataInput {
+    IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec![CERT.into()],
         want_authn_requests_signed: want_authn_signed,
@@ -58,8 +58,8 @@ fn idp_config(want_authn_signed: bool) -> IdpMetadataConfig {
     }
 }
 
-fn sp_config(authn_signed: bool, want_assertions_signed: bool, enc: bool) -> SpMetadataConfig {
-    SpMetadataConfig {
+fn sp_config(authn_signed: bool, want_assertions_signed: bool, enc: bool) -> SpMetadataInput {
+    SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         authn_requests_signed: authn_signed,
         want_assertions_signed,
@@ -578,8 +578,8 @@ fn logout_request(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(false, false);
     let ctx = create_logout_request(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         binding,
         &User::new("a@e.com"),
         None,
@@ -602,7 +602,7 @@ fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::erro
     // IdP target exposes a single SLO binding.
     let idp = idp(false);
     let sp = ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -612,8 +612,8 @@ fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::erro
     )?;
     let ctx = create_logout_request(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Redirect,
         &User::new("a@e.com"),
         None,
@@ -631,8 +631,8 @@ fn flow_conformance_logout_response_undefined_binding() -> Result<(), Box<dyn st
     let sp = sp(false, false);
     match create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Artifact,
         Some("_r"),
         None,
@@ -650,8 +650,8 @@ fn logout_response(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         binding,
         Some("_r"),
         None,
@@ -1248,15 +1248,15 @@ fn logout_request_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn std
     sp.setting.want_logout_request_signed = signed;
     let ctx = create_logout_request(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         binding,
         &User::new("a@e.com"),
         None,
         signed,
     )?;
     let request = logout_request_to_http(binding, &ctx)?;
-    let parsed = parse_logout_request(&sp.setting, &idp.metadata, binding, &request)?;
+    let parsed = parse_logout_request(&sp.setting, idp.metadata.as_metadata(), binding, &request)?;
     assert_eq!(
         parsed.extract.get_str("issuer"),
         Some("https://idp.example.com/metadata")
@@ -1351,8 +1351,8 @@ fn flow_conformance_signed_simplesign_logout_request_returns_detached_signature_
     let sp = sp(false, false);
     let ctx = create_logout_request(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::SimpleSign,
         &User::new("a@e.com"),
         None,
@@ -1373,15 +1373,20 @@ fn flow_conformance_signed_simplesign_logout_request_parses_when_required(
     sp.setting.want_logout_request_signed = true;
     let ctx = create_logout_request(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::SimpleSign,
         &User::new("a@e.com"),
         None,
         true,
     )?;
     let request = logout_request_to_http(Binding::SimpleSign, &ctx)?;
-    let parsed = parse_logout_request(&sp.setting, &idp.metadata, Binding::SimpleSign, &request)?;
+    let parsed = parse_logout_request(
+        &sp.setting,
+        idp.metadata.as_metadata(),
+        Binding::SimpleSign,
+        &request,
+    )?;
     assert_eq!(
         parsed.extract.get_str("issuer"),
         Some("https://idp.example.com/metadata")
@@ -1397,8 +1402,8 @@ fn flow_conformance_tampered_simplesign_logout_request_body_fails_signature_veri
     sp.setting.want_logout_request_signed = true;
     let ctx = create_logout_request(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::SimpleSign,
         &User::new("a@e.com"),
         None,
@@ -1413,7 +1418,7 @@ fn flow_conformance_tampered_simplesign_logout_request_body_fails_signature_veri
     )?;
     assert_failed_message_signature(parse_logout_request(
         &sp.setting,
-        &idp.metadata,
+        idp.metadata.as_metadata(),
         Binding::SimpleSign,
         &request,
     ))
@@ -1426,8 +1431,8 @@ fn flow_conformance_signed_simplesign_logout_request_with_relay_state_includes_b
     let sp = sp(false, false);
     let ctx = create_logout_request(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::SimpleSign,
         &User::new("a@e.com"),
         Some("relay-123"),
@@ -1453,15 +1458,21 @@ fn logout_response_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn st
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
-        &sp.metadata,
-        &idp.metadata,
+        sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         binding,
         Some("_r"),
         None,
         signed,
     )?;
     let request = logout_response_to_http(binding, &ctx)?;
-    let parsed = parse_logout_response(&idp_recv.setting, &sp.metadata, binding, &request, "_r")?;
+    let parsed = parse_logout_response(
+        &idp_recv.setting,
+        sp.metadata.as_metadata(),
+        binding,
+        &request,
+        "_r",
+    )?;
     assert_eq!(
         parsed.extract.get_str("issuer"),
         Some("https://sp.example.com/metadata")
@@ -1490,8 +1501,8 @@ fn flow_conformance_signed_simplesign_logout_response_returns_detached_signature
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
-        &sp.metadata,
-        &idp.metadata,
+        sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         Binding::SimpleSign,
         Some("_r"),
         None,
@@ -1512,8 +1523,8 @@ fn flow_conformance_signed_simplesign_logout_response_parses_when_required(
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
-        &sp.metadata,
-        &idp_recv.metadata,
+        sp.metadata.as_metadata(),
+        idp_recv.metadata.as_metadata(),
         Binding::SimpleSign,
         Some("_r"),
         None,
@@ -1522,7 +1533,7 @@ fn flow_conformance_signed_simplesign_logout_response_parses_when_required(
     let request = logout_response_to_http(Binding::SimpleSign, &ctx)?;
     let parsed = parse_logout_response(
         &idp_recv.setting,
-        &sp.metadata,
+        sp.metadata.as_metadata(),
         Binding::SimpleSign,
         &request,
         "_r",
@@ -1542,8 +1553,8 @@ fn flow_conformance_tampered_simplesign_logout_response_body_fails_signature_ver
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
-        &sp.metadata,
-        &idp_recv.metadata,
+        sp.metadata.as_metadata(),
+        idp_recv.metadata.as_metadata(),
         Binding::SimpleSign,
         Some("_r"),
         None,
@@ -1558,7 +1569,7 @@ fn flow_conformance_tampered_simplesign_logout_response_body_fails_signature_ver
     )?;
     assert_failed_message_signature(parse_logout_response(
         &idp_recv.setting,
-        &sp.metadata,
+        sp.metadata.as_metadata(),
         Binding::SimpleSign,
         &request,
         "_r",
@@ -1572,8 +1583,8 @@ fn flow_conformance_signed_simplesign_logout_response_with_relay_state_includes_
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
-        &sp.metadata,
-        &idp.metadata,
+        sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         Binding::SimpleSign,
         Some("_r"),
         Some("relay-456"),
@@ -1600,8 +1611,8 @@ fn flow_conformance_signed_logout_response_wrong_request_id_rejected(
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
-        &sp.metadata,
-        &idp_recv.metadata,
+        sp.metadata.as_metadata(),
+        idp_recv.metadata.as_metadata(),
         Binding::Post,
         Some("_wrong"),
         None,
@@ -1612,7 +1623,7 @@ fn flow_conformance_signed_logout_response_wrong_request_id_rejected(
     assert!(matches!(
         parse_logout_response(
             &idp_recv.setting,
-            &sp.metadata,
+            sp.metadata.as_metadata(),
             Binding::Post,
             &request,
             "_r"

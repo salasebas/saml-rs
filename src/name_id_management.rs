@@ -269,6 +269,7 @@ pub(crate) fn start(
     let sp_entity_id = service_provider.entity_id().as_str();
     let destination = service_provider
         .metadata()
+        .as_metadata()
         .manage_name_id_service_locations(Binding::Soap, EndpointDirection::Request)
         .into_iter()
         .next()
@@ -292,7 +293,7 @@ pub(crate) fn start(
         xml,
         identifier_encryption,
         idp.setting,
-        service_provider.metadata(),
+        service_provider.metadata().as_metadata(),
     )?;
     let request = SoapProtocolMessage::request(EndpointUrl::try_new(destination)?, &xml)?;
     Ok(StartedNameIdManagement {

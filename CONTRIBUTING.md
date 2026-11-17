@@ -70,9 +70,12 @@ Historical fixture provenance is recorded in
 ## How to add a migration guide
 
 Add a guide in the same change that forces consumers to change code, runtime
-behaviour, feature flags, or the minimum supported Rust version. Name the file
-after that boundary, such as `docs/migrations/0.2-to-0.3.md`, and cover the
-move from the latest patch of the source minor release.
+behaviour, feature flags, or the minimum supported Rust version. Group new
+guides in a directory named after the version boundary, such as
+`docs/migrations/0.8-to-0.9/`. Put the upgrade overview in `README.md` and use
+focused files such as `metadata-api.md` for detailed changes. Cover the move
+from the latest patch of the source minor release. Existing flat guides can
+stay at their current paths.
 
 In the guide, state what breaks, who must change, and the steps to upgrade.
 Leave compatible features out; the changelog records those. Link the new guide

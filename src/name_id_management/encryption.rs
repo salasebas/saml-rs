@@ -71,12 +71,13 @@ fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String
     use crate::crypto::enc::{encrypt_root_children, MANAGED_NAME_ID, NEW_ID};
 
     let certificate = peer
-        .get_x509_certificate(CertUse::Encryption)
+        .x509_certificates(CertUse::Encryption)
+        .first()
         .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))?;
     encrypt_root_children(
         xml,
         &[MANAGED_NAME_ID, NEW_ID],
-        &certificate,
+        certificate,
         &setting.data_encryption_algorithm,
         crate::crypto::enc::KeyTransport::from_setting(setting),
     )

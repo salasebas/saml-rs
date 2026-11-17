@@ -3,11 +3,11 @@
 pub(crate) mod description;
 mod description_read;
 mod endpoints;
-pub mod generate;
-pub mod idp;
+mod generate;
+mod idp;
 mod lifetime;
 mod role;
-pub mod sp;
+mod sp;
 mod validity;
 mod write;
 
@@ -15,8 +15,7 @@ mod write;
 pub use crate::crypto::MetadataSignatureVerification;
 pub use description::{ContactPerson, ContactType, LocalizedValue, Organization};
 pub use generate::{
-    generate_idp_metadata, generate_sp_metadata, ArtifactResolutionEndpoint, Endpoint,
-    IdpMetadataConfig, SpMetadataConfig,
+    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
 pub use idp::{ArtifactResolutionServiceEndpoint, IdpMetadata};
 pub use lifetime::MetadataLifetime;
@@ -225,7 +224,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Parse `xml`, adding the role-specific `extra` extractor fields.
+    /// Parse entity metadata without selecting an SSO role.
     ///
     /// Rejects documents carrying more than one `<EntityDescriptor>`. A root
     /// `<EntitiesDescriptor>` is accepted when it contains exactly one entity.
@@ -234,8 +233,8 @@ impl Metadata {
     ///
     /// Returns [`SamlError`] when XML parsing, parser resource limits,
     /// extraction, or the single-`EntityDescriptor` check fails.
-    pub fn parse(xml: &str, extra: Vec<ExtractorField>) -> Result<Self, SamlError> {
-        Self::parse_with_limits(xml, extra, XmlLimits::default())
+    pub fn parse(xml: &str) -> Result<Self, SamlError> {
+        Self::parse_with_limits(xml, XmlLimits::default())
     }
 
     /// Parse `xml` with explicit XML parser resource limits.
@@ -248,14 +247,9 @@ impl Metadata {
     ///
     /// Returns [`SamlError`] when XML parsing, parser resource limits,
     /// extraction, or the single-`EntityDescriptor` check fails.
-    pub fn parse_with_limits(
-        xml: &str,
-        extra: Vec<ExtractorField>,
-        limits: XmlLimits,
-    ) -> Result<Self, SamlError> {
+    pub fn parse_with_limits(xml: &str, limits: XmlLimits) -> Result<Self, SamlError> {
         Self::parse_with_policy(
             xml,
-            extra,
             &crate::XmlPolicy {
                 limits,
                 ..crate::XmlPolicy::default()
@@ -269,12 +263,8 @@ impl Metadata {
     ///
     /// Returns [`SamlError`] when XML parsing, schema validation, extraction,
     /// or the single-entity check fails.
-    pub fn parse_with_policy(
-        xml: &str,
-        extra: Vec<ExtractorField>,
-        policy: &crate::XmlPolicy,
-    ) -> Result<Self, SamlError> {
-        Self::parse_role_with_policy(xml, SsoDescriptorRole::Any, extra, policy)
+    pub fn parse_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
+        Self::parse_role_with_policy(xml, SsoDescriptorRole::Any, Vec::new(), policy)
     }
 
     fn parse_role_with_policy(
@@ -328,12 +318,12 @@ impl Metadata {
     }
 
     /// The original metadata XML.
-    pub fn get_metadata(&self) -> &str {
+    pub fn metadata_xml(&self) -> &str {
         &self.xml
     }
 
     /// `entityID`.
-    pub fn get_entity_id(&self) -> Option<&str> {
+    pub fn entity_id(&self) -> Option<&str> {
         self.meta.get_str("entityID")
     }
 
@@ -358,17 +348,22 @@ impl Metadata {
     }
 
     /// `<NameIDFormat>` values of the SSO role descriptors read, in document
-    /// order.
-    pub fn get_name_id_format(&self) -> Vec<String> {
-        match self.meta.get("nameIDFormat") {
-            Some(Value::Array(items)) => items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect(),
-            Some(Value::Str(s)) => vec![s.clone()],
-            _ => Vec::new(),
-        }
+    /// order, after XML Schema whitespace collapse.
+    pub fn name_id_formats(&self) -> Vec<crate::NameIdFormat> {
+        let values = match self.meta.get("nameIDFormat") {
+            Some(Value::Array(items)) => items.as_slice(),
+            Some(value @ Value::Str(_)) => std::slice::from_ref(value),
+            Some(Value::Null | Value::Object(_)) | None => &[],
+        };
+        values
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|value| {
+                crate::model::name_id_format_from_uri(&crate::xml::any_uri::collapse_whitespace(
+                    value,
+                ))
+            })
+            .collect()
     }
 
     /// All X.509 certificates declared for `use` (raw, as written in metadata),
@@ -376,20 +371,15 @@ impl Metadata {
     ///
     /// A `KeyDescriptor` without a `use` attribute declares its certificates
     /// for both signing and encryption.
-    pub fn x509_certificates(&self, use_: CertUse) -> Vec<String> {
-        self.key_certificates.for_use(use_).to_vec()
-    }
-
-    /// First X.509 certificate declared for `use`.
-    pub fn get_x509_certificate(&self, use_: CertUse) -> Option<String> {
-        self.key_certificates.for_use(use_).first().cloned()
+    pub fn x509_certificates(&self, use_: CertUse) -> &[String] {
+        self.key_certificates.for_use(use_)
     }
 
     /// First non-empty `SingleLogoutService` `Location` for `binding`.
     ///
     /// Logout requests are sent to this URL. Logout responses use
-    /// [`Self::get_single_logout_response_service`].
-    pub fn get_single_logout_service(&self, binding: Binding) -> Option<String> {
+    /// [`Self::single_logout_response_location`].
+    pub fn single_logout_location(&self, binding: Binding) -> Option<String> {
         self.single_logout_service_location(binding, EndpointDirection::Request)
     }
 
@@ -397,7 +387,7 @@ impl Metadata {
     ///
     /// Each endpoint for `binding` offers its non-empty `ResponseLocation`, or
     /// else its non-empty `Location`. This is the first such URL.
-    pub fn get_single_logout_response_service(&self, binding: Binding) -> Option<String> {
+    pub fn single_logout_response_location(&self, binding: Binding) -> Option<String> {
         self.single_logout_service_location(binding, EndpointDirection::Response)
     }
 
@@ -431,18 +421,9 @@ impl Metadata {
         published_locations_for_binding(self.meta.get("manageNameIDService"), binding, direction)
     }
 
-    /// Write the metadata XML to `path`.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`std::io::Error`] if the filesystem write fails.
-    pub fn export_metadata(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::write(path, &self.xml)
-    }
-
     /// Bindings for which a `SingleLogoutService` endpoint declares a
     /// non-empty `Location`.
-    pub fn get_support_bindings(&self) -> Vec<Binding> {
+    pub fn single_logout_bindings(&self) -> Vec<Binding> {
         [
             Binding::Redirect,
             Binding::Post,
@@ -450,124 +431,8 @@ impl Metadata {
             Binding::Soap,
         ]
         .into_iter()
-        .filter(|b| self.get_single_logout_service(*b).is_some())
+        .filter(|b| self.single_logout_location(*b).is_some())
         .collect()
-    }
-
-    /// Verify this metadata document's enveloped signature against trusted
-    /// certificate(s) (federation trust anchor). Requires a crypto provider.
-    ///
-    /// Returns `Ok(false)` when the document is unsigned or its signature does
-    /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies, so
-    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
-    /// provider supports them.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading, the
-    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
-    /// fail.
-    #[cfg(crypto)]
-    #[deprecated(
-        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
-    )]
-    pub fn verify_signature(&self, trusted_certificates: &[String]) -> Result<bool, SamlError> {
-        Ok(crate::crypto::verify::verify_metadata_document_signature(
-            &self.xml,
-            trusted_certificates,
-            XmlLimits::default(),
-        )?
-        .verified())
-    }
-
-    /// Verify this metadata document's signature with explicit XML parser limits.
-    ///
-    /// Returns `Ok(false)` when the document is unsigned or its signature does
-    /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies, so
-    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
-    /// provider supports them.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading, the
-    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
-    /// fail.
-    #[cfg(crypto)]
-    #[deprecated(
-        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
-    )]
-    pub fn verify_signature_with_limits(
-        &self,
-        trusted_certificates: &[String],
-        limits: XmlLimits,
-    ) -> Result<bool, SamlError> {
-        Ok(crate::crypto::verify::verify_metadata_document_signature(
-            &self.xml,
-            trusted_certificates,
-            limits,
-        )?
-        .verified())
-    }
-
-    /// Verify this metadata document's signature and preserve signed
-    /// `<EntityDescriptor>` coverage evidence using default XML parser limits.
-    ///
-    /// Returns an unverified result when the document is unsigned or its signature does
-    /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies, so
-    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
-    /// provider supports them.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading, the
-    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
-    /// fail.
-    #[cfg(crypto)]
-    #[deprecated(
-        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
-    )]
-    pub fn verify_signature_detailed(
-        &self,
-        trusted_certificates: &[String],
-    ) -> Result<MetadataSignatureVerification, SamlError> {
-        crate::crypto::verify::verify_metadata_document_signature(
-            &self.xml,
-            trusted_certificates,
-            XmlLimits::default(),
-        )
-    }
-
-    /// Verify this metadata document's signature and preserve signed
-    /// `<EntityDescriptor>` coverage evidence.
-    ///
-    /// Returns an unverified result when the document is unsigned or its signature does
-    /// not verify against `trusted_certificates`. It accepts every signature
-    /// and digest algorithm and RSA key size the crypto provider verifies, so
-    /// MD5, RIPEMD-160, and RSA keys shorter than 2048 bits verify where the
-    /// provider supports them.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when XML parsing, certificate loading, the
-    /// signature transforms, or signed `<EntityDescriptor>` coverage checks
-    /// fail.
-    #[cfg(crypto)]
-    #[deprecated(
-        note = "removed in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
-    )]
-    pub fn verify_signature_detailed_with_limits(
-        &self,
-        trusted_certificates: &[String],
-        limits: XmlLimits,
-    ) -> Result<MetadataSignatureVerification, SamlError> {
-        crate::crypto::verify::verify_metadata_document_signature(
-            &self.xml,
-            trusted_certificates,
-            limits,
-        )
     }
 }
 
@@ -581,7 +446,7 @@ mod tests {
 
     #[test]
     fn rejects_multiple_entity_descriptors() {
-        assert!(Metadata::parse(MULTIPLE, Vec::new()).is_err());
+        assert!(Metadata::parse(MULTIPLE).is_err());
     }
 
     #[test]
@@ -596,7 +461,7 @@ mod tests {
             format!("<Extra/>{entity}"),
         ] {
             assert!(
-                matches!(Metadata::parse(&xml, Vec::new()), Err(SamlError::Xml(_))),
+                matches!(Metadata::parse(&xml), Err(SamlError::Xml(_))),
                 "{xml}"
             );
             assert!(
@@ -614,7 +479,12 @@ mod tests {
     fn reads_extra_fields_under_a_root_that_is_not_an_entity() -> Result<(), SamlError> {
         let xml = r#"<Foo><SPSSODescriptor><X a="1"/></SPSSODescriptor></Foo>"#;
         let field = ExtractorField::new("x", &["Foo", "SPSSODescriptor", "X"]).attrs(&["a"]);
-        let metadata = Metadata::parse(xml, vec![field])?;
+        let metadata = Metadata::parse_role_with_policy(
+            xml,
+            SsoDescriptorRole::Any,
+            vec![field],
+            &crate::XmlPolicy::default(),
+        )?;
         assert_eq!(metadata.meta.get_str("x"), Some("1"));
         Ok(())
     }
@@ -623,19 +493,22 @@ mod tests {
     fn parses_idp_metadata() -> Result<(), Box<dyn std::error::Error>> {
         let idp = IdpMetadata::from_xml(IDPMETA)?;
         assert_eq!(
-            idp.get_entity_id(),
+            idp.as_metadata().entity_id(),
             Some("https://idp.example.com/metadata")
         );
-        assert!(idp.is_want_authn_requests_signed());
+        assert!(idp.want_authn_requests_signed());
         assert_eq!(
-            idp.get_single_sign_on_service(Binding::Redirect).as_deref(),
+            idp.single_sign_on_location(Binding::Redirect).as_deref(),
             Some("https://idp.example.org/sso/SingleSignOnService")
         );
-        assert!(idp.get_x509_certificate(CertUse::Signing).is_some());
+        assert!(!idp
+            .as_metadata()
+            .x509_certificates(CertUse::Signing)
+            .is_empty());
         assert!(idp
-            .get_name_id_format()
-            .iter()
-            .any(|f| f.contains("persistent")));
+            .as_metadata()
+            .name_id_formats()
+            .contains(&crate::NameIdFormat::Persistent));
         Ok(())
     }
 
@@ -663,9 +536,9 @@ mod tests {
             let sp = SpMetadata::from_xml(&xml)?;
             assert_eq!(
                 (
-                    idp.is_want_authn_requests_signed(),
-                    sp.is_authn_request_signed(),
-                    sp.is_want_assertions_signed(),
+                    idp.want_authn_requests_signed(),
+                    sp.authn_requests_signed(),
+                    sp.want_assertions_signed(),
                 ),
                 (expected, expected, expected),
                 "{value:?}"
@@ -689,7 +562,7 @@ mod tests {
 </EntityDescriptor>"#
             );
             assert_eq!(
-                SpMetadata::from_xml(&xml)?.is_authn_request_signed(),
+                SpMetadata::from_xml(&xml)?.authn_requests_signed(),
                 expected,
                 "{second:?}"
             );
@@ -700,30 +573,26 @@ mod tests {
     #[test]
     fn parses_sp_metadata() -> Result<(), Box<dyn std::error::Error>> {
         let sp = SpMetadata::from_xml(SPMETA)?;
-        assert_eq!(sp.get_entity_id(), Some("https://sp.example.org/metadata"));
-        assert!(sp.is_want_assertions_signed());
-        assert!(sp.is_authn_request_signed());
         assert_eq!(
-            sp.get_assertion_consumer_service(Binding::Post).as_deref(),
+            sp.as_metadata().entity_id(),
+            Some("https://sp.example.org/metadata")
+        );
+        assert!(sp.want_assertions_signed());
+        assert!(sp.authn_requests_signed());
+        assert_eq!(
+            sp.assertion_consumer_location(Binding::Post).as_deref(),
             Some("https://sp.example.org/sp/sso")
         );
         assert_eq!(
-            sp.get_single_logout_service(Binding::Redirect).as_deref(),
+            sp.as_metadata()
+                .single_logout_location(Binding::Redirect)
+                .as_deref(),
             Some("https://sp.example.org/sp/slo")
         );
-        assert!(sp.get_x509_certificate(CertUse::Encryption).is_some());
-        Ok(())
-    }
-
-    #[test]
-    fn support_bindings_and_export() -> Result<(), Box<dyn std::error::Error>> {
-        let sp = SpMetadata::from_xml(SPMETA)?;
-        assert!(sp.get_support_bindings().contains(&Binding::Redirect));
-        let mut path = std::env::temp_dir();
-        path.push(format!("saml_rs_md_{}.xml", std::process::id()));
-        sp.export_metadata(&path)?;
-        assert_eq!(std::fs::read_to_string(&path)?, sp.get_metadata());
-        std::fs::remove_file(&path)?;
+        assert!(!sp
+            .as_metadata()
+            .x509_certificates(CertUse::Encryption)
+            .is_empty());
         Ok(())
     }
 
@@ -738,14 +607,14 @@ mod tests {
     <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://sp.example.com/slo/redirect"/>
   </SPSSODescriptor>
 </EntityDescriptor>"#;
-        let metadata = Metadata::parse(xml, Vec::new())?;
+        let metadata = Metadata::parse(xml)?;
         assert_eq!(
-            metadata.get_single_logout_service(Binding::Post).as_deref(),
+            metadata.single_logout_location(Binding::Post).as_deref(),
             Some("https://sp.example.com/slo/a")
         );
         assert_eq!(
             metadata
-                .get_single_logout_response_service(Binding::Post)
+                .single_logout_response_location(Binding::Post)
                 .as_deref(),
             Some("https://sp.example.com/slo/b")
         );
@@ -765,7 +634,7 @@ mod tests {
         );
         assert_eq!(
             metadata
-                .get_single_logout_response_service(Binding::Redirect)
+                .single_logout_response_location(Binding::Redirect)
                 .as_deref(),
             Some("https://sp.example.com/slo/redirect")
         );
@@ -788,35 +657,44 @@ mod tests {
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
         assert_eq!(
-            idp.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
+            idp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec!["https://dual.example.com/idp/slo".to_string()]
         );
         assert_eq!(
-            idp.single_logout_service_locations(Binding::Post, EndpointDirection::Response),
+            idp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Response),
             vec!["https://dual.example.com/idp/slo/response".to_string()]
         );
-        assert_eq!(idp.get_support_bindings(), vec![Binding::Post]);
+        assert_eq!(
+            idp.as_metadata().single_logout_bindings(),
+            vec![Binding::Post]
+        );
 
         let sp = SpMetadata::from_xml(xml)?;
         assert_eq!(
-            sp.get_single_logout_service(Binding::Post).as_deref(),
+            sp.as_metadata()
+                .single_logout_location(Binding::Post)
+                .as_deref(),
             Some("https://dual.example.com/sp/slo")
         );
         assert_eq!(
-            sp.get_single_logout_response_service(Binding::Post)
+            sp.as_metadata()
+                .single_logout_response_location(Binding::Post)
                 .as_deref(),
             Some("https://dual.example.com/sp/slo/response")
         );
         assert_eq!(
-            sp.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
+            sp.as_metadata()
+                .single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec!["https://dual.example.com/sp/slo".to_string()]
         );
         assert_eq!(
-            sp.get_support_bindings(),
+            sp.as_metadata().single_logout_bindings(),
             vec![Binding::Redirect, Binding::Post]
         );
 
-        let any_role = Metadata::parse(xml, Vec::new())?;
+        let any_role = Metadata::parse(xml)?;
         assert_eq!(
             any_role.single_logout_service_locations(Binding::Post, EndpointDirection::Request),
             vec![
@@ -851,11 +729,15 @@ mod tests {
             "ENCRYPTION",
         )))?;
         assert_eq!(
-            encryption_only.x509_certificates(CertUse::Signing),
+            encryption_only
+                .as_metadata()
+                .x509_certificates(CertUse::Signing),
             Vec::<String>::new()
         );
         assert_eq!(
-            encryption_only.x509_certificates(CertUse::Encryption),
+            encryption_only
+                .as_metadata()
+                .x509_certificates(CertUse::Encryption),
             vec!["ENCRYPTION".to_string()]
         );
 
@@ -864,11 +746,15 @@ mod tests {
             "SIGNING",
         )))?;
         assert_eq!(
-            signing_only.x509_certificates(CertUse::Signing),
+            signing_only
+                .as_metadata()
+                .x509_certificates(CertUse::Signing),
             vec!["SIGNING".to_string()]
         );
         assert_eq!(
-            signing_only.x509_certificates(CertUse::Encryption),
+            signing_only
+                .as_metadata()
+                .x509_certificates(CertUse::Encryption),
             Vec::<String>::new()
         );
         Ok(())
@@ -884,11 +770,11 @@ mod tests {
         .concat();
         let idp = IdpMetadata::from_xml(&idp_metadata_with_keys(&key_descriptors))?;
         assert_eq!(
-            idp.x509_certificates(CertUse::Signing),
+            idp.as_metadata().x509_certificates(CertUse::Signing),
             vec!["OLD".to_string(), "NEW".to_string()]
         );
         assert_eq!(
-            idp.x509_certificates(CertUse::Encryption),
+            idp.as_metadata().x509_certificates(CertUse::Encryption),
             vec!["NEW".to_string(), "ENCRYPTION".to_string()]
         );
         Ok(())
@@ -908,15 +794,24 @@ mod tests {
   </SPSSODescriptor>
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
-        assert_eq!(idp.x509_certificates(CertUse::Signing), vec!["IDP-SIGNING"]);
         assert_eq!(
-            idp.x509_certificates(CertUse::Encryption),
+            idp.as_metadata().x509_certificates(CertUse::Signing),
+            vec!["IDP-SIGNING"]
+        );
+        assert_eq!(
+            idp.as_metadata().x509_certificates(CertUse::Encryption),
             vec!["IDP-ENCRYPTION"]
         );
 
         let sp = SpMetadata::from_xml(xml)?;
-        assert_eq!(sp.x509_certificates(CertUse::Signing), vec!["SP-SHARED"]);
-        assert_eq!(sp.x509_certificates(CertUse::Encryption), vec!["SP-SHARED"]);
+        assert_eq!(
+            sp.as_metadata().x509_certificates(CertUse::Signing),
+            vec!["SP-SHARED"]
+        );
+        assert_eq!(
+            sp.as_metadata().x509_certificates(CertUse::Encryption),
+            vec!["SP-SHARED"]
+        );
 
         Ok(())
     }
@@ -932,7 +827,7 @@ mod tests {
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
         assert_eq!(
-            idp.get_single_sign_on_service(Binding::Post).as_deref(),
+            idp.single_sign_on_location(Binding::Post).as_deref(),
             Some("https://idp.example.com/sso/a")
         );
         assert_eq!(
@@ -961,25 +856,34 @@ mod tests {
 </EntityDescriptor>"#;
         let idp = IdpMetadata::from_xml(xml)?;
         assert_eq!(
-            idp.get_single_sign_on_service(Binding::Post).as_deref(),
+            idp.single_sign_on_location(Binding::Post).as_deref(),
             Some("https://idp.example.com/sso")
         );
         assert_eq!(
             idp.single_sign_on_service_locations(Binding::Post),
             vec!["https://idp.example.com/sso".to_string()]
         );
-        assert_eq!(idp.get_single_sign_on_service(Binding::Redirect), None);
+        assert_eq!(idp.single_sign_on_location(Binding::Redirect), None);
         assert_eq!(
-            idp.get_single_logout_service(Binding::Post).as_deref(),
-            Some("https://idp.example.com/slo")
-        );
-        assert_eq!(
-            idp.get_single_logout_response_service(Binding::Post)
+            idp.as_metadata()
+                .single_logout_location(Binding::Post)
                 .as_deref(),
             Some("https://idp.example.com/slo")
         );
-        assert_eq!(idp.get_single_logout_service(Binding::Redirect), None);
-        assert_eq!(idp.get_support_bindings(), vec![Binding::Post]);
+        assert_eq!(
+            idp.as_metadata()
+                .single_logout_response_location(Binding::Post)
+                .as_deref(),
+            Some("https://idp.example.com/slo")
+        );
+        assert_eq!(
+            idp.as_metadata().single_logout_location(Binding::Redirect),
+            None
+        );
+        assert_eq!(
+            idp.as_metadata().single_logout_bindings(),
+            vec![Binding::Post]
+        );
         Ok(())
     }
 
@@ -1001,11 +905,13 @@ mod tests {
 </EntityDescriptor>"#
         ))?;
         assert_eq!(
-            idp.get_single_logout_service(Binding::Post).as_deref(),
+            idp.as_metadata()
+                .single_logout_location(Binding::Post)
+                .as_deref(),
             Some("https://idp.example.com/slo")
         );
         assert_eq!(
-            idp.get_single_sign_on_service(Binding::Post).as_deref(),
+            idp.single_sign_on_location(Binding::Post).as_deref(),
             Some("https://idp.example.com/sso")
         );
         let artifact_resolution = idp.artifact_resolution_services()?;
@@ -1017,7 +923,8 @@ mod tests {
             "https://idp.example.com/ars"
         );
         assert_eq!(
-            idp.manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Response),
+            idp.as_metadata()
+                .manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Response),
             vec!["https://idp.example.com/mnid/response".to_string()]
         );
 
@@ -1031,15 +938,18 @@ mod tests {
 </EntityDescriptor>"#
         ))?;
         assert_eq!(
-            sp.get_single_logout_service(Binding::Post).as_deref(),
+            sp.as_metadata()
+                .single_logout_location(Binding::Post)
+                .as_deref(),
             Some("https://sp.example.com/slo")
         );
         assert_eq!(
-            sp.get_assertion_consumer_service(Binding::Post).as_deref(),
+            sp.assertion_consumer_location(Binding::Post).as_deref(),
             Some("https://sp.example.com/acs")
         );
         assert_eq!(
-            sp.manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Request),
+            sp.as_metadata()
+                .manage_name_id_service_locations(Binding::Redirect, EndpointDirection::Request),
             vec!["https://sp.example.com/mnid".to_string()]
         );
         Ok(())

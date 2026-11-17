@@ -6,12 +6,12 @@ use base64::Engine;
 use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 
 fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             authn_requests_signed: setting.private_key.is_some(),
             want_assertions_signed: setting.private_key.is_some(),
@@ -31,7 +31,7 @@ fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
 #[cfg(crypto)]
 fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: setting
                 .signing_cert
@@ -52,7 +52,7 @@ fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
 fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
     let idp = IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
             ..Default::default()
@@ -75,13 +75,13 @@ fn sp_metadata_generate_parse_round_trips() -> Result<(), Box<dyn std::error::Er
     let sp = sp(EntitySetting::default())?;
     let reparsed = ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
     assert_eq!(
-        reparsed.metadata.get_entity_id(),
+        reparsed.metadata.as_metadata().entity_id(),
         Some("https://sp.example.com/metadata")
     );
     assert_eq!(
         reparsed
             .metadata
-            .get_assertion_consumer_service(Binding::Post)
+            .assertion_consumer_location(Binding::Post)
             .as_deref(),
         Some("https://sp/acs")
     );
@@ -136,8 +136,8 @@ mod signed {
         let idp = idp(signing_setting())?;
         let ctx = create_logout_request(
             &sp.setting,
-            &sp.metadata,
-            &idp.metadata,
+            sp.metadata.as_metadata(),
+            idp.metadata.as_metadata(),
             Binding::Post,
             &saml_rs::entity::User::new("alice@example.com"),
             None,
@@ -147,8 +147,12 @@ mod signed {
         let mut idp_signed = idp;
         idp_signed.setting.want_logout_request_signed = true;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
-        let parsed =
-            parse_logout_request(&idp_signed.setting, &sp.metadata, Binding::Post, &request)?;
+        let parsed = parse_logout_request(
+            &idp_signed.setting,
+            sp.metadata.as_metadata(),
+            Binding::Post,
+            &request,
+        )?;
         assert_eq!(
             parsed.extract.get_str("issuer"),
             Some("https://sp.example.com/metadata")

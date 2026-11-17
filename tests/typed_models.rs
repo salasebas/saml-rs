@@ -1,7 +1,7 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::Binding;
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::Value;
 use saml_rs::raw::{BindingContext, FlowResult};
 use saml_rs::raw::{EntitySetting, IdentityProvider, LoginRequestOptions, ServiceProvider};
@@ -1571,7 +1571,7 @@ fn typed_models_logout_completed_equality_uses_peer_entity_id(
 
 fn sp(setting: EntitySetting) -> Result<ServiceProvider, SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
             assertion_consumer_service: vec![
@@ -1586,7 +1586,7 @@ fn sp(setting: EntitySetting) -> Result<ServiceProvider, SamlError> {
 
 fn idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: setting
                 .signing_cert

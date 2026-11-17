@@ -1189,7 +1189,8 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
             .idp
             .raw_identity_provider()
             .metadata
-            .get_entity_id(),
+            .as_metadata()
+            .entity_id(),
         Some(IDP_ENTITY_ID)
     );
     assert_eq!(exchange.sp_descriptor.entity_id().as_str(), SP_ENTITY_ID);
@@ -1649,8 +1650,8 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 
     let logout = create_logout_request(
         &peer_idp.setting,
-        &peer_idp.metadata,
-        &local_sp.metadata,
+        peer_idp.metadata.as_metadata(),
+        local_sp.metadata.as_metadata(),
         Binding::Post,
         &User::new("alice@example.com"),
         None,
@@ -2533,7 +2534,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
             trusted_certificates: &pinned,
         },
     )?;
-    assert!(verified.was_verified_with_pinned_certificates());
+    assert!(verified.metadata_signature_verified());
     let started = sp.start_sso(&verified, StartSso::post())?;
     assert!(!started.outbound.id().as_str().is_empty());
 
@@ -2542,7 +2543,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
         &signed,
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    assert!(!unverified.was_verified_with_pinned_certificates());
+    assert!(!unverified.metadata_signature_verified());
     Ok(())
 }
 
@@ -2594,7 +2595,7 @@ fn recommended_sso_receive_does_not_store_replay_without_a_caller_cache(
     let sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?)?;
     let idp = Saml::idp(idp_with_validation(recommended_sso_accept_idp_validation())?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    assert!(!idp_descriptor.was_verified_with_pinned_certificates());
+    assert!(!idp_descriptor.metadata_signature_verified());
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let fields = post_fields(&started.outbound)?;
 

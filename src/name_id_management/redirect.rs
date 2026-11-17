@@ -213,8 +213,8 @@ fn parse_signed(
         // HTTP-Redirect.
         check_signature: true,
         xml_signatures: setting.xml_signatures,
-        from_issuer: peer_meta.get_entity_id(),
-        signing_certs: &signing_certs,
+        from_issuer: peer_meta.entity_id(),
+        signing_certs,
         clock_drifts: validation.clock_drifts,
         now: Some(validation.now),
         redirect_inflate_max_bytes: setting.redirect_inflate_max_bytes,

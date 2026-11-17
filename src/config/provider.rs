@@ -2,10 +2,7 @@
 
 use crate::error::SamlError;
 use crate::idp::IdentityProvider;
-use crate::metadata::{
-    ArtifactResolutionEndpoint, IdpMetadataConfig as IdpMetadataInput,
-    SpMetadataConfig as SpMetadataInput,
-};
+use crate::metadata::{IdpMetadataInput, SpMetadataInput};
 use crate::sp::ServiceProvider;
 
 use super::algorithms::name_id_format_uris;
@@ -42,7 +39,7 @@ fn sp_metadata_input(config: &SpConfig) -> SpMetadataInput {
             config.validation().assertions,
             AssertionSignaturePolicy::RequireSigned
         ),
-        name_id_format: name_id_format_uris(metadata.name_id_format()),
+        name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_logout_service: metadata
             .single_logout_service()
             .iter()
@@ -76,7 +73,7 @@ fn idp_metadata_input(config: &IdpConfig) -> IdpMetadataInput {
             config.validation().authn_requests,
             AuthnRequestValidationPolicy::RequireSigned
         ),
-        name_id_format: name_id_format_uris(metadata.name_id_format()),
+        name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_sign_on_service: metadata
             .single_sign_on_service()
             .iter()
@@ -87,14 +84,7 @@ fn idp_metadata_input(config: &IdpConfig) -> IdpMetadataInput {
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
-        artifact_resolution_service: metadata
-            .artifact_resolution_service()
-            .iter()
-            .map(|service| ArtifactResolutionEndpoint {
-                index: service.index(),
-                location: service.location().as_str().to_string(),
-            })
-            .collect(),
+        artifact_resolution_service: metadata.artifact_resolution_service().to_vec(),
         manage_name_id_service: metadata
             .manage_name_id_service()
             .iter()

@@ -3,7 +3,7 @@
 This guide moves an integration of `saml-rs`, `opensaml`, `samlify`, or
 `samlet` from the latest `0.8.x` release to `0.9.x`. The compatibility crates
 re-export the same API, so every step applies to them too. Compatible
-additions are in the [changelog](../../CHANGELOG.md).
+additions are in the [changelog](../../../CHANGELOG.md).
 
 Each section starts with **Affects**. Skip the section when it does not
 describe your integration.
@@ -37,6 +37,7 @@ describe your integration.
 | `metadata::try_generate_idp_metadata` | Removed; call `generate_idp_metadata` | [1.18](#118-call-generate_idp_metadata) |
 | `context::set_schema_validator` | Configure `XmlPolicy::schema_validator` | [9.1](#91-configure-each-local-role) |
 | A full struct literal of `XmlPolicy` | Has a new `schema_validator` field | [9.1](#91-configure-each-local-role) |
+| `Metadata::parse` and its variants, raw metadata `Deref`, generation config names, signature evidence names, raw `get_*` and signing flag getters, `x509_certificates()`, `export_metadata()`, descriptor `metadata()`, `metadata::{sp,idp,generate}` paths, `ArtifactResolutionEndpoint`, or `Metadata::verify_signature*` | Parser arguments, getter names and types, endpoint publishing, and public paths changed; obsolete methods removed | [10](#10-update-metadata-imports-and-accessors) |
 
 ### 1.1 Pass the expected entity ID to `from_metadata_xml`
 
@@ -290,19 +291,21 @@ let relaxed = base.validation(SpValidationPolicy::compatibility()).build()?;
 
 **Affects:** callers that read a field of a built config.
 
-Every former field is a getter of the same name that borrows it:
+Former fields are borrowing getters. Names stay the same except that the
+NameID format list uses the plural `name_id_formats()`:
 
 | Before | After |
 | --- | --- |
 | `config.entity_id` | `config.entity_id()` |
 | `config.validation` | `config.validation()` |
 | `config.metadata.assertion_consumer_service` | `config.metadata().assertion_consumer_service()` |
+| `config.metadata.name_id_format` | `config.metadata().name_id_formats()` |
 | `config.metadata.elements_order` | `config.metadata().elements_order()`, an `Option<&[String]>` |
 | `config.issuance_lifetime` | `config.issuance_lifetime()` |
 
-The same holds for `credentials`, `algorithms`, `xml`, and `templates`, and for
-every field of `SpMetadataConfig` and `IdpMetadataConfig`. Collections are
-returned as slices.
+The same borrowing pattern applies to `credentials`, `algorithms`, `xml`, and
+`templates`, and to the fields of `SpMetadataConfig` and `IdpMetadataConfig`.
+Collections are returned as slices.
 
 ### 1.9 Fill credentials with the with methods
 
@@ -395,10 +398,11 @@ use saml_rs::raw::{EntitySetting, IdentityProvider, ServiceProvider};
 
 **Affects:** code that imports through `saml_rs::raw::metadata`.
 
-**Now:** use the `metadata` module directly. The items are the same:
+**Now:** use the `metadata` module directly. Raw generator configs are now
+named `IdpMetadataInput` and `SpMetadataInput`:
 
 ```rust
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 ```
 
 ### 1.13 Pass options to `create_login_request`
@@ -908,14 +912,14 @@ let config = IdpConfig::builder(entity_id)
     .build()?;
 ```
 
-Add an endpoint to every `SpMetadataConfig` and `IdpMetadataConfig` you pass
+Add an endpoint to every `SpMetadataInput` and `IdpMetadataInput` you pass
 to the generators:
 
 ```rust
-let xml = generate_sp_metadata(&SpMetadataConfig {
+let xml = generate_sp_metadata(&SpMetadataInput {
     entity_id: "https://sp.example.com/metadata".into(),
     assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")],
-    ..SpMetadataConfig::default()
+    ..SpMetadataInput::default()
 })?;
 ```
 
@@ -927,16 +931,16 @@ let xml = generate_sp_metadata(&SpMetadataConfig {
 `IdpMetadata` and `SpMetadata`. It also affects callers of
 `crypto::verify_metadata_signature` and its three variants.
 
-**Now:** these methods and functions are deprecated, and the next minor
-release removes them. They return `Ok(false)`, or an unverified
+**Now:** the `Metadata` methods are removed. The `crypto` functions remain
+deprecated. Those functions return `Ok(false)`, or an unverified
 `MetadataSignatureVerification`, when the metadata is unsigned or its
 signature does not verify. They also accept MD5, RIPEMD-160, and RSA keys
 shorter than 2048 bits where the crypto provider verifies them. A call that only applies `?` to the result accepts
 unsigned metadata:
 
 ```rust
-let metadata = IdpMetadata::from_xml(&xml)?;
-metadata.verify_signature(&[certificate_pem])?;
+use saml_rs::crypto::verify_metadata_signature;
+verify_metadata_signature(&xml, &[certificate_pem])?;
 ```
 
 **Upgrade:** import the metadata with `IdpDescriptor::from_metadata_xml` or
@@ -955,10 +959,10 @@ let idp = IdpDescriptor::from_metadata_xml(
         trusted_certificates: &certificates,
     },
 )?;
-let signed_descriptor = idp.signed_entity_descriptor_xml();
+let signed_descriptor = idp.signed_metadata_xml();
 ```
 
-The import checks more than the deprecated methods:
+The import checks more than the deprecated `crypto` functions:
 
 - The document holds exactly one signature, directly under the metadata
   root. That signature has one reference, to the root's `ID` as `#ID`, with
@@ -972,7 +976,7 @@ The import checks more than the deprecated methods:
   key shorter than 2048 bits. Until the publisher signs with stronger
   algorithms, use `RequireSignatureAllowingWeakAlgorithms`, which accepts
   them where the crypto provider verifies them. See the
-  [metadata trust](../conformance/metadata-and-replay.md#metadata-trust) rows.
+  [metadata trust](../../conformance/metadata-and-replay.md#metadata-trust) rows.
 - `from_metadata_xml` parses with the default `XmlLimits`. Use
   `from_metadata_xml_with_policy` to supply other limits and an optional schema
   validator.
@@ -1084,3 +1088,8 @@ let idp = IdpDescriptor::from_metadata_xml_with_policy(
 `Metadata::parse_with_policy`. Existing constructors keep their default XML
 limits and have no callback. Low-level DOM, extractor, signature, and encryption
 utilities do not inherit a role's policy.
+
+## 10. Update metadata imports and accessors
+
+Follow [Update metadata imports and accessors](metadata-api.md) for the parser,
+getter, endpoint, certificate, and module-path changes.

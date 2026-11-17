@@ -8,13 +8,13 @@ use saml_rs::entity::{EntitySetting, User};
 use saml_rs::logout::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
 };
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::SamlError;
 
 fn idp() -> Result<IdentityProvider, SamlError> {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
             single_logout_service: vec![
@@ -30,7 +30,7 @@ fn idp() -> Result<IdentityProvider, SamlError> {
 
 fn sp() -> Result<ServiceProvider, SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -56,8 +56,8 @@ fn logout_request_xml(
     let user = user(session_index);
     let context = create_logout_request(
         &sp.setting,
-        &sp.metadata,
-        &idp.metadata,
+        sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         binding,
         &user,
         None,
@@ -75,8 +75,8 @@ fn logout_response_xml(
     let sp = sp()?;
     let context = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         binding,
         in_response_to,
         None,
@@ -164,8 +164,8 @@ fn public_raw_logout_request_generation_keeps_expiration_omitted_for_supported_b
         let idp = idp()?;
         let context = create_logout_request_with_id(
             &sp.setting,
-            &sp.metadata,
-            &idp.metadata,
+            sp.metadata.as_metadata(),
+            idp.metadata.as_metadata(),
             binding,
             &user(Some("_session-123")),
             None,
@@ -190,8 +190,8 @@ fn public_raw_logout_request_preserves_unrecognized_expiration_placeholder(
     let idp = idp()?;
     let context = create_logout_request(
         &sp.setting,
-        &sp.metadata,
-        &idp.metadata,
+        sp.metadata.as_metadata(),
+        idp.metadata.as_metadata(),
         Binding::Post,
         &user(Some("_session-123")),
         None,

@@ -5,7 +5,7 @@ use base64::Engine;
 use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
-use saml_rs::metadata::{generate_sp_metadata, Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider, Value};
 use saml_rs::xml::{extract, ExtractorField};
 
@@ -14,8 +14,8 @@ const DUMPES_ISSUER: &str = include_str!("../../tests/fixtures/misc/dumpes_issue
 const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 const SP_META_98: &str = include_str!("../../tests/fixtures/misc/sp_metadata_98.xml");
 
-fn sp_config() -> SpMetadataConfig {
-    SpMetadataConfig {
+fn sp_config() -> SpMetadataInput {
+    SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         name_id_format: vec!["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into()],
         assertion_consumer_service: vec![
@@ -30,8 +30,8 @@ fn sp_config() -> SpMetadataConfig {
     }
 }
 
-fn idp_config() -> IdpMetadataConfig {
-    IdpMetadataConfig {
+fn idp_config() -> IdpMetadataInput {
+    IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![
             Endpoint::new(Binding::Post, "idp.example.com/sso"),
@@ -188,7 +188,7 @@ fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std
     let idp = IdentityProvider::from_config(&idp_config(), EntitySetting::default())?;
     assert_eq!(
         idp.metadata
-            .get_single_sign_on_service(Binding::Post)
+            .single_sign_on_location(Binding::Post)
             .as_deref(),
         Some("idp.example.com/sso")
     );
@@ -200,7 +200,7 @@ fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std
 fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_metadata(SP_META_98, EntitySetting::default())?;
     let idp = IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
             ..Default::default()

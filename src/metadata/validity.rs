@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn metadata_is_invalid_from_valid_until_onward() -> Result<(), SamlError> {
         let xml = entity(&valid_until("2030-01-01T00:00:00Z"), "", "");
-        let validity = IdpMetadata::from_xml(&xml)?.validity()?;
+        let validity = IdpMetadata::from_xml(&xml)?.as_metadata().validity()?;
 
         validity.ensure_valid_at(at(Y2030 - 1))?;
         assert!(is_valid_until_error(validity.ensure_valid_at(at(Y2030))));
@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn a_timezone_offset_names_the_same_instant() -> Result<(), SamlError> {
         let xml = entity(&valid_until("2030-01-01T02:00:00+02:00"), "", "");
-        let validity = IdpMetadata::from_xml(&xml)?.validity()?;
+        let validity = IdpMetadata::from_xml(&xml)?.as_metadata().validity()?;
 
         validity.ensure_valid_at(at(Y2030 - 1))?;
         assert!(is_valid_until_error(validity.ensure_valid_at(at(Y2030))));
@@ -147,7 +147,7 @@ mod tests {
         ];
 
         for xml in documents {
-            let validity = IdpMetadata::from_xml(&xml)?.validity()?;
+            let validity = IdpMetadata::from_xml(&xml)?.as_metadata().validity()?;
             validity.ensure_valid_at(at(Y2030 - 1))?;
             assert!(
                 is_valid_until_error(validity.ensure_valid_at(at(Y2030))),
@@ -162,10 +162,12 @@ mod tests {
         let xml = entity("", "", &valid_until("2001-01-01T00:00:00Z"));
 
         IdpMetadata::from_xml(&xml)?
+            .as_metadata()
             .validity()?
             .ensure_valid_at(at(Y2030))?;
         assert!(is_valid_until_error(
             SpMetadata::from_xml(&xml)?
+                .as_metadata()
                 .validity()?
                 .ensure_valid_at(at(Y2030))
         ));
@@ -177,6 +179,7 @@ mod tests {
         let xml = entity(r#" cacheDuration="PT1S""#, "", "");
 
         IdpMetadata::from_xml(&xml)?
+            .as_metadata()
             .validity()?
             .ensure_valid_at(at(Y2030))
     }
@@ -196,7 +199,7 @@ mod tests {
             let xml = entity("", &valid_until(value), "");
             assert!(
                 matches!(
-                    IdpMetadata::from_xml(&xml)?.validity(),
+                    IdpMetadata::from_xml(&xml)?.as_metadata().validity(),
                     Err(SamlError::TimeWindowInvalid {
                         field: TimeWindowField::MetadataValidUntil
                     })

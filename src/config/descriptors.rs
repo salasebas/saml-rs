@@ -2,7 +2,10 @@ use core::str::FromStr;
 use std::collections::HashSet;
 use std::time::SystemTime;
 
-use crate::browser::{AcsEndpoint, NameIdManagementBinding, SloEndpoint, SsoEndpoint};
+use crate::browser::{
+    AcsEndpoint, LogoutBinding, NameIdManagementBinding, SloEndpoint, SsoEndpoint,
+    SsoRequestBinding, SsoResponseBinding,
+};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::idp::IdentityProvider;
@@ -213,7 +216,7 @@ impl SpMetadataConfig {
     }
 
     /// `<NameIDFormat>` values advertised by the SP.
-    pub fn name_id_format(&self) -> &[NameIdFormat] {
+    pub fn name_id_formats(&self) -> &[NameIdFormat] {
         &self.name_id_format
     }
 
@@ -315,7 +318,7 @@ impl IdpMetadataConfig {
     }
 
     /// `<NameIDFormat>` values advertised by the IdP.
-    pub fn name_id_format(&self) -> &[NameIdFormat] {
+    pub fn name_id_formats(&self) -> &[NameIdFormat] {
         &self.name_id_format
     }
 
@@ -416,10 +419,10 @@ impl IdpDescriptor {
         xml_policy: &crate::XmlPolicy,
     ) -> Result<Self, SamlError> {
         let metadata = IdpMetadata::from_xml_with_policy(xml, xml_policy)?;
-        let actual_entity_id = metadata_entity_id(&metadata)?;
+        let actual_entity_id = metadata_entity_id(metadata.as_metadata())?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
-        let trust = ensure_metadata_trust(&metadata, trust)?;
-        let validity = metadata.validity()?;
+        let trust = ensure_metadata_trust(metadata.as_metadata(), trust)?;
+        let validity = metadata.as_metadata().validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
             provider: IdentityProvider::from_parsed_metadata(metadata, EntitySetting::default()),
@@ -435,11 +438,94 @@ impl IdpDescriptor {
 
     /// Original metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.provider.metadata.get_metadata()
+        self.provider.metadata.as_metadata().metadata_xml()
+    }
+
+    /// Name identifier formats advertised by this peer's SAML 2.0 role, in document order.
+    pub fn name_id_formats(&self) -> Vec<NameIdFormat> {
+        self.provider.metadata.as_metadata().name_id_formats()
+    }
+
+    /// Entity-level organization in the imported metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for multiple organizations or a localized
+    /// value without `xml:lang`.
+    pub fn organization(&self) -> Result<Option<crate::metadata::Organization>, SamlError> {
+        self.provider.metadata.as_metadata().organization()
+    }
+
+    /// Entity-level contacts in document order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for a missing or unknown `contactType`.
+    pub fn contacts(&self) -> Result<Vec<crate::metadata::ContactPerson>, SamlError> {
+        self.provider.metadata.as_metadata().contacts()
+    }
+
+    /// First non-empty logout request location for this peer's SAML 2.0 role and binding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_location(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        endpoint_location(
+            self.provider
+                .metadata
+                .as_metadata()
+                .single_logout_location(binding.into()),
+            "SingleLogoutService",
+            binding.into(),
+        )
+    }
+
+    /// First logout response location, falling back to the endpoint's request location.
+    ///
+    /// For SOAP this reports the published location; a SOAP response returns on
+    /// the request's HTTP exchange and is not sent to that URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_response_location(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        endpoint_location(
+            self.provider
+                .metadata
+                .as_metadata()
+                .single_logout_response_location(binding.into()),
+            "SingleLogoutService",
+            binding.into(),
+        )
+    }
+
+    /// First non-empty SSO location for this peer's SAML 2.0 IdP role and binding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_sign_on_location(
+        &self,
+        binding: SsoRequestBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        endpoint_location(
+            self.provider
+                .metadata
+                .single_sign_on_location(binding.into()),
+            "SingleSignOnService",
+            binding.into(),
+        )
     }
 
     /// Parsed IdP metadata.
-    pub fn metadata(&self) -> &IdpMetadata {
+    pub(crate) fn metadata(&self) -> &IdpMetadata {
         &self.provider.metadata
     }
 
@@ -460,8 +546,12 @@ impl IdpDescriptor {
         self
     }
 
-    /// Whether this descriptor was verified with pinned signing certificates.
-    pub fn was_verified_with_pinned_certificates(&self) -> bool {
+    /// Whether the metadata signature was verified with caller-pinned certificates.
+    ///
+    /// This records successful import-time verification under the selected trust
+    /// policy. It does not check metadata expiration. [`MetadataTrustPolicy::AllowUnsigned`]
+    /// leaves it false even when the document contains a signature.
+    pub fn metadata_signature_verified(&self) -> bool {
         matches!(
             self.trust,
             AppliedMetadataTrust::SignedByPinnedCertificates { .. }
@@ -469,13 +559,13 @@ impl IdpDescriptor {
     }
 
     /// Signed metadata root when pinned verification passed, including a
-    /// covering `<EntitiesDescriptor>`.
-    pub fn signed_entity_descriptor_xml(&self) -> Option<&str> {
+    /// covering `<EntitiesDescriptor>`. The original signed XML is retained.
+    pub fn signed_metadata_xml(&self) -> Option<&str> {
         match &self.trust {
             AppliedMetadataTrust::SignedByPinnedCertificates {
-                signed_entity_descriptor_xml,
-            } => Some(signed_entity_descriptor_xml.as_str()),
-            AppliedMetadataTrust::Unsigned => None,
+                signed_metadata_xml,
+            } => Some(signed_metadata_xml.as_str()),
+            AppliedMetadataTrust::Unverified => None,
         }
     }
 }
@@ -530,10 +620,10 @@ impl SpDescriptor {
         xml_policy: &crate::XmlPolicy,
     ) -> Result<Self, SamlError> {
         let metadata = SpMetadata::from_xml_with_policy(xml, xml_policy)?;
-        let actual_entity_id = metadata_entity_id(&metadata)?;
+        let actual_entity_id = metadata_entity_id(metadata.as_metadata())?;
         ensure_expected_entity_id(&expected_entity_id, actual_entity_id)?;
-        let trust = ensure_metadata_trust(&metadata, trust)?;
-        let validity = metadata.validity()?;
+        let trust = ensure_metadata_trust(metadata.as_metadata(), trust)?;
+        let validity = metadata.as_metadata().validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
             provider: ServiceProvider::from_parsed_metadata(metadata, EntitySetting::default()),
@@ -549,11 +639,96 @@ impl SpDescriptor {
 
     /// Original metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.provider.metadata.get_metadata()
+        self.provider.metadata.as_metadata().metadata_xml()
+    }
+
+    /// Name identifier formats advertised by this peer's SAML 2.0 role, in document order.
+    pub fn name_id_formats(&self) -> Vec<NameIdFormat> {
+        self.provider.metadata.as_metadata().name_id_formats()
+    }
+
+    /// Entity-level organization in the imported metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for multiple organizations or a localized
+    /// value without `xml:lang`.
+    pub fn organization(&self) -> Result<Option<crate::metadata::Organization>, SamlError> {
+        self.provider.metadata.as_metadata().organization()
+    }
+
+    /// Entity-level contacts in document order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for a missing or unknown `contactType`.
+    pub fn contacts(&self) -> Result<Vec<crate::metadata::ContactPerson>, SamlError> {
+        self.provider.metadata.as_metadata().contacts()
+    }
+
+    /// First non-empty logout request location for this peer's SAML 2.0 role and binding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_location(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        endpoint_location(
+            self.provider
+                .metadata
+                .as_metadata()
+                .single_logout_location(binding.into()),
+            "SingleLogoutService",
+            binding.into(),
+        )
+    }
+
+    /// First logout response location, falling back to the endpoint's request location.
+    ///
+    /// For SOAP this reports the published location; a SOAP response returns on
+    /// the request's HTTP exchange and is not sent to that URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_response_location(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        endpoint_location(
+            self.provider
+                .metadata
+                .as_metadata()
+                .single_logout_response_location(binding.into()),
+            "SingleLogoutService",
+            binding.into(),
+        )
+    }
+
+    /// Default assertion consumer location for this peer's SAML 2.0 SP role and binding.
+    ///
+    /// Uses the metadata's indexed endpoint default selection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn assertion_consumer_location(
+        &self,
+        binding: SsoResponseBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        endpoint_location(
+            self.provider
+                .metadata
+                .assertion_consumer_location(binding.into()),
+            "AssertionConsumerService",
+            binding.into(),
+        )
     }
 
     /// Parsed SP metadata.
-    pub fn metadata(&self) -> &SpMetadata {
+    pub(crate) fn metadata(&self) -> &SpMetadata {
         &self.provider.metadata
     }
 
@@ -574,8 +749,12 @@ impl SpDescriptor {
         self
     }
 
-    /// Whether this descriptor was verified with pinned signing certificates.
-    pub fn was_verified_with_pinned_certificates(&self) -> bool {
+    /// Whether the metadata signature was verified with caller-pinned certificates.
+    ///
+    /// This records successful import-time verification under the selected trust
+    /// policy. It does not check metadata expiration. [`MetadataTrustPolicy::AllowUnsigned`]
+    /// leaves it false even when the document contains a signature.
+    pub fn metadata_signature_verified(&self) -> bool {
         matches!(
             self.trust,
             AppliedMetadataTrust::SignedByPinnedCertificates { .. }
@@ -583,13 +762,33 @@ impl SpDescriptor {
     }
 
     /// Signed metadata root when pinned verification passed, including a
-    /// covering `<EntitiesDescriptor>`.
-    pub fn signed_entity_descriptor_xml(&self) -> Option<&str> {
+    /// covering `<EntitiesDescriptor>`. The original signed XML is retained.
+    pub fn signed_metadata_xml(&self) -> Option<&str> {
         match &self.trust {
             AppliedMetadataTrust::SignedByPinnedCertificates {
-                signed_entity_descriptor_xml,
-            } => Some(signed_entity_descriptor_xml.as_str()),
-            AppliedMetadataTrust::Unsigned => None,
+                signed_metadata_xml,
+            } => Some(signed_metadata_xml.as_str()),
+            AppliedMetadataTrust::Unverified => None,
         }
     }
+}
+
+fn endpoint_location(
+    location: Option<String>,
+    element: &str,
+    binding: crate::constants::Binding,
+) -> Result<Option<EndpointUrl>, SamlError> {
+    location
+        .map(EndpointUrl::try_new)
+        .transpose()
+        .map_err(|error| {
+            if let SamlError::Invalid(detail) = error {
+                SamlError::Invalid(format!(
+                    "{element} location for binding {}: {detail}",
+                    binding.urn()
+                ))
+            } else {
+                error
+            }
+        })
 }

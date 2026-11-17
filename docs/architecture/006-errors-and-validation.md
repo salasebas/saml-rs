@@ -195,7 +195,7 @@ pub struct MetadataSignatureVerification { /* private fields */ }
 
 impl MetadataSignatureVerification {
     pub fn verified(&self) -> bool;
-    pub fn signed_entity_descriptor_xml(&self) -> Option<&str>;
+    pub fn signed_metadata_xml(&self) -> Option<&str>;
 }
 ```
 

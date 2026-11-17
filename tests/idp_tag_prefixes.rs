@@ -12,7 +12,7 @@ use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{create_logout_request, create_logout_response};
-use saml_rs::metadata::{Endpoint, IdpMetadataConfig, SpMetadataConfig};
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::LoginResponseTemplate;
@@ -32,7 +32,7 @@ fn signing() -> EntitySetting {
 
 fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
     IdentityProvider::from_config(
-        &IdpMetadataConfig {
+        &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -49,7 +49,7 @@ fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlErro
 
 fn sp(want_assertions_signed: bool) -> Result<ServiceProvider, SamlError> {
     ServiceProvider::from_config(
-        &SpMetadataConfig {
+        &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             want_assertions_signed,
             signing_certs: vec![CERT.into()],
@@ -319,8 +319,8 @@ fn logout_request_defaults_render_overridden_prefixes_for_post_redirect_and_simp
     for binding in [Binding::Post, Binding::Redirect, Binding::SimpleSign] {
         let ctx = create_logout_request(
             &idp.setting,
-            &idp.metadata,
-            &sp.metadata,
+            idp.metadata.as_metadata(),
+            sp.metadata.as_metadata(),
             binding,
             &user,
             None,
@@ -345,8 +345,8 @@ fn logout_response_defaults_render_overridden_prefixes_for_post_redirect_and_sim
     for binding in [Binding::Post, Binding::Redirect, Binding::SimpleSign] {
         let ctx = create_logout_response(
             &idp.setting,
-            &idp.metadata,
-            &sp.metadata,
+            idp.metadata.as_metadata(),
+            sp.metadata.as_metadata(),
             binding,
             Some("_logout_req"),
             None,
@@ -397,8 +397,8 @@ fn invalid_prefixes_are_rejected_before_rendering() -> Result<(), Box<dyn std::e
         let idp = idp_with_setting(prefixed_setting("samlp", invalid))?;
         let result = create_logout_response(
             &idp.setting,
-            &idp.metadata,
-            &sp.metadata,
+            idp.metadata.as_metadata(),
+            sp.metadata.as_metadata(),
             Binding::Post,
             Some("_logout_req"),
             None,
@@ -413,8 +413,8 @@ fn invalid_prefixes_are_rejected_before_rendering() -> Result<(), Box<dyn std::e
     let idp = idp_with_setting(prefixed_setting("p", "p"))?;
     let result = create_logout_response(
         &idp.setting,
-        &idp.metadata,
-        &sp.metadata,
+        idp.metadata.as_metadata(),
+        sp.metadata.as_metadata(),
         Binding::Post,
         Some("_logout_req"),
         None,

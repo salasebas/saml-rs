@@ -29,9 +29,10 @@ pub(super) fn encrypt_name_id_for_peer(
         IdentifierEncryptionPolicy::PlaintextIdentifiers => Ok(xml),
         IdentifierEncryptionPolicy::EncryptIdentifiers => {
             let certificate = target_meta
-                .get_x509_certificate(CertUse::Encryption)
+                .x509_certificates(CertUse::Encryption)
+                .first()
                 .ok_or_else(|| SamlError::MissingMetadata("encryption certificate".into()))?;
-            encrypt(&xml, &certificate, init_setting)
+            encrypt(&xml, certificate, init_setting)
         }
     }
 }

@@ -2,9 +2,8 @@ use std::time::Duration;
 
 use saml_rs::constants::{elements_order, name_id_format};
 use saml_rs::metadata::{
-    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadata,
-    IdpMetadataConfig as RawIdpMetadataConfig, Metadata, SpMetadata,
-    SpMetadataConfig as RawSpMetadataConfig,
+    generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, Metadata,
+    SpMetadata, SpMetadataInput,
 };
 use saml_rs::raw::Binding;
 use saml_rs::{
@@ -58,8 +57,8 @@ fn contacts() -> Vec<ContactPerson> {
     ]
 }
 
-fn raw_sp() -> RawSpMetadataConfig {
-    RawSpMetadataConfig {
+fn raw_sp() -> SpMetadataInput {
+    SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         assertion_consumer_service: vec![Endpoint::new(
             Binding::Post,
@@ -73,8 +72,8 @@ fn raw_sp() -> RawSpMetadataConfig {
     }
 }
 
-fn raw_idp() -> RawIdpMetadataConfig {
-    RawIdpMetadataConfig {
+fn raw_idp() -> IdpMetadataInput {
+    IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")],
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.into()],
@@ -101,8 +100,8 @@ fn raw_metadata_writes_descriptions_after_roles_with_every_order_profile() -> Te
         let xml = generate_sp_metadata(&cfg)?;
         assert_eq!(xml, SP_XML.trim_end());
         let parsed = SpMetadata::from_xml(&xml)?;
-        assert_eq!(parsed.organization()?, Some(organization()));
-        assert_eq!(parsed.contacts()?, contacts());
+        assert_eq!(parsed.as_metadata().organization()?, Some(organization()));
+        assert_eq!(parsed.as_metadata().contacts()?, contacts());
     }
     for profile in [
         None,
@@ -117,8 +116,8 @@ fn raw_metadata_writes_descriptions_after_roles_with_every_order_profile() -> Te
         let xml = generate_idp_metadata(&cfg)?;
         assert_eq!(xml, IDP_XML.trim_end());
         let parsed = IdpMetadata::from_xml(&xml)?;
-        assert_eq!(parsed.organization()?, Some(organization()));
-        assert_eq!(parsed.contacts()?, contacts());
+        assert_eq!(parsed.as_metadata().organization()?, Some(organization()));
+        assert_eq!(parsed.as_metadata().contacts()?, contacts());
     }
     Ok(())
 }
@@ -156,8 +155,8 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
         idp.metadata_xml(),
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    assert_eq!(sp_peer.metadata().organization()?, Some(organization()));
-    assert_eq!(idp_peer.metadata().contacts()?, contacts());
+    assert_eq!(sp_peer.organization()?, Some(organization()));
+    assert_eq!(idp_peer.contacts()?, contacts());
     Ok(())
 }
 
@@ -176,8 +175,8 @@ fn unset_descriptions_leave_existing_output_unchanged() -> TestResult {
         "</SPSSODescriptor></EntityDescriptor>"
     ));
     let parsed = SpMetadata::from_xml(&xml)?;
-    assert_eq!(parsed.organization()?, None);
-    assert!(parsed.contacts()?.is_empty());
+    assert_eq!(parsed.as_metadata().organization()?, None);
+    assert!(parsed.as_metadata().contacts()?.is_empty());
     let mut idp = raw_idp();
     idp.organization = None;
     idp.contacts.clear();
@@ -312,11 +311,11 @@ fn imported_descriptions_use_entity_scope_and_resolved_namespaces() -> TestResul
       </md:EntitiesDescriptor>"#;
     let metadata = IdpMetadata::from_xml(xml)?;
     assert_eq!(
-        metadata.organization()?.map(|org| org.names),
+        metadata.as_metadata().organization()?.map(|org| org.names),
         Some(vec![LocalizedValue::new("en", "Example")])
     );
     assert_eq!(
-        metadata.contacts()?,
+        metadata.as_metadata().contacts()?,
         vec![
             ContactPerson {
                 email_addresses: vec!["mailto:security@example.com".into()],
@@ -325,10 +324,10 @@ fn imported_descriptions_use_entity_scope_and_resolved_namespaces() -> TestResul
             ContactPerson::new(ContactType::Other)
         ]
     );
-    assert_eq!(metadata.get_metadata(), xml);
+    assert_eq!(metadata.as_metadata().metadata_xml(), xml);
     assert_eq!(
-        Metadata::parse(xml, Vec::new())?.contacts()?,
-        metadata.contacts()?
+        Metadata::parse(xml)?.contacts()?,
+        metadata.as_metadata().contacts()?
     );
     Ok(())
 }
@@ -339,8 +338,14 @@ fn malformed_optional_descriptions_do_not_change_import_acceptance() -> TestResu
         .replace("contactType=\"technical\"", "contactType=\"unknown\"")
         .replace("xml:lang=\"en\"", "lang=\"en\"");
     let parsed = IdpMetadata::from_xml(&xml)?;
-    assert!(matches!(parsed.contacts(), Err(SamlError::Invalid(_))));
-    assert!(matches!(parsed.organization(), Err(SamlError::Invalid(_))));
+    assert!(matches!(
+        parsed.as_metadata().contacts(),
+        Err(SamlError::Invalid(_))
+    ));
+    assert!(matches!(
+        parsed.as_metadata().organization(),
+        Err(SamlError::Invalid(_))
+    ));
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &xml,

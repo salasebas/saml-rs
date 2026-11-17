@@ -1208,7 +1208,8 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
             .idp
             .raw_identity_provider()
             .metadata
-            .get_entity_id(),
+            .as_metadata()
+            .entity_id(),
         Some(IDP_ENTITY_ID)
     );
     Ok(())
@@ -1689,8 +1690,8 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         ..IdpValidationPolicy::compatibility()
     })?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    assert!(!sp_descriptor.was_verified_with_pinned_certificates());
-    assert!(!idp_descriptor.was_verified_with_pinned_certificates());
+    assert!(!sp_descriptor.metadata_signature_verified());
+    assert!(!idp_descriptor.metadata_signature_verified());
 
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let request_fields = post_fields(&started.outbound)?;
@@ -3791,8 +3792,8 @@ fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_
     let raw_sp = sp.raw_service_provider();
     let result = saml_rs::raw::logout::create_logout_request(
         &raw_idp.setting,
-        &raw_idp.metadata,
-        &raw_sp.metadata,
+        raw_idp.metadata.as_metadata(),
+        raw_sp.metadata.as_metadata(),
         Binding::Post,
         &saml_rs::raw::User::new("alice@example.com"),
         None,

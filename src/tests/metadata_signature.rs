@@ -8,7 +8,6 @@ use saml_rs::crypto::{
     sign_saml_xml, verify_metadata_signature, verify_metadata_signature_detailed,
     verify_metadata_signature_detailed_with_limits, verify_metadata_signature_with_limits,
 };
-use saml_rs::metadata::IdpMetadata;
 use saml_rs::util::normalize_cert_string;
 use saml_rs::SamlError;
 use saml_rs::XmlLimits;
@@ -94,7 +93,7 @@ fn metadata_signature_detailed_default_limits_preserves_signed_descriptor(
 
     assert!(verification.verified());
     let signed_xml = verification
-        .signed_entity_descriptor_xml()
+        .signed_metadata_xml()
         .ok_or("missing signed descriptor")?;
     assert!(signed_xml.contains("entityID=\"https://idp.example.com/metadata\""));
     assert!(signed_xml.contains("<ds:Signature"));
@@ -145,46 +144,6 @@ fn metadata_signature_bool_wrapper_uses_detailed_coverage() -> Result<(), Box<dy
 }
 
 #[test]
-fn metadata_method_detailed_default_limits_preserves_signed_descriptor(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let signed = sign_root_metadata(idp_metadata_xml())?;
-    let metadata = IdpMetadata::from_xml(&signed)?;
-    let certificates = [CERT.to_string()];
-    let verification = metadata.verify_signature_detailed(&certificates)?;
-
-    assert_eq!(
-        verification,
-        verify_metadata_signature_detailed(&signed, &certificates)?
-    );
-    assert_eq!(
-        metadata.verify_signature_detailed_with_limits(&certificates, XmlLimits::default())?,
-        verification
-    );
-    assert!(metadata.verify_signature(&certificates)?);
-    assert!(metadata.verify_signature_with_limits(&certificates, XmlLimits::default())?);
-
-    let limits = XmlLimits {
-        max_bytes: signed.len() - 1,
-        ..XmlLimits::default()
-    };
-    for result in [
-        metadata.verify_signature_with_limits(&certificates, limits),
-        metadata
-            .verify_signature_detailed_with_limits(&certificates, limits)
-            .map(|verification| verification.verified()),
-    ] {
-        assert!(
-            matches!(result, Err(SamlError::Invalid(detail)) if detail.contains("ERR_XML_LIMIT_EXCEEDED"))
-        );
-    }
-
-    assert!(verification
-        .signed_entity_descriptor_xml()
-        .is_some_and(|xml| xml.contains("entityID=\"https://idp.example.com/metadata\"")));
-    Ok(())
-}
-
-#[test]
 fn metadata_signature_unsigned_metadata_returns_unverified(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let verification = verify_metadata_signature_detailed_with_limits(
@@ -194,7 +153,7 @@ fn metadata_signature_unsigned_metadata_returns_unverified(
     )?;
 
     assert!(!verification.verified());
-    assert_eq!(verification.signed_entity_descriptor_xml(), None);
+    assert_eq!(verification.signed_metadata_xml(), None);
     Ok(())
 }
 
@@ -205,7 +164,7 @@ fn metadata_signature_does_not_verify_with_a_certificate_outside_the_trust_ancho
     let verification = verify_metadata_signature_detailed(&signed, &[WRONG_CERT.to_string()])?;
 
     assert!(!verification.verified());
-    assert_eq!(verification.signed_entity_descriptor_xml(), None);
+    assert_eq!(verification.signed_metadata_xml(), None);
     Ok(())
 }
 

@@ -15,7 +15,7 @@ use crate::flow::{
     ResponseSignatureRequirement, SignedMessageDestination,
 };
 use crate::idp::IdentityProvider;
-use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataConfig};
+use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataInput};
 use crate::model::validate_name_id_format;
 use crate::template::{replace_tags_by_optional_value, LOGIN_REQUEST_TEMPLATE};
 use std::time::SystemTime;
@@ -136,14 +136,17 @@ impl ServiceProvider {
     }
 
     pub(crate) fn from_parsed_metadata(metadata: SpMetadata, mut setting: EntitySetting) -> Self {
-        setting.authn_requests_signed = metadata.is_authn_request_signed();
-        setting.want_assertions_signed = metadata.is_want_assertions_signed();
-        let formats = metadata.get_name_id_format();
+        setting.authn_requests_signed = metadata.authn_requests_signed();
+        setting.want_assertions_signed = metadata.want_assertions_signed();
+        let formats = metadata.as_metadata().name_id_formats();
         if !formats.is_empty() {
-            setting.name_id_format = formats;
+            setting.name_id_format = formats
+                .iter()
+                .map(|format| format.as_uri().to_string())
+                .collect();
         }
         if setting.entity_id.is_none() {
-            setting.entity_id = metadata.get_entity_id().map(str::to_string);
+            setting.entity_id = metadata.as_metadata().entity_id().map(str::to_string);
         }
         Self { setting, metadata }
     }
@@ -161,7 +164,7 @@ impl ServiceProvider {
     /// the generated metadata cannot be parsed back into SP
     /// metadata, including invalid endpoint or certificate declarations.
     pub fn from_config(
-        config: &SpMetadataConfig,
+        config: &SpMetadataInput,
         setting: EntitySetting,
     ) -> Result<Self, SamlError> {
         Self::from_metadata(&generate_sp_metadata(config)?, setting)
@@ -169,14 +172,14 @@ impl ServiceProvider {
 
     /// The SP metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.metadata.get_metadata()
+        self.metadata.as_metadata().metadata_xml()
     }
 
     fn entity_id(&self) -> String {
         self.setting
             .entity_id
             .clone()
-            .or_else(|| self.metadata.get_entity_id().map(str::to_string))
+            .or_else(|| self.metadata.as_metadata().entity_id().map(str::to_string))
             .unwrap_or_default()
     }
 
@@ -235,8 +238,7 @@ impl ServiceProvider {
         preferences: &AuthnRequestPreferences<'_>,
     ) -> Result<BindingContext, SamlError> {
         preferences.validate()?;
-        if idp.metadata.is_want_authn_requests_signed() && !self.metadata.is_authn_request_signed()
-        {
+        if idp.metadata.want_authn_requests_signed() && !self.metadata.authn_requests_signed() {
             return Err(SamlError::Invalid(
                 "ERR_METADATA_CONFLICT_REQUEST_SIGNED_FLAG: SP AuthnRequestsSigned=false but IdP WantAuthnRequestsSigned=true"
                     .into(),
@@ -244,7 +246,7 @@ impl ServiceProvider {
         }
         let destination = idp
             .metadata
-            .get_single_sign_on_service(binding)
+            .single_sign_on_location(binding)
             .ok_or_else(|| SamlError::MissingMetadata("SingleSignOnService".into()))?;
         let custom_template = self.setting.login_request_template.as_deref();
         if producer.follows() && (options.custom.is_some() || custom_template.is_some()) {
@@ -273,7 +275,7 @@ impl ServiceProvider {
                 } else {
                     Some(
                         self.metadata
-                            .get_assertion_consumer_service(response_binding)
+                            .assertion_consumer_location(response_binding)
                             .ok_or_else(|| {
                                 SamlError::MissingMetadata("AssertionConsumerService".into())
                             })?,
@@ -344,7 +346,7 @@ impl ServiceProvider {
             }
         };
 
-        if self.metadata.is_authn_request_signed() {
+        if self.metadata.authn_requests_signed() {
             return self.signed_request_context(binding, &xml, destination, relay_state, id);
         }
 
@@ -569,7 +571,10 @@ impl ServiceProvider {
         correlation: LoginResponseCorrelation<'_>,
         options: LoginResponseParseOptions<'_>,
     ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
-        let signing_certs = idp.metadata.x509_certificates(CertUse::Signing);
+        let signing_certs = idp
+            .metadata
+            .as_metadata()
+            .x509_certificates(CertUse::Signing);
         let decrypt_key = if self.setting.is_assertion_encrypted {
             self.setting.enc_private_key.as_deref()
         } else {
@@ -584,7 +589,7 @@ impl ServiceProvider {
             Some(recipient) => recipient.to_string(),
             None => self
                 .metadata
-                .get_assertion_consumer_service(binding)
+                .assertion_consumer_location(binding)
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let result = flow_with_expected_recipient_and_signature_evidence(
@@ -595,8 +600,8 @@ impl ServiceProvider {
                 verify_signature_if_present: false,
                 require_audience_restriction: self.setting.require_audience_restriction,
                 xml_signatures: self.setting.xml_signatures,
-                from_issuer: idp.metadata.get_entity_id(),
-                signing_certs: &signing_certs,
+                from_issuer: idp.metadata.as_metadata().entity_id(),
+                signing_certs,
                 hmac_secret: idp.setting.hmac_secret.as_ref(),
                 decrypt_key,
                 decrypt_key_pass: self.setting.enc_private_key_pass.as_deref(),
@@ -651,12 +656,12 @@ impl ServiceProvider {
 mod tests {
     use super::*;
     use crate::binding::{decode_base64, deflate_raw_decode};
-    use crate::metadata::{Endpoint, IdpMetadataConfig};
+    use crate::metadata::{Endpoint, IdpMetadataInput};
     use url::Url;
 
     fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 single_sign_on_service: vec![
                     Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
@@ -670,7 +675,7 @@ mod tests {
 
     fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
         ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 assertion_consumer_service: vec![Endpoint::new(
                     Binding::Post,
@@ -748,7 +753,7 @@ mod crypto_tests {
     use crate::crypto::verify_signature;
     use crate::entity::User;
     use crate::idp::LoginResponseOptions;
-    use crate::metadata::{Endpoint, IdpMetadataConfig};
+    use crate::metadata::{Endpoint, IdpMetadataInput};
 
     const IDP_CERT: &str = include_str!("../tests/fixtures/key/idp/cert.cer");
     const SP_PRIVKEY: &str = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -757,7 +762,7 @@ mod crypto_tests {
 
     fn signing_idp() -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![IDP_CERT.into()],
                 want_authn_requests_signed: true,
@@ -775,7 +780,7 @@ mod crypto_tests {
     #[allow(deprecated)]
     fn parse_signed_response_extracts_name_id() -> Result<(), Box<dyn std::error::Error>> {
         let idp = IdentityProvider::from_config(
-            &IdpMetadataConfig {
+            &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![SP_SIGNING_CERT.into()],
                 single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -789,7 +794,7 @@ mod crypto_tests {
             },
         )?;
         let sp = ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 assertion_consumer_service: vec![Endpoint::new(
                     Binding::Post,
@@ -821,7 +826,7 @@ mod crypto_tests {
     #[allow(deprecated)]
     fn create_signed_post_request_verifies() -> Result<(), Box<dyn std::error::Error>> {
         let sp = ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 authn_requests_signed: true,
                 assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -852,7 +857,7 @@ mod crypto_tests {
     #[allow(deprecated)]
     fn create_signed_redirect_request_has_signature() -> Result<(), Box<dyn std::error::Error>> {
         let sp = ServiceProvider::from_config(
-            &SpMetadataConfig {
+            &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 authn_requests_signed: true,
                 assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],

@@ -11,15 +11,6 @@ use crate::metadata::write::MetadataWriter;
 use crate::model::validate_name_id_format;
 use crate::util::normalize_cert_string;
 
-/// Indexed `ArtifactResolutionService` location. The binding is SOAP.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArtifactResolutionEndpoint {
-    /// `index` selecting this endpoint from an artifact.
-    pub index: u16,
-    /// Endpoint URL.
-    pub location: String,
-}
-
 /// A protocol endpoint (`SingleSignOnService` / `SingleLogoutService` / ACS).
 #[derive(Debug, Clone)]
 pub struct Endpoint {
@@ -52,7 +43,7 @@ impl Endpoint {
 
 /// SP metadata generation input.
 #[derive(Debug, Clone, Default)]
-pub struct SpMetadataConfig {
+pub struct SpMetadataInput {
     /// `entityID`.
     pub entity_id: String,
     /// Signing certificates (PEM or bare base64).
@@ -88,7 +79,7 @@ pub struct SpMetadataConfig {
 
 /// IdP metadata generation input.
 #[derive(Debug, Clone, Default)]
-pub struct IdpMetadataConfig {
+pub struct IdpMetadataInput {
     /// `entityID`.
     pub entity_id: String,
     /// Signing certificates.
@@ -104,7 +95,7 @@ pub struct IdpMetadataConfig {
     /// `SingleLogoutService` endpoints.
     pub single_logout_service: Vec<Endpoint>,
     /// `ArtifactResolutionService` endpoints. Each binding is SOAP.
-    pub artifact_resolution_service: Vec<ArtifactResolutionEndpoint>,
+    pub artifact_resolution_service: Vec<crate::ArtifactResolutionService>,
     /// `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::idp::DEFAULT`]).
@@ -249,16 +240,16 @@ fn write_single_sign_on_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) 
 
 fn write_artifact_resolution_service(
     w: &mut MetadataWriter,
-    endpoints: &[ArtifactResolutionEndpoint],
+    endpoints: &[crate::ArtifactResolutionService],
 ) {
     for endpoint in endpoints {
-        let index = endpoint.index.to_string();
+        let index = endpoint.index().to_string();
         w.empty(
             "ArtifactResolutionService",
             &[
                 ("index", index.as_str()),
                 ("Binding", crate::constants::SOAP_BINDING_URN),
-                ("Location", endpoint.location.as_str()),
+                ("Location", endpoint.location().as_str()),
             ],
         );
     }
@@ -272,7 +263,7 @@ fn write_manage_name_id_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) 
 
 fn write_sp_group(
     w: &mut MetadataWriter,
-    cfg: &SpMetadataConfig,
+    cfg: &SpMetadataInput,
     name: &str,
 ) -> Result<(), SamlError> {
     match name {
@@ -295,7 +286,7 @@ fn write_sp_group(
 
 fn write_idp_group(
     w: &mut MetadataWriter,
-    cfg: &IdpMetadataConfig,
+    cfg: &IdpMetadataInput,
     name: &str,
 ) -> Result<(), SamlError> {
     match name {
@@ -366,7 +357,7 @@ fn bool_str(value: bool) -> &'static str {
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
 /// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
-pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError> {
+pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> {
     if cfg.assertion_consumer_service.is_empty() {
         return Err(SamlError::MissingMetadata(
             "AssertionConsumerService".to_string(),
@@ -421,7 +412,7 @@ pub fn generate_sp_metadata(cfg: &SpMetadataConfig) -> Result<String, SamlError>
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
 /// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
-pub fn generate_idp_metadata(cfg: &IdpMetadataConfig) -> Result<String, SamlError> {
+pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
             "SingleSignOnService".to_string(),

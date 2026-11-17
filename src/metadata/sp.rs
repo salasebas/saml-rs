@@ -5,7 +5,6 @@ use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::{extract_with_limits, ExtractorField, XmlLimits};
-use std::ops::Deref;
 
 /// Parsed AssertionConsumerService endpoint from SP metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +31,7 @@ impl AcsMetadataEndpoint {
     }
 }
 
-/// Parsed SP metadata. Derefs to [`Metadata`] for the shared accessors.
+/// Parsed SP metadata. Use [`Self::as_metadata`] for role-scoped shared fields.
 #[derive(Debug, Clone)]
 pub struct SpMetadata {
     inner: Metadata,
@@ -40,6 +39,11 @@ pub struct SpMetadata {
 }
 
 impl SpMetadata {
+    /// Borrow shared metadata fields selected from this SAML 2.0 role.
+    pub fn as_metadata(&self) -> &Metadata {
+        &self.inner
+    }
+
     /// Parse SP metadata XML.
     ///
     /// Keys, flags, and endpoints are read from the entity's `SPSSODescriptor`
@@ -144,7 +148,7 @@ impl SpMetadata {
     /// `WantAssertionsSigned` flag.
     ///
     /// `true` and `1` are true. An absent attribute or another value is false.
-    pub fn is_want_assertions_signed(&self) -> bool {
+    pub fn want_assertions_signed(&self) -> bool {
         crate::xml::xs_boolean(
             self.inner
                 .meta
@@ -156,7 +160,7 @@ impl SpMetadata {
     ///
     /// True when any SAML 2.0 `SPSSODescriptor` sets it. `true` and `1` are
     /// true. An absent attribute or another value is false.
-    pub fn is_authn_request_signed(&self) -> bool {
+    pub fn authn_requests_signed(&self) -> bool {
         self.inner
             .meta
             .get("spSSODescriptor")
@@ -171,13 +175,13 @@ impl SpMetadata {
     /// The default is the first endpoint for `binding` with `isDefault` true,
     /// otherwise the first whose `isDefault` is not false, otherwise the first.
     /// `true` and `1` are true. `false` and `0` are false.
-    pub fn get_assertion_consumer_service(&self, binding: Binding) -> Option<String> {
-        self.get_assertion_consumer_service_endpoint(binding)
+    pub fn assertion_consumer_location(&self, binding: Binding) -> Option<String> {
+        self.assertion_consumer_service_endpoint(binding)
             .map(|endpoint| endpoint.location)
     }
 
     /// Default `AssertionConsumerService` endpoint for `binding`.
-    pub(crate) fn get_assertion_consumer_service_endpoint(
+    pub(crate) fn assertion_consumer_service_endpoint(
         &self,
         binding: Binding,
     ) -> Option<AcsMetadataEndpoint> {
@@ -192,7 +196,7 @@ impl SpMetadata {
     }
 
     /// Default `AssertionConsumerService` across the SAML 2.0 role's bindings.
-    pub(crate) fn get_default_assertion_consumer_service_endpoint(
+    pub(crate) fn default_assertion_consumer_service_endpoint(
         &self,
     ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
         select_indexed_default(
@@ -210,7 +214,7 @@ impl SpMetadata {
     }
 
     /// `AssertionConsumerService` endpoint with the declared metadata index.
-    pub(crate) fn get_assertion_consumer_service_by_index(
+    pub(crate) fn assertion_consumer_service_by_index(
         &self,
         index: u16,
     ) -> Result<Option<AcsMetadataEndpoint>, SamlError> {
@@ -240,7 +244,7 @@ impl SpMetadata {
     ///
     /// The candidates are the HTTP-POST and HTTP-POST-SimpleSign endpoints.
     /// Selection uses the same default rule as
-    /// [`Self::get_assertion_consumer_service`].
+    /// [`Self::assertion_consumer_location`].
     pub(crate) fn default_assertion_consumer_location(&self) -> Option<String> {
         select_indexed_default(self.posted_response_endpoints(), |endpoint| {
             (endpoint.is_default, endpoint.is_default_false)
@@ -330,13 +334,6 @@ fn select_indexed_default<T>(endpoints: Vec<T>, flags: impl Fn(&T) -> (bool, boo
     endpoints.into_iter().next()
 }
 
-impl Deref for SpMetadata {
-    type Target = Metadata;
-    fn deref(&self) -> &Metadata {
-        &self.inner
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::SpMetadata;
@@ -358,7 +355,7 @@ mod tests {
         )?;
         assert_eq!(
             second_default
-                .get_assertion_consumer_service(Binding::Post)
+                .assertion_consumer_location(Binding::Post)
                 .as_deref(),
             Some("https://sp.example.com/second")
         );
@@ -370,13 +367,13 @@ mod tests {
         )?;
         assert_eq!(
             false_then_omitted
-                .get_assertion_consumer_service(Binding::Post)
+                .assertion_consumer_location(Binding::Post)
                 .as_deref(),
             Some("https://sp.example.com/second")
         );
         assert_eq!(
             false_then_omitted
-                .get_assertion_consumer_service(Binding::Redirect)
+                .assertion_consumer_location(Binding::Redirect)
                 .as_deref(),
             Some("https://sp.example.com/redirect")
         );
@@ -387,7 +384,7 @@ mod tests {
         )?;
         assert_eq!(
             all_false
-                .get_assertion_consumer_service(Binding::Post)
+                .assertion_consumer_location(Binding::Post)
                 .as_deref(),
             Some("https://sp.example.com/first")
         );
@@ -398,7 +395,7 @@ mod tests {
         )?;
         assert_eq!(
             numeric_true
-                .get_assertion_consumer_service(Binding::Post)
+                .assertion_consumer_location(Binding::Post)
                 .as_deref(),
             Some("https://sp.example.com/second")
         );
@@ -410,7 +407,7 @@ mod tests {
             ))?;
             assert_eq!(
                 foreign_false
-                    .get_assertion_consumer_service(Binding::Post)
+                    .assertion_consumer_location(Binding::Post)
                     .as_deref(),
                 Some("https://sp.example.com/first"),
                 "ext:isDefault={value}"
@@ -427,7 +424,7 @@ mod tests {
             ))?;
             assert_eq!(
                 qualified_and_unqualified
-                    .get_assertion_consumer_service(Binding::Post)
+                    .assertion_consumer_location(Binding::Post)
                     .as_deref(),
                 Some("https://sp.example.com/second"),
                 "{attributes}"
@@ -446,7 +443,7 @@ mod tests {
             ))?;
             assert_eq!(
                 whitespace_true
-                    .get_assertion_consumer_service(Binding::Post)
+                    .assertion_consumer_location(Binding::Post)
                     .as_deref(),
                 Some("https://sp.example.com/second"),
                 "isDefault={is_default}"
@@ -465,7 +462,7 @@ mod tests {
             ))?;
             assert_eq!(
                 whitespace_false
-                    .get_assertion_consumer_service(Binding::Post)
+                    .assertion_consumer_location(Binding::Post)
                     .as_deref(),
                 Some("https://sp.example.com/second"),
                 "isDefault={is_default}"
@@ -478,7 +475,7 @@ mod tests {
         )?;
         assert_eq!(
             unrecognized
-                .get_assertion_consumer_service(Binding::Post)
+                .assertion_consumer_location(Binding::Post)
                 .as_deref(),
             Some("https://sp.example.com/first")
         );
