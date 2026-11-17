@@ -556,7 +556,7 @@ pub(crate) fn issue(
     issued: &mut IssuedArtifacts,
 ) -> Result<Artifact, SamlError> {
     let entity_id = metadata
-        .get_entity_id()
+        .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?;
     let _service = soap_service(metadata, endpoint_index)?;
     let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(entity_id.as_bytes()).into();
@@ -636,7 +636,7 @@ pub(crate) fn answer(
     schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<AnsweredArtifact, SamlError> {
     let entity_id = metadata
-        .get_entity_id()
+        .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();
     let body = read_soap_body(request_envelope, xml_limits, &[])?;

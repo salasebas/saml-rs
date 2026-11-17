@@ -1185,11 +1185,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
         exchange.pending.request_id()
     );
     assert_eq!(
-        exchange
-            .idp
-            .raw_identity_provider()
-            .metadata
-            .get_entity_id(),
+        exchange.idp.raw_identity_provider().metadata.entity_id(),
         Some(IDP_ENTITY_ID)
     );
     assert_eq!(exchange.sp_descriptor.entity_id().as_str(), SP_ENTITY_ID);

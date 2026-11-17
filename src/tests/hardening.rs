@@ -682,7 +682,6 @@ fn hardening_signed_metadata_verifies_against_trust_anchor(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::crypto::keys::read_private_key;
     use saml_rs::crypto::{sign_saml_xml, verify_metadata_signature};
-    use saml_rs::metadata::IdpMetadata;
     use saml_rs::{SignatureAction, SignatureConfig};
 
     let md = "<EntityDescriptor ID=\"_md1\" entityID=\"https://idp.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><IDPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://idp/sso\"/></IDPSSODescriptor></EntityDescriptor>";
@@ -696,8 +695,6 @@ fn hardening_signed_metadata_verifies_against_trust_anchor(
 
     // Valid against the trust anchor.
     assert!(verify_metadata_signature(&signed, &[CERT.to_string()])?);
-    // Also reachable via the parsed Metadata.
-    assert!(IdpMetadata::from_xml(&signed)?.verify_signature(&[CERT.to_string()])?);
     // Tampered entityID no longer verifies.
     let tampered = signed.replacen(
         "https://idp.example.com/metadata",
@@ -736,7 +733,7 @@ fn hardening_metadata_signature_requires_root_coverage() -> Result<(), Box<dyn s
     let wrapped_metadata = sign(&ctx, &template)?;
 
     assert_eq!(
-        IdpMetadata::from_xml(&wrapped_metadata)?.get_entity_id(),
+        IdpMetadata::from_xml(&wrapped_metadata)?.entity_id(),
         Some("https://evil.example.com/metadata")
     );
     match verify_metadata_signature(&wrapped_metadata, &[CERT.to_string()]) {

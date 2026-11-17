@@ -45,7 +45,7 @@ pub(super) fn resolve_response_acs(
                     return Err(SamlError::destination_mismatch(
                         url.as_str(),
                         metadata
-                            .get_assertion_consumer_service(binding.as_binding())
+                            .assertion_consumer_service(binding.as_binding())
                             .as_deref(),
                     ));
                 }

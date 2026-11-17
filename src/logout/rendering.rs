@@ -11,7 +11,7 @@ pub(super) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
     setting
         .entity_id
         .clone()
-        .or_else(|| meta.get_entity_id().map(str::to_string))
+        .or_else(|| meta.entity_id().map(str::to_string))
         .unwrap_or_default()
 }
 

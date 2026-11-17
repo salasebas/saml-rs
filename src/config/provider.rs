@@ -2,10 +2,7 @@
 
 use crate::error::SamlError;
 use crate::idp::IdentityProvider;
-use crate::metadata::{
-    ArtifactResolutionEndpoint, IdpMetadataConfig as IdpMetadataInput,
-    SpMetadataConfig as SpMetadataInput,
-};
+use crate::metadata::{IdpMetadataConfig as IdpMetadataInput, SpMetadataConfig as SpMetadataInput};
 use crate::sp::ServiceProvider;
 
 use super::algorithms::name_id_format_uris;
@@ -87,14 +84,7 @@ fn idp_metadata_input(config: &IdpConfig) -> IdpMetadataInput {
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
-        artifact_resolution_service: metadata
-            .artifact_resolution_service()
-            .iter()
-            .map(|service| ArtifactResolutionEndpoint {
-                index: service.index(),
-                location: service.location().as_str().to_string(),
-            })
-            .collect(),
+        artifact_resolution_service: metadata.artifact_resolution_service().to_vec(),
         manage_name_id_service: metadata
             .manage_name_id_service()
             .iter()

@@ -492,9 +492,9 @@ fn entities_descriptor_require_signature_accepts_the_profile_shape(
     assert!(descriptor.was_verified_with_pinned_certificates());
     assert_eq!(
         descriptor
-            .metadata()
-            .get_single_sign_on_service(saml_rs::constants::Binding::Post)
-            .as_deref(),
+            .single_sign_on_service(saml_rs::SsoRequestBinding::Post)?
+            .as_ref()
+            .map(saml_rs::EndpointUrl::as_str),
         Some("https://idp.example.com/sso")
     );
     assert!(descriptor

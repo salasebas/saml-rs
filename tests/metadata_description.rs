@@ -156,8 +156,8 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
         idp.metadata_xml(),
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    assert_eq!(sp_peer.metadata().organization()?, Some(organization()));
-    assert_eq!(idp_peer.metadata().contacts()?, contacts());
+    assert_eq!(sp_peer.organization()?, Some(organization()));
+    assert_eq!(idp_peer.contacts()?, contacts());
     Ok(())
 }
 
@@ -325,11 +325,8 @@ fn imported_descriptions_use_entity_scope_and_resolved_namespaces() -> TestResul
             ContactPerson::new(ContactType::Other)
         ]
     );
-    assert_eq!(metadata.get_metadata(), xml);
-    assert_eq!(
-        Metadata::parse(xml, Vec::new())?.contacts()?,
-        metadata.contacts()?
-    );
+    assert_eq!(metadata.metadata_xml(), xml);
+    assert_eq!(Metadata::parse(xml)?.contacts()?, metadata.contacts()?);
     Ok(())
 }
 

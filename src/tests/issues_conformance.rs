@@ -188,7 +188,7 @@ fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std
     let idp = IdentityProvider::from_config(&idp_config(), EntitySetting::default())?;
     assert_eq!(
         idp.metadata
-            .get_single_sign_on_service(Binding::Post)
+            .single_sign_on_service(Binding::Post)
             .as_deref(),
         Some("idp.example.com/sso")
     );

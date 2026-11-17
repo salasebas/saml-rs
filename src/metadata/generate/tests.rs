@@ -72,30 +72,29 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     };
     let xml = generate_sp_metadata(&cfg)?;
     let parsed = SpMetadata::from_xml(&xml)?;
+    assert_eq!(parsed.entity_id(), Some("https://sp.example.com/metadata"));
+    assert!(parsed.authn_requests_signed());
+    assert!(parsed.want_assertions_signed());
     assert_eq!(
-        parsed.get_entity_id(),
-        Some("https://sp.example.com/metadata")
-    );
-    assert!(parsed.is_authn_request_signed());
-    assert!(parsed.is_want_assertions_signed());
-    assert_eq!(
-        parsed
-            .get_assertion_consumer_service(Binding::Post)
-            .as_deref(),
+        parsed.assertion_consumer_service(Binding::Post).as_deref(),
         Some("https://sp.example.com/acs")
     );
     assert_eq!(
-        parsed
-            .get_single_logout_service(Binding::Redirect)
-            .as_deref(),
+        parsed.single_logout_service(Binding::Redirect).as_deref(),
         Some("https://sp.example.com/slo")
     );
     assert_eq!(
-        parsed.get_x509_certificate(CertUse::Signing).as_deref(),
+        parsed
+            .x509_certificates(CertUse::Signing)
+            .first()
+            .map(String::as_str),
         Some("MIIBsigning")
     );
     assert_eq!(
-        parsed.get_x509_certificate(CertUse::Encryption).as_deref(),
+        parsed
+            .x509_certificates(CertUse::Encryption)
+            .first()
+            .map(String::as_str),
         Some("MIIBencrypt")
     );
     Ok(())
@@ -293,15 +292,16 @@ fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     };
     let xml = generate_idp_metadata(&cfg)?;
     let parsed = IdpMetadata::from_xml(&xml)?;
-    assert!(parsed.is_want_authn_requests_signed());
+    assert!(parsed.want_authn_requests_signed());
     assert_eq!(
-        parsed
-            .get_single_sign_on_service(Binding::Redirect)
-            .as_deref(),
+        parsed.single_sign_on_service(Binding::Redirect).as_deref(),
         Some("https://idp.example.com/sso")
     );
     assert_eq!(
-        parsed.get_x509_certificate(CertUse::Signing).as_deref(),
+        parsed
+            .x509_certificates(CertUse::Signing)
+            .first()
+            .map(String::as_str),
         Some("MIIBidp")
     );
     Ok(())
@@ -346,7 +346,7 @@ fn sp_from_config_escapes_name_id_format_xml_markup() -> TestResult {
 
     assert!(sp
         .metadata
-        .get_single_logout_service(Binding::Redirect)
+        .single_logout_service(Binding::Redirect)
         .is_none());
     assert_eq!(sp.setting.name_id_format, vec![injected_format]);
     assert!(sp.metadata_xml().contains("&lt;SingleLogoutService"));
@@ -367,7 +367,7 @@ fn sp_metadata_escapes_entity_id_attribute_markup() -> TestResult {
 
     assert!(!xml.contains(" ID=\"_evil\""));
     assert!(xml.contains("&quot; ID=&quot;_evil"));
-    assert_eq!(parsed.get_entity_id(), Some(entity_id));
+    assert_eq!(parsed.entity_id(), Some(entity_id));
     Ok(())
 }
 
@@ -393,7 +393,10 @@ fn sp_metadata_escapes_certificate_text_markup() -> TestResult {
     let parsed = SpMetadata::from_xml(&xml)?;
 
     assert!(xml.contains("&lt;NameIDFormat&gt;evil&lt;/NameIDFormat&gt;"));
-    assert_eq!(parsed.get_name_id_format(), [name_id_format::EMAIL_ADDRESS]);
+    assert_eq!(
+        parsed.name_id_formats(),
+        [crate::NameIdFormat::EmailAddress]
+    );
     assert_eq!(parsed.x509_certificates(CertUse::Signing).len(), 1);
     Ok(())
 }
@@ -451,14 +454,10 @@ fn idp_metadata_escapes_endpoint_location_attribute_markup() -> TestResult {
 
     assert!(!xml.contains("<SingleLogoutService"));
     assert_eq!(
-        parsed
-            .get_single_sign_on_service(Binding::Redirect)
-            .as_deref(),
+        parsed.single_sign_on_service(Binding::Redirect).as_deref(),
         Some(injected_location.as_str())
     );
-    assert!(parsed
-        .get_single_logout_service(Binding::Redirect)
-        .is_none());
+    assert!(parsed.single_logout_service(Binding::Redirect).is_none());
     Ok(())
 }
 
@@ -612,10 +611,10 @@ fn idp_custom_elements_order_writes_omitted_artifact_resolution_after_keys() -> 
         name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-        artifact_resolution_service: vec![ArtifactResolutionEndpoint {
-            index: 0,
-            location: "https://idp/artifact".into(),
-        }],
+        artifact_resolution_service: vec![crate::ArtifactResolutionService::new(
+            0,
+            crate::EndpointUrl::try_new("https://idp/artifact")?,
+        )],
         elements_order: Some(
             elements_order::idp::SHIBBOLETH
                 .iter()
@@ -649,10 +648,10 @@ fn default_orders_follow_the_metadata_schema_sequence() -> TestResult {
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-        artifact_resolution_service: vec![ArtifactResolutionEndpoint {
-            index: 0,
-            location: "https://idp/artifact".into(),
-        }],
+        artifact_resolution_service: vec![crate::ArtifactResolutionService::new(
+            0,
+            crate::EndpointUrl::try_new("https://idp/artifact")?,
+        )],
         manage_name_id_service: vec![Endpoint::new(Binding::Soap, "https://idp/nameid")],
         ..Default::default()
     })?;

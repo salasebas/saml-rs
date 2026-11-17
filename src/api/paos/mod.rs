@@ -506,7 +506,7 @@ impl Saml<Sp> {
         let issuer = self
             .raw_service_provider()
             .metadata
-            .get_entity_id()
+            .entity_id()
             .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
             .to_string();
         let (request_id, authn_request_xml) = self

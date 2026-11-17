@@ -130,7 +130,7 @@ fn unsigned_metadata_parsing_and_xml_extraction_still_work(
     let metadata_xml = idp(false)?.metadata_xml().to_string();
     let metadata = IdpMetadata::from_xml(&metadata_xml)?;
     assert_eq!(
-        metadata.get_entity_id(),
+        metadata.entity_id(),
         Some("https://idp.example.com/metadata")
     );
 

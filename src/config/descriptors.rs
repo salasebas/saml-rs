@@ -2,7 +2,10 @@ use core::str::FromStr;
 use std::collections::HashSet;
 use std::time::SystemTime;
 
-use crate::browser::{AcsEndpoint, NameIdManagementBinding, SloEndpoint, SsoEndpoint};
+use crate::browser::{
+    AcsEndpoint, LogoutBinding, NameIdManagementBinding, SloEndpoint, SsoEndpoint,
+    SsoRequestBinding, SsoResponseBinding,
+};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::idp::IdentityProvider;
@@ -435,11 +438,83 @@ impl IdpDescriptor {
 
     /// Original metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.provider.metadata.get_metadata()
+        self.provider.metadata.metadata_xml()
+    }
+
+    /// Name identifier formats advertised by this peer's SAML 2.0 role, in document order.
+    pub fn name_id_formats(&self) -> Vec<NameIdFormat> {
+        self.provider.metadata.name_id_formats()
+    }
+
+    /// Entity-level organization in the imported metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for multiple organizations or a localized
+    /// value without `xml:lang`.
+    pub fn organization(&self) -> Result<Option<crate::metadata::Organization>, SamlError> {
+        self.provider.metadata.organization()
+    }
+
+    /// Entity-level contacts in document order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for a missing or unknown `contactType`.
+    pub fn contacts(&self) -> Result<Vec<crate::metadata::ContactPerson>, SamlError> {
+        self.provider.metadata.contacts()
+    }
+
+    /// First non-empty logout request location for this peer's SAML 2.0 role and binding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_service(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        self.provider
+            .metadata
+            .single_logout_service(binding.into())
+            .map(EndpointUrl::try_new)
+            .transpose()
+    }
+
+    /// First logout response location, falling back to the endpoint's request location.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_response_service(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        self.provider
+            .metadata
+            .single_logout_response_service(binding.into())
+            .map(EndpointUrl::try_new)
+            .transpose()
+    }
+
+    /// First non-empty SSO location for this peer's SAML 2.0 IdP role and binding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_sign_on_service(
+        &self,
+        binding: SsoRequestBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        self.provider
+            .metadata
+            .single_sign_on_service(binding.into())
+            .map(EndpointUrl::try_new)
+            .transpose()
     }
 
     /// Parsed IdP metadata.
-    pub fn metadata(&self) -> &IdpMetadata {
+    pub(crate) fn metadata(&self) -> &IdpMetadata {
         &self.provider.metadata
     }
 
@@ -549,11 +624,85 @@ impl SpDescriptor {
 
     /// Original metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.provider.metadata.get_metadata()
+        self.provider.metadata.metadata_xml()
+    }
+
+    /// Name identifier formats advertised by this peer's SAML 2.0 role, in document order.
+    pub fn name_id_formats(&self) -> Vec<NameIdFormat> {
+        self.provider.metadata.name_id_formats()
+    }
+
+    /// Entity-level organization in the imported metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for multiple organizations or a localized
+    /// value without `xml:lang`.
+    pub fn organization(&self) -> Result<Option<crate::metadata::Organization>, SamlError> {
+        self.provider.metadata.organization()
+    }
+
+    /// Entity-level contacts in document order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for a missing or unknown `contactType`.
+    pub fn contacts(&self) -> Result<Vec<crate::metadata::ContactPerson>, SamlError> {
+        self.provider.metadata.contacts()
+    }
+
+    /// First non-empty logout request location for this peer's SAML 2.0 role and binding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_service(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        self.provider
+            .metadata
+            .single_logout_service(binding.into())
+            .map(EndpointUrl::try_new)
+            .transpose()
+    }
+
+    /// First logout response location, falling back to the endpoint's request location.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn single_logout_response_service(
+        &self,
+        binding: LogoutBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        self.provider
+            .metadata
+            .single_logout_response_service(binding.into())
+            .map(EndpointUrl::try_new)
+            .transpose()
+    }
+
+    /// Default assertion consumer location for this peer's SAML 2.0 SP role and binding.
+    ///
+    /// Uses the metadata's indexed endpoint default selection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the selected location is not an absolute HTTP(S) URL.
+    pub fn assertion_consumer_service(
+        &self,
+        binding: SsoResponseBinding,
+    ) -> Result<Option<EndpointUrl>, SamlError> {
+        self.provider
+            .metadata
+            .assertion_consumer_service(binding.into())
+            .map(EndpointUrl::try_new)
+            .transpose()
     }
 
     /// Parsed SP metadata.
-    pub fn metadata(&self) -> &SpMetadata {
+    pub(crate) fn metadata(&self) -> &SpMetadata {
         &self.provider.metadata
     }
 

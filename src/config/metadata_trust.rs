@@ -99,7 +99,7 @@ where
     M: Deref<Target = Metadata>,
 {
     metadata
-        .get_entity_id()
+        .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))
 }
 
@@ -162,13 +162,13 @@ fn verify_pinned_metadata_signature<M>(
 where
     M: Deref<Target = Metadata>,
 {
-    ensure_import_signature_shape(metadata.get_metadata(), transforms)?;
+    ensure_import_signature_shape(metadata.metadata_xml(), transforms)?;
     let trusted_certificates: Vec<String> = trusted_certificates
         .iter()
         .map(|certificate| certificate.as_str().to_string())
         .collect();
     let verification = crate::crypto::verify::verify_metadata_signature_coverage_with_limits(
-        metadata.get_metadata(),
+        metadata.metadata_xml(),
         &trusted_certificates,
         XmlLimits::default(),
         algorithms,
@@ -196,7 +196,7 @@ fn verify_pinned_metadata_signature<M>(
 where
     M: Deref<Target = Metadata>,
 {
-    ensure_import_signature_shape(metadata.get_metadata(), transforms)?;
+    ensure_import_signature_shape(metadata.metadata_xml(), transforms)?;
     Err(SamlError::Unsupported(
         "signed metadata verification requires a crypto provider feature".into(),
     ))

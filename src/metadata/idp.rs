@@ -148,14 +148,14 @@ impl IdpMetadata {
     /// `WantAuthnRequestsSigned` flag.
     ///
     /// `true` and `1` are true. An absent attribute or another value is false.
-    pub fn is_want_authn_requests_signed(&self) -> bool {
+    pub fn want_authn_requests_signed(&self) -> bool {
         crate::xml::xs_boolean(self.inner.meta.get_str("wantAuthnRequestsSigned")) == Some(true)
     }
 
     /// First non-empty `SingleSignOnService` `Location` for `binding`.
     ///
     /// AuthnRequests are sent to this URL.
-    pub fn get_single_sign_on_service(&self, binding: Binding) -> Option<String> {
+    pub fn single_sign_on_service(&self, binding: Binding) -> Option<String> {
         super::first_published_location(
             self.inner.meta.get("singleSignOnService"),
             binding,

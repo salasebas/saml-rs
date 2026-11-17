@@ -190,7 +190,7 @@ fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_r
 ) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = IdentityProvider::from_config(&idp_config(true), EntitySetting::default())?
         .metadata
-        .get_metadata()
+        .metadata_xml()
         .replace(
             r#"WantAuthnRequestsSigned="true""#,
             r#"WantAuthnRequestsSigned="1""#,

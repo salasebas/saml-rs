@@ -198,7 +198,7 @@ impl Saml<Idp> {
         Ok(LocalIdentityProvider {
             entity_id: idp
                 .metadata
-                .get_entity_id()
+                .entity_id()
                 .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?,
             metadata: &idp.metadata,
             setting: &idp.setting,

@@ -11,15 +11,6 @@ use crate::metadata::write::MetadataWriter;
 use crate::model::validate_name_id_format;
 use crate::util::normalize_cert_string;
 
-/// Indexed `ArtifactResolutionService` location. The binding is SOAP.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArtifactResolutionEndpoint {
-    /// `index` selecting this endpoint from an artifact.
-    pub index: u16,
-    /// Endpoint URL.
-    pub location: String,
-}
-
 /// A protocol endpoint (`SingleSignOnService` / `SingleLogoutService` / ACS).
 #[derive(Debug, Clone)]
 pub struct Endpoint {
@@ -104,7 +95,7 @@ pub struct IdpMetadataConfig {
     /// `SingleLogoutService` endpoints.
     pub single_logout_service: Vec<Endpoint>,
     /// `ArtifactResolutionService` endpoints. Each binding is SOAP.
-    pub artifact_resolution_service: Vec<ArtifactResolutionEndpoint>,
+    pub artifact_resolution_service: Vec<crate::ArtifactResolutionService>,
     /// `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<Endpoint>,
     /// Element ordering profile (defaults to [`elements_order::idp::DEFAULT`]).
@@ -249,16 +240,16 @@ fn write_single_sign_on_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) 
 
 fn write_artifact_resolution_service(
     w: &mut MetadataWriter,
-    endpoints: &[ArtifactResolutionEndpoint],
+    endpoints: &[crate::ArtifactResolutionService],
 ) {
     for endpoint in endpoints {
-        let index = endpoint.index.to_string();
+        let index = endpoint.index().to_string();
         w.empty(
             "ArtifactResolutionService",
             &[
                 ("index", index.as_str()),
                 ("Binding", crate::constants::SOAP_BINDING_URN),
-                ("Location", endpoint.location.as_str()),
+                ("Location", endpoint.location().as_str()),
             ],
         );
     }

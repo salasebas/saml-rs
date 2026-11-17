@@ -378,7 +378,7 @@ impl Local<'_> {
         self.setting
             .entity_id
             .clone()
-            .or_else(|| self.metadata.get_entity_id().map(str::to_string))
+            .or_else(|| self.metadata.entity_id().map(str::to_string))
             .ok_or_else(|| Error::MissingMetadata("entityID".into()))
     }
 }

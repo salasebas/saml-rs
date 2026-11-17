@@ -75,13 +75,13 @@ fn sp_metadata_generate_parse_round_trips() -> Result<(), Box<dyn std::error::Er
     let sp = sp(EntitySetting::default())?;
     let reparsed = ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
     assert_eq!(
-        reparsed.metadata.get_entity_id(),
+        reparsed.metadata.entity_id(),
         Some("https://sp.example.com/metadata")
     );
     assert_eq!(
         reparsed
             .metadata
-            .get_assertion_consumer_service(Binding::Post)
+            .assertion_consumer_service(Binding::Post)
             .as_deref(),
         Some("https://sp/acs")
     );
