@@ -13,6 +13,14 @@ All published workspace packages require Rust 1.88. The default
 `crypto-bergshamra` feature uses `bergshamra` 0.12 with `kryptering` 0.7 and
 preserves the RustCrypto-backed defaults.
 
+## Raise the MSRV only when needed
+
+CI tests the `rust-version` in `Cargo.toml` and the latest stable Rust.
+Raise it only when a needed language or standard library feature, or a
+dependency with no compatible version, requires it. Keep it at least six
+stable releases behind the latest. Make the change a breaking Conventional
+Commit (`!`) with a note in the current [migration guide](docs/migrations/README.md).
+
 ## How to run the checks
 
 Verify the package plus plausible side effects:

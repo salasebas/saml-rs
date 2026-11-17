@@ -110,21 +110,34 @@ jobs:
       - run: cargo nextest run -p saml-rs --locked --no-default-features --features "$CRYPTO_PROVIDER_FEATURES"
 
   msrv:
-    name: MSRV (Rust 1.88)
+    name: MSRV
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Read MSRV from Cargo.toml
+        id: msrv
+        run: |
+          msrv=$(cargo metadata --no-deps --format-version 1 | jq -er '.packages[] | select(.name == "saml-rs") | .rust_version | split(".") | .[2] //= "0" | join(".")')
+          echo "version=$msrv" >> "$GITHUB_OUTPUT"
+          echo "RUSTUP_TOOLCHAIN=$msrv" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
-          toolchain: 1.88.0
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - name: Verify MSRV toolchain
+        run: |
+          rustc --version
+          test "$(rustc --version | cut -d ' ' -f 2)" = "$RUSTUP_TOOLCHAIN"
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
-          tool: nextest
+          tool: nextest,cargo-hack
+      - name: Resolve MSRV-compatible dependencies
+        run: CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo update
       - run: cargo nextest run -p saml-rs --locked
       - run: cargo test -p saml-rs --doc --locked
+      - run: cargo hack check --rust-version --workspace --all-targets --ignore-private --locked
 
   semver:
     name: Semver

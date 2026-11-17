@@ -21,7 +21,10 @@ chain. XML signatures and encryption go through
 cargo add saml-rs
 ```
 
-Rust 1.88 or newer. The import path is `saml_rs`.
+Rust 1.88 or newer. On a Rust release older than a dependency's newest
+version needs, build with resolver `"3"` or
+`CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`. The import path is
+`saml_rs`.
 
 ## Quick start: service provider login
 
