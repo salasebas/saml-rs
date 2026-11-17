@@ -3569,30 +3569,43 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
 #[test]
 fn typed_logout_response_template_must_carry_the_supplied_top_level_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template = saml_rs::config::LOGOUT_RESPONSE_TEMPLATE
+    let success_template = saml_rs::config::LOGOUT_RESPONSE_TEMPLATE
         .replace("{StatusCode}", saml_rs::constants::status_code::SUCCESS);
-    let sp = Saml::sp(sp_config()?)?;
-    let idp = Saml::idp(idp_config_with_logout_response_template(template)?)?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let received = idp.receive_slo(
-        &sp_descriptor,
-        logout_request_input(&started.outbound, LogoutBinding::Post)?,
-        validation(),
-    )?;
+    let over_default_limits =
+        "x".repeat(saml_rs::XmlLimits::default().max_attribute_value_bytes + 1);
+    let over_default_limits_template = success_template.replace(
+        "<samlp:Status>",
+        &format!(
+            r#"<samlp:Extensions><x:Note xmlns:x="urn:example:note" value="{over_default_limits}"/></samlp:Extensions><samlp:Status>"#
+        ),
+    );
+    let cases = [
+        (success_template, RespondSlo::post()),
+        (over_default_limits_template, RespondSlo::redirect()),
+    ];
 
-    match idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        RespondSlo::post().status(Status::responder()),
-    ) {
-        Err(SamlError::Invalid(message))
-            if message.contains("did not carry the supplied top-level status code") =>
-        {
-            Ok(())
+    for (template, options) in cases {
+        let sp = Saml::sp(sp_config()?)?;
+        let idp = Saml::idp(idp_config_with_logout_response_template(template)?)?;
+        let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+        let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
+        let received = idp.receive_slo(
+            &sp_descriptor,
+            logout_request_input(&started.outbound, LogoutBinding::Post)?,
+            validation(),
+        )?;
+
+        match idp.respond_slo(
+            &sp_descriptor,
+            &received,
+            options.status(Status::responder()),
+        ) {
+            Err(SamlError::Invalid(message))
+                if message.contains("did not carry the supplied top-level status code") => {}
+            other => return Err(format!("expected template status mismatch, got {other:?}").into()),
         }
-        other => Err(format!("expected template status mismatch, got {other:?}").into()),
     }
+    Ok(())
 }
 
 const QUALIFIED_NAME_ID: &str = "pseudonym-7f3a";

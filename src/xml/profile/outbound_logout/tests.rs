@@ -75,6 +75,7 @@ fn validate_with_issuer(
         Some(DESTINATION),
         expected_issuer,
         expected_in_response_to,
+        status_code::SUCCESS,
         OutboundLogoutValidation::BeforeSigning {
             destination_required: signed,
         },

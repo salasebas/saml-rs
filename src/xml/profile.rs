@@ -747,6 +747,7 @@ mod tests {
             None,
             "https://idp.example.com/metadata",
             None,
+            crate::constants::status_code::SUCCESS,
             OutboundLogoutValidation::BeforeSigning {
                 destination_required: false,
             },
