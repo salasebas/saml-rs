@@ -58,12 +58,12 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let relay_state = RelayStateParam::try_from_option(Some("return".to_string()))?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
@@ -131,11 +131,10 @@ fn validation_at(
     seconds: i64,
     skew: ClockSkew,
 ) -> Result<SamlValidationContext<'static>, SamlError> {
-    Ok(SamlValidationContext::new(
-        system_time_at(seconds)?,
-        ReplayPolicy::DisabledForCompatibility,
+    Ok(
+        SamlValidationContext::new(system_time_at(seconds)?, ReplayPolicy::Disabled)
+            .with_clock_skew(skew),
     )
-    .with_clock_skew(skew))
 }
 
 fn logout(

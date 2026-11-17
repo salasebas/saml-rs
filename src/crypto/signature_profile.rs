@@ -30,7 +30,7 @@ pub(crate) fn allows_signature_method(profile: XmlSignatureProfile, uri: &str) -
                 | weak::HMAC_MD5
                 | weak::HMAC_RIPEMD160
         ),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility => true,
+        XmlSignatureProfile::AllowWeakAlgorithms => true,
     }
 }
 
@@ -39,7 +39,7 @@ pub(crate) fn allows_signature_method(profile: XmlSignatureProfile, uri: &str) -
 pub(crate) fn rejects_present_signature_that_does_not_verify(profile: XmlSignatureProfile) -> bool {
     match profile {
         XmlSignatureProfile::StrictRsaSha2 | XmlSignatureProfile::ExcludeWeakAlgorithms => true,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility => false,
+        XmlSignatureProfile::AllowWeakAlgorithms => false,
     }
 }
 
@@ -51,7 +51,7 @@ pub(crate) fn allows_digest_method(profile: XmlSignatureProfile, uri: &str) -> b
             digest_algorithm::SHA256 | digest_algorithm::SHA384 | digest_algorithm::SHA512
         ),
         XmlSignatureProfile::ExcludeWeakAlgorithms => !matches!(uri, weak::MD5 | weak::RIPEMD160),
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility => true,
+        XmlSignatureProfile::AllowWeakAlgorithms => true,
     }
 }
 
@@ -75,7 +75,7 @@ pub(crate) fn check_verification_key(
                 Some(_) | None => Ok(()),
             }
         }
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility => Ok(()),
+        XmlSignatureProfile::AllowWeakAlgorithms => Ok(()),
     }
 }
 

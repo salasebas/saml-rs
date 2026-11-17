@@ -62,7 +62,7 @@ fn subject() -> Subject {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -97,12 +97,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }

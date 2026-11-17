@@ -46,7 +46,7 @@ const DEPLOYMENT_FORMAT: &str = "https://example.com/attribute-name-format";
 const MAIL_OID: &str = "urn:oid:0.9.2342.19200300.100.1.3";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -86,12 +86,12 @@ fn descriptors(
         SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?,
         IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             idp.metadata_xml(),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?,
     ))
 }

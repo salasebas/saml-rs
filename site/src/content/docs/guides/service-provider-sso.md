@@ -58,7 +58,7 @@ let name_id = session.subject().name_id().value();
 
 ## Replay
 
-`ReplayPolicy::RequireCache` stores identifiers in the cache you pass. The context has no hidden cache. `ReplayPolicy::DisabledForCompatibility` stores nothing. The rules are in [Metadata and replay](../reference/conformance/metadata-and-replay.md).
+`ReplayPolicy::RequireCache` stores identifiers in the cache you pass. The context has no hidden cache. `ReplayPolicy::Disabled` stores nothing. The rules are in [Metadata and replay](../reference/conformance/metadata-and-replay.md).
 
 A new validation context allows five minutes of clock skew. Pass `ClockSkew::strict()` for zero skew.
 

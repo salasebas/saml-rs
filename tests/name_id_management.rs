@@ -83,7 +83,7 @@ fn service_provider(
     Ok(SpDescriptor::from_metadata_xml(
         EntityId::try_new(entity_id)?,
         &metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?)
 }
 
@@ -100,7 +100,7 @@ fn authenticated() -> SoapChannel {
 }
 
 fn validation<'a>() -> SamlValidationContext<'a> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn body(envelope: &str) -> Result<String, SamlError> {
@@ -621,7 +621,7 @@ fn a_service_provider_without_a_soap_service_is_not_sent_a_request() -> TestResu
             .metadata()
             .get_metadata()
             .replacen("<SPSSODescriptor", &identity_role, 1),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let started = idp.start_name_id_management(
         &dual_role,

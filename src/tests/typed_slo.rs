@@ -312,12 +312,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }
@@ -330,10 +330,7 @@ fn subject() -> Result<LogoutSubject, SamlError> {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(
-        SystemTime::now(),
-        saml_rs::ReplayPolicy::DisabledForCompatibility,
-    )
+    SamlValidationContext::new(SystemTime::now(), saml_rs::ReplayPolicy::Disabled)
 }
 
 fn validation_with_cache(cache: &mut dyn ReplayCache) -> SamlValidationContext<'_> {
@@ -491,7 +488,7 @@ fn start_slo_for_binding(binding: LogoutBinding) -> Result<StartSlo, SamlError> 
 }
 
 fn start_unsigned_slo_for_binding(binding: LogoutBinding) -> Result<StartSlo, SamlError> {
-    Ok(start_slo_for_binding(binding)?.signing(LogoutSigning::DoNotSignForCompatibility))
+    Ok(start_slo_for_binding(binding)?.signing(LogoutSigning::DoNotSign))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1123,7 +1120,7 @@ fn typed_slo_rejects_peer_without_requested_logout_binding(
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     match sp.start_slo(&idp_descriptor, subject()?, StartSlo::redirect()) {
@@ -1312,7 +1309,7 @@ fn new_validation_context_allows_five_minutes_on_logout_request_not_on_or_after(
         LogoutBinding::Post,
         LocalSloRole::Idp,
         RequestProtection::Signed,
-        SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility),
+        SamlValidationContext::new(now, ReplayPolicy::Disabled),
     )?;
 
     match receive_custom_logout_request(
@@ -1320,7 +1317,7 @@ fn new_validation_context_allows_five_minutes_on_logout_request_not_on_or_after(
         LogoutBinding::Post,
         LocalSloRole::Idp,
         RequestProtection::Signed,
-        SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility),
+        SamlValidationContext::new(now, ReplayPolicy::Disabled),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
             assert_eq!(field, TimeWindowField::LogoutRequestNotOnOrAfter);
@@ -1342,11 +1339,8 @@ fn clock_skew_strict_allows_no_logout_request_skew() -> Result<(), Box<dyn std::
         LogoutBinding::Post,
         LocalSloRole::Idp,
         RequestProtection::Signed,
-        SamlValidationContext::new(
-            system_time("2026-07-15T12:00:00Z")?,
-            ReplayPolicy::DisabledForCompatibility,
-        )
-        .with_clock_skew(ClockSkew::strict()),
+        SamlValidationContext::new(system_time("2026-07-15T12:00:00Z")?, ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict()),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
             assert_eq!(field, TimeWindowField::LogoutRequestNotOnOrAfter);
@@ -1369,8 +1363,7 @@ fn explicit_clock_skew_replaces_logout_request_five_minute_default(
         LogoutBinding::Post,
         LocalSloRole::Idp,
         RequestProtection::Signed,
-        SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility)
-            .with_clock_skew(skew),
+        SamlValidationContext::new(now, ReplayPolicy::Disabled).with_clock_skew(skew),
     )?;
 
     match receive_custom_logout_request(
@@ -1378,8 +1371,7 @@ fn explicit_clock_skew_replaces_logout_request_five_minute_default(
         LogoutBinding::Post,
         LocalSloRole::Idp,
         RequestProtection::Signed,
-        SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility)
-            .with_clock_skew(skew),
+        SamlValidationContext::new(now, ReplayPolicy::Disabled).with_clock_skew(skew),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
             assert_eq!(field, TimeWindowField::LogoutRequestNotOnOrAfter);
@@ -2636,7 +2628,7 @@ fn typed_facade_rejects_slo_pending_peer_mismatch() -> Result<(), Box<dyn std::e
     let other_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
         other_idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     match exchange.sp.finish_slo(
@@ -3242,7 +3234,7 @@ fn typed_facade_allows_explicit_unsigned_logout_request_for_compatibility(
     let started = sp.start_slo(
         &idp_descriptor,
         subject()?,
-        StartSlo::post().signing(LogoutSigning::DoNotSignForCompatibility),
+        StartSlo::post().signing(LogoutSigning::DoNotSign),
     )?;
 
     assert!(started.outbound.post_form()?.value("SAMLRequest").is_some());
@@ -3388,7 +3380,7 @@ fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
         let sp_descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?;
         let idp_descriptor = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -3396,7 +3388,7 @@ fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
                 &format!(r#"Location="{IDP_SLO_POST}""#),
                 &format!(r#"Location="{location}""#),
             ),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?;
         let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
         let received = sp.receive_slo(
@@ -4288,7 +4280,7 @@ fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn st
         (subject()?, StartSlo::soap().relay_state(relay_state)),
         (
             subject()?,
-            StartSlo::soap().signing(LogoutSigning::DoNotSignForCompatibility),
+            StartSlo::soap().signing(LogoutSigning::DoNotSign),
         ),
         (without_session_index, StartSlo::soap()),
     ];

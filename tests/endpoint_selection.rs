@@ -25,7 +25,7 @@ const IDP_SSO_FIRST: &str = "https://idp.example.com/sso/first";
 const IDP_SSO_SECOND: &str = "https://idp.example.com/sso/second";
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn subject() -> Subject {
@@ -63,12 +63,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }
@@ -170,7 +170,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     let unsupported_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &unsupported_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let unspecified = idp.receive_sso(
         &unsupported_descriptor,
@@ -210,7 +210,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         let descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             &metadata,
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?;
         let unspecified = idp.receive_sso(
             &descriptor,

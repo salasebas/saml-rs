@@ -70,7 +70,7 @@ impl Saml<Idp> {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::DisabledForCompatibility,
+    ///     ReplayPolicy::Disabled,
     /// );
     /// let input = BrowserInput::<AuthnRequest>::post(fields);
     /// let request = idp.receive_sso(sp, input, validation)?;
@@ -223,7 +223,7 @@ impl Saml<Idp> {
     ///
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::DisabledForCompatibility,
+    ///     ReplayPolicy::Disabled,
     /// );
     /// let session = sp.accept_unsolicited_sso(
     ///     idp_descriptor,

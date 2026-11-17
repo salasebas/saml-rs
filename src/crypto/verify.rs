@@ -564,7 +564,7 @@ pub fn verify_signature_with_limits(
         xml,
         metadata_certs,
         limits,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )
 }
 
@@ -892,7 +892,7 @@ pub fn verify_metadata_signature_detailed_with_limits(
         xml,
         trusted_certificates,
         limits,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )
 }
 

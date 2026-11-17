@@ -333,7 +333,7 @@ pub(crate) fn verify_octet_string_signature(
         signature_b64,
         cert,
         sig_alg,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
     )
 }
 

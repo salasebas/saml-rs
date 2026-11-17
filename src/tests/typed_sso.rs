@@ -153,7 +153,7 @@ fn response_signature_required_sp_config() -> Result<SpConfig, SamlError> {
 
 fn response_root_only_sp_config() -> Result<SpConfig, SamlError> {
     let validation = SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::AllowUnsignedForCompatibility,
+        assertions: AssertionSignaturePolicy::AllowUnsigned,
         responses: ResponseSignaturePolicy::RequireSigned,
         ..signing_sp_validation()
     };
@@ -286,12 +286,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }
@@ -301,7 +301,7 @@ fn subject() -> Subject {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn validation_with_cache(cache: &mut dyn ReplayCache) -> SamlValidationContext<'_> {
@@ -462,12 +462,12 @@ fn typed_builder_authn_request_escapes_hostile_values_for_all_bindings(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(HOSTILE_SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     for start in [
@@ -601,7 +601,7 @@ fn typed_facade_honors_custom_acs_index_from_metadata() -> Result<(), Box<dyn st
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     let started = sp.start_sso(
@@ -727,7 +727,7 @@ fn bounded_authn_request_age(
     max_age: Duration,
     skew: ClockSkew,
 ) -> SamlValidationContext<'static> {
-    SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(now, ReplayPolicy::Disabled)
         .with_clock_skew(skew)
         .with_authn_request_age(AuthnRequestAgePolicy::Bounded { max_age })
 }
@@ -803,7 +803,7 @@ fn assert_authn_request_age_rejected(
 fn disabled_authn_request_age_ignores_clock_skew_at_a_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let now = authn_request_age_now()?;
-    let validation = SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility);
+    let validation = SamlValidationContext::new(now, ReplayPolicy::Disabled);
     assert_eq!(
         validation.authn_request_age(),
         AuthnRequestAgePolicy::Disabled
@@ -824,7 +824,7 @@ fn disabled_authn_request_age_ignores_clock_skew_at_a_fixed_clock(
 }
 
 fn validation_at_disabled(now: SystemTime) -> SamlValidationContext<'static> {
-    SamlValidationContext::new(now, ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(now, ReplayPolicy::Disabled)
 }
 
 #[test]
@@ -1600,12 +1600,12 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
     let peer_idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(PEER_IDP_ENTITY_ID)?,
         &peer_idp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let peer_sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(PEER_SP_ENTITY_ID)?,
         &peer_sp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let signing_setting = EntitySetting {
         private_key: Some(PRIVKEY.to_string()),
@@ -1681,7 +1681,7 @@ fn typed_facade_rejects_pending_peer_mismatch() -> Result<(), Box<dyn std::error
     let other_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
         other_idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     match exchange.sp.finish_sso(
@@ -1716,7 +1716,7 @@ fn typed_facade_rejects_response_with_wrong_sp_descriptor() -> Result<(), Box<dy
     let other_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-sp.example.com/metadata")?,
         other_sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     match exchange.idp.respond_sso(
@@ -2540,7 +2540,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
     let unverified = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &signed,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     assert!(!unverified.was_verified_with_pinned_certificates());
     Ok(())

@@ -168,7 +168,7 @@ impl Saml<Sp> {
     /// let idp = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
-    ///     MetadataTrustPolicy::UnsignedForCompatibility,
+    ///     MetadataTrustPolicy::AllowUnsigned,
     /// )?;
     /// let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
     /// let started = sp.start_sso(&idp, StartSso::redirect().relay_state(relay_state))?;
@@ -262,7 +262,7 @@ impl Saml<Sp> {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::DisabledForCompatibility,
+    ///     ReplayPolicy::Disabled,
     /// );
     /// let input = BrowserInput::<SsoResponse>::post(fields);
     /// let session = sp.finish_sso(idp, pending, input, validation)?;

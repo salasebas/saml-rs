@@ -68,17 +68,17 @@ fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let sp_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let other_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(OTHER_ENTITY_ID)?,
         other.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok(Parties {
         idp,
@@ -371,7 +371,7 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
     let peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         parties.sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let missing = without.issue_artifact(&peer, web_sso_response()?, 0, &mut issued);
@@ -665,7 +665,7 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
     let peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &posted,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let unsupported = parties.sp.resolve_artifact(
         &peer,
@@ -978,7 +978,7 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
     let peer = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &posted,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let channel = confidential();
     let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);

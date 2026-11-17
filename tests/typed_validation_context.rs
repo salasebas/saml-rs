@@ -1,4 +1,4 @@
-//! `ReplayPolicy::DisabledForCompatibility` preserves the raw API, which has no replay cache.
+//! `ReplayPolicy::Disabled` preserves the raw API, which has no replay cache.
 
 #[path = "common/replay_cache.rs"]
 mod replay_cache;
@@ -110,7 +110,7 @@ fn xml_with_time_window(
 fn context_at(now: &str) -> Result<SamlValidationContext<'static>, time::error::Parse> {
     Ok(SamlValidationContext::new(
         instant(now)?,
-        ReplayPolicy::DisabledForCompatibility,
+        ReplayPolicy::Disabled,
     ))
 }
 
@@ -209,11 +209,9 @@ fn remove_extract_keys(flow: &mut FlowResult, keys: &[&str]) {
 fn typed_validation_context_expired_condition_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = xml_with_late_subject_and_session();
-    let validation = SamlValidationContext::new(
-        instant("2025-01-01T00:00:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    )
-    .with_clock_skew(ClockSkew::strict());
+    let validation =
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -228,11 +226,9 @@ fn typed_validation_context_expired_condition_uses_fixed_clock(
 fn typed_validation_context_expired_subject_confirmation_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = xml_with_late_conditions_and_session();
-    let validation = SamlValidationContext::new(
-        instant("2025-01-01T00:00:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    )
-    .with_clock_skew(ClockSkew::strict());
+    let validation =
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
         Err(SamlError::SubjectConfirmationInvalid { reason }) => {
@@ -247,11 +243,9 @@ fn typed_validation_context_expired_subject_confirmation_uses_fixed_clock(
 fn typed_validation_context_expired_session_not_on_or_after_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = xml_with_late_subject_and_conditions();
-    let validation = SamlValidationContext::new(
-        instant("2025-01-01T00:00:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    )
-    .with_clock_skew(ClockSkew::strict());
+    let validation =
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(&xml, &validation) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -275,11 +269,9 @@ fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
             "</saml:AuthnStatement><saml:AuthnStatement AuthnInstant=\"2024-12-31T23:00:00Z\" SessionNotOnOrAfter=\"2025-01-01T00:10:00Z\" SessionIndex=\"_later\"/>",
             1,
         );
-    let validation = SamlValidationContext::new(
-        instant("2025-01-01T00:00:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    )
-    .with_clock_skew(ClockSkew::strict().with_not_on_or_after_millis(60_000));
+    let validation =
+        SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict().with_not_on_or_after_millis(60_000));
 
     parse_response_at(&xml, &validation)?;
     Ok(())
@@ -288,11 +280,9 @@ fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
 #[test]
 fn typed_validation_context_not_yet_valid_condition_uses_fixed_clock(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let validation = SamlValidationContext::new(
-        instant("2014-07-17T01:01:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    )
-    .with_clock_skew(ClockSkew::strict());
+    let validation =
+        SamlValidationContext::new(instant("2014-07-17T01:01:00Z")?, ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict());
 
     match parse_response_at(RESPONSE, &validation) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -310,10 +300,8 @@ fn typed_validation_context_invalid_timestamp_fails_closed_at_fixed_clock(
         "NotBefore=\"2014-07-17T01:01:18Z\"",
         "NotBefore=\"not-a-date\"",
     );
-    let validation = SamlValidationContext::new(
-        instant("2014-07-17T01:02:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    );
+    let validation =
+        SamlValidationContext::new(instant("2014-07-17T01:02:00Z")?, ReplayPolicy::Disabled);
 
     match parse_response_at(&xml, &validation) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -910,11 +898,9 @@ fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_pol
         "</saml:SubjectConfirmation>",
         "</saml:SubjectConfirmation><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData NotOnOrAfter=\"2024-01-18T06:21:48\"/></saml:SubjectConfirmation>",
     );
-    let mut validation = SamlValidationContext::new(
-        instant("2020-01-01T00:00:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    )
-    .with_clock_skew(ClockSkew::strict());
+    let mut validation =
+        SamlValidationContext::new(instant("2020-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict());
     let session = SsoSession::try_from(parse_response_at(&xml, &validation)?)?;
     session.check_and_store_replay(&mut validation)?;
 
@@ -943,10 +929,8 @@ fn typed_validation_context_disabled_replay_is_explicit_compatibility(
         &["conditions", "sessionIndex", "subjectConfirmation"],
     );
     let session = SsoSession::try_from(flow)?;
-    let mut validation = SamlValidationContext::new(
-        instant("2026-07-04T12:05:00Z")?,
-        ReplayPolicy::DisabledForCompatibility,
-    );
+    let mut validation =
+        SamlValidationContext::new(instant("2026-07-04T12:05:00Z")?, ReplayPolicy::Disabled);
 
     session.check_and_store_replay(&mut validation)?;
     session.check_and_store_replay(&mut validation)?;

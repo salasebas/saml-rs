@@ -42,7 +42,7 @@ fn idp_with_slo_accept() -> IdpValidationPolicy {
 }
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 fn sp(slo: &str, policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -74,12 +74,12 @@ fn descriptors(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok((sp_descriptor, idp_descriptor))
 }
@@ -170,7 +170,7 @@ fn compatibility_session_participant_logout_stays_unsigned_without_session_index
     let started = service_provider.start_slo(
         &idp_descriptor,
         subject_without_session(),
-        StartSlo::post().signing(LogoutSigning::DoNotSignForCompatibility),
+        StartSlo::post().signing(LogoutSigning::DoNotSign),
     )?;
     let xml = post_xml(&started.outbound)?;
 
@@ -229,7 +229,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
         StartSlo::post()
             .apply_single_logout_generation_rules()
             .allow_http_single_logout()
-            .signing(LogoutSigning::DoNotSignForCompatibility),
+            .signing(LogoutSigning::DoNotSign),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("signature") => {}
         other => {
@@ -287,7 +287,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
     let compatible = idp.start_slo(
         &sp_descriptor,
         subject_without_session(),
-        StartSlo::post().signing(LogoutSigning::DoNotSignForCompatibility),
+        StartSlo::post().signing(LogoutSigning::DoNotSign),
     )?;
     let compatible_xml = post_xml(&compatible.outbound)?;
     assert!(compatible_xml.contains("NotOnOrAfter="));
@@ -526,10 +526,10 @@ fn logout_policy_defaults_follow_recommended() {
     assert_eq!(LogoutPolicy::recommended(), slo_accept_policy());
     assert_eq!(
         LogoutPolicy::compatibility().requests,
-        LogoutSignaturePolicy::AllowUnsignedForCompatibility
+        LogoutSignaturePolicy::AllowUnsigned
     );
     assert_eq!(
         LogoutPolicy::compatibility().responses,
-        LogoutSignaturePolicy::AllowUnsignedForCompatibility
+        LogoutSignaturePolicy::AllowUnsigned
     );
 }

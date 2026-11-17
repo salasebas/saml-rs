@@ -83,7 +83,7 @@ fn trust_allowing_other_transforms<'a>(
 fn trust_allowing_weak_algorithms<'a>(
     certificates: &'a [CertificatePem],
 ) -> MetadataTrustPolicy<'a> {
-    MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility {
+    MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms {
         trusted_certificates: certificates,
     }
 }
@@ -564,7 +564,7 @@ fn entities_descriptor_import_rejects_two_entities() -> Result<(), Box<dyn std::
     match IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &xml,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     ) {
         Err(SamlError::Xml(message))
             if message.contains("ERR_MULTIPLE_METADATA_ENTITYDESCRIPTOR") =>
@@ -584,7 +584,7 @@ fn unsigned_for_compatibility_does_not_record_a_signature_as_verified(
     let descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &signed,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     assert!(!descriptor.was_verified_with_pinned_certificates());

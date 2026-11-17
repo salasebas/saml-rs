@@ -46,7 +46,7 @@ pub(super) fn enforce_profile_on_verified_signature(
             reject_signature_object(document, signature_node)?;
             enforce_algorithms_on_verified_signature(document, signature_node, profile)
         }
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility => Ok(()),
+        XmlSignatureProfile::AllowWeakAlgorithms => Ok(()),
     }
 }
 

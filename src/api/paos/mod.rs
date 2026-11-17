@@ -475,7 +475,7 @@ impl Saml<Sp> {
     /// let idp = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
-    ///     MetadataTrustPolicy::UnsignedForCompatibility,
+    ///     MetadataTrustPolicy::AllowUnsigned,
     /// )?;
     /// let started = sp.start_paos_sso(
     ///     &idp,

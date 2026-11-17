@@ -34,7 +34,7 @@ impl Saml<Sp> {
     /// [`StartSlo::apply_single_logout_generation_rules`] also rejects a
     /// missing `SessionIndex`, an `http` peer endpoint unless
     /// [`StartSlo::allow_http_single_logout`] is selected, and rejects the
-    /// samlify-port [`LogoutSigning::DoNotSignForCompatibility`].
+    /// samlify-port [`LogoutSigning::DoNotSign`].
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
     /// certificate.
@@ -180,7 +180,7 @@ impl Saml<Sp> {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::DisabledForCompatibility,
+    ///     ReplayPolicy::Disabled,
     /// );
     /// let completed = sp.finish_slo(
     ///     idp,
@@ -239,7 +239,7 @@ impl Saml<Idp> {
     /// is not an absolute URI reference, logout request creation fails, or the
     /// configured issuance lifetime cannot be added to the current issue
     /// instant. [`StartSlo::apply_single_logout_generation_rules`] also
-    /// rejects [`LogoutSigning::DoNotSignForCompatibility`].
+    /// rejects [`LogoutSigning::DoNotSign`].
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
     /// certificate.
@@ -310,7 +310,7 @@ impl Saml<Idp> {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::DisabledForCompatibility,
+    ///     ReplayPolicy::Disabled,
     /// );
     /// let input = BrowserInput::<LogoutRequest>::post(fields);
     /// let request = idp.receive_slo(sp, input, validation)?;
@@ -423,7 +423,7 @@ impl Saml<Idp> {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::DisabledForCompatibility,
+    ///     ReplayPolicy::Disabled,
     /// );
     /// let completed = idp.finish_slo(
     ///     sp,
@@ -471,7 +471,7 @@ fn start_slo_impl(
 ) -> Result<Started<LogoutRequest>, SamlError> {
     options.relay_state.validate()?;
     let follows_rules = options.follows_generation_rules();
-    if follows_rules && matches!(options.signing, LogoutSigning::DoNotSignForCompatibility) {
+    if follows_rules && matches!(options.signing, LogoutSigning::DoNotSign) {
         return Err(Error::ProtocolProfile(
             "a LogoutRequest signature cannot be disabled when Single Logout generation rules apply".into(),
         ));
@@ -735,7 +735,7 @@ fn logout_request_signing(setting: &EntitySetting, signing: LogoutSigning) -> bo
     match signing {
         LogoutSigning::FollowLocalPolicy => setting.want_logout_request_signed,
         LogoutSigning::Sign => true,
-        LogoutSigning::DoNotSignForCompatibility => false,
+        LogoutSigning::DoNotSign => false,
     }
 }
 

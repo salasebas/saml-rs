@@ -59,7 +59,7 @@ fn sp_descriptor_with_signing_cert(cert: &str) -> Result<SpDescriptor, SamlError
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp_signing_authn_requests(SP_KEY, cert)?.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )
 }
 
@@ -70,7 +70,7 @@ fn signed_authn_request_form(
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let started = signer.start_sso(&idp_descriptor, StartSso::post())?;
     Ok(started.outbound.post_form()?.fields().to_vec())
@@ -103,7 +103,7 @@ fn receive(
     idp.receive_sso(
         sp_descriptor,
         BrowserInput::<AuthnRequest>::post(form),
-        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
     )
     .map(drop)
 }

@@ -173,7 +173,7 @@ pub trait ReplayCache {
 #[non_exhaustive]
 pub enum ReplayPolicy<'a> {
     /// Skip replay checks. The raw API and the samlify port have no replay cache.
-    DisabledForCompatibility,
+    Disabled,
     /// Require the caller to provide replay storage.
     RequireCache(&'a mut dyn ReplayCache),
 }
@@ -425,12 +425,12 @@ impl<'a> SamlValidationContext<'a> {
         &mut self,
         key: ReplayKey,
     ) -> Result<(), SamlError> {
-        if matches!(&self.replay, ReplayPolicy::DisabledForCompatibility) {
+        if matches!(&self.replay, ReplayPolicy::Disabled) {
             return Ok(());
         }
         let expires_at = self.message_replay_expires_at()?;
         match &mut self.replay {
-            ReplayPolicy::DisabledForCompatibility => Ok(()),
+            ReplayPolicy::Disabled => Ok(()),
             ReplayPolicy::RequireCache(cache) => cache.check_and_store(key, expires_at),
         }
     }
@@ -440,7 +440,7 @@ impl<'a> SamlValidationContext<'a> {
         key: ReplayKey,
         derived_deadline: Option<OffsetDateTime>,
     ) -> Result<(), SamlError> {
-        if matches!(&self.replay, ReplayPolicy::DisabledForCompatibility) {
+        if matches!(&self.replay, ReplayPolicy::Disabled) {
             return Ok(());
         }
         let expires_at = derived_deadline
@@ -448,7 +448,7 @@ impl<'a> SamlValidationContext<'a> {
             .transpose()?
             .map_or_else(|| self.message_replay_expires_at(), Ok)?;
         match &mut self.replay {
-            ReplayPolicy::DisabledForCompatibility => Ok(()),
+            ReplayPolicy::Disabled => Ok(()),
             ReplayPolicy::RequireCache(cache) => cache.check_and_store(key, expires_at),
         }
     }

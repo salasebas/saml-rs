@@ -61,9 +61,6 @@ impl SignatureAlgorithm {
 #[non_exhaustive]
 pub enum DigestAlgorithm {
     /// SHA-1 digest preserved from the samlify port.
-    Sha1ForCompatibility,
-    /// Deprecated alias for [`Self::Sha1ForCompatibility`].
-    #[deprecated(note = "use DigestAlgorithm::Sha1ForCompatibility")]
     Sha1,
     /// SHA-256 digest.
     Sha256,
@@ -77,13 +74,9 @@ pub enum DigestAlgorithm {
 
 impl DigestAlgorithm {
     /// Return the XML digest algorithm URI.
-    #[expect(
-        deprecated,
-        reason = "deprecated algorithm aliases remain mapped for the samlify port"
-    )]
     pub fn as_uri(&self) -> &str {
         match self {
-            Self::Sha1ForCompatibility | Self::Sha1 => digest_algorithm::SHA1,
+            Self::Sha1 => digest_algorithm::SHA1,
             Self::Sha256 => digest_algorithm::SHA256,
             Self::Sha384 => digest_algorithm::SHA384,
             Self::Sha512 => digest_algorithm::SHA512,
@@ -100,15 +93,12 @@ impl DigestAlgorithm {
 #[non_exhaustive]
 pub enum DataEncryptionAlgorithm {
     /// AES-128-CBC.
-    Aes128,
+    Aes128Cbc,
     /// AES-256-CBC.
     #[default]
-    Aes256,
+    Aes256Cbc,
     /// Triple DES CBC preserved from the samlify port.
-    TripleDesForCompatibility,
-    /// Deprecated alias for [`Self::TripleDesForCompatibility`].
-    #[deprecated(note = "use DataEncryptionAlgorithm::TripleDesForCompatibility")]
-    TripleDes,
+    TripleDesCbc,
     /// AES-128-GCM.
     Aes128Gcm,
     /// AES-256-GCM.
@@ -119,17 +109,11 @@ pub enum DataEncryptionAlgorithm {
 
 impl DataEncryptionAlgorithm {
     /// Return the XML-Enc algorithm URI.
-    #[expect(
-        deprecated,
-        reason = "deprecated algorithm aliases remain mapped for the samlify port"
-    )]
     pub fn as_uri(&self) -> &str {
         match self {
-            Self::Aes128 => data_encryption_algorithm::AES_128,
-            Self::Aes256 => data_encryption_algorithm::AES_256,
-            Self::TripleDesForCompatibility | Self::TripleDes => {
-                data_encryption_algorithm::TRIPLE_DES
-            }
+            Self::Aes128Cbc => data_encryption_algorithm::AES_128,
+            Self::Aes256Cbc => data_encryption_algorithm::AES_256,
+            Self::TripleDesCbc => data_encryption_algorithm::TRIPLE_DES,
             Self::Aes128Gcm => data_encryption_algorithm::AES_128_GCM,
             Self::Aes256Gcm => data_encryption_algorithm::AES_256_GCM,
             Self::Custom(uri) => uri.as_str(),
@@ -157,9 +141,6 @@ pub enum KeyEncryptionAlgorithm {
         mgf: MaskGenerationFunction,
     },
     /// RSAES-PKCS1-v1_5 preserved from the samlify port.
-    Rsa15ForCompatibility,
-    /// Deprecated alias for [`Self::Rsa15ForCompatibility`].
-    #[deprecated(note = "use KeyEncryptionAlgorithm::Rsa15ForCompatibility")]
     Rsa15,
     /// Backend-specific key transport algorithm URI.
     Custom(String),
@@ -167,15 +148,11 @@ pub enum KeyEncryptionAlgorithm {
 
 impl KeyEncryptionAlgorithm {
     /// Return the XML-Enc key transport algorithm URI.
-    #[expect(
-        deprecated,
-        reason = "deprecated algorithm aliases remain mapped for the samlify port"
-    )]
     pub fn as_uri(&self) -> &str {
         match self {
             Self::RsaOaepMgf1p => key_encryption_algorithm::RSA_OAEP_MGF1P,
             Self::RsaOaep { .. } => key_encryption_algorithm::RSA_OAEP,
-            Self::Rsa15ForCompatibility | Self::Rsa15 => key_encryption_algorithm::RSA_1_5,
+            Self::Rsa15 => key_encryption_algorithm::RSA_1_5,
             Self::Custom(uri) => uri.as_str(),
         }
     }

@@ -133,12 +133,9 @@ fn typed_config_algorithm_enums_return_existing_uri_constants() {
     );
     assert_eq!(DigestAlgorithm::Sha256.as_uri(), digest_algorithm::SHA256);
     assert_eq!(DigestAlgorithm::Sha384.as_uri(), digest_algorithm::SHA384);
+    assert_eq!(DigestAlgorithm::Sha1.as_uri(), digest_algorithm::SHA1);
     assert_eq!(
-        DigestAlgorithm::Sha1ForCompatibility.as_uri(),
-        digest_algorithm::SHA1
-    );
-    assert_eq!(
-        DataEncryptionAlgorithm::Aes256.as_uri(),
+        DataEncryptionAlgorithm::Aes256Cbc.as_uri(),
         data_encryption_algorithm::AES_256
     );
     assert_eq!(
@@ -170,7 +167,7 @@ fn typed_config_algorithm_enums_return_existing_uri_constants() {
         assert_eq!(mgf.as_uri(), uri);
     }
     assert_eq!(
-        DataEncryptionAlgorithm::TripleDesForCompatibility.as_uri(),
+        DataEncryptionAlgorithm::TripleDesCbc.as_uri(),
         data_encryption_algorithm::TRIPLE_DES
     );
     assert_eq!(
@@ -178,7 +175,7 @@ fn typed_config_algorithm_enums_return_existing_uri_constants() {
         key_encryption_algorithm::RSA_OAEP_MGF1P
     );
     assert_eq!(
-        KeyEncryptionAlgorithm::Rsa15ForCompatibility.as_uri(),
+        KeyEncryptionAlgorithm::Rsa15.as_uri(),
         key_encryption_algorithm::RSA_1_5
     );
     assert_eq!(
@@ -188,20 +185,6 @@ fn typed_config_algorithm_enums_return_existing_uri_constants() {
     assert_eq!(
         TransformAlgorithm::ExclusiveCanonicalization.as_uri(),
         transform_algorithm::EXC_C14N
-    );
-}
-
-#[test]
-#[expect(deprecated, reason = "pin old risky algorithm variant URI aliases")]
-fn typed_config_deprecated_algorithm_aliases_return_existing_uri_constants() {
-    assert_eq!(DigestAlgorithm::Sha1.as_uri(), digest_algorithm::SHA1);
-    assert_eq!(
-        DataEncryptionAlgorithm::TripleDes.as_uri(),
-        data_encryption_algorithm::TRIPLE_DES
-    );
-    assert_eq!(
-        KeyEncryptionAlgorithm::Rsa15.as_uri(),
-        key_encryption_algorithm::RSA_1_5
     );
 }
 
@@ -238,7 +221,7 @@ fn typed_config_idp_descriptor_accepts_expected_unsigned_metadata(
     let descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         IDP_METADATA,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     assert_eq!(
@@ -255,7 +238,7 @@ fn typed_config_idp_descriptor_rejects_unexpected_entity_id(
     let result = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://unexpected.example.com/metadata")?,
         IDP_METADATA,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     );
 
     assert!(
@@ -277,7 +260,7 @@ fn typed_config_sp_descriptor_accepts_expected_unsigned_metadata(
     let descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.org/metadata")?,
         SP_METADATA,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     assert_eq!(
@@ -285,6 +268,7 @@ fn typed_config_sp_descriptor_accepts_expected_unsigned_metadata(
         "https://sp.example.org/metadata"
     );
     assert!(!descriptor.was_verified_with_pinned_certificates());
+    assert_eq!(descriptor.signed_entity_descriptor_xml(), None);
     Ok(())
 }
 
@@ -297,12 +281,12 @@ fn typed_config_descriptors_import_a_peer_entity_id_that_is_not_a_uri(
     let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("idp.example.com")?,
         &idp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new("sp.example.org")?,
         &sp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     assert_eq!(idp.entity_id().as_str(), "idp.example.com");
@@ -319,12 +303,12 @@ fn typed_config_descriptors_return_the_imported_metadata_xml_unchanged(
     let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let sp = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.org/metadata")?,
         &sp_metadata,
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
 
     assert_eq!(idp.metadata_xml(), idp_metadata);

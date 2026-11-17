@@ -150,18 +150,12 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = (sp.validation(), idp.validation());
     assert_eq!(sp, &SpValidationPolicy::recommended());
     assert_eq!(idp, &IdpValidationPolicy::recommended());
-    assert_eq!(
-        sp.assertions,
-        AssertionSignaturePolicy::AllowUnsignedForCompatibility
-    );
+    assert_eq!(sp.assertions, AssertionSignaturePolicy::AllowUnsigned);
     assert_eq!(
         sp.responses,
         ResponseSignaturePolicy::RequireForEncryptedCbc
     );
-    assert_eq!(
-        sp.authn_requests,
-        AuthnRequestSigningPolicy::DoNotSignForCompatibility
-    );
+    assert_eq!(sp.authn_requests, AuthnRequestSigningPolicy::DoNotSign);
     assert_eq!(
         sp.audience,
         AudienceValidationPolicy::EvaluatePresentRestrictions
@@ -188,36 +182,21 @@ fn compatibility_policy_names_unsigned_choices_explicitly() {
     let sp = SpValidationPolicy::compatibility();
     let idp = IdpValidationPolicy::compatibility();
 
-    assert_eq!(
-        sp.assertions,
-        AssertionSignaturePolicy::AllowUnsignedForCompatibility
-    );
+    assert_eq!(sp.assertions, AssertionSignaturePolicy::AllowUnsigned);
     assert_eq!(
         sp.responses,
         ResponseSignaturePolicy::AllowUnsignedEncryptedCbc
     );
-    assert_eq!(
-        sp.authn_requests,
-        AuthnRequestSigningPolicy::DoNotSignForCompatibility
-    );
-    assert_eq!(sp.audience, AudienceValidationPolicy::SkipForCompatibility);
+    assert_eq!(sp.authn_requests, AuthnRequestSigningPolicy::DoNotSign);
+    assert_eq!(sp.audience, AudienceValidationPolicy::Skip);
     assert_eq!(sp.logout, LogoutPolicy::compatibility());
-    assert_eq!(
-        sp.xml_signatures,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility
-    );
+    assert_eq!(sp.xml_signatures, XmlSignatureProfile::AllowWeakAlgorithms);
     assert_eq!(
         idp.authn_requests,
-        AuthnRequestValidationPolicy::AllowUnsignedForCompatibility
+        AuthnRequestValidationPolicy::AllowUnsigned
     );
-    assert_eq!(
-        idp.xml_signatures,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility
-    );
-    assert_eq!(
-        idp.logout.requests,
-        LogoutSignaturePolicy::AllowUnsignedForCompatibility
-    );
+    assert_eq!(idp.xml_signatures, XmlSignatureProfile::AllowWeakAlgorithms);
+    assert_eq!(idp.logout.requests, LogoutSignaturePolicy::AllowUnsigned);
 }
 
 #[test]
@@ -230,10 +209,10 @@ fn recommended_preset_matches_classified_validation_and_hardenings_stay_independ
     assert_eq!(
         SpValidationPolicy::recommended(),
         SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::AllowUnsignedForCompatibility,
+            assertions: AssertionSignaturePolicy::AllowUnsigned,
             responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
-            authn_requests: AuthnRequestSigningPolicy::DoNotSignForCompatibility,
+            authn_requests: AuthnRequestSigningPolicy::DoNotSign,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
             logout: recommended_logout,
@@ -260,10 +239,7 @@ fn recommended_preset_matches_classified_validation_and_hardenings_stay_independ
         xml_signatures: XmlSignatureProfile::StrictRsaSha2,
         ..SpValidationPolicy::recommended()
     };
-    assert_eq!(
-        rsa_sha2.assertions,
-        AssertionSignaturePolicy::AllowUnsignedForCompatibility
-    );
+    assert_eq!(rsa_sha2.assertions, AssertionSignaturePolicy::AllowUnsigned);
 }
 
 #[test]
@@ -282,19 +258,6 @@ fn policy_defaults_are_the_recommended_presets() {
     assert_eq!(NameIdCreationPolicy::default(), sp.name_id_creation);
     assert_eq!(LogoutSignaturePolicy::default(), logout.requests);
     assert_eq!(LogoutSignaturePolicy::default(), logout.responses);
-}
-
-#[test]
-fn legacy_algorithm_variants_are_risk_named() {
-    let variants = [
-        format!("{:?}", DigestAlgorithm::Sha1ForCompatibility),
-        format!("{:?}", DataEncryptionAlgorithm::TripleDesForCompatibility),
-        format!("{:?}", KeyEncryptionAlgorithm::Rsa15ForCompatibility),
-    ];
-
-    assert!(variants
-        .iter()
-        .all(|variant| variant.contains("Compatibility") || variant.contains("Legacy")));
 }
 
 #[test]
@@ -319,7 +282,7 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let elements_order = vec!["AssertionConsumerService".to_string()];
     let algorithms = AlgorithmPolicy {
         signature: SignatureAlgorithm::RsaSha512,
-        data_encryption: DataEncryptionAlgorithm::Aes128,
+        data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
         key_encryption: KeyEncryptionAlgorithm::RsaOaepMgf1p,
         signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
         ..AlgorithmPolicy::default()
@@ -363,7 +326,7 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     let elements_order = vec!["SingleSignOnService".to_string()];
     let algorithms = AlgorithmPolicy {
         signature: SignatureAlgorithm::RsaSha384,
-        data_encryption: DataEncryptionAlgorithm::Aes256,
+        data_encryption: DataEncryptionAlgorithm::Aes256Cbc,
         key_encryption: KeyEncryptionAlgorithm::RsaOaepMgf1p,
         signed_reference_transforms: vec![TransformAlgorithm::EnvelopedSignature],
         ..AlgorithmPolicy::default()

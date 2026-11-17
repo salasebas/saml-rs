@@ -152,8 +152,6 @@ pub enum SignatureAlgorithm {
 
 #[non_exhaustive]
 pub enum DigestAlgorithm {
-    Sha1ForCompatibility,
-    #[deprecated]
     Sha1,
     Sha256,
     Sha384,
@@ -163,11 +161,9 @@ pub enum DigestAlgorithm {
 
 #[non_exhaustive]
 pub enum DataEncryptionAlgorithm {
-    Aes128,
-    Aes256,
-    TripleDesForCompatibility,
-    #[deprecated]
-    TripleDes,
+    Aes128Cbc,
+    Aes256Cbc,
+    TripleDesCbc,
     Aes128Gcm,
     Aes256Gcm,
     Custom(String),
@@ -180,8 +176,6 @@ pub enum KeyEncryptionAlgorithm {
         digest: DigestAlgorithm,
         mgf: MaskGenerationFunction,
     },
-    Rsa15ForCompatibility,
-    #[deprecated]
     Rsa15,
     Custom(String),
 }
@@ -235,7 +229,7 @@ pub enum AttributeEncryptionPolicy {
 
 pub enum AssertionSignaturePolicy {
     RequireSigned,
-    AllowUnsignedForCompatibility,
+    AllowUnsigned,
 }
 
 pub enum ResponseSignaturePolicy {
@@ -246,17 +240,17 @@ pub enum ResponseSignaturePolicy {
 
 pub enum AuthnRequestSigningPolicy {
     Sign,
-    DoNotSignForCompatibility,
+    DoNotSign,
 }
 
 pub enum AuthnRequestValidationPolicy {
     RequireSigned,
-    AllowUnsignedForCompatibility,
+    AllowUnsigned,
 }
 
 pub enum LogoutSignaturePolicy {
     RequireSigned,
-    AllowUnsignedForCompatibility,
+    AllowUnsigned,
 }
 
 pub struct SpValidationPolicy {
@@ -286,13 +280,14 @@ E93 recommends outer integrity protection before processing an
 `EncryptedAssertion` that uses CBC. Recommended therefore uses
 `ResponseSignaturePolicy::RequireForEncryptedCbc`; the samlify-port preset
 selects the E93 relaxation
-`AllowUnsignedEncryptedCbc`. That name is not Compatibility. Typed IdPs sign CBC-encrypted
+`AllowUnsignedEncryptedCbc`. Typed IdPs sign CBC-encrypted
 Responses by default. Callers can require Response authentication for every
 response with `ResponseSignaturePolicy::RequireSigned` and force producer-side
 HTTP-POST signing with `RespondSso::post().sign_response()`.
 
 Avoid bare boolean names for signature requirements and avoid names like
-`insecure(true)`. A samlify-port exception keeps Compatibility in the name. An OASIS recommendation relaxation does not.
+`insecure(true)`. A relaxed option is named after what it allows, such as
+`AllowUnsigned`, `AllowWeakAlgorithms`, or `DoNotSign`, not after why it exists.
 
 ## Descriptors
 
@@ -334,7 +329,7 @@ pub enum MetadataTrustPolicy<'a> {
     RequireSignature {
         trusted_certificates: &'a [CertificatePem],
     },
-    UnsignedForCompatibility,
+    AllowUnsigned,
 }
 
 pub struct VerifiedIdpMetadata {
@@ -384,11 +379,11 @@ Rules:
   `RequireSignatureAllowingOtherCanonicalization`. The shape is classified in
   `docs/conformance/metadata-and-replay.md`.
 - MD5 and RIPEMD-160 algorithms and RSA signing keys shorter than 2048 bits
-  are excluded. `RequireSignatureAllowingWeakAlgorithmsForCompatibility`
+  are excluded. `RequireSignatureAllowingWeakAlgorithms`
   accepts them.
 - `signed_entity_descriptor_xml()` exposes the signed descriptor evidence when
   pinned verification passed.
-- `UnsignedForCompatibility` is explicit and visible in call sites.
+- `AllowUnsigned` is explicit and visible in call sites.
 - PKIX path validation, federation, and online metadata refresh are outside
   this trust model. The caller supplies the certificates that verify a
   signature.

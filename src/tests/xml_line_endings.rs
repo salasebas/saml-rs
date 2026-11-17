@@ -37,7 +37,7 @@ const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencryp
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn validation() -> SamlValidationContext<'static> {
-    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility)
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
 struct SignedExchange {
@@ -71,12 +71,12 @@ impl SignedExchange {
         let sp_descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?;
         let idp_descriptor = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
             idp.metadata_xml(),
-            MetadataTrustPolicy::UnsignedForCompatibility,
+            MetadataTrustPolicy::AllowUnsigned,
         )?;
 
         let started = sp.start_sso(&idp_descriptor, StartSso::post())?;

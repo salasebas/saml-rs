@@ -158,7 +158,7 @@ fn all_signature_processing_preflights_extension_references(
         &format!("<samlp:Extensions>{extra}</samlp:Extensions>{SUCCESS_STATUS}"),
     );
     for profile in [
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
         XmlSignatureProfile::ExcludeWeakAlgorithms,
         XmlSignatureProfile::StrictRsaSha2,
     ] {
@@ -201,10 +201,7 @@ fn extension_signature_cannot_open_a_local_pipe_before_authentication(
         &signature("#_root"),
         &format!("<samlp:Extensions>{extra}</samlp:Extensions>{SUCCESS_STATUS}"),
     );
-    let result = verify_flow(
-        &xml,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-    );
+    let result = verify_flow(&xml, XmlSignatureProfile::AllowWeakAlgorithms);
     let opened_before_return = opened_rx.try_recv().is_ok();
     let cleanup_reader = if opened_before_return {
         None
@@ -263,10 +260,7 @@ fn first_signature_processing_does_not_process_later_extension_signatures(
         verify_signature(&xml, &[CERT.to_string()])?,
         (true, Some(xml.clone()))
     );
-    let result = verify_flow(
-        &xml,
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
-    );
+    let result = verify_flow(&xml, XmlSignatureProfile::AllowWeakAlgorithms);
     assert!(
         matches!(
             result,
@@ -364,7 +358,7 @@ fn error_response_with_only_a_sibling_signature_is_rejected(
         r#"<Payload xmlns="urn:example:extension" ID="_payload">signed sibling</Payload><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Requester"/></samlp:Status>"#,
     ))?;
     for profile in [
-        XmlSignatureProfile::AllowProviderSupportedForCompatibility,
+        XmlSignatureProfile::AllowWeakAlgorithms,
         XmlSignatureProfile::ExcludeWeakAlgorithms,
         XmlSignatureProfile::StrictRsaSha2,
     ] {

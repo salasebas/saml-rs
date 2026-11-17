@@ -131,12 +131,12 @@ fn received_by(
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
-        MetadataTrustPolicy::UnsignedForCompatibility,
+        MetadataTrustPolicy::AllowUnsigned,
     )?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let context = started.outbound.raw_context();
@@ -170,7 +170,7 @@ fn received_by(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )]),
-        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::DisabledForCompatibility),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
     )?;
     Ok(received
         .message()
