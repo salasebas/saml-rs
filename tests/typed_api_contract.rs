@@ -8,6 +8,8 @@ use saml_rs::{
 
 fn assert_send_sync<T: Send + Sync>() {}
 
+fn assert_eq_trait<T: Eq>() {}
+
 #[test]
 fn typed_api_contract_exposes_role_markers() {
     assert_send_sync::<Saml<Sp>>();
@@ -45,6 +47,7 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
     assert_send_sync::<RelayState>();
     assert_send_sync::<SamlInstant>();
     assert_send_sync::<PendingAuthnRequest>();
+    assert_eq_trait::<PendingAuthnRequest>();
     assert_send_sync::<PendingAuthnRequestSnapshot>();
     assert_send_sync::<PendingLogoutRequest>();
     assert_send_sync::<PendingLogoutRequestSnapshot>();
@@ -82,8 +85,16 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
 fn typed_api_contract_compares_inbound_messages_by_binding_and_content() {
     let fields = vec![FormField::new("SAMLResponse", "PHNhbWxwOlJlc3BvbnNlLz4=")];
     let post: Inbound<SsoResponse> = Inbound::post(fields.clone());
+    assert_eq_trait::<Inbound<SsoResponse>>();
 
     assert_eq!(post, Inbound::post(fields.clone()));
+    assert_ne!(
+        post,
+        Inbound::post(vec![FormField::new(
+            "SAMLResponse",
+            "PHNhbWxwOkxvZ291dFJlc3BvbnNlLz4="
+        )])
+    );
     assert_ne!(post, Inbound::simple_sign(fields));
 }
 
