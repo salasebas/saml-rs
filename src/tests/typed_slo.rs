@@ -1728,8 +1728,8 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         ..IdpValidationPolicy::compatibility()
     })?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    assert!(!sp_descriptor.metadata_signature_verified());
-    assert!(!idp_descriptor.metadata_signature_verified());
+    assert!(!sp_descriptor.signed_metadata_xml().is_some());
+    assert!(!idp_descriptor.signed_metadata_xml().is_some());
 
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let request_fields = post_fields(&started.outbound)?;

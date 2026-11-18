@@ -233,7 +233,7 @@ fn typed_config_idp_descriptor_accepts_expected_unsigned_metadata(
         descriptor.entity_id().as_str(),
         "https://idp.example.com/metadata"
     );
-    assert!(!descriptor.metadata_signature_verified());
+    assert!(!descriptor.signed_metadata_xml().is_some());
     Ok(())
 }
 
@@ -272,7 +272,7 @@ fn typed_config_sp_descriptor_accepts_expected_unsigned_metadata(
         descriptor.entity_id().as_str(),
         "https://sp.example.org/metadata"
     );
-    assert!(!descriptor.metadata_signature_verified());
+    assert!(!descriptor.signed_metadata_xml().is_some());
     assert_eq!(descriptor.signed_metadata_xml(), None);
     Ok(())
 }

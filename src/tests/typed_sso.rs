@@ -2732,7 +2732,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
             trusted_certificates: &pinned,
         },
     )?;
-    assert!(verified.metadata_signature_verified());
+    assert!(verified.signed_metadata_xml().is_some());
     let started = sp.start_sso(&verified, StartSso::post())?;
     assert!(!started.outbound.id().as_str().is_empty());
 
@@ -2741,7 +2741,7 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
         &signed,
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    assert!(!unverified.metadata_signature_verified());
+    assert!(!unverified.signed_metadata_xml().is_some());
     Ok(())
 }
 
@@ -2793,7 +2793,7 @@ fn recommended_sso_receive_does_not_store_replay_without_a_caller_cache(
     let sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?);
     let idp = Saml::idp(idp_with_validation(recommended_sso_accept_idp_validation())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    assert!(!idp_descriptor.metadata_signature_verified());
+    assert!(!idp_descriptor.signed_metadata_xml().is_some());
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let fields = post_fields(&started.outbound)?;
 
