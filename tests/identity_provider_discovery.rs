@@ -12,10 +12,12 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const IDP_ENTITY_COOKIE_VALUE: &str = "aHR0cHM6Ly9pZHAuZXhhbXBsZS5jb20vbWV0YWRhdGE%3D";
 
 fn identity_provider(entity_id: &str) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let config = IdpConfig::builder(EntityId::try_new(entity_id)?)
-        .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-        .validation(IdpValidationPolicy::compatibility())
-        .build()?;
+    let config = IdpConfig::builder(
+        EntityId::try_new(entity_id)?,
+        SsoEndpoint::post("https://idp.example.com/sso")?,
+    )
+    .validation(IdpValidationPolicy::compatibility())
+    .build()?;
     Saml::idp(config)
 }
 

@@ -35,18 +35,21 @@ fn subject() -> Subject {
 
 fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(FIRST_ACS)?.with_index(0))
-            .acs_endpoint(AcsEndpoint::post(DEFAULT_ACS)?.with_index(1).with_default())
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy::compatibility())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(FIRST_ACS)?.with_index(0),
+        )
+        .acs_endpoint(AcsEndpoint::post(DEFAULT_ACS)?.with_index(1).with_default())
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy::compatibility())
+        .build()?,
     )
 }
 
-fn idp_with_sso(urls: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let mut builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?);
-    for url in urls {
+fn idp_with_sso(first: &str, more: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlError> {
+    let mut builder =
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?, SsoEndpoint::post(first)?);
+    for url in more {
         builder = builder.sso_endpoint(SsoEndpoint::post(*url)?);
     }
     Saml::idp(
@@ -91,7 +94,7 @@ fn post_authn_request(xml: &str) -> BrowserInput<AuthnRequest> {
 fn default_assertion_consumer_service_is_selected_when_the_request_names_neither(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with_default_acs()?;
-    let idp = idp_with_sso(&[IDP_SSO_FIRST])?;
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
@@ -119,16 +122,18 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     assert_eq!(response.post_form()?.action().as_str(), DEFAULT_ACS);
 
     let cross_binding_sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(FIRST_ACS)?.with_index(0))
-            .acs_endpoint(
-                AcsEndpoint::simple_sign(DEFAULT_ACS)?
-                    .with_index(1)
-                    .with_default(),
-            )
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy::compatibility())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(FIRST_ACS)?.with_index(0),
+        )
+        .acs_endpoint(
+            AcsEndpoint::simple_sign(DEFAULT_ACS)?
+                .with_index(1)
+                .with_default(),
+        )
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy::compatibility())
+        .build()?,
     )?;
     let (cross_binding_descriptor, _) = descriptors(&cross_binding_sp, &idp)?;
     let unspecified = idp.receive_sso(
@@ -233,15 +238,17 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
 fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_FIRST)?)
-            .artifact_resolution_service(ArtifactResolutionService::new(
-                0,
-                EndpointUrl::try_new("https://idp.example.com/artifact")?,
-            ))
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::compatibility())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_FIRST)?,
+        )
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new("https://idp.example.com/artifact")?,
+        ))
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::compatibility())
+        .build()?,
     )?;
     for binding in [
         SsoResponseBinding::Post,
@@ -256,18 +263,16 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
             _ => return Err("unsupported response binding".into()),
         };
         let sp = Saml::sp(
-            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-                .acs_endpoint(
-                    AcsEndpoint::new(global_binding, EndpointUrl::try_new(DEFAULT_ACS)?)
-                        .with_index(0)
-                        .with_default(),
-                )
-                .acs_endpoint(
-                    AcsEndpoint::new(binding, EndpointUrl::try_new(FIRST_ACS)?).with_index(1),
-                )
-                .credentials(signing_credentials())
-                .validation(SpValidationPolicy::compatibility())
-                .build()?,
+            SpConfig::builder(
+                EntityId::try_new(SP_ENTITY_ID)?,
+                AcsEndpoint::new(global_binding, EndpointUrl::try_new(DEFAULT_ACS)?)
+                    .with_index(0)
+                    .with_default(),
+            )
+            .acs_endpoint(AcsEndpoint::new(binding, EndpointUrl::try_new(FIRST_ACS)?).with_index(1))
+            .credentials(signing_credentials())
+            .validation(SpValidationPolicy::compatibility())
+            .build()?,
         )?;
         let (sp_descriptor, _) = descriptors(&sp, &idp)?;
         let xml = authn_request(IDP_SSO_FIRST).replace(
@@ -321,7 +326,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
 #[test]
 fn conflicting_request_acs_selectors_are_not_answered() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with_default_acs()?;
-    let idp = idp_with_sso(&[IDP_SSO_FIRST])?;
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     for (selector, options, expected) in [
         (
@@ -352,7 +357,7 @@ fn conflicting_request_acs_selectors_are_not_answered() -> Result<(), Box<dyn st
 fn a_response_is_not_sent_to_an_unpublished_request_acs() -> Result<(), Box<dyn std::error::Error>>
 {
     let sp = sp_with_default_acs()?;
-    let idp = idp_with_sso(&[IDP_SSO_FIRST])?;
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[])?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let unpublished = "https://sp.example.com/acs/unpublished";
     let xml = authn_request(IDP_SSO_FIRST).replace(
@@ -376,7 +381,7 @@ fn a_response_is_not_sent_to_an_unpublished_request_acs() -> Result<(), Box<dyn 
 fn sso_destination_matches_the_actual_published_receiving_endpoint(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with_default_acs()?;
-    let idp = idp_with_sso(&[IDP_SSO_FIRST, IDP_SSO_SECOND])?;
+    let idp = idp_with_sso(IDP_SSO_FIRST, &[IDP_SSO_SECOND])?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
     let accepted = idp.receive_sso(

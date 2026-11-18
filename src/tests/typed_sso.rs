@@ -134,8 +134,7 @@ fn sp_config_with_default_response_binding(
             })
         }
     };
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(post)
+    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, post)
         .acs_endpoint(simple_sign)
         .credentials(signing_credentials())
         .validation(signing_sp_validation())
@@ -147,12 +146,14 @@ fn response_signature_required_sp_config() -> Result<SpConfig, SamlError> {
         responses: ResponseSignaturePolicy::RequireSigned,
         ..signing_sp_validation()
     };
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
-        .credentials(signing_credentials())
-        .validation(validation)
-        .build()
+    SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
+    .credentials(signing_credentials())
+    .validation(validation)
+    .build()
 }
 
 fn response_root_only_sp_config() -> Result<SpConfig, SamlError> {
@@ -161,21 +162,25 @@ fn response_root_only_sp_config() -> Result<SpConfig, SamlError> {
         responses: ResponseSignaturePolicy::RequireSigned,
         ..signing_sp_validation()
     };
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .credentials(signing_credentials())
-        .validation(validation)
-        .build()
+    SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .credentials(signing_credentials())
+    .validation(validation)
+    .build()
 }
 
 fn idp_config() -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-        .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
-        .credentials(signing_credentials())
-        .validation(signed_authn_request_idp_validation())
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+    .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
+    .credentials(signing_credentials())
+    .validation(signed_authn_request_idp_validation())
+    .build()
 }
 
 // Field combination exercised by the typed Web Browser SSO accept tests.
@@ -201,58 +206,70 @@ fn signed_idp_metadata() -> Result<String, SamlError> {
 }
 
 fn sp_with_validation(validation: SpValidationPolicy) -> Result<SpConfig, SamlError> {
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .credentials(signing_credentials())
-        .validation(validation)
-        .build()
+    SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .credentials(signing_credentials())
+    .validation(validation)
+    .build()
 }
 
 fn idp_with_validation(validation: IdpValidationPolicy) -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .credentials(signing_credentials())
-        .validation(validation)
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .credentials(signing_credentials())
+    .validation(validation)
+    .build()
 }
 
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_sp_config() -> Result<SpConfig, SamlError> {
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .credentials(encryption_credentials())
-        .validation(signing_sp_validation())
-        .xml(encrypted_xml_policy())
-        .build()
+    SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .credentials(encryption_credentials())
+    .validation(signing_sp_validation())
+    .xml(encrypted_xml_policy())
+    .build()
 }
 
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_idp_config() -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .credentials(signing_credentials())
-        .validation(signed_authn_request_idp_validation())
-        .xml(encrypted_xml_policy())
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .credentials(signing_credentials())
+    .validation(signed_authn_request_idp_validation())
+    .xml(encrypted_xml_policy())
+    .build()
 }
 
 fn hostile_sp_config() -> Result<SpConfig, SamlError> {
-    SpConfig::builder(EntityId::try_new(HOSTILE_SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(HOSTILE_ACS_URL)?.with_default())
-        .credentials(signing_credentials())
-        .validation(signing_sp_validation())
-        .name_id_format(NameIdFormat::Custom(HOSTILE_NAME_ID_FORMAT.to_string()))
-        .build()
+    SpConfig::builder(
+        EntityId::try_new(HOSTILE_SP_ENTITY_ID)?,
+        AcsEndpoint::post(HOSTILE_ACS_URL)?.with_default(),
+    )
+    .credentials(signing_credentials())
+    .validation(signing_sp_validation())
+    .name_id_format(NameIdFormat::Custom(HOSTILE_NAME_ID_FORMAT.to_string()))
+    .build()
 }
 
 fn hostile_idp_config() -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(HOSTILE_IDP_SSO_DESTINATION)?)
-        .sso_endpoint(SsoEndpoint::redirect(HOSTILE_IDP_SSO_DESTINATION)?)
-        .sso_endpoint(SsoEndpoint::simple_sign(HOSTILE_IDP_SSO_DESTINATION)?)
-        .credentials(signing_credentials())
-        .validation(signed_authn_request_idp_validation())
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(HOSTILE_IDP_SSO_DESTINATION)?,
+    )
+    .sso_endpoint(SsoEndpoint::redirect(HOSTILE_IDP_SSO_DESTINATION)?)
+    .sso_endpoint(SsoEndpoint::simple_sign(HOSTILE_IDP_SSO_DESTINATION)?)
+    .credentials(signing_credentials())
+    .validation(signed_authn_request_idp_validation())
+    .build()
 }
 
 fn facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
@@ -260,19 +277,23 @@ fn facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
 }
 
 fn compatibility_facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
-    let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
-        .credentials(signing_credentials())
-        .validation(SpValidationPolicy::compatibility())
-        .build()?;
-    let idp = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-        .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
-        .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::compatibility())
-        .build()?;
+    let sp = SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
+    .credentials(signing_credentials())
+    .validation(SpValidationPolicy::compatibility())
+    .build()?;
+    let idp = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+    .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
+    .credentials(signing_credentials())
+    .validation(IdpValidationPolicy::compatibility())
+    .build()?;
     Ok((Saml::sp(sp)?, Saml::idp(idp)?))
 }
 
@@ -595,11 +616,13 @@ fn typed_facade_rejects_unknown_acs_index() -> Result<(), Box<dyn std::error::Er
 #[test]
 fn typed_facade_honors_custom_acs_index_from_metadata() -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_index(7))
-            .credentials(signing_credentials())
-            .validation(signing_sp_validation())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?.with_index(7),
+        )
+        .credentials(signing_credentials())
+        .validation(signing_sp_validation())
+        .build()?,
     )?;
     let idp = Saml::idp(idp_config()?)?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
@@ -1583,12 +1606,14 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
     const PEER_IDP_ENTITY_ID: &str = "idp.example.com";
     const PEER_SP_ENTITY_ID: &str = "sp.example.org";
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-            .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
-            .credentials(signing_credentials())
-            .validation(signing_sp_validation())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+        )
+        .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
+        .credentials(signing_credentials())
+        .validation(signing_sp_validation())
+        .build()?,
     )?;
     let idp = Saml::idp(idp_config()?)?;
     let peer_idp_metadata = idp
@@ -1670,11 +1695,13 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 fn typed_facade_rejects_pending_peer_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
     let other_idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new("https://other-idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(signing_credentials())
-            .validation(signed_authn_request_idp_validation())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new("https://other-idp.example.com/metadata")?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(signing_credentials())
+        .validation(signed_authn_request_idp_validation())
+        .build()?,
     )?;
     let other_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
@@ -1705,11 +1732,13 @@ fn typed_facade_rejects_response_with_wrong_sp_descriptor() -> Result<(), Box<dy
 {
     let exchange = start_receive_respond()?;
     let other_sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new("https://other-sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
-            .credentials(signing_credentials())
-            .validation(signing_sp_validation())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new("https://other-sp.example.com/metadata")?,
+            AcsEndpoint::post(SP_ACS_POST)?,
+        )
+        .credentials(signing_credentials())
+        .validation(signing_sp_validation())
+        .build()?,
     )?;
     let other_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-sp.example.com/metadata")?,
@@ -2055,11 +2084,13 @@ fn typed_finish_sso_requiring_encrypted_assertions_reports_a_response_without_an
 fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-            .credentials(encryption_credentials())
-            .validation(signing_sp_validation())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+        )
+        .credentials(encryption_credentials())
+        .validation(signing_sp_validation())
+        .build()?,
     )?;
     let idp = Saml::idp(idp_config()?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -2499,17 +2530,19 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
     ] {
         let sp = Saml::sp(sp_config_with_default_response_binding(binding)?)?;
         let idp = Saml::idp(
-            IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-                .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-                .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
-                .credentials(signing_credentials())
-                .issuance_lifetime(lifetime)
-                .validation(signed_authn_request_idp_validation())
-                .templates(TemplatePolicy {
-                    login_response_template: template,
-                    ..TemplatePolicy::default()
-                })
-                .build()?,
+            IdpConfig::builder(
+                EntityId::try_new(IDP_ENTITY_ID)?,
+                SsoEndpoint::post(IDP_SSO_POST)?,
+            )
+            .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
+            .credentials(signing_credentials())
+            .issuance_lifetime(lifetime)
+            .validation(signed_authn_request_idp_validation())
+            .templates(TemplatePolicy {
+                login_response_template: template,
+                ..TemplatePolicy::default()
+            })
+            .build()?,
         )?;
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let options = match binding {
@@ -2576,12 +2609,14 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
 fn typed_idp_sso_reports_issuance_expiration_overflow() -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(signing_credentials())
-            .issuance_lifetime(Duration::from_secs(i64::MAX as u64))
-            .validation(signed_authn_request_idp_validation())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(signing_credentials())
+        .issuance_lifetime(Duration::from_secs(i64::MAX as u64))
+        .validation(signed_authn_request_idp_validation())
+        .build()?,
     )?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
@@ -3081,22 +3116,26 @@ fn cbc_relaxation_does_not_disable_other_accept_rules() -> Result<(), Box<dyn st
 fn sp_with_validation_and_xml(
     validation: SpValidationPolicy,
 ) -> Result<saml_rs::SpConfigBuilder, SamlError> {
-    Ok(SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .credentials(encryption_credentials())
-        .validation(validation)
-        .xml(encrypted_xml_policy()))
+    Ok(SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .credentials(encryption_credentials())
+    .validation(validation)
+    .xml(encrypted_xml_policy()))
 }
 
 #[cfg(not(feature = "crypto-fips"))]
 fn idp_with_validation_and_xml(
     validation: IdpValidationPolicy,
 ) -> Result<saml_rs::IdpConfigBuilder, SamlError> {
-    Ok(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .credentials(signing_credentials())
-        .validation(validation)
-        .xml(encrypted_xml_policy()))
+    Ok(IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .credentials(signing_credentials())
+    .validation(validation)
+    .xml(encrypted_xml_policy()))
 }
 
 fn response_without_audience_restriction(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -3312,12 +3351,14 @@ fn idp_receive_rejects_authenticated_request_without_destination(
     let signing_sp = Saml::sp(sp_config()?)?;
     let strict_idp = Saml::idp(idp_config()?)?;
     let recommended_idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-            .credentials(signing_credentials())
-            .validation(recommended_sso_accept_idp_validation())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+        .credentials(signing_credentials())
+        .validation(recommended_sso_accept_idp_validation())
+        .build()?,
     )?;
     let (sp_descriptor, idp_descriptor) = descriptors(&signing_sp, &strict_idp)?;
 

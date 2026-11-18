@@ -30,11 +30,13 @@ const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pk
 fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing_policy(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs/post")?.with_default())
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post("https://sp.example.com/acs/post")?.with_default(),
+        )
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
     )?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -52,11 +54,13 @@ fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing
         ),
     ] {
         let idp = Saml::idp(
-            IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-                .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
-                .credentials(signing_credentials())
-                .validation(validation)
-                .build()?,
+            IdpConfig::builder(
+                EntityId::try_new(IDP_ENTITY_ID)?,
+                SsoEndpoint::post("https://idp.example.com/sso/post")?,
+            )
+            .credentials(signing_credentials())
+            .validation(validation)
+            .build()?,
         )?;
         let idp_descriptor = IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,

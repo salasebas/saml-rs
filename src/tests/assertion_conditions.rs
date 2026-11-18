@@ -78,18 +78,22 @@ fn exchange_for(
     unsolicited: bool,
 ) -> Result<Exchange, Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-            .credentials(signing_credentials())
-            .validation(sp_validation)
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+        )
+        .credentials(signing_credentials())
+        .validation(sp_validation)
+        .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
     )?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     if unsolicited {
@@ -351,19 +355,23 @@ fn simple_sign_fields(
 
 fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
-            .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default())
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?,
+        )
+        .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default())
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
     )?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::simple_sign())?;
@@ -1035,8 +1043,7 @@ mod encrypted_assertions {
         validation: SpValidationPolicy,
     ) -> Result<Saml<saml_rs::Sp>, SamlError> {
         Saml::sp(
-            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-                .acs_endpoint(acs)
+            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs)
                 .credentials(
                     signing_credentials().with_decryption(saml_rs::DecryptionCredential {
                         certificate: CertificatePem::new(CERT),

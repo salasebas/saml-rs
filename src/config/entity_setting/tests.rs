@@ -17,20 +17,24 @@ fn compatibility_relaxes_audience_and_logout_defaults_of_raw_settings() -> Resul
     assert!(raw.want_logout_request_signed);
     assert!(raw.want_logout_response_signed);
 
-    let sp = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .validation(SpValidationPolicy::compatibility())
-        .build()?
-        .entity_setting();
+    let sp = SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .validation(SpValidationPolicy::compatibility())
+    .build()?
+    .entity_setting();
     assert!(!sp.validate_audience);
     assert!(!sp.want_logout_request_signed);
     assert!(!sp.want_logout_response_signed);
 
-    let idp = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-        .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-        .validation(IdpValidationPolicy::compatibility())
-        .build()?
-        .entity_setting();
+    let idp = IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::redirect("https://idp.example.com/sso")?,
+    )
+    .validation(IdpValidationPolicy::compatibility())
+    .build()?
+    .entity_setting();
     assert!(idp.validate_audience);
     assert!(!idp.want_logout_request_signed);
     assert!(!idp.want_logout_response_signed);
@@ -55,35 +59,37 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         max_attribute_value_bytes: 2048,
         max_text_bytes: 4096,
     };
-    let setting = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .name_id_format(NameIdFormat::EmailAddress)
-        .credentials(
-            Credentials::default()
-                .with_signing_key(PrivateKeyPem::new("dummy-private-key-for-conversion-test"))
-                .with_signing_certificate(CertificatePem::new(
-                    "dummy-signing-certificate-for-conversion-test",
-                )),
-        )
-        .validation(SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
-            responses: ResponseSignaturePolicy::RequireSigned,
-            authn_requests: AuthnRequestSigningPolicy::Sign,
-            ..SpValidationPolicy::recommended()
-        })
-        .xml(XmlPolicy {
-            limits,
-            ..XmlPolicy::default()
-        })
-        .algorithms(AlgorithmPolicy {
-            signature: SignatureAlgorithm::RsaSha512,
-            data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
-            key_encryption: KeyEncryptionAlgorithm::Rsa15,
-            signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
-            ..AlgorithmPolicy::default()
-        })
-        .build()?
-        .entity_setting();
+    let setting = SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .name_id_format(NameIdFormat::EmailAddress)
+    .credentials(
+        Credentials::default()
+            .with_signing_key(PrivateKeyPem::new("dummy-private-key-for-conversion-test"))
+            .with_signing_certificate(CertificatePem::new(
+                "dummy-signing-certificate-for-conversion-test",
+            )),
+    )
+    .validation(SpValidationPolicy {
+        assertions: AssertionSignaturePolicy::RequireSigned,
+        responses: ResponseSignaturePolicy::RequireSigned,
+        authn_requests: AuthnRequestSigningPolicy::Sign,
+        ..SpValidationPolicy::recommended()
+    })
+    .xml(XmlPolicy {
+        limits,
+        ..XmlPolicy::default()
+    })
+    .algorithms(AlgorithmPolicy {
+        signature: SignatureAlgorithm::RsaSha512,
+        data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
+        key_encryption: KeyEncryptionAlgorithm::Rsa15,
+        signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
+        ..AlgorithmPolicy::default()
+    })
+    .build()?
+    .entity_setting();
 
     assert_eq!(
         setting.entity_id.as_deref(),
@@ -129,15 +135,17 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
 fn idp_config_converts_authn_request_policy() -> Result<(), SamlError> {
     use crate::config::AuthnRequestValidationPolicy;
 
-    let setting = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-        .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-        .name_id_format(NameIdFormat::Transient)
-        .validation(IdpValidationPolicy {
-            authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-            ..IdpValidationPolicy::recommended()
-        })
-        .build()?
-        .entity_setting();
+    let setting = IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::redirect("https://idp.example.com/sso")?,
+    )
+    .name_id_format(NameIdFormat::Transient)
+    .validation(IdpValidationPolicy {
+        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        ..IdpValidationPolicy::recommended()
+    })
+    .build()?
+    .entity_setting();
 
     assert_eq!(
         setting.entity_id.as_deref(),

@@ -41,21 +41,26 @@ fn sp_metadata_input(config: &SpConfig) -> SpMetadataInput {
         ),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_logout_service: metadata
-            .single_logout_service()
+            .slo_endpoints()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
         assertion_consumer_service: metadata
-            .assertion_consumer_service()
+            .acs_endpoints()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
         manage_name_id_service: metadata
-            .manage_name_id_service()
+            .manage_name_id_services()
             .iter()
             .map(ManageNameIdService::to_raw)
             .collect(),
-        elements_order: metadata.elements_order().map(<[String]>::to_vec),
+        elements_order: metadata.elements_order().map(|order| {
+            order
+                .iter()
+                .map(|element| element.element_name().to_string())
+                .collect()
+        }),
         lifetime: metadata.lifetime(),
         organization: metadata.organization().cloned(),
         contacts: metadata.contacts().to_vec(),
@@ -75,22 +80,27 @@ fn idp_metadata_input(config: &IdpConfig) -> IdpMetadataInput {
         ),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_sign_on_service: metadata
-            .single_sign_on_service()
+            .sso_endpoints()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
         single_logout_service: metadata
-            .single_logout_service()
+            .slo_endpoints()
             .iter()
             .map(|endpoint| endpoint.to_raw())
             .collect(),
-        artifact_resolution_service: metadata.artifact_resolution_service().to_vec(),
+        artifact_resolution_service: metadata.artifact_resolution_services().to_vec(),
         manage_name_id_service: metadata
-            .manage_name_id_service()
+            .manage_name_id_services()
             .iter()
             .map(ManageNameIdService::to_raw)
             .collect(),
-        elements_order: metadata.elements_order().map(<[String]>::to_vec),
+        elements_order: metadata.elements_order().map(|order| {
+            order
+                .iter()
+                .map(|element| element.element_name().to_string())
+                .collect()
+        }),
         lifetime: metadata.lifetime(),
         organization: metadata.organization().cloned(),
         contacts: metadata.contacts().to_vec(),

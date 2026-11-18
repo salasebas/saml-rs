@@ -47,18 +47,19 @@ fn parties_with(
     credentials: saml_rs::Credentials,
 ) -> Result<Parties, SamlError> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP)?)
-            .acs_endpoint(AcsEndpoint::post(ACS)?.with_default())
-            .credentials(credentials)
-            .validation(SpValidationPolicy {
-                authn_requests: AuthnRequestSigningPolicy::Sign,
-                ..SpValidationPolicy::recommended()
-            })
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP)?,
+            AcsEndpoint::post(ACS)?.with_default(),
+        )
+        .credentials(credentials)
+        .validation(SpValidationPolicy {
+            authn_requests: AuthnRequestSigningPolicy::Sign,
+            ..SpValidationPolicy::recommended()
+        })
+        .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP)?)
-            .sso_endpoint(SsoEndpoint::redirect(SSO)?)
+        IdpConfig::builder(EntityId::try_new(IDP)?, SsoEndpoint::redirect(SSO)?)
             .sso_endpoint(SsoEndpoint::post(SSO)?)
             .sso_endpoint(SsoEndpoint::simple_sign(SSO)?)
             .credentials(signing_credentials())
@@ -530,18 +531,20 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
 {
     let (_, _, _, idp_descriptor) = parties()?;
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP)?)
-            .acs_endpoint(AcsEndpoint::post(ACS)?.with_default())
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy {
-                authn_requests: AuthnRequestSigningPolicy::Sign,
-                ..SpValidationPolicy::recommended()
-            })
-            .templates(saml_rs::TemplatePolicy {
-                login_request_template: Some(saml_rs::config::LOGIN_REQUEST_TEMPLATE.into()),
-                ..Default::default()
-            })
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP)?,
+            AcsEndpoint::post(ACS)?.with_default(),
+        )
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy {
+            authn_requests: AuthnRequestSigningPolicy::Sign,
+            ..SpValidationPolicy::recommended()
+        })
+        .templates(saml_rs::TemplatePolicy {
+            login_request_template: Some(saml_rs::config::LOGIN_REQUEST_TEMPLATE.into()),
+            ..Default::default()
+        })
+        .build()?,
     )?;
     sp.start_sso(&idp_descriptor, StartSso::post())?;
     for start in [

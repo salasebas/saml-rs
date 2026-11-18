@@ -24,8 +24,7 @@
 //! use saml_rs::{AcsEndpoint, EntityId, SpConfig, SpValidationPolicy};
 //!
 //! # fn main() -> Result<(), saml_rs::SamlError> {
-//! let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-//!     .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+//! let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
 //!     .validation(SpValidationPolicy::compatibility())
 //!     .build()?;
 //!
@@ -52,8 +51,7 @@
 //! #     form_fields: Vec<FormField>,
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let sp = Saml::sp(
-//!     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-//!         .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+//!     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
 //!         .validation(SpValidationPolicy::compatibility())
 //!         .build()?,
 //! )?;
@@ -449,12 +447,13 @@ pub use config::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
     DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm, EntityId, HmacSecret,
     IdentifierEncryptionPolicy, IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig,
-    IdpValidationPolicy, KeyEncryptionAlgorithm, LoginResponseAttribute, LoginResponseTemplate,
-    LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService, MaskGenerationFunction,
-    MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
-    ResponseSignaturePolicy, SignatureAction, SignatureAlgorithm, SignatureConfig, SpConfig,
-    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
-    TransformAlgorithm, XmlEncryptionPolicy, XmlLimits, XmlPolicy, XmlSignatureProfile,
+    IdpMetadataElement, IdpValidationPolicy, KeyEncryptionAlgorithm, LoginResponseAttribute,
+    LoginResponseTemplate, LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService,
+    MaskGenerationFunction, MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase,
+    PrivateKeyPem, ResponseSignaturePolicy, SignatureAction, SignatureAlgorithm, SignatureConfig,
+    SpConfig, SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpMetadataElement,
+    SpValidationPolicy, TemplatePolicy, TransformAlgorithm, XmlEncryptionPolicy, XmlLimits,
+    XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(crypto)]
 pub use crypto::{

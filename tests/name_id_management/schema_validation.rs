@@ -6,17 +6,19 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
         Err("schema rejected management envelope".into())
     }
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-                IDP_NIM_URL,
-            )?))
-            .validation(saml_rs::IdpValidationPolicy::compatibility())
-            .xml(saml_rs::XmlPolicy {
-                schema_validator: Some(reject),
-                ..saml_rs::XmlPolicy::default()
-            })
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            IDP_NIM_URL,
+        )?))
+        .validation(saml_rs::IdpValidationPolicy::compatibility())
+        .xml(saml_rs::XmlPolicy {
+            schema_validator: Some(reject),
+            ..saml_rs::XmlPolicy::default()
+        })
+        .build()?,
     )?;
     let sp = soap_service_provider()?;
     let envelope = sp_request(&format!(

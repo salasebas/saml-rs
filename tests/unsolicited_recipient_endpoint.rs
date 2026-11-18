@@ -49,15 +49,16 @@ fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, Saml
 /// A service provider with `/acs/a` and `/acs/b` for `binding`, the one at
 /// `default` marked default, and [`OTHER_BINDING`] for another binding.
 fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError> {
-    let mut builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?);
-    for (index, location) in [(0, ACS_A), (1, ACS_B)] {
+    let acs = |index, location| -> Result<AcsEndpoint, SamlError> {
         let endpoint = AcsEndpoint::new(binding, EndpointUrl::try_new(location)?).with_index(index);
-        builder = builder.acs_endpoint(if location == default {
+        Ok(if location == default {
             endpoint.with_default()
         } else {
             endpoint
-        });
-    }
+        })
+    };
+    let builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs(0, ACS_A)?)
+        .acs_endpoint(acs(1, ACS_B)?);
     let other = AcsEndpoint::new(
         other_binding(binding)?,
         EndpointUrl::try_new(OTHER_BINDING)?,
@@ -73,14 +74,16 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
 
 fn idp() -> Result<Saml<Idp>, SamlError> {
     Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .artifact_resolution_service(ArtifactResolutionService::new(
-                0,
-                EndpointUrl::try_new("https://idp.example.com/artifact")?,
-            ))
-            .credentials(signing_credentials())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new("https://idp.example.com/artifact")?,
+        ))
+        .credentials(signing_credentials())
+        .build()?,
     )
 }
 

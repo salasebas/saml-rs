@@ -73,14 +73,14 @@ fn encrypted() -> StartNameIdManagement {
 /// own key.
 fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                SP_MANAGE,
-            )?))
-            .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .manage_name_id_service(EndpointUrl::try_new(SP_MANAGE)?)
+        .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
     )
 }
 
@@ -94,17 +94,19 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 
 fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                IDP_MANAGE,
-            )?))
-            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-                IDP_MANAGE_SOAP,
-            )?))
-            .credentials(credentials)
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+            IDP_MANAGE,
+        )?))
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            IDP_MANAGE_SOAP,
+        )?))
+        .credentials(credentials)
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
     )
 }
 

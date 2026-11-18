@@ -110,12 +110,13 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
-    let config =
-        crate::SpConfig::builder(crate::EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(crate::AcsEndpoint::post("https://sp/acs-implicit")?)
-            .acs_endpoint(crate::AcsEndpoint::post("https://sp/acs-zero")?.with_index(0))
-            .validation(crate::SpValidationPolicy::compatibility())
-            .build()?;
+    let config = crate::SpConfig::builder(
+        crate::EntityId::try_new("https://sp.example.com/metadata")?,
+        crate::AcsEndpoint::post("https://sp/acs-implicit")?,
+    )
+    .acs_endpoint(crate::AcsEndpoint::post("https://sp/acs-zero")?.with_index(0))
+    .validation(crate::SpValidationPolicy::compatibility())
+    .build()?;
 
     let sp = crate::Saml::sp(config)?;
     let parsed = SpMetadata::from_xml(sp.metadata_xml())?;

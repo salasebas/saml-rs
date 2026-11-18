@@ -465,14 +465,12 @@ impl Saml<Sp> {
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
     /// let sp = Saml::sp(
-    ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-    ///         .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+    ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
     ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
     /// )?;
     /// let idp = Saml::idp(
-    ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-    ///         .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
+    ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// )?;

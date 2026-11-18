@@ -6,6 +6,7 @@ mod credentials;
 mod descriptors;
 mod encryption;
 mod entity_setting;
+mod metadata_element;
 mod metadata_signature_shape;
 mod metadata_trust;
 mod policies;
@@ -30,6 +31,7 @@ pub use descriptors::{
     ArtifactResolutionService, EntityId, IdpDescriptor, IdpMetadataConfig, ManageNameIdService,
     SpDescriptor, SpMetadataConfig,
 };
+pub use metadata_element::{IdpMetadataElement, SpMetadataElement};
 pub use metadata_trust::MetadataTrustPolicy;
 pub use policies::{
     AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,

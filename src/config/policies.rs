@@ -456,8 +456,7 @@ pub enum AttributeEncryptionPolicy {
 ///     encryption: XmlEncryptionPolicy::encrypt_assertions(),
 ///     ..XmlPolicy::default()
 /// };
-/// let idp_builder = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-///     .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+/// let idp_builder = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::post("https://idp.example.com/sso")?)
 ///     .xml(xml);
 /// # let _ = idp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())
@@ -626,8 +625,7 @@ pub(crate) enum ReceivedEncryptedElements {
 ///     encryption: XmlEncryptionPolicy::encrypt_assertions(),
 ///     ..XmlPolicy::default()
 /// };
-/// let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-///     .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+/// let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
 ///     .xml(xml);
 /// # let _ = sp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())

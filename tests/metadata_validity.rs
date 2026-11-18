@@ -43,9 +43,11 @@ fn whole_seconds_from_now(seconds: u64) -> Result<SystemTime, Box<dyn std::error
 }
 
 fn sp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    let builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.with_default())
-        .validation(SpValidationPolicy::compatibility());
+    let builder = SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
+    )
+    .validation(SpValidationPolicy::compatibility());
     let builder = match lifetime {
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
@@ -54,17 +56,19 @@ fn sp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Sp>, SamlError
 }
 
 fn idp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-        .artifact_resolution_service(ArtifactResolutionService::new(
-            0,
-            EndpointUrl::try_new("https://idp.example.com/artifact")?,
-        ))
-        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-            IDP_NIM_URL,
-        )?))
-        .name_id_format(NameIdFormat::Persistent)
-        .validation(IdpValidationPolicy::compatibility());
+    let builder = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post("https://idp.example.com/sso")?,
+    )
+    .artifact_resolution_service(ArtifactResolutionService::new(
+        0,
+        EndpointUrl::try_new("https://idp.example.com/artifact")?,
+    ))
+    .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+        IDP_NIM_URL,
+    )?))
+    .name_id_format(NameIdFormat::Persistent)
+    .validation(IdpValidationPolicy::compatibility());
     let builder = match lifetime {
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
@@ -353,26 +357,28 @@ fn browser_facades(
     valid_until: SystemTime,
 ) -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .slo_endpoint(SloEndpoint::redirect("https://sp.example.com/slo")?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                "https://sp.example.com/nameid",
-            )?))
-            .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
-            .credentials(signing_credentials())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .slo_endpoint(SloEndpoint::redirect("https://sp.example.com/slo")?)
+        .manage_name_id_service(EndpointUrl::try_new("https://sp.example.com/nameid")?)
+        .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
+        .credentials(signing_credentials())
+        .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-            .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                IDP_NIM_URL,
-            )?))
-            .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
-            .credentials(signing_credentials())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
+        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+            IDP_NIM_URL,
+        )?))
+        .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
+        .credentials(signing_credentials())
+        .build()?,
     )?;
     Ok((sp, idp))
 }

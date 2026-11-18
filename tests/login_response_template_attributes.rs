@@ -29,11 +29,13 @@ fn email_attribute() -> LoginResponseAttribute {
 fn login_response_template_rejects_an_attribute_without_a_value_for_both_renderers(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.with_default())
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
+        )
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
     )?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -46,17 +48,19 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
         ("custom template", Some(LOGIN_RESPONSE_TEMPLATE.to_string())),
     ] {
         let idp = Saml::idp(
-            IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-                .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-                .credentials(signing_credentials())
-                .templates(TemplatePolicy {
-                    login_response_template: Some(LoginResponseTemplate {
-                        context,
-                        attributes: vec![email_attribute()],
-                    }),
-                    ..TemplatePolicy::default()
-                })
-                .build()?,
+            IdpConfig::builder(
+                EntityId::try_new(IDP_ENTITY_ID)?,
+                SsoEndpoint::post("https://idp.example.com/sso")?,
+            )
+            .credentials(signing_credentials())
+            .templates(TemplatePolicy {
+                login_response_template: Some(LoginResponseTemplate {
+                    context,
+                    attributes: vec![email_attribute()],
+                }),
+                ..TemplatePolicy::default()
+            })
+            .build()?,
         )?;
         let subject = Subject::new(NameId::new("alice@example.com", None), Vec::new());
 

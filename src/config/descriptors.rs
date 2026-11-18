@@ -55,8 +55,9 @@ pub struct ManageNameIdService {
 impl ManageNameIdService {
     /// Publish a SOAP name identifier management endpoint.
     ///
-    /// Only an identity provider publishes it. A service provider
-    /// configuration with it does not build.
+    /// Only an identity provider publishes it:
+    /// [`SpConfigBuilder::manage_name_id_service`](crate::SpConfigBuilder::manage_name_id_service)
+    /// publishes an HTTP-Redirect endpoint.
     pub fn soap(location: EndpointUrl) -> Self {
         Self {
             binding: NameIdManagementBinding::Soap,
@@ -89,6 +90,7 @@ impl ManageNameIdService {
 
 use super::algorithms::NameIdFormat;
 use super::credentials::HmacSecret;
+use super::metadata_element::{IdpMetadataElement, SpMetadataElement};
 use super::metadata_trust::{
     ensure_expected_entity_id, ensure_metadata_trust, metadata_entity_id, AppliedMetadataTrust,
     MetadataTrustPolicy,
@@ -167,11 +169,11 @@ pub(crate) fn validate_entity_id_syntax(value: &str) -> Result<(), SamlError> {
 /// [`SpConfig::metadata`](crate::SpConfig::metadata) reads it back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpMetadataConfig {
-    pub(super) name_id_format: Vec<NameIdFormat>,
-    pub(super) single_logout_service: Vec<SloEndpoint>,
-    pub(super) assertion_consumer_service: Vec<AcsEndpoint>,
-    pub(super) manage_name_id_service: Vec<ManageNameIdService>,
-    pub(super) elements_order: Option<Vec<String>>,
+    pub(super) name_id_formats: Vec<NameIdFormat>,
+    pub(super) slo_endpoints: Vec<SloEndpoint>,
+    pub(super) acs_endpoints: Vec<AcsEndpoint>,
+    pub(super) manage_name_id_services: Vec<ManageNameIdService>,
+    pub(super) elements_order: Option<Vec<SpMetadataElement>>,
     pub(super) lifetime: Option<MetadataLifetime>,
     pub(super) organization: Option<crate::metadata::Organization>,
     pub(super) contacts: Vec<crate::metadata::ContactPerson>,
@@ -179,12 +181,12 @@ pub struct SpMetadataConfig {
 }
 
 impl SpMetadataConfig {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(acs: AcsEndpoint) -> Self {
         Self {
-            name_id_format: Vec::new(),
-            single_logout_service: Vec::new(),
-            assertion_consumer_service: Vec::new(),
-            manage_name_id_service: Vec::new(),
+            name_id_formats: Vec::new(),
+            slo_endpoints: Vec::new(),
+            acs_endpoints: vec![acs],
+            manage_name_id_services: Vec::new(),
             elements_order: None,
             lifetime: None,
             organization: None,
@@ -193,51 +195,29 @@ impl SpMetadataConfig {
         }
     }
 
-    pub(super) fn validate(&self) -> Result<(), SamlError> {
-        if self.assertion_consumer_service.is_empty() {
-            return Err(SamlError::MissingMetadata(
-                "AssertionConsumerService".into(),
-            ));
-        }
-        if self
-            .manage_name_id_service
-            .iter()
-            .any(|service| service.binding() == NameIdManagementBinding::Soap)
-        {
-            return Err(SamlError::Unsupported(
-                "a service provider has no SOAP name identifier management".into(),
-            ));
-        }
-        crate::metadata::description::validate_description(
-            self.organization.as_ref(),
-            &self.contacts,
-            self.error_url.as_deref(),
-        )?;
-        Ok(())
-    }
-
     /// `<NameIDFormat>` values advertised by the SP.
     pub fn name_id_formats(&self) -> &[NameIdFormat] {
-        &self.name_id_format
+        &self.name_id_formats
     }
 
     /// `SingleLogoutService` endpoints.
-    pub fn single_logout_service(&self) -> &[SloEndpoint] {
-        &self.single_logout_service
+    pub fn slo_endpoints(&self) -> &[SloEndpoint] {
+        &self.slo_endpoints
     }
 
-    /// `AssertionConsumerService` endpoints.
-    pub fn assertion_consumer_service(&self) -> &[AcsEndpoint] {
-        &self.assertion_consumer_service
+    /// `AssertionConsumerService` endpoints, never empty.
+    pub fn acs_endpoints(&self) -> &[AcsEndpoint] {
+        &self.acs_endpoints
     }
 
     /// HTTP-Redirect `ManageNameIDService` endpoints.
-    pub fn manage_name_id_service(&self) -> &[ManageNameIdService] {
-        &self.manage_name_id_service
+    pub fn manage_name_id_services(&self) -> &[ManageNameIdService] {
+        &self.manage_name_id_services
     }
 
-    /// Element ordering profile for generated metadata.
-    pub fn elements_order(&self) -> Option<&[String]> {
+    /// Element group order of generated metadata. `None` writes the schema
+    /// sequence.
+    pub fn elements_order(&self) -> Option<&[SpMetadataElement]> {
         self.elements_order.as_deref()
     }
 
@@ -269,12 +249,12 @@ impl SpMetadataConfig {
 /// [`IdpConfig::metadata`](crate::IdpConfig::metadata) reads it back.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdpMetadataConfig {
-    pub(super) name_id_format: Vec<NameIdFormat>,
-    pub(super) single_sign_on_service: Vec<SsoEndpoint>,
-    pub(super) single_logout_service: Vec<SloEndpoint>,
-    pub(super) artifact_resolution_service: Vec<ArtifactResolutionService>,
-    pub(super) manage_name_id_service: Vec<ManageNameIdService>,
-    pub(super) elements_order: Option<Vec<String>>,
+    pub(super) name_id_formats: Vec<NameIdFormat>,
+    pub(super) sso_endpoints: Vec<SsoEndpoint>,
+    pub(super) slo_endpoints: Vec<SloEndpoint>,
+    pub(super) artifact_resolution_services: Vec<ArtifactResolutionService>,
+    pub(super) manage_name_id_services: Vec<ManageNameIdService>,
+    pub(super) elements_order: Option<Vec<IdpMetadataElement>>,
     pub(super) lifetime: Option<MetadataLifetime>,
     pub(super) organization: Option<crate::metadata::Organization>,
     pub(super) contacts: Vec<crate::metadata::ContactPerson>,
@@ -282,13 +262,13 @@ pub struct IdpMetadataConfig {
 }
 
 impl IdpMetadataConfig {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(sso: SsoEndpoint) -> Self {
         Self {
-            name_id_format: Vec::new(),
-            single_sign_on_service: Vec::new(),
-            single_logout_service: Vec::new(),
-            artifact_resolution_service: Vec::new(),
-            manage_name_id_service: Vec::new(),
+            name_id_formats: Vec::new(),
+            sso_endpoints: vec![sso],
+            slo_endpoints: Vec::new(),
+            artifact_resolution_services: Vec::new(),
+            manage_name_id_services: Vec::new(),
             elements_order: None,
             lifetime: None,
             organization: None,
@@ -297,12 +277,9 @@ impl IdpMetadataConfig {
         }
     }
 
-    pub(super) fn validate(&self) -> Result<(), SamlError> {
-        if self.single_sign_on_service.is_empty() {
-            return Err(SamlError::MissingMetadata("SingleSignOnService".into()));
-        }
+    pub(super) fn ensure_unique_artifact_resolution_indexes(&self) -> Result<(), SamlError> {
         let mut seen_indexes = HashSet::new();
-        for service in &self.artifact_resolution_service {
+        for service in &self.artifact_resolution_services {
             if !seen_indexes.insert(service.index()) {
                 return Err(SamlError::Invalid(format!(
                     "duplicate ArtifactResolutionService index {}",
@@ -310,41 +287,37 @@ impl IdpMetadataConfig {
                 )));
             }
         }
-        crate::metadata::description::validate_description(
-            self.organization.as_ref(),
-            &self.contacts,
-            self.error_url.as_deref(),
-        )?;
         Ok(())
     }
 
     /// `<NameIDFormat>` values advertised by the IdP.
     pub fn name_id_formats(&self) -> &[NameIdFormat] {
-        &self.name_id_format
+        &self.name_id_formats
     }
 
-    /// `SingleSignOnService` endpoints.
-    pub fn single_sign_on_service(&self) -> &[SsoEndpoint] {
-        &self.single_sign_on_service
+    /// `SingleSignOnService` endpoints, never empty.
+    pub fn sso_endpoints(&self) -> &[SsoEndpoint] {
+        &self.sso_endpoints
     }
 
     /// `SingleLogoutService` endpoints.
-    pub fn single_logout_service(&self) -> &[SloEndpoint] {
-        &self.single_logout_service
+    pub fn slo_endpoints(&self) -> &[SloEndpoint] {
+        &self.slo_endpoints
     }
 
     /// SOAP `ArtifactResolutionService` endpoints.
-    pub fn artifact_resolution_service(&self) -> &[ArtifactResolutionService] {
-        &self.artifact_resolution_service
+    pub fn artifact_resolution_services(&self) -> &[ArtifactResolutionService] {
+        &self.artifact_resolution_services
     }
 
     /// SOAP and HTTP-Redirect `ManageNameIDService` endpoints.
-    pub fn manage_name_id_service(&self) -> &[ManageNameIdService] {
-        &self.manage_name_id_service
+    pub fn manage_name_id_services(&self) -> &[ManageNameIdService] {
+        &self.manage_name_id_services
     }
 
-    /// Element ordering profile for generated metadata.
-    pub fn elements_order(&self) -> Option<&[String]> {
+    /// Element group order of generated metadata. `None` writes the schema
+    /// sequence.
+    pub fn elements_order(&self) -> Option<&[IdpMetadataElement]> {
         self.elements_order.as_deref()
     }
 

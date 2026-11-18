@@ -51,26 +51,30 @@ fn validation() -> SamlValidationContext<'static> {
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy {
-                assertions: AssertionSignaturePolicy::RequireSigned,
-                audience: AudienceValidationPolicy::Validate,
-                ..SpValidationPolicy::recommended()
-            })
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy {
+            assertions: AssertionSignaturePolicy::RequireSigned,
+            audience: AudienceValidationPolicy::Validate,
+            ..SpValidationPolicy::recommended()
+        })
+        .build()?,
     )
 }
 
 fn idp_with(templates: TemplatePolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .templates(templates)
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .templates(templates)
+        .build()?,
     )
 }
 
@@ -879,12 +883,14 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     // A NameID without a format is issued in the first configured format.
     let sp = sp()?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .name_id_format(NameIdFormat::Persistent)
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .name_id_format(NameIdFormat::Persistent)
+        .build()?,
     )?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let unformatted = NameId::new("x".repeat(257), None);
@@ -896,19 +902,21 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
 
     // The raw template renderer fills the same NameID.
     let templated = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .name_id_format(NameIdFormat::Persistent)
-            .templates(TemplatePolicy {
-                login_response_template: Some(LoginResponseTemplate {
-                    context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-                    attributes: Vec::new(),
-                }),
-                ..TemplatePolicy::default()
-            })
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .name_id_format(NameIdFormat::Persistent)
+        .templates(TemplatePolicy {
+            login_response_template: Some(LoginResponseTemplate {
+                context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
+                attributes: Vec::new(),
+            }),
+            ..TemplatePolicy::default()
+        })
+        .build()?,
     )?;
     expect_name_id_length_error(templated.raw_identity_provider().create_login_response(
         sp.raw_service_provider(),
@@ -1180,18 +1188,19 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
     for format in INVALID_FORMATS {
         let custom = NameIdFormat::Custom(format.into());
         expect_name_id_format_error(
-            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-                .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
+            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
                 .credentials(signing_credentials())
                 .name_id_format(custom.clone())
                 .build(),
         )?;
         expect_name_id_format_error(
-            IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-                .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-                .credentials(signing_credentials())
-                .name_id_format(custom)
-                .build(),
+            IdpConfig::builder(
+                EntityId::try_new(IDP_ENTITY_ID)?,
+                SsoEndpoint::post(IDP_SSO_POST)?,
+            )
+            .credentials(signing_credentials())
+            .name_id_format(custom)
+            .build(),
         )?;
 
         // Every advertised format is checked, not only the first.

@@ -44,8 +44,7 @@ fn sign_in(
     posted_form: Vec<FormField>,
 ) -> Result<(), SamlError> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+        SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
             .build()?,
     )?;
 

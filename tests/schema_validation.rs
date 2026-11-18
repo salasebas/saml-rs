@@ -33,20 +33,24 @@ fn policy(validator: Option<SchemaValidator>) -> XmlPolicy {
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .validation(SpValidationPolicy::compatibility())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP)?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(SpValidationPolicy::compatibility())
+        .build()?,
     )
 }
 
 fn idp(validator: Option<SchemaValidator>) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP)?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-            .validation(IdpValidationPolicy::compatibility())
-            .xml(policy(validator))
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP)?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .validation(IdpValidationPolicy::compatibility())
+        .xml(policy(validator))
+        .build()?,
     )
 }
 

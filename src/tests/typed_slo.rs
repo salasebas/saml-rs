@@ -205,18 +205,20 @@ fn sp_config_builder(
     validation: SpValidationPolicy,
     template: Option<&str>,
 ) -> Result<saml_rs::SpConfigBuilder, SamlError> {
-    Ok(SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
-        .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
-        .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::simple_sign(SP_SLO_SIMPLESIGN)?)
-        .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
-        .credentials(signing_credentials())
-        .validation(validation)
-        .templates(TemplatePolicy {
-            logout_request_template: template.map(str::to_string),
-            ..TemplatePolicy::default()
-        }))
+    Ok(SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?,
+    )
+    .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
+    .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::simple_sign(SP_SLO_SIMPLESIGN)?)
+    .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
+    .credentials(signing_credentials())
+    .validation(validation)
+    .templates(TemplatePolicy {
+        logout_request_template: template.map(str::to_string),
+        ..TemplatePolicy::default()
+    }))
 }
 
 fn sp_config_with_logout_request_template(template: &str) -> Result<SpConfig, SamlError> {
@@ -242,18 +244,20 @@ fn idp_config_builder(
     validation: IdpValidationPolicy,
     template: Option<&str>,
 ) -> Result<saml_rs::IdpConfigBuilder, SamlError> {
-    Ok(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-        .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::simple_sign(IDP_SLO_SIMPLESIGN)?)
-        .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
-        .credentials(signing_credentials())
-        .validation(validation)
-        .templates(TemplatePolicy {
-            logout_request_template: template.map(str::to_string),
-            ..TemplatePolicy::default()
-        }))
+    Ok(IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+    .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::simple_sign(IDP_SLO_SIMPLESIGN)?)
+    .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
+    .credentials(signing_credentials())
+    .validation(validation)
+    .templates(TemplatePolicy {
+        logout_request_template: template.map(str::to_string),
+        ..TemplatePolicy::default()
+    }))
 }
 
 fn idp_config_with_issuance(
@@ -262,35 +266,39 @@ fn idp_config_with_issuance(
     credentials: Credentials,
     validation: IdpValidationPolicy,
 ) -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-        .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::simple_sign(IDP_SLO_SIMPLESIGN)?)
-        .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
-        .credentials(credentials)
-        .issuance_lifetime(lifetime)
-        .validation(validation)
-        .templates(TemplatePolicy {
-            logout_request_template,
-            ..TemplatePolicy::default()
-        })
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+    .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::simple_sign(IDP_SLO_SIMPLESIGN)?)
+    .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
+    .credentials(credentials)
+    .issuance_lifetime(lifetime)
+    .validation(validation)
+    .templates(TemplatePolicy {
+        logout_request_template,
+        ..TemplatePolicy::default()
+    })
+    .build()
 }
 
 fn idp_config_with_logout_response_template(
     logout_response_template: String,
 ) -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-        .credentials(signing_credentials())
-        .validation(signed_authn_request_idp_validation())
-        .templates(TemplatePolicy {
-            logout_response_template: Some(logout_response_template),
-            ..TemplatePolicy::default()
-        })
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+    .credentials(signing_credentials())
+    .validation(signed_authn_request_idp_validation())
+    .templates(TemplatePolicy {
+        logout_response_template: Some(logout_response_template),
+        ..TemplatePolicy::default()
+    })
+    .build()
 }
 
 fn bad_template_idp_config() -> Result<IdpConfig, SamlError> {
@@ -1111,12 +1119,14 @@ fn typed_slo_rejects_peer_without_requested_logout_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-            .credentials(signing_credentials())
-            .validation(signed_authn_request_idp_validation())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+        .credentials(signing_credentials())
+        .validation(signed_authn_request_idp_validation())
+        .build()?,
     )?;
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -2540,18 +2550,20 @@ fn typed_session_authority_custom_logout_template_requires_explicit_name_id_form
         SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(" Format=\"{NameIDFormat}\"", "");
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-            .name_id_format(NameIdFormat::EmailAddress)
-            .credentials(Credentials::default())
-            .issuance_lifetime(Duration::from_secs(7 * 60))
-            .validation(IdpValidationPolicy::compatibility())
-            .templates(TemplatePolicy {
-                logout_request_template: Some(template),
-                ..TemplatePolicy::default()
-            })
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+        .name_id_format(NameIdFormat::EmailAddress)
+        .credentials(Credentials::default())
+        .issuance_lifetime(Duration::from_secs(7 * 60))
+        .validation(IdpValidationPolicy::compatibility())
+        .templates(TemplatePolicy {
+            logout_request_template: Some(template),
+            ..TemplatePolicy::default()
+        })
+        .build()?,
     )?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
@@ -2641,12 +2653,14 @@ fn typed_session_authority_custom_logout_template_rejects_hard_coded_expiration(
 fn typed_facade_rejects_slo_pending_peer_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange()?;
     let other_idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new("https://other-idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-            .credentials(signing_credentials())
-            .validation(signed_authn_request_idp_validation())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new("https://other-idp.example.com/metadata")?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+        .credentials(signing_credentials())
+        .validation(signed_authn_request_idp_validation())
+        .build()?,
     )?;
     let other_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
@@ -2748,12 +2762,14 @@ fn typed_facade_checks_destination_for_the_binding_the_response_arrived_on(
 fn typed_facade_rejects_a_response_binding_the_local_metadata_does_not_publish(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
-            .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
-            .credentials(signing_credentials())
-            .validation(signing_sp_validation())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
+        .credentials(signing_credentials())
+        .validation(signing_sp_validation())
+        .build()?,
     )?;
     let idp = Saml::idp(idp_config()?)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -3743,13 +3759,15 @@ fn typed_session_authority_logout_request_without_subject_format_sends_configure
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(sp_config()?)?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-            .name_id_format(NameIdFormat::EmailAddress)
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::compatibility())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+        .name_id_format(NameIdFormat::EmailAddress)
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::compatibility())
+        .build()?,
     )?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 

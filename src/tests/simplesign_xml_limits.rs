@@ -51,38 +51,38 @@ fn raised_xml_policy() -> XmlPolicy {
 
 fn parties() -> TestResult<Parties> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::simple_sign(
-                "https://sp.example.com/acs/simple",
-            )?)
-            .slo_endpoint(SloEndpoint::simple_sign(
-                "https://sp.example.com/slo/simple",
-            )?)
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy {
-                assertions: AssertionSignaturePolicy::RequireSigned,
-                authn_requests: AuthnRequestSigningPolicy::Sign,
-                audience: AudienceValidationPolicy::Validate,
-                ..SpValidationPolicy::recommended()
-            })
-            .xml(raised_xml_policy())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::simple_sign("https://sp.example.com/acs/simple")?,
+        )
+        .slo_endpoint(SloEndpoint::simple_sign(
+            "https://sp.example.com/slo/simple",
+        )?)
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy {
+            assertions: AssertionSignaturePolicy::RequireSigned,
+            authn_requests: AuthnRequestSigningPolicy::Sign,
+            audience: AudienceValidationPolicy::Validate,
+            ..SpValidationPolicy::recommended()
+        })
+        .xml(raised_xml_policy())
+        .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::simple_sign(
-                "https://idp.example.com/sso/simple",
-            )?)
-            .slo_endpoint(SloEndpoint::simple_sign(
-                "https://idp.example.com/slo/simple",
-            )?)
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy {
-                authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-                ..IdpValidationPolicy::recommended()
-            })
-            .xml(raised_xml_policy())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::simple_sign("https://idp.example.com/sso/simple")?,
+        )
+        .slo_endpoint(SloEndpoint::simple_sign(
+            "https://idp.example.com/slo/simple",
+        )?)
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy {
+            authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+            ..IdpValidationPolicy::recommended()
+        })
+        .xml(raised_xml_policy())
+        .build()?,
     )?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,

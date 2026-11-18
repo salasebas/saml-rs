@@ -42,17 +42,21 @@ fn issued_sso() -> Result<IssuedSso, Box<dyn std::error::Error>> {
 }
 
 fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Error>> {
-    let sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-        .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
-        .build()?;
-    let idp_config = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO)?)
-        .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
-        .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
-        .build()?;
+    let sp_config = SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS)?.with_default(),
+    )
+    .credentials(signing_credentials())
+    .validation(SpValidationPolicy::recommended())
+    .build()?;
+    let idp_config = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO)?,
+    )
+    .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
+    .credentials(signing_credentials())
+    .validation(IdpValidationPolicy::recommended())
+    .build()?;
     let sp = Saml::sp(sp_config)?;
     let idp = Saml::idp(idp_config)?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(

@@ -25,20 +25,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
 
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo")?)
-            .credentials(credentials())
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo")?)
+        .credentials(credentials())
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-            .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo")?)
-            .credentials(credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo")?)
+        .credentials(credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
     )?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,

@@ -52,21 +52,29 @@ type Parties = (
     IdpDescriptor,
 );
 
+fn idp_builder() -> Result<IdpConfigBuilder, SamlError> {
+    Ok(IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post("https://idp.example.com/sso/post")?,
+    ))
+}
+
 fn parties() -> Result<Parties, SamlError> {
-    parties_with(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?))
+    parties_with(idp_builder()?)
 }
 
 fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(credentials())
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(credentials())
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
     )?;
     let idp = Saml::idp(
-        idp.sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
-            .credentials(credentials())
+        idp.credentials(credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
     )?;
@@ -174,15 +182,14 @@ fn child<'a, 'input>(node: Node<'a, 'input>, name: &str) -> Option<Node<'a, 'inp
 
 #[test]
 fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp, sp_descriptor, idp_descriptor) = parties_with(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?).algorithms(AlgorithmPolicy {
+    let (sp, idp, sp_descriptor, idp_descriptor) =
+        parties_with(idp_builder()?.algorithms(AlgorithmPolicy {
             signed_reference_transforms: vec![
                 TransformAlgorithm::EnvelopedSignature,
                 TransformAlgorithm::CanonicalXml,
             ],
             ..AlgorithmPolicy::default()
-        }),
-    )?;
+        }))?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::from_headers(PaosClientRequest::ACCEPT, PaosClientRequest::PAOS_HEADER)?,
@@ -263,8 +270,7 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
 fn paos_response_returns_the_session_index_the_service_provider_accepts(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp, sp_descriptor, idp_descriptor) = parties_with(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
+        idp_builder()?.slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
     )?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
@@ -694,20 +700,24 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         ..SpValidationPolicy::recommended()
     };
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(encrypted_credentials)
-            .validation(sp_validation)
-            .xml(encryption)
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(encrypted_credentials)
+        .validation(sp_validation)
+        .xml(encryption)
+        .build()?,
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
-            .credentials(credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .xml(encryption)
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post("https://idp.example.com/sso/post")?,
+        )
+        .credentials(credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .xml(encryption)
+        .build()?,
     )?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,

@@ -45,15 +45,17 @@ const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(
-                Credentials::default()
-                    .with_signing_key(PrivateKeyPem::new(PRIVKEY))
-                    .with_signing_certificate(CertificatePem::new(CERT)),
-            )
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(
+            Credentials::default()
+                .with_signing_key(PrivateKeyPem::new(PRIVKEY))
+                .with_signing_certificate(CertificatePem::new(CERT)),
+        )
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
     )
 }
 
@@ -74,11 +76,13 @@ fn idp_credentials() -> Credentials {
 
 fn idp_with_credentials(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials)
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(credentials)
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
     )
 }
 

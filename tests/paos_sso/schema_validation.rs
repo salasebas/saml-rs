@@ -11,15 +11,17 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
     }
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let rejecting = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(credentials())
-            .validation(SpValidationPolicy::recommended())
-            .xml(saml_rs::XmlPolicy {
-                schema_validator: Some(reject_envelope),
-                ..saml_rs::XmlPolicy::default()
-            })
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(credentials())
+        .validation(SpValidationPolicy::recommended())
+        .xml(saml_rs::XmlPolicy {
+            schema_validator: Some(reject_envelope),
+            ..saml_rs::XmlPolicy::default()
+        })
+        .build()?,
     )?;
     let started = sp.start_paos_sso(
         &idp_descriptor,

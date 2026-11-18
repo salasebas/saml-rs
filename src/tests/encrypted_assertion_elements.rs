@@ -83,12 +83,14 @@ fn sp_with_credentials(
     credentials: Credentials,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(credentials)
-            .validation(validation)
-            .xml(xml(encryption))
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(credentials)
+        .validation(validation)
+        .xml(xml(encryption))
+        .build()?,
     )
 }
 
@@ -98,12 +100,14 @@ fn sp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
 
 fn idp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
     Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .xml(xml(encryption))
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .xml(xml(encryption))
+        .build()?,
     )
 }
 
@@ -307,18 +311,20 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
 
     let sp = sp(XmlEncryptionPolicy::encrypt_assertions())?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials())
-            .xml(xml(XmlEncryptionPolicy::encrypt_assertions()))
-            .algorithms(AlgorithmPolicy {
-                key_encryption: KeyEncryptionAlgorithm::RsaOaep {
-                    digest: DigestAlgorithm::Sha256,
-                    mgf: MaskGenerationFunction::Mgf1Sha256,
-                },
-                ..AlgorithmPolicy::default()
-            })
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(credentials())
+        .xml(xml(XmlEncryptionPolicy::encrypt_assertions()))
+        .algorithms(AlgorithmPolicy {
+            key_encryption: KeyEncryptionAlgorithm::RsaOaep {
+                digest: DigestAlgorithm::Sha256,
+                mgf: MaskGenerationFunction::Mgf1Sha256,
+            },
+            ..AlgorithmPolicy::default()
+        })
+        .build()?,
     )?;
     let mut raw = idp.raw_identity_provider().clone();
     raw.setting.key_encryption_algorithm = RSA_OAEP_MGF1P.into();
@@ -359,11 +365,13 @@ fn metadata_publishes_each_encryption_certificate_in_order(
         rolling.clone(),
     )?;
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(rolling)
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(rolling)
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
     )?;
     let published = vec![
         normalize_cert_string(CERT),
@@ -522,12 +530,14 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         XmlEncryptionPolicy::encrypt_assertions(),
     ] {
         let sp = Saml::sp(
-            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-                .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS)?.with_default())
-                .credentials(credentials())
-                .validation(SpValidationPolicy::recommended())
-                .xml(xml(sp_encryption))
-                .build()?,
+            SpConfig::builder(
+                EntityId::try_new(SP_ENTITY_ID)?,
+                AcsEndpoint::simple_sign(SP_ACS)?.with_default(),
+            )
+            .credentials(credentials())
+            .validation(SpValidationPolicy::recommended())
+            .xml(xml(sp_encryption))
+            .build()?,
         )?;
         let idp = idp(XmlEncryptionPolicy::encrypt_assertions())?;
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -605,10 +615,12 @@ fn service_provider_builder_requires_a_decryption_key_for_encrypted_elements(
         XmlEncryptionPolicy::encrypt_ids(),
         XmlEncryptionPolicy::encrypt_attributes(),
     ] {
-        let built = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .xml(xml(encryption))
-            .build();
+        let built = SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .xml(xml(encryption))
+        .build();
         match built {
             Err(SamlError::MissingKey(key)) if key == "decryption_key" => {}
             other => return Err(format!("expected MissingKey, got {other:?}").into()),

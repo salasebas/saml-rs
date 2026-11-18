@@ -100,33 +100,37 @@ fn peers_with_profiles(
     sp_xml_signatures: XmlSignatureProfile,
     idp_xml_signatures: XmlSignatureProfile,
 ) -> Result<Peers, SamlError> {
-    let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
-        .credentials(sp.credentials)
-        .validation(SpValidationPolicy {
-            authn_requests: AuthnRequestSigningPolicy::Sign,
-            xml_signatures: sp_xml_signatures,
-            ..SpValidationPolicy::recommended()
-        })
-        .algorithms(sp.algorithms)
-        .xml(xml)
-        .build()?;
-    let idp = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
-        .credentials(idp.credentials)
-        .validation(IdpValidationPolicy {
-            authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-            xml_signatures: idp_xml_signatures,
-            ..IdpValidationPolicy::recommended()
-        })
-        .algorithms(idp.algorithms)
-        .xml(xml)
-        .build()?;
+    let sp = SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
+    .credentials(sp.credentials)
+    .validation(SpValidationPolicy {
+        authn_requests: AuthnRequestSigningPolicy::Sign,
+        xml_signatures: sp_xml_signatures,
+        ..SpValidationPolicy::recommended()
+    })
+    .algorithms(sp.algorithms)
+    .xml(xml)
+    .build()?;
+    let idp = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
+    .credentials(idp.credentials)
+    .validation(IdpValidationPolicy {
+        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        xml_signatures: idp_xml_signatures,
+        ..IdpValidationPolicy::recommended()
+    })
+    .algorithms(idp.algorithms)
+    .xml(xml)
+    .build()?;
     let sp = Saml::sp(sp)?;
     let idp = Saml::idp(idp)?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(

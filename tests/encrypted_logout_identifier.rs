@@ -85,8 +85,10 @@ fn sp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    let mut builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default());
+    let mut builder = SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS)?.with_default(),
+    );
     for endpoint in slo_endpoints("sp.example.com")? {
         builder = builder.slo_endpoint(endpoint);
     }
@@ -114,8 +116,10 @@ fn idp_with_credentials(
     encryption: XmlEncryptionPolicy,
     credentials: Credentials,
 ) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let mut builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO)?);
+    let mut builder = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO)?,
+    );
     for endpoint in slo_endpoints("idp.example.com")? {
         builder = builder.slo_endpoint(endpoint);
     }
