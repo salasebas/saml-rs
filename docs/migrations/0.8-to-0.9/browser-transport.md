@@ -150,15 +150,16 @@ A snapshot you stored with 0.8 maps to the new fields as follows:
 | `acs_url`, `acs_index`, `acs_is_default` | Unchanged | Removed | Removed |
 | `acs_binding` | `acs_binding` | Removed | Removed |
 | `issued_at` | Removed | Removed | Removed |
-| `expires_at` | Removed | `not_on_or_after` | Removed |
+| `expires_at` | Removed | `not_on_or_after` for a session authority's request, otherwise `None` | Removed |
 
 `relay_state` is an `Option<String>`: `None` for `Absent`, `Some("")` for
 `PresentEmpty`, and `Some(value)` for `PresentValue`. An AuthnRequest's
-`expected_binding` and `acs_binding` always held the same binding. A
-ManageNameIDRequest always uses HTTP-Redirect. saml-rs never set `issued_at`
-or `expires_at` on an AuthnRequest or a ManageNameIDRequest. If you set them
-with `with_issue_instant` or `with_expiration`, store those values next to the
-snapshot yourself.
+`expected_binding` and `acs_binding` always held the same binding.
+`PendingManageNameIdRequest` tracks only HTTP-Redirect requests. saml-rs set
+`issued_at` and `expires_at` only on a session authority's LogoutRequest. If
+you set them yourself with `with_issue_instant` or `with_expiration`, on any
+pending type, store those values next to the snapshot. Do not copy them into
+`not_on_or_after`.
 
 `from_snapshot` still reads a binding as a short name, such as `post`, or as a
 binding URN. A SOAP logout snapshot with RelayState returns
