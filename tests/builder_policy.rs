@@ -314,7 +314,6 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         ..XmlPolicy::default()
     };
     let templates = TemplatePolicy {
-        relay_state: "relay-state".to_string(),
         tag_prefix_protocol: "p".to_string(),
         ..TemplatePolicy::default()
     };
@@ -334,7 +333,6 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(config.algorithms(), &algorithms);
     assert_eq!(config.xml(), &xml);
-    assert_eq!(config.templates().relay_state, templates.relay_state);
     assert_eq!(
         config.templates().tag_prefix_protocol,
         templates.tag_prefix_protocol
@@ -358,7 +356,6 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         ..XmlPolicy::default()
     };
     let templates = TemplatePolicy {
-        relay_state: "idp-relay".to_string(),
         tag_prefix_assertion: "a".to_string(),
         ..TemplatePolicy::default()
     };
@@ -377,7 +374,6 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(config.algorithms(), &algorithms);
     assert_eq!(config.xml(), &xml);
-    assert_eq!(config.templates().relay_state, templates.relay_state);
     assert_eq!(
         config.templates().tag_prefix_assertion,
         templates.tag_prefix_assertion

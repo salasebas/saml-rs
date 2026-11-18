@@ -202,16 +202,7 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
         }
     }
 
-    let templates = TemplatePolicy {
-        relay_state: "b".repeat(MAX_RELAY_STATE_BYTES + 1),
-        ..TemplatePolicy::default()
-    };
-    let sp = sp_with(SpValidationPolicy::recommended(), templates)?;
-    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    match sp.start_sso(&idp_descriptor, StartSso::redirect()) {
-        Err(SamlError::Invalid(message)) if message.contains("80") => Ok(()),
-        other => Err(format!("expected the 80-byte RelayState prohibition, got {other:?}").into()),
-    }
+    Ok(())
 }
 
 #[test]

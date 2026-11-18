@@ -714,20 +714,17 @@ impl Default for AlgorithmPolicy {
 /// Template and XML tag-prefix customization.
 #[derive(Debug, Clone)]
 pub struct TemplatePolicy {
-    /// Default RelayState.
-    pub relay_state: String,
     /// IdP protocol tag prefix for generated messages.
     ///
     /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
     /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
-    /// IdP assertion tag prefix for generated messages.
+    /// IdP assertion tag prefix for generated messages, including a generated
+    /// `<EncryptedAssertion>`.
     ///
     /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
     /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// IdP tag prefix for generated `<EncryptedAssertion>` elements.
-    pub tag_prefix_encrypted_assertion: String,
     /// IdP login response template and attributes.
     ///
     /// `{NameIDFormat}` receives a format that has been checked to be an
@@ -773,10 +770,8 @@ pub struct TemplatePolicy {
 impl Default for TemplatePolicy {
     fn default() -> Self {
         Self {
-            relay_state: String::new(),
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            tag_prefix_encrypted_assertion: "saml".to_string(),
             login_response_template: None,
             login_request_template: None,
             logout_request_template: None,

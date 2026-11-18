@@ -94,7 +94,6 @@ fn common_setting(
             .encryption
             .allows_rsa15_key_transport_decryption(),
         max_decryption_work: xml.encryption.max_decryption_work(),
-        relay_state: templates.relay_state.clone(),
         name_id_format: name_id_format_uris(name_id_format),
         private_key: credentials
             .signing_key()
@@ -117,7 +116,7 @@ fn common_setting(
         schema_validator: xml.schema_validator,
         tag_prefix_protocol: templates.tag_prefix_protocol.clone(),
         tag_prefix_assertion: templates.tag_prefix_assertion.clone(),
-        tag_prefix_encrypted_assertion: templates.tag_prefix_encrypted_assertion.clone(),
+        tag_prefix_encrypted_assertion: templates.tag_prefix_assertion.clone(),
         login_response_template: templates.login_response_template.clone(),
         login_request_template: templates.login_request_template.clone(),
         logout_request_template: templates.logout_request_template.clone(),

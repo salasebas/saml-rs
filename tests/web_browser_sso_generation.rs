@@ -746,6 +746,54 @@ fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_reque
 
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
+fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn std::error::Error>>
+{
+    let encryption = XmlPolicy {
+        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        ..XmlPolicy::default()
+    };
+    let sp = Saml::sp(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
+            .credentials(
+                signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+                    certificate: CertificatePem::new(CERT),
+                    key: PrivateKeyPem::new(PRIVKEY),
+                    passphrase: None,
+                }),
+            )
+            .validation(signing_sp_validation())
+            .build()?,
+    )?;
+    let idp = Saml::idp(
+        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
+            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
+            .credentials(signing_credentials())
+            .validation(signed_authn_request_idp_validation())
+            .xml(encryption)
+            .templates(saml_rs::TemplatePolicy {
+                tag_prefix_assertion: "saml2".into(),
+                ..saml_rs::TemplatePolicy::default()
+            })
+            .build()?,
+    )?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+
+    let xml = response_xml(&response)?;
+    assert!(xml.contains("<saml2:EncryptedAssertion "), "{xml}");
+    assert!(!xml.contains("<saml:EncryptedAssertion"), "{xml}");
+    Ok(())
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+#[test]
 fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let encryption = XmlPolicy {
