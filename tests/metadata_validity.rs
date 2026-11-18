@@ -490,16 +490,15 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wrong_peer = EntityId::try_new("https://other.example.com/metadata")?;
     let logout_pending = PendingLogoutRequest::from_snapshot(PendingLogoutRequestSnapshot {
-        id: "_logout".to_string(),
+        request_id: "_logout".to_string(),
         relay_state: None,
         peer_entity_id: wrong_peer.as_str().to_string(),
-        binding: "redirect".to_string(),
-        issued_at: None,
-        expires_at: None,
+        request_binding: "redirect".to_string(),
+        not_on_or_after: None,
     })?;
     let manage_pending =
         PendingManageNameIdRequest::from_snapshot(PendingManageNameIdRequestSnapshot {
-            id: "_manage".to_string(),
+            request_id: "_manage".to_string(),
             relay_state: None,
             peer_entity_id: wrong_peer.as_str().to_string(),
         })?;

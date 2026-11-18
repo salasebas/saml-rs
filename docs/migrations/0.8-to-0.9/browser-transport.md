@@ -99,8 +99,7 @@ has its own snapshot, a plain struct with public fields:
   `PendingManageNameIdRequestSnapshot`.
 
 Build a snapshot from stored values with a struct literal, then call
-`from_snapshot`. `relay_state`, `issued_at`, and `expires_at` are strings now,
-so store them as text.
+`from_snapshot`.
 
 Before the upgrade, a constructor filled part of the snapshot and you assigned
 the rest.
@@ -123,13 +122,13 @@ After the upgrade, write the snapshot as one literal.
 
 ```rust
 # use saml_rs::{PendingAuthnRequest, PendingAuthnRequestSnapshot, SamlError};
-# struct Row { id: String, relay_state: Option<String>, idp_entity_id: String,
+# struct Row { request_id: String, relay_state: Option<String>, idp_entity_id: String,
 #     acs_binding: String, acs_url: String, acs_index: Option<u16>, acs_is_default: bool }
 # fn restore(row: Row) -> Result<PendingAuthnRequest, SamlError> {
 let pending = PendingAuthnRequest::from_snapshot(PendingAuthnRequestSnapshot {
-    id: row.id,
+    request_id: row.request_id,
     relay_state: row.relay_state,
-    peer_entity_id: row.idp_entity_id,
+    idp_entity_id: row.idp_entity_id,
     acs_binding: row.acs_binding,
     acs_url: row.acs_url,
     acs_index: row.acs_index,
@@ -141,39 +140,51 @@ let pending = PendingAuthnRequest::from_snapshot(PendingAuthnRequestSnapshot {
 
 A snapshot you stored with 0.8 maps to the new fields as follows:
 
-| 0.8 field | 0.9 field |
-| --- | --- |
-| `id`, `peer_entity_id` | Unchanged |
-| `relay_state` | `relay_state: Option<String>`: `None` for `Absent`, `Some("")` for `PresentEmpty`, and `Some(value)` for `PresentValue` |
-| `expected_binding` and `acs_binding` of an AuthnRequest | `acs_binding`. Both held the same binding |
-| `request_binding` of an AuthnRequest | Removed |
-| `acs_url`, `acs_index`, `acs_is_default` of an AuthnRequest | Unchanged |
-| `expected_binding` and `request_binding` of a LogoutRequest | `binding`. Both held the same binding |
-| `issued_at`, `expires_at` of a LogoutRequest | `issued_at`, `expires_at` as strings. Set both or neither |
-| Binding and ACS fields of a ManageNameIDRequest | Removed. The request always uses HTTP-Redirect |
-| `issued_at`, `expires_at` of an AuthnRequest or ManageNameIDRequest | Removed. saml-rs never set them. If you set them with `with_issue_instant` or `with_expiration`, store those values next to the snapshot yourself |
+| 0.8 field | AuthnRequest | LogoutRequest | ManageNameIDRequest |
+| --- | --- | --- | --- |
+| `id` | `request_id` | `request_id` | `request_id` |
+| `relay_state` | `relay_state` | `relay_state` | `relay_state` |
+| `peer_entity_id` | `idp_entity_id` | `peer_entity_id` | `peer_entity_id` |
+| `expected_binding` | `acs_binding` | `request_binding` | Removed |
+| `request_binding` | Removed | Removed. It was optional and held the same binding as `expected_binding` | Removed |
+| `acs_url`, `acs_index`, `acs_is_default` | Unchanged | Removed | Removed |
+| `acs_binding` | `acs_binding` | Removed | Removed |
+| `issued_at` | Removed | Removed | Removed |
+| `expires_at` | Removed | `not_on_or_after` | Removed |
+
+`relay_state` is an `Option<String>`: `None` for `Absent`, `Some("")` for
+`PresentEmpty`, and `Some(value)` for `PresentValue`. An AuthnRequest's
+`expected_binding` and `acs_binding` always held the same binding. A
+ManageNameIDRequest always uses HTTP-Redirect. saml-rs never set `issued_at`
+or `expires_at` on an AuthnRequest or a ManageNameIDRequest. If you set them
+with `with_issue_instant` or `with_expiration`, store those values next to the
+snapshot yourself.
 
 `from_snapshot` still reads a binding as a short name, such as `post`, or as a
-binding URN. A logout snapshot with only one of `issued_at` and `expires_at`
-returns `SamlError::Invalid`. A SOAP logout snapshot with RelayState returns
+binding URN. A SOAP logout snapshot with RelayState returns
 `SamlError::ProtocolProfile`, because a SOAP request carries none.
 
-`PendingPaosSsoSnapshot` renames `request_id` to `id` and `idp_entity_id` to
-`peer_entity_id`, and its `relay_state` is an `Option<String>`.
+`PendingPaosSsoSnapshot` keeps its field names. Its `relay_state` is an
+`Option<String>`.
 
 ## Read pending state through one accessor each
 
-The duplicate accessors are removed:
+Each value has one accessor, named for what it is:
 
 | Before | After |
 | --- | --- |
-| `PendingAuthnRequest::request_id()`, `PendingPaosSso::request_id()` | `id()` |
-| `PendingAuthnRequest::idp_entity_id()`, `PendingPaosSso::idp_entity_id()` | `peer_entity_id()` |
+| `id()`, and `PendingAuthnRequest::request_id()` | `request_id()` on every pending type |
+| `PendingAuthnRequest::peer_entity_id()`, and `idp_entity_id()` | `idp_entity_id()` |
+| `peer_entity_id()` on `PendingLogoutRequest` and `PendingManageNameIdRequest` | Unchanged |
 | `PendingAuthnRequest::response_binding()` | `acs().binding()` |
 | `PendingAuthnRequest::request_binding()` | Removed. The binding is the one you passed to `StartSso` |
-| `PendingLogoutRequest::request_binding()`, `response_binding()` | `binding()` |
+| `PendingLogoutRequest::request_binding()`, `response_binding()` | `request_binding()`. Both returned the same value |
+| `PendingLogoutRequest::issued_at()` | Removed. saml-rs does not use the request's `IssueInstant` after sending it |
+| `PendingLogoutRequest::expires_at()` | `not_on_or_after()`. `None` for a session participant |
 | `PendingManageNameIdRequest::request_binding()`, `response_binding()` | Removed. Both returned `NameIdManagementBinding::Redirect` |
-| `issued_at()`, `expires_at()` on `PendingAuthnRequest` or `PendingManageNameIdRequest` | Removed. saml-rs never set them; keep a time you set yourself next to the pending state. `PendingLogoutRequest` keeps them |
+| `issued_at()`, `expires_at()` on `PendingAuthnRequest` or `PendingManageNameIdRequest` | Removed. saml-rs never set them; keep a time you set yourself next to the pending state |
+
+`PendingPaosSso` keeps `request_id()` and `idp_entity_id()`.
 
 `Pending::try_new`, `with_request_binding`, `with_issue_instant`, and
 `with_expiration` are removed. Take pending state from the start operation,

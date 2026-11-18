@@ -474,7 +474,7 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
         BrowserInput::<AuthnRequest>::redirect(reordered),
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.id());
+    assert_eq!(received.message().id(), started.pending.request_id());
     assert_eq!(
         received.relay_state().map(RelayState::as_str),
         Some("ordered-state")

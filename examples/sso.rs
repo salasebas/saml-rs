@@ -54,7 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let relay_state = RelayState::try_new("demo-state")?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
-    println!("SP  -> AuthnRequest id = {}", started.pending.id().as_str());
+    println!(
+        "SP  -> AuthnRequest id = {}",
+        started.pending.request_id().as_str()
+    );
 
     let request = idp.receive_sso(
         &sp_descriptor,

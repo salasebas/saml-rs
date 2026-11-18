@@ -372,7 +372,7 @@ impl Saml<Sp> {
         input: BrowserInput<SsoResponse>,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
-        ensure_entity_id(pending.peer_entity_id(), idp.entity_id())?;
+        ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         ensure_sso_response_binding(input_binding(&input), pending.acs().binding())?;
         let relay_state = relay_state_from_input(&input)?;
         ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
@@ -388,7 +388,7 @@ impl Saml<Sp> {
                 raw_idp,
                 parse.binding,
                 &parse.request,
-                pending.id().as_str(),
+                pending.request_id().as_str(),
                 parse.options(validation, pending.acs().location().as_str()),
             )?;
         session_from_verified_flow(flow, relay_state)

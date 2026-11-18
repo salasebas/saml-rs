@@ -635,7 +635,7 @@ fn typed_detached_authn_requests_parse_with_relay_state() -> Result<(), Box<dyn 
             validation(),
         )?;
 
-        assert_eq!(received.message().id(), started.pending.id());
+        assert_eq!(received.message().id(), started.pending.request_id());
         assert_eq!(
             started.outbound.relay_state().map(|state| state.as_str()),
             Some("signed-state")
@@ -1144,7 +1144,7 @@ fn typed_facade_start_sso_redirect_returns_url() -> Result<(), Box<dyn std::erro
 
     let redirect_url = started.outbound.redirect_url()?;
     assert!(redirect_url.starts_with(IDP_SSO_REDIRECT));
-    assert_eq!(started.pending.id(), started.outbound.id());
+    assert_eq!(started.pending.request_id(), started.outbound.id());
     Ok(())
 }
 
@@ -1165,7 +1165,10 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
     )?;
 
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
-    assert_eq!(session.in_response_to(), Some(exchange.pending.id()));
+    assert_eq!(
+        session.in_response_to(),
+        Some(exchange.pending.request_id())
+    );
     assert_eq!(session.relay_state(), exchange.pending.relay_state());
     assert_eq!(
         session.response_issue_instant(),
@@ -1174,7 +1177,10 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
     assert!(session.response_issue_instant().as_str().ends_with('Z'));
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert!(!session.raw_flow().saml_content.is_empty());
-    assert_eq!(exchange.received.message().id(), exchange.pending.id());
+    assert_eq!(
+        exchange.received.message().id(),
+        exchange.pending.request_id()
+    );
     assert_eq!(
         exchange
             .idp
@@ -1447,7 +1453,7 @@ fn typed_facade_runs_simplesign_sso_response_binding() -> Result<(), Box<dyn std
         validation(),
     )?;
 
-    assert_eq!(session.in_response_to(), Some(started.pending.id()));
+    assert_eq!(session.in_response_to(), Some(started.pending.request_id()));
     assert_eq!(
         session.response_issue_instant(),
         session.assertion_issue_instant()
@@ -1566,7 +1572,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
         validation(),
     )?;
 
-    assert_eq!(session.in_response_to(), Some(restored.id()));
+    assert_eq!(session.in_response_to(), Some(restored.request_id()));
     Ok(())
 }
 
@@ -1621,13 +1627,13 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 
     let started = sp.start_sso(&peer_idp_descriptor, StartSso::post())?;
     let pending = PendingAuthnRequest::from_snapshot(started.pending.snapshot())?;
-    assert_eq!(pending.peer_entity_id().as_str(), PEER_IDP_ENTITY_ID);
+    assert_eq!(pending.idp_entity_id().as_str(), PEER_IDP_ENTITY_ID);
     let response = peer_idp.create_login_response(
         &local_sp,
         Binding::Post,
         &User::new("alice@example.com"),
         &LoginResponseOptions {
-            in_response_to: Some(pending.id().as_str()),
+            in_response_to: Some(pending.request_id().as_str()),
             ..LoginResponseOptions::default()
         },
     )?;
@@ -1855,7 +1861,7 @@ fn respond_sso_returns_the_relay_state_the_request_carried(
 fn typed_facade_rejects_wrong_pending_request_id() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
     let mut snapshot: PendingAuthnRequestSnapshot = exchange.pending.snapshot();
-    snapshot.id = "_different_request".to_string();
+    snapshot.request_id = "_different_request".to_string();
     let wrong_pending = PendingAuthnRequest::from_snapshot(snapshot)?;
 
     match exchange.sp.finish_sso(
@@ -1866,7 +1872,10 @@ fn typed_facade_rejects_wrong_pending_request_id() -> Result<(), Box<dyn std::er
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected.as_deref(), Some("_different_request"));
-            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
+            assert_eq!(
+                actual.as_deref(),
+                Some(exchange.pending.request_id().as_str())
+            );
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -1885,7 +1894,10 @@ fn typed_facade_rejects_solicited_response_as_unsolicited() -> Result<(), Box<dy
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected, None);
-            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
+            assert_eq!(
+                actual.as_deref(),
+                Some(exchange.pending.request_id().as_str())
+            );
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -1988,7 +2000,7 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
     }
 
     let mut snapshot: PendingAuthnRequestSnapshot = started.pending.snapshot();
-    snapshot.id = "_different_request".to_string();
+    snapshot.request_id = "_different_request".to_string();
     match sp.finish_sso(
         &idp_descriptor,
         &PendingAuthnRequest::from_snapshot(snapshot)?,
@@ -2083,7 +2095,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
     )];
 
     let mut snapshot: PendingAuthnRequestSnapshot = started.pending.snapshot();
-    snapshot.id = "_different_request".to_string();
+    snapshot.request_id = "_different_request".to_string();
     match sp.finish_sso(
         &idp_descriptor,
         &PendingAuthnRequest::from_snapshot(snapshot)?,
@@ -2112,7 +2124,7 @@ fn typed_finish_sso_checks_in_response_to_before_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = error_response_exchange()?;
     let mut snapshot: PendingAuthnRequestSnapshot = exchange.pending.snapshot();
-    snapshot.id = "_different_request".to_string();
+    snapshot.request_id = "_different_request".to_string();
     let wrong_pending = PendingAuthnRequest::from_snapshot(snapshot)?;
 
     match exchange.sp.finish_sso(
@@ -2123,7 +2135,10 @@ fn typed_finish_sso_checks_in_response_to_before_error_status(
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected.as_deref(), Some("_different_request"));
-            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
+            assert_eq!(
+                actual.as_deref(),
+                Some(exchange.pending.request_id().as_str())
+            );
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -3214,7 +3229,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
         BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.id());
+    assert_eq!(received.message().id(), started.pending.request_id());
 
     let wrong_destination = authn_request_xml(&started.outbound)?
         .replace(IDP_SSO_POST, "https://idp.example.com/sso/wrong");
@@ -3287,7 +3302,7 @@ fn recommended_idp_receive_ignores_a_spurious_post_signature_field(
         BrowserInput::<AuthnRequest>::post(fields),
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.id());
+    assert_eq!(received.message().id(), started.pending.request_id());
     Ok(())
 }
 
@@ -3380,6 +3395,9 @@ fn typed_facade_accepts_metadata_and_response_that_start_with_a_byte_order_mark(
     )?;
 
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
-    assert_eq!(session.in_response_to(), Some(exchange.pending.id()));
+    assert_eq!(
+        session.in_response_to(),
+        Some(exchange.pending.request_id())
+    );
     Ok(())
 }

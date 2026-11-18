@@ -76,7 +76,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .logout_subject()
         .ok_or("session has no logout subject")?;
     let logout = sp.start_slo(&idp_descriptor, subject, StartSlo::post())?;
-    println!("SP  -> LogoutRequest id = {}", logout.pending.id().as_str());
+    println!(
+        "SP  -> LogoutRequest id = {}",
+        logout.pending.request_id().as_str()
+    );
 
     let logout_request = idp.receive_slo(
         &sp_descriptor,

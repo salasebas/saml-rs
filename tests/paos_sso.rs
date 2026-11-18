@@ -869,7 +869,7 @@ fn signed_request_with_a_namespace_declared_on_the_envelope_is_received(
         &PaosAuthnRequest::from_envelope(hoisted, IDP_SOAP)?,
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.id());
+    assert_eq!(received.message().id(), started.pending.request_id());
     Ok(())
 }
 

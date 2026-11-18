@@ -135,7 +135,7 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         (&signed_redirect, redirect_input(&signed_redirect.outbound)?),
     ] {
         let received = idp.receive_sso(&signing_descriptor, input, validation())?;
-        assert_eq!(received.message().id(), started.pending.id());
+        assert_eq!(received.message().id(), started.pending.request_id());
     }
 
     let compatibility = self::idp(IdpValidationPolicy::compatibility())?;
@@ -144,7 +144,7 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         post_input(&unsigned_post.outbound)?,
         validation(),
     )?;
-    assert_eq!(received.message().id(), unsigned_post.pending.id());
+    assert_eq!(received.message().id(), unsigned_post.pending.request_id());
     Ok(())
 }
 
@@ -184,6 +184,6 @@ fn unsigned_paos_request_is_rejected_when_sp_metadata_sets_authn_requests_signed
         )?,
         validation(),
     )?;
-    assert_eq!(received.message().id(), signed.pending.id());
+    assert_eq!(received.message().id(), signed.pending.request_id());
     Ok(())
 }

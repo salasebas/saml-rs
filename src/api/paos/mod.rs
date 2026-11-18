@@ -210,16 +210,16 @@ impl RespondPaosSso {
 /// Correlation state for a PAOS login the service provider has started.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPaosSso {
-    id: MessageId,
+    request_id: MessageId,
     relay_state: Option<RelayState>,
-    peer_entity_id: EntityId,
+    idp_entity_id: EntityId,
     acs_url: EndpointUrl,
 }
 
 impl PendingPaosSso {
     /// AuthnRequest ID the response must cite.
-    pub fn id(&self) -> &MessageId {
-        &self.id
+    pub fn request_id(&self) -> &MessageId {
+        &self.request_id
     }
 
     /// RelayState the service provider asked the enhanced client to return.
@@ -228,8 +228,8 @@ impl PendingPaosSso {
     }
 
     /// Identity provider this login was addressed to.
-    pub fn peer_entity_id(&self) -> &EntityId {
-        &self.peer_entity_id
+    pub fn idp_entity_id(&self) -> &EntityId {
+        &self.idp_entity_id
     }
 
     /// Assertion consumer the response must target.
@@ -240,12 +240,12 @@ impl PendingPaosSso {
     /// Correlation fields for the caller to store.
     pub fn snapshot(&self) -> PendingPaosSsoSnapshot {
         PendingPaosSsoSnapshot {
-            id: self.id.as_str().to_string(),
+            request_id: self.request_id.as_str().to_string(),
             relay_state: self
                 .relay_state
                 .as_ref()
                 .map(|relay_state| relay_state.as_str().to_string()),
-            peer_entity_id: self.peer_entity_id.as_str().to_string(),
+            idp_entity_id: self.idp_entity_id.as_str().to_string(),
             acs_url: self.acs_url.as_str().to_string(),
         }
     }
@@ -258,9 +258,9 @@ impl PendingPaosSso {
     /// identity-provider entity ID, or assertion consumer URL is not usable.
     pub fn from_snapshot(snapshot: PendingPaosSsoSnapshot) -> Result<Self, SamlError> {
         Ok(Self {
-            id: MessageId::try_new(snapshot.id)?,
+            request_id: MessageId::try_new(snapshot.request_id)?,
             relay_state: snapshot.relay_state.map(RelayState::try_new).transpose()?,
-            peer_entity_id: EntityId::try_new(snapshot.peer_entity_id)?,
+            idp_entity_id: EntityId::try_new(snapshot.idp_entity_id)?,
             acs_url: EndpointUrl::try_new(snapshot.acs_url)?,
         })
     }
@@ -270,12 +270,12 @@ impl PendingPaosSso {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPaosSsoSnapshot {
     /// AuthnRequest ID.
-    pub id: String,
+    pub request_id: String,
     /// `ecp:RelayState` the service provider sent. `None` when it sent none,
     /// and an empty string when it sent an empty one.
     pub relay_state: Option<String>,
     /// Identity provider entity ID.
-    pub peer_entity_id: String,
+    pub idp_entity_id: String,
     /// Assertion consumer URL placed on the AuthnRequest.
     pub acs_url: String,
 }
@@ -535,9 +535,9 @@ impl Saml<Sp> {
         });
         Ok(StartedPaosSso {
             pending: PendingPaosSso {
-                id: MessageId::try_new(request_id)?,
+                request_id: MessageId::try_new(request_id)?,
                 relay_state: options.relay_state,
-                peer_entity_id: idp.entity_id().clone(),
+                idp_entity_id: idp.entity_id().clone(),
                 acs_url: assertion_consumer,
             },
             http_response: PaosHttpResponse::from_parts(PAOS_MEDIA_TYPE, envelope),
@@ -597,7 +597,7 @@ impl Saml<Sp> {
         response: &PaosSsoResponse,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
-        ensure_entity_id(pending.peer_entity_id(), idp.entity_id())?;
+        ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         let limits = self.raw_service_provider().setting.xml_limits;
         let body = read_soap_body(
             &response.envelope,
@@ -620,7 +620,7 @@ impl Saml<Sp> {
                 raw_idp,
                 crate::constants::Binding::Post,
                 &request,
-                pending.id().as_str(),
+                pending.request_id().as_str(),
                 LoginResponseParseOptions::at(
                     validation.now(),
                     validation.clock_skew().as_millis(),
