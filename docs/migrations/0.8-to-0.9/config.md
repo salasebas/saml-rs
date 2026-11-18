@@ -113,7 +113,7 @@ unknown name and wrote a repeated group again, as
 
 **Now:** `SpConfigBuilder::elements_order` takes an iterator of
 `SpMetadataElement`, and `IdpConfigBuilder::elements_order` takes an iterator
-of `IdpMetadataElement`. An unknown group no longer compiles. `build()` still
+of `IdpMetadataElement`. An unknown group no longer compiles. `build()` now
 returns `SamlError::Invalid` for a repeated group. The getters return
 `Option<&[SpMetadataElement]>` and `Option<&[IdpMetadataElement]>`. The raw
 generator input keeps its `Vec<String>`.
@@ -273,9 +273,10 @@ element.
 **Affects:** callers that set `TemplatePolicy::signature_config`.
 
 **Before:** `build()` accepted any `SignatureConfig::prefix`. A prefix that is
-not an XML NCName, such as `ds:sig`, failed when the first message was
-signed. Signing and encryption accepted only ASCII prefixes, while templates
-accepted every NCName.
+not an XML NCName, such as `ds:sig`, failed when the first embedded XML
+signature was written. A detached HTTP-Redirect signature does not use the
+prefix. Signing and encryption accepted only ASCII prefixes, while templates
+accepted every NCName other than `xml` and `xmlns`.
 
 **Now:** `build()` returns `SamlError::Invalid` with
 `SignatureConfig.prefix XML prefix must be an XML NCName` for such a prefix.
