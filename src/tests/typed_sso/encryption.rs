@@ -23,7 +23,7 @@ fn encrypted_exchange(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -66,7 +66,7 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
         let session = exchange.sp.finish_sso(
             &exchange.idp_descriptor,
             &exchange.pending,
-            BrowserInput::<SsoResponse>::post(fields),
+            Inbound::post(fields),
             validation(),
         )?;
         assert_eq!(session.name_id().value(), "alice@example.com");
@@ -103,14 +103,14 @@ fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
             let result = accepting.finish_sso(
                 &exchange.idp_descriptor,
                 &exchange.pending,
-                BrowserInput::<SsoResponse>::post(response_fields_with_xml(fields.clone(), &variant)?),
+                Inbound::post(response_fields_with_xml(fields.clone(), &variant)?),
                 validation(),
             );
             assert!(matches!(result, Err(SamlError::SignatureMissing)), "unsigned CBC accepted or wrong error");
             let session = relaxed.finish_sso(
                 &exchange.idp_descriptor,
                 &exchange.pending,
-                BrowserInput::<SsoResponse>::post(response_fields_with_xml(fields.clone(), &variant)?),
+                Inbound::post(response_fields_with_xml(fields.clone(), &variant)?),
                 validation(),
             )?;
             assert_eq!(session.name_id().value(), "alice@example.com");
@@ -148,7 +148,7 @@ fn recommended_sso_accept_rejects_missing_and_unknown_data_methods(
         let result = exchange.sp.finish_sso(
             &exchange.idp_descriptor,
             &exchange.pending,
-            BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+            Inbound::post(response_fields_with_xml(
                 exchange.response_fields.clone(),
                 &variant,
             )?),
@@ -220,7 +220,7 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
             let result = rollover.finish_sso(
                 &exchange.idp_descriptor,
                 &exchange.pending,
-                BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+                Inbound::post(response_fields_with_xml(
                     exchange.response_fields.clone(),
                     &variant,
                 )?),
@@ -274,7 +274,7 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -283,7 +283,7 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     )?;
 
@@ -316,7 +316,7 @@ fn schema_validator_rejects_the_decrypted_response() -> Result<(), Box<dyn std::
     let result = rejecting.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields.clone()),
+        Inbound::post(exchange.response_fields.clone()),
         validation(),
     );
     assert!(
@@ -326,7 +326,7 @@ fn schema_validator_rejects_the_decrypted_response() -> Result<(), Box<dyn std::
     exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     )?;
     Ok(())

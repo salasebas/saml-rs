@@ -11,11 +11,10 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::Binding;
 use saml_rs::{
-    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, BrowserInput,
-    EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponseBinding, StartSso, Subject,
+    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId,
+    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts,
+    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Subject,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -80,8 +79,8 @@ fn authn_request(destination: &str) -> String {
     )
 }
 
-fn post_authn_request(xml: &str) -> BrowserInput<AuthnRequest> {
-    BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+fn post_authn_request(xml: &str) -> Inbound<AuthnRequest> {
+    Inbound::post(vec![FormField::new(
         "SAMLRequest",
         STANDARD.encode(xml.as_bytes()),
     )])
@@ -97,7 +96,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(

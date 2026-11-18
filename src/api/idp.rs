@@ -1,5 +1,5 @@
 use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
-use crate::browser::{ArtifactDelivery, BrowserInput, Outbound, SsoRequestBinding};
+use crate::browser::{ArtifactDelivery, Inbound, Outbound, SsoRequestBinding};
 use crate::config::{NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
@@ -40,7 +40,7 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when browser input or relay state is invalid, the
+    /// Returns [`SamlError`] when the inbound message or relay state is invalid, the
     /// request binding is unsupported, SP metadata cannot be parsed, XML
     /// parsing or signature/trust validation fails, the request is unsigned
     /// while the SP metadata sets `AuthnRequestsSigned` under
@@ -57,8 +57,8 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     AuthnRequest, BrowserInput, FormField, ReplayPolicy, RespondSso, Saml,
-    ///     SamlValidationContext, SpDescriptor, Subject,
+    ///     FormField, Inbound, ReplayPolicy, RespondSso, Saml, SamlValidationContext, SpDescriptor,
+    ///     Subject,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -72,7 +72,7 @@ impl Saml<Idp> {
     ///     SystemTime::now(),
     ///     ReplayPolicy::Disabled,
     /// );
-    /// let input = BrowserInput::<AuthnRequest>::post(fields);
+    /// let input = Inbound::post(fields);
     /// let request = idp.receive_sso(sp, input, validation)?;
     /// let response = idp.respond_sso(sp, &request, subject, RespondSso::post())?;
     ///
@@ -83,7 +83,7 @@ impl Saml<Idp> {
     pub fn receive_sso(
         &self,
         sp: &SpDescriptor,
-        input: BrowserInput<AuthnRequest>,
+        input: Inbound<AuthnRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<AuthnRequest>, SamlError> {
         let relay_state = relay_state_from_input(&input)?;
@@ -204,8 +204,8 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     BrowserInput, FormField, IdpDescriptor, ReplayPolicy, RespondSso, Saml,
-    ///     SamlValidationContext, SpDescriptor, SsoResponse, Subject,
+    ///     FormField, IdpDescriptor, Inbound, ReplayPolicy, RespondSso, Saml,
+    ///     SamlValidationContext, SpDescriptor, Subject,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -227,7 +227,7 @@ impl Saml<Idp> {
     /// );
     /// let session = sp.accept_unsolicited_sso(
     ///     idp_descriptor,
-    ///     BrowserInput::<SsoResponse>::post(form_fields),
+    ///     Inbound::post(form_fields),
     ///     validation,
     /// )?;
     /// let issuer = session.issuer().as_str();

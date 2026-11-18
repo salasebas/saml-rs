@@ -99,7 +99,7 @@ fn typed_api_contract_reexports_browser_and_model_types() {
     let _: for<'a> fn(&'a VerifiedXmlSignature) -> &'a str = VerifiedXmlSignature::algorithm_uri;
     let _: fn(&VerifiedXmlSignature) -> VerifiedXmlSignatureCoverage =
         VerifiedXmlSignature::coverage;
-    let _ = std::any::type_name::<saml_rs::BrowserInput<saml_rs::AuthnRequest>>();
+    let _ = std::any::type_name::<saml_rs::Inbound<saml_rs::AuthnRequest>>();
     let _ = std::any::type_name::<saml_rs::FormField>();
     let _ = std::any::type_name::<saml_rs::Outbound<saml_rs::AuthnRequest>>();
     let _ = std::any::type_name::<saml_rs::Pending<saml_rs::AuthnRequest>>();

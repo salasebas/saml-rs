@@ -34,13 +34,13 @@ use saml_rs::xml::dom::parse_document;
 use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
-    ClockSkew, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    LogoutRequest, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PendingAuthnRequest,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew, EntityId,
+    ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PendingAuthnRequest,
     PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
     RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
-    StartSso, Status, Subject, SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Status,
+    Subject, SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage,
     XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
@@ -340,24 +340,20 @@ fn authn_request_xml(
 
 fn authn_request_input(
     outbound: &Outbound<AuthnRequest>,
-) -> Result<BrowserInput<AuthnRequest>, Box<dyn std::error::Error>> {
+) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
     match outbound.raw_context().binding {
         Binding::Redirect => {
             let url = Url::parse(outbound.redirect_url()?)?;
-            Ok(BrowserInput::<AuthnRequest>::redirect(
-                url.query().unwrap_or_default(),
-            ))
+            Ok(Inbound::redirect(url.query().unwrap_or_default()))
         }
-        Binding::Post => Ok(BrowserInput::<AuthnRequest>::post(post_fields(outbound)?)),
-        Binding::SimpleSign => Ok(BrowserInput::<AuthnRequest>::simple_sign(post_fields(
-            outbound,
-        )?)),
+        Binding::Post => Ok(Inbound::post(post_fields(outbound)?)),
+        Binding::SimpleSign => Ok(Inbound::simple_sign(post_fields(outbound)?)),
         _ => Err("binding is unsupported for AuthnRequest".into()),
     }
 }
 
-fn post_authn_request_input_with_xml(xml: &str) -> BrowserInput<AuthnRequest> {
-    BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+fn post_authn_request_input_with_xml(xml: &str) -> Inbound<AuthnRequest> {
+    Inbound::post(vec![FormField::new(
         "SAMLRequest",
         STANDARD.encode(xml.as_bytes()),
     )])
@@ -431,7 +427,7 @@ fn start_receive_respond_with(
     let started = sp.start_sso(&idp_descriptor, start_options)?;
     assert_eq!(started.outbound.raw_context().request_type, "SAMLRequest");
 
-    let request_input = BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_sso(&sp_descriptor, request_input, validation())?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
     assert!(!received.message().raw_flow().saml_content.is_empty());
@@ -1094,7 +1090,7 @@ fn typed_facade_receive_sso_checks_authn_request_replay() -> Result<(), Box<dyn 
 
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         validation_with_cache(&mut cache),
     )?;
     let replay_key = format!("authn_request_id:{}", received.message().id().as_str());
@@ -1102,7 +1098,7 @@ fn typed_facade_receive_sso_checks_authn_request_replay() -> Result<(), Box<dyn 
 
     match idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(request_fields),
+        Inbound::post(request_fields),
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
@@ -1125,7 +1121,7 @@ fn typed_facade_receive_sso_requires_replay_retention_for_authn_request(
 
     match idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation,
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -1160,7 +1156,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
     let session = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     )?;
 
@@ -1201,7 +1197,7 @@ fn typed_http_post_exposes_verified_assertion_signature_evidence(
     let session = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     )?;
 
@@ -1226,7 +1222,7 @@ fn typed_http_post_exposes_verified_response_root_signature_evidence(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -1238,7 +1234,7 @@ fn typed_http_post_exposes_verified_response_root_signature_evidence(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     )?;
 
@@ -1267,7 +1263,7 @@ fn typed_http_post_preserves_distinct_response_and_assertion_signature_evidence(
     let session = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(response_fields),
+        Inbound::post(response_fields),
         validation(),
     )?;
 
@@ -1293,7 +1289,7 @@ fn typed_required_response_signature_rejects_assertion_only_post(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -1301,7 +1297,7 @@ fn typed_required_response_signature_rejects_assertion_only_post(
     match sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     ) {
         Err(SamlError::SignedReferenceMismatch) => Ok(()),
@@ -1318,7 +1314,7 @@ fn typed_sign_response_satisfies_required_response_signature(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -1330,7 +1326,7 @@ fn typed_sign_response_satisfies_required_response_signature(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     )?;
 
@@ -1375,7 +1371,7 @@ fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -1388,7 +1384,7 @@ fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(fields, &peer)?),
+        Inbound::post(response_fields_with_xml(fields, &peer)?),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -1404,7 +1400,7 @@ fn typed_sp_rejects_explicit_unsigned_encrypted_cbc() -> Result<(), Box<dyn std:
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -1417,7 +1413,7 @@ fn typed_sp_rejects_explicit_unsigned_encrypted_cbc() -> Result<(), Box<dyn std:
     match sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     ) {
         Err(SamlError::SignatureMissing) => Ok(()),
@@ -1433,7 +1429,7 @@ fn typed_facade_runs_simplesign_sso_response_binding() -> Result<(), Box<dyn std
         &idp_descriptor,
         StartSso::post().response_binding(SsoResponseBinding::SimpleSign),
     )?;
-    let request_input = BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_sso(&sp_descriptor, request_input, validation())?;
     let response = idp.respond_sso(
         &sp_descriptor,
@@ -1449,7 +1445,7 @@ fn typed_facade_runs_simplesign_sso_response_binding() -> Result<(), Box<dyn std
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::simple_sign(response_form.fields().to_vec()),
+        Inbound::simple_sign(response_form.fields().to_vec()),
         validation(),
     )?;
 
@@ -1485,7 +1481,7 @@ fn typed_facade_finish_sso_post_rejects_missing_response_issue_instant(
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     ) {
         Err(SamlError::ProtocolProfile(message))
@@ -1518,7 +1514,7 @@ fn typed_facade_finish_sso_simplesign_rejects_malformed_assertion_issue_instant(
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::simple_sign(fields),
+        Inbound::simple_sign(fields),
         validation(),
     ) {
         Err(SamlError::ProtocolProfile(message))
@@ -1557,7 +1553,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
     assert_eq!(restored.acs().index(), Some(1));
     assert_eq!(restored.acs().binding(), SsoResponseBinding::SimpleSign);
 
-    let request_input = BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_sso(&sp_descriptor, request_input, validation())?;
     let response = idp.respond_sso(
         &sp_descriptor,
@@ -1568,7 +1564,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
     let session = sp.finish_sso(
         &idp_descriptor,
         &restored,
-        BrowserInput::<SsoResponse>::simple_sign(post_fields(&response)?),
+        Inbound::simple_sign(post_fields(&response)?),
         validation(),
     )?;
 
@@ -1620,7 +1616,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         peer_sp.create_login_request(&local_idp, Binding::Post, &LoginRequestOptions::default())?;
     let received = idp.receive_sso(
         &peer_sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(vec![FormField::new("SAMLRequest", request.context)]),
+        Inbound::post(vec![FormField::new("SAMLRequest", request.context)]),
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), PEER_SP_ENTITY_ID);
@@ -1640,7 +1636,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
     let session = sp.finish_sso(
         &peer_idp_descriptor,
         &pending,
-        BrowserInput::<SsoResponse>::post(vec![FormField::new("SAMLResponse", response.context)]),
+        Inbound::post(vec![FormField::new("SAMLResponse", response.context)]),
         validation(),
     )?;
     assert_eq!(session.issuer().as_str(), PEER_IDP_ENTITY_ID);
@@ -1656,7 +1652,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
     )?;
     let received_logout = sp.receive_slo(
         &peer_idp_descriptor,
-        BrowserInput::<LogoutRequest>::post(vec![FormField::new("SAMLRequest", logout.context)]),
+        Inbound::post(vec![FormField::new("SAMLRequest", logout.context)]),
         validation(),
     )?;
     assert_eq!(
@@ -1685,7 +1681,7 @@ fn typed_facade_rejects_pending_peer_mismatch() -> Result<(), Box<dyn std::error
     match exchange.sp.finish_sso(
         &other_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::IssuerMismatch { expected, actual }) => {
@@ -1746,7 +1742,7 @@ fn typed_facade_rejects_response_binding_mismatch() -> Result<(), Box<dyn std::e
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::UnsupportedBinding { binding }) => {
@@ -1769,7 +1765,7 @@ fn typed_facade_rejects_relay_state_mismatch() -> Result<(), Box<dyn std::error:
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
@@ -1792,7 +1788,7 @@ fn typed_facade_rejects_a_response_without_the_relay_state_the_request_carried(
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
@@ -1816,7 +1812,7 @@ fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
         let session = exchange.sp.finish_sso(
             &exchange.idp_descriptor,
             &exchange.pending,
-            BrowserInput::<SsoResponse>::post(exchange.response_fields),
+            Inbound::post(exchange.response_fields),
             validation(),
         )?;
 
@@ -1867,7 +1863,7 @@ fn typed_facade_rejects_wrong_pending_request_id() -> Result<(), Box<dyn std::er
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &wrong_pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
@@ -1889,7 +1885,7 @@ fn typed_facade_rejects_solicited_response_as_unsolicited() -> Result<(), Box<dy
 
     match exchange.sp.accept_unsolicited_sso(
         &exchange.idp_descriptor,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
@@ -1923,7 +1919,7 @@ fn finish_sso_with_response_xml(
     exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(vec![FormField::new(
+        Inbound::post(vec![FormField::new(
             "SAMLResponse",
             STANDARD.encode(xml.as_bytes()),
         )]),
@@ -1977,7 +1973,7 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -1992,7 +1988,7 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
     match sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response_fields.clone()),
+        Inbound::post(response_fields.clone()),
         validation(),
     ) {
         Err(SamlError::StatusNotSuccess { status }) => assert_eq!(status, auth_failed_status()?),
@@ -2004,7 +2000,7 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
     match sp.finish_sso(
         &idp_descriptor,
         &PendingAuthnRequest::from_snapshot(snapshot)?,
-        BrowserInput::<SsoResponse>::post(response_fields),
+        Inbound::post(response_fields),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { .. }) => Ok(()),
@@ -2022,7 +2018,7 @@ fn typed_finish_sso_requiring_encrypted_assertions_reports_a_response_without_an
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -2042,7 +2038,7 @@ fn typed_finish_sso_requiring_encrypted_assertions_reports_a_response_without_an
     match sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     ) {
         Err(SamlError::AssertionMissing) => Ok(()),
@@ -2066,7 +2062,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -2099,7 +2095,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
     match sp.finish_sso(
         &idp_descriptor,
         &PendingAuthnRequest::from_snapshot(snapshot)?,
-        BrowserInput::<SsoResponse>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { .. }) => {}
@@ -2108,7 +2104,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
     match sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     ) {
         Err(SamlError::StatusNotSuccess { status }) => {
@@ -2130,7 +2126,7 @@ fn typed_finish_sso_checks_in_response_to_before_error_status(
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &wrong_pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
@@ -2234,7 +2230,7 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
         exchange.sp.finish_sso(
             &exchange.idp_descriptor,
             &exchange.pending,
-            BrowserInput::<SsoResponse>::simple_sign(fields),
+            Inbound::simple_sign(fields),
             validation(),
         )
     };
@@ -2336,11 +2332,7 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
     ];
 
     for (case, fields) in cases {
-        match sp.accept_unsolicited_sso(
-            &idp_descriptor,
-            BrowserInput::<SsoResponse>::post(fields),
-            validation(),
-        ) {
+        match sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation()) {
             Err(SamlError::InResponseToMismatch { expected, actual }) => {
                 assert_eq!(expected, None, "{case}");
                 assert_eq!(actual.as_deref(), Some(""), "{case}");
@@ -2361,7 +2353,7 @@ fn typed_facade_checks_replay_cache() -> Result<(), Box<dyn std::error::Error>> 
     let first = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields.clone()),
+        Inbound::post(exchange.response_fields.clone()),
         validation_with_cache(&mut cache),
     )?;
     let replay_keys: Vec<_> = first
@@ -2379,7 +2371,7 @@ fn typed_facade_checks_replay_cache() -> Result<(), Box<dyn std::error::Error>> 
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
@@ -2401,7 +2393,7 @@ fn typed_facade_accepts_unsolicited_sso_explicitly() -> Result<(), Box<dyn std::
     )?;
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     )?;
 
@@ -2429,11 +2421,7 @@ fn typed_facade_accept_unsolicited_sso_post_rejects_missing_assertion_issue_inst
     )?;
     let fields = response_fields_with_xml(fields, &xml)?;
 
-    match sp.accept_unsolicited_sso(
-        &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    ) {
+    match sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation()) {
         Err(SamlError::ProtocolProfile(message))
             if message
                 .contains("Assertion is missing required unqualified attribute IssueInstant") =>
@@ -2466,7 +2454,7 @@ fn typed_facade_accept_unsolicited_sso_simplesign_rejects_non_utc_response_issue
 
     match sp.accept_unsolicited_sso(
         &idp_descriptor,
-        BrowserInput::<SsoResponse>::simple_sign(fields),
+        Inbound::simple_sign(fields),
         validation(),
     ) {
         Err(SamlError::ProtocolProfile(message))
@@ -2559,8 +2547,8 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
         assert_eq!(expiration - issue_instant, time::Duration::minutes(11));
 
         let input = match binding {
-            SsoResponseBinding::Post => BrowserInput::<SsoResponse>::post(fields),
-            SsoResponseBinding::SimpleSign => BrowserInput::<SsoResponse>::simple_sign(fields),
+            SsoResponseBinding::Post => Inbound::post(fields),
+            SsoResponseBinding::SimpleSign => Inbound::simple_sign(fields),
             _ => return Err("not a posted response binding".into()),
         };
         let session = sp.accept_unsolicited_sso(&idp_descriptor, input, validation())?;
@@ -2629,7 +2617,7 @@ fn recommended_post_exchange() -> Result<SsoExchange, Box<dyn std::error::Error>
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -2713,13 +2701,13 @@ fn recommended_sso_accept_does_not_store_replay_without_a_caller_cache(
     exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation(),
     )?;
     exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation(),
     )?;
 
@@ -2727,7 +2715,7 @@ fn recommended_sso_accept_does_not_store_replay_without_a_caller_cache(
     exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation_with_cache(&mut cache),
     )?;
     let stored: Vec<_> = cache.seen.keys().cloned().collect();
@@ -2737,7 +2725,7 @@ fn recommended_sso_accept_does_not_store_replay_without_a_caller_cache(
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { .. }) => Ok(()),
@@ -2757,28 +2745,20 @@ fn recommended_sso_receive_does_not_store_replay_without_a_caller_cache(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let fields = post_fields(&started.outbound)?;
 
-    idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(fields.clone()),
-        validation(),
-    )?;
-    idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(fields.clone()),
-        validation(),
-    )?;
+    idp.receive_sso(&sp_descriptor, Inbound::post(fields.clone()), validation())?;
+    idp.receive_sso(&sp_descriptor, Inbound::post(fields.clone()), validation())?;
 
     let mut cache = RecordingReplayCache::default();
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation_with_cache(&mut cache),
     )?;
     let replay_key = format!("authn_request_id:{}", received.message().id().as_str());
     assert!(cache.seen.contains_key(&replay_key));
     match idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(fields),
+        Inbound::post(fields),
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
@@ -2804,7 +2784,7 @@ fn recommended_sso_accept_accepts_response_signature_without_assertion_signature
     let session = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields.clone()),
+        Inbound::post(exchange.response_fields.clone()),
         validation(),
     )?;
     assert_response_root_signature(&session)?;
@@ -2821,7 +2801,7 @@ fn recommended_sso_accept_accepts_response_signature_without_assertion_signature
     }
     let session = exchange.sp.accept_unsolicited_sso(
         &exchange.idp_descriptor,
-        BrowserInput::<SsoResponse>::post(unsolicited_fields),
+        Inbound::post(unsolicited_fields),
         validation(),
     )?;
     assert_response_root_signature(&session)?;
@@ -2841,7 +2821,7 @@ fn recommended_sso_accept_rejects_response_only_signature_only_with_assertion_ha
     match hardening.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation(),
     ) {
         Err(SamlError::AssertionSignatureRequired) => {}
@@ -2860,7 +2840,7 @@ fn recommended_sso_accept_rejects_response_only_signature_only_with_assertion_ha
     let session = sha2_only.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     )?;
     assert_response_root_signature(&session)?;
@@ -2875,7 +2855,7 @@ fn recommended_sso_accept_rejects_messages_a_receiver_must_reject(
     match first.sp.finish_sso(
         &first.idp_descriptor,
         &second.pending,
-        BrowserInput::<SsoResponse>::post(first.response_fields.clone()),
+        Inbound::post(first.response_fields.clone()),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { .. }) => {}
@@ -2888,7 +2868,7 @@ fn recommended_sso_accept_rejects_messages_a_receiver_must_reject(
 
     match first.sp.accept_unsolicited_sso(
         &first.idp_descriptor,
-        BrowserInput::<SsoResponse>::post(first.response_fields.clone()),
+        Inbound::post(first.response_fields.clone()),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { .. }) => {}
@@ -2911,7 +2891,7 @@ fn recommended_sso_accept_rejects_messages_a_receiver_must_reject(
     match first.sp.finish_sso(
         &first.idp_descriptor,
         &first.pending,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+        Inbound::post(response_fields_with_xml(
             first.response_fields,
             &wrong_audience,
         )?),
@@ -2948,7 +2928,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+        Inbound::post(response_fields_with_xml(
             exchange.response_fields.clone(),
             &missing,
         )?),
@@ -2971,7 +2951,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
     let session = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+        Inbound::post(response_fields_with_xml(
             exchange.response_fields,
             &leap_xml,
         )?),
@@ -2991,7 +2971,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
     )?)?;
     let session = exchange.sp.accept_unsolicited_sso(
         &exchange.idp_descriptor,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+        Inbound::post(response_fields_with_xml(
             unsolicited_fields,
             &unsolicited_leap,
         )?),
@@ -3039,7 +3019,7 @@ fn cbc_relaxation_does_not_disable_other_accept_rules() -> Result<(), Box<dyn st
     match relaxed.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+        Inbound::post(response_fields_with_xml(
             exchange.response_fields.clone(),
             &unsigned,
         )?),
@@ -3063,7 +3043,7 @@ fn cbc_relaxation_does_not_disable_other_accept_rules() -> Result<(), Box<dyn st
     match relaxed.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+        Inbound::post(response_fields_with_xml(
             exchange.response_fields,
             &wrong_audience,
         )?),
@@ -3133,7 +3113,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
     let session = exchange.sp.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -3145,7 +3125,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
     match validate_omission.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     ) {
         Err(SamlError::AudienceMismatch { .. }) => Ok(()),
@@ -3199,7 +3179,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
     let session = compatibility.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields.clone()),
+        Inbound::post(exchange.response_fields.clone()),
         validation(),
     )?;
     assert_response_root_signature(&session)?;
@@ -3213,7 +3193,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
     let session = compatibility.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(response_fields_with_xml(
+        Inbound::post(response_fields_with_xml(
             exchange.response_fields,
             &wrong_audience,
         )?),
@@ -3226,7 +3206,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
     let started = compatibility_sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = compatibility_idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     assert_eq!(received.message().id(), started.pending.request_id());
@@ -3250,7 +3230,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
     let strict_idp = Saml::idp(idp_config()?)?;
     match strict_idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     ) {
         Err(SamlError::SignatureMissing) => Ok(()),
@@ -3297,11 +3277,7 @@ fn recommended_idp_receive_ignores_a_spurious_post_signature_field(
     let mut fields = post_fields(&started.outbound)?;
     fields.push(FormField::new("Signature", "bm90LWEgc2ln"));
 
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(fields),
-        validation(),
-    )?;
+    let received = idp.receive_sso(&sp_descriptor, Inbound::post(fields), validation())?;
     assert_eq!(received.message().id(), started.pending.request_id());
     Ok(())
 }
@@ -3343,11 +3319,7 @@ fn idp_receive_rejects_authenticated_request_without_destination(
                 .into());
             }
         }
-        match idp.receive_sso(
-            &sp_descriptor,
-            BrowserInput::<AuthnRequest>::redirect(&query),
-            validation(),
-        ) {
+        match idp.receive_sso(&sp_descriptor, Inbound::redirect(&query), validation()) {
             Err(SamlError::DestinationMismatch { actual, .. }) if actual.is_none() => {}
             other => {
                 return Err(format!(
@@ -3390,7 +3362,7 @@ fn typed_facade_accepts_metadata_and_response_that_start_with_a_byte_order_mark(
     let session = exchange.sp.finish_sso(
         &idp_descriptor,
         &exchange.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     )?;
 

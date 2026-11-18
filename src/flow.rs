@@ -43,7 +43,7 @@ pub struct HttpRequest {
 impl HttpRequest {
     /// HTTP-Redirect request from query pairs.
     #[deprecated(
-        note = "the raw API is removed in the next minor release; use `BrowserInput::redirect` with the raw query string"
+        note = "the raw API is removed in the next minor release; use `Inbound::redirect` with the raw query string"
     )]
     pub fn redirect(query: Vec<(String, String)>) -> Self {
         Self {

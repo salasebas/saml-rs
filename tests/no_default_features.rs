@@ -14,12 +14,12 @@ use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataInput, SpMetadataInput
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, BrowserInput, CertificatePem, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
-    NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, Saml, SamlError,
-    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    CertificatePem, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, RelayState,
+    ReplayPolicy, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso,
+    XmlEncryptionPolicy, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -228,7 +228,7 @@ fn typed_facade_creates_and_receives_unsigned_protocol_sso_without_default_crypt
     assert!(form.value("SAMLRequest").is_some());
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(form.fields().to_vec()),
+        Inbound::post(form.fields().to_vec()),
         typed_validation(),
     )?;
 

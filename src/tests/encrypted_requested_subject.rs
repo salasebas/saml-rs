@@ -19,11 +19,10 @@ use saml_rs::crypto::{
 };
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, DecryptionCredential,
-    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
-    NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RequestedSubject,
-    RequestedSubjectIdentifier, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSso,
+    AcsEndpoint, CertificatePem, Credentials, DecryptionCredential, EntityId, FormField, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
+    PrivateKeyPem, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -166,7 +165,7 @@ fn received_by(
     };
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+        Inbound::post(vec![FormField::new(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )]),

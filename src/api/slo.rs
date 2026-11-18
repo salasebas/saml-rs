@@ -1,4 +1,4 @@
-use crate::browser::{BrowserInput, LogoutBinding, Outbound, PendingLogoutRequest, Started};
+use crate::browser::{Inbound, LogoutBinding, Outbound, PendingLogoutRequest, Started};
 use crate::config::{IdpDescriptor, NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{capture_idp_issuance_window, now_iso8601, EntitySetting};
@@ -75,7 +75,7 @@ impl Saml<Sp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the browser input or relay state is invalid,
+    /// Returns [`SamlError`] when the inbound message or relay state is invalid,
     /// the binding is unsupported for logout, IdP metadata cannot be parsed,
     /// XML parsing or signature/trust validation fails, required
     /// `IssueInstant` or optional `NotOnOrAfter` is not conformant,
@@ -93,7 +93,7 @@ impl Saml<Sp> {
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
-        input: BrowserInput<LogoutRequest>,
+        input: Inbound<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
@@ -166,8 +166,8 @@ impl Saml<Sp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     BrowserInput, FormField, IdpDescriptor, LogoutResponse, PendingLogoutRequest,
-    ///     ReplayPolicy, Saml, SamlValidationContext,
+    ///     FormField, IdpDescriptor, Inbound, PendingLogoutRequest, ReplayPolicy, Saml,
+    ///     SamlValidationContext,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -184,7 +184,7 @@ impl Saml<Sp> {
     /// let completed = sp.finish_slo(
     ///     idp,
     ///     pending,
-    ///     BrowserInput::<LogoutResponse>::post(fields),
+    ///     Inbound::post(fields),
     ///     validation,
     /// )?;
     ///
@@ -196,7 +196,7 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         pending: &PendingLogoutRequest,
-        input: BrowserInput<LogoutResponse>,
+        input: Inbound<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
@@ -282,7 +282,7 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the browser input or relay state is invalid,
+    /// Returns [`SamlError`] when the inbound message or relay state is invalid,
     /// the binding is unsupported for logout, SP metadata cannot be parsed, XML
     /// parsing or signature/trust validation fails, required `IssueInstant` or
     /// optional `NotOnOrAfter` is not conformant, `NotOnOrAfter` has expired
@@ -297,8 +297,7 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     BrowserInput, FormField, LogoutRequest, ReplayPolicy, RespondSlo, Saml,
-    ///     SamlValidationContext, SpDescriptor,
+    ///     FormField, Inbound, ReplayPolicy, RespondSlo, Saml, SamlValidationContext, SpDescriptor,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -311,7 +310,7 @@ impl Saml<Idp> {
     ///     SystemTime::now(),
     ///     ReplayPolicy::Disabled,
     /// );
-    /// let input = BrowserInput::<LogoutRequest>::post(fields);
+    /// let input = Inbound::post(fields);
     /// let request = idp.receive_slo(sp, input, validation)?;
     /// let response = idp.respond_slo(sp, &request, RespondSlo::post())?;
     ///
@@ -322,7 +321,7 @@ impl Saml<Idp> {
     pub fn receive_slo(
         &self,
         sp: &SpDescriptor,
-        input: BrowserInput<LogoutRequest>,
+        input: Inbound<LogoutRequest>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
@@ -409,8 +408,8 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     BrowserInput, FormField, LogoutResponse, PendingLogoutRequest, ReplayPolicy,
-    ///     Saml, SamlValidationContext, SpDescriptor,
+    ///     FormField, Inbound, PendingLogoutRequest, ReplayPolicy, Saml, SamlValidationContext,
+    ///     SpDescriptor,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -427,7 +426,7 @@ impl Saml<Idp> {
     /// let completed = idp.finish_slo(
     ///     sp,
     ///     pending,
-    ///     BrowserInput::<LogoutResponse>::post(fields),
+    ///     Inbound::post(fields),
     ///     validation,
     /// )?;
     ///
@@ -439,7 +438,7 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         pending: &PendingLogoutRequest,
-        input: BrowserInput<LogoutResponse>,
+        input: Inbound<LogoutResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<LogoutCompleted, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
@@ -562,7 +561,7 @@ fn receive_slo_impl(
     local_setting: &EntitySetting,
     local_metadata: &Metadata,
     peer: RawPeer<'_>,
-    input: BrowserInput<LogoutRequest>,
+    input: Inbound<LogoutRequest>,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
     let relay_state = relay_state_from_input(&input)?;
@@ -643,7 +642,7 @@ fn finish_slo_impl(
     local_metadata: &Metadata,
     peer: RawPeer<'_>,
     pending: &PendingLogoutRequest,
-    input: BrowserInput<LogoutResponse>,
+    input: Inbound<LogoutResponse>,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<LogoutCompleted, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;

@@ -26,11 +26,11 @@ use saml_rs::raw::{Binding, LoginRequestOptions, LoginResponseOptions, User};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
-    Attributes, AudienceValidationPolicy, AuthnRequest, BrowserInput, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    Outbound, ReplayPolicy, RequestedSubjectIdentifier, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoSession, StartSso, Status, Subject, TemplatePolicy,
+    Attributes, AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
+    ReplayPolicy, RequestedSubjectIdentifier, RespondSso, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
+    Status, Subject, TemplatePolicy,
 };
 use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
@@ -147,7 +147,7 @@ fn exchange(subject: Subject, options: RespondSso) -> Result<Exchange, Box<dyn s
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject, options)?;
@@ -155,7 +155,7 @@ fn exchange(subject: Subject, options: RespondSso) -> Result<Exchange, Box<dyn s
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
     Ok(Exchange { xml, session })
@@ -297,7 +297,7 @@ fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifie
     )?;
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
 
@@ -510,7 +510,7 @@ fn accept_peer_response(
     Ok(sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(vec![FormField::new("SAMLResponse", context.context)]),
+        Inbound::post(vec![FormField::new("SAMLResponse", context.context)]),
         validation(),
     )?)
 }
@@ -983,7 +983,7 @@ fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::erro
     Ok(sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(vec![FormField::new("SAMLResponse", context.context)]),
+        Inbound::post(vec![FormField::new("SAMLResponse", context.context)]),
         validation(),
     )?)
 }
@@ -1022,7 +1022,7 @@ fn identity_provider_accepts_a_requested_identifier_that_misses_the_producer_rul
         );
         let received = idp.receive_sso(
             &sp_descriptor,
-            BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+            Inbound::post(vec![FormField::new(
                 "SAMLRequest",
                 STANDARD.encode(xml.as_bytes()),
             )]),

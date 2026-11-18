@@ -450,7 +450,7 @@ impl StartSlo {
     ///
     /// POST [`Outbound::soap_request`](crate::Outbound::soap_request) with the
     /// deployment's HTTP client, then pass the SOAP response body to
-    /// `finish_slo` as [`BrowserInput::soap`](crate::BrowserInput::soap).
+    /// `finish_slo` as [`Inbound::soap`](crate::Inbound::soap).
     pub fn soap() -> Self {
         let mut options = Self::new(LogoutBinding::Soap);
         options.rules = options.rules.apply_generation_rules();
@@ -563,7 +563,7 @@ impl RespondSlo {
     }
 
     /// Respond over SOAP to a request received as
-    /// [`BrowserInput::soap`](crate::BrowserInput::soap).
+    /// [`Inbound::soap`](crate::Inbound::soap).
     ///
     /// The response is signed and carries no `Destination` and no RelayState.
     /// A request received with RelayState cannot be answered over SOAP.

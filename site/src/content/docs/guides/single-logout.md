@@ -24,11 +24,11 @@ let logout = sp.start_slo(
 )?;
 store_with_session(logout.pending.snapshot());
 
-let pending = Pending::<LogoutRequest>::from_snapshot(load_snapshot())?;
+let pending = PendingLogoutRequest::from_snapshot(load_snapshot())?;
 let completed = sp.finish_slo(
     &idp,
     &pending,
-    BrowserInput::<LogoutResponse>::post(response_fields),
+    Inbound::post(response_fields),
     validation,
 )?;
 let status = completed.response().status();
@@ -46,7 +46,7 @@ The response carries the exact `RelayState` that arrived with the request. It ma
 ```rust
 let logout_request = idp.receive_slo(
     &sp,
-    BrowserInput::<LogoutRequest>::post(request_fields),
+    Inbound::post(request_fields),
     validation,
 )?;
 let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::post())?;
@@ -58,7 +58,7 @@ When the identity provider starts logout itself, `Saml<Idp>::start_slo` is the s
 
 ## Over SOAP
 
-`StartSlo::soap()` and `RespondSlo::soap()` run the same calls as one back-channel SOAP exchange. Your HTTP client sends the request, and saml-rs reads the reply. Both peers publish `SloEndpoint::soap(...)`. saml-rs signs every SOAP logout message it writes, and none carries `RelayState`. A received SOAP message must be signed under every `LogoutPolicy`. When your server or client authenticated the peer with mutual TLS, pass that with `BrowserInput::soap_with_channel(body, channel)`; an unsigned message is then accepted, and a present signature is still checked.
+`StartSlo::soap()` and `RespondSlo::soap()` run the same calls as one back-channel SOAP exchange. Your HTTP client sends the request, and saml-rs reads the reply. Both peers publish `SloEndpoint::soap(...)`. saml-rs signs every SOAP logout message it writes, and none carries `RelayState`. `Inbound::soap(body, channel)` reads a received envelope. With `SoapChannel::unattested()`, the message must be signed under every `LogoutPolicy`. When your server or client authenticated the peer with mutual TLS, pass a `SoapChannel` that says so; an unsigned message is then accepted, and a present signature is still checked.
 
 ```rust
 let logout = sp.start_slo(&idp, subject, StartSlo::soap())?;
@@ -67,7 +67,7 @@ let reply_body = post_soap(request.endpoint().as_str(), request.envelope())?;
 let completed = sp.finish_slo(
     &idp,
     &logout.pending,
-    BrowserInput::<LogoutResponse>::soap(reply_body),
+    Inbound::soap(reply_body, SoapChannel::unattested()),
     validation,
 )?;
 ```
@@ -75,7 +75,7 @@ let completed = sp.finish_slo(
 The receiving side reads the posted body and returns the response envelope as the HTTP 200 body:
 
 ```rust
-let logout_request = idp.receive_slo(&sp, BrowserInput::<LogoutRequest>::soap(body), validation)?;
+let logout_request = idp.receive_slo(&sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;
 let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::soap())?;
 let reply_body = logout_response.soap_response()?.envelope();
 ```

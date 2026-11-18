@@ -23,7 +23,7 @@ before that upgrade:
 | `logout::create_logout_response`, `create_logout_response_with_id` | `respond_slo` |
 | `logout::parse_logout_response`, `parse_logout_response_without_request_id` | `finish_slo` |
 | `flow::flow` | The typed receive operation for the message |
-| `HttpRequest::redirect` | `BrowserInput::redirect` with the raw query string |
+| `HttpRequest::redirect` | `Inbound::redirect` with the raw query string |
 
 A service-provider login moves from a raw request and response to a pending
 request that `finish_sso` checks the response against:
@@ -41,7 +41,7 @@ let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
 let session = sp.finish_sso(
     &idp_descriptor,
     &pending,
-    BrowserInput::<SsoResponse>::post(fields),
+    Inbound::post(fields),
     validation,
 )?;
 let name_id = session.name_id().value();

@@ -1,4 +1,4 @@
-use crate::browser::BrowserInput;
+use crate::browser::{Inbound, Transport};
 use crate::config::HmacSecret;
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, CertUse, ParserType};
@@ -76,12 +76,12 @@ impl LogoutReceipt {
 
     /// The SOAP body XML arrives as an HTTP-POST message. It must carry an
     /// XML signature unless `channel` authenticated the peer.
-    pub(crate) fn of_input<Message>(input: &BrowserInput<Message>) -> Result<Self, SamlError> {
-        match input {
-            BrowserInput::Redirect { .. } => Ok(Self::raw(Binding::Redirect)),
-            BrowserInput::Post { .. } => Ok(Self::raw(Binding::Post)),
-            BrowserInput::SimpleSignPost { .. } => Ok(Self::raw(Binding::SimpleSign)),
-            BrowserInput::Soap { channel, .. } => Ok(Self {
+    pub(crate) fn of_input<Message>(input: &Inbound<Message>) -> Result<Self, SamlError> {
+        match &input.transport {
+            Transport::Redirect { .. } => Ok(Self::raw(Binding::Redirect)),
+            Transport::Post { .. } => Ok(Self::raw(Binding::Post)),
+            Transport::SimpleSign { .. } => Ok(Self::raw(Binding::SimpleSign)),
+            Transport::Soap { channel, .. } => Ok(Self {
                 decode_as: Binding::Post,
                 signature: if channel.authenticates_peer() {
                     LogoutReceiptSignature::VerifyIfPresent
@@ -90,7 +90,7 @@ impl LogoutReceipt {
                 },
                 signed_destination: SignedMessageDestination::Optional,
             }),
-            BrowserInput::Artifact { .. } => Err(SamlError::UnsupportedBinding {
+            Transport::Artifact { .. } => Err(SamlError::UnsupportedBinding {
                 binding: Binding::Artifact,
             }),
         }
