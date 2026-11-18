@@ -101,16 +101,6 @@ fn marked_default(acs: AcsEndpoint, is_default: bool) -> AcsEndpoint {
     }
 }
 
-pub(super) fn input_binding<Message>(input: &Inbound<Message>) -> Binding {
-    match input.transport {
-        Transport::Redirect { .. } => Binding::Redirect,
-        Transport::Post { .. } => Binding::Post,
-        Transport::SimpleSign { .. } => Binding::SimpleSign,
-        Transport::Artifact { .. } => Binding::Artifact,
-        Transport::Soap { .. } => Binding::Soap,
-    }
-}
-
 pub(super) fn relay_state_from_input<Message>(
     input: &Inbound<Message>,
 ) -> Result<Option<RelayState>, SamlError> {

@@ -16,8 +16,7 @@ use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding,
-    relay_state_from_input, RawPeer,
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
 use super::{Idp, LogoutSigning, RespondSlo, Saml, SamlError, Sp, StartSlo};
 
@@ -565,7 +564,7 @@ fn receive_slo_impl(
     mut validation: SamlValidationContext<'_>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
     let relay_state = relay_state_from_input(&input)?;
-    let binding = LogoutBinding::try_from(input_binding(&input))?;
+    let binding = LogoutBinding::try_from(input.binding())?;
     let expected_recipient = logout_recipient_endpoint(
         local_metadata,
         binding,
@@ -646,7 +645,7 @@ fn finish_slo_impl(
     mut validation: SamlValidationContext<'_>,
 ) -> Result<LogoutCompleted, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;
-    let binding = logout_response_binding(input_binding(&input), pending.request_binding())?;
+    let binding = logout_response_binding(input.binding(), pending.request_binding())?;
     let relay_state = relay_state_from_input(&input)?;
     ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
     // A SOAP response returns on this party's own HTTP exchange, so no local

@@ -211,11 +211,11 @@ compiles.
 
 `Inbound` is a struct with private fields. The variants `Redirect`, `Post`,
 `SimpleSignPost`, `Artifact`, and `Soap` are gone. Build the value with a
-constructor. If you matched on the variant to learn the binding, keep the
-binding you chose when you built the value. A variant built directly could pair
-a message with a binding saml-rs does not receive it over, such as an
-`SsoResponse` over HTTP-Redirect, and the operation returned
-`SamlError::UnsupportedBinding`. That pair no longer compiles.
+constructor. If you matched on the variant to learn the binding, call
+`Inbound::binding`. A variant built directly could pair a message with a
+binding saml-rs does not receive it over, such as an `SsoResponse` over
+HTTP-Redirect. That pair failed when the operation ran, and it no longer
+compiles.
 
 `BrowserInput::soap(envelope)` and `soap_with_channel(envelope, channel)` are
 now one constructor, `Inbound::soap(envelope, channel)`. Where you called
@@ -232,6 +232,7 @@ signature, as before.
 | `BrowserInput::<LogoutRequest>::soap(envelope)` | `Inbound::soap(envelope, SoapChannel::unattested())` |
 | `BrowserInput::<LogoutResponse>::soap_with_channel(envelope, channel)` | `Inbound::soap(envelope, channel)` |
 | `BrowserInput::Post { fields, _message: PhantomData }` | `Inbound::post(fields)` |
+| `match input { BrowserInput::Soap { .. } => .., .. }` | `match input.binding() { Binding::Soap => .., .. }` |
 
 Before the upgrade, each call named the message type.
 

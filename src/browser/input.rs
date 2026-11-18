@@ -44,13 +44,16 @@ pub trait RedirectMessage: sealed::Sealed {}
 )]
 pub trait PostMessage: sealed::Sealed {}
 
-/// A protocol message saml-rs receives in a SOAP envelope.
+/// A Single Logout message that [`Inbound::soap`] reads from a SOAP exchange.
 ///
-/// It bounds [`Inbound::soap`]. The trait is sealed: saml-rs implements it
-/// for the messages it reads from a SOAP exchange, and other crates cannot.
+/// It bounds [`Inbound::soap`]. The trait is sealed: saml-rs implements it for
+/// `LogoutRequest` and `LogoutResponse`, and other crates cannot. A PAOS
+/// message and a SOAP `ManageNameIDRequest` have their own operations, which
+/// take the envelope.
 #[diagnostic::on_unimplemented(
-    message = "saml-rs does not receive `{Self}` over SOAP",
-    label = "no SOAP input for `{Self}`"
+    message = "`Inbound::soap` does not read `{Self}`",
+    label = "no `Inbound::soap` input for `{Self}`",
+    note = "`Inbound::soap` reads SOAP Single Logout messages; PAOS and SOAP name identifier management have their own operations"
 )]
 pub trait SoapMessage: sealed::Sealed {}
 
@@ -156,6 +159,14 @@ impl<Message> Inbound<Message> {
     }
 
     /// Create HTTP-POST input from the parsed form fields.
+    ///
+    /// A `ManageNameIDRequest` does not arrive over HTTP-POST:
+    ///
+    /// ```compile_fail,E0277
+    /// use saml_rs::{Inbound, ManageNameIdRequest};
+    ///
+    /// let _: Inbound<ManageNameIdRequest> = Inbound::post(Vec::new());
+    /// ```
     pub fn post(fields: Vec<FormField>) -> Self
     where
         Message: PostMessage,
@@ -164,6 +175,14 @@ impl<Message> Inbound<Message> {
     }
 
     /// Create HTTP-POST-SimpleSign input from the parsed form fields.
+    ///
+    /// A `ManageNameIDRequest` does not arrive over HTTP-POST-SimpleSign:
+    ///
+    /// ```compile_fail,E0277
+    /// use saml_rs::{Inbound, ManageNameIdRequest};
+    ///
+    /// let _: Inbound<ManageNameIdRequest> = Inbound::simple_sign(Vec::new());
+    /// ```
     pub fn simple_sign(fields: Vec<FormField>) -> Self
     where
         Message: PostMessage,
@@ -198,6 +217,17 @@ impl<Message> Inbound<Message> {
             envelope: envelope.into(),
             channel,
         })
+    }
+
+    /// Binding the message arrived on.
+    pub fn binding(&self) -> Binding {
+        match self.transport {
+            Transport::Redirect { .. } => Binding::Redirect,
+            Transport::Post { .. } => Binding::Post,
+            Transport::SimpleSign { .. } => Binding::SimpleSign,
+            Transport::Artifact { .. } => Binding::Artifact,
+            Transport::Soap { .. } => Binding::Soap,
+        }
     }
 
     fn from_transport(transport: Transport) -> Self {

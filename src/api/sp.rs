@@ -15,8 +15,8 @@ use crate::xml::XmlLimits;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
-    ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, input_binding,
-    raw_idp_descriptor, relay_state_from_input, selected_acs,
+    ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, raw_idp_descriptor,
+    relay_state_from_input, selected_acs,
 };
 use super::{ForceAuthn, Saml, SamlError, Sp, StartSso};
 
@@ -65,7 +65,7 @@ impl ResponseParseInput {
             }
             Transport::Redirect { .. } | Transport::Post { .. } | Transport::SimpleSign { .. } => {
                 return Ok(Self {
-                    binding: input_binding(&input),
+                    binding: input.binding(),
                     request: input.into_http_request(limits)?,
                     signed_destination: SignedMessageDestination::Required,
                 });
@@ -372,7 +372,7 @@ impl Saml<Sp> {
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
-        ensure_sso_response_binding(input_binding(&input), pending.acs().binding())?;
+        ensure_sso_response_binding(input.binding(), pending.acs().binding())?;
         let relay_state = relay_state_from_input(&input)?;
         ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
@@ -400,7 +400,7 @@ impl Saml<Sp> {
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let relay_state = relay_state_from_input(&input)?;
-        let binding = SsoResponseBinding::try_from(input_binding(&input))?;
+        let binding = SsoResponseBinding::try_from(input.binding())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let metadata = &self.raw_service_provider().metadata;
         let expected_recipient = match validation.recipient_endpoint() {

@@ -196,7 +196,7 @@ Two other variants were still returned:
 | Removed | Returned by |
 | --- | --- |
 | `FailedToVerifySignature` | `BergshamraBackend::verify_signature`, when no trusted key verifies the signature |
-| `MissingSigAlg` | An HTTP-POST-SimpleSign `Inbound` without a `SigAlg` field |
+| `MissingSigAlg` | An HTTP-POST-SimpleSign `BrowserInput` without a `SigAlg` field |
 
 **Now:** all eleven variants are removed. `BergshamraBackend::verify_signature`
 returns `SignatureVerification` with `SignatureVerificationReason::XmlSignature`.

@@ -21,8 +21,7 @@ use crate::name_id_management::{
 use std::time::SystemTime;
 
 use super::super::raw_mapping::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding,
-    relay_state_from_input, RawPeer,
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
 use super::super::{
     Idp, ReceiveNameIdManagement, RespondNameIdManagement, Saml, SamlError, Sp,
@@ -109,8 +108,7 @@ impl Saml<Sp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the input is not HTTP-Redirect, relay state
-    /// is invalid, the signature is missing or does not verify, the issuer is
+    /// Returns [`SamlError`] when relay state is invalid, the signature is missing or does not verify, the issuer is
     /// not the identity provider, `Destination` is missing or is not the
     /// receiving `ManageNameIDService`, this service provider publishes no
     /// HTTP-Redirect `ManageNameIDService` or several without
@@ -587,7 +585,7 @@ fn finish(
 }
 
 fn require_redirect_input<Message>(input: &Inbound<Message>) -> Result<(), SamlError> {
-    let binding = input_binding(input);
+    let binding = input.binding();
     if binding == Binding::from(NameIdManagementBinding::Redirect) {
         return Ok(());
     }

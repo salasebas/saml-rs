@@ -11,7 +11,7 @@ use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
-    ensure_entity_id, input_binding, raw_sp_descriptor, relay_state_from_input, user_from_subject,
+    ensure_entity_id, raw_sp_descriptor, relay_state_from_input, user_from_subject,
 };
 use super::requested_subject::decrypt_requested_subject;
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
@@ -87,7 +87,7 @@ impl Saml<Idp> {
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<AuthnRequest>, SamlError> {
         let relay_state = relay_state_from_input(&input)?;
-        let binding = SsoRequestBinding::try_from(input_binding(&input))?;
+        let binding = SsoRequestBinding::try_from(input.binding())?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let request = input.into_http_request(self.raw_identity_provider().setting.xml_limits)?;
         let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
