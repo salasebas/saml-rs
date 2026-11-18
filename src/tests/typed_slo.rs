@@ -41,7 +41,7 @@ use saml_rs::{
     IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutBinding, LogoutCompleted, LogoutPolicy,
     LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
-    PartyAuthentication, PendingLogoutRequest, PendingSnapshot, Received, RelayStateParam,
+    PartyAuthentication, PendingLogoutRequest, PendingLogoutRequestSnapshot, Received, RelayState,
     ReplayCache, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
     SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, SsoSession, StartSlo, Status, Subject, SubordinateStatusCode,
@@ -925,7 +925,7 @@ fn sp_started_exchange() -> Result<SloExchange, SamlError> {
 fn sp_started_exchange_answered_with(answer: RespondSlo) -> Result<SloExchange, SamlError> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("logout-state".to_string()))?;
+    let relay_state = RelayState::try_new("logout-state")?;
     let started = sp.start_slo(
         &idp_descriptor,
         subject()?,
@@ -1037,21 +1037,18 @@ fn typed_slo_start_and_response_bindings_use_peer_endpoints(
         .outbound
         .redirect_url()?
         .starts_with(IDP_SLO_REDIRECT));
-    assert_eq!(redirect.pending.request_binding(), LogoutBinding::Redirect);
+    assert_eq!(redirect.pending.binding(), LogoutBinding::Redirect);
 
     let post = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     assert_eq!(post.outbound.post_form()?.action().as_str(), IDP_SLO_POST);
-    assert_eq!(post.pending.request_binding(), LogoutBinding::Post);
+    assert_eq!(post.pending.binding(), LogoutBinding::Post);
 
     let simple_sign = sp.start_slo(&idp_descriptor, subject()?, StartSlo::simple_sign())?;
     let simple_sign_form = simple_sign.outbound.post_form()?;
     assert_eq!(simple_sign_form.action().as_str(), IDP_SLO_SIMPLESIGN);
     assert!(simple_sign_form.value("SigAlg").is_some());
     assert!(simple_sign_form.value("Signature").is_some());
-    assert_eq!(
-        simple_sign.pending.request_binding(),
-        LogoutBinding::SimpleSign
-    );
+    assert_eq!(simple_sign.pending.binding(), LogoutBinding::SimpleSign);
 
     let exchange = sp_started_exchange()?;
     let redirect_response =
@@ -1159,7 +1156,7 @@ fn typed_facade_starts_slo_redirect() -> Result<(), Box<dyn std::error::Error>> 
     let redirect_url = started.outbound.redirect_url()?;
     assert!(redirect_url.starts_with(IDP_SLO_REDIRECT));
     assert_eq!(started.pending.id(), started.outbound.id());
-    assert_eq!(started.pending.request_binding(), LogoutBinding::Redirect);
+    assert_eq!(started.pending.binding(), LogoutBinding::Redirect);
     assert_eq!(started.pending.peer_entity_id().as_str(), IDP_ENTITY_ID);
     Ok(())
 }
@@ -1170,7 +1167,7 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
 
     assert_eq!(
         exchange.received.relay_state(),
-        &RelayStateParam::try_from_option(Some("logout-state".to_string()))?
+        Some(&RelayState::try_new("logout-state")?)
     );
 
     let completed = exchange.sp.finish_slo(
@@ -1980,7 +1977,7 @@ fn typed_facade_finish_slo_requires_replay_retention_for_logout_response(
 fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("idp-logout".to_string()))?;
+    let relay_state = RelayState::try_new("idp-logout")?;
     let started = idp.start_slo(
         &sp_descriptor,
         subject()?,
@@ -2666,7 +2663,7 @@ fn typed_facade_finish_slo_accepts_another_front_channel_response_binding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("logout-state".to_string()))?;
+    let relay_state = RelayState::try_new("logout-state")?;
     for request_binding in ALL_LOGOUT_BINDINGS {
         for response_binding in ALL_LOGOUT_BINDINGS {
             if request_binding == response_binding {
@@ -2769,12 +2766,12 @@ fn typed_facade_rejects_a_response_binding_the_local_metadata_does_not_publish(
 fn typed_facade_rejects_slo_response_crossing_the_soap_exchange(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange()?;
-    let soap_pending = PendingLogoutRequest::try_new(
+    let soap_pending = PendingLogoutRequest::new(
         exchange.pending.id().clone(),
-        RelayStateParam::absent(),
-        LogoutBinding::Soap,
+        None,
         exchange.pending.peer_entity_id().clone(),
-    )?;
+        LogoutBinding::Soap,
+    );
     let post_response: Vec<FormField> = exchange
         .response_fields
         .iter()
@@ -2826,14 +2823,8 @@ fn typed_facade_rejects_slo_relay_state_mismatch() -> Result<(), Box<dyn std::er
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(
-                expected,
-                RelayStateParam::try_from_option(Some("logout-state".to_string()))?
-            );
-            assert_eq!(
-                actual,
-                RelayStateParam::try_from_option(Some("other-logout".to_string()))?
-            );
+            assert_eq!(expected, Some(RelayState::try_new("logout-state")?));
+            assert_eq!(actual, Some(RelayState::try_new("other-logout")?));
             Ok(())
         }
         other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
@@ -2843,7 +2834,7 @@ fn typed_facade_rejects_slo_relay_state_mismatch() -> Result<(), Box<dyn std::er
 #[test]
 fn typed_facade_rejects_slo_wrong_pending_request_id() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange()?;
-    let mut snapshot: PendingSnapshot<LogoutRequest> = exchange.pending.snapshot();
+    let mut snapshot: PendingLogoutRequestSnapshot = exchange.pending.snapshot();
     snapshot.id = "_different_logout".to_string();
     let wrong_pending = PendingLogoutRequest::from_snapshot(snapshot)?;
 
@@ -2923,7 +2914,7 @@ fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange =
         sp_started_exchange_answered_with(RespondSlo::post().status(refused_logout_status()))?;
-    let mut snapshot: PendingSnapshot<LogoutRequest> = exchange.pending.snapshot();
+    let mut snapshot: PendingLogoutRequestSnapshot = exchange.pending.snapshot();
     snapshot.id = "_different_logout".to_string();
     let wrong_pending = PendingLogoutRequest::from_snapshot(snapshot)?;
 
@@ -2993,11 +2984,8 @@ fn typed_facade_rejects_a_slo_response_that_dropped_the_relay_state(
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(
-                expected,
-                RelayStateParam::try_from_option(Some("logout-state".to_string()))?
-            );
-            assert_eq!(actual, RelayStateParam::Absent);
+            assert_eq!(expected, Some(RelayState::try_new("logout-state")?));
+            assert_eq!(actual, None);
             Ok(())
         }
         other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
@@ -3010,11 +2998,8 @@ fn typed_facade_accepts_slo_relay_state_the_responder_adds_to_a_request_without_
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     for (added, expected) in [
-        (
-            "added",
-            RelayStateParam::try_from_option(Some("added".to_string()))?,
-        ),
-        ("", RelayStateParam::PresentEmpty),
+        ("added", RelayState::try_new("added")?),
+        ("", RelayState::try_new("")?),
     ] {
         let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
         let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
@@ -3030,7 +3015,7 @@ fn typed_facade_accepts_slo_relay_state_the_responder_adds_to_a_request_without_
             validation(),
         )?;
 
-        assert_eq!(completed.relay_state(), &expected);
+        assert_eq!(completed.relay_state(), Some(&expected));
     }
     Ok(())
 }
@@ -3041,23 +3026,20 @@ fn typed_facade_respond_slo_echoes_the_received_relay_state_exactly(
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     for relay_state in [
-        RelayStateParam::absent(),
-        RelayStateParam::try_from_option(Some(String::new()))?,
-        RelayStateParam::try_from_option(Some("logout-state".to_string()))?,
+        None,
+        Some(RelayState::try_new("")?),
+        Some(RelayState::try_new("logout-state")?),
     ] {
-        let started = sp.start_slo(
-            &idp_descriptor,
-            subject()?,
-            StartSlo::post().relay_state(relay_state.clone()),
-        )?;
+        let options = match relay_state.clone() {
+            Some(relay_state) => StartSlo::post().relay_state(relay_state),
+            None => StartSlo::post(),
+        };
+        let started = sp.start_slo(&idp_descriptor, subject()?, options)?;
         let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
         let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
         let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
-        let echoed = response
-            .post_form()?
-            .value("RelayState")
-            .map(str::to_string);
-        assert_eq!(RelayStateParam::try_from_option(echoed)?, relay_state);
+        let echoed = response.post_form()?.value("RelayState");
+        assert_eq!(echoed, relay_state.as_ref().map(RelayState::as_str));
     }
     Ok(())
 }
@@ -3077,7 +3059,10 @@ fn typed_facade_slo_accepts_and_echoes_received_relay_state_up_to_the_receive_li
         BrowserInput::<LogoutRequest>::post(request_fields),
         validation(),
     )?;
-    assert_eq!(received.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        received.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
 
     let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
     assert_eq!(
@@ -3091,7 +3076,10 @@ fn typed_facade_slo_accepts_and_echoes_received_relay_state_up_to_the_receive_li
         BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
         validation(),
     )?;
-    assert_eq!(completed.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        completed.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
     Ok(())
 }
 
@@ -4084,14 +4072,14 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
 
     let snapshot = started.pending.snapshot();
     let pending = PendingLogoutRequest::from_snapshot(snapshot)?;
-    assert_eq!(pending.response_binding(), LogoutBinding::Soap);
+    assert_eq!(pending.binding(), LogoutBinding::Soap);
 
     let received = idp.receive_slo(
         &sp_descriptor,
         BrowserInput::<LogoutRequest>::soap(request.envelope()),
         validation(),
     )?;
-    assert_eq!(received.relay_state(), &RelayStateParam::absent());
+    assert_eq!(received.relay_state(), None);
     let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
     let response_envelope = response.soap_response()?.envelope();
     let response_xml = soap_body_xml(response_envelope)?;
@@ -4299,7 +4287,7 @@ fn soap_logout_accepts_an_inclusive_c14n_signature_made_inside_the_envelope(
 fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+    let relay_state = RelayState::try_new("state")?;
     let without_session_index = LogoutSubject::new(NameId::new("alice@example.com", None));
     let cases = [
         (subject()?, StartSlo::soap().relay_state(relay_state)),
@@ -4322,7 +4310,7 @@ fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn st
 fn soap_respond_slo_rejects_a_request_with_relay_state() -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+    let relay_state = RelayState::try_new("state")?;
     let started = sp.start_slo(
         &idp_descriptor,
         subject()?,

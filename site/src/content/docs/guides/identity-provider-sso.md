@@ -45,6 +45,8 @@ let response = idp.respond_sso(
 
 Send `response` back through the browser to the service provider's assertion consumer service.
 
+The response carries the exact `RelayState` that arrived with the request. `RespondSso::relay_state` sets one only for an unsolicited response or for a request that carried none.
+
 `post()`, `redirect()`, and `simple_sign()` leave the generation rules off until you call `apply_web_browser_sso_generation_rules()`. Those rules are the producer rows in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
 ## Encrypted assertions

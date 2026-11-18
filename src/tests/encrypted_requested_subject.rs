@@ -46,7 +46,7 @@ const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(
                 Credentials::default()
                     .with_signing_key(PrivateKeyPem::new(PRIVKEY))

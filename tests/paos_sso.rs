@@ -19,10 +19,9 @@ use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, Attribute, AttributeNameFormat, AttributeValue, Attributes,
     AuthnContextReference, EndpointUrl, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor,
     IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat, PaosAuthnRequest,
-    PaosClientRequest, PaosSsoResponse, RelayStateParam, ReplayPolicy, RespondPaosSso, Saml,
-    SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode,
-    TransformAlgorithm,
+    PaosClientRequest, PaosSsoResponse, RelayState, ReplayPolicy, RespondPaosSso, Saml, SamlError,
+    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode, TransformAlgorithm,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -60,7 +59,7 @@ fn parties() -> Result<Parties, SamlError> {
 fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,
@@ -188,7 +187,7 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
         &idp_descriptor,
         PaosClientRequest::from_headers(PaosClientRequest::ACCEPT, PaosClientRequest::PAOS_HEADER)?,
         StartPaosSso::to_soap_endpoint(IDP_SOAP)?
-            .relay_state(RelayStateParam::try_from_option(Some("state".to_string()))?)
+            .relay_state(RelayState::try_new("state")?)
             .provider_name("Example SP")?,
     )?;
     assert_eq!(started.http_response.http_status(), 200);
@@ -346,8 +345,7 @@ fn returned_relay_state_must_match_the_value_the_service_provider_sent(
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::headers_checked_by_caller(),
-        StartPaosSso::to_soap_endpoint(IDP_SOAP)?
-            .relay_state(RelayStateParam::try_from_option(Some("state".to_string()))?),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.relay_state(RelayState::try_new("state")?),
     )?;
     let (client, idp_request) =
         enhanced_client_takes_authn_request(started.http_response.envelope())?;
@@ -697,7 +695,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
     };
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(encrypted_credentials)
             .validation(sp_validation)
             .xml(encryption)
@@ -758,8 +756,7 @@ fn relay_state_is_checked_after_the_response_signature() -> Result<(), Box<dyn s
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::headers_checked_by_caller(),
-        StartPaosSso::to_soap_endpoint(IDP_SOAP)?
-            .relay_state(RelayStateParam::try_from_option(Some("state".to_string()))?),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.relay_state(RelayState::try_new("state")?),
     )?;
     let (client, idp_request) =
         enhanced_client_takes_authn_request(started.http_response.envelope())?;
@@ -788,7 +785,7 @@ fn relay_state_is_checked_after_the_response_signature() -> Result<(), Box<dyn s
         .err()
         .ok_or("a broken response signature does not return a session")?;
     let mut wrong_snapshot = started.pending.snapshot();
-    wrong_snapshot.relay_state = RelayStateParam::try_from_option(Some("other".to_string()))?;
+    wrong_snapshot.relay_state = Some("other".to_string());
     let wrong_pending = saml_rs::PendingPaosSso::from_snapshot(wrong_snapshot)?;
     let with_wrong_relay = sp
         .finish_paos_sso(
@@ -818,8 +815,7 @@ fn overlong_relay_state_in_response_is_rejected() -> Result<(), Box<dyn std::err
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::headers_checked_by_caller(),
-        StartPaosSso::to_soap_endpoint(IDP_SOAP)?
-            .relay_state(RelayStateParam::try_from_option(Some("state".to_string()))?),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.relay_state(RelayState::try_new("state")?),
     )?;
     let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
     let received = idp.receive_paos_sso(
@@ -873,7 +869,7 @@ fn signed_request_with_a_namespace_declared_on_the_envelope_is_received(
         &PaosAuthnRequest::from_envelope(hoisted, IDP_SOAP)?,
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.request_id());
+    assert_eq!(received.message().id(), started.pending.id());
     Ok(())
 }
 
@@ -925,9 +921,7 @@ fn relay_state_xml_forbids_is_rejected_at_start() -> Result<(), Box<dyn std::err
             &idp_descriptor,
             PaosClientRequest::headers_checked_by_caller(),
             StartPaosSso::to_soap_endpoint(IDP_SOAP)?
-                .relay_state(RelayStateParam::try_from_option(Some(
-                    relay_state.to_string(),
-                ))?)
+                .relay_state(RelayState::try_new(relay_state.to_string())?)
                 .allow_unsigned_authn_request(),
         ) {
             Err(error) => error,
@@ -1305,8 +1299,7 @@ fn service_provider_processes_relay_state_and_paos_response_headers(
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::headers_checked_by_caller(),
-        StartPaosSso::to_soap_endpoint(IDP_SOAP)?
-            .relay_state(RelayStateParam::try_from_option(Some("state".to_string()))?),
+        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.relay_state(RelayState::try_new("state")?),
     )?;
     let (_, idp_request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
     let received = idp.receive_paos_sso(

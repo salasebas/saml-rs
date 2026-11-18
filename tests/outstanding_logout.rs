@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use saml_rs::{
     AcsEndpoint, AuthnRequest, AuthnSession, BrowserInput, ClockSkew, EntityId, FormField,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, MetadataTrustPolicy,
-    NameId, NameIdFormat, OutstandingLogout, PendingAuthnRequest, RelayStateParam, ReplayPolicy,
+    NameId, NameIdFormat, OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy,
     RespondSso, Saml, SamlError, SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
     Subject,
@@ -43,7 +43,7 @@ fn issued_sso() -> Result<IssuedSso, Box<dyn std::error::Error>> {
 
 fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Error>> {
     let sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended())
         .build()?;
@@ -65,7 +65,7 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
         idp.metadata_xml(),
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    let relay_state = RelayStateParam::try_from_option(Some("return".to_string()))?;
+    let relay_state = RelayState::try_new("return")?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
     let received = idp.receive_sso(
         &sp_descriptor,

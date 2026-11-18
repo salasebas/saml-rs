@@ -84,7 +84,7 @@ fn sp_with_credentials(
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(credentials)
             .validation(validation)
             .xml(xml(encryption))
@@ -523,7 +523,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
     ] {
         let sp = Saml::sp(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-                .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS)?.mark_default())
+                .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS)?.with_default())
                 .credentials(credentials())
                 .validation(SpValidationPolicy::recommended())
                 .xml(xml(sp_encryption))
@@ -606,7 +606,7 @@ fn service_provider_builder_requires_a_decryption_key_for_encrypted_elements(
         XmlEncryptionPolicy::encrypt_attributes(),
     ] {
         let built = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .xml(xml(encryption))
             .build();
         match built {

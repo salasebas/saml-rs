@@ -6,6 +6,7 @@ use crate::browser::{
     AcsEndpoint, LogoutBinding, NameIdManagementBinding, SloEndpoint, SsoEndpoint,
     SsoRequestBinding, SsoResponseBinding,
 };
+use crate::constants::Binding;
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::idp::IdentityProvider;
@@ -82,7 +83,7 @@ impl ManageNameIdService {
     }
 
     pub(crate) fn to_raw(&self) -> crate::metadata::Endpoint {
-        crate::metadata::Endpoint::new(self.binding.as_binding(), self.location.as_str())
+        crate::metadata::Endpoint::new(Binding::from(self.binding), self.location.as_str())
     }
 }
 

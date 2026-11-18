@@ -1,10 +1,11 @@
 use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
 use crate::browser::{ArtifactDelivery, BrowserInput, Outbound, SsoRequestBinding};
 use crate::config::{NameIdFormat, SpDescriptor};
+use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
 use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
-    AuthnRequest, Received, RelayStateParam, ReplayKey, SamlValidationContext, SsoResponse, Subject,
+    AuthnRequest, Received, RelayState, ReplayKey, SamlValidationContext, SsoResponse, Subject,
 };
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
@@ -91,7 +92,7 @@ impl Saml<Idp> {
         let request = input.into_http_request(self.raw_identity_provider().setting.xml_limits)?;
         let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
             raw_sp,
-            binding.as_binding(),
+            Binding::from(binding),
             &request,
             validation.now(),
             validation.clock_skew().as_millis(),
@@ -106,7 +107,7 @@ impl Saml<Idp> {
             let locations = self
                 .raw_identity_provider()
                 .metadata
-                .single_sign_on_service_locations(binding.as_binding());
+                .single_sign_on_service_locations(Binding::from(binding));
             if locations.is_empty() {
                 return Err(SamlError::MissingMetadata("SingleSignOnService".into()));
             }
@@ -119,7 +120,7 @@ impl Saml<Idp> {
         let mut validation = validation;
         validation.check_authn_request_issue_instant(authn.issue_instant())?;
         validation.check_and_store_message_replay(ReplayKey::AuthnRequest(authn.id().clone()))?;
-        Ok(Received::new(authn).with_relay_state(relay_state))
+        Ok(Received::new(authn, relay_state))
     }
 
     /// Respond to a received SP AuthnRequest.
@@ -259,18 +260,18 @@ impl Saml<Idp> {
             idp_setting.is_assertion_encrypted,
             &idp_setting.data_encryption_algorithm,
         );
-        let relay_state = match options.relay_state {
-            Some(relay_state) => {
-                relay_state.validate()?;
-                relay_state
+        let relay_state = match (request.and_then(Received::relay_state), options.relay_state) {
+            (Some(_), Some(_)) => {
+                return Err(SamlError::ProtocolProfile(
+                    "a response returns the RelayState its AuthnRequest carried".into(),
+                ))
             }
-            None => {
-                let echoed = request.map_or_else(RelayStateParam::absent, |request| {
-                    request.relay_state().clone()
-                });
-                echoed.validate_echoed()?;
-                echoed
+            (Some(received), None) => Some(received.clone()),
+            (None, Some(chosen)) => {
+                chosen.ensure_sendable()?;
+                Some(chosen)
             }
+            (None, None) => None,
         };
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let transformation_algorithms = match &options.delivery {
@@ -311,11 +312,11 @@ impl Saml<Idp> {
                     .raw_identity_provider()
                     .create_login_response_with_overrides(
                         raw_sp,
-                        binding.as_binding(),
+                        Binding::from(binding),
                         &user,
                         &LoginResponseOptions {
                             in_response_to,
-                            relay_state: relay_state.as_deref(),
+                            relay_state: relay_state.as_ref().map(RelayState::as_str),
                             encrypt_then_sign: false,
                             custom: None,
                         },
@@ -341,7 +342,7 @@ impl Saml<Idp> {
         )?;
         Outbound::<SsoResponse>::artifact(
             rendered.id,
-            relay_state.as_deref().map(str::to_string),
+            relay_state,
             &acs,
             &artifact,
             delivery.encoding(),

@@ -31,8 +31,8 @@ use saml_rs::{
     IdpValidationPolicy, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
     MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound,
     Pending, PendingManageNameIdRequest, ReceiveNameIdManagement, Received,
-    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayState, RelayStateParam,
-    ReplayCache, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml, SamlError,
+    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayState, ReplayCache,
+    ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml, SamlError,
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartNameIdManagement, Status, SubordinateStatusCode,
 };
@@ -249,7 +249,7 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
         NameIdChange::NewId("alice-2".into()),
         NameIdChange::Terminate,
     ] {
-        let relay_state = RelayStateParam::try_from_option(Some("manage"))?;
+        let relay_state = RelayState::try_new("manage")?;
         let started = idp.start_name_id_management_redirect(
             &sp_peer,
             &alice(),
@@ -267,7 +267,7 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
         assert_eq!(request.message().issuer().as_str(), IDP_ENTITY_ID);
         assert_eq!(request.message().name_id(), &alice());
         assert_eq!(request.message().change(), &change);
-        assert_eq!(request.relay_state(), &relay_state);
+        assert_eq!(request.relay_state(), Some(&relay_state));
 
         let response = sp.respond_name_id_management_redirect(
             &idp_peer,
@@ -286,7 +286,7 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
             response_input(&response)?,
             validation(),
         )?;
-        assert_eq!(relay_state_received, relay_state);
+        assert_eq!(relay_state_received, Some(relay_state));
     }
     Ok(())
 }
@@ -318,7 +318,7 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
         assert_eq!(request.message().issuer().as_str(), SP_ENTITY_ID);
         assert_eq!(request.message().name_id(), &alice());
         assert_eq!(request.message().change(), &change);
-        assert_eq!(request.relay_state(), &RelayStateParam::absent());
+        assert_eq!(request.relay_state(), None);
 
         let response = idp.respond_name_id_management_redirect(
             &sp_peer,
@@ -344,8 +344,8 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
     let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
     let key = read_private_key(PRIVKEY, None)?;
     for (added, expected) in [
-        ("added", RelayStateParam::try_from_option(Some("added"))?),
-        ("", RelayStateParam::PresentEmpty),
+        ("added", RelayState::try_new("added")?),
+        ("", RelayState::try_new("")?),
     ] {
         let started = sp.start_name_id_management_redirect(
             &idp_peer,
@@ -383,7 +383,7 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
             validation(),
         )?;
 
-        assert_eq!(relay_state, expected);
+        assert_eq!(relay_state, Some(expected));
     }
     Ok(())
 }
@@ -419,7 +419,10 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
         ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
-    assert_eq!(request.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        request.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
 
     let response = idp.respond_name_id_management_redirect(
         &sp_peer,
@@ -437,7 +440,10 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
         response_input(&response)?,
         validation(),
     )?;
-    assert_eq!(relay_state.as_deref(), Some(long.as_str()));
+    assert_eq!(
+        relay_state.as_ref().map(RelayState::as_str),
+        Some(long.as_str())
+    );
     Ok(())
 }
 

@@ -5,7 +5,7 @@ use super::extract::{
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::status::Status;
 use super::subject::NameId;
-use super::{EndpointUrl, RelayStateParam};
+use super::{EndpointUrl, RelayState};
 use crate::config::EntityId;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
@@ -294,11 +294,11 @@ fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstan
 #[derive(Debug, Clone)]
 pub struct LogoutCompleted {
     response: LogoutResponse,
-    relay_state: RelayStateParam,
+    relay_state: Option<RelayState>,
 }
 
 impl LogoutCompleted {
-    pub(crate) fn new(response: LogoutResponse, relay_state: RelayStateParam) -> Self {
+    pub(crate) fn new(response: LogoutResponse, relay_state: Option<RelayState>) -> Self {
         Self {
             response,
             relay_state,
@@ -320,8 +320,8 @@ impl LogoutCompleted {
     /// When the request carried RelayState, this is the same value. When it
     /// carried none, this is whatever the responder supplied, which the caller
     /// interprets by prior agreement.
-    pub fn relay_state(&self) -> &RelayStateParam {
-        &self.relay_state
+    pub fn relay_state(&self) -> Option<&RelayState> {
+        self.relay_state.as_ref()
     }
 
     /// Underlying raw compatibility flow result for the LogoutResponse.

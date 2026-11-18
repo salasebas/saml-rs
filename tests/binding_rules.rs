@@ -18,9 +18,9 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, Credentials, EntityId,
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
-    PrivateKeyPem, RelayState, RelayStateParam, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    StartSso, Subject, TemplatePolicy, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    PrivateKeyPem, RelayState, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject,
+    TemplatePolicy, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 use url::Url;
 
@@ -87,7 +87,7 @@ fn sp_with(
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
             .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
             .credentials(credentials())
             .validation(validation)
@@ -154,8 +154,8 @@ fn query_names(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 
 #[test]
 fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn std::error::Error>> {
-    assert!(RelayStateParam::try_from_option(Some("a".repeat(MAX_RELAY_STATE_BYTES + 1))).is_err());
-    let relay_state = RelayStateParam::try_from_option(Some("a".repeat(MAX_RELAY_STATE_BYTES)))?;
+    assert!(RelayState::try_new("a".repeat(MAX_RELAY_STATE_BYTES + 1)).is_err());
+    let relay_state = RelayState::try_new("a".repeat(MAX_RELAY_STATE_BYTES))?;
 
     let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::recommended())?;
@@ -177,7 +177,10 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
         BrowserInput::<AuthnRequest>::redirect(query),
         validation(),
     )?;
-    let reused = received.relay_state().clone();
+    let reused = received
+        .relay_state()
+        .cloned()
+        .ok_or("missing RelayState")?;
     match idp.initiate_sso(
         &sp_descriptor,
         subject(),
@@ -234,7 +237,10 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
         BrowserInput::<AuthnRequest>::redirect(request_query(&long)?),
         validation(),
     )?;
-    assert_eq!(received.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        received.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
 
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
     assert_eq!(
@@ -253,7 +259,10 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
         BrowserInput::<SsoResponse>::post(response_fields),
         validation(),
     )?;
-    assert_eq!(session.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        session.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
 
     let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
     let mut fields = unsolicited.post_form()?.fields().to_vec();
@@ -263,7 +272,10 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
         BrowserInput::<SsoResponse>::post(fields),
         validation(),
     )?;
-    assert_eq!(session.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        session.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
     Ok(())
 }
 
@@ -333,7 +345,7 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
     let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
     let idp = idp_with(IdpValidationPolicy::recommended())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+    let relay_state = RelayState::try_new("state")?;
 
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
     let mut request_fields = started.outbound.post_form()?.fields().to_vec();
@@ -417,7 +429,7 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
     let sp = sp_with(signing_sp_validation(), templates)?;
     let idp = idp_with(signed_authn_request_idp_validation())?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("ordered-state".to_string()))?;
+    let relay_state = RelayState::try_new("ordered-state")?;
     let started = sp.start_sso(
         &idp_descriptor,
         StartSso::redirect().relay_state(relay_state),
@@ -442,7 +454,7 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
 
     let sp = sp_with(signing_sp_validation(), TemplatePolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("ordered-state".to_string()))?;
+    let relay_state = RelayState::try_new("ordered-state")?;
     let started = sp.start_sso(
         &idp_descriptor,
         StartSso::redirect().relay_state(relay_state),
@@ -462,8 +474,11 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
         BrowserInput::<AuthnRequest>::redirect(reordered),
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.request_id());
-    assert_eq!(received.relay_state().as_deref(), Some("ordered-state"));
+    assert_eq!(received.message().id(), started.pending.id());
+    assert_eq!(
+        received.relay_state().map(RelayState::as_str),
+        Some("ordered-state")
+    );
     Ok(())
 }
 
@@ -473,7 +488,7 @@ fn typed_simplesign_binds_relay_state_to_the_raw_xml_signature(
     let sp = sp_with(signing_sp_validation(), TemplatePolicy::default())?;
     let idp = idp_with(signed_authn_request_idp_validation())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayStateParam::try_from_option(Some("signed-state".to_string()))?;
+    let relay_state = RelayState::try_new("signed-state")?;
     let started = sp.start_sso(
         &idp_descriptor,
         StartSso::simple_sign().relay_state(relay_state),
@@ -484,7 +499,10 @@ fn typed_simplesign_binds_relay_state_to_the_raw_xml_signature(
         BrowserInput::<AuthnRequest>::simple_sign(fields.clone()),
         validation(),
     )?;
-    assert_eq!(received.relay_state().as_deref(), Some("signed-state"));
+    assert_eq!(
+        received.relay_state().map(RelayState::as_str),
+        Some("signed-state")
+    );
 
     let mut tampered = fields;
     let relay = tampered

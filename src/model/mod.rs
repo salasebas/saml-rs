@@ -37,9 +37,7 @@ pub use identifiers::{AssertionId, MessageId, SamlInstant, SessionIndex};
 pub use logout::{LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject};
 pub use outstanding_logout::OutstandingLogout;
 pub use received::Received;
-pub use relay::{
-    RelayState, RelayStateParam, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
-};
+pub use relay::{RelayState, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES};
 pub use replay_cache::InMemoryReplayCache;
 pub use session::AuthnSession;
 pub use sso::{

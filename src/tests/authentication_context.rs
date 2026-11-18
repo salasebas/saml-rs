@@ -48,7 +48,7 @@ fn parties_with(
 ) -> Result<Parties, SamlError> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP)?)
-            .acs_endpoint(AcsEndpoint::post(ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(ACS)?.with_default())
             .credentials(credentials)
             .validation(SpValidationPolicy {
                 authn_requests: AuthnRequestSigningPolicy::Sign,
@@ -531,7 +531,7 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
     let (_, _, _, idp_descriptor) = parties()?;
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP)?)
-            .acs_endpoint(AcsEndpoint::post(ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(ACS)?.with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy {
                 authn_requests: AuthnRequestSigningPolicy::Sign,

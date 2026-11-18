@@ -1,4 +1,5 @@
 use crate::browser::SsoResponseBinding;
+use crate::constants::Binding;
 use crate::metadata::SpMetadata;
 use crate::model::AuthnRequest;
 
@@ -41,11 +42,11 @@ pub(super) fn resolve_response_acs(
     if let Some(url) = acs_url {
         match bindings {
             ResponseAcsBindings::Browser(binding) => {
-                if !metadata.has_assertion_consumer_service(binding.as_binding(), url.as_str()) {
+                if !metadata.has_assertion_consumer_service(Binding::from(binding), url.as_str()) {
                     return Err(SamlError::destination_mismatch(
                         url.as_str(),
                         metadata
-                            .assertion_consumer_location(binding.as_binding())
+                            .assertion_consumer_location(Binding::from(binding))
                             .as_deref(),
                     ));
                 }
@@ -69,7 +70,7 @@ pub(super) fn resolve_response_acs(
     let endpoint = if let Some(index) = acs_index {
         metadata.assertion_consumer_service_by_index(index)?
     } else if let (ResponseAcsBindings::Browser(binding), Some(_)) = (&bindings, protocol_binding) {
-        metadata.assertion_consumer_service_endpoint(binding.as_binding())
+        metadata.assertion_consumer_service_endpoint(Binding::from(*binding))
     } else {
         metadata.default_assertion_consumer_service_endpoint()?
     }
@@ -84,7 +85,7 @@ pub(super) fn resolve_response_acs(
                         "response binding conflicts with AuthnRequest ACS index".into(),
                     ));
                 }
-            } else if endpoint.binding != binding.as_binding() {
+            } else if endpoint.binding != Binding::from(binding) {
                 return Err(SamlError::Invalid(
                     "response binding conflicts with default AssertionConsumerService".into(),
                 ));

@@ -79,7 +79,7 @@ fn exchange_for(
 ) -> Result<Exchange, Box<dyn std::error::Error>> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
             .credentials(signing_credentials())
             .validation(sp_validation)
             .build()?,
@@ -353,7 +353,7 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
-            .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default())
+            .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,
@@ -1053,7 +1053,7 @@ mod encrypted_assertions {
         validation: SpValidationPolicy,
     ) -> Result<Exchange, Box<dyn std::error::Error>> {
         Ok(Exchange {
-            sp: decrypting_sp(AcsEndpoint::post(SP_ACS_POST)?.mark_default(), validation)?,
+            sp: decrypting_sp(AcsEndpoint::post(SP_ACS_POST)?.with_default(), validation)?,
             ..exchange_for(SpValidationPolicy::recommended(), false)?
         })
     }
@@ -1252,7 +1252,7 @@ mod encrypted_assertions {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = Exchange {
             sp: decrypting_sp(
-                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default(),
+                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 require_signed(),
             )?,
             ..exchange_simple_sign()?
@@ -1448,7 +1448,7 @@ mod encrypted_assertions {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = Exchange {
             sp: decrypting_sp(
-                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default(),
+                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 SpValidationPolicy::recommended(),
             )?,
             ..exchange_simple_sign()?
@@ -1484,7 +1484,7 @@ mod encrypted_assertions {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = Exchange {
             sp: decrypting_sp(
-                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.mark_default(),
+                AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 SpValidationPolicy::recommended(),
             )?,
             ..exchange_simple_sign()?

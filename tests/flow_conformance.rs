@@ -24,6 +24,7 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::template::replace_tags_by_value;
+use saml_rs::RelayState;
 use saml_rs::SamlError;
 use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
@@ -470,8 +471,14 @@ fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
         Err(SamlError::RelayStateMismatch {
             expected, actual, ..
         }) => {
-            assert_eq!(expected.as_deref(), Some("relay-expected"));
-            assert_eq!(actual.as_deref(), Some("relay-actual"));
+            assert_eq!(
+                expected.as_ref().map(RelayState::as_str),
+                Some("relay-expected")
+            );
+            assert_eq!(
+                actual.as_ref().map(RelayState::as_str),
+                Some("relay-actual")
+            );
             Ok(())
         }
         other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),

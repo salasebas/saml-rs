@@ -439,7 +439,8 @@ pub use artifact::{
 pub use browser::{
     AcsEndpoint, ArtifactDelivery, BrowserInput, DeliveredArtifact, EndpointUrl, FormField,
     LogoutBinding, NameIdManagementBinding, Outbound, Pending, PendingAuthnRequest,
-    PendingLogoutRequest, PendingManageNameIdRequest, PendingSnapshot, PostForm, SloEndpoint,
+    PendingAuthnRequestSnapshot, PendingLogoutRequest, PendingLogoutRequestSnapshot,
+    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, PostForm, SloEndpoint,
     SsoEndpoint, SsoRequestBinding, SsoResponseBinding, Started,
 };
 pub use config::{
@@ -473,7 +474,7 @@ pub use model::{
     AuthnContext, AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind,
     AuthnRequest, AuthnSession, ClockSkew, InMemoryReplayCache, LogoutCompleted, LogoutRequest,
     LogoutResponse, LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy,
-    OutstandingLogout, Received, RelayState, RelayStateParam, ReplayCache, ReplayKey, ReplayPolicy,
+    OutstandingLogout, Received, RelayState, ReplayCache, ReplayKey, ReplayPolicy,
     RequestAgePolicy, RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier,
     SamlInstant, SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, Subject,
     SubjectConfirmation, SubjectLocality, SubordinateStatusCode, TopLevelStatusCode,

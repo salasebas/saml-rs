@@ -86,7 +86,7 @@ fn sp_with(
     encryption: XmlEncryptionPolicy,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
     let mut builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default());
+        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default());
     for endpoint in slo_endpoints("sp.example.com")? {
         builder = builder.slo_endpoint(endpoint);
     }

@@ -7,7 +7,7 @@ use crate::artifact::Artifact;
 use crate::binding::single_parameter;
 use crate::constants::url_params;
 use crate::error::SamlError;
-use crate::model::RelayStateParam;
+use crate::model::RelayState;
 
 /// How an artifact is encoded for the browser.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +71,7 @@ impl ArtifactDelivery {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeliveredArtifact {
     artifact: Artifact,
-    relay_state: RelayStateParam,
+    relay_state: Option<RelayState>,
 }
 
 impl DeliveredArtifact {
@@ -122,8 +122,8 @@ impl DeliveredArtifact {
     }
 
     /// RelayState delivered with the artifact.
-    pub fn relay_state(&self) -> &RelayStateParam {
-        &self.relay_state
+    pub fn relay_state(&self) -> Option<&RelayState> {
+        self.relay_state.as_ref()
     }
 
     fn from_pairs<'a>(
@@ -137,7 +137,9 @@ impl DeliveredArtifact {
         let relay_state = single_parameter(pairs, url_params::RELAY_STATE)?;
         Ok(Self {
             artifact: Artifact::try_from_encoded(artifact)?,
-            relay_state: RelayStateParam::received(relay_state.map(str::to_string))?,
+            relay_state: relay_state
+                .map(|value| RelayState::received(value.to_string()))
+                .transpose()?,
         })
     }
 }

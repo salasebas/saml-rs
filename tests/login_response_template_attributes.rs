@@ -30,7 +30,7 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.mark_default())
+            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,

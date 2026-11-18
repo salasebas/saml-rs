@@ -1,7 +1,7 @@
 use super::{missing_binding_parameter, single_param, FlowOptions, HttpRequest};
 use crate::constants::{Binding, ParserType};
 use crate::error::{SamlError, SignatureVerificationReason};
-use crate::model::RelayStateParam;
+use crate::model::RelayState;
 
 fn decoded_octet_params(octet: &str) -> Vec<(String, String)> {
     url::form_urlencoded::parse(octet.as_bytes())
@@ -15,8 +15,8 @@ fn detached_signature_verification() -> SamlError {
     }
 }
 
-fn relay_state_param(value: Option<&str>) -> Option<RelayStateParam> {
-    RelayStateParam::try_from_option(value.map(str::to_string)).ok()
+fn relay_state_param(value: Option<&str>) -> Option<Option<RelayState>> {
+    value.map(RelayState::try_new).transpose().ok()
 }
 
 fn detached_relay_state_mismatch(expected: Option<&str>, actual: Option<&str>) -> SamlError {

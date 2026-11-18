@@ -17,20 +17,13 @@ pub enum SsoRequestBinding {
     SimpleSign,
 }
 
-impl SsoRequestBinding {
-    /// Convert to the raw compatibility binding.
-    pub fn as_binding(self) -> Binding {
-        match self {
-            Self::Redirect => Binding::Redirect,
-            Self::Post => Binding::Post,
-            Self::SimpleSign => Binding::SimpleSign,
-        }
-    }
-}
-
 impl From<SsoRequestBinding> for Binding {
     fn from(value: SsoRequestBinding) -> Self {
-        value.as_binding()
+        match value {
+            SsoRequestBinding::Redirect => Binding::Redirect,
+            SsoRequestBinding::Post => Binding::Post,
+            SsoRequestBinding::SimpleSign => Binding::SimpleSign,
+        }
     }
 }
 
@@ -61,20 +54,13 @@ pub enum SsoResponseBinding {
     Artifact,
 }
 
-impl SsoResponseBinding {
-    /// Convert to the raw compatibility binding.
-    pub fn as_binding(self) -> Binding {
-        match self {
-            Self::Post => Binding::Post,
-            Self::SimpleSign => Binding::SimpleSign,
-            Self::Artifact => Binding::Artifact,
-        }
-    }
-}
-
 impl From<SsoResponseBinding> for Binding {
     fn from(value: SsoResponseBinding) -> Self {
-        value.as_binding()
+        match value {
+            SsoResponseBinding::Post => Binding::Post,
+            SsoResponseBinding::SimpleSign => Binding::SimpleSign,
+            SsoResponseBinding::Artifact => Binding::Artifact,
+        }
     }
 }
 
@@ -109,21 +95,14 @@ pub enum LogoutBinding {
     Soap,
 }
 
-impl LogoutBinding {
-    /// Convert to the raw compatibility binding.
-    pub fn as_binding(self) -> Binding {
-        match self {
-            Self::Redirect => Binding::Redirect,
-            Self::Post => Binding::Post,
-            Self::SimpleSign => Binding::SimpleSign,
-            Self::Soap => Binding::Soap,
-        }
-    }
-}
-
 impl From<LogoutBinding> for Binding {
     fn from(value: LogoutBinding) -> Self {
-        value.as_binding()
+        match value {
+            LogoutBinding::Redirect => Binding::Redirect,
+            LogoutBinding::Post => Binding::Post,
+            LogoutBinding::SimpleSign => Binding::SimpleSign,
+            LogoutBinding::Soap => Binding::Soap,
+        }
     }
 }
 
@@ -154,18 +133,25 @@ pub enum NameIdManagementBinding {
     Soap,
 }
 
-impl NameIdManagementBinding {
-    /// Convert to the raw compatibility binding.
-    pub fn as_binding(self) -> Binding {
-        match self {
-            Self::Redirect => Binding::Redirect,
-            Self::Soap => Binding::Soap,
+impl From<NameIdManagementBinding> for Binding {
+    fn from(value: NameIdManagementBinding) -> Self {
+        match value {
+            NameIdManagementBinding::Redirect => Binding::Redirect,
+            NameIdManagementBinding::Soap => Binding::Soap,
         }
     }
 }
 
-impl From<NameIdManagementBinding> for Binding {
-    fn from(value: NameIdManagementBinding) -> Self {
-        value.as_binding()
+impl TryFrom<Binding> for NameIdManagementBinding {
+    type Error = SamlError;
+
+    fn try_from(value: Binding) -> Result<Self, Self::Error> {
+        match value {
+            Binding::Redirect => Ok(Self::Redirect),
+            Binding::Soap => Ok(Self::Soap),
+            binding @ (Binding::Post | Binding::SimpleSign | Binding::Artifact) => {
+                Err(SamlError::UnsupportedBinding { binding })
+            }
+        }
     }
 }

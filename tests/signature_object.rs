@@ -38,7 +38,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         .with_signing_certificate(CertificatePem::new(CERT));
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.mark_default())
+            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.with_default())
             .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo/post")?)
             .slo_endpoint(SloEndpoint::soap("https://sp.example.com/slo/soap")?)
             .credentials(credentials.clone())

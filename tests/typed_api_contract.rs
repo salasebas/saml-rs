@@ -1,8 +1,9 @@
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, EndpointUrl, EntityId, Idp, LogoutBinding, LogoutRequest, MessageId,
-    NameIdCreationRequest, PendingAuthnRequest, PendingLogoutRequest, PendingSnapshot,
-    RelayStateParam, Saml, SamlError, SamlInstant, SloEndpoint, Sp, SsoEndpoint, SsoRequestBinding,
-    SsoResponseBinding, VerifiedXmlSignature, VerifiedXmlSignatureCoverage,
+    AcsEndpoint, AuthnRequest, EndpointUrl, Idp, LogoutBinding, MessageId, NameIdCreationRequest,
+    PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    PendingLogoutRequestSnapshot, RelayState, Saml, SamlError, SamlInstant, SloEndpoint, Sp,
+    SsoEndpoint, SsoRequestBinding, SsoResponseBinding, VerifiedXmlSignature,
+    VerifiedXmlSignatureCoverage,
 };
 
 fn assert_send_sync<T: Send + Sync>() {}
@@ -41,30 +42,34 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
     assert_send_sync::<AcsEndpoint>();
     assert_send_sync::<SloEndpoint>();
     assert_send_sync::<MessageId>();
-    assert_send_sync::<RelayStateParam>();
+    assert_send_sync::<RelayState>();
     assert_send_sync::<SamlInstant>();
     assert_send_sync::<PendingAuthnRequest>();
-    assert_send_sync::<PendingSnapshot<AuthnRequest>>();
+    assert_send_sync::<PendingAuthnRequestSnapshot>();
     assert_send_sync::<PendingLogoutRequest>();
-    assert_send_sync::<PendingSnapshot<LogoutRequest>>();
+    assert_send_sync::<PendingLogoutRequestSnapshot>();
     assert_send_sync::<NameIdCreationRequest>();
 
-    let acs = AcsEndpoint::post("https://sp.example.com/acs")?;
-    let pending = PendingAuthnRequest::try_new(
-        MessageId::try_new("_request123")?,
-        RelayStateParam::try_from_option(Some("relay".to_string()))?,
-        acs,
-        SsoResponseBinding::Post,
-        EntityId::try_new("https://idp.example.com/metadata")?,
-    )?;
-    let _: PendingSnapshot<AuthnRequest> = pending.snapshot();
-    let logout_pending = PendingLogoutRequest::try_new(
-        MessageId::try_new("_logout123")?,
-        RelayStateParam::present_empty(),
-        LogoutBinding::Redirect,
-        EntityId::try_new("https://idp.example.com/metadata")?,
-    )?;
-    let _: PendingSnapshot<LogoutRequest> = logout_pending.snapshot();
+    let pending = PendingAuthnRequest::from_snapshot(PendingAuthnRequestSnapshot {
+        id: "_request123".to_string(),
+        relay_state: Some("relay".to_string()),
+        peer_entity_id: "https://idp.example.com/metadata".to_string(),
+        acs_binding: "post".to_string(),
+        acs_url: "https://sp.example.com/acs".to_string(),
+        acs_index: None,
+        acs_is_default: false,
+    })?;
+    let _: &AcsEndpoint = pending.acs();
+    let _: SsoResponseBinding = pending.acs().binding();
+    let logout_pending = PendingLogoutRequest::from_snapshot(PendingLogoutRequestSnapshot {
+        id: "_logout123".to_string(),
+        relay_state: Some(String::new()),
+        peer_entity_id: "https://idp.example.com/metadata".to_string(),
+        binding: "redirect".to_string(),
+        issued_at: None,
+        expires_at: None,
+    })?;
+    let _: LogoutBinding = logout_pending.binding();
     let _ = SsoEndpoint::redirect("https://idp.example.com/sso")?;
     let _ = SloEndpoint::new(
         LogoutBinding::Redirect,

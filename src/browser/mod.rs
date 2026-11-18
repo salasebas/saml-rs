@@ -19,8 +19,9 @@ pub use input::BrowserInput;
 pub(crate) use input::{field_value, parse_form_fields};
 pub use outbound::Outbound;
 pub use pending::{
-    Pending, PendingAuthnRequest, PendingLogoutRequest, PendingManageNameIdRequest,
-    PendingSnapshot, Started,
+    Pending, PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
+    Started,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

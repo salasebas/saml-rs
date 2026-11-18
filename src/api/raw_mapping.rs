@@ -6,7 +6,7 @@ use crate::constants::{url_params, Binding};
 use crate::entity::User;
 use crate::idp::IdentityProvider;
 use crate::metadata::Metadata;
-use crate::model::{RelayStateParam, Subject};
+use crate::model::{RelayState, Subject};
 use crate::sp::ServiceProvider;
 use std::time::SystemTime;
 
@@ -73,24 +73,32 @@ pub(super) fn selected_acs(
                 ));
             }
         }
-        return Ok(AcsEndpoint::new(
+        let acs = AcsEndpoint::new(
             binding,
             crate::model::EndpointUrl::try_new(endpoint.location)?,
         )
-        .with_index(index)
-        .with_default_flag(endpoint.is_default));
+        .with_index(index);
+        return Ok(marked_default(acs, endpoint.is_default));
     }
 
     let binding = requested_binding.unwrap_or(SsoResponseBinding::Post);
     let endpoint = sp
         .metadata
-        .assertion_consumer_service_endpoint(binding.as_binding())
+        .assertion_consumer_service_endpoint(Binding::from(binding))
         .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
-    Ok(AcsEndpoint::new(
+    let acs = AcsEndpoint::new(
         binding,
         crate::model::EndpointUrl::try_new(endpoint.location)?,
-    )
-    .with_default_flag(endpoint.is_default))
+    );
+    Ok(marked_default(acs, endpoint.is_default))
+}
+
+fn marked_default(acs: AcsEndpoint, is_default: bool) -> AcsEndpoint {
+    if is_default {
+        acs.with_default()
+    } else {
+        acs
+    }
 }
 
 pub(super) fn input_binding<Message>(input: &BrowserInput<Message>) -> Binding {
@@ -105,34 +113,35 @@ pub(super) fn input_binding<Message>(input: &BrowserInput<Message>) -> Binding {
 
 pub(super) fn relay_state_from_input<Message>(
     input: &BrowserInput<Message>,
-) -> Result<RelayStateParam, SamlError> {
+) -> Result<Option<RelayState>, SamlError> {
+    let received = |value: Option<&str>| {
+        value
+            .map(|value| RelayState::received(value.to_string()))
+            .transpose()
+    };
     match input {
         BrowserInput::Redirect { raw_query, .. } => {
             let params = parse_form_fields(raw_query.trim_start_matches('?'));
-            RelayStateParam::received(
-                field_value(&params, url_params::RELAY_STATE)?.map(str::to_string),
-            )
+            received(field_value(&params, url_params::RELAY_STATE)?)
         }
         BrowserInput::Post { fields, .. } | BrowserInput::SimpleSignPost { fields, .. } => {
-            RelayStateParam::received(
-                field_value(fields, url_params::RELAY_STATE)?.map(str::to_string),
-            )
+            received(field_value(fields, url_params::RELAY_STATE)?)
         }
-        BrowserInput::Artifact { delivered, .. } => Ok(delivered.relay_state().clone()),
-        BrowserInput::Soap { .. } => Ok(RelayStateParam::absent()),
+        BrowserInput::Artifact { delivered, .. } => Ok(delivered.relay_state().cloned()),
+        BrowserInput::Soap { .. } => Ok(None),
     }
 }
 
 pub(super) fn ensure_relay_state(
-    expected: &RelayStateParam,
-    actual: &RelayStateParam,
+    expected: Option<&RelayState>,
+    actual: Option<&RelayState>,
 ) -> Result<(), SamlError> {
-    if *expected == RelayStateParam::Absent || expected == actual {
+    if expected.is_none() || expected == actual {
         return Ok(());
     }
     Err(SamlError::RelayStateMismatch {
-        expected: expected.clone(),
-        actual: actual.clone(),
+        expected: expected.cloned(),
+        actual: actual.cloned(),
     })
 }
 
@@ -166,7 +175,7 @@ pub(super) fn ensure_sso_response_binding(
     actual: Binding,
     expected: SsoResponseBinding,
 ) -> Result<(), SamlError> {
-    if actual == expected.as_binding() {
+    if actual == Binding::from(expected) {
         return Ok(());
     }
     Err(SamlError::UnsupportedBinding { binding: actual })

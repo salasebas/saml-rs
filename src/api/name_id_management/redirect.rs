@@ -2,11 +2,12 @@ use crate::browser::{
     BrowserInput, NameIdManagementBinding, Outbound, PendingManageNameIdRequest, Started,
 };
 use crate::config::{IdpDescriptor, SpDescriptor};
+use crate::constants::Binding;
 use crate::entity::{generate_id, EntitySetting};
 use crate::flow::HttpRequest;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    MessageId, NameId, Received, RelayStateParam, ReplayKey, SamlValidationContext, Status,
+    MessageId, NameId, Received, RelayState, ReplayKey, SamlValidationContext, Status,
 };
 use crate::name_id_management::redirect::{
     create_request, create_response, parse_request, parse_response, request_from_flow,
@@ -176,7 +177,7 @@ impl Saml<Sp> {
         pending: &PendingManageNameIdRequest,
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
-    ) -> Result<RelayStateParam, SamlError> {
+    ) -> Result<Option<RelayState>, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
         finish(self.local(), peer, pending, input, validation)
     }
@@ -350,7 +351,7 @@ impl Saml<Idp> {
         pending: &PendingManageNameIdRequest,
         input: BrowserInput<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
-    ) -> Result<RelayStateParam, SamlError> {
+    ) -> Result<Option<RelayState>, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
         finish(self.local(), peer, pending, input, validation)
     }
@@ -389,7 +390,9 @@ fn start(
     change: &NameIdChange,
     options: StartNameIdManagement,
 ) -> Result<Started<ManageNameIdRequest>, SamlError> {
-    options.relay_state.validate()?;
+    if let Some(relay_state) = &options.relay_state {
+        relay_state.ensure_sendable()?;
+    }
     local_locations(local.metadata, EndpointDirection::Response)?;
     let destination = peer_location(&peer, EndpointDirection::Request)?;
     if !options.allows_http() {
@@ -421,15 +424,14 @@ fn start(
             sp_entity_id,
         },
         options.identifier_encryption,
-        options.relay_state.as_deref(),
+        options.relay_state.as_ref().map(RelayState::as_str),
     )?;
     let outbound = Outbound::<ManageNameIdRequest>::try_from(context)?;
-    let pending = PendingManageNameIdRequest::try_new(
+    let pending = PendingManageNameIdRequest::new(
         outbound.id().clone(),
         options.relay_state,
-        NameIdManagementBinding::Redirect,
         peer.entity_id.clone(),
-    )?;
+    );
     Ok(Started { pending, outbound })
 }
 
@@ -464,7 +466,7 @@ fn receive(
     let id = request.id.clone();
     match request.decrypt(&flow, local.setting) {
         ParsedRequest::Plain(message) => Ok(ReceivedNameIdManagement::Request(Box::new(
-            Received::new(message).with_relay_state(relay_state),
+            Received::new(message, relay_state),
         ))),
         ParsedRequest::Refused {
             reason,
@@ -473,7 +475,7 @@ fn receive(
             local,
             &peer,
             &id,
-            relay_state.as_deref(),
+            relay_state.as_ref().map(RelayState::as_str),
             reason,
             decryption_error,
             options.allows_http(),
@@ -516,7 +518,7 @@ fn respond(
         &peer,
         request.message().id().as_str(),
         &status,
-        request.relay_state().as_deref(),
+        request.relay_state().map(RelayState::as_str),
         options.allows_http(),
     )
 }
@@ -558,11 +560,11 @@ fn finish(
     pending: &PendingManageNameIdRequest,
     input: BrowserInput<ManageNameIdResponse>,
     mut validation: SamlValidationContext<'_>,
-) -> Result<RelayStateParam, SamlError> {
+) -> Result<Option<RelayState>, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;
     require_redirect_input(&input)?;
     let relay_state = relay_state_from_input(&input)?;
-    ensure_relay_state(pending.relay_state(), &relay_state)?;
+    ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
     let locations = local_locations(local.metadata, EndpointDirection::Response)?;
     let expected_recipient = validation.resolve_recipient_endpoint(&locations)?;
     let request = HttpRequest::try_from(input)?;
@@ -586,7 +588,7 @@ fn finish(
 
 fn require_redirect_input<Message>(input: &BrowserInput<Message>) -> Result<(), SamlError> {
     let binding = input_binding(input);
-    if binding == NameIdManagementBinding::Redirect.as_binding() {
+    if binding == Binding::from(NameIdManagementBinding::Redirect) {
         return Ok(());
     }
     Err(SamlError::UnsupportedBinding { binding })
@@ -594,7 +596,10 @@ fn require_redirect_input<Message>(input: &BrowserInput<Message>) -> Result<(), 
 
 fn peer_location(peer: &RawPeer<'_>, direction: EndpointDirection) -> Result<String, SamlError> {
     peer.metadata
-        .manage_name_id_service_locations(NameIdManagementBinding::Redirect.as_binding(), direction)
+        .manage_name_id_service_locations(
+            Binding::from(NameIdManagementBinding::Redirect),
+            direction,
+        )
         .into_iter()
         .next()
         .ok_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into()))
@@ -605,7 +610,7 @@ fn local_locations(
     direction: EndpointDirection,
 ) -> Result<Vec<String>, SamlError> {
     let locations = metadata.manage_name_id_service_locations(
-        NameIdManagementBinding::Redirect.as_binding(),
+        Binding::from(NameIdManagementBinding::Redirect),
         direction,
     );
     if locations.is_empty() {

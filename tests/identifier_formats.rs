@@ -52,7 +52,7 @@ fn validation() -> SamlValidationContext<'static> {
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy {
                 assertions: AssertionSignaturePolicy::RequireSigned,
@@ -503,7 +503,7 @@ fn accept_peer_response(
         Binding::Post,
         &user,
         &LoginResponseOptions {
-            in_response_to: Some(started.pending.request_id().as_str()),
+            in_response_to: Some(started.pending.id().as_str()),
             ..LoginResponseOptions::default()
         },
     )?;
@@ -935,7 +935,7 @@ fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::erro
     let idp = idp()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let request_id = started.pending.request_id().as_str().to_string();
+    let request_id = started.pending.id().as_str().to_string();
     let format = name_id
         .format()
         .map(NameIdFormat::as_uri)

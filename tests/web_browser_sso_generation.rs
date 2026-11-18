@@ -68,7 +68,7 @@ fn validation() -> SamlValidationContext<'static> {
 fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(signing_credentials())
             .validation(validation)
             .build()?,
@@ -659,7 +659,7 @@ fn typed_transient_name_id_omits_allow_create_under_producer_rules(
     validation.name_id_creation = NameIdCreationPolicy::AllowCreate;
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .name_id_format(NameIdFormat::Transient)
             .credentials(signing_credentials())
             .validation(validation)
@@ -760,7 +760,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         });
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(encrypted_credentials.clone())
             .validation(signing_sp_validation())
             .xml(encryption)
@@ -823,7 +823,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 
     let permissive = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(encrypted_credentials)
             .validation(SpValidationPolicy::compatibility())
             .xml(encryption)
@@ -842,7 +842,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 #[test]
 fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn std::error::Error>> {
     let config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::compatibility())
         .templates(saml_rs::TemplatePolicy {
@@ -1153,7 +1153,7 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
             .acs_endpoint(
-                AcsEndpoint::simple_sign("https://sp.example.com/acs/simple-sign")?.mark_default(),
+                AcsEndpoint::simple_sign("https://sp.example.com/acs/simple-sign")?.with_default(),
             )
             .credentials(signing_credentials())
             .validation(signing_sp_validation())

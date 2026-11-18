@@ -1,8 +1,6 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
-use crate::model::{
-    Attributes, AuthnContextReference, RelayStateParam, RequestedAuthnContext, Status,
-};
+use crate::model::{Attributes, AuthnContextReference, RelayState, RequestedAuthnContext, Status};
 use crate::sp::WebBrowserSsoProducer;
 use std::time::SystemTime;
 
@@ -13,7 +11,7 @@ pub use crate::model::{ForceAuthn, IsPassive};
 pub struct StartSso {
     pub(super) binding: SsoRequestBinding,
     pub(super) response_binding: Option<SsoResponseBinding>,
-    pub(super) relay_state: RelayStateParam,
+    pub(super) relay_state: Option<RelayState>,
     pub(super) force_authn: Option<ForceAuthn>,
     pub(super) acs_index: Option<u16>,
     pub(super) is_passive: Option<IsPassive>,
@@ -42,7 +40,7 @@ impl StartSso {
         Self {
             binding,
             response_binding: None,
-            relay_state: RelayStateParam::absent(),
+            relay_state: None,
             force_authn: None,
             acs_index: None,
             is_passive: None,
@@ -58,9 +56,15 @@ impl StartSso {
         self
     }
 
-    /// Set exact RelayState state for the outbound request.
-    pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
-        self.relay_state = relay_state;
+    /// Set the RelayState the AuthnRequest carries. The request carries none
+    /// by default.
+    ///
+    /// [`Saml<Sp>::finish_sso`](crate::Saml::finish_sso) requires the response
+    /// to return it unchanged. A value longer than
+    /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES) fails
+    /// [`Saml<Sp>::start_sso`](crate::Saml::start_sso).
+    pub fn relay_state(mut self, relay_state: RelayState) -> Self {
+        self.relay_state = Some(relay_state);
         self
     }
 
@@ -134,7 +138,7 @@ pub struct MessageDelivery;
 pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) binding: SsoResponseBinding,
     pub(super) delivery: Delivery,
-    pub(super) relay_state: Option<RelayStateParam>,
+    pub(super) relay_state: Option<RelayState>,
     response_signing: ResponseSigning,
     pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(super) status: Option<Status>,
@@ -311,14 +315,16 @@ impl<Delivery> RespondSso<Delivery> {
         self
     }
 
-    /// Set exact RelayState state for the response.
+    /// Set the RelayState of a response whose request carried none, or of an
+    /// unsolicited response.
     ///
-    /// When omitted for a response to a received request, the received
-    /// RelayState is echoed unchanged, up to
-    /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES).
-    /// Pass [`RelayStateParam::absent`] to suppress echo. A value set here
-    /// must not exceed [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES).
-    pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
+    /// A response to an `AuthnRequest` that carried RelayState returns that
+    /// value unchanged, up to
+    /// [`MAX_RECEIVED_RELAY_STATE_BYTES`](crate::MAX_RECEIVED_RELAY_STATE_BYTES),
+    /// and setting one here returns [`SamlError::ProtocolProfile`](crate::SamlError::ProtocolProfile).
+    /// A value set here must not exceed
+    /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES).
+    pub fn relay_state(mut self, relay_state: RelayState) -> Self {
         self.relay_state = Some(relay_state);
         self
     }
@@ -411,7 +417,7 @@ impl SingleLogoutRules {
 #[derive(Debug, Clone)]
 pub struct StartSlo {
     pub(super) binding: LogoutBinding,
-    pub(super) relay_state: RelayStateParam,
+    pub(super) relay_state: Option<RelayState>,
     pub(super) signing: LogoutSigning,
     pub(super) identifier_encryption: IdentifierEncryptionPolicy,
     rules: SingleLogoutRules,
@@ -454,16 +460,21 @@ impl StartSlo {
     fn new(binding: LogoutBinding) -> Self {
         Self {
             binding,
-            relay_state: RelayStateParam::absent(),
+            relay_state: None,
             signing: LogoutSigning::FollowLocalPolicy,
             identifier_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
             rules: SingleLogoutRules::default(),
         }
     }
 
-    /// Set exact RelayState state for the logout request.
-    pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
-        self.relay_state = relay_state;
+    /// Set the RelayState the LogoutRequest carries. The request carries none
+    /// by default.
+    ///
+    /// `finish_slo` requires the response to return it unchanged. A value
+    /// longer than [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES)
+    /// fails `start_slo`.
+    pub fn relay_state(mut self, relay_state: RelayState) -> Self {
+        self.relay_state = Some(relay_state);
         self
     }
 
@@ -628,7 +639,7 @@ enum NameIdManagementTransport {
 /// selected.
 #[derive(Debug, Clone)]
 pub struct StartNameIdManagement {
-    pub(super) relay_state: RelayStateParam,
+    pub(super) relay_state: Option<RelayState>,
     pub(super) identifier_encryption: IdentifierEncryptionPolicy,
     transport: NameIdManagementTransport,
 }
@@ -637,15 +648,20 @@ impl StartNameIdManagement {
     /// Send the request over HTTP-Redirect.
     pub fn redirect() -> Self {
         Self {
-            relay_state: RelayStateParam::absent(),
+            relay_state: None,
             identifier_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
             transport: NameIdManagementTransport::default(),
         }
     }
 
-    /// Set exact RelayState state for the request.
-    pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
-        self.relay_state = relay_state;
+    /// Set the RelayState the ManageNameIDRequest carries. The request
+    /// carries none by default.
+    ///
+    /// The response must return it unchanged. A value longer than
+    /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES) fails the start
+    /// operation.
+    pub fn relay_state(mut self, relay_state: RelayState) -> Self {
+        self.relay_state = Some(relay_state);
         self
     }
 

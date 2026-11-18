@@ -21,10 +21,10 @@ use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService,
     ArtifactUses, AuthnRequest, BrowserInput, DeliveredArtifact, EndpointUrl, EntityId, FormField,
     Idp, IdpConfig, IdpDescriptor, IssuedArtifacts, IssuedMessage, MetadataTrustPolicy, NameId,
-    Outbound, PendingAuthnRequest, Received, RelayStateParam, ReplayPolicy,
-    ResolvedProtocolMessage, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp,
-    SpConfig, SpDescriptor, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
-    Status, Subject, SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
+    Outbound, PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage,
+    RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor,
+    SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status, Subject,
+    SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -59,7 +59,7 @@ fn parties() -> Result<Parties, SamlError> {
 
 fn parties_with_idp_algorithms(algorithms: AlgorithmPolicy) -> Result<Parties, SamlError> {
     parties_with_consumers(
-        AcsEndpoint::post(SP_ACS_POST)?.mark_default(),
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
         AcsEndpoint::artifact(SP_ACS_ARTIFACT)?,
         algorithms,
     )
@@ -70,7 +70,7 @@ fn parties_with_idp_algorithms(algorithms: AlgorithmPolicy) -> Result<Parties, S
 fn unsolicited_parties() -> Result<Parties, SamlError> {
     parties_with_consumers(
         AcsEndpoint::post(SP_ACS_POST)?,
-        AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.mark_default(),
+        AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.with_default(),
         AlgorithmPolicy::default(),
     )
 }
@@ -132,14 +132,14 @@ fn confidential() -> SoapChannel {
 /// provider receives that request.
 fn requested(
     parties: &Parties,
-    relay_state: RelayStateParam,
+    relay_state: Option<RelayState>,
 ) -> Result<(PendingAuthnRequest, Received<AuthnRequest>), Box<dyn std::error::Error>> {
-    let started = parties.sp.start_sso(
-        &parties.idp_metadata,
-        StartSso::redirect()
-            .response_binding(SsoResponseBinding::Artifact)
-            .relay_state(relay_state),
-    )?;
+    let options = StartSso::redirect().response_binding(SsoResponseBinding::Artifact);
+    let options = match relay_state {
+        Some(relay_state) => options.relay_state(relay_state),
+        None => options,
+    };
+    let started = parties.sp.start_sso(&parties.idp_metadata, options)?;
     let url = Url::parse(started.outbound.redirect_url()?)?;
     let request = parties.idp.receive_sso(
         &parties.sp_metadata,
@@ -174,8 +174,8 @@ fn delivered_by(
 fn a_response_delivered_as_an_artifact_establishes_the_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
-    assert_eq!(pending.response_binding(), SsoResponseBinding::Artifact);
+    let (pending, request) = requested(&parties, None)?;
+    assert_eq!(pending.acs().binding(), SsoResponseBinding::Artifact);
     assert_eq!(pending.acs().location().as_str(), SP_ACS_ARTIFACT);
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
@@ -219,7 +219,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
         ],
         ..AlgorithmPolicy::default()
     })?;
-    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (pending, request) = requested(&parties, None)?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
@@ -259,8 +259,8 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
 #[test]
 fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let relay_state = RelayStateParam::try_from_option(Some("state & more=1"))?;
-    let (pending, request) = requested(&parties, relay_state.clone())?;
+    let relay_state = RelayState::try_new("state & more=1")?;
+    let (pending, request) = requested(&parties, Some(relay_state.clone()))?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
@@ -273,7 +273,7 @@ fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Err
 
     let url = Url::parse(response.redirect_url()?)?;
     let delivered = DeliveredArtifact::from_query(url.query().ok_or("missing query")?)?;
-    assert_eq!(delivered.relay_state(), &relay_state);
+    assert_eq!(delivered.relay_state(), Some(&relay_state));
 
     let session = follow_redirect_and_finish(&parties, &pending, &response, &mut issued)?;
     assert_eq!(session.name_id().value(), USER);
@@ -284,11 +284,11 @@ fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Err
 fn an_artifact_redirect_keeps_the_consumer_fragment_after_the_query(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties_with_consumers(
-        AcsEndpoint::post(SP_ACS_POST)?.mark_default(),
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
         AcsEndpoint::artifact(format!("{SP_ACS_ARTIFACT}#done"))?,
         AlgorithmPolicy::default(),
     )?;
-    let (_, request) = requested(&parties, RelayStateParam::absent())?;
+    let (_, request) = requested(&parties, None)?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
@@ -313,22 +313,30 @@ fn an_artifact_redirect_keeps_the_consumer_fragment_after_the_query(
 fn a_relay_state_the_service_provider_did_not_send_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let (pending, request) = requested(
-        &parties,
-        RelayStateParam::try_from_option(Some("expected"))?,
-    )?;
+    let (pending, request) = requested(&parties, Some(RelayState::try_new("expected")?))?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
         subject(),
-        RespondSso::artifact(ArtifactDelivery::redirect(0))
-            .relay_state(RelayStateParam::try_from_option(Some("swapped"))?),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
+    let url = Url::parse(response.redirect_url()?)?;
+    let swapped: String = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(url.query_pairs().map(|(name, value)| {
+            let value = if name == "RelayState" {
+                "swapped".into()
+            } else {
+                value
+            };
+            (name, value)
+        }))
+        .finish();
+    let delivered = DeliveredArtifact::from_query(&swapped)?;
 
-    let result = follow_redirect_and_finish(&parties, &pending, &response, &mut issued);
+    let result = resolve_and_finish(&parties, &pending, delivered, &mut issued);
     assert!(matches!(
         saml_error(result),
         Some(SamlError::RelayStateMismatch { .. })
@@ -362,10 +370,16 @@ fn a_received_relay_state_up_to_the_receive_limit_travels_with_the_artifact(
         &mut issued,
     )?;
     let delivered = delivered_by(&response)?;
-    assert_eq!(delivered.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        delivered.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
 
     let session = resolve_and_finish(&parties, &started.pending, delivered, &mut issued)?;
-    assert_eq!(session.relay_state().as_deref(), Some(long.as_str()));
+    assert_eq!(
+        session.relay_state().map(RelayState::as_str),
+        Some(long.as_str())
+    );
     Ok(())
 }
 
@@ -379,7 +393,10 @@ fn a_relay_state_above_the_receive_limit_is_not_delivered() -> Result<(), Box<dy
     };
     let longest = "r".repeat(MAX_RECEIVED_RELAY_STATE_BYTES);
     let delivered = DeliveredArtifact::from_query(&query(longest.clone()))?;
-    assert_eq!(delivered.relay_state().as_deref(), Some(longest.as_str()));
+    assert_eq!(
+        delivered.relay_state().map(RelayState::as_str),
+        Some(longest.as_str())
+    );
     assert!(matches!(
         DeliveredArtifact::from_query(&query("r".repeat(MAX_RECEIVED_RELAY_STATE_BYTES + 1))),
         Err(SamlError::LimitExceeded {
@@ -437,8 +454,8 @@ fn saml_error(result: Result<SsoSession, Box<dyn std::error::Error>>) -> Option<
 fn an_artifact_delivered_in_a_form_establishes_the_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let relay_state = RelayStateParam::try_from_option(Some("form-state"))?;
-    let (pending, request) = requested(&parties, relay_state)?;
+    let relay_state = RelayState::try_new("form-state")?;
+    let (pending, request) = requested(&parties, Some(relay_state))?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
@@ -471,7 +488,7 @@ fn an_artifact_delivered_in_a_form_establishes_the_session(
 fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (pending, request) = requested(&parties, None)?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
@@ -517,7 +534,7 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
 fn an_unsolicited_artifact_response_establishes_the_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = unsolicited_parties()?;
-    let relay_state = RelayStateParam::try_from_option(Some("https://sp.example.com/app"))?;
+    let relay_state = RelayState::try_new("https://sp.example.com/app")?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
@@ -529,7 +546,7 @@ fn an_unsolicited_artifact_response_establishes_the_session(
     assert!(response.redirect_url()?.starts_with(SP_ACS_ARTIFACT));
 
     let delivered = delivered_by(&response)?;
-    assert_eq!(delivered.relay_state(), &relay_state);
+    assert_eq!(delivered.relay_state(), Some(&relay_state));
     let resolved = resolve(&parties, &delivered, &mut issued)?;
     let session = parties.sp.accept_unsolicited_sso(
         &parties.idp_metadata,
@@ -544,7 +561,7 @@ fn an_unsolicited_artifact_response_establishes_the_session(
 fn a_request_for_an_artifact_response_is_not_answered_over_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let (_pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (_pending, request) = requested(&parties, None)?;
     assert_eq!(
         request.message().protocol_binding(),
         Some(SsoResponseBinding::Artifact)
@@ -564,7 +581,7 @@ fn a_request_for_an_artifact_response_is_not_answered_over_post(
 #[test]
 fn a_missing_resolution_service_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let (_pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (_pending, request) = requested(&parties, None)?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     assert!(matches!(
         parties.idp.respond_sso_artifact(
@@ -583,7 +600,7 @@ fn a_missing_resolution_service_is_rejected() -> Result<(), Box<dyn std::error::
 fn a_message_resolved_from_another_artifact_is_rejected() -> Result<(), Box<dyn std::error::Error>>
 {
     let parties = parties()?;
-    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (pending, request) = requested(&parties, None)?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let respond = |issued: &mut IssuedArtifacts| {
         parties.idp.respond_sso_artifact(
@@ -618,7 +635,7 @@ fn a_resolved_response_is_not_accepted_at_a_post_consumer() -> Result<(), Box<dy
         &parties.idp_metadata,
         StartSso::redirect().response_binding(SsoResponseBinding::Post),
     )?;
-    assert_eq!(started.pending.response_binding(), SsoResponseBinding::Post);
+    assert_eq!(started.pending.acs().binding(), SsoResponseBinding::Post);
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
@@ -668,7 +685,7 @@ fn unsigned_response(
     parties: &Parties,
     issued: &mut IssuedArtifacts,
 ) -> Result<(PendingAuthnRequest, String), Box<dyn std::error::Error>> {
-    let (pending, request) = requested(parties, RelayStateParam::absent())?;
+    let (pending, request) = requested(parties, None)?;
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
@@ -845,11 +862,11 @@ fn service_provider_metadata_publishes_the_artifact_consumer(
 #[test]
 fn a_pending_artifact_login_survives_a_snapshot() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (pending, request) = requested(&parties, None)?;
     let snapshot = pending.snapshot();
-    assert_eq!(snapshot.expected_binding, "artifact");
+    assert_eq!(snapshot.acs_binding, "artifact");
     let restored = PendingAuthnRequest::from_snapshot(snapshot)?;
-    assert_eq!(restored.response_binding(), SsoResponseBinding::Artifact);
+    assert_eq!(restored.acs().binding(), SsoResponseBinding::Artifact);
     assert_eq!(restored.acs(), pending.acs());
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
@@ -891,7 +908,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
             .acs_endpoint(
                 AcsEndpoint::artifact("https://sp.example.com/acs/default-artifact")?
                     .with_index(2)
-                    .mark_default(),
+                    .with_default(),
             )
             .credentials(signing_credentials())
             .build()?,
@@ -942,7 +959,7 @@ fn an_artifact_must_be_delivered_once_and_be_a_saml_v2_artifact(
 ) -> Result<(), Box<dyn std::error::Error>> {
     const ARTIFACT: &str = "AAQAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJyg%3D";
     let delivered = DeliveredArtifact::from_query(&format!("?SAMLart={ARTIFACT}&other=1"))?;
-    assert_eq!(delivered.relay_state(), &RelayStateParam::absent());
+    assert_eq!(delivered.relay_state(), None);
     assert_eq!(delivered.artifact().endpoint_index(), 0);
 
     assert!(matches!(
@@ -1083,7 +1100,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties =
         encrypted_assertion_parties(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?))?;
-    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (pending, request) = requested(&parties, None)?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
@@ -1117,7 +1134,7 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
         IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
             .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
     )?;
-    let (pending, request) = requested(&parties, RelayStateParam::absent())?;
+    let (pending, request) = requested(&parties, None)?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(

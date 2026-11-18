@@ -1,25 +1,18 @@
-use super::RelayStateParam;
+use super::RelayState;
 
 /// Typed received message wrapper.
 #[derive(Debug, Clone)]
 pub struct Received<Message> {
     message: Message,
-    relay_state: RelayStateParam,
+    relay_state: Option<RelayState>,
 }
 
 impl<Message> Received<Message> {
-    /// Create a received message wrapper with absent RelayState.
-    pub fn new(message: Message) -> Self {
+    pub(crate) fn new(message: Message, relay_state: Option<RelayState>) -> Self {
         Self {
             message,
-            relay_state: RelayStateParam::absent(),
+            relay_state,
         }
-    }
-
-    /// Record the RelayState received with the browser message.
-    pub fn with_relay_state(mut self, relay_state: RelayStateParam) -> Self {
-        self.relay_state = relay_state;
-        self
     }
 
     /// Borrow the typed message.
@@ -28,8 +21,8 @@ impl<Message> Received<Message> {
     }
 
     /// RelayState received with the browser message.
-    pub fn relay_state(&self) -> &RelayStateParam {
-        &self.relay_state
+    pub fn relay_state(&self) -> Option<&RelayState> {
+        self.relay_state.as_ref()
     }
 
     /// Consume the wrapper and return the typed message.

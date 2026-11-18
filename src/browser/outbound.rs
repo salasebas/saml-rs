@@ -207,7 +207,7 @@ impl Outbound<SsoResponse> {
     /// `id` is the ID of the stored `<Response>`.
     pub(crate) fn artifact(
         id: String,
-        relay_state: Option<String>,
+        relay_state: Option<RelayState>,
         acs: &str,
         artifact: &Artifact,
         encoding: ArtifactEncoding,
@@ -215,7 +215,9 @@ impl Outbound<SsoResponse> {
         let raw_context = BindingContext {
             id,
             context: artifact.as_str().to_string(),
-            relay_state,
+            relay_state: relay_state
+                .as_ref()
+                .map(|relay_state| relay_state.as_str().to_string()),
             entity_endpoint: acs.to_string(),
             binding: Binding::Artifact,
             request_type: url_params::SAML_ART,
@@ -223,11 +225,6 @@ impl Outbound<SsoResponse> {
             sig_alg: None,
         };
         let id = MessageId::try_new(raw_context.id.clone())?;
-        let relay_state = raw_context
-            .relay_state
-            .clone()
-            .map(RelayState::received)
-            .transpose()?;
         let action = match encoding {
             ArtifactEncoding::Url => {
                 let query = crate::binding::redirect_binding_query(

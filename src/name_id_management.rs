@@ -362,6 +362,7 @@ pub(crate) fn receive(
                 name_id,
                 change,
             },
+            None,
         )))),
         Err(undecryptable) => refused(
             idp.entity_id,

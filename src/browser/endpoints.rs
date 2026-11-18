@@ -3,6 +3,7 @@
 //! References: SAML Metadata 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf>.
 
 use super::bindings::{LogoutBinding, SsoRequestBinding, SsoResponseBinding};
+use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::metadata::Endpoint;
 use crate::model::EndpointUrl;
@@ -75,7 +76,7 @@ impl SsoEndpoint {
     /// Convert to the raw metadata endpoint shape.
     pub fn to_raw(&self) -> Endpoint {
         Endpoint {
-            binding: self.binding.as_binding(),
+            binding: Binding::from(self.binding),
             location: self.url.as_str().to_string(),
             index: None,
             is_default: false,
@@ -161,14 +162,10 @@ impl AcsEndpoint {
         self
     }
 
-    /// Mark this ACS endpoint as the default endpoint in metadata.
-    pub fn mark_default(mut self) -> Self {
+    /// Publish this ACS endpoint as the default one, with
+    /// `isDefault="true"` in metadata.
+    pub fn with_default(mut self) -> Self {
         self.is_default = true;
-        self
-    }
-
-    pub(crate) fn with_default_flag(mut self, is_default: bool) -> Self {
-        self.is_default = is_default;
         self
     }
 
@@ -190,7 +187,7 @@ impl AcsEndpoint {
     /// Convert to the raw metadata endpoint shape.
     pub fn to_raw(&self) -> Endpoint {
         Endpoint {
-            binding: self.binding.as_binding(),
+            binding: Binding::from(self.binding),
             location: self.url.as_str().to_string(),
             index: self.index,
             is_default: self.is_default,
@@ -293,7 +290,7 @@ impl SloEndpoint {
     /// Convert to the raw metadata endpoint shape.
     pub fn to_raw(&self) -> Endpoint {
         Endpoint {
-            binding: self.binding.as_binding(),
+            binding: Binding::from(self.binding),
             location: self.url.as_str().to_string(),
             index: None,
             is_default: false,

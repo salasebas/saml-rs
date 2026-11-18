@@ -53,7 +53,7 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
     for (index, location) in [(0, ACS_A), (1, ACS_B)] {
         let endpoint = AcsEndpoint::new(binding, EndpointUrl::try_new(location)?).with_index(index);
         builder = builder.acs_endpoint(if location == default {
-            endpoint.mark_default()
+            endpoint.with_default()
         } else {
             endpoint
         });

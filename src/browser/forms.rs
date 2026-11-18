@@ -39,8 +39,7 @@ pub struct PostForm {
 }
 
 impl PostForm {
-    /// Create a POST form.
-    pub fn new(action: EndpointUrl, fields: Vec<FormField>) -> Self {
+    pub(crate) fn new(action: EndpointUrl, fields: Vec<FormField>) -> Self {
         Self { action, fields }
     }
 
@@ -54,7 +53,9 @@ impl PostForm {
         &self.fields
     }
 
-    /// Return the first field value for a name.
+    /// Value of the hidden field named `name`, if the form has one.
+    ///
+    /// A form this crate builds has at most one field per name.
     pub fn value(&self, name: &str) -> Option<&str> {
         self.fields
             .iter()
