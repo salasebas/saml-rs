@@ -1550,8 +1550,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
     let snapshot = started.pending.snapshot();
     assert_eq!(snapshot.acs_index, Some(1));
     let restored = PendingAuthnRequest::from_snapshot(snapshot)?;
-    assert_eq!(restored.acs().index(), Some(1));
-    assert_eq!(restored.acs().binding(), SsoResponseBinding::SimpleSign);
+    assert_eq!(restored, started.pending);
 
     let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_sso(&sp_descriptor, request_input, validation())?;

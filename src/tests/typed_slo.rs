@@ -2260,11 +2260,8 @@ fn typed_session_authority_pending_snapshot_round_trips_issuance_window(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
     let restored = PendingLogoutRequest::from_snapshot(started.pending.snapshot())?;
-    assert!(restored.not_on_or_after().is_some());
-    assert_eq!(
-        restored.not_on_or_after(),
-        started.pending.not_on_or_after()
-    );
+    assert!(started.pending.not_on_or_after().is_some());
+    assert_eq!(restored, started.pending);
 
     let received = sp.receive_slo(
         &idp_descriptor,

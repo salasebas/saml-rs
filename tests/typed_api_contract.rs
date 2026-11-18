@@ -1,8 +1,8 @@
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, EndpointUrl, Idp, LogoutBinding, MessageId, NameIdCreationRequest,
-    PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    AcsEndpoint, AuthnRequest, EndpointUrl, FormField, Idp, Inbound, LogoutBinding, MessageId,
+    NameIdCreationRequest, PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, RelayState, Saml, SamlError, SamlInstant, SloEndpoint, Sp,
-    SsoEndpoint, SsoRequestBinding, SsoResponseBinding, VerifiedXmlSignature,
+    SsoEndpoint, SsoRequestBinding, SsoResponse, SsoResponseBinding, VerifiedXmlSignature,
     VerifiedXmlSignatureCoverage,
 };
 
@@ -76,6 +76,15 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
     );
     let _ = SsoRequestBinding::Redirect;
     Ok(())
+}
+
+#[test]
+fn typed_api_contract_compares_inbound_messages_by_binding_and_content() {
+    let fields = vec![FormField::new("SAMLResponse", "PHNhbWxwOlJlc3BvbnNlLz4=")];
+    let post: Inbound<SsoResponse> = Inbound::post(fields.clone());
+
+    assert_eq!(post, Inbound::post(fields.clone()));
+    assert_ne!(post, Inbound::simple_sign(fields));
 }
 
 #[test]

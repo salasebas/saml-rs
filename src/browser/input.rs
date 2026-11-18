@@ -116,11 +116,19 @@ impl SoapMessage for LogoutResponse {}
 ///
 /// let _: Inbound<SsoResponse> = Inbound::redirect("SAMLResponse=...");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Inbound<Message> {
     pub(crate) transport: Transport,
     _message: PhantomData<Message>,
 }
+
+impl<Message> PartialEq for Inbound<Message> {
+    fn eq(&self, other: &Self) -> bool {
+        self.transport == other.transport
+    }
+}
+
+impl<Message> Eq for Inbound<Message> {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Transport {

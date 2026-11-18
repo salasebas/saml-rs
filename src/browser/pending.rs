@@ -58,7 +58,7 @@ impl PendingMessage for ManageNameIdRequest {
 /// The start operation returns it in [`Started`]. Store its snapshot with the
 /// user's session and rebuild it with `from_snapshot` for the finish
 /// operation, which checks that the response answers this request.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Pending<Message: PendingMessage> {
     request_id: MessageId,
     relay_state: Option<RelayState>,
@@ -66,6 +66,24 @@ pub struct Pending<Message: PendingMessage> {
     details: Message::Details,
     _message: PhantomData<Message>,
 }
+
+impl<Message: PendingMessage> PartialEq for Pending<Message> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            request_id,
+            relay_state,
+            peer_entity_id,
+            details,
+            _message,
+        } = self;
+        *request_id == other.request_id
+            && *relay_state == other.relay_state
+            && *peer_entity_id == other.peer_entity_id
+            && *details == other.details
+    }
+}
+
+impl<Message: PendingMessage> Eq for Pending<Message> {}
 
 /// Pending AuthnRequest correlation state.
 pub type PendingAuthnRequest = Pending<AuthnRequest>;
