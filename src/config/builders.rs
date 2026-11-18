@@ -8,6 +8,7 @@ use crate::idp::IdentityProvider;
 use crate::metadata::MetadataLifetime;
 use crate::sp::ServiceProvider;
 use crate::template::validate_tag_prefixes;
+use crate::xml::name::validate_namespace_prefix;
 
 use super::algorithms::{NameIdFormat, SignatureAlgorithm};
 use super::credentials::Credentials;
@@ -148,9 +149,22 @@ impl SpConfigBuilder {
         self
     }
 
+    /// Append `AssertionConsumerService` endpoints after the ones added
+    /// before, in iteration order.
+    pub fn acs_endpoints(mut self, endpoints: impl IntoIterator<Item = AcsEndpoint>) -> Self {
+        self.metadata.acs_endpoints.extend(endpoints);
+        self
+    }
+
     /// Append a `SingleLogoutService` endpoint.
     pub fn slo_endpoint(mut self, endpoint: SloEndpoint) -> Self {
         self.metadata.slo_endpoints.push(endpoint);
+        self
+    }
+
+    /// Append `SingleLogoutService` endpoints, in iteration order.
+    pub fn slo_endpoints(mut self, endpoints: impl IntoIterator<Item = SloEndpoint>) -> Self {
+        self.metadata.slo_endpoints.extend(endpoints);
         self
     }
 
@@ -168,6 +182,12 @@ impl SpConfigBuilder {
     /// Append an advertised NameID format.
     pub fn name_id_format(mut self, format: NameIdFormat) -> Self {
         self.metadata.name_id_formats.push(format);
+        self
+    }
+
+    /// Append advertised NameID formats, in iteration order.
+    pub fn name_id_formats(mut self, formats: impl IntoIterator<Item = NameIdFormat>) -> Self {
+        self.metadata.name_id_formats.extend(formats);
         self
     }
 
@@ -191,6 +211,15 @@ impl SpConfigBuilder {
     /// Append an entity-level contact.
     pub fn contact(mut self, contact: crate::metadata::ContactPerson) -> Self {
         self.metadata.contacts.push(contact);
+        self
+    }
+
+    /// Append entity-level contacts, in iteration order.
+    pub fn contacts(
+        mut self,
+        contacts: impl IntoIterator<Item = crate::metadata::ContactPerson>,
+    ) -> Self {
+        self.metadata.contacts.extend(contacts);
         self
     }
 
@@ -411,9 +440,22 @@ impl IdpConfigBuilder {
         self
     }
 
+    /// Append `SingleSignOnService` endpoints after the ones added before, in
+    /// iteration order.
+    pub fn sso_endpoints(mut self, endpoints: impl IntoIterator<Item = SsoEndpoint>) -> Self {
+        self.metadata.sso_endpoints.extend(endpoints);
+        self
+    }
+
     /// Append a `SingleLogoutService` endpoint.
     pub fn slo_endpoint(mut self, endpoint: SloEndpoint) -> Self {
         self.metadata.slo_endpoints.push(endpoint);
+        self
+    }
+
+    /// Append `SingleLogoutService` endpoints, in iteration order.
+    pub fn slo_endpoints(mut self, endpoints: impl IntoIterator<Item = SloEndpoint>) -> Self {
+        self.metadata.slo_endpoints.extend(endpoints);
         self
     }
 
@@ -442,6 +484,12 @@ impl IdpConfigBuilder {
         self
     }
 
+    /// Append advertised NameID formats, in iteration order.
+    pub fn name_id_formats(mut self, formats: impl IntoIterator<Item = NameIdFormat>) -> Self {
+        self.metadata.name_id_formats.extend(formats);
+        self
+    }
+
     /// Set the order of the `<IDPSSODescriptor>` element groups in generated
     /// metadata.
     ///
@@ -462,6 +510,15 @@ impl IdpConfigBuilder {
     /// Append an entity-level contact.
     pub fn contact(mut self, contact: crate::metadata::ContactPerson) -> Self {
         self.metadata.contacts.push(contact);
+        self
+    }
+
+    /// Append entity-level contacts, in iteration order.
+    pub fn contacts(
+        mut self,
+        contacts: impl IntoIterator<Item = crate::metadata::ContactPerson>,
+    ) -> Self {
+        self.metadata.contacts.extend(contacts);
         self
     }
 
@@ -567,7 +624,11 @@ fn validate_shared_policy(
     validate_tag_prefixes(
         &templates.tag_prefix_protocol,
         &templates.tag_prefix_assertion,
-    )
+    )?;
+    if let Some(signature) = &templates.signature_config {
+        validate_namespace_prefix("SignatureConfig.prefix XML prefix", &signature.prefix)?;
+    }
+    Ok(())
 }
 
 fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {

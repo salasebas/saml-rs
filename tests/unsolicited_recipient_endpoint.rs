@@ -57,16 +57,14 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
             endpoint
         })
     };
-    let builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs(0, ACS_A)?)
-        .acs_endpoint(acs(1, ACS_B)?);
     let other = AcsEndpoint::new(
         other_binding(binding)?,
         EndpointUrl::try_new(OTHER_BINDING)?,
     )
     .with_index(2);
     Ok(Saml::sp(
-        builder
-            .acs_endpoint(other)
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs(0, ACS_A)?)
+            .acs_endpoints([acs(1, ACS_B)?, other])
             .credentials(signing_credentials())
             .build()?,
     ))

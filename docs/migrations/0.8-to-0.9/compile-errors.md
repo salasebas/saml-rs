@@ -284,8 +284,9 @@ let sp = Saml::sp(config);
 first SSO endpoint. Each other metadata field has a builder setter:
 `acs_endpoint`, `sso_endpoint`, `slo_endpoint`, `artifact_resolution_service`,
 `manage_name_id_service`, `name_id_format`, and `contact` append one entry
-each, in call order. `elements_order`, `organization`, `error_url`, and
-`metadata_lifetime` set the rest.
+each, in call order. `acs_endpoints`, `sso_endpoints`, `slo_endpoints`,
+`name_id_formats`, and `contacts` append several. `elements_order`,
+`organization`, `error_url`, and `metadata_lifetime` set the rest.
 Policy fields have the setters `credentials`, `validation`, `algorithms`,
 `xml`, `templates`, and, on the identity provider, `issuance_lifetime`.
 
@@ -376,8 +377,14 @@ can no longer be expressed:
 
 - A passphrase without its key. `build()` used to reject it with
   `SamlError::MissingKey`; now the code does not compile.
-- A signing key without a signing certificate, which `build()` rejected with
-  `SamlError::MissingKey("signing_certificate")` when the policy signed.
+- A signing key without a signing certificate. `build()` rejected it with
+  `SamlError::MissingKey("signing_certificate")` only for a service provider
+  that signs AuthnRequests. Other signing, such as an HTTP-Redirect logout
+  message, used the key alone. Give `with_signing_credential` the matching
+  certificate, which your metadata then publishes.
+- A signing certificate without a signing key. To publish a certificate you do
+  not sign with, such as the next one in a rollover, pass it to
+  `with_additional_signing_certificate`.
 - A decryption key without an encryption certificate, or an encryption
   certificate without a decryption key. Give `with_decryption_credential` the
   certificate that peers encrypt for. That certificate is published in your

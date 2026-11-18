@@ -10,9 +10,9 @@ use saml_rs::{
     DigestAlgorithm, EndpointUrl, EntityId, IdpConfig, IdpMetadataElement, IdpValidationPolicy,
     KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService,
     MaskGenerationFunction, NameIdCreationPolicy, NameIdFormat, PrivateKeyPem,
-    ResponseSignaturePolicy, Saml, SamlError, SignatureAlgorithm, SloEndpoint, SpConfig,
-    SpMetadataElement, SpValidationPolicy, SsoEndpoint, TemplatePolicy, TransformAlgorithm,
-    X509Credential, XmlPolicy, XmlSignatureProfile,
+    ResponseSignaturePolicy, Saml, SamlError, SignatureAlgorithm, SignatureConfig, SloEndpoint,
+    SpConfig, SpMetadataElement, SpValidationPolicy, SsoEndpoint, TemplatePolicy,
+    TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 
 use saml_rs::raw::EntitySetting;
@@ -603,28 +603,49 @@ fn sp_builder_rejects_two_acs_endpoints_with_the_same_index(
 #[test]
 fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let templates = TemplatePolicy {
-        tag_prefix_protocol: "saml:p".into(),
-        ..TemplatePolicy::default()
-    };
-    let sp = SpConfig::builder(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        AcsEndpoint::post("https://sp.example.com/acs")?,
-    )
-    .validation(SpValidationPolicy::compatibility())
-    .templates(templates.clone())
-    .build();
-    let idp = IdpConfig::builder(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        SsoEndpoint::post("https://idp.example.com/sso")?,
-    )
-    .validation(IdpValidationPolicy::compatibility())
-    .templates(templates)
-    .build();
+    for (templates, expected) in [
+        (
+            TemplatePolicy {
+                tag_prefix_protocol: "saml:p".into(),
+                ..TemplatePolicy::default()
+            },
+            "protocol tag prefix must be an XML NCName",
+        ),
+        (
+            TemplatePolicy {
+                signature_config: Some(SignatureConfig {
+                    prefix: "ds:p".into(),
+                    ..SignatureConfig::default()
+                }),
+                ..TemplatePolicy::default()
+            },
+            "SignatureConfig.prefix XML prefix must be an XML NCName",
+        ),
+    ] {
+        let sp = SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(SpValidationPolicy::compatibility())
+        .templates(templates.clone())
+        .build();
+        let idp = IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .validation(IdpValidationPolicy::compatibility())
+        .templates(templates)
+        .build();
 
-    let expected = "protocol tag prefix must be an XML NCName";
-    assert!(matches!(sp, Err(SamlError::Invalid(message)) if message == expected));
-    assert!(matches!(idp, Err(SamlError::Invalid(message)) if message == expected));
+        assert!(
+            matches!(&sp, Err(SamlError::Invalid(message)) if message == expected),
+            "{sp:?}"
+        );
+        assert!(
+            matches!(&idp, Err(SamlError::Invalid(message)) if message == expected),
+            "{idp:?}"
+        );
+    }
     Ok(())
 }
 

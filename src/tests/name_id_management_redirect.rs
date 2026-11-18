@@ -65,7 +65,7 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn idp_with_formats(formats: &[NameIdFormat]) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let mut builder = IdpConfig::builder(
+    let builder = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::redirect(IDP_SSO)?,
     )
@@ -73,10 +73,8 @@ fn idp_with_formats(formats: &[NameIdFormat]) -> Result<Saml<saml_rs::Idp>, Saml
         IDP_MANAGE,
     )?))
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::recommended());
-    for format in formats {
-        builder = builder.name_id_format(format.clone());
-    }
+    .validation(IdpValidationPolicy::recommended())
+    .name_id_formats(formats.iter().cloned());
     Ok(Saml::idp(builder.build()?))
 }
 

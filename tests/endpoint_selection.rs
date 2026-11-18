@@ -47,11 +47,12 @@ fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn idp_with_sso(first: &str, more: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let mut builder =
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?, SsoEndpoint::post(first)?);
-    for url in more {
-        builder = builder.sso_endpoint(SsoEndpoint::post(*url)?);
-    }
+    let more = more
+        .iter()
+        .map(|url| SsoEndpoint::post(*url))
+        .collect::<Result<Vec<_>, _>>()?;
+    let builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?, SsoEndpoint::post(first)?)
+        .sso_endpoints(more);
     Ok(Saml::idp(
         builder
             .credentials(signing_credentials())

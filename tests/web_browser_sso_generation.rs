@@ -795,7 +795,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
         .validation(signed_authn_request_idp_validation())
         .xml(encryption)
         .templates(saml_rs::TemplatePolicy {
-            tag_prefix_assertion: "saml2".into(),
+            tag_prefix_assertion: "é".into(),
             ..saml_rs::TemplatePolicy::default()
         })
         .build()?,
@@ -810,7 +810,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
 
     let xml = response_xml(&response)?;
-    assert!(xml.contains("<saml2:EncryptedAssertion "), "{xml}");
+    assert!(xml.contains("<é:EncryptedAssertion "), "{xml}");
     assert!(!xml.contains("<saml:EncryptedAssertion"), "{xml}");
     Ok(())
 }

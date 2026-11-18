@@ -49,18 +49,19 @@ fn idp(
     validation_policy: IdpValidationPolicy,
     slo_urls: &[&str],
 ) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let mut builder = IdpConfig::builder(
-        EntityId::try_new(IDP_ENTITY_ID)?,
-        SsoEndpoint::post(IDP_SSO)?,
-    );
-    for url in slo_urls {
-        builder = builder.slo_endpoint(SloEndpoint::post(*url)?);
-    }
+    let slo_endpoints = slo_urls
+        .iter()
+        .map(|url| SloEndpoint::post(*url))
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(Saml::idp(
-        builder
-            .credentials(signing_credentials())
-            .validation(validation_policy)
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO)?,
+        )
+        .slo_endpoints(slo_endpoints)
+        .credentials(signing_credentials())
+        .validation(validation_policy)
+        .build()?,
     ))
 }
 

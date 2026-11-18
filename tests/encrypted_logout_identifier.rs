@@ -88,22 +88,19 @@ fn sp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    let mut builder = SpConfig::builder(
-        EntityId::try_new(SP_ENTITY_ID)?,
-        AcsEndpoint::post(SP_ACS)?.with_default(),
-    );
-    for endpoint in slo_endpoints("sp.example.com")? {
-        builder = builder.slo_endpoint(endpoint);
-    }
     Ok(Saml::sp(
-        builder
-            .credentials(credentials())
-            .validation(SpValidationPolicy {
-                logout,
-                ..SpValidationPolicy::recommended()
-            })
-            .xml(xml(encryption))
-            .build()?,
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .slo_endpoints(slo_endpoints("sp.example.com")?)
+        .credentials(credentials())
+        .validation(SpValidationPolicy {
+            logout,
+            ..SpValidationPolicy::recommended()
+        })
+        .xml(xml(encryption))
+        .build()?,
     ))
 }
 
@@ -119,22 +116,19 @@ fn idp_with_credentials(
     encryption: XmlEncryptionPolicy,
     credentials: Credentials,
 ) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let mut builder = IdpConfig::builder(
-        EntityId::try_new(IDP_ENTITY_ID)?,
-        SsoEndpoint::post(IDP_SSO)?,
-    );
-    for endpoint in slo_endpoints("idp.example.com")? {
-        builder = builder.slo_endpoint(endpoint);
-    }
     Ok(Saml::idp(
-        builder
-            .credentials(credentials)
-            .validation(IdpValidationPolicy {
-                logout,
-                ..IdpValidationPolicy::recommended()
-            })
-            .xml(xml(encryption))
-            .build()?,
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO)?,
+        )
+        .slo_endpoints(slo_endpoints("idp.example.com")?)
+        .credentials(credentials)
+        .validation(IdpValidationPolicy {
+            logout,
+            ..IdpValidationPolicy::recommended()
+        })
+        .xml(xml(encryption))
+        .build()?,
     ))
 }
 

@@ -11,11 +11,11 @@ use crate::binding::xml_escape;
 use crate::config::AssertionElementEncryption;
 use crate::constants::namespace;
 use crate::crypto::keys::load_certificate;
-use crate::crypto::xml_syntax::validate_crypto_xml_prefix;
 use crate::entity::EntitySetting;
 use crate::error::{crypto_err, SamlError};
 use crate::xml::dom;
 use crate::xml::fragment::standalone_element;
+use crate::xml::name::validate_namespace_prefix;
 use bergshamra::xml::{Document as XmlDocument, NodeId};
 use bergshamra::{encrypt, EncContext, KeysManager};
 
@@ -105,7 +105,7 @@ pub(crate) fn encrypt_assertion_with_key_transport(
     tag_prefix: &str,
 ) -> Result<String, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
-    validate_crypto_xml_prefix("EncryptedAssertion", tag_prefix)?;
+    validate_namespace_prefix("EncryptedAssertion XML prefix", tag_prefix)?;
     let doc = dom::parse_document(xml, crate::XmlLimits::default())?;
     let assertion = doc
         .root

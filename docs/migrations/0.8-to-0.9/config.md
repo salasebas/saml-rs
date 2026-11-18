@@ -19,7 +19,10 @@ without `sso_endpoint`.
 `AssertionConsumerService` endpoint, and `IdpConfig::builder(entity_id, sso)`
 takes the first `SingleSignOnService` endpoint. The metadata schema requires
 one of each, so a config without one no longer compiles. `acs_endpoint` and
-`sso_endpoint` append the next endpoints, as before.
+`sso_endpoint` append the next endpoints, as before, and `acs_endpoints` and
+`sso_endpoints` append several. `mark_default` is now `with_default`, as
+[Rename the remaining calls](browser-transport.md#rename-the-remaining-calls)
+describes.
 
 **Upgrade:** move the first `acs_endpoint` or `sso_endpoint` argument into
 `builder`:
@@ -27,7 +30,7 @@ one of each, so a config without one no longer compiles. `acs_endpoint` and
 ```rust
 // Before
 let sp = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-    .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.with_default())
+    .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.mark_default())
     .acs_endpoint(AcsEndpoint::artifact("https://sp.example.com/acs/artifact")?)
     .build()?;
 
@@ -47,15 +50,17 @@ Remove the `MissingMetadata` arms that handled a missing endpoint from
 
 **Affects:** every call to `Saml::sp` and `Saml::idp`.
 
-**Before:** both returned `Result`. `build()` had already generated the
-metadata and built the provider to check the config, so the `Result` was never
-an error, and the facade generated the same metadata again.
+**Before:** both returned `Result`. They generated the metadata, so a config
+that `build()` accepted could still fail there, for example with two ACS
+endpoints that share an index.
 
-**Now:** the built config keeps the provider that `build()` made.
-`Saml::sp(config)` returns `Saml<Sp>` and `Saml::idp(config)` returns
-`Saml<Idp>`.
+**Now:** `build()` generates the metadata, returns its errors as
+[section 6](metadata.md#6-handle-metadata-errors-from-build) lists, and keeps
+the provider it made. `Saml::sp(config)` returns `Saml<Sp>` and
+`Saml::idp(config)` returns `Saml<Idp>`.
 
-**Upgrade:** delete the `?`, or the error handling, after the call:
+**Upgrade:** handle metadata errors where you call `build()`. Then delete the
+`?`, or the error handling, after `Saml::sp` and `Saml::idp`:
 
 ```rust
 // Before
@@ -67,8 +72,8 @@ let sp = Saml::sp(config);
 
 A function that returned `Saml::sp(..)` as its `Result` wraps it in `Ok`.
 
-The `Debug` output of `SpConfig` and `IdpConfig` lists the same fields and
-ends with `..`, for the provider it leaves out. Update a snapshot that
+The `Debug` output of `SpConfig` and `IdpConfig` shows the 0.9 field names
+and ends with `..`, for the provider it leaves out. Update a snapshot that
 compares it.
 
 ## Publish an SP name identifier management endpoint by URL
@@ -102,8 +107,9 @@ let builder = builder.manage_name_id_service(EndpointUrl::try_new(
 **Affects:** callers that pass `elements_order` to `SpConfigBuilder` or
 `IdpConfigBuilder`, or read it back.
 
-**Before:** `elements_order` took a `Vec<String>`, and `build()` returned
-`SamlError::Invalid` for an unknown name.
+**Before:** `elements_order` took a `Vec<String>`. Generation ignored an
+unknown name and wrote a repeated group again, as
+[section 8](metadata.md#8-update-metadata-element-orders) describes.
 
 **Now:** `SpConfigBuilder::elements_order` takes an iterator of
 `SpMetadataElement`, and `IdpConfigBuilder::elements_order` takes an iterator
@@ -261,3 +267,22 @@ as the old field did. The raw `EntitySetting` keeps its field.
 `tag_prefix_assertion`, an encrypted response now uses the assertion prefix.
 The namespace is the same, so a peer that reads namespaces reads the same
 element.
+
+## Fix a signature prefix that `build()` now rejects
+
+**Affects:** callers that set `TemplatePolicy::signature_config`.
+
+**Before:** `build()` accepted any `SignatureConfig::prefix`. A prefix that is
+not an XML NCName, such as `ds:sig`, failed when the first message was
+signed. Signing and encryption accepted only ASCII prefixes, while templates
+accepted every NCName.
+
+**Now:** `build()` returns `SamlError::Invalid` with
+`SignatureConfig.prefix XML prefix must be an XML NCName` for such a prefix.
+Every generated prefix follows one rule: an NCName other than `xml` and
+`xmlns`. Signing and encryption now accept a non-ASCII NCName, and their
+messages say `must be an XML NCName` in place of `contains an invalid
+character`.
+
+**Upgrade:** use an NCName, such as `ds`, and update a check that compares
+the old message.

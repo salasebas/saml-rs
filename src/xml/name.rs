@@ -2,6 +2,8 @@
 //!
 //! Both use the XML 1.0 Fifth Edition name characters.
 
+use crate::error::SamlError;
+
 fn is_name_start_char(value: char) -> bool {
     matches!(
         value,
@@ -39,6 +41,24 @@ fn is_name_char(value: char) -> bool {
 pub(crate) fn is_ncname(value: &str) -> bool {
     let mut chars = value.chars();
     chars.next().is_some_and(is_name_start_char) && chars.all(is_name_char)
+}
+
+/// Check that `prefix` can be declared for a generated element: an NCName
+/// other than `xml` and `xmlns`, which Namespaces in XML 1.0 §3 reserves.
+/// `label` names the prefix in the error.
+pub(crate) fn validate_namespace_prefix(label: &str, prefix: &str) -> Result<(), SamlError> {
+    if prefix.is_empty() {
+        return Err(SamlError::Invalid(format!("{label} cannot be empty")));
+    }
+    if matches!(prefix, "xml" | "xmlns") {
+        return Err(SamlError::Invalid(format!(
+            "{label} `{prefix}` is reserved"
+        )));
+    }
+    if !is_ncname(prefix) {
+        return Err(SamlError::Invalid(format!("{label} must be an XML NCName")));
+    }
+    Ok(())
 }
 
 /// Whether `value` is an `xs:Name`: an XML name, where a colon is a name

@@ -20,8 +20,6 @@ pub mod sign;
 pub(crate) mod signature_profile;
 #[cfg(crypto)]
 pub mod verify;
-#[cfg(crypto)]
-mod xml_syntax;
 
 pub use backend::XmlSecurityBackend;
 #[cfg(crypto)]
