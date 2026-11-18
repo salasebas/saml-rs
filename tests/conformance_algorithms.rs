@@ -7,6 +7,8 @@ use base64::Engine;
 use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+use saml_rs::Rsa15KeyTransportPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequest, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
@@ -17,8 +19,9 @@ use saml_rs::{
     TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
-    Attribute, AttributeValue, Attributes, DataEncryptionAlgorithm, DigestAlgorithm,
-    KeyEncryptionAlgorithm, MaskGenerationFunction, XmlEncryptionPolicy,
+    AssertionEncryptionPolicy, Attribute, AttributeEncryptionPolicy, AttributeValue, Attributes,
+    DataEncryptionAlgorithm, DigestAlgorithm, IdentifierEncryptionPolicy, KeyEncryptionAlgorithm,
+    MaskGenerationFunction, XmlEncryptionPolicy,
 };
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::{HmacSecret, SignatureAlgorithm};
@@ -74,7 +77,10 @@ fn rsa(algorithms: AlgorithmPolicy) -> Side {
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_assertions() -> XmlPolicy {
     XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     }
 }
@@ -238,12 +244,24 @@ fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn
 {
     for (encryption, wrapper) in [
         (
-            XmlEncryptionPolicy::encrypt_assertions(),
+            XmlEncryptionPolicy {
+                assertions: AssertionEncryptionPolicy::EncryptAssertions,
+                ..XmlEncryptionPolicy::default()
+            },
             "EncryptedAssertion",
         ),
-        (XmlEncryptionPolicy::encrypt_ids(), "EncryptedID"),
         (
-            XmlEncryptionPolicy::encrypt_attributes(),
+            XmlEncryptionPolicy {
+                identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+                ..XmlEncryptionPolicy::default()
+            },
+            "EncryptedID",
+        ),
+        (
+            XmlEncryptionPolicy {
+                attributes: AttributeEncryptionPolicy::EncryptAttributes,
+                ..XmlEncryptionPolicy::default()
+            },
             "EncryptedAttribute",
         ),
     ] {
@@ -760,9 +778,10 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
                     ..AlgorithmPolicy::default()
                 }),
                 XmlPolicy {
-                    encryption: encrypted_assertions()
-                        .encryption
-                        .with_rsa15_key_transport_decryption_allowed(),
+                    encryption: XmlEncryptionPolicy {
+                        rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
+                        ..encrypted_assertions().encryption
+                    },
                     ..XmlPolicy::default()
                 },
             )?;
@@ -785,8 +804,14 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
         ..AlgorithmPolicy::default()
     };
     for encryption in [
-        XmlEncryptionPolicy::encrypt_assertions(),
-        XmlEncryptionPolicy::encrypt_ids(),
+        XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
+        XmlEncryptionPolicy {
+            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+            ..XmlEncryptionPolicy::default()
+        },
     ] {
         let default = peers(
             rsa(AlgorithmPolicy::default()),
@@ -811,7 +836,10 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
             rsa(AlgorithmPolicy::default()),
             rsa(rsa15.clone()),
             XmlPolicy {
-                encryption: encryption.with_rsa15_key_transport_decryption_allowed(),
+                encryption: XmlEncryptionPolicy {
+                    rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
+                    ..encryption
+                },
                 ..XmlPolicy::default()
             },
         )?;

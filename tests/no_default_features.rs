@@ -14,12 +14,12 @@ use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataInput, SpMetadataInput
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, BrowserInput, CertificatePem, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
-    NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, Saml, SamlError,
-    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequest,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
+    EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutSignaturePolicy, LogoutSigning,
+    LogoutSubject, MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy,
+    Saml, SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -312,7 +312,10 @@ fn sp_signed_logout_policy_returns_unsupported_without_default_crypto(
 fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
 
@@ -344,7 +347,10 @@ fn idp_signed_logout_policy_returns_unsupported_without_default_crypto(
 fn idp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
 

@@ -25,7 +25,9 @@ use saml_rs::{
     SubordinateStatusCode,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{CertificatePem, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
+use saml_rs::{
+    AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy,
+};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -45,7 +47,7 @@ fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
-        audience: AudienceValidationPolicy::Validate,
+        audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::recommended()
     }
 }
@@ -763,7 +765,10 @@ fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_reque
 fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn std::error::Error>>
 {
     let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
     let sp = Saml::sp(
@@ -815,7 +820,10 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
 fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
     let encrypted_credentials =
@@ -1259,7 +1267,10 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
 fn typed_error_response_stays_plaintext_when_assertion_encryption_is_on(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
     let sp = sp_with(signing_sp_validation())?;

@@ -619,11 +619,17 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     let parties = parties_with(
         sp_with(
             LogoutPolicy::recommended(),
-            XmlEncryptionPolicy::encrypt_ids(),
+            XmlEncryptionPolicy {
+                identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+                ..XmlEncryptionPolicy::default()
+            },
         )?,
         idp_with(
             LogoutPolicy::recommended(),
-            XmlEncryptionPolicy::encrypt_ids(),
+            XmlEncryptionPolicy {
+                identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+                ..XmlEncryptionPolicy::default()
+            },
         )?,
     )?;
     let started_sso = parties

@@ -174,7 +174,7 @@ fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
-        audience: AudienceValidationPolicy::Validate,
+        audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::recommended()
     }
 }

@@ -58,7 +58,7 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
         .credentials(signing_credentials())
         .validation(SpValidationPolicy {
             assertions: AssertionSignaturePolicy::RequireSigned,
-            audience: AudienceValidationPolicy::Validate,
+            audience: AudienceValidationPolicy::RequireRestriction,
             ..SpValidationPolicy::recommended()
         })
         .build()?,

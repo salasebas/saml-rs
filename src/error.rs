@@ -160,7 +160,7 @@ pub enum ResourceLimit {
     /// [`crate::XmlPolicy::redirect_inflate_max_bytes`].
     InflatedBytes,
     /// Estimated decryption work units per message,
-    /// [`crate::XmlEncryptionPolicy::with_max_decryption_work`].
+    /// [`crate::XmlEncryptionPolicy::max_decryption_work`].
     DecryptionWork,
     /// Bytes of a received `RelayState`,
     /// [`crate::MAX_RECEIVED_RELAY_STATE_BYTES`].

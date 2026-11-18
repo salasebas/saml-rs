@@ -18,13 +18,14 @@ use saml_rs::constants::CertUse;
 use saml_rs::metadata::{IdpMetadata, SpMetadata};
 use saml_rs::util::normalize_cert_string;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeEncryptionPolicy,
-    AttributeNameFormat, AttributeValue, Attributes, AudienceValidationPolicy, AuthnRequest,
-    BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem,
-    ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
-    SsoSession, StartSso, Subject, X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, Attribute,
+    AttributeEncryptionPolicy, AttributeNameFormat, AttributeValue, Attributes,
+    AudienceValidationPolicy, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId,
+    FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso,
+    ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
+    Subject, X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -68,7 +69,7 @@ fn validation() -> SamlValidationContext<'static> {
 fn sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
-        audience: AudienceValidationPolicy::Validate,
+        audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::recommended()
     }
 }
@@ -210,15 +211,20 @@ fn exchange_between(
 }
 
 fn ids_and_attributes() -> XmlEncryptionPolicy {
-    let mut encryption = XmlEncryptionPolicy::encrypt_ids();
-    encryption.attributes = AttributeEncryptionPolicy::EncryptAttributes;
-    encryption
+    XmlEncryptionPolicy {
+        identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+        attributes: AttributeEncryptionPolicy::EncryptAttributes,
+        ..XmlEncryptionPolicy::default()
+    }
 }
 
 #[test]
 fn encrypted_id_carries_the_name_id_to_the_service_provider(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let encryption = XmlEncryptionPolicy::encrypt_ids();
+    let encryption = XmlEncryptionPolicy {
+        identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+        ..XmlEncryptionPolicy::default()
+    };
     let exchange = exchange(encryption, encryption)?;
 
     assert!(
@@ -240,7 +246,10 @@ fn encrypted_id_carries_the_name_id_to_the_service_provider(
 #[test]
 fn encrypted_attribute_carries_each_attribute_to_the_service_provider(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let encryption = XmlEncryptionPolicy::encrypt_attributes();
+    let encryption = XmlEncryptionPolicy {
+        attributes: AttributeEncryptionPolicy::EncryptAttributes,
+        ..XmlEncryptionPolicy::default()
+    };
     let exchange = exchange(encryption, encryption)?;
 
     assert_eq!(exchange.xml.matches("<saml:EncryptedAttribute>").count(), 2);
@@ -294,9 +303,18 @@ fn exchange_encrypted_for(
 
 fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
     [
-        XmlEncryptionPolicy::encrypt_assertions(),
-        XmlEncryptionPolicy::encrypt_ids(),
-        XmlEncryptionPolicy::encrypt_attributes(),
+        XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
+        XmlEncryptionPolicy {
+            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+            ..XmlEncryptionPolicy::default()
+        },
+        XmlEncryptionPolicy {
+            attributes: AttributeEncryptionPolicy::EncryptAttributes,
+            ..XmlEncryptionPolicy::default()
+        },
     ]
 }
 
@@ -312,14 +330,20 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
         AlgorithmPolicy, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,
     };
 
-    let sp = sp(XmlEncryptionPolicy::encrypt_assertions())?;
+    let sp = sp(XmlEncryptionPolicy {
+        assertions: AssertionEncryptionPolicy::EncryptAssertions,
+        ..XmlEncryptionPolicy::default()
+    })?;
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(credentials())
-        .xml(xml(XmlEncryptionPolicy::encrypt_assertions()))
+        .xml(xml(XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        }))
         .algorithms(AlgorithmPolicy {
             key_encryption: KeyEncryptionAlgorithm::RsaOaep {
                 digest: DigestAlgorithm::Sha256,
@@ -486,8 +510,10 @@ fn identifier_and_attribute_encryption_do_not_select_assertion_encryption(
 #[test]
 fn encrypted_elements_round_trip_inside_an_encrypted_assertion(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut encryption = ids_and_attributes();
-    encryption.assertions = XmlEncryptionPolicy::encrypt_assertions().assertions;
+    let encryption = XmlEncryptionPolicy {
+        assertions: AssertionEncryptionPolicy::EncryptAssertions,
+        ..ids_and_attributes()
+    };
     let exchange = exchange(encryption, encryption)?;
 
     assert!(exchange.xml.contains("EncryptedAssertion"));
@@ -514,7 +540,10 @@ fn service_provider_decrypts_encrypted_elements_it_does_not_select(
 fn service_provider_decrypts_an_encrypted_assertion_it_does_not_select(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange(
-        XmlEncryptionPolicy::encrypt_assertions(),
+        XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         XmlEncryptionPolicy::default(),
     )?;
 
@@ -530,7 +559,10 @@ fn service_provider_decrypts_an_encrypted_assertion_it_does_not_select(
 fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std::error::Error>> {
     for sp_encryption in [
         XmlEncryptionPolicy::default(),
-        XmlEncryptionPolicy::encrypt_assertions(),
+        XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
     ] {
         let sp = Saml::sp(
             SpConfig::builder(
@@ -542,7 +574,10 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
             .xml(xml(sp_encryption))
             .build()?,
         );
-        let idp = idp(XmlEncryptionPolicy::encrypt_assertions())?;
+        let idp = idp(XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        })?;
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let started = sp.start_sso(
             &idp_descriptor,
@@ -576,7 +611,10 @@ fn service_provider_that_selects_encrypted_assertions_rejects_a_plaintext_assert
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange(
         XmlEncryptionPolicy::default(),
-        XmlEncryptionPolicy::encrypt_assertions(),
+        XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
     )?;
     match exchange.session {
         Err(SamlError::EncryptionRequired {
@@ -591,7 +629,10 @@ fn service_provider_that_selects_encrypted_id_rejects_a_plaintext_name_id(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange(
         XmlEncryptionPolicy::default(),
-        XmlEncryptionPolicy::encrypt_ids(),
+        XmlEncryptionPolicy {
+            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+            ..XmlEncryptionPolicy::default()
+        },
     )?;
     match exchange.session {
         Err(SamlError::EncryptionRequired { element: "NameID" }) => Ok(()),
@@ -602,7 +643,13 @@ fn service_provider_that_selects_encrypted_id_rejects_a_plaintext_name_id(
 #[test]
 fn service_provider_that_selects_encrypted_attribute_rejects_a_plaintext_attribute(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange(XmlEncryptionPolicy::encrypt_ids(), ids_and_attributes())?;
+    let exchange = exchange(
+        XmlEncryptionPolicy {
+            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+            ..XmlEncryptionPolicy::default()
+        },
+        ids_and_attributes(),
+    )?;
     match exchange.session {
         Err(SamlError::EncryptionRequired {
             element: "Attribute",
@@ -615,8 +662,14 @@ fn service_provider_that_selects_encrypted_attribute_rejects_a_plaintext_attribu
 fn service_provider_builder_requires_a_decryption_key_for_encrypted_elements(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for encryption in [
-        XmlEncryptionPolicy::encrypt_ids(),
-        XmlEncryptionPolicy::encrypt_attributes(),
+        XmlEncryptionPolicy {
+            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+            ..XmlEncryptionPolicy::default()
+        },
+        XmlEncryptionPolicy {
+            attributes: AttributeEncryptionPolicy::EncryptAttributes,
+            ..XmlEncryptionPolicy::default()
+        },
     ] {
         let built = SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -645,8 +698,11 @@ const UNSIGNED_SIBLING: &str = concat!(
 #[test]
 fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut encryption = XmlEncryptionPolicy::encrypt_ids();
-    encryption.assertions = XmlEncryptionPolicy::encrypt_assertions().assertions;
+    let encryption = XmlEncryptionPolicy {
+        assertions: AssertionEncryptionPolicy::EncryptAssertions,
+        identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+        ..XmlEncryptionPolicy::default()
+    };
     let sp = sp_with(
         encryption,
         SpValidationPolicy {

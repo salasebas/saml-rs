@@ -94,7 +94,7 @@ fn common_setting(
         allow_rsa15_key_transport_decryption: xml
             .encryption
             .allows_rsa15_key_transport_decryption(),
-        max_decryption_work: xml.encryption.max_decryption_work(),
+        max_decryption_work: xml.encryption.max_decryption_work,
         name_id_format: name_id_format_uris(name_id_format),
         private_key: signing.map(|credential| credential.key.as_str().to_string()),
         private_key_pass: signing

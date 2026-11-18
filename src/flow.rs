@@ -144,7 +144,7 @@ pub struct FlowOptions<'a> {
     /// decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
-    /// See [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),

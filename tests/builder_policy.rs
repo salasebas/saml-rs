@@ -666,7 +666,10 @@ fn sp_builder_allows_protocol_only_compatibility_without_credentials(
 fn sp_builder_requires_decryption_key_when_encrypted_assertions_are_selected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
     let result = SpConfig::builder(

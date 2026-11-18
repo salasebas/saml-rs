@@ -44,7 +44,9 @@ use saml_rs::{
     XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy};
+use saml_rs::{
+    AssertionEncryptionPolicy, Credentials, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy,
+};
 use saml_rs::{SignatureAction, SignatureConfig};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use url::Url;
@@ -87,7 +89,7 @@ fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
-        audience: AudienceValidationPolicy::Validate,
+        audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::recommended()
     }
 }
@@ -111,7 +113,10 @@ fn encryption_credentials() -> Credentials {
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_xml_policy() -> XmlPolicy {
     XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     }
 }
@@ -3178,7 +3183,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
     assert_eq!(session.name_id().value(), "alice@example.com");
 
     let validate_omission = Saml::sp(sp_with_validation(SpValidationPolicy {
-        audience: AudienceValidationPolicy::Validate,
+        audience: AudienceValidationPolicy::RequireRestriction,
         ..recommended_sso_accept_validation()
     })?);
     match validate_omission.finish_sso(

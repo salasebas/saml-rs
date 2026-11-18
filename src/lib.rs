@@ -450,10 +450,10 @@ pub use config::{
     IdpValidationPolicy, KeyEncryptionAlgorithm, LoginResponseAttribute, LoginResponseTemplate,
     LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService, MaskGenerationFunction,
     MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
-    ResponseSignaturePolicy, SignatureAction, SignatureAlgorithm, SignatureConfig, SpConfig,
-    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpMetadataElement, SpValidationPolicy,
-    TemplatePolicy, TransformAlgorithm, X509Credential, XmlEncryptionPolicy, XmlLimits, XmlPolicy,
-    XmlSignatureProfile,
+    ResponseSignaturePolicy, Rsa15KeyTransportPolicy, SignatureAction, SignatureAlgorithm,
+    SignatureConfig, SpConfig, SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpMetadataElement,
+    SpValidationPolicy, TemplatePolicy, TransformAlgorithm, X509Credential, XmlEncryptionPolicy,
+    XmlLimits, XmlPolicy, XmlSignatureProfile,
 };
 #[cfg(crypto)]
 pub use crypto::{

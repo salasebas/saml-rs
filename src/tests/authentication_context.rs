@@ -487,7 +487,10 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
     });
     let (sp, idp, sp_descriptor, idp_descriptor) = parties_with(
         saml_rs::XmlPolicy {
-            encryption: saml_rs::XmlEncryptionPolicy::encrypt_assertions(),
+            encryption: saml_rs::XmlEncryptionPolicy {
+                assertions: saml_rs::AssertionEncryptionPolicy::EncryptAssertions,
+                ..saml_rs::XmlEncryptionPolicy::default()
+            },
             ..Default::default()
         },
         credentials,

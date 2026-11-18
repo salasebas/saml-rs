@@ -208,9 +208,10 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
         let configured = config
             .clone()
             .xml(XmlPolicy {
-                encryption: encrypted_xml_policy()
-                    .encryption
-                    .with_max_decryption_work(maximum),
+                encryption: XmlEncryptionPolicy {
+                    max_decryption_work: maximum,
+                    ..encrypted_xml_policy().encryption
+                },
                 ..encrypted_xml_policy()
             })
             .build()?;

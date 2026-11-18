@@ -34,7 +34,7 @@ pub struct AssertionDecryptionOptions {
     pub allow_rsa15_key_transport_decryption: bool,
     /// Maximum estimated decryption work per message, including revealed
     /// encrypted content. Zero refuses encrypted input. See
-    /// [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    /// [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
 }
 

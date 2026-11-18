@@ -37,7 +37,7 @@ pub use policies::{
     AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
     AttributeEncryptionPolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, IdentifierEncryptionPolicy, IdpValidationPolicy, LogoutPolicy,
-    LogoutSignaturePolicy, NameIdCreationPolicy, ResponseSignaturePolicy, SpValidationPolicy,
-    TemplatePolicy, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
+    LogoutSignaturePolicy, NameIdCreationPolicy, ResponseSignaturePolicy, Rsa15KeyTransportPolicy,
+    SpValidationPolicy, TemplatePolicy, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
 };
 pub(crate) use policies::{AssertionElementEncryption, ReceivedEncryptedElements};

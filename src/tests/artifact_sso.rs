@@ -28,7 +28,8 @@ use saml_rs::{
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
-    CertificatePem, IdpConfigBuilder, PrivateKeyPem, SloEndpoint, XmlEncryptionPolicy, XmlPolicy,
+    AssertionEncryptionPolicy, CertificatePem, IdpConfigBuilder, PrivateKeyPem, SloEndpoint,
+    XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -1065,7 +1066,10 @@ fn encrypted_assertion_parties(
     idp: IdpConfigBuilder,
 ) -> Result<Parties, Box<dyn std::error::Error>> {
     let encryption = || XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
     let idp = Saml::idp(

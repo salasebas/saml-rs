@@ -58,7 +58,7 @@ impl SignedExchange {
             .credentials(signing_credentials())
             .validation(SpValidationPolicy {
                 assertions: AssertionSignaturePolicy::RequireSigned,
-                audience: AudienceValidationPolicy::Validate,
+                audience: AudienceValidationPolicy::RequireRestriction,
                 ..SpValidationPolicy::recommended()
             })
             .build()?,

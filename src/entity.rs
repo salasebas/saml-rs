@@ -46,7 +46,7 @@ pub struct EntitySetting {
     /// `SamlError::Unsupported` before any key is decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
-    /// See [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
     /// Default RelayState.
     pub relay_state: String,

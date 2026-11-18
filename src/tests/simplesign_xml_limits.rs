@@ -62,7 +62,7 @@ fn parties() -> TestResult<Parties> {
         .validation(SpValidationPolicy {
             assertions: AssertionSignaturePolicy::RequireSigned,
             authn_requests: AuthnRequestSigningPolicy::Sign,
-            audience: AudienceValidationPolicy::Validate,
+            audience: AudienceValidationPolicy::RequireRestriction,
             ..SpValidationPolicy::recommended()
         })
         .xml(raised_xml_policy())
