@@ -324,14 +324,14 @@ fn typed_bindings_pending_snapshot_reads_a_binding_urn() -> Result<(), Box<dyn s
 #[test]
 fn typed_bindings_pending_logout_request_snapshot_round_trips_supported_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in [
-        LogoutBinding::Redirect,
-        LogoutBinding::Post,
-        LogoutBinding::SimpleSign,
-        LogoutBinding::Soap,
+    for (binding, relay_state) in [
+        (LogoutBinding::Redirect, Some("relay")),
+        (LogoutBinding::Post, Some("relay")),
+        (LogoutBinding::SimpleSign, Some("")),
+        (LogoutBinding::Soap, None),
     ] {
         let snapshot = PendingLogoutRequestSnapshot {
-            relay_state: Some("relay".to_string()),
+            relay_state: relay_state.map(str::to_string),
             binding: Binding::from(binding).short_name().to_string(),
             issued_at: Some("2026-07-04T12:00:00Z".to_string()),
             expires_at: Some("2026-07-04T12:05:00Z".to_string()),
@@ -341,7 +341,7 @@ fn typed_bindings_pending_logout_request_snapshot_round_trips_supported_bindings
         let restored = PendingLogoutRequest::from_snapshot(snapshot.clone())?;
 
         assert_eq!(restored.binding(), binding);
-        assert_eq!(restored.relay_state(), Some(&RelayState::try_new("relay")?));
+        assert_eq!(restored.relay_state().map(RelayState::as_str), relay_state);
         assert_eq!(
             restored.issued_at().map(SamlInstant::as_str),
             Some("2026-07-04T12:00:00Z")
@@ -448,6 +448,20 @@ fn typed_bindings_pending_logout_snapshot_validates_binding() {
             binding: Binding::Artifact,
             ..
         })
+    ));
+}
+
+#[test]
+fn typed_bindings_pending_logout_snapshot_rejects_relay_state_on_soap() {
+    let snapshot = PendingLogoutRequestSnapshot {
+        relay_state: Some(String::new()),
+        binding: Binding::Soap.short_name().to_string(),
+        ..valid_logout_snapshot()
+    };
+
+    assert!(matches!(
+        PendingLogoutRequest::from_snapshot(snapshot),
+        Err(SamlError::ProtocolProfile(_))
     ));
 }
 

@@ -584,7 +584,10 @@ fn embedded_signed_xml(binding: Binding, context: &str) -> Result<Option<String>
     }
 }
 
-fn reject_soap_relay_state(binding: Binding, relay_state: Option<&str>) -> Result<(), SamlError> {
+pub(crate) fn reject_soap_relay_state(
+    binding: Binding,
+    relay_state: Option<&str>,
+) -> Result<(), SamlError> {
     if binding == Binding::Soap && relay_state.is_some() {
         return Err(SamlError::ProtocolProfile(
             "the SOAP binding does not carry RelayState".into(),

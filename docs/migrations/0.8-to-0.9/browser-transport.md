@@ -5,12 +5,13 @@
 This guide covers typed API callers of `saml-rs`, `opensaml`, `samlify`, and
 `samlet`. Apply the sections that match your integration.
 
-## Pass `Option<RelayState>` instead of `RelayStateParam`
+## Replace `RelayStateParam` with `RelayState`
 
-`RelayStateParam` is removed. The typed API takes and returns
-`Option<RelayState>`. `None` is a message without a `RelayState` parameter,
-and an empty `RelayState` is a parameter sent with no value. The two stay
-distinct, as `Absent` and `PresentEmpty` did.
+`RelayStateParam` is removed. The `relay_state` setters take a `RelayState`,
+and the `relay_state` getters return `Option<&RelayState>`. `None` is a
+message without a `RelayState` parameter, and an empty `RelayState` is a
+parameter sent with no value. The two stay distinct, as `Absent` and
+`PresentEmpty` did.
 
 | Before | After |
 | --- | --- |
@@ -149,11 +150,12 @@ A snapshot you stored with 0.8 maps to the new fields as follows:
 | `expected_binding` and `request_binding` of a LogoutRequest | `binding`. Both held the same binding |
 | `issued_at`, `expires_at` of a LogoutRequest | `issued_at`, `expires_at` as strings. Set both or neither |
 | Binding and ACS fields of a ManageNameIDRequest | Removed. The request always uses HTTP-Redirect |
-| `issued_at`, `expires_at` of an AuthnRequest or ManageNameIDRequest | Removed. They were always `None` |
+| `issued_at`, `expires_at` of an AuthnRequest or ManageNameIDRequest | Removed. saml-rs never set them. If you set them with `with_issue_instant` or `with_expiration`, store those values next to the snapshot yourself |
 
 `from_snapshot` still reads a binding as a short name, such as `post`, or as a
 binding URN. A logout snapshot with only one of `issued_at` and `expires_at`
-returns `SamlError::Invalid`.
+returns `SamlError::Invalid`. A SOAP logout snapshot with RelayState returns
+`SamlError::ProtocolProfile`, because a SOAP request carries none.
 
 `PendingPaosSsoSnapshot` renames `request_id` to `id` and `idp_entity_id` to
 `peer_entity_id`, and its `relay_state` is an `Option<String>`.
@@ -170,7 +172,7 @@ The duplicate accessors are removed:
 | `PendingAuthnRequest::request_binding()` | Removed. The binding is the one you passed to `StartSso` |
 | `PendingLogoutRequest::request_binding()`, `response_binding()` | `binding()` |
 | `PendingManageNameIdRequest::request_binding()`, `response_binding()` | Removed. Both returned `NameIdManagementBinding::Redirect` |
-| `issued_at()`, `expires_at()` on `PendingAuthnRequest` or `PendingManageNameIdRequest` | Removed. They were always `None`. `PendingLogoutRequest` keeps them |
+| `issued_at()`, `expires_at()` on `PendingAuthnRequest` or `PendingManageNameIdRequest` | Removed. saml-rs never set them; keep a time you set yourself next to the pending state. `PendingLogoutRequest` keeps them |
 
 `Pending::try_new`, `with_request_binding`, `with_issue_instant`, and
 `with_expiration` are removed. Take pending state from the start operation,

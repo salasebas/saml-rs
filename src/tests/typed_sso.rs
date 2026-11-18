@@ -1820,13 +1820,20 @@ fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
 }
 
 #[test]
-fn respond_sso_refuses_to_replace_the_relay_state_the_request_carried(
+fn respond_sso_returns_the_relay_state_the_request_carried(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for received in ["state-123", ""] {
         let exchange = start_receive_respond_with(
             StartSso::post().relay_state(RelayState::try_new(received)?),
             RespondSso::post(),
         )?;
+        let echoed: Vec<&str> = exchange
+            .response_fields
+            .iter()
+            .filter(|field| field.name() == "RelayState")
+            .map(FormField::value)
+            .collect();
+        assert_eq!(echoed, [received]);
 
         let result = exchange.idp.respond_sso(
             &exchange.sp_descriptor,

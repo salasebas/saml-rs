@@ -274,8 +274,9 @@ impl Pending<LogoutRequest> {
     /// [`MessageId::try_new`], [`RelayState::try_new`], [`EntityId::try_new`],
     /// or [`SamlInstant::try_new`]. Returns [`SamlError::Invalid`] when
     /// `binding` is not a binding name or only one of `issued_at` and
-    /// `expires_at` is set, and [`SamlError::UnsupportedBinding`] when
-    /// `binding` names a binding logout cannot use.
+    /// `expires_at` is set, [`SamlError::UnsupportedBinding`] when `binding`
+    /// names a binding logout cannot use, and [`SamlError::ProtocolProfile`]
+    /// when a SOAP request has RelayState.
     ///
     /// # Examples
     ///
@@ -295,11 +296,17 @@ impl Pending<LogoutRequest> {
     /// # Ok::<(), saml_rs::SamlError>(())
     /// ```
     pub fn from_snapshot(snapshot: PendingLogoutRequestSnapshot) -> Result<Self, SamlError> {
+        let binding: LogoutBinding = snapshot_binding(&snapshot.binding)?;
+        let relay_state = snapshot.relay_state.map(RelayState::try_new).transpose()?;
+        crate::logout::reject_soap_relay_state(
+            Binding::from(binding),
+            relay_state.as_ref().map(RelayState::as_str),
+        )?;
         let pending = Self::new(
             MessageId::try_new(snapshot.id)?,
-            snapshot.relay_state.map(RelayState::try_new).transpose()?,
+            relay_state,
             EntityId::try_new(snapshot.peer_entity_id)?,
-            snapshot_binding(&snapshot.binding)?,
+            binding,
         );
         match (snapshot.issued_at, snapshot.expires_at) {
             (None, None) => Ok(pending),
