@@ -5,9 +5,10 @@ use saml_rs::constants::{
 use saml_rs::flow::FlowOptions;
 use saml_rs::raw::EntitySetting;
 use saml_rs::{
-    CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, HmacSecret,
-    IdpDescriptor, KeyEncryptionAlgorithm, MaskGenerationFunction, MetadataTrustPolicy,
-    NameIdFormat, Passphrase, PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor,
+    AcsEndpoint, CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId,
+    HmacSecret, IdpConfig, IdpDescriptor, IdpValidationPolicy, KeyEncryptionAlgorithm,
+    MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
+    SamlError, SignatureAlgorithm, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     TransformAlgorithm, X509Credential,
 };
 
@@ -65,7 +66,7 @@ fn hmac_secret_is_at_least_the_sha1_output_length() {
 }
 
 #[test]
-fn typed_config_credentials_debug_redacts_every_secret() {
+fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError> {
     let credentials = Credentials::default()
         .with_signing_credential(X509Credential {
             certificate: CertificatePem::new(
@@ -84,10 +85,30 @@ fn typed_config_credentials_debug_redacts_every_secret() {
             )),
         });
 
-    let debug = format!("{credentials:?}");
+    let sp = SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .credentials(credentials.clone())
+    .validation(SpValidationPolicy::compatibility())
+    .build()?;
+    let idp = IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::post("https://idp.example.com/sso")?,
+    )
+    .credentials(credentials.clone())
+    .validation(IdpValidationPolicy::compatibility())
+    .build()?;
 
-    assert!(debug.contains("redacted"), "{debug}");
-    assert!(!debug.contains("for-credentials-debug-test"), "{debug}");
+    for debug in [
+        format!("{credentials:?}"),
+        format!("{sp:?}"),
+        format!("{idp:?}"),
+    ] {
+        assert!(debug.contains("redacted"), "{debug}");
+        assert!(!debug.contains("for-credentials-debug-test"), "{debug}");
+    }
+    Ok(())
 }
 
 #[test]
