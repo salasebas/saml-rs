@@ -24,8 +24,9 @@ parameter sent with no value. The two stay distinct, as `Absent` and
 | `RelayStateMismatch { expected, actual }` with `RelayStateParam` | The same fields as `Option<RelayState>` |
 
 The `relay_state` setters of `StartSso`, `RespondSso`, `StartSlo`,
-`StartNameIdManagement`, and `StartPaosSso` take a `RelayState`. To send no
-RelayState, leave the setter out. `finish_name_id_management_redirect` returns
+`StartNameIdManagement`, and `StartPaosSso` take a `RelayState`. A request
+carries no RelayState when you leave its setter out. A response always carries
+the RelayState its request carried, as the next section describes. `finish_name_id_management_redirect` returns
 `Option<RelayState>`.
 
 Before the upgrade, wrap the value and read it back through `as_deref`.

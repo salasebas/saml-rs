@@ -19,7 +19,8 @@ pub const MAX_RECEIVED_RELAY_STATE_BYTES: usize = 4096;
 /// returns `Option<&RelayState>`. `None` is a message without a `RelayState`
 /// parameter, and an empty value is a `RelayState` parameter sent with no
 /// value. The two stay distinct when a value is compared or returned to its
-/// sender. To send no RelayState, leave the setter out.
+/// sender. A request without a setter call carries no RelayState. A
+/// response always carries the RelayState its request carried.
 ///
 /// A value built with [`Self::try_new`] is at most [`MAX_RELAY_STATE_BYTES`].
 /// A value received from a peer is at most [`MAX_RECEIVED_RELAY_STATE_BYTES`].
