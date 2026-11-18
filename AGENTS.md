@@ -8,10 +8,8 @@ work in the repo, not restate the README.
 
 - `src/` contains the implementation. Put protocol, XML, metadata, binding,
   validation, logout, and crypto-adapter changes there.
-- `docs/module-map.md` names the file for typed SSO, assertion acceptance,
-  raw parse, signature verification, validation presets, logout, and the
-  compatibility crates. Read it before searching `flow.rs`, `idp.rs`, `sp.rs`,
-  or `crypto/verify.rs`.
+- `docs/module-map.md` lists the behaviour whose file name does not give it
+  away.
 - `tests/` contains integration tests and committed fixtures.
 - `src/tests/` holds the tests that build signed, encrypted, or malformed
   input with crate-private helpers. They import through `saml_rs::` like
@@ -36,14 +34,18 @@ work in the repo, not restate the README.
 - If a user has local changes, preserve them and work around them.
 - Keep non-mechanical diffs reviewable. If a change grows large, split it into
   the smallest coherent stages.
-- New SAML behavior must follow `docs/standards-conformance.md`.
-- Review judgements for doc comments, caller-visible changes, and stricter
-  receiver rules are in `CODING_STANDARDS.md`.
+- Code, rustdoc, and tests describe current behaviour. A doc that claims to
+  describe current behaviour and disagrees with them is stale: fix it in the
+  same change or report it. Migration guides describe past releases.
+- Report a rule or design choice without a stated reason as an open question
+  instead of following or defending it.
+- API design, naming, error, and review rules are in `CODING_STANDARDS.md`.
 
 ## Standards Conformance
 
 - Read `docs/standards-conformance.md` before adding or changing SAML
   generation, parsing, validation, bindings, profiles, or metadata behavior.
+  It also says how to record a rule in `docs/conformance/`.
 - Cite and verify the applicable OASIS standard, schema, profile/binding, and
   approved errata. Identify the obligated actor, condition, and scope.
 - A producer `MUST` or `MUST NOT` does not automatically require a receiver to
@@ -96,6 +98,9 @@ Do not use `--all-features`. Document-crypto providers are mutually exclusive.
 AWS-LC, FIPS, and provider-specific rustdoc run in the Linux `provider-matrix`
 job in `.github/workflows/ci.yml`.
 
+`codecov/patch` is a signal, not a merge gate. When it is red, the pull
+request names the changed lines that no test runs and says why.
+
 ## Rust Style
 
 - Prefer private modules and explicitly exported public crate API.
@@ -110,8 +115,8 @@ job in `.github/workflows/ci.yml`.
   implementations are expected to use them.
 - Comments describe behavior and API usage. Do not justify why an
   implementation was chosen.
-- The normative note for a claimed feature is its row in `docs/conformance/`.
-  A code comment names the behavior.
+- A claimed rule is recorded as its row in `docs/conformance/`. A code comment
+  names the behavior.
 - Use inline format arguments, collapse nested `if` statements when clear, and
   prefer method references over redundant closures.
 - In tests, return `Result<(), Box<dyn std::error::Error>>` and use `?` instead
@@ -168,5 +173,4 @@ The default five-role triage label vocabulary is used. See
 
 ### Domain docs
 
-Domain documentation uses the single-context layout. See
-`docs/agents/domain.md`.
+Domain terms are in `GLOSSARY.md`. See `docs/agents/domain.md`.

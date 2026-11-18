@@ -33,3 +33,37 @@ Also mark each variant with named fields that only this crate builds, so a
 later field is not a breaking change. A variant that a public trait asks
 callers to return, such as `SamlError::ReplayDetected` for `ReplayCache`,
 stays constructible.
+
+## Method names
+
+These rules apply when an API is added or redesigned.
+
+- A value that is not a dedicated builder configures with
+  `with_foo(self, value) -> Self`, which leaves `foo()` for reading.
+- A single-valued setter replaces its value. For a repeated element, the
+  singular method appends one value and the plural appends an
+  `impl IntoIterator<Item = T>`. Their doc comments start with `Replace`,
+  `Set`, or `Append`.
+
+## Configuration types
+
+- An option that relaxes a rule is named for what it allows, such as
+  `AllowUnsigned`, `AllowWeakAlgorithms`, or `DoNotSign`, not for why it
+  exists.
+- Each hardening is a separate option on the type that owns its check, such as
+  a field of `SpValidationPolicy` or `SamlValidationContext::with_authn_request_age`.
+  There is no bundled strict preset, because callers need the hardenings
+  independently.
+- A validation policy enum implements `Default` only when that value is its
+  field in `recommended()`. Otherwise a field would get a silently different
+  value from the enum than from the preset.
+
+## Errors
+
+- A failure that callers handle differently gets its own `SamlError` variant
+  with typed data, such as `Status`, `ReplayKey`, or `ResourceLimit`, instead
+  of `Invalid(String)`. Callers match the variant, never its message.
+- A lower-level error is kept as the `source`, boxed as
+  `Box<dyn Error + Send + Sync>`. A third-party type or a `From` impl from one
+  never appears in `SamlError`.
+- `Display` says what failed at this layer and leaves the cause to `source`.

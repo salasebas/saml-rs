@@ -1,281 +1,78 @@
 # Standards conformance
 
-This note explains how `saml-rs` interprets requirements from the OASIS SAML
-specifications. It covers new protocol behaviour, validation, rendering,
-metadata, bindings, profiles, and compatibility work. The steps for reviewing
-a change are in
-[How to review a SAML change](how-to-review-saml-behaviour.md).
+How `saml-rs` reads the OASIS SAML specifications when a change adds or alters
+generation, parsing, validation, bindings, profiles, or metadata.
 
-The aim is precise conformance without inventing protocol requirements:
+## Find the rule
 
-- mandatory requirements are always implemented for the applicable scope;
-- recommendations are enabled by default and may be relaxed only through an
-  explicit policy;
-- optional capabilities are exposed intentionally;
-- requirements aimed at one actor are not silently converted into requirements
-  for another actor;
-- behaviour not required by the applicable standards is not presented as OASIS
-  validation.
+The source for a behaviour is the approved specification, schema, and errata
+that govern it. The SAML V2.0 set is listed in
+[Conformance Requirements](https://docs.oasis-open.org/security/saml/v2.0/saml-conformance-2.0-os.pdf)
+and the [OASIS document and schema index](https://docs.oasis-open.org/security/saml/v2.0/).
+The documents most changes need are
+[Core](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf),
+[Bindings](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf),
+[Profiles](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf),
+[Metadata](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf),
+and [approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/).
+A schema takes precedence over a schema listing in prose. A binding or
+profile can narrow or add to Core. A draft is a target only for a feature that
+is explicitly experimental.
 
-## Normative sources
+## Classify the rule
 
-The source for a feature is the exact approved specification, schema, and
-errata that govern it. The links below are a navigation aid, not a whitelist,
-an exhaustive list, or a statement of the crate's current feature support.
+A keyword alone does not classify a rule. Name the actor (producer, receiver,
+identity provider, service provider, metadata publisher or consumer), the
+direction (generate, accept, validate), the condition under which it applies,
+and its scope (Core, a profile, a binding, a message type).
 
-The canonical catalogs for the SAML V2.0 specification set are:
+A rule for one actor does not create a rule for another. A producer `MUST`,
+`MUST NOT`, or `SHOULD` does not make a receiver reject the other forms. A
+receiver rejects only when a schema, a processing rule, a binding, a profile,
+or a conformance requirement makes the input invalid or tells the receiver to
+reject it. When a rule's condition holds, apply the rule at its stated level: a
+receiver still compares an optional `Destination` when it is present.
 
-- [SAML V2.0 Conformance Requirements](https://docs.oasis-open.org/security/saml/v2.0/saml-conformance-2.0-os.pdf),
-  which identifies the documents and schemas that comprise SAML V2.0 and
-  defines its conformance model;
-- the [official OASIS SAML V2.0 document and schema index](https://docs.oasis-open.org/security/saml/v2.0/),
-  which contains the approved documents, schemas, and schema archive.
+## Implement the level
 
-The base specification set commonly relevant to implementation work includes:
+- **Mandatory** (`MUST`, `REQUIRED`, `SHALL`, and their negations): every API
+  that claims the behaviour enforces it, no policy disables it, and a required
+  rejection fails closed with an explicit `SamlError`.
+- **Recommended** (`SHOULD`, `RECOMMENDED`, and their negations): on by
+  default. A deviation is an explicit, narrowly named option that says what it
+  allows, and its rustdoc states the interoperability or security
+  consequence.
+- **Optional** (`MAY`, `OPTIONAL`): an intentional API, option, or feature.
+  Naming a capability in the specification does not mean the crate implements
+  it.
+- **Library policy**: behaviour the standard leaves open, a rule stricter than
+  the standard, or a resource limit. It is never presented as an OASIS
+  requirement.
 
-- [Core](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)
-- [Bindings](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf)
-- [Profiles](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)
-- [Metadata](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)
-- [Authentication Context](https://docs.oasis-open.org/security/saml/v2.0/saml-authn-context-2.0-os.pdf)
-- [Security and Privacy Considerations](https://docs.oasis-open.org/security/saml/v2.0/saml-sec-consider-2.0-os.pdf)
-- the official assertion, protocol, metadata, authentication-context, and
-  profile schemas in the OASIS index
-- [approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/)
+Scope every claim by role, direction, profile, binding, and feature. Parsing an
+element or one step of a flow does not claim the whole profile.
 
-An applicable feature may also be governed by an approved OASIS SAML extension
-or later OASIS specification and by dependent standards such as XML Schema,
-XML Signature, XML Encryption, HTTP, URI, or TLS. Each source applies only
-within its scope, and the record names the exact version and status. A draft
-is not the default SAML requirement. A draft is a target only for an explicitly
-experimental feature.
+## Record it
 
-Requirement-language and dependent-standard references include:
+Each claimed flow has a record in `docs/conformance/`, one row per rule: the
+rule, its level, the section that states it, and the option that controls it.
+The site publishes these records.
 
-- [RFC 2119 requirement levels](https://www.rfc-editor.org/rfc/rfc2119.html)
-- [RFC 8174 capitalization clarification](https://www.rfc-editor.org/rfc/rfc8174.html)
-- [W3C XML Schema](https://www.w3.org/TR/xmlschema-1/)
+A library-policy row states its reason in one sentence: why the looser rule
+cannot be applied. A row without a reason is an open question, not a decision.
+Report it rather than extend or defend it. When the evidence is ambiguous,
+check the schemas, related OASIS documents, errata, and the behaviour of other
+implementations before changing validation. An uncertain reading does not
+become a new rejection.
 
-OASIS SAML Core uses the requirement language defined by RFC 2119. Its schema
-documents take precedence over schema listings in prose when they disagree,
-while normative prose may impose additional constraints beyond the schemas.
+## Review checklist
 
-## Feature-Scoped Conformance
-
-SAML conformance is not a single global switch. The OASIS conformance model
-defines a feature by the combination of a profile, a message exchange or flow,
-and a selected binding. A conformance or support claim must therefore identify
-the applicable scope, including:
-
-- operational mode and role, such as service provider, identity provider,
-  sender, receiver, metadata publisher, or metadata consumer;
-- protocol, message type, and direction;
-- profile and the portion of its flow being implemented;
-- binding;
-- optional capability, attribute profile, or extension, when applicable.
-
-Operational mode and claimed feature are defined in the
-[glossary](../GLOSSARY.md). Parsing or serializing a SAML element, supporting
-a protocol message, or implementing one step of a flow does not by itself
-imply conformance with an entire profile, binding, operational mode, or
-SAML V2.0 as a whole. A broad claim such as "SAML V2.0 conformant" requires
-a documented support matrix that shows the exact claimed features and their
-normative coverage.
-
-This policy applies to every SAML feature that `saml-rs` implements. It neither
-declares the crate's current support nor limits future support. Bindings,
-profiles, operational modes, queries, extensions, and other capabilities may
-be added incrementally, provided each one has an explicit boundary and meets
-all mandatory requirements within the scope it claims. Unsupported and partial
-features must remain explicit rather than being inferred from lower-level XML
-support.
-
-## Requirement Vocabulary
-
-The RFC 2119 terms form three main levels:
-
-| Level | Positive terms | Negative terms |
-| --- | --- | --- |
-| Mandatory | `MUST`, `REQUIRED`, `SHALL` | `MUST NOT`, `SHALL NOT` |
-| Recommended | `SHOULD`, `RECOMMENDED` | `SHOULD NOT`, `NOT RECOMMENDED` |
-| Optional | `MAY`, `OPTIONAL` | — |
-
-Within each row, the terms have the same normative strength:
-
-- `MUST`, `REQUIRED`, and `SHALL` are absolute requirements.
-- `MUST NOT` and `SHALL NOT` are absolute prohibitions.
-- `SHOULD` and `RECOMMENDED` describe the normal behaviour. A deviation requires
-  a valid reason and an understanding of its interoperability and security
-  consequences.
-- `SHOULD NOT` and `NOT RECOMMENDED` describe behaviour that is normally
-  avoided. An exception likewise requires explicit justification.
-- `MAY` and `OPTIONAL` describe behaviour or capabilities that are truly
-  optional.
-
-OASIS also uses labels such as `[Required]` and `[Optional]` when describing
-XML elements and attributes. These commonly express schema presence or
-cardinality rather than a separate requirement level. A field can be optional
-to include while still having mandatory processing rules when it is present.
-
-Only uppercase requirement keywords carry the special RFC meaning. Normative
-schemas and prose can still impose requirements without using one of those
-keywords, so classification must consider the complete applicable text.
-
-## What a rule actually obligates
-
-A keyword is not enough to classify a rule. Classification names all of the
-following:
-
-- **Actor:** producer, sender, receiver, relying party, identity provider,
-  service provider, metadata publisher, metadata consumer, or application.
-- **Direction:** outbound generation, inbound acceptance, inbound validation,
-  or local API behaviour.
-- **Condition:** whether the rule applies only when a field, signature,
-  binding, feature, or prior condition is present.
-- **Scope:** Core, a particular profile, binding, role, message type, or
-  optional extension.
-- **Layer:** XML/schema validity, protocol processing, profile processing,
-  cryptographic processing, or application policy.
-- **Required outcome:** generate, accept, process, verify, ignore, reject, or
-  expose a value.
-
-A requirement for one actor does not create a rejection rule for another
-actor. In particular:
-
-- `MUST generate` does not imply that a receiver `MUST reject` every other
-  representation.
-- `MUST NOT generate` does not imply that a receiver `MUST reject` the prohibited
-  output.
-- `SHOULD` for a producer does not imply that a receiver should reject a
-  producer that deviates.
-
-Inbound rejection belongs in the library only when the applicable schema, Core
-processing rule, binding, profile, conformance requirement, or another
-normative source makes the input invalid or requires the receiver to reject
-it.
-
-Conditional requirements remain mandatory when their condition is true. For
-example, an element may be optional, while a receiver `MUST` perform a
-particular check whenever that element is present.
-
-## What each requirement level means here
-
-### Mandatory conformance
-
-An applicable `MUST`, `REQUIRED`, `SHALL`, `MUST NOT`, or `SHALL NOT`
-requirement has this shape in the library:
-
-- every API that claims the applicable SAML behaviour implements it;
-- a conformant typed flow has no policy that disables it;
-- required XML structure, datatype, namespace, and cardinality rules inside
-  the parser or validator's declared scope are enforced;
-- a mandatory inbound validation rule that requires rejection fails closed
-  with an explicit `SamlError`;
-- the narrowest positive and negative tests prove the requirement;
-- the rule stays inside its actor, condition, and profile.
-
-Raw compatibility APIs can expose lower-level data and unsupported profiles.
-They do not label non-conformant data as validated. A raw escape hatch does
-not weaken the mandatory guarantees of a typed result.
-
-### Recommended conformance
-
-An applicable `SHOULD`, `RECOMMENDED`, `SHOULD NOT`, or `NOT RECOMMENDED`
-requirement has this shape:
-
-- the recommendation is the default;
-- a deviation exists only as an explicit, typed, narrowly named policy or
-  builder option;
-- unrelated recommendations stay separate, rather than sharing one generic
-  `strict` boolean;
-- the relaxed recommendation, and its interoperability or security
-  consequences, are named;
-- a producer recommendation changes generated output and does not by itself
-  become an inbound rejection;
-- the conformant default is visible in API documentation and tests.
-
-Recommended is the preset for claimed features. It is not an implementation
-of SAML V2.0 as a whole. Compatibility is the legacy permissive preset: the
-samlify-port behaviour kept for callers leaving the raw API. It is not an
-alternate interpretation of OASIS, and a recommendation relaxation does not
-use that name.
-
-### Optional capabilities
-
-An applicable `MAY` or `OPTIONAL` behaviour has this shape:
-
-- support, when the capability is in scope, is an intentional API,
-  configuration, builder, or feature flag;
-- naming a capability in the specifications does not imply that this crate
-  implements it;
-- optional wire data stays available when interoperability needs it, even when
-  the library does not otherwise use that data;
-- mandatory processing rules that become active when the optional capability
-  is selected, or the optional field is present, still apply;
-- an unsupported profile stays explicit, rather than appearing as a partial
-  implementation behind ambiguous behaviour.
-
-### Unspecified behaviour and application policy
-
-Terms such as `implementation-dependent`, `application-specific`,
-`profile-specific`, and `unspecified` do not create another RFC requirement
-level. They identify decisions left to an implementation, profile, deployment,
-or caller.
-
-For that kind of behaviour:
-
-- the library does not invent an OASIS rejection rule;
-- when the decision belongs to the caller, the library exposes an application
-  policy or hook;
-- a library default is documented as library policy, not standards conformance;
-- protocol validation stays distinct from resource limits, parser safety, and
-  other implementation-security controls.
-
-Implementation-security controls, such as XML resource limits or disabling an
-unsafe cryptographic backend, can remain library invariants even when they are
-not SAML wire requirements. Their rationale is recorded separately from OASIS
-text. Citing them as if OASIS required a peer's message to be rejected
-misstates the source.
-
-## Interpretation Examples
-
-These examples are illustrative, not exhaustive, and do not define the crate's
-current feature support:
-
-- **Required `IssueInstant`:** The assertion and response schemas declare
-  `IssueInstant` with `use="required"`. Missing values are structurally invalid,
-  so typed inbound flows enforce their presence without a disable switch.
-  SAML's UTC wire-format rule is separate from freshness, clock-skew, and
-  replay policies, which require their own basis.
-- **Producer-only leap-second rule:** SAML Core says implementations `MUST NOT
-  generate` time instants that specify leap seconds. This is an absolute
-  outbound rule, but it does not by itself require receivers to reject an
-  inbound leap-second value. Rejection needs a separate normative receiver
-  rule or an explicitly identified library or application policy.
-- **LogoutRequest expiration:** `LogoutRequest@NotOnOrAfter` is optional for
-  inbound general LogoutRequest processing, and Core says a recipient may
-  discard the message after that instant. saml-rs' fail-closed rejection of an
-  expired value is therefore documented as library policy, not an OASIS
-  receiver `MUST`. The required UTC `IssueInstant` is checked separately and
-  does not imply a library-selected maximum request age.
-- **Optional field with mandatory processing:** `Destination` can be optional
-  in the message schema while a receiver is required to compare it with the
-  actual destination whenever it is present. Configuration may control
-  outbound emission, but it may not disable a mandatory inbound comparison
-  once its condition applies.
-- **Signed HTTP binding destination:** The HTTP-Redirect and HTTP-POST
-  bindings, and the supported HTTP-POST-SimpleSign CD04 binding, require a
-  signed message to contain `Destination` and require the receiver to verify
-  it against the actual endpoint. A typed receiver therefore rejects a missing
-  or mismatched value after authenticating the binding-level message; an
-  Assertion-only signature does not activate this Response-level condition.
-- **CBC-encrypted assertions:** Approved Errata 05 E93 recommends integrity
-  protection before a relying party processes CBC-encrypted SAML data and
-  specifically recommends signing a Response that contains a CBC
-  `EncryptedAssertion`. Typed defaults follow this producer and relying-party
-  recommendation; accepting an unsigned CBC-encrypted Response requires
-  `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc`. Generating one
-  requires `RespondSso::allow_unsigned_encrypted_cbc`.
-
-The working checklist for a change is
-[How to review a SAML change](how-to-review-saml-behaviour.md).
+1. Which section, schema declaration, binding, profile, or erratum governs the
+   behaviour, and which claimed flow does it affect?
+2. Who is obligated, under which condition, and does the text require
+   generation, acceptance, verification, or rejection?
+3. Does the change enforce only that requirement? A stricter receiver rule is
+   library policy, stated in its own sentence in the pull request
+   ([coding standards](../CODING_STANDARDS.md#stricter-than-the-cited-section)).
+4. Is a recommendation on by default, and an optional behaviour opt-in?
+5. Do focused tests cover the boundary of the rule, accepting and rejecting?

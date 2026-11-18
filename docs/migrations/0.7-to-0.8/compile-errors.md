@@ -284,8 +284,8 @@ The catch-all covers future variants. It does not make an unsupported
 algorithm or binding work. Inside saml-rs, the attribute does not require
 catch-all arms. Exhaustive matches can still identify implementations that
 need an update.
-The [extensibility audit](../../research/non-exhaustive-api.md) records why
-closed choices and public-field struct construction remain unchanged.
+The rule for which enums are non-exhaustive is in
+[coding standards](../../../CODING_STANDARDS.md#public-enums-that-can-grow).
 
 If a match only maps variants to URIs, replace it with `as_uri()`:
 

@@ -24,13 +24,15 @@ A disposition is one of:
 - **Prohibited**: a `MUST NOT` cell. The column does not use the feature.
 - **Not implemented, off**: an `OPTIONAL` cell this crate does not implement.
 - **Open issue**: an obligation with a tracked gap.
-- **Exclusion**: the obligated actor is the deployment, not this crate.
+- **Exclusion**: not implemented by this crate, for the reason the row gives,
+  such as the deployment being the obligated actor or the mode not being
+  claimed.
 
 The ECP column of Table 2 is a separate operational mode. The enhanced client
 is not a facade, and this page does not record that column. The IdP Extended
 and SP Extended modes of Table 3, the authorities and requester of Table 4,
 and the attribute profiles are in
-[Extended, authority, and requester modes](extended-and-authority-modes.md).
+[Extended, authority, and requester modes](#extended-authority-and-requester-modes).
 
 ## Feature matrix
 
@@ -52,8 +54,8 @@ and the attribute profiles are in
 | Identity Provider Discovery (cookie) | `MUST` | `MUST` | `OPTIONAL` | `OPTIONAL` | Claimed feature for the IdP and IdP Lite: `remember_identity_provider`. [Identity Provider Discovery](identity-provider-discovery.md). Not implemented, off, for the SP and SP Lite |
 | Metadata Structures | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. Errata 05 E25 and §3.6 below. The crate reads and writes metadata, as in [Metadata and replay](metadata-and-replay.md), and does not elect this option |
 | Metadata Interoperation | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. Errata 05 E25 and §3.7 below |
-| Request for Assertion by Identifier | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. `AssertionIDRequest` is in [Extended, authority, and requester modes](extended-and-authority-modes.md) |
-| SAML URI Binding | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. In [Extended, authority, and requester modes](extended-and-authority-modes.md) |
+| Request for Assertion by Identifier | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. `AssertionIDRequest` is in [Extended, authority, and requester modes](#extended-authority-and-requester-modes) |
+| SAML URI Binding | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. In [Extended, authority, and requester modes](#extended-authority-and-requester-modes) |
 
 The HTTP Redirect rows are claimed for the default build. Bindings §3.4.4.1
 signature rule 5 makes DSAwithSHA1 and RSAwithSHA1 mandatory for the HTTP-Redirect
@@ -100,7 +102,7 @@ unencrypted element there:
   and never generated.
 - An assertion inside `<Advice>` (Core §2.6.1) or `<Evidence>`.
 - Attribute queries and name identifier mapping, in
-  [Extended, authority, and requester modes](extended-and-authority-modes.md).
+  [Extended, authority, and requester modes](#extended-authority-and-requester-modes).
 
 ## SOAP and URI security models
 
@@ -137,3 +139,76 @@ has the rules, including what each backend supports.
 | --- | --- | --- |
 | §5: the server authenticates with an X.509 v3 certificate, and the client checks its identity | The deployment's TLS stack | Exclusion. saml-rs does not terminate TLS |
 | §5.1 and §5.2: `TLS_RSA_WITH_3DES_EDE_CBC_SHA` and the SSL and FIPS counterparts | A TLS-capable or SSL-capable deployment | Exclusion, for the same reason |
+
+## Extended, authority, and requester modes
+
+The inventory of SAML V2.0 Conformance Requirements Table 3 (IdP Extended and
+SP Extended) and Table 4 (SAML Authentication Authority, SAML Attribute
+Authority, SAML Authorization Decision Authority, and SAML Requester), and of
+the attribute profiles that Table 1 lists and no other table names. Each row
+names the level for each column and one disposition.
+
+None of these modes is claimed. Table 3 extends a mode in
+the [feature matrix](#feature-matrix) with two more
+`MUST` rows. Every authority column of Table 4 has `MUST` for Request for
+Assertion by Identifier and for the SAML URI Binding, which are not
+implemented, so no authority mode can be claimed. Every SAML Requester cell is
+`OPTIONAL`.
+
+Normative text is Conformance Requirements, as corrected by Approved
+Errata 05. E25 adds the Metadata Structures and Metadata Interoperation rows to
+Table 4. E42 replaces the `OPTIONAL` cells of an authority for another
+authority's query with `N/A`. E28 regroups the query rows of Table 1 under
+Assertion Query/Request. The dispositions are the ones defined at the top of
+this page.
+
+An exchange excluded as "mode not claimed" is needed only by a mode that is
+not claimed. Conformance Requirements §1 states features for implementations
+that claim conformance, so a mode that is not claimed carries no obligation.
+Shibboleth IdP 5, Shibboleth SP 4, SimpleSAMLphp, Keycloak, crewjam/saml,
+python3-saml, ruby-saml, node-saml, samlify, and Sustainsys.Saml2 do not
+implement the exchange, and some of them define its schema types only.
+pysaml2 does implement most of these exchanges: it sends and answers
+`<AuthnQuery>` and `<NameIDMappingRequest>`, sends `<AuthzDecisionQuery>`, and
+serves an assertion by identifier over the SAML URI Binding.
+
+### Extended IdP and SP
+
+Table 3. An extended mode is an IdP or SP mode of Table 2 plus both rows.
+
+| Feature | IdP Extended | SP Extended | Disposition |
+| --- | --- | --- | --- |
+| Identity Provider proxy (Core §3.4.1.5) | `MUST` | `MUST` | Open issue: [#277](https://github.com/salasebas/saml-rs/issues/277). The identity provider accepts a request that carries `<Scoping>` and never proxies, which Core §3.4.1.5.1 leaves to local policy. An application that proxies cannot yet read the received `ProxyCount`, `<IDPList>`, and `<RequesterID>`, or write them on its own `<AuthnRequest>` |
+| Name identifier mapping, SOAP (Core §3.8, Profiles §7) | `MUST` | `MUST` | Exclusion, mode not claimed. No `<NameIDMappingRequest>` or `<NameIDMappingResponse>` is generated or processed |
+
+### SAML authorities and requester
+
+Table 4, as corrected by Errata 05 E25 and E42. The exchanges use the
+Assertion Query/Request profile (Profiles §6) over the SOAP binding.
+
+| Feature | Authentication Authority | Attribute Authority | Authorization Decision Authority | Requester | Disposition |
+| --- | --- | --- | --- | --- | --- |
+| Authentication Query, SOAP (Core §3.3.2.2) | `MUST` | N/A | N/A | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthnQuery>` is generated or answered |
+| Attribute Query, SOAP (Core §3.3.2.3) | N/A | `MUST` | N/A | `OPTIONAL` | Open issue: [#278](https://github.com/salasebas/saml-rs/issues/278). Shibboleth IdP 5 answers it, and Shibboleth SP 4 and crewjam/saml send it |
+| Authorization Decision Query, SOAP (Core §3.3.2.4) | N/A | N/A | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AuthzDecisionQuery>` is generated or answered |
+| Request for Assertion by Identifier, SOAP (Core §3.3.1) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No `<AssertionIDRequest>` is generated or answered. The same feature is the `OPTIONAL` IdP row of Table 2 (Errata 05 E29). SimpleSAMLphp and crewjam/saml read and write `<md:AssertionIDRequestService>` in metadata only |
+| SAML URI Binding (Bindings §3.7) | `MUST` | `MUST` | `MUST` | `OPTIONAL` | Exclusion, mode not claimed. No assertion is served by URI reference |
+| Metadata Structures | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. As the Table 2 row of the same name |
+| Metadata Interoperation | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. As the Table 2 row of the same name |
+
+Conformance §3.5, the SOAP and URI security models of authorities and
+requesters, is an exclusion in
+[IdP and SP operational modes](idp-sp-operational-modes.md#soap-and-uri-security-models).
+
+### Attribute profiles
+
+Table 1 lists the UUID, DCE PAC, X.500/LDAP, and XACML attribute profiles
+(Profiles §§8.2 to 8.5). No cell of Tables 2, 3, or 4 names them, so they
+carry no conformance requirement for any mode.
+
+| Profile | Disposition |
+| --- | --- |
+| X.500/LDAP (Profiles §8.2) | Exclusion, no conformance cell. An `<Attribute>` named under this profile is an ordinary `<Attribute>` with the `uri` name format. The `x500:Encoding` XML attribute is not generated or exposed |
+| UUID (Profiles §8.3) | Exclusion, no conformance cell |
+| DCE PAC (Profiles §8.4) | Exclusion, no conformance cell |
+| XACML (Profiles §8.5) | Exclusion, no conformance cell |

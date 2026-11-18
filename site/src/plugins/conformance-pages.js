@@ -16,11 +16,6 @@ const pages = {
 		description:
 			'Typed service-provider and identity-provider ends of one Enhanced Client/Proxy login over PAOS.',
 	},
-	'extended-and-authority-modes.md': {
-		title: 'Extended, authority, and requester modes',
-		description:
-			'The inventory of Conformance Requirements Tables 3 and 4 and of the attribute profiles that no table names, with one disposition for each row.',
-	},
 	'identifiers.md': {
 		title: 'SAML-defined identifiers',
 		description:
@@ -34,7 +29,7 @@ const pages = {
 	'idp-sp-operational-modes.md': {
 		title: 'IdP and SP operational modes',
 		description:
-			'The inventory of the IdP, IdP Lite, SP, and SP Lite columns of Conformance Requirements Table 2, and of Conformance §§3.3 to 3.7, 4, and 5, with one disposition for each obligation.',
+			'The inventory of Conformance Requirements Table 2 and §§3.3 to 3.7, 4, and 5, and of Tables 3 and 4 and the attribute profiles, with one disposition for each obligation.',
 	},
 	'metadata-and-replay.md': {
 		title: 'Metadata and replay',
@@ -71,21 +66,11 @@ const pages = {
 		description:
 			'Scope of optional schema validation for received protocol XML, SOAP envelopes, decrypted documents, and metadata.',
 	},
-	'xml-signature-processing.md': {
-		title: 'XML signature processing',
-		description:
-			'Reference preflight and signed-content coverage in public XML verification functions and embedded-signature flows.',
-	},
 	'xml-security-algorithms.md': {
 		title: 'XML Signature and XML Encryption algorithms',
 		description:
 			'The Conformance §4 algorithms a typed identity provider and service provider sign, verify, encrypt, and decrypt with, and the `AlgorithmPolicy` defaults.',
 	},
-};
-
-const pagesOutsideRecords = {
-	'../adr/0001-session-authority-logout-expiration.md': '../../explanation/logout-expiration.md',
-	'../adr/0002-validation-presets.md': '../../explanation/validation-presets.md',
 };
 
 /** Writes one site page for each record in `docs/conformance/` before the content collection loads. */
@@ -155,7 +140,5 @@ function sitePath(record, url) {
 	const hash = hashAt === -1 ? '' : url.slice(hashAt);
 	if (!href.includes('/')) return url;
 
-	const page = pagesOutsideRecords[href];
-	if (!page) throw new Error(`${record} links to ${href}, which has no site page`);
-	return `${page}${hash}`;
+	throw new Error(`${record} links to ${href}, which has no site page`);
 }

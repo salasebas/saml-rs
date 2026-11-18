@@ -7,7 +7,7 @@ creation off. `IdpValidationPolicy::recommended` does not turn assertion
 encryption on. `Default` and the config builders are
 Recommended. Raw generation keeps its existing validation defaults. The
 preset distinction is recorded in
-[validation presets](../adr/0002-validation-presets.md).
+[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected
 by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.

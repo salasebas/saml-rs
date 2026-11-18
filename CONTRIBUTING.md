@@ -48,10 +48,8 @@ exclusive. AWS-LC, FIPS, and provider-specific rustdoc run in the Linux
 ## How to change SAML behaviour
 
 1. Ground the change in the SAML specifications or targeted interoperability
-   evidence. The review steps are in
-   [How to review a SAML change](docs/how-to-review-saml-behaviour.md). The
-   reasons for those checks are in
-   [standards conformance](docs/standards-conformance.md).
+   evidence, and answer the review checklist in
+   [standards conformance](docs/standards-conformance.md#review-checklist).
 2. Write a focused Rust test.
 3. Implement an idiomatic Rust equivalent with explicit errors.
 4. Keep XML cryptography (XML-DSig, XML-Enc, C14N) delegated to `bergshamra`

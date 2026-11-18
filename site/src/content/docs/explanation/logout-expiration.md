@@ -11,4 +11,4 @@ The attribute cannot be turned off on the typed session-authority flow. A sessio
 
 SAML Core 2.0 section 3.7.3.2 requires a session authority constructing a `LogoutRequest` to set `NotOnOrAfter`. Core section 3.7.1 describes that attribute as optional on the generic `LogoutRequest`, and the protocol schema declares it with `use="optional"`. Approved Errata 05 E38 clarifies `SessionIndex` and does not change either rule.
 
-The call is in [Single Logout](../guides/single-logout.md). This page restates [ADR 0001](https://github.com/salasebas/saml-rs/blob/main/docs/adr/0001-session-authority-logout-expiration.md).
+The call is in [Single Logout](../guides/single-logout.md).

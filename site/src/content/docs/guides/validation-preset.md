@@ -39,7 +39,7 @@ To keep the legacy permissive preset, name it:
 SpValidationPolicy::compatibility()
 ```
 
-`Default`, `new`, `try_new`, and the config builders already use Recommended. Pass `compatibility()` when one of those constructors must stay permissive.
+The validation policies' `Default` and the `SpConfig` and `IdpConfig` builders already use Recommended. Pass `compatibility()` when a configuration must stay permissive.
 
 An upgrade from 0.6, including a call to `strict()`, is [0.6 to 0.7](upgrade/v0-6-to-v0-7.md).
 
