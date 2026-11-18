@@ -160,7 +160,7 @@ impl<Message> Inbound<Message> {
 
     /// Create HTTP-POST input from the parsed form fields.
     ///
-    /// A `ManageNameIDRequest` does not arrive over HTTP-POST:
+    /// `Inbound::post` requires a message type that implements [`PostMessage`]:
     ///
     /// ```compile_fail,E0277
     /// use saml_rs::{Inbound, ManageNameIdRequest};
@@ -176,7 +176,8 @@ impl<Message> Inbound<Message> {
 
     /// Create HTTP-POST-SimpleSign input from the parsed form fields.
     ///
-    /// A `ManageNameIDRequest` does not arrive over HTTP-POST-SimpleSign:
+    /// `Inbound::simple_sign` requires a message type that implements
+    /// [`PostMessage`]:
     ///
     /// ```compile_fail,E0277
     /// use saml_rs::{Inbound, ManageNameIdRequest};
@@ -202,7 +203,7 @@ impl<Message> Inbound<Message> {
     /// passed to `receive_slo`, or the TLS server certificate for a
     /// `LogoutResponse` passed to `finish_slo`.
     ///
-    /// An `AuthnRequest` does not arrive over SOAP:
+    /// `Inbound::soap` requires a message type that implements [`SoapMessage`]:
     ///
     /// ```compile_fail,E0277
     /// use saml_rs::{AuthnRequest, Inbound, SoapChannel};
