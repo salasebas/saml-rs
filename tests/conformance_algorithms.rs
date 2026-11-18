@@ -8,20 +8,19 @@ use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AlgorithmPolicy, AuthnRequest, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, CertificatePem, Credentials, EntityId, FormField, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId,
-    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
-    SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoSession, StartSlo, StartSso, Subject, TransformAlgorithm, XmlPolicy,
-    XmlSignatureProfile,
+    AcsEndpoint, AlgorithmPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
+    PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
+    SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession,
+    StartSlo, StartSso, Subject, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
     Attribute, AttributeValue, Attributes, DataEncryptionAlgorithm, DigestAlgorithm,
     KeyEncryptionAlgorithm, MaskGenerationFunction, XmlEncryptionPolicy,
 };
 #[cfg(feature = "crypto-rustcrypto")]
-use saml_rs::{HmacSecret, SignatureAlgorithm};
+use saml_rs::{AuthnRequest, HmacSecret, SignatureAlgorithm};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
