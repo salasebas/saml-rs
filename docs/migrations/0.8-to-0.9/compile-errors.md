@@ -15,7 +15,7 @@
 | `SpConfig::validate`, `IdpConfig::validate`, `SpMetadataConfig::validate`, `IdpMetadataConfig::validate` | Removed; `build()` validates | [1.7](#17-build-configs-with-the-builder) |
 | `SpMetadataConfig::new`, `try_new`, `IdpMetadataConfig::new`, `try_new`, or a struct literal of either | Removed; use the builder setters | [1.7](#17-build-configs-with-the-builder) |
 | A field of `SpConfig`, `IdpConfig`, `SpMetadataConfig`, or `IdpMetadataConfig`, read or assigned | Private; read it through the getter of the same name | [1.8](#18-read-config-fields-through-getters) |
-| A struct literal of `Credentials`, or one of its fields | Private; set them with the `with_*` methods and read them through getters | [1.9](#19-fill-credentials-with-the-with-methods) |
+| A struct literal of `Credentials`, one of its fields, or `DecryptionCredential` | Private; set them with the `with_*` methods and `X509Credential`, and read them through getters | [1.9](#19-fill-credentials-with-the-with-methods) |
 | `EntitySetting::try_from(&SpConfig)` or `EntitySetting::try_from(&IdpConfig)` | Removed | [1.10](#110-stop-converting-typed-configs-to-entitysetting) |
 | `saml_rs::ServiceProvider`, `saml_rs::IdentityProvider`, `saml_rs::EntitySetting` | Removed from the crate root | [1.11](#111-import-the-raw-roles-from-raw) |
 | `saml_rs::raw::metadata` | Removed | [1.12](#112-import-metadata-from-metadata) |
@@ -27,6 +27,13 @@
 | A variant ending in `ForCompatibility`, `DataEncryptionAlgorithm::Aes128`, `Aes256`, or `TripleDes` | Renamed | [1.16](#116-rename-the-relaxed-policy-and-algorithm-variants) |
 | `XmlPolicy::clock_drifts` | Removed; set `ClockSkew` on `SamlValidationContext` | [1.17](#117-set-clock-skew-on-the-validation-context) |
 | `metadata::try_generate_idp_metadata` | Removed; call `generate_idp_metadata` | [1.18](#118-call-generate_idp_metadata) |
+| `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
+| `Saml::sp(config)?` or `Saml::idp(config)?` | Returns the facade, not a `Result` | [Typed config](config.md#remove-the--after-samlsp-and-samlidp) |
+| `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
+| `elements_order(Vec<String>)` on a typed builder | Takes `SpMetadataElement` or `IdpMetadataElement` values | [Typed config](config.md#name-metadata-element-groups-with-spmetadataelement-and-idpmetadataelement) |
+| `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
+| `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
+| `TemplatePolicy::relay_state` or `tag_prefix_encrypted_assertion` | Removed | [Typed config](config.md#send-relaystate-per-request) |
 | `context::set_schema_validator` | Configure `XmlPolicy::schema_validator` | [9.1](xml-policy.md#91-configure-each-local-role) |
 | A full struct literal of `XmlPolicy` | Has a new `schema_validator` field | [9.1](xml-policy.md#91-configure-each-local-role) |
 | `Metadata::parse` and its variants, raw metadata `Deref`, generation config names, signature evidence names, raw `get_*` and signing flag getters, `x509_certificates()`, `export_metadata()`, descriptor `metadata()`, `metadata::{sp,idp,generate}` paths, `ArtifactResolutionEndpoint`, or `Metadata::verify_signature*` | Parser arguments, getter names and types, endpoint publishing, and public paths changed; obsolete methods removed | [Metadata API](metadata-api.md) |
@@ -166,8 +173,8 @@ let policy = SpValidationPolicy {
 To keep the 0.8 behavior, name the variant from the `Default` in 0.8 column
 instead. For the first three enums, that variant is the `compatibility()`
 value, which relaxes a recommended check. `AudienceValidationPolicy::Validate`
-is stricter than Recommended: it also rejects a bearer assertion that omits
-`<AudienceRestriction>`.
+is now `RequireRestriction`. It is stricter than Recommended: it also rejects
+a bearer assertion that omits `<AudienceRestriction>`.
 
 ## 1.6 Match the `SamlError` variant the crate returns
 
@@ -239,9 +246,9 @@ tests that compare these strings.
 `SpConfig::builder` or `IdpConfig::builder`, or that call `validate()`.
 
 `builder(..).build()` is now the only way to make a config, and `build()`
-validates it once. A built config cannot change afterwards, so
-`Saml::sp` and `Saml::idp` no longer validate it again. They still return
-`Result`, but `build()` already returns every error they could. See
+validates it once. A built config cannot change afterwards, and it keeps the
+provider `build()` made, so `Saml::sp` and `Saml::idp` return the facade
+without a `Result`. See
 [section 6](metadata.md#6-handle-metadata-errors-from-build).
 
 Before:
@@ -260,21 +267,25 @@ let sp = Saml::sp(config)?;
 After:
 
 ```rust
-let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-    .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-    .name_id_format(NameIdFormat::EmailAddress)
-    .xml(XmlPolicy {
-        redirect_inflate_max_bytes: 256 * 1024,
-        ..XmlPolicy::default()
-    })
-    .build()?;
-let sp = Saml::sp(config)?;
+let config = SpConfig::builder(
+    EntityId::try_new("https://sp.example.com/metadata")?,
+    AcsEndpoint::post("https://sp.example.com/acs")?,
+)
+.name_id_format(NameIdFormat::EmailAddress)
+.xml(XmlPolicy {
+    redirect_inflate_max_bytes: 256 * 1024,
+    ..XmlPolicy::default()
+})
+.build()?;
+let sp = Saml::sp(config);
 ```
 
-Each metadata field has a builder setter: `acs_endpoint`, `sso_endpoint`,
-`slo_endpoint`, `artifact_resolution_service`, `manage_name_id_service`, and
-`name_id_format` add one entry each, in call order. `elements_order`,
-`organization`, `contact`, `error_url`, and `metadata_lifetime` set the rest.
+`SpConfig::builder` takes the first ACS endpoint and `IdpConfig::builder` the
+first SSO endpoint. Each other metadata field has a builder setter:
+`acs_endpoint`, `sso_endpoint`, `slo_endpoint`, `artifact_resolution_service`,
+`manage_name_id_service`, `name_id_format`, and `contact` append one entry
+each, in call order. `elements_order`, `organization`, `error_url`, and
+`metadata_lifetime` set the rest.
 Policy fields have the setters `credentials`, `validation`, `algorithms`,
 `xml`, `templates`, and, on the identity provider, `issuance_lifetime`.
 
@@ -286,7 +297,7 @@ To change a config after you built it, keep the builder instead, clone it,
 and build again:
 
 ```rust
-let base = SpConfig::builder(entity_id).acs_endpoint(acs);
+let base = SpConfig::builder(entity_id, acs);
 let strict = base.clone().validation(SpValidationPolicy::recommended()).build()?;
 let relaxed = base.validation(SpValidationPolicy::compatibility()).build()?;
 ```
@@ -295,38 +306,42 @@ let relaxed = base.validation(SpValidationPolicy::compatibility()).build()?;
 
 **Affects:** callers that read a field of a built config.
 
-Former fields are borrowing getters. Names stay the same except that the
-NameID format list uses the plural `name_id_formats()`:
+Former fields are borrowing getters. Names stay the same except that each
+list uses a plural name:
 
 | Before | After |
 | --- | --- |
 | `config.entity_id` | `config.entity_id()` |
 | `config.validation` | `config.validation()` |
-| `config.metadata.assertion_consumer_service` | `config.metadata().assertion_consumer_service()` |
+| `config.metadata.assertion_consumer_service` | `config.metadata().acs_endpoints()` |
+| `config.metadata.single_logout_service` | `config.metadata().slo_endpoints()` |
+| `config.metadata.single_sign_on_service` | `config.metadata().sso_endpoints()` |
+| `config.metadata.manage_name_id_service` | `config.metadata().manage_name_id_services()` |
+| `config.metadata.artifact_resolution_service` | `config.metadata().artifact_resolution_services()` |
 | `config.metadata.name_id_format` | `config.metadata().name_id_formats()` |
-| `config.metadata.elements_order` | `config.metadata().elements_order()`, an `Option<&[String]>` |
+| `config.metadata.elements_order` | `config.metadata().elements_order()`, an `Option<&[SpMetadataElement]>` or `Option<&[IdpMetadataElement]>` |
 | `config.issuance_lifetime` | `config.issuance_lifetime()` |
 
 The same borrowing pattern applies to `credentials`, `algorithms`, `xml`, and
-`templates`, and to the fields of `SpMetadataConfig` and `IdpMetadataConfig`.
-Collections are returned as slices.
+`templates`, and to the other fields of `SpMetadataConfig` and
+`IdpMetadataConfig`. Collections are returned as slices.
 
 ## 1.9 Fill credentials with the with methods
 
 **Affects:** callers that build `Credentials` with a struct literal or assign
 its fields.
 
-Start from `Credentials::default()` and chain one method per value:
+`DecryptionCredential` is renamed `X509Credential`: a private key, the
+certificate of its public key, and an optional passphrase. Signing takes one
+too. Start from `Credentials::default()` and chain one method per value:
 
 | Former field | Method |
 | --- | --- |
-| `signing_key` | `with_signing_key(key)` |
-| `signing_key` with `signing_key_passphrase` | `with_encrypted_signing_key(key, passphrase)` |
-| `signing_certificate` | `with_signing_certificate(certificate)` |
+| `signing_key`, `signing_key_passphrase`, and `signing_certificate` | `with_signing_credential(X509Credential { certificate, key, passphrase })` |
 | `additional_signing_certificates` | `with_additional_signing_certificate(certificate)`, once per certificate, in publication order |
 | `hmac_secret` | `with_hmac_secret(secret)` |
-| `encryption_certificate`, `decryption_key`, and `decryption_key_passphrase` | `with_decryption(DecryptionCredential { certificate, key, passphrase })` |
-| `additional_decryption_keys` | `with_additional_decryption_key(credential)`, once per key, in decryption order |
+| `encryption_certificate`, `decryption_key`, and `decryption_key_passphrase` | `with_decryption_credential(X509Credential { certificate, key, passphrase })` |
+| `additional_decryption_keys` | `with_additional_decryption_credential(credential)`, once per credential, in decryption order |
 
 Before:
 
@@ -344,36 +359,46 @@ After:
 
 ```rust
 let credentials = Credentials::default()
-    .with_signing_key(PrivateKeyPem::new(signing_key_pem))
-    .with_signing_certificate(CertificatePem::new(signing_cert_pem))
-    .with_decryption(DecryptionCredential {
+    .with_signing_credential(X509Credential {
+        certificate: CertificatePem::new(signing_cert_pem),
+        key: PrivateKeyPem::new(signing_key_pem),
+        passphrase: None,
+    })
+    .with_decryption_credential(X509Credential {
         certificate: CertificatePem::new(encryption_cert_pem),
         key: PrivateKeyPem::new(decryption_key_pem),
         passphrase: None,
     });
 ```
 
-The primary decryption key now travels with its encryption certificate and
-passphrase. Two combinations can no longer be expressed:
+Each key now travels with its certificate and passphrase. Three combinations
+can no longer be expressed:
 
 - A passphrase without its key. `build()` used to reject it with
   `SamlError::MissingKey`; now the code does not compile.
+- A signing key without a signing certificate, which `build()` rejected with
+  `SamlError::MissingKey("signing_certificate")` when the policy signed.
 - A decryption key without an encryption certificate, or an encryption
-  certificate without a decryption key. Give `with_decryption` the
+  certificate without a decryption key. Give `with_decryption_credential` the
   certificate that peers encrypt for. That certificate is published in your
   metadata, as before.
 
-An additional decryption key without a primary one still makes `build()`
-return `SamlError::MissingKey("decryption_key")`.
+The `MissingKey` values that `build()` returns name the credential.
+`"signing_credential"` replaces `"signing_key"` for a policy that signs
+without one. `"decryption_credential"` replaces `"decryption_key"` for
+selected encryption without a decryption credential, and for an additional
+decryption credential without a primary one. Update a check that compares
+these strings.
 
 To read credentials, use the getters:
 
 | Former field read | Getter |
 | --- | --- |
-| `signing_key`, `signing_certificate`, `hmac_secret` | The method of the same name, an `Option` of a reference |
-| `signing_key_passphrase` | `signing_key_passphrase()` |
-| `additional_signing_certificates`, `additional_decryption_keys` | The method of the same name, a slice |
-| `encryption_certificate`, `decryption_key`, `decryption_key_passphrase` | `decryption()`, then its `certificate`, `key`, and `passphrase` fields |
+| `signing_key`, `signing_key_passphrase`, `signing_certificate` | `signing_credential()`, then its `key`, `passphrase`, and `certificate` fields |
+| `hmac_secret` | `hmac_secret()`, an `Option` of a reference |
+| `additional_signing_certificates` | `additional_signing_certificates()`, a slice |
+| `encryption_certificate`, `decryption_key`, `decryption_key_passphrase` | `decryption_credential()`, then its `certificate`, `key`, and `passphrase` fields |
+| `additional_decryption_keys` | `additional_decryption_credentials()`, a slice |
 
 The getters return the typed wrappers, which no longer give the PEM text or
 secret back. See [1.3](#13-keep-your-own-copy-of-credential-material).
@@ -599,9 +624,7 @@ let config = SpConfig::builder(entity_id)
 let validation = SamlValidationContext::new(now, replay);
 
 // Now
-let config = SpConfig::builder(entity_id)
-    .acs_endpoint(acs)
-    .build()?;
+let config = SpConfig::builder(entity_id, acs).build()?;
 let validation = SamlValidationContext::new(now, replay)
     .with_clock_skew(ClockSkew::from_millis(-120_000, 180_000));
 ```

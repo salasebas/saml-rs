@@ -71,12 +71,14 @@ The package name is `saml-rs`. Rust imports `saml_rs`. Method signatures live on
 
 ```rust title="sp.rs"
 let sp = Saml::sp(
-    SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .credentials(credentials)
-        .validation(SpValidationPolicy::recommended())
-        .build()?,
-)?;
+    SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .credentials(credentials)
+    .validation(SpValidationPolicy::recommended())
+    .build()?,
+);
 
 let started = sp.start_sso(&idp, StartSso::redirect())?;
 ```

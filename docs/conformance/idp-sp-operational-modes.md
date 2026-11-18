@@ -83,12 +83,12 @@ Conformance §3.4: a mode processes or generates `<EncryptedID>`,
 generates `<NameID>`, `<Assertion>`, or `<Attribute>`. Generating the
 encrypted form is the producer's choice (Core §§2.2.4, 2.3.4, 2.7.3.2), so
 generation stays off until it is selected. Processing does not wait for a
-selection: an entity with `Credentials::with_decryption` decrypts what it
+selection: an entity with `Credentials::with_decryption_credential` decrypts what it
 receives.
 
 | Context | Actor | Disposition |
 | --- | --- | --- |
-| `<EncryptedAssertion>`, assertion `<EncryptedID>`, and `<EncryptedAttribute>` in a `<Response>` | Identity provider, generate | Claimed feature. `encrypt_assertions`, `encrypt_ids`, and `encrypt_attributes`. [SSO generation](web-browser-sso-generation.md) |
+| `<EncryptedAssertion>`, assertion `<EncryptedID>`, and `<EncryptedAttribute>` in a `<Response>` | Identity provider, generate | Claimed feature. The `assertions`, `identifiers`, and `attributes` fields of `XmlEncryptionPolicy`. [SSO generation](web-browser-sso-generation.md) |
 | The same three in a received `<Response>`, on every response binding and over PAOS | Service provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). |
 | `<EncryptedID>` in the requested `<Subject>` of an `<AuthnRequest>` | Identity provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). Library policy leaves an unsigned request whose data encryption is CBC unread |
 | `<EncryptedID>` in a `<LogoutRequest>` | Both roles, generate and process | Claimed feature. [Encrypted principal identifier](single-logout.md#encrypted-principal-identifier) |

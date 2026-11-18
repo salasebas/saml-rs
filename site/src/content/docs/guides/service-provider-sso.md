@@ -16,12 +16,14 @@ Keep the `Pending<_>` value with the browser session until the person returns.
 
 ```rust
 let sp = Saml::sp(
-    SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .credentials(credentials)
-        .validation(SpValidationPolicy::recommended())
-        .build()?,
-)?;
+    SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .credentials(credentials)
+    .validation(SpValidationPolicy::recommended())
+    .build()?,
+);
 
 let idp = IdpDescriptor::from_metadata_xml(
     EntityId::try_new("https://idp.example.com/metadata")?,

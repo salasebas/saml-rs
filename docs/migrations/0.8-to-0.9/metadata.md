@@ -25,8 +25,8 @@ still, when the first message was rendered.
 at least one of each.
 
 **Now:** `build()` returns each of these errors, with the same `SamlError`
-variant and message. `Saml::sp` and `Saml::idp` accept every config that
-`build()` returns. `generate_sp_metadata` returns
+variant and message. `Saml::sp` and `Saml::idp` take the built config and
+return the facade without a `Result`. `generate_sp_metadata` returns
 `SamlError::MissingMetadata("AssertionConsumerService")` and
 `generate_idp_metadata` returns
 `SamlError::MissingMetadata("SingleSignOnService")` for a config without that
@@ -48,8 +48,7 @@ let config = IdpConfig::builder(entity_id)
     .build()?;
 
 // Now: build() returns SamlError::Invalid. Use an NCName.
-let config = IdpConfig::builder(entity_id)
-    .sso_endpoint(sso)
+let config = IdpConfig::builder(entity_id, sso)
     .templates(TemplatePolicy {
         tag_prefix_protocol: "samlp2".into(),
         ..TemplatePolicy::default()
@@ -136,16 +135,20 @@ metadata generation config, including through the compatibility crates.
 **Before:** generation silently ignored unknown names and wrote repeated
 groups again.
 
-**Now:** generation and typed `build()` return `SamlError::Invalid` when an
-order contains an unknown name or repeats a group.
+**Now:** raw generation returns `SamlError::Invalid` when an order contains an
+unknown name or repeats a group. The typed builders take
+`SpMetadataElement` and `IdpMetadataElement` values, so an unknown name does
+not compile, and `build()` returns `SamlError::Invalid` for a repeated group.
+See [Name metadata element groups](config.md#name-metadata-element-groups-with-spmetadataelement-and-idpmetadataelement).
 
-**Upgrade:** correct spelling and use each group name once. SP orders accept
-`KeyDescriptor`, `SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`,
-and `AssertionConsumerService`. The `AttributeConsumingService` slot remains
-accepted for the existing Shibboleth profile, but writes nothing because the
-generator has no configuration for it.
+**Upgrade:** correct spelling and use each group name once. Raw SP orders
+accept `KeyDescriptor`, `SingleLogoutService`, `ManageNameIDService`,
+`NameIDFormat`, and `AssertionConsumerService`. The raw
+`AttributeConsumingService` slot remains accepted for the existing Shibboleth
+profile, but writes nothing because the generator has no configuration for
+it. `SpMetadataElement` has no variant for it.
 
-IdP orders accept `KeyDescriptor`, `ArtifactResolutionService`,
+Raw IdP orders accept `KeyDescriptor`, `ArtifactResolutionService`,
 `SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`, and
 `SingleSignOnService`.
 
@@ -157,7 +160,7 @@ entity-level elements with `organization` and `contacts`, or the builder's
 
 **Before:** an order could filter out configured groups. For example, with a
 signing certificate, logout endpoint, NameID format, and ACS configured,
-`elements_order = ["AssertionConsumerService"]` wrote only the ACS.
+an order of only `AssertionConsumerService` wrote only the ACS.
 
 **Now:** an order controls placement, including when it is empty. It no
 longer filters configured groups. Missing groups are inserted before the

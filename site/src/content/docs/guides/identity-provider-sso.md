@@ -14,12 +14,14 @@ Issue a browser SSO response. You already have a service-provider peer, an SSO U
 
 ```rust
 let idp = Saml::idp(
-    IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-        .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-        .credentials(credentials)
-        .validation(IdpValidationPolicy::recommended())
-        .build()?,
-)?;
+    IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::post("https://idp.example.com/sso")?,
+    )
+    .credentials(credentials)
+    .validation(IdpValidationPolicy::recommended())
+    .build()?,
+);
 
 let sp = SpDescriptor::from_metadata_xml(
     EntityId::try_new("https://sp.example.com/metadata")?,
@@ -64,7 +66,7 @@ let response = idp.respond_sso(
 
 `allow_unsigned_encrypted_cbc()` relaxes that recommendation only. It is not the Compatibility preset. A service provider that already requires the signature still rejects the relaxed response.
 
-Assertion encryption stays off until you select `XmlEncryptionPolicy::encrypt_assertions`.
+Assertion encryption stays off until you set `XmlEncryptionPolicy::assertions` to `AssertionEncryptionPolicy::EncryptAssertions`.
 
 ## Attributes and name identifiers
 

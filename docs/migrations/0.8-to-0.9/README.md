@@ -23,5 +23,6 @@ Check the topics that affect your integration.
 - [Upgrade logout, validation, and replay code](logout-validation-replay.md)
 - [Match typed `SamlError` variants](errors.md)
 - [Upgrade RelayState, pending state, and browser input code](browser-transport.md)
+- [Upgrade typed config code](config.md)
 
 [All migration guides](../README.md)

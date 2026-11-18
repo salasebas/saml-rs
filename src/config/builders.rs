@@ -244,15 +244,15 @@ impl SpConfigBuilder {
     ///
     /// Returns [`SamlError`] when the entity ID is not an absolute URI
     /// reference of at most 1024 characters, the organization, contacts, or
-    /// error URI are invalid, an additional decryption key has no primary one, the
-    /// selected policy needs credentials that are not set, the algorithm
-    /// policy is not supported, the selected policy requires crypto in a
-    /// build without a crypto provider, or the protocol and assertion tag
-    /// prefixes are not two different XML NCNames other than `xml` and
-    /// `xmlns`. Also returns the errors of generating SP metadata from the
-    /// config: a NameID format that is not an absolute URI reference, two ACS
-    /// endpoints with the same index, more ACS endpoints than `unsignedShort`
-    /// indexes, an unknown or repeated element ordering group, or a
+    /// error URI are invalid, an additional decryption credential has no
+    /// primary one, the selected policy needs a credential that is not set,
+    /// the algorithm policy is not supported, the selected policy requires
+    /// crypto in a build without a crypto provider, or the protocol and
+    /// assertion tag prefixes are not two different XML NCNames other than
+    /// `xml` and `xmlns`. Also returns the errors of generating SP metadata
+    /// from the config: a NameID format that is not an absolute URI
+    /// reference, two ACS endpoints with the same index, more ACS endpoints
+    /// than `unsignedShort` indexes, a repeated element ordering group, or a
     /// `validUntil` outside the years 0001 through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         let service_provider = self.service_provider()?;
@@ -525,15 +525,15 @@ impl IdpConfigBuilder {
     /// Returns [`SamlError`] when the entity ID is not an absolute URI
     /// reference of at most 1024 characters, two
     /// `ArtifactResolutionService` endpoints share an index, the organization,
-    /// contacts, or error URI are invalid, an additional decryption key has no
-    /// primary one, the issuance lifetime is zero or outside the internal
+    /// contacts, or error URI are invalid, an additional decryption credential
+    /// has no primary one, the issuance lifetime is zero or outside the internal
     /// supported range, the algorithm policy is not supported, the selected
     /// policy requires crypto in a build without a crypto provider, or the
     /// protocol and assertion tag prefixes are not two different XML NCNames
     /// other than `xml` and `xmlns`. Also returns the errors of generating
     /// IdP metadata from the config: a NameID format that is not an absolute
-    /// URI reference, an unknown or repeated element ordering group, or a
-    /// `validUntil` outside the years 0001 through 9999.
+    /// URI reference, a repeated element ordering group, or a `validUntil`
+    /// outside the years 0001 through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         self.metadata.ensure_unique_artifact_resolution_indexes()?;
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
