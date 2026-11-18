@@ -52,7 +52,7 @@ fn sp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Sp>, SamlError
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
     };
-    Saml::sp(builder.build()?)
+    Ok(Saml::sp(builder.build()?))
 }
 
 fn idp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -73,7 +73,7 @@ fn idp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Idp>, SamlErr
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
     };
-    Saml::idp(builder.build()?)
+    Ok(Saml::idp(builder.build()?))
 }
 
 fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> {
@@ -366,7 +366,7 @@ fn browser_facades(
         .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
         .credentials(signing_credentials())
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -379,7 +379,7 @@ fn browser_facades(
         .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
         .credentials(signing_credentials())
         .build()?,
-    )?;
+    );
     Ok((sp, idp))
 }
 

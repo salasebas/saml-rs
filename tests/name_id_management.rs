@@ -59,7 +59,7 @@ fn identity_provider(service: Option<&str>) -> Result<Saml<Idp>, Box<dyn std::er
         builder = builder
             .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(location)?));
     }
-    Ok(Saml::idp(builder.build()?)?)
+    Ok(Saml::idp(builder.build()?))
 }
 
 /// A service provider whose metadata publishes `services` as
@@ -75,7 +75,7 @@ fn service_provider(
         )
         .validation(SpValidationPolicy::compatibility())
         .build()?,
-    )?;
+    );
     let endpoints: String = services
         .iter()
         .map(|(binding, location)| {
@@ -357,7 +357,7 @@ fn a_transient_identifier_is_not_managed() -> TestResult {
         )?))
         .validation(saml_rs::IdpValidationPolicy::compatibility())
         .build()?,
-    )?;
+    );
 
     for (idp, current) in [
         (
@@ -889,7 +889,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
         })
         .validation(saml_rs::IdpValidationPolicy::compatibility())
         .build()?,
-    )?;
+    );
     let sp = soap_service_provider()?;
     let deep_header =
         "<soap:Header><a><b><c><d><e>note</e></d></c></b></a></soap:Header><soap:Body>";

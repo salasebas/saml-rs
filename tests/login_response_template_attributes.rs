@@ -36,7 +36,7 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -61,7 +61,7 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
                 ..TemplatePolicy::default()
             })
             .build()?,
-        )?;
+        );
         let subject = Subject::new(NameId::new("alice@example.com", None), Vec::new());
 
         match idp.initiate_sso(&sp_descriptor, subject, RespondSso::post()) {

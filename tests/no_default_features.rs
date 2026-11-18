@@ -109,8 +109,8 @@ fn typed_protocol_facades() -> Result<
     ),
     SamlError,
 > {
-    let sp = Saml::sp(typed_sp_config()?)?;
-    let idp = Saml::idp(typed_idp_config()?)?;
+    let sp = Saml::sp(typed_sp_config()?);
+    let idp = Saml::idp(typed_idp_config()?);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),

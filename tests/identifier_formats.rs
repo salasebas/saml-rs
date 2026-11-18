@@ -50,7 +50,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -62,11 +62,11 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
             ..SpValidationPolicy::recommended()
         })
         .build()?,
-    )
+    ))
 }
 
 fn idp_with(templates: TemplatePolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -75,7 +75,7 @@ fn idp_with(templates: TemplatePolicy) -> Result<Saml<saml_rs::Idp>, SamlError> 
         .validation(IdpValidationPolicy::recommended())
         .templates(templates)
         .build()?,
-    )
+    ))
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -891,7 +891,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         .validation(IdpValidationPolicy::recommended())
         .name_id_format(NameIdFormat::Persistent)
         .build()?,
-    )?;
+    );
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let unformatted = NameId::new("x".repeat(257), None);
     expect_name_id_length_error(idp.initiate_sso(
@@ -917,7 +917,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
             ..TemplatePolicy::default()
         })
         .build()?,
-    )?;
+    );
     expect_name_id_length_error(templated.raw_identity_provider().create_login_response(
         sp.raw_service_provider(),
         Binding::Post,

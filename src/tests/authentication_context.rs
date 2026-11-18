@@ -57,7 +57,7 @@ fn parties_with(
             ..SpValidationPolicy::recommended()
         })
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(EntityId::try_new(IDP)?, SsoEndpoint::redirect(SSO)?)
             .sso_endpoint(SsoEndpoint::post(SSO)?)
@@ -69,7 +69,7 @@ fn parties_with(
             })
             .xml(xml)
             .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP)?,
         sp.metadata_xml(),
@@ -545,7 +545,7 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
             ..Default::default()
         })
         .build()?,
-    )?;
+    );
     sp.start_sso(&idp_descriptor, StartSso::post())?;
     for start in [
         StartSso::post().is_passive(IsPassive::Required),

@@ -64,16 +64,16 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
         EndpointUrl::try_new(OTHER_BINDING)?,
     )
     .with_index(2);
-    Saml::sp(
+    Ok(Saml::sp(
         builder
             .acs_endpoint(other)
             .credentials(signing_credentials())
             .build()?,
-    )
+    ))
 }
 
 fn idp() -> Result<Saml<Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,
@@ -84,7 +84,7 @@ fn idp() -> Result<Saml<Idp>, SamlError> {
         ))
         .credentials(signing_credentials())
         .build()?,
-    )
+    ))
 }
 
 fn validation() -> SamlValidationContext<'static> {

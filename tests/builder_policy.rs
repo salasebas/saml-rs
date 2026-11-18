@@ -92,7 +92,7 @@ fn builders_write_metadata_element_groups_in_the_order_set(
     .build()?;
 
     assert_eq!(
-        role_children(Saml::sp(sp)?.metadata_xml(), "SPSSODescriptor")?,
+        role_children(Saml::sp(sp).metadata_xml(), "SPSSODescriptor")?,
         [
             "AssertionConsumerService",
             "NameIDFormat",
@@ -102,7 +102,7 @@ fn builders_write_metadata_element_groups_in_the_order_set(
         ]
     );
     assert_eq!(
-        role_children(Saml::idp(idp)?.metadata_xml(), "IDPSSODescriptor")?,
+        role_children(Saml::idp(idp).metadata_xml(), "IDPSSODescriptor")?,
         [
             "SingleSignOnService",
             "NameIDFormat",

@@ -57,7 +57,7 @@ fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
     for endpoint in endpoints {
         builder = builder.manage_name_id_service(EndpointUrl::try_new(*endpoint)?);
     }
-    Saml::sp(builder.build()?)
+    Ok(Saml::sp(builder.build()?))
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -77,7 +77,7 @@ fn idp_with_formats(formats: &[NameIdFormat]) -> Result<Saml<saml_rs::Idp>, Saml
     for format in formats {
         builder = builder.name_id_format(format.clone());
     }
-    Saml::idp(builder.build()?)
+    Ok(Saml::idp(builder.build()?))
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -1140,7 +1140,7 @@ fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
         .credentials(signing_credentials())
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let idp_metadata = both.metadata_xml();
     assert!(idp_metadata.contains(
         r#"<ManageNameIDService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp.example.com/manage-name-id/soap"/>"#
@@ -1194,7 +1194,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
             .algorithms(sp_algorithms)
             .validation(SpValidationPolicy::recommended())
             .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -1207,7 +1207,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
         .algorithms(idp_algorithms)
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let sp_peer =
         sp_descriptor(&sp)?.with_hmac_secret(HmacSecret::try_new(b"service-provider-hmac-secret")?);
     let idp_peer = idp_descriptor(&idp)?
@@ -1346,7 +1346,7 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
             })
             .validation(SpValidationPolicy::recommended())
             .build()?,
-    )?;
+    );
     let idp = idp()?;
     let attributes: String = (0..65).map(|index| format!(r#" a{index}="v""#)).collect();
     let extensions = format!(

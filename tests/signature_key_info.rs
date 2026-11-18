@@ -30,7 +30,7 @@ fn credentials(key: &str, cert: &str) -> Credentials {
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -41,11 +41,11 @@ fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>,
             ..SpValidationPolicy::recommended()
         })
         .build()?,
-    )
+    ))
 }
 
 fn idp_requiring_signed_authn_requests() -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
@@ -56,7 +56,7 @@ fn idp_requiring_signed_authn_requests() -> Result<Saml<saml_rs::Idp>, SamlError
             ..IdpValidationPolicy::recommended()
         })
         .build()?,
-    )
+    ))
 }
 
 fn sp_descriptor_with_signing_cert(cert: &str) -> Result<SpDescriptor, SamlError> {

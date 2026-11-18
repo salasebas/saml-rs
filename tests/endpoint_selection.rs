@@ -34,7 +34,7 @@ fn subject() -> Subject {
 }
 
 fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(FIRST_ACS)?.with_index(0),
@@ -43,7 +43,7 @@ fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::compatibility())
         .build()?,
-    )
+    ))
 }
 
 fn idp_with_sso(first: &str, more: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -52,12 +52,12 @@ fn idp_with_sso(first: &str, more: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlEr
     for url in more {
         builder = builder.sso_endpoint(SsoEndpoint::post(*url)?);
     }
-    Saml::idp(
+    Ok(Saml::idp(
         builder
             .credentials(signing_credentials())
             .validation(IdpValidationPolicy::compatibility())
             .build()?,
-    )
+    ))
 }
 
 fn descriptors(
@@ -134,7 +134,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::compatibility())
         .build()?,
-    )?;
+    );
     let (cross_binding_descriptor, _) = descriptors(&cross_binding_sp, &idp)?;
     let unspecified = idp.receive_sso(
         &cross_binding_descriptor,
@@ -249,7 +249,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
         .credentials(signing_credentials())
         .validation(IdpValidationPolicy::compatibility())
         .build()?,
-    )?;
+    );
     for binding in [
         SsoResponseBinding::Post,
         SsoResponseBinding::SimpleSign,
@@ -273,7 +273,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::compatibility())
             .build()?,
-        )?;
+        );
         let (sp_descriptor, _) = descriptors(&sp, &idp)?;
         let xml = authn_request(IDP_SSO_FIRST).replace(
             " Version=",

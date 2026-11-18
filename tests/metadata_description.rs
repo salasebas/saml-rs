@@ -145,8 +145,8 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
         sp = sp.contact(contact.clone());
         idp = idp.contact(contact);
     }
-    let sp = Saml::sp(sp.build()?)?;
-    let idp = Saml::idp(idp.build()?)?;
+    let sp = Saml::sp(sp.build()?);
+    let idp = Saml::idp(idp.build()?);
     assert_eq!(sp.metadata_xml(), SP_XML.trim_end());
     assert_eq!(idp.metadata_xml(), IDP_XML.trim_end());
     let sp_peer = SpDescriptor::from_metadata_xml(

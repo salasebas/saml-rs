@@ -92,7 +92,7 @@ fn sp_with(
     for endpoint in slo_endpoints("sp.example.com")? {
         builder = builder.slo_endpoint(endpoint);
     }
-    Saml::sp(
+    Ok(Saml::sp(
         builder
             .credentials(credentials())
             .validation(SpValidationPolicy {
@@ -101,7 +101,7 @@ fn sp_with(
             })
             .xml(xml(encryption))
             .build()?,
-    )
+    ))
 }
 
 fn idp_with(
@@ -123,7 +123,7 @@ fn idp_with_credentials(
     for endpoint in slo_endpoints("idp.example.com")? {
         builder = builder.slo_endpoint(endpoint);
     }
-    Saml::idp(
+    Ok(Saml::idp(
         builder
             .credentials(credentials)
             .validation(IdpValidationPolicy {
@@ -132,7 +132,7 @@ fn idp_with_credentials(
             })
             .xml(xml(encryption))
             .build()?,
-    )
+    ))
 }
 
 struct Parties {

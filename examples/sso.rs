@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .credentials(credentials())
         .validation(SpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new("https://idp.example.com/metadata")?,
@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .credentials(credentials())
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
 
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,

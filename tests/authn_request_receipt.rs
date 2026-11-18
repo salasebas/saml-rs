@@ -45,7 +45,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -53,11 +53,11 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended())
         .build()?,
-    )
+    ))
 }
 
 fn idp(validation_policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -65,7 +65,7 @@ fn idp(validation_policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, Sam
         .credentials(signing_credentials())
         .validation(validation_policy)
         .build()?,
-    )
+    ))
 }
 
 struct Receipt {

@@ -92,13 +92,13 @@ fn parties_with_consumers(
         .credentials(signing_credentials())
         .algorithms(algorithms)
         .build()?,
-    )?;
+    );
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, post)
             .acs_endpoint(artifact)
             .credentials(signing_credentials())
             .build()?,
-    )?;
+    );
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
@@ -788,7 +788,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
         ))
         .credentials(signing_credentials())
         .build()?,
-    )?;
+    );
     let other_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
         other.metadata_xml(),
@@ -917,7 +917,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
         )
         .credentials(signing_credentials())
         .build()?,
-    )?;
+    );
     let sp_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -1076,7 +1076,7 @@ fn encrypted_assertion_parties(
         .credentials(signing_credentials())
         .xml(encryption())
         .build()?,
-    )?;
+    );
     let sp = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -1091,7 +1091,7 @@ fn encrypted_assertion_parties(
         )
         .xml(encryption())
         .build()?,
-    )?;
+    );
     Ok(Parties {
         idp_metadata: IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,

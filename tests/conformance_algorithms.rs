@@ -131,8 +131,8 @@ fn peers_with_profiles(
     .algorithms(idp.algorithms)
     .xml(xml)
     .build()?;
-    let sp = Saml::sp(sp)?;
-    let idp = Saml::idp(idp)?;
+    let sp = Saml::sp(sp);
+    let idp = Saml::idp(idp);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),

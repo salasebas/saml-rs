@@ -82,7 +82,7 @@ fn sp_with_credentials(
     validation: SpValidationPolicy,
     credentials: Credentials,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -91,7 +91,7 @@ fn sp_with_credentials(
         .validation(validation)
         .xml(xml(encryption))
         .build()?,
-    )
+    ))
 }
 
 fn sp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -99,7 +99,7 @@ fn sp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn idp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -108,7 +108,7 @@ fn idp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError>
         .validation(IdpValidationPolicy::recommended())
         .xml(xml(encryption))
         .build()?,
-    )
+    ))
 }
 
 fn descriptors(
@@ -325,7 +325,7 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
             ..AlgorithmPolicy::default()
         })
         .build()?,
-    )?;
+    );
     let mut raw = idp.raw_identity_provider().clone();
     raw.setting.key_encryption_algorithm = RSA_OAEP_MGF1P.into();
     let response = raw.create_login_response(
@@ -372,7 +372,7 @@ fn metadata_publishes_each_encryption_certificate_in_order(
         .credentials(rolling)
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let published = vec![
         normalize_cert_string(CERT),
         normalize_cert_string(NEXT_CERT),
@@ -538,7 +538,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
             .validation(SpValidationPolicy::recommended())
             .xml(xml(sp_encryption))
             .build()?,
-        )?;
+        );
         let idp = idp(XmlEncryptionPolicy::encrypt_assertions())?;
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let started = sp.start_sso(

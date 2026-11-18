@@ -72,7 +72,7 @@ fn encrypted() -> StartNameIdManagement {
 /// A service provider that publishes `encryption_cert` and decrypts with its
 /// own key.
 fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -81,7 +81,7 @@ fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> 
         .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
         .validation(SpValidationPolicy::recommended())
         .build()?,
-    )
+    ))
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -93,7 +93,7 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,
@@ -107,7 +107,7 @@ fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
         .credentials(credentials)
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )
+    ))
 }
 
 fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {

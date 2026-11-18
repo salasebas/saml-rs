@@ -468,12 +468,12 @@ impl Saml<Sp> {
     ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
     ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
-    /// )?;
+    /// );
     /// let idp = Saml::idp(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
-    /// )?;
+    /// );
     /// let idp = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),

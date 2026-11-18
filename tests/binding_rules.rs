@@ -85,7 +85,7 @@ fn sp_with(
     validation: SpValidationPolicy,
     templates: TemplatePolicy,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?.with_default(),
@@ -95,11 +95,11 @@ fn sp_with(
         .validation(validation)
         .templates(templates)
         .build()?,
-    )
+    ))
 }
 
 fn idp_with(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -109,7 +109,7 @@ fn idp_with(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlE
         .credentials(credentials())
         .validation(validation)
         .build()?,
-    )
+    ))
 }
 
 fn descriptors(

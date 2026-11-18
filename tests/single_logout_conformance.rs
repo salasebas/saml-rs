@@ -46,17 +46,17 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp(slo: &str, policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .slo_endpoint(SloEndpoint::post(slo)?)
             .credentials(signing_credentials())
             .validation(policy)
             .build()?,
-    )
+    ))
 }
 
 fn idp(slo: &str, policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO)?,
@@ -65,7 +65,7 @@ fn idp(slo: &str, policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, Sam
         .credentials(signing_credentials())
         .validation(policy)
         .build()?,
-    )
+    ))
 }
 
 fn descriptors(

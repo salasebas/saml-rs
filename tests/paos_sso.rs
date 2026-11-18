@@ -72,12 +72,12 @@ fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
         .credentials(credentials())
         .validation(SpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         idp.credentials(credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -708,7 +708,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         .validation(sp_validation)
         .xml(encryption)
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -718,7 +718,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         .validation(IdpValidationPolicy::recommended())
         .xml(encryption)
         .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),

@@ -33,7 +33,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp(validation_policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             saml_rs::AcsEndpoint::post(SP_ACS)?,
@@ -42,7 +42,7 @@ fn sp(validation_policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlEr
         .credentials(signing_credentials())
         .validation(validation_policy)
         .build()?,
-    )
+    ))
 }
 
 fn idp(
@@ -56,12 +56,12 @@ fn idp(
     for url in slo_urls {
         builder = builder.slo_endpoint(SloEndpoint::post(*url)?);
     }
-    Saml::idp(
+    Ok(Saml::idp(
         builder
             .credentials(signing_credentials())
             .validation(validation_policy)
             .build()?,
-    )
+    ))
 }
 
 fn descriptor_pair(
@@ -213,7 +213,7 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
         .slo_endpoint(SloEndpoint::post(SP_SLO_RESPONSE)?)
         .credentials(signing_credentials())
         .build()?,
-    )?;
+    );
     let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
     let peer_sp = sp(SpValidationPolicy::recommended())?;
     let response_metadata = peer_sp.metadata_xml().replace(SP_SLO, SP_SLO_RESPONSE);

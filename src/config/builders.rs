@@ -1,8 +1,12 @@
 use std::time::Duration;
 
+use core::fmt;
+
 use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
+use crate::idp::IdentityProvider;
 use crate::metadata::MetadataLifetime;
+use crate::sp::ServiceProvider;
 use crate::template::validate_tag_prefixes;
 
 use super::algorithms::{NameIdFormat, SignatureAlgorithm};
@@ -25,7 +29,8 @@ use crate::model::EndpointUrl;
 /// Typed Service Provider configuration.
 ///
 /// Build it with [`SpConfig::builder`]. A built config has passed every check
-/// in [`SpConfigBuilder::build`] and cannot be changed afterwards.
+/// in [`SpConfigBuilder::build`], holds the metadata `build` generated, and
+/// cannot be changed afterwards.
 ///
 /// # Examples
 ///
@@ -43,7 +48,7 @@ use crate::model::EndpointUrl;
 /// assert_eq!(config.validation(), &SpValidationPolicy::compatibility());
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SpConfig {
     entity_id: EntityId,
     metadata: SpMetadataConfig,
@@ -52,6 +57,21 @@ pub struct SpConfig {
     algorithms: AlgorithmPolicy,
     xml: XmlPolicy,
     templates: TemplatePolicy,
+    pub(crate) service_provider: ServiceProvider,
+}
+
+impl fmt::Debug for SpConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpConfig")
+            .field("entity_id", &self.entity_id)
+            .field("metadata", &self.metadata)
+            .field("credentials", &self.credentials)
+            .field("validation", &self.validation)
+            .field("algorithms", &self.algorithms)
+            .field("xml", &self.xml)
+            .field("templates", &self.templates)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SpConfig {
@@ -108,16 +128,16 @@ impl SpConfig {
     }
 }
 
-/// Dependency-free builder for [`SpConfig`].
+/// Builder for [`SpConfig`].
 #[derive(Debug, Clone)]
 pub struct SpConfigBuilder {
-    entity_id: EntityId,
-    metadata: SpMetadataConfig,
-    credentials: Credentials,
-    validation: SpValidationPolicy,
-    algorithms: AlgorithmPolicy,
-    xml: XmlPolicy,
-    templates: TemplatePolicy,
+    pub(super) entity_id: EntityId,
+    pub(super) metadata: SpMetadataConfig,
+    pub(super) credentials: Credentials,
+    pub(super) validation: SpValidationPolicy,
+    pub(super) algorithms: AlgorithmPolicy,
+    pub(super) xml: XmlPolicy,
+    pub(super) templates: TemplatePolicy,
 }
 
 impl SpConfigBuilder {
@@ -234,9 +254,10 @@ impl SpConfigBuilder {
     /// endpoints with the same index, more ACS endpoints than `unsignedShort`
     /// indexes, an unknown or repeated element ordering group, or a
     /// `validUntil` outside the years 0001 through 9999.
-    /// [`Saml::sp`](crate::Saml::sp) accepts every config this returns.
     pub fn build(self) -> Result<SpConfig, SamlError> {
-        let config = SpConfig {
+        let service_provider = self.service_provider()?;
+        validate_sp_policy(&self)?;
+        Ok(SpConfig {
             entity_id: self.entity_id,
             metadata: self.metadata,
             credentials: self.credentials,
@@ -244,17 +265,16 @@ impl SpConfigBuilder {
             algorithms: self.algorithms,
             xml: self.xml,
             templates: self.templates,
-        };
-        config.to_service_provider()?;
-        validate_sp_policy(&config)?;
-        Ok(config)
+            service_provider,
+        })
     }
 }
 
 /// Typed Identity Provider configuration.
 ///
 /// Build it with [`IdpConfig::builder`]. A built config has passed every check
-/// in [`IdpConfigBuilder::build`] and cannot be changed afterwards.
+/// in [`IdpConfigBuilder::build`], holds the metadata `build` generated, and
+/// cannot be changed afterwards.
 ///
 /// # Examples
 ///
@@ -278,16 +298,32 @@ impl SpConfigBuilder {
 /// assert_eq!(config.issuance_lifetime(), Duration::from_secs(10 * 60));
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct IdpConfig {
     entity_id: EntityId,
     metadata: IdpMetadataConfig,
     credentials: Credentials,
-    issuance_lifetime: time::Duration,
+    pub(crate) issuance_lifetime: time::Duration,
     validation: IdpValidationPolicy,
     algorithms: AlgorithmPolicy,
     xml: XmlPolicy,
     templates: TemplatePolicy,
+    pub(crate) identity_provider: IdentityProvider,
+}
+
+impl fmt::Debug for IdpConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IdpConfig")
+            .field("entity_id", &self.entity_id)
+            .field("metadata", &self.metadata)
+            .field("credentials", &self.credentials)
+            .field("issuance_lifetime", &self.issuance_lifetime)
+            .field("validation", &self.validation)
+            .field("algorithms", &self.algorithms)
+            .field("xml", &self.xml)
+            .field("templates", &self.templates)
+            .finish_non_exhaustive()
+    }
 }
 
 impl IdpConfig {
@@ -353,23 +389,19 @@ impl IdpConfig {
     pub fn templates(&self) -> &TemplatePolicy {
         &self.templates
     }
-
-    pub(crate) fn issuance_period(&self) -> time::Duration {
-        self.issuance_lifetime
-    }
 }
 
-/// Dependency-free builder for [`IdpConfig`].
+/// Builder for [`IdpConfig`].
 #[derive(Debug, Clone)]
 pub struct IdpConfigBuilder {
-    entity_id: EntityId,
-    metadata: IdpMetadataConfig,
-    credentials: Credentials,
-    issuance_lifetime: Duration,
-    validation: IdpValidationPolicy,
-    algorithms: AlgorithmPolicy,
-    xml: XmlPolicy,
-    templates: TemplatePolicy,
+    pub(super) entity_id: EntityId,
+    pub(super) metadata: IdpMetadataConfig,
+    pub(super) credentials: Credentials,
+    pub(super) issuance_lifetime: Duration,
+    pub(super) validation: IdpValidationPolicy,
+    pub(super) algorithms: AlgorithmPolicy,
+    pub(super) xml: XmlPolicy,
+    pub(super) templates: TemplatePolicy,
 }
 
 impl IdpConfigBuilder {
@@ -502,22 +534,22 @@ impl IdpConfigBuilder {
     /// IdP metadata from the config: a NameID format that is not an absolute
     /// URI reference, an unknown or repeated element ordering group, or a
     /// `validUntil` outside the years 0001 through 9999.
-    /// [`Saml::idp`](crate::Saml::idp) accepts every config this returns.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         self.metadata.ensure_unique_artifact_resolution_indexes()?;
-        let config = IdpConfig {
+        let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
+        let identity_provider = self.identity_provider()?;
+        validate_idp_policy(&self)?;
+        Ok(IdpConfig {
             entity_id: self.entity_id,
             metadata: self.metadata,
             credentials: self.credentials,
-            issuance_lifetime: validated_idp_issuance_lifetime(self.issuance_lifetime)?,
+            issuance_lifetime,
             validation: self.validation,
             algorithms: self.algorithms,
             xml: self.xml,
             templates: self.templates,
-        };
-        config.to_identity_provider()?;
-        validate_idp_policy(&config)?;
-        Ok(config)
+            identity_provider,
+        })
     }
 }
 
@@ -536,7 +568,7 @@ fn validate_shared_policy(
     )
 }
 
-fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
+fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     validate_sp_crypto_support(config)?;
     validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)?;
     if matches!(
@@ -551,7 +583,7 @@ fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
     Ok(())
 }
 
-fn validate_idp_policy(config: &IdpConfig) -> Result<(), SamlError> {
+fn validate_idp_policy(config: &IdpConfigBuilder) -> Result<(), SamlError> {
     validate_idp_crypto_support(config)?;
     validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)
 }
@@ -591,12 +623,12 @@ fn validate_signing_credentials(
 }
 
 #[cfg(crypto)]
-fn validate_sp_crypto_support(_config: &SpConfig) -> Result<(), SamlError> {
+fn validate_sp_crypto_support(_config: &SpConfigBuilder) -> Result<(), SamlError> {
     Ok(())
 }
 
 #[cfg(not(crypto))]
-fn validate_sp_crypto_support(config: &SpConfig) -> Result<(), SamlError> {
+fn validate_sp_crypto_support(config: &SpConfigBuilder) -> Result<(), SamlError> {
     if sp_config_requires_crypto(config) {
         return Err(SamlError::Unsupported(
             "selected SP config policy requires a crypto provider feature".into(),
@@ -606,12 +638,12 @@ fn validate_sp_crypto_support(config: &SpConfig) -> Result<(), SamlError> {
 }
 
 #[cfg(crypto)]
-fn validate_idp_crypto_support(_config: &IdpConfig) -> Result<(), SamlError> {
+fn validate_idp_crypto_support(_config: &IdpConfigBuilder) -> Result<(), SamlError> {
     Ok(())
 }
 
 #[cfg(not(crypto))]
-fn validate_idp_crypto_support(config: &IdpConfig) -> Result<(), SamlError> {
+fn validate_idp_crypto_support(config: &IdpConfigBuilder) -> Result<(), SamlError> {
     if idp_config_requires_crypto(config) {
         return Err(SamlError::Unsupported(
             "selected IdP config policy requires a crypto provider feature".into(),
@@ -621,7 +653,7 @@ fn validate_idp_crypto_support(config: &IdpConfig) -> Result<(), SamlError> {
 }
 
 #[cfg(not(crypto))]
-fn sp_config_requires_crypto(config: &SpConfig) -> bool {
+fn sp_config_requires_crypto(config: &SpConfigBuilder) -> bool {
     matches!(
         config.validation.assertions,
         AssertionSignaturePolicy::RequireSigned
@@ -636,7 +668,7 @@ fn sp_config_requires_crypto(config: &SpConfig) -> bool {
 }
 
 #[cfg(not(crypto))]
-fn idp_config_requires_crypto(config: &IdpConfig) -> bool {
+fn idp_config_requires_crypto(config: &IdpConfigBuilder) -> bool {
     matches!(
         config.validation.authn_requests,
         AuthnRequestValidationPolicy::RequireSigned

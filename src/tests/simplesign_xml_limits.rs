@@ -67,7 +67,7 @@ fn parties() -> TestResult<Parties> {
         })
         .xml(raised_xml_policy())
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -83,7 +83,7 @@ fn parties() -> TestResult<Parties> {
         })
         .xml(raised_xml_policy())
         .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),

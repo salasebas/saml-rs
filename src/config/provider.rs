@@ -1,4 +1,4 @@
-//! Typed configs to the metadata generator input and the internal providers the typed API runs on.
+//! Typed config builders to the metadata generator input and the internal providers the typed API runs on.
 
 use crate::error::SamlError;
 use crate::idp::IdentityProvider;
@@ -6,37 +6,37 @@ use crate::metadata::{IdpMetadataInput, SpMetadataInput};
 use crate::sp::ServiceProvider;
 
 use super::algorithms::name_id_format_uris;
-use super::builders::{IdpConfig, SpConfig};
+use super::builders::{IdpConfigBuilder, SpConfigBuilder};
 use super::credentials::Credentials;
 use super::descriptors::ManageNameIdService;
 use super::policies::{
     AssertionSignaturePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
 };
 
-impl SpConfig {
-    pub(crate) fn to_service_provider(&self) -> Result<ServiceProvider, SamlError> {
+impl SpConfigBuilder {
+    pub(super) fn service_provider(&self) -> Result<ServiceProvider, SamlError> {
         ServiceProvider::from_config(&sp_metadata_input(self), self.entity_setting())
     }
 }
 
-impl IdpConfig {
-    pub(crate) fn to_identity_provider(&self) -> Result<IdentityProvider, SamlError> {
+impl IdpConfigBuilder {
+    pub(super) fn identity_provider(&self) -> Result<IdentityProvider, SamlError> {
         IdentityProvider::from_config(&idp_metadata_input(self), self.entity_setting())
     }
 }
 
-fn sp_metadata_input(config: &SpConfig) -> SpMetadataInput {
-    let metadata = config.metadata();
+fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
+    let metadata = &config.metadata;
     SpMetadataInput {
-        entity_id: config.entity_id().as_str().to_string(),
-        signing_certs: signing_certificates(config.credentials()),
-        encrypt_certs: encryption_certificates(config.credentials()),
+        entity_id: config.entity_id.as_str().to_string(),
+        signing_certs: signing_certificates(&config.credentials),
+        encrypt_certs: encryption_certificates(&config.credentials),
         authn_requests_signed: matches!(
-            config.validation().authn_requests,
+            config.validation.authn_requests,
             AuthnRequestSigningPolicy::Sign
         ),
         want_assertions_signed: matches!(
-            config.validation().assertions,
+            config.validation.assertions,
             AssertionSignaturePolicy::RequireSigned
         ),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),
@@ -68,14 +68,14 @@ fn sp_metadata_input(config: &SpConfig) -> SpMetadataInput {
     }
 }
 
-fn idp_metadata_input(config: &IdpConfig) -> IdpMetadataInput {
-    let metadata = config.metadata();
+fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
+    let metadata = &config.metadata;
     IdpMetadataInput {
-        entity_id: config.entity_id().as_str().to_string(),
-        signing_certs: signing_certificates(config.credentials()),
-        encrypt_certs: encryption_certificates(config.credentials()),
+        entity_id: config.entity_id.as_str().to_string(),
+        signing_certs: signing_certificates(&config.credentials),
+        encrypt_certs: encryption_certificates(&config.credentials),
         want_authn_requests_signed: matches!(
-            config.validation().authn_requests,
+            config.validation.authn_requests,
             AuthnRequestValidationPolicy::RequireSigned
         ),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),

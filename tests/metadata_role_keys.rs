@@ -30,7 +30,7 @@ fn credentials(key: &str, cert: &str) -> Credentials {
 }
 
 fn idp_signing_with(key: &str, cert: &str) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
+    Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO)?,
@@ -38,7 +38,7 @@ fn idp_signing_with(key: &str, cert: &str) -> Result<Saml<saml_rs::Idp>, SamlErr
         .credentials(credentials(key, cert))
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )
+    ))
 }
 
 fn validation() -> SamlValidationContext<'static> {
@@ -79,7 +79,7 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
             .credentials(credentials(SP_ROLE_KEY, SP_ROLE_CERT))
             .validation(SpValidationPolicy::recommended())
             .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -158,7 +158,7 @@ fn with_role_in_both_orders(metadata: &str, descriptor: &str, role: &str) -> [St
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(credentials(key, cert))
             .validation(SpValidationPolicy {
@@ -166,7 +166,7 @@ fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>,
                 ..SpValidationPolicy::recommended()
             })
             .build()?,
-    )
+    ))
 }
 
 #[test]
@@ -187,8 +187,8 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
         authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
         ..IdpValidationPolicy::recommended()
     });
-    let published_sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?)?;
-    let published_idp = Saml::idp(idp_config.clone().credentials(rolling).build()?)?;
+    let published_sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?);
+    let published_idp = Saml::idp(idp_config.clone().credentials(rolling).build()?);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         published_sp.metadata_xml(),
@@ -206,8 +206,8 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
     ] {
         let rolling = credentials(key, current)
             .with_additional_signing_certificate(CertificatePem::new(overlap));
-        let sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?)?;
-        let idp = Saml::idp(idp_config.clone().credentials(rolling).build()?)?;
+        let sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?);
+        let idp = Saml::idp(idp_config.clone().credentials(rolling).build()?);
 
         for metadata in [sp.metadata_xml(), idp.metadata_xml()] {
             let document = roxmltree::Document::parse(metadata)?;
@@ -257,7 +257,7 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
             .credentials(credentials(SP_ROLE_KEY, SP_ROLE_CERT))
             .validation(SpValidationPolicy::recommended())
             .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -344,7 +344,7 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
             ..IdpValidationPolicy::recommended()
         })
         .build()?,
-    )?;
+    );
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),

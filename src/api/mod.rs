@@ -141,32 +141,18 @@ pub struct Idp {
 }
 
 impl Saml {
-    /// Build a typed Service Provider facade.
-    ///
-    /// # Errors
-    ///
-    /// Returns no error for a config [`SpConfigBuilder::build`] returned:
-    /// `build` generates the same SP metadata and returns its errors.
-    ///
-    /// [`SpConfigBuilder::build`]: crate::SpConfigBuilder::build
-    pub fn sp(config: SpConfig) -> Result<Saml<Sp>, SamlError> {
-        let service_provider = config.to_service_provider()?;
-        Ok(Saml(Sp { service_provider }))
+    /// Build a typed Service Provider facade from a built config.
+    pub fn sp(config: SpConfig) -> Saml<Sp> {
+        Saml(Sp {
+            service_provider: config.service_provider,
+        })
     }
 
-    /// Build a typed Identity Provider facade.
-    ///
-    /// # Errors
-    ///
-    /// Returns no error for a config [`IdpConfigBuilder::build`] returned:
-    /// `build` generates the same IdP metadata and returns its errors.
-    ///
-    /// [`IdpConfigBuilder::build`]: crate::IdpConfigBuilder::build
-    pub fn idp(config: IdpConfig) -> Result<Saml<Idp>, SamlError> {
-        let identity_provider = config.to_identity_provider()?;
-        Ok(Saml(Idp {
-            identity_provider,
-            issuance_lifetime: config.issuance_period(),
-        }))
+    /// Build a typed Identity Provider facade from a built config.
+    pub fn idp(config: IdpConfig) -> Saml<Idp> {
+        Saml(Idp {
+            identity_provider: config.identity_provider,
+            issuance_lifetime: config.issuance_lifetime,
+        })
     }
 }

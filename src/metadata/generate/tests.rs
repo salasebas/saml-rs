@@ -118,7 +118,7 @@ fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
     .validation(crate::SpValidationPolicy::compatibility())
     .build()?;
 
-    let sp = crate::Saml::sp(config)?;
+    let sp = crate::Saml::sp(config);
     let parsed = SpMetadata::from_xml(sp.metadata_xml())?;
 
     let endpoint = |index, location: &str| crate::metadata::sp::AcsMetadataEndpoint {

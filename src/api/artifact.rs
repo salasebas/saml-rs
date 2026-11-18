@@ -161,12 +161,12 @@ impl Saml<Idp> {
     ///         .artifact_resolution_service(service)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
-    /// )?;
+    /// );
     /// let sp = Saml::sp(
     ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, saml_rs::AcsEndpoint::post("https://sp.example.com/acs")?)
     ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
-    /// )?;
+    /// );
     /// let sp_descriptor = SpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://sp.example.com/metadata")?,
     ///     sp.metadata_xml(),

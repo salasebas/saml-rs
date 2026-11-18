@@ -18,7 +18,7 @@ fn identity_provider(entity_id: &str) -> Result<Saml<saml_rs::Idp>, SamlError> {
     )
     .validation(IdpValidationPolicy::compatibility())
     .build()?;
-    Saml::idp(config)
+    Ok(Saml::idp(config))
 }
 
 fn remember(

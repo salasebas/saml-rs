@@ -46,7 +46,7 @@ fn sign_in(
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
             .build()?,
-    )?;
+    );
 
     let idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,

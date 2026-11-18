@@ -19,7 +19,7 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
             ..saml_rs::XmlPolicy::default()
         })
         .build()?,
-    )?;
+    );
     let sp = soap_service_provider()?;
     let envelope = sp_request(&format!(
         "{}<samlp:NewID>sp-alias</samlp:NewID>",

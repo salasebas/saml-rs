@@ -381,7 +381,7 @@ impl Saml<Idp> {
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::post("https://idp.example.com/sso")?)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
-    /// )?;
+    /// );
     /// let cookie = idp.remember_identity_provider(RememberIdentityProvider::new(
     ///     "example.org",
     ///     CommonDomainCookieLifetime::Session,

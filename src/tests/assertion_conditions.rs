@@ -85,7 +85,7 @@ fn exchange_for(
         .credentials(signing_credentials())
         .validation(sp_validation)
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -94,7 +94,7 @@ fn exchange_for(
         .credentials(signing_credentials())
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     if unsolicited {
         let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
@@ -363,7 +363,7 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -372,7 +372,7 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
         .credentials(signing_credentials())
         .validation(IdpValidationPolicy::recommended())
         .build()?,
-    )?;
+    );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::simple_sign())?;
     Ok(Exchange {
@@ -1042,7 +1042,7 @@ mod encrypted_assertions {
         acs: AcsEndpoint,
         validation: SpValidationPolicy,
     ) -> Result<Saml<saml_rs::Sp>, SamlError> {
-        Saml::sp(
+        Ok(Saml::sp(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs)
                 .credentials(
                     signing_credentials().with_decryption(saml_rs::DecryptionCredential {
@@ -1053,7 +1053,7 @@ mod encrypted_assertions {
                 )
                 .validation(validation)
                 .build()?,
-        )
+        ))
     }
 
     fn post_exchange(

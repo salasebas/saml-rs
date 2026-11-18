@@ -22,7 +22,7 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
             ..saml_rs::XmlPolicy::default()
         })
         .build()?,
-    )?;
+    );
     let started = sp.start_paos_sso(
         &idp_descriptor,
         PaosClientRequest::headers_checked_by_caller(),

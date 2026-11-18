@@ -165,8 +165,8 @@ impl Saml<Sp> {
     ///     .validation(IdpValidationPolicy::compatibility())
     ///     .build()?;
     ///
-    /// let sp = Saml::sp(sp_config)?;
-    /// let idp = Saml::idp(idp_config)?;
+    /// let sp = Saml::sp(sp_config);
+    /// let idp = Saml::idp(idp_config);
     /// let idp = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),

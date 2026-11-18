@@ -57,8 +57,8 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     .credentials(signing_credentials())
     .validation(IdpValidationPolicy::recommended())
     .build()?;
-    let sp = Saml::sp(sp_config)?;
-    let idp = Saml::idp(idp_config)?;
+    let sp = Saml::sp(sp_config);
+    let idp = Saml::idp(idp_config);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),

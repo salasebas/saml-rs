@@ -50,7 +50,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
             ..SpValidationPolicy::recommended()
         })
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -64,7 +64,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
             ..IdpValidationPolicy::recommended()
         })
         .build()?,
-    )?;
+    );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),

@@ -62,7 +62,7 @@ impl SignedExchange {
                 ..SpValidationPolicy::recommended()
             })
             .build()?,
-        )?;
+        );
         let idp = Saml::idp(
             IdpConfig::builder(
                 EntityId::try_new(IDP_ENTITY_ID)?,
@@ -71,7 +71,7 @@ impl SignedExchange {
             .credentials(signing_credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
-        )?;
+        );
         let sp_descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),

@@ -32,7 +32,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
                     Credentials::default().with_hmac_secret(HmacSecret::try_new(sp_secret)?),
                 )
                 .build()?,
-        )?;
+        );
         let idp = Saml::idp(
             idp_config_builder(signed_authn_request_idp_validation(), None)?
                 .algorithms(hmac)
@@ -40,7 +40,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
                     Credentials::default().with_hmac_secret(HmacSecret::try_new(idp_secret)?),
                 )
                 .build()?,
-        )?;
+        );
         let (sp_missing, idp_missing) = descriptors(&sp, &idp)?;
         let sp_wrong = sp_missing
             .clone()

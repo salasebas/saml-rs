@@ -66,7 +66,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
+    Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -74,7 +74,7 @@ fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlErro
         .credentials(signing_credentials())
         .validation(validation)
         .build()?,
-    )
+    ))
 }
 
 fn idp_with(
@@ -91,7 +91,7 @@ fn idp_with(
     if single_logout {
         builder = builder.slo_endpoint(SloEndpoint::redirect(IDP_SLO)?);
     }
-    Saml::idp(builder.build()?)
+    Ok(Saml::idp(builder.build()?))
 }
 
 fn descriptors(
@@ -411,7 +411,7 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
         ..saml_rs::TemplatePolicy::default()
     })
     .build()?;
-    let idp = Saml::idp(idp_config)?;
+    let idp = Saml::idp(idp_config);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
@@ -512,7 +512,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
         ..saml_rs::TemplatePolicy::default()
     })
     .build()?;
-    let template_idp = Saml::idp(template_config)?;
+    let template_idp = Saml::idp(template_config);
     let (sp_descriptor, _) = descriptors(&sp, &template_idp)?;
     let response = template_idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
     assert!(response_xml(&response)?.contains("<saml:NameID>alice@example.com</saml:NameID>"));
@@ -532,7 +532,7 @@ fn typed_sso_assertion_name_id_keeps_the_configured_format(
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .build()?,
-    )?;
+    );
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
     let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
@@ -603,7 +603,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .build()?,
-    )?;
+    );
     let (sp_descriptor, _) = descriptors(&sp, &soap_only_idp)?;
     let response = soap_only_idp.initiate_sso(
         &sp_descriptor,
@@ -678,7 +678,7 @@ fn typed_transient_name_id_omits_allow_create_under_producer_rules(
         .credentials(signing_credentials())
         .validation(validation)
         .build()?,
-    )?;
+    );
     let idp = idp_with(IdpValidationPolicy::compatibility(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
 
@@ -780,7 +780,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
         )
         .validation(signing_sp_validation())
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -794,7 +794,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
             ..saml_rs::TemplatePolicy::default()
         })
         .build()?,
-    )?;
+    );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -833,7 +833,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         .validation(signing_sp_validation())
         .xml(encryption)
         .build()?,
-    )?;
+    );
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -843,7 +843,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         .validation(signed_authn_request_idp_validation())
         .xml(encryption)
         .build()?,
-    )?;
+    );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -900,7 +900,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         .validation(SpValidationPolicy::compatibility())
         .xml(encryption)
         .build()?,
-    )?;
+    );
     let session = permissive.finish_sso(
         &idp_descriptor,
         &started.pending,
@@ -924,7 +924,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
         ..saml_rs::TemplatePolicy::default()
     })
     .build()?;
-    let sp = Saml::sp(config)?;
+    let sp = Saml::sp(config);
     let idp = idp_with(IdpValidationPolicy::compatibility(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     match sp.start_sso(
@@ -950,7 +950,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
         ..saml_rs::TemplatePolicy::default()
     })
     .build()?;
-    let idp = Saml::idp(idp_config)?;
+    let idp = Saml::idp(idp_config);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     match idp.initiate_sso(
         &sp_descriptor,
@@ -1207,7 +1207,7 @@ fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dy
         ..saml_rs::TemplatePolicy::default()
     })
     .build()?;
-    let idp = Saml::idp(idp_config)?;
+    let idp = Saml::idp(idp_config);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
     match idp.initiate_sso(
@@ -1235,7 +1235,7 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
             .credentials(signing_credentials())
             .validation(signing_sp_validation())
             .build()?,
-    )?;
+    );
     let idp = idp_with(signed_authn_request_idp_validation(), false)?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
@@ -1272,7 +1272,7 @@ fn typed_error_response_stays_plaintext_when_assertion_encryption_is_on(
         .validation(signed_authn_request_idp_validation())
         .xml(encryption)
         .build()?,
-    )?;
+    );
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
