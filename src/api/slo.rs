@@ -545,11 +545,6 @@ fn start_slo_impl(
         name_id_encryption: options.identifier_encryption,
     })?;
     let outbound = Outbound::<LogoutRequest>::try_from(created.context)?;
-    if matches!(role, StartSloRole::SessionAuthority { .. }) && created.not_on_or_after.is_none() {
-        return Err(SamlError::Invalid(
-            "Session Authority LogoutRequest is missing its generated expiration".into(),
-        ));
-    }
     let pending = PendingLogoutRequest::new(
         outbound.id().clone(),
         options.relay_state,
