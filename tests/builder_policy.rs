@@ -7,12 +7,12 @@ use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,
     AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
-    DecryptionCredential, DigestAlgorithm, EndpointUrl, EntityId, IdpConfig, IdpMetadataElement,
-    IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy,
-    ManageNameIdService, MaskGenerationFunction, NameIdCreationPolicy, NameIdFormat, PrivateKeyPem,
+    DigestAlgorithm, EndpointUrl, EntityId, IdpConfig, IdpMetadataElement, IdpValidationPolicy,
+    KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService,
+    MaskGenerationFunction, NameIdCreationPolicy, NameIdFormat, PrivateKeyPem,
     ResponseSignaturePolicy, Saml, SamlError, SignatureAlgorithm, SloEndpoint, SpConfig,
     SpMetadataElement, SpValidationPolicy, SsoEndpoint, TemplatePolicy, TransformAlgorithm,
-    XmlPolicy, XmlSignatureProfile,
+    X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 
 use saml_rs::raw::EntitySetting;
@@ -182,9 +182,11 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
 }
 
 fn signing_credentials() -> Credentials {
-    Credentials::default()
-        .with_signing_key(PrivateKeyPem::new("test signing key"))
-        .with_signing_certificate(CertificatePem::new("test signing certificate"))
+    Credentials::default().with_signing_credential(X509Credential {
+        certificate: CertificatePem::new("test signing certificate"),
+        key: PrivateKeyPem::new("test signing key"),
+        passphrase: None,
+    })
 }
 
 fn assert_missing_key(result: Result<impl Sized, SamlError>, field: &str) {
@@ -561,11 +563,12 @@ fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_charact
 #[test]
 fn sp_builder_rejects_additional_decryption_keys_without_decryption_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let credentials = Credentials::default().with_additional_decryption_key(DecryptionCredential {
-        certificate: CertificatePem::new("certificate"),
-        key: PrivateKeyPem::new("key"),
-        passphrase: None,
-    });
+    let credentials =
+        Credentials::default().with_additional_decryption_credential(X509Credential {
+            certificate: CertificatePem::new("certificate"),
+            key: PrivateKeyPem::new("key"),
+            passphrase: None,
+        });
 
     let result = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
@@ -575,7 +578,7 @@ fn sp_builder_rejects_additional_decryption_keys_without_decryption_key(
     .credentials(credentials)
     .build();
 
-    assert_missing_key(result, "decryption_key");
+    assert_missing_key(result, "decryption_credential");
     Ok(())
 }
 
@@ -639,28 +642,7 @@ fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
     })
     .build();
 
-    assert_missing_key(result, "signing_key");
-    Ok(())
-}
-
-#[cfg(crypto)]
-#[test]
-fn sp_builder_requires_signing_certificate_when_authn_requests_are_signed(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let credentials =
-        Credentials::default().with_signing_key(PrivateKeyPem::new("test signing key"));
-    let result = SpConfig::builder(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        AcsEndpoint::post("https://sp.example.com/acs")?,
-    )
-    .validation(SpValidationPolicy {
-        authn_requests: AuthnRequestSigningPolicy::Sign,
-        ..SpValidationPolicy::recommended()
-    })
-    .credentials(credentials)
-    .build();
-
-    assert_missing_key(result, "signing_certificate");
+    assert_missing_key(result, "signing_credential");
     Ok(())
 }
 
@@ -695,7 +677,7 @@ fn sp_builder_requires_decryption_key_when_encrypted_assertions_are_selected(
     .xml(xml)
     .build();
 
-    assert_missing_key(result, "decryption_key");
+    assert_missing_key(result, "decryption_credential");
     Ok(())
 }
 

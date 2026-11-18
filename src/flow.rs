@@ -7,7 +7,7 @@ use crate::binding::{
     MAX_DEFLATE_RAW_DECODE_BYTES,
 };
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
-use crate::config::{DecryptionCredential, HmacSecret};
+use crate::config::{HmacSecret, X509Credential};
 use crate::constants::{Binding, ParserType};
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
@@ -130,7 +130,7 @@ pub struct FlowOptions<'a> {
     pub decrypt_key_pass: Option<&'a str>,
     /// More decryption keys, tried in order after `decrypt_key`. Each one's
     /// passphrase is its own.
-    pub additional_decrypt_keys: &'a [DecryptionCredential],
+    pub additional_decrypt_keys: &'a [X509Credential],
     /// Typed SP: assertion children that arrive encrypted. They are decrypted
     /// with `element_decrypt_key` after a signature verifies.
     pub(crate) assertion_elements: AssertionElementEncryption,

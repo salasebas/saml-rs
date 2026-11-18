@@ -24,7 +24,7 @@ pub use algorithms::{
 };
 pub use builders::{IdpConfig, IdpConfigBuilder, SpConfig, SpConfigBuilder};
 pub use credentials::{
-    CertificatePem, Credentials, DecryptionCredential, HmacSecret, Passphrase, PrivateKeyPem,
+    CertificatePem, Credentials, HmacSecret, Passphrase, PrivateKeyPem, X509Credential,
 };
 pub(crate) use descriptors::validate_entity_id_syntax;
 pub use descriptors::{

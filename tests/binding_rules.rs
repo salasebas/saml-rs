@@ -20,7 +20,7 @@ use saml_rs::{
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
     PrivateKeyPem, RelayState, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject,
-    TemplatePolicy, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    TemplatePolicy, X509Credential, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 use url::Url;
 
@@ -52,9 +52,11 @@ const SIGNED_AUTHN_REQUEST_TEMPLATE: &str = r#"
 "#;
 
 fn credentials() -> Credentials {
-    Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
-        .with_signing_certificate(saml_rs::CertificatePem::new(CERT))
+    Credentials::default().with_signing_credential(X509Credential {
+        certificate: saml_rs::CertificatePem::new(CERT),
+        key: PrivateKeyPem::new(PRIVKEY),
+        passphrase: None,
+    })
 }
 
 fn signing_sp_validation() -> SpValidationPolicy {

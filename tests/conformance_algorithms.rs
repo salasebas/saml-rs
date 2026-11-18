@@ -14,7 +14,7 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, Saml,
     SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSlo, StartSso, Subject,
-    TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
+    TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
     Attribute, AttributeValue, Attributes, DataEncryptionAlgorithm, DigestAlgorithm,
@@ -54,9 +54,12 @@ fn signed_with(algorithms: AlgorithmPolicy, key: &str, cert: &str) -> Side {
     Side {
         algorithms,
         credentials: Credentials::default()
-            .with_signing_key(PrivateKeyPem::new(key))
-            .with_signing_certificate(CertificatePem::new(cert))
-            .with_decryption(saml_rs::DecryptionCredential {
+            .with_signing_credential(X509Credential {
+                certificate: CertificatePem::new(cert),
+                key: PrivateKeyPem::new(key),
+                passphrase: None,
+            })
+            .with_decryption_credential(saml_rs::X509Credential {
                 certificate: CertificatePem::new(RSA_CERT),
                 key: PrivateKeyPem::new(RSA_KEY),
                 passphrase: None,

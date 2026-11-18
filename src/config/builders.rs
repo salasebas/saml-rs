@@ -559,8 +559,10 @@ fn validate_shared_policy(
     templates: &TemplatePolicy,
 ) -> Result<(), SamlError> {
     super::encryption::validate_algorithms(algorithms)?;
-    if !credentials.additional_decryption_keys().is_empty() && credentials.decryption().is_none() {
-        return Err(SamlError::MissingKey("decryption_key".into()));
+    if !credentials.additional_decryption_credentials().is_empty()
+        && credentials.decryption_credential().is_none()
+    {
+        return Err(SamlError::MissingKey("decryption_credential".into()));
     }
     validate_tag_prefixes(
         &templates.tag_prefix_protocol,
@@ -577,8 +579,10 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     ) {
         validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
     }
-    if config.xml.encryption.selects_any_element() && config.credentials.decryption().is_none() {
-        return Err(SamlError::MissingKey("decryption_key".into()));
+    if config.xml.encryption.selects_any_element()
+        && config.credentials.decryption_credential().is_none()
+    {
+        return Err(SamlError::MissingKey("decryption_credential".into()));
     }
     Ok(())
 }
@@ -613,11 +617,8 @@ fn validate_signing_credentials(
         }
         return Ok(());
     }
-    if credentials.signing_key().is_none() {
-        return Err(SamlError::MissingKey("signing_key".into()));
-    }
-    if credentials.signing_certificate().is_none() {
-        return Err(SamlError::MissingKey("signing_certificate".into()));
+    if credentials.signing_credential().is_none() {
+        return Err(SamlError::MissingKey("signing_credential".into()));
     }
     Ok(())
 }

@@ -5,10 +5,10 @@ use saml_rs::constants::{
 use saml_rs::flow::FlowOptions;
 use saml_rs::raw::EntitySetting;
 use saml_rs::{
-    CertificatePem, Credentials, DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm,
-    EntityId, HmacSecret, IdpDescriptor, KeyEncryptionAlgorithm, MaskGenerationFunction,
-    MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem, SamlError, SignatureAlgorithm,
-    SpDescriptor, TransformAlgorithm,
+    CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, HmacSecret,
+    IdpDescriptor, KeyEncryptionAlgorithm, MaskGenerationFunction, MetadataTrustPolicy,
+    NameIdFormat, Passphrase, PrivateKeyPem, SamlError, SignatureAlgorithm, SpDescriptor,
+    TransformAlgorithm, X509Credential,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");
@@ -67,11 +67,16 @@ fn hmac_secret_is_at_least_the_sha1_output_length() {
 #[test]
 fn typed_config_credentials_debug_redacts_every_secret() {
     let credentials = Credentials::default()
-        .with_encrypted_signing_key(
-            PrivateKeyPem::new("dummy-signing-key-for-credentials-debug-test"),
-            Passphrase::new("dummy-signing-pass-for-credentials-debug-test"),
-        )
-        .with_decryption(DecryptionCredential {
+        .with_signing_credential(X509Credential {
+            certificate: CertificatePem::new(
+                "dummy-signing-certificate-for-credentials-debug-test",
+            ),
+            key: PrivateKeyPem::new("dummy-signing-key-for-credentials-debug-test"),
+            passphrase: Some(Passphrase::new(
+                "dummy-signing-pass-for-credentials-debug-test",
+            )),
+        })
+        .with_decryption_credential(X509Credential {
             certificate: CertificatePem::new("dummy-certificate-for-credentials-debug-test"),
             key: PrivateKeyPem::new("dummy-decryption-key-for-credentials-debug-test"),
             passphrase: Some(Passphrase::new(

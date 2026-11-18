@@ -101,7 +101,7 @@ fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
 
 #[cfg(not(feature = "crypto-fips"))]
 fn encryption_credentials() -> Credentials {
-    signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+    signing_credentials().with_decryption_credential(saml_rs::X509Credential {
         certificate: CertificatePem::new(CERT),
         key: PrivateKeyPem::new(PRIVKEY),
         passphrase: None,

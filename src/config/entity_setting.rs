@@ -70,7 +70,8 @@ fn common_setting(
     xml: &XmlPolicy,
     templates: &TemplatePolicy,
 ) -> EntitySetting {
-    let decryption = credentials.decryption();
+    let signing = credentials.signing_credential();
+    let decryption = credentials.decryption_credential();
     EntitySetting {
         entity_id: Some(entity_id.as_str().to_string()),
         request_signature_algorithm: algorithms.signature.as_uri().to_string(),
@@ -95,22 +96,18 @@ fn common_setting(
             .allows_rsa15_key_transport_decryption(),
         max_decryption_work: xml.encryption.max_decryption_work(),
         name_id_format: name_id_format_uris(name_id_format),
-        private_key: credentials
-            .signing_key()
-            .map(|key| key.as_str().to_string()),
-        private_key_pass: credentials
-            .signing_key_passphrase()
+        private_key: signing.map(|credential| credential.key.as_str().to_string()),
+        private_key_pass: signing
+            .and_then(|credential| credential.passphrase.as_ref())
             .map(|passphrase| passphrase.as_str().to_string()),
-        signing_cert: credentials
-            .signing_certificate()
-            .map(|certificate| certificate.as_str().to_string()),
+        signing_cert: signing.map(|credential| credential.certificate.as_str().to_string()),
         hmac_secret: credentials.hmac_secret().cloned(),
         encrypt_cert: decryption.map(|credential| credential.certificate.as_str().to_string()),
         enc_private_key: decryption.map(|credential| credential.key.as_str().to_string()),
         enc_private_key_pass: decryption
             .and_then(|credential| credential.passphrase.as_ref())
             .map(|passphrase| passphrase.as_str().to_string()),
-        additional_decryption_keys: credentials.additional_decryption_keys().to_vec(),
+        additional_decryption_keys: credentials.additional_decryption_credentials().to_vec(),
         redirect_inflate_max_bytes: xml.redirect_inflate_max_bytes,
         xml_limits: xml.limits,
         schema_validator: xml.schema_validator,

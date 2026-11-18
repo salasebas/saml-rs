@@ -480,7 +480,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std::error::Error>> {
-    let credentials = signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+    let credentials = signing_credentials().with_decryption_credential(saml_rs::X509Credential {
         certificate: saml_rs::CertificatePem::new(CERT),
         key: saml_rs::PrivateKeyPem::new(KEY),
         passphrase: None,

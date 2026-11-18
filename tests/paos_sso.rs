@@ -22,6 +22,7 @@ use saml_rs::{
     PaosClientRequest, PaosSsoResponse, RelayState, ReplayPolicy, RespondPaosSso, Saml, SamlError,
     SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartPaosSso, Status, Subject, SubjectConfirmation, SubordinateStatusCode, TransformAlgorithm,
+    X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -40,9 +41,11 @@ struct EnhancedClient {
 }
 
 fn credentials() -> saml_rs::Credentials {
-    saml_rs::Credentials::default()
-        .with_signing_key(saml_rs::PrivateKeyPem::new(PRIVKEY))
-        .with_signing_certificate(saml_rs::CertificatePem::new(CERT))
+    saml_rs::Credentials::default().with_signing_credential(X509Credential {
+        certificate: saml_rs::CertificatePem::new(CERT),
+        key: saml_rs::PrivateKeyPem::new(PRIVKEY),
+        passphrase: None,
+    })
 }
 
 type Parties = (
@@ -690,7 +693,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         encryption: saml_rs::XmlEncryptionPolicy::encrypt_assertions(),
         ..saml_rs::XmlPolicy::default()
     };
-    let encrypted_credentials = credentials().with_decryption(saml_rs::DecryptionCredential {
+    let encrypted_credentials = credentials().with_decryption_credential(saml_rs::X509Credential {
         certificate: saml_rs::CertificatePem::new(CERT),
         key: saml_rs::PrivateKeyPem::new(PRIVKEY),
         passphrase: None,

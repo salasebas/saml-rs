@@ -1044,13 +1044,13 @@ mod encrypted_assertions {
     ) -> Result<Saml<saml_rs::Sp>, SamlError> {
         Ok(Saml::sp(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs)
-                .credentials(
-                    signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+                .credentials(signing_credentials().with_decryption_credential(
+                    saml_rs::X509Credential {
                         certificate: CertificatePem::new(CERT),
                         key: PrivateKeyPem::new(PRIVKEY),
                         passphrase: None,
-                    }),
-                )
+                    },
+                ))
                 .validation(validation)
                 .build()?,
         ))

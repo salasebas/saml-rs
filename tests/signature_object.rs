@@ -13,7 +13,7 @@ use saml_rs::{
     PaosClientRequest, PaosSsoResponse, PrivateKeyPem, ReplayPolicy, RespondPaosSso, RespondSlo,
     RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
     SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartPaosSso, StartSlo, StartSso,
-    Subject, XmlSignatureProfile,
+    Subject, X509Credential, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -33,9 +33,11 @@ struct Parties {
 }
 
 fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
-    let credentials = Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(KEY))
-        .with_signing_certificate(CertificatePem::new(CERT));
+    let credentials = Credentials::default().with_signing_credential(X509Credential {
+        certificate: CertificatePem::new(CERT),
+        key: PrivateKeyPem::new(KEY),
+        passphrase: None,
+    });
     let sp = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,

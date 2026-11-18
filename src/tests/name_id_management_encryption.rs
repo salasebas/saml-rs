@@ -18,15 +18,14 @@ use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserTyp
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, BrowserInput, CertificatePem, Credentials, DecryptionCredential, EndpointUrl,
-    EntityId, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    InMemoryReplayCache, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
-    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
-    NameIdFormat, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
-    ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy,
-    RespondNameIdManagement, Saml, SamlError, SamlValidationContext, SoapChannel,
-    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartNameIdManagement,
+    AcsEndpoint, BrowserInput, CertificatePem, Credentials, EndpointUrl, EntityId,
+    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache,
+    ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MessageConfidentiality,
+    MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
+    NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
+    ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml,
+    SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -55,9 +54,12 @@ const IDP_NEXT_ENCRYPTION_CERT: &str =
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(SIGNING_KEY))
-        .with_signing_certificate(CertificatePem::new(SIGNING_CERT))
-        .with_decryption(DecryptionCredential {
+        .with_signing_credential(X509Credential {
+            certificate: CertificatePem::new(SIGNING_CERT),
+            key: PrivateKeyPem::new(SIGNING_KEY),
+            passphrase: None,
+        })
+        .with_decryption_credential(X509Credential {
             certificate: CertificatePem::new(encryption_cert),
             key: PrivateKeyPem::new(decryption_key),
             passphrase: None,
@@ -319,8 +321,8 @@ fn identity_provider_decrypts_identifiers_made_for_either_published_certificate(
     let sp = sp()?;
     let sp_peer = sp_descriptor(&sp)?;
     let idp = idp_with(
-        credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY).with_additional_decryption_key(
-            DecryptionCredential {
+        credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY).with_additional_decryption_credential(
+            X509Credential {
                 certificate: CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
                 key: PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
                 passphrase: None,

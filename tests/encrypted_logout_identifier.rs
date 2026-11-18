@@ -17,13 +17,13 @@ use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::status_code;
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, DecryptionCredential,
-    EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    InMemoryReplayCache, LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning,
-    LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout,
-    PrivateKeyPem, Received, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError,
-    SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponse, StartSlo, StartSso, Status, Subject, SubordinateStatusCode,
+    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
+    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache,
+    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem,
+    Received, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
+    SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoResponse, StartSlo, StartSso, Status, Subject, SubordinateStatusCode, X509Credential,
     XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
@@ -56,9 +56,12 @@ const INITIATORS: [Initiator; 2] = [Initiator::Sp, Initiator::Idp];
 
 fn credentials() -> Credentials {
     Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
-        .with_signing_certificate(CertificatePem::new(CERT))
-        .with_decryption(DecryptionCredential {
+        .with_signing_credential(X509Credential {
+            certificate: CertificatePem::new(CERT),
+            key: PrivateKeyPem::new(PRIVKEY),
+            passphrase: None,
+        })
+        .with_decryption_credential(X509Credential {
             certificate: CertificatePem::new(CERT),
             key: PrivateKeyPem::new(PRIVKEY),
             passphrase: None,
@@ -401,7 +404,7 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
 #[test]
 fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certificate(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_key(DecryptionCredential {
+    let rolling = credentials().with_additional_decryption_credential(X509Credential {
         certificate: CertificatePem::new(NEXT_CERT),
         key: PrivateKeyPem::new(NEXT_PRIVKEY),
         passphrase: None,
@@ -410,7 +413,7 @@ fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certific
         let published = idp_with_credentials(
             LogoutPolicy::recommended(),
             XmlEncryptionPolicy::default(),
-            credentials().with_decryption(DecryptionCredential {
+            credentials().with_decryption_credential(X509Credential {
                 certificate: CertificatePem::new(encryption_cert),
                 key: PrivateKeyPem::new(PRIVKEY),
                 passphrase: None,
@@ -448,7 +451,7 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
     let published = idp_with_credentials(
         LogoutPolicy::recommended(),
         XmlEncryptionPolicy::default(),
-        credentials().with_decryption(DecryptionCredential {
+        credentials().with_decryption_credential(X509Credential {
             certificate: CertificatePem::new(NEXT_CERT),
             key: PrivateKeyPem::new(PRIVKEY),
             passphrase: None,
@@ -681,7 +684,7 @@ fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
     let unloadable_key = idp_with_credentials(
         LogoutPolicy::recommended(),
         XmlEncryptionPolicy::default(),
-        credentials().with_decryption(DecryptionCredential {
+        credentials().with_decryption_credential(X509Credential {
             certificate: CertificatePem::new(CERT),
             key: PrivateKeyPem::new("not a private key"),
             passphrase: None,

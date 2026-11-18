@@ -9,7 +9,7 @@ use super::{
     ENCRYPTED_ATTRIBUTE, ENCRYPTED_ID, LOGOUT_REQUEST_ENCRYPTED_ID,
 };
 use super::{policy::encrypted_data_algorithm, work};
-use crate::config::{AssertionElementEncryption, DecryptionCredential, ReceivedEncryptedElements};
+use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, X509Credential};
 use crate::constants::{key_encryption_algorithm, namespace};
 use crate::error::{crypto_err, utf8_err, xml_err, SamlError};
 use crate::xml::dom::{self, XmlLimits};
@@ -240,7 +240,7 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
     xml: &str,
     key_pem: &str,
     key_pass: Option<&str>,
-    additional: &[DecryptionCredential],
+    additional: &[X509Credential],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
     authentication: RequestAuthentication,

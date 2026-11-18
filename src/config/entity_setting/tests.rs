@@ -49,7 +49,7 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     use crate::config::{
         AlgorithmPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy, CertificatePem,
         Credentials, DataEncryptionAlgorithm, KeyEncryptionAlgorithm, PrivateKeyPem,
-        ResponseSignaturePolicy, SignatureAlgorithm, TransformAlgorithm, XmlPolicy,
+        ResponseSignaturePolicy, SignatureAlgorithm, TransformAlgorithm, X509Credential, XmlPolicy,
     };
     use crate::xml::XmlLimits;
 
@@ -67,11 +67,11 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     )
     .name_id_format(NameIdFormat::EmailAddress)
     .credentials(
-        Credentials::default()
-            .with_signing_key(PrivateKeyPem::new("dummy-private-key-for-conversion-test"))
-            .with_signing_certificate(CertificatePem::new(
-                "dummy-signing-certificate-for-conversion-test",
-            )),
+        Credentials::default().with_signing_credential(X509Credential {
+            certificate: CertificatePem::new("dummy-signing-certificate-for-conversion-test"),
+            key: PrivateKeyPem::new("dummy-private-key-for-conversion-test"),
+            passphrase: None,
+        }),
     )
     .validation(SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,

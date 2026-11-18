@@ -10,16 +10,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutResponse, MetadataTrustPolicy,
         NameId, PrivateKeyPem, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlValidationContext,
         SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-        StartSlo, StartSso, Subject,
+        StartSlo, StartSso, Subject, X509Credential,
     };
     use std::time::SystemTime;
 
     let privkey = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     let cert = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     let credentials = || {
-        Credentials::default()
-            .with_signing_key(PrivateKeyPem::new(privkey))
-            .with_signing_certificate(CertificatePem::new(cert))
+        Credentials::default().with_signing_credential(X509Credential {
+            certificate: CertificatePem::new(cert),
+            key: PrivateKeyPem::new(privkey),
+            passphrase: None,
+        })
     };
     // Disabled preserves the raw API, which has no replay cache.
     let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);

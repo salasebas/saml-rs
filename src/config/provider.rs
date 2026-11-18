@@ -110,7 +110,8 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
 
 fn signing_certificates(credentials: &Credentials) -> Vec<String> {
     credentials
-        .signing_certificate()
+        .signing_credential()
+        .map(|credential| &credential.certificate)
         .into_iter()
         .chain(credentials.additional_signing_certificates())
         .map(|certificate| certificate.as_str().to_string())
@@ -119,9 +120,9 @@ fn signing_certificates(credentials: &Credentials) -> Vec<String> {
 
 fn encryption_certificates(credentials: &Credentials) -> Vec<String> {
     credentials
-        .decryption()
+        .decryption_credential()
         .into_iter()
-        .chain(credentials.additional_decryption_keys())
+        .chain(credentials.additional_decryption_credentials())
         .map(|credential| credential.certificate.as_str().to_string())
         .collect()
 }

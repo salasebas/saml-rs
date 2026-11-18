@@ -772,7 +772,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(
-            signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+            signing_credentials().with_decryption_credential(saml_rs::X509Credential {
                 certificate: CertificatePem::new(CERT),
                 key: PrivateKeyPem::new(PRIVKEY),
                 passphrase: None,
@@ -819,7 +819,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         ..XmlPolicy::default()
     };
     let encrypted_credentials =
-        signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+        signing_credentials().with_decryption_credential(saml_rs::X509Credential {
             certificate: CertificatePem::new(CERT),
             key: PrivateKeyPem::new(PRIVKEY),
             passphrase: None,

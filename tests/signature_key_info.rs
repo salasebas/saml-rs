@@ -12,6 +12,7 @@ use saml_rs::{
     BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, MetadataTrustPolicy, PrivateKeyPem, ReplayPolicy, Saml, SamlError,
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
+    X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -24,9 +25,11 @@ const IDP_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkc
 const IDP_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 
 fn credentials(key: &str, cert: &str) -> Credentials {
-    Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(key))
-        .with_signing_certificate(CertificatePem::new(cert))
+    Credentials::default().with_signing_credential(X509Credential {
+        certificate: CertificatePem::new(cert),
+        key: PrivateKeyPem::new(key),
+        passphrase: None,
+    })
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {

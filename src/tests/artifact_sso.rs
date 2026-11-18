@@ -1083,7 +1083,7 @@ fn encrypted_assertion_parties(
             AcsEndpoint::artifact(SP_ACS_ARTIFACT)?,
         )
         .credentials(
-            signing_credentials().with_decryption(saml_rs::DecryptionCredential {
+            signing_credentials().with_decryption_credential(saml_rs::X509Credential {
                 certificate: CertificatePem::new(CERT),
                 key: PrivateKeyPem::new(PRIVKEY),
                 passphrase: None,

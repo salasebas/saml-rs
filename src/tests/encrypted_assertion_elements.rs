@@ -20,11 +20,11 @@ use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeEncryptionPolicy,
     AttributeNameFormat, AttributeValue, Attributes, AudienceValidationPolicy, AuthnRequest,
-    BrowserInput, CertificatePem, Credentials, DecryptionCredential, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoResponseBinding, SsoSession, StartSso, Subject, XmlEncryptionPolicy, XmlPolicy,
+    BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem,
+    ReplayPolicy, RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
+    SsoSession, StartSso, Subject, X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -42,9 +42,12 @@ const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
 fn credentials() -> Credentials {
     Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
-        .with_signing_certificate(CertificatePem::new(CERT))
-        .with_decryption(DecryptionCredential {
+        .with_signing_credential(X509Credential {
+            certificate: CertificatePem::new(CERT),
+            key: PrivateKeyPem::new(PRIVKEY),
+            passphrase: None,
+        })
+        .with_decryption_credential(X509Credential {
             certificate: CertificatePem::new(CERT),
             key: PrivateKeyPem::new(PRIVKEY),
             passphrase: None,
@@ -255,8 +258,8 @@ fn encrypted_attribute_carries_each_attribute_to_the_service_provider(
     Ok(())
 }
 
-fn next_decryption_key() -> DecryptionCredential {
-    DecryptionCredential {
+fn next_decryption_key() -> X509Credential {
+    X509Credential {
         certificate: CertificatePem::new(NEXT_CERT),
         key: PrivateKeyPem::new(NEXT_PRIVKEY),
         passphrase: None,
@@ -278,7 +281,7 @@ fn exchange_encrypted_for(
     let published = sp_with_credentials(
         XmlEncryptionPolicy::default(),
         sp_validation(),
-        credentials().with_decryption(DecryptionCredential {
+        credentials().with_decryption_credential(X509Credential {
             certificate: CertificatePem::new(encryption_cert),
             key: PrivateKeyPem::new(PRIVKEY),
             passphrase: None,
@@ -358,7 +361,7 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
 #[test]
 fn metadata_publishes_each_encryption_certificate_in_order(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_key(next_decryption_key());
+    let rolling = credentials().with_additional_decryption_credential(next_decryption_key());
     let sp = sp_with_credentials(
         XmlEncryptionPolicy::default(),
         sp_validation(),
@@ -403,7 +406,7 @@ fn metadata_publishes_each_encryption_certificate_in_order(
 #[test]
 fn service_provider_decrypts_elements_made_for_either_published_certificate(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_key(next_decryption_key());
+    let rolling = credentials().with_additional_decryption_credential(next_decryption_key());
     for encryption in each_encrypted_element() {
         for encryption_cert in [CERT, NEXT_CERT] {
             let exchange = exchange_encrypted_for(encryption, encryption_cert, rolling.clone())?;
@@ -423,7 +426,7 @@ fn service_provider_decrypts_elements_made_for_either_published_certificate(
 #[test]
 fn service_provider_without_the_key_keeps_the_single_key_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_key(next_decryption_key());
+    let rolling = credentials().with_additional_decryption_credential(next_decryption_key());
     for encryption in each_encrypted_element() {
         let single_key = exchange_encrypted_for(encryption, UNKNOWN_CERT, credentials())?.session;
         let both_keys = exchange_encrypted_for(encryption, UNKNOWN_CERT, rolling.clone())?.session;
@@ -622,7 +625,7 @@ fn service_provider_builder_requires_a_decryption_key_for_encrypted_elements(
         .xml(xml(encryption))
         .build();
         match built {
-            Err(SamlError::MissingKey(key)) if key == "decryption_key" => {}
+            Err(SamlError::MissingKey(key)) if key == "decryption_credential" => {}
             other => return Err(format!("expected MissingKey, got {other:?}").into()),
         }
     }

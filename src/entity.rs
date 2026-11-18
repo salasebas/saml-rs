@@ -5,7 +5,7 @@ use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
-use crate::config::{DecryptionCredential, DigestAlgorithm, HmacSecret, MaskGenerationFunction};
+use crate::config::{DigestAlgorithm, HmacSecret, MaskGenerationFunction, X509Credential};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
     MessageSignatureOrder,
@@ -101,7 +101,7 @@ pub struct EntitySetting {
     /// Passphrase for `enc_private_key`.
     pub enc_private_key_pass: Option<String>,
     /// More decryption keys, tried in order after `enc_private_key`.
-    pub additional_decryption_keys: Vec<DecryptionCredential>,
+    pub additional_decryption_keys: Vec<X509Credential>,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for

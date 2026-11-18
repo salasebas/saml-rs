@@ -1,5 +1,5 @@
 use super::*;
-use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, DecryptionCredential};
+use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, X509Credential};
 
 fn encrypted_exchange(
     algorithm: DataEncryptionAlgorithm,
@@ -181,7 +181,7 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
     let candidate = &xml[range];
     let config = sp_with_validation_and_xml(recommended_sso_accept_validation())?.credentials(
         encryption_credentials()
-            .with_decryption(DecryptionCredential {
+            .with_decryption_credential(X509Credential {
                 certificate: CertificatePem::new(include_str!(
                     "../../../tests/fixtures/key/idp/cert.cer"
                 )),
@@ -190,7 +190,7 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
                 )),
                 passphrase: None,
             })
-            .with_additional_decryption_key(DecryptionCredential {
+            .with_additional_decryption_credential(X509Credential {
                 certificate: CertificatePem::new(CERT),
                 key: PrivateKeyPem::new(PRIVKEY),
                 passphrase: None,
@@ -255,9 +255,12 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
     const PASSPHRASE: &str = "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px";
     use saml_rs::{Credentials, Passphrase};
     let credentials = Credentials::default()
-        .with_encrypted_signing_key(PrivateKeyPem::new(KEY), Passphrase::new(PASSPHRASE))
-        .with_signing_certificate(CertificatePem::new(KEY_CERT))
-        .with_decryption(DecryptionCredential {
+        .with_signing_credential(X509Credential {
+            certificate: CertificatePem::new(KEY_CERT),
+            key: PrivateKeyPem::new(KEY),
+            passphrase: Some(Passphrase::new(PASSPHRASE)),
+        })
+        .with_decryption_credential(X509Credential {
             certificate: CertificatePem::new(KEY_CERT),
             key: PrivateKeyPem::new(KEY),
             passphrase: Some(Passphrase::new(PASSPHRASE)),
