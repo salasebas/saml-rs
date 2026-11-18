@@ -60,10 +60,8 @@ pub enum BrowserInput<Message> {
         /// Message marker.
         _message: PhantomData<Message>,
     },
-    /// HTTP-POST-SimpleSign input.
+    /// HTTP-POST-SimpleSign input as parsed form fields.
     SimpleSignPost {
-        /// Raw form body.
-        raw_body: String,
         /// Parsed form fields.
         fields: Vec<FormField>,
         /// Message marker.
@@ -105,10 +103,6 @@ impl BrowserInput<AuthnRequest> {
         simple_sign_input(fields)
     }
 
-    /// Parse a raw `application/x-www-form-urlencoded` SimpleSign body.
-    pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
-        simple_sign_body_input(raw_body)
-    }
     pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
         http_request_from_input(self, true, MessageField::Request, limits)
     }
@@ -138,11 +132,6 @@ impl BrowserInput<SsoResponse> {
     /// Create SimpleSign input from parsed fields.
     pub fn simple_sign(fields: Vec<FormField>) -> Self {
         simple_sign_input(fields)
-    }
-
-    /// Parse a raw `application/x-www-form-urlencoded` SimpleSign body.
-    pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
-        simple_sign_body_input(raw_body)
     }
 
     pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
@@ -185,11 +174,6 @@ impl BrowserInput<LogoutRequest> {
         simple_sign_input(fields)
     }
 
-    /// Parse a raw `application/x-www-form-urlencoded` SimpleSign body.
-    pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
-        simple_sign_body_input(raw_body)
-    }
-
     pub(crate) fn into_http_request(
         self,
         limits: XmlLimits,
@@ -230,11 +214,6 @@ impl BrowserInput<LogoutResponse> {
     /// Create SimpleSign input from parsed fields.
     pub fn simple_sign(fields: Vec<FormField>) -> Self {
         simple_sign_input(fields)
-    }
-
-    /// Parse a raw `application/x-www-form-urlencoded` SimpleSign body.
-    pub fn simple_sign_body(raw_body: impl Into<String>) -> Self {
-        simple_sign_body_input(raw_body)
     }
 
     pub(crate) fn into_http_request(
@@ -324,7 +303,6 @@ fn post_input<Message>(fields: Vec<FormField>) -> BrowserInput<Message> {
 
 fn simple_sign_input<Message>(fields: Vec<FormField>) -> BrowserInput<Message> {
     BrowserInput::SimpleSignPost {
-        raw_body: String::new(),
         fields,
         _message: PhantomData,
     }
@@ -367,16 +345,6 @@ fn soap_request(
     )]))
 }
 
-fn simple_sign_body_input<Message>(raw_body: impl Into<String>) -> BrowserInput<Message> {
-    let raw_body = raw_body.into();
-    let fields = parse_form_fields(&raw_body);
-    BrowserInput::SimpleSignPost {
-        raw_body,
-        fields,
-        _message: PhantomData,
-    }
-}
-
 fn http_request_from_input<Message>(
     value: BrowserInput<Message>,
     allow_redirect: bool,
@@ -403,14 +371,7 @@ fn http_request_from_input<Message>(
             validate_form_message_kind(&fields, expected_message)?;
             Ok(HttpRequest::post(fields_to_pairs(fields)))
         }
-        BrowserInput::SimpleSignPost {
-            raw_body,
-            mut fields,
-            ..
-        } => {
-            if fields.is_empty() {
-                fields = parse_form_fields(&raw_body);
-            }
+        BrowserInput::SimpleSignPost { fields, .. } => {
             let octet_string = simplesign_octet_from_fields(&fields, expected_message, limits)?;
             let mut request = HttpRequest::post(fields_to_pairs(fields));
             request.octet_string = Some(octet_string);

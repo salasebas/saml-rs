@@ -17,7 +17,7 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, BrowserInput, CertificatePem, EntityId, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
-    NameId, RelayStateParam, ReplayPolicy, ResponseSignaturePolicy, Saml, SamlError,
+    NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, Saml, SamlError,
     SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
 };
@@ -220,7 +220,7 @@ fn typed_config_builders_construct_protocol_only_without_default_crypto(
 fn typed_facade_creates_and_receives_unsigned_protocol_sso_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp, sp_descriptor, idp_descriptor) = typed_protocol_facades()?;
-    let relay_state = RelayStateParam::try_from_option(Some("protocol-only".to_string()))?;
+    let relay_state = RelayState::try_new("protocol-only")?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
 
     let form = started.outbound.post_form()?;
@@ -236,7 +236,7 @@ fn typed_facade_creates_and_receives_unsigned_protocol_sso_without_default_crypt
         received.message().issuer().as_str(),
         "https://sp.example.com/metadata"
     );
-    assert_eq!(received.message().id(), started.pending.request_id());
+    assert_eq!(received.message().id(), started.pending.id());
     Ok(())
 }
 

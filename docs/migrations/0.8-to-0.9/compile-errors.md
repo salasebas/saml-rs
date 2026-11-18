@@ -35,6 +35,11 @@
 | `LogoutSubject` constructors or `session_index()`, `OutstandingLogout::principal()` or `sessions()` | Use `LogoutSubject::new(name_id)`, the append methods, and the renamed getters | [Logout subjects](logout-validation-replay.md#build-a-logout-subject-with-session-indexes) |
 | `LogoutCompleted` constructors, `status()`, optional `response()` or `raw_flow()`, or equality | Obtain the completion from `finish_slo` and read the response directly | [Logout completions](logout-validation-replay.md#obtain-the-completed-response-through-finish_slo) |
 | `ReplayKey` variants ending in `Id` or `SamlValidationContext::replay_retention()` | Rename variants and keep the retention duration in your configuration | [Replay keys and cache](logout-validation-replay.md#update-replay-keys-and-cache-access) |
+| `RelayStateParam`, or a `relay_state` setter or getter | Use `Option<RelayState>` | [RelayState](browser-transport.md#pass-optionrelaystate-instead-of-relaystateparam) |
+| `PendingSnapshot`, `Pending::try_new`, or a pending `with_*` setter | Use the snapshot for the message and `from_snapshot` | [Pending snapshots](browser-transport.md#store-pending-state-with-the-snapshot-for-its-message) |
+| `request_id()`, `idp_entity_id()`, `request_binding()`, or `response_binding()` on pending state | Use the one remaining accessor | [Pending accessors](browser-transport.md#read-pending-state-through-one-accessor-each) |
+| `BrowserInput::simple_sign_body` or `SimpleSignPost { raw_body, .. }` | Pass parsed fields to `simple_sign` | [SimpleSign input](browser-transport.md#pass-parsed-fields-to-browserinputsimple_sign) |
+| `AcsEndpoint::mark_default`, `as_binding()`, `Received::new`, or `PostForm::new` | Renamed or removed | [Remaining calls](browser-transport.md#rename-the-remaining-calls) |
 | `SamlError::StatusNotSuccess { top, second }`, `ReplayDetected { key }` as a string, `UndefinedBinding`, `UndefinedStatus`, `Xml(message)`, `Crypto(message)`, `Base64(error)`, `Deflate(error)`, or `?` from a `base64::DecodeError` or `std::io::Error` into `SamlError` | Typed payloads, new variants, and no third-party `From` | [Typed errors](errors.md) |
 
 ## 1.1 Pass the expected entity ID to `from_metadata_xml`

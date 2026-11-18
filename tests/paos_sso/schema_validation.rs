@@ -12,7 +12,7 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let rejecting = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(credentials())
             .validation(SpValidationPolicy::recommended())
             .xml(saml_rs::XmlPolicy {

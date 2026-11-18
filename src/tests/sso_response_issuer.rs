@@ -56,7 +56,7 @@ fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, 
 fn exchange(delivery: Delivery) -> TestResult<Exchange> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,

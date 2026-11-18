@@ -5,7 +5,7 @@
 //! source compatibility.
 
 use crate::constants::Binding;
-use crate::model::{RelayStateParam, ReplayKey, Status, SubordinateStatusCode};
+use crate::model::{RelayState, ReplayKey, Status, SubordinateStatusCode};
 use std::fmt;
 
 /// Reason a required SAML signature verification failed.
@@ -344,10 +344,10 @@ pub enum SamlError {
     #[error("relay state mismatch")]
     #[non_exhaustive]
     RelayStateMismatch {
-        /// Expected RelayState presence and value.
-        expected: RelayStateParam,
-        /// Actual RelayState presence and value.
-        actual: RelayStateParam,
+        /// Expected RelayState. `None` means no `RelayState` parameter.
+        expected: Option<RelayState>,
+        /// Received RelayState. `None` means no `RelayState` parameter.
+        actual: Option<RelayState>,
     },
     /// `<Audience>` does not include the expected Service Provider entity ID.
     #[error("audience restriction not satisfied: expected {expected}")]

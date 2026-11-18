@@ -1,3 +1,4 @@
+use saml_rs::constants::Binding;
 use saml_rs::{
     EndpointUrl, EntityId, IdpDescriptor, LogoutBinding, MetadataTrustPolicy, NameIdFormat,
     SamlError, SpDescriptor, SsoRequestBinding, SsoResponseBinding,
@@ -121,7 +122,7 @@ fn endpoint_access_validates_selected_urls_without_rejecting_metadata_on_import(
         };
         assert!(detail.contains(element), "missing endpoint name: {detail}");
         assert!(
-            detail.contains(SsoRequestBinding::Post.as_binding().urn()),
+            detail.contains(Binding::from(SsoRequestBinding::Post).urn()),
             "missing binding: {detail}"
         );
     }

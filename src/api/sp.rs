@@ -3,8 +3,8 @@ use crate::config::IdpDescriptor;
 use crate::constants::Binding;
 use crate::flow::{FlowResultWithSignatureEvidence, HttpRequest, SignedMessageDestination};
 use crate::model::{
-    AuthnRequest, OutstandingLogout, RelayStateParam, SamlValidationContext, SsoResponse,
-    SsoSession, VerifiedXmlSignature,
+    AuthnRequest, OutstandingLogout, RelayState, SamlValidationContext, SsoResponse, SsoSession,
+    VerifiedXmlSignature,
 };
 use crate::sp::{
     AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions, ServiceProvider,
@@ -20,7 +20,7 @@ use super::{ForceAuthn, Saml, SamlError, Sp, StartSso};
 
 pub(super) fn session_from_verified_flow(
     result: FlowResultWithSignatureEvidence,
-    relay_state: RelayStateParam,
+    relay_state: Option<RelayState>,
 ) -> Result<SsoSession, SamlError> {
     let (flow, evidence) = result.into_parts();
     let verified_xml_signatures = evidence
@@ -153,8 +153,8 @@ impl Saml<Sp> {
     /// ```
     /// use saml_rs::{
     ///     AcsEndpoint, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    ///     MetadataTrustPolicy, RelayStateParam, Saml, SpConfig, SpValidationPolicy,
-    ///     SsoEndpoint, StartSso,
+    ///     MetadataTrustPolicy, RelayState, Saml, SpConfig, SpValidationPolicy, SsoEndpoint,
+    ///     StartSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
@@ -174,7 +174,7 @@ impl Saml<Sp> {
     ///     idp.metadata_xml(),
     ///     MetadataTrustPolicy::AllowUnsigned,
     /// )?;
-    /// let relay_state = RelayStateParam::try_from_option(Some("state".to_string()))?;
+    /// let relay_state = RelayState::try_new("state")?;
     /// let started = sp.start_sso(&idp, StartSso::redirect().relay_state(relay_state))?;
     ///
     /// let redirect_url = started.outbound.redirect_url()?;
@@ -186,7 +186,9 @@ impl Saml<Sp> {
         idp: &IdpDescriptor,
         options: StartSso,
     ) -> Result<Started<AuthnRequest>, SamlError> {
-        options.relay_state.validate()?;
+        if let Some(relay_state) = &options.relay_state {
+            relay_state.ensure_sendable()?;
+        }
         let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
         let acs = selected_acs(
             self.raw_service_provider(),
@@ -195,15 +197,15 @@ impl Saml<Sp> {
         )?;
         let response_binding = acs.binding();
         let raw_options = LoginRequestOptions {
-            relay_state: options.relay_state.as_deref(),
+            relay_state: options.relay_state.as_ref().map(RelayState::as_str),
             force_authn: options.force_authn.map(ForceAuthn::as_bool),
             assertion_consumer_service_index: options.acs_index,
-            response_binding: Some(response_binding.as_binding()),
+            response_binding: Some(Binding::from(response_binding)),
             ..Default::default()
         };
         let context = self.raw_service_provider().create_typed_login_request(
             raw_idp,
-            options.binding.as_binding(),
+            Binding::from(options.binding),
             &raw_options,
             options.web_browser_sso_producer,
             &AuthnRequestPreferences {
@@ -213,14 +215,12 @@ impl Saml<Sp> {
             },
         )?;
         let outbound = Outbound::<AuthnRequest>::try_from(context)?;
-        let pending = PendingAuthnRequest::try_new(
+        let pending = PendingAuthnRequest::new(
             outbound.id().clone(),
             options.relay_state,
-            acs,
-            response_binding,
             idp.entity_id().clone(),
-        )?
-        .with_request_binding(options.binding);
+            acs,
+        );
         Ok(Started { pending, outbound })
     }
 
@@ -372,10 +372,10 @@ impl Saml<Sp> {
         input: BrowserInput<SsoResponse>,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
-        ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
-        ensure_sso_response_binding(input_binding(&input), pending.response_binding())?;
+        ensure_entity_id(pending.peer_entity_id(), idp.entity_id())?;
+        ensure_sso_response_binding(input_binding(&input), pending.acs().binding())?;
         let relay_state = relay_state_from_input(&input)?;
-        ensure_relay_state(pending.relay_state(), &relay_state)?;
+        ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let parse = ResponseParseInput::try_new(
             idp,
@@ -388,7 +388,7 @@ impl Saml<Sp> {
                 raw_idp,
                 parse.binding,
                 &parse.request,
-                pending.request_id().as_str(),
+                pending.id().as_str(),
                 parse.options(validation, pending.acs().location().as_str()),
             )?;
         session_from_verified_flow(flow, relay_state)
@@ -406,10 +406,10 @@ impl Saml<Sp> {
         let metadata = &self.raw_service_provider().metadata;
         let expected_recipient = match validation.recipient_endpoint() {
             Some(_) => validation.resolve_recipient_endpoint(
-                &metadata.assertion_consumer_service_locations(binding.as_binding()),
+                &metadata.assertion_consumer_service_locations(Binding::from(binding)),
             )?,
             None => metadata
-                .assertion_consumer_location(binding.as_binding())
+                .assertion_consumer_location(Binding::from(binding))
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
         let parse = ResponseParseInput::try_new(

@@ -2,9 +2,10 @@ use saml_rs::constants::Binding;
 use saml_rs::metadata::Endpoint;
 use saml_rs::SamlError;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, EntityId, LogoutBinding, MessageId, PendingAuthnRequest,
-    PendingLogoutRequest, PendingSnapshot, RelayState, RelayStateParam, SamlInstant, SloEndpoint,
-    SsoEndpoint, SsoRequestBinding, SsoResponseBinding, MAX_RELAY_STATE_BYTES,
+    AcsEndpoint, LogoutBinding, NameIdManagementBinding, PendingAuthnRequest,
+    PendingAuthnRequestSnapshot, PendingLogoutRequest, PendingLogoutRequestSnapshot, RelayState,
+    SamlInstant, SloEndpoint, SsoEndpoint, SsoRequestBinding, SsoResponseBinding,
+    MAX_RELAY_STATE_BYTES,
 };
 
 #[test]
@@ -51,7 +52,10 @@ fn typed_bindings_sso_response_binding_accepts_post_simplesign_and_artifact(
         SsoResponseBinding::try_from(Binding::Artifact)?,
         SsoResponseBinding::Artifact
     );
-    assert_eq!(SsoResponseBinding::Artifact.as_binding(), Binding::Artifact);
+    assert_eq!(
+        Binding::from(SsoResponseBinding::Artifact),
+        Binding::Artifact
+    );
     Ok(())
 }
 
@@ -93,10 +97,31 @@ fn typed_bindings_logout_binding_rejects_artifact() {
 }
 
 #[test]
+fn typed_bindings_name_id_management_binding_accepts_redirect_and_soap(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for binding in [
+        NameIdManagementBinding::Redirect,
+        NameIdManagementBinding::Soap,
+    ] {
+        assert_eq!(
+            NameIdManagementBinding::try_from(Binding::from(binding))?,
+            binding
+        );
+    }
+    for binding in [Binding::Post, Binding::SimpleSign, Binding::Artifact] {
+        assert!(matches!(
+            NameIdManagementBinding::try_from(binding),
+            Err(SamlError::UnsupportedBinding { binding: rejected, .. }) if rejected == binding
+        ));
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_bindings_post_acs_endpoint_converts_to_raw_metadata_endpoint(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let endpoint = AcsEndpoint::post("https://sp.example.com/acs")?
-        .mark_default()
+        .with_default()
         .with_index(7);
 
     let raw = endpoint.to_raw();
@@ -211,21 +236,6 @@ fn typed_bindings_endpoint_url_rejects_non_http_urls() {
 }
 
 #[test]
-fn typed_bindings_relay_state_preserves_absent_empty_and_present_values(
-) -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(RelayStateParam::absent(), RelayStateParam::Absent);
-    assert_eq!(
-        RelayStateParam::present_empty(),
-        RelayStateParam::PresentEmpty
-    );
-    assert_eq!(
-        RelayStateParam::try_from_option(Some("state-123".to_string()))?,
-        RelayStateParam::PresentValue(RelayState::try_new("state-123")?)
-    );
-    Ok(())
-}
-
-#[test]
 fn typed_bindings_relay_state_enforces_saml_bindings_byte_limit(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(
@@ -243,57 +253,71 @@ fn typed_bindings_relay_state_enforces_saml_bindings_byte_limit(
         MAX_RELAY_STATE_BYTES
     );
     assert!(RelayState::try_new(eighty_two_utf8_bytes).is_err());
-    assert!(RelayStateParam::try_from_option(Some("a".repeat(MAX_RELAY_STATE_BYTES + 1))).is_err());
+    Ok(())
+}
+
+fn valid_authn_snapshot() -> PendingAuthnRequestSnapshot {
+    PendingAuthnRequestSnapshot {
+        id: "_request123".to_string(),
+        relay_state: None,
+        peer_entity_id: "https://idp.example.com/metadata".to_string(),
+        acs_binding: Binding::Post.short_name().to_string(),
+        acs_url: "https://sp.example.com/acs".to_string(),
+        acs_index: None,
+        acs_is_default: false,
+    }
+}
+
+fn valid_logout_snapshot() -> PendingLogoutRequestSnapshot {
+    PendingLogoutRequestSnapshot {
+        id: "_logout123".to_string(),
+        relay_state: None,
+        peer_entity_id: "https://idp.example.com/metadata".to_string(),
+        binding: Binding::Post.short_name().to_string(),
+        issued_at: None,
+        expires_at: None,
+    }
+}
+
+#[test]
+fn typed_bindings_pending_authn_request_snapshot_round_trips(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let snapshot = PendingAuthnRequestSnapshot {
+        relay_state: Some("relay".to_string()),
+        acs_index: Some(2),
+        acs_is_default: true,
+        ..valid_authn_snapshot()
+    };
+
+    let restored = PendingAuthnRequest::from_snapshot(snapshot.clone())?;
+
+    assert_eq!(restored.id().as_str(), "_request123");
+    assert_eq!(restored.relay_state(), Some(&RelayState::try_new("relay")?));
+    assert_eq!(
+        restored.acs(),
+        &AcsEndpoint::post("https://sp.example.com/acs")?
+            .with_index(2)
+            .with_default()
+    );
+    assert_eq!(
+        restored.peer_entity_id().as_str(),
+        "https://idp.example.com/metadata"
+    );
+    assert_eq!(restored.snapshot(), snapshot);
     Ok(())
 }
 
 #[test]
-fn typed_bindings_pending_authn_request_snapshot_round_trips_without_raw_state(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let acs = AcsEndpoint::post("https://sp.example.com/acs")?
-        .with_index(2)
-        .mark_default();
-    let pending = PendingAuthnRequest::try_new(
-        MessageId::try_new("_request123")?,
-        RelayStateParam::try_from_option(Some("relay".to_string()))?,
-        acs,
-        SsoResponseBinding::Post,
-        saml_rs::EntityId::try_new("https://idp.example.com/metadata")?,
-    )?
-    .with_issue_instant(SamlInstant::try_new("2026-07-04T12:00:00Z")?)
-    .with_expiration(SamlInstant::try_new("2026-07-04T12:05:00Z")?);
+fn typed_bindings_pending_snapshot_reads_a_binding_urn() -> Result<(), Box<dyn std::error::Error>> {
+    let snapshot = PendingAuthnRequestSnapshot {
+        acs_binding: Binding::SimpleSign.urn().to_string(),
+        ..valid_authn_snapshot()
+    };
 
-    let snapshot = pending.snapshot();
-    let snapshot_debug = format!("{snapshot:?}");
     let restored = PendingAuthnRequest::from_snapshot(snapshot)?;
 
-    assert_eq!(restored.request_id().as_str(), "_request123");
-    assert_eq!(
-        restored.relay_state(),
-        &RelayStateParam::PresentValue(RelayState::try_new("relay")?)
-    );
-    assert_eq!(restored.acs().binding(), SsoResponseBinding::Post);
-    assert_eq!(
-        restored.acs().location().as_str(),
-        "https://sp.example.com/acs"
-    );
-    assert_eq!(restored.acs().index(), Some(2));
-    assert!(restored.acs().is_default());
-    assert_eq!(restored.response_binding(), SsoResponseBinding::Post);
-    assert_eq!(
-        restored.idp_entity_id().as_str(),
-        "https://idp.example.com/metadata"
-    );
-    assert_eq!(
-        restored.issued_at().map(SamlInstant::as_str),
-        Some("2026-07-04T12:00:00Z")
-    );
-    assert_eq!(
-        restored.expires_at().map(SamlInstant::as_str),
-        Some("2026-07-04T12:05:00Z")
-    );
-    assert!(!snapshot_debug.contains("PRIVATE KEY"));
-    assert!(!snapshot_debug.contains("<EntityDescriptor"));
+    assert_eq!(restored.acs().binding(), SsoResponseBinding::SimpleSign);
+    assert_eq!(restored.snapshot().acs_binding, "simpleSign");
     Ok(())
 }
 
@@ -304,71 +328,31 @@ fn typed_bindings_pending_logout_request_snapshot_round_trips_supported_bindings
         LogoutBinding::Redirect,
         LogoutBinding::Post,
         LogoutBinding::SimpleSign,
+        LogoutBinding::Soap,
     ] {
-        let pending = PendingLogoutRequest::try_new(
-            MessageId::try_new(format!("_logout_{binding:?}"))?,
-            RelayStateParam::try_from_option(Some("relay".to_string()))?,
-            binding,
-            EntityId::try_new("https://idp.example.com/metadata")?,
-        )?
-        .with_issue_instant(SamlInstant::try_new("2026-07-04T12:00:00Z")?)
-        .with_expiration(SamlInstant::try_new("2026-07-04T12:05:00Z")?);
+        let snapshot = PendingLogoutRequestSnapshot {
+            relay_state: Some("relay".to_string()),
+            binding: Binding::from(binding).short_name().to_string(),
+            issued_at: Some("2026-07-04T12:00:00Z".to_string()),
+            expires_at: Some("2026-07-04T12:05:00Z".to_string()),
+            ..valid_logout_snapshot()
+        };
 
-        let restored = PendingLogoutRequest::from_snapshot(pending.snapshot())?;
+        let restored = PendingLogoutRequest::from_snapshot(snapshot.clone())?;
 
-        assert_eq!(restored.request_binding(), binding);
-        assert_eq!(restored.response_binding(), binding);
+        assert_eq!(restored.binding(), binding);
+        assert_eq!(restored.relay_state(), Some(&RelayState::try_new("relay")?));
         assert_eq!(
-            restored.relay_state(),
-            &RelayStateParam::PresentValue(RelayState::try_new("relay")?)
-        );
-        assert_eq!(
-            restored.peer_entity_id().as_str(),
-            "https://idp.example.com/metadata"
+            restored.issued_at().map(SamlInstant::as_str),
+            Some("2026-07-04T12:00:00Z")
         );
         assert_eq!(
             restored.expires_at().map(SamlInstant::as_str),
             Some("2026-07-04T12:05:00Z")
         );
+        assert_eq!(restored.snapshot(), snapshot);
     }
     Ok(())
-}
-
-#[test]
-fn typed_bindings_pending_authn_request_rejects_mismatched_acs_and_response_binding(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let acs = AcsEndpoint::simple_sign("https://sp.example.com/acs/simple")?;
-
-    let result = PendingAuthnRequest::try_new(
-        MessageId::try_new("_request123")?,
-        RelayStateParam::Absent,
-        acs,
-        SsoResponseBinding::Post,
-        saml_rs::EntityId::try_new("https://idp.example.com/metadata")?,
-    );
-
-    assert!(matches!(result, Err(SamlError::Invalid(_))));
-    Ok(())
-}
-
-fn valid_authn_snapshot() -> PendingSnapshot<AuthnRequest> {
-    PendingSnapshot::authn_request(
-        "_request123",
-        RelayStateParam::Absent,
-        "https://idp.example.com/metadata",
-        Binding::Post.short_name(),
-        "https://sp.example.com/acs",
-        Binding::Post.short_name(),
-    )
-}
-
-fn valid_logout_snapshot() -> PendingSnapshot<saml_rs::LogoutRequest> {
-    PendingSnapshot::logout_request(
-        "_logout123",
-        RelayStateParam::Absent,
-        "https://idp.example.com/metadata",
-        LogoutBinding::Post,
-    )
 }
 
 #[test]
@@ -386,12 +370,23 @@ fn typed_bindings_pending_snapshot_validates_request_id() {
 fn typed_bindings_pending_snapshot_accepts_present_empty_relay_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut snapshot = valid_authn_snapshot();
-    snapshot.relay_state = RelayStateParam::present_empty();
+    snapshot.relay_state = Some(String::new());
 
     let pending = PendingAuthnRequest::from_snapshot(snapshot)?;
 
-    assert_eq!(pending.relay_state(), &RelayStateParam::PresentEmpty);
+    assert_eq!(pending.relay_state(), Some(&RelayState::try_new("")?));
     Ok(())
+}
+
+#[test]
+fn typed_bindings_pending_snapshot_rejects_an_overlong_relay_state() {
+    let mut snapshot = valid_authn_snapshot();
+    snapshot.relay_state = Some("a".repeat(MAX_RELAY_STATE_BYTES + 1));
+
+    assert!(matches!(
+        PendingAuthnRequest::from_snapshot(snapshot),
+        Err(SamlError::Invalid(_))
+    ));
 }
 
 #[test]
@@ -402,20 +397,6 @@ fn typed_bindings_pending_snapshot_validates_peer_entity_id() {
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
         Err(SamlError::Invalid(_))
-    ));
-}
-
-#[test]
-fn typed_bindings_pending_snapshot_validates_expected_binding() {
-    let mut snapshot = valid_authn_snapshot();
-    snapshot.expected_binding = Binding::Redirect.short_name().to_string();
-
-    assert!(matches!(
-        PendingAuthnRequest::from_snapshot(snapshot),
-        Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect,
-            ..
-        })
     ));
 }
 
@@ -457,52 +438,34 @@ fn typed_bindings_pending_snapshot_validates_acs_binding() {
 }
 
 #[test]
-fn typed_bindings_pending_snapshot_validates_acs_expected_binding_match() {
-    let mut snapshot = valid_authn_snapshot();
-    snapshot.acs_binding = Binding::SimpleSign.short_name().to_string();
-
-    assert!(matches!(
-        PendingAuthnRequest::from_snapshot(snapshot),
-        Err(SamlError::Invalid(_))
-    ));
-}
-
-#[test]
-fn typed_bindings_pending_snapshot_validates_expiration_requires_issue_instant(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut snapshot = valid_authn_snapshot();
-    snapshot.expires_at = Some(SamlInstant::try_new("2026-07-04T12:05:00Z")?);
-
-    assert!(matches!(
-        PendingAuthnRequest::from_snapshot(snapshot),
-        Err(SamlError::Invalid(_))
-    ));
-    Ok(())
-}
-
-#[test]
-fn typed_bindings_pending_logout_snapshot_ignores_authn_only_acs_fields(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn typed_bindings_pending_logout_snapshot_validates_binding() {
     let mut snapshot = valid_logout_snapshot();
-    snapshot.acs_url = "https://evil.example.com/acs".to_string();
-    snapshot.acs_binding = Binding::Redirect.short_name().to_string();
-    snapshot.acs_index = Some(99);
-    snapshot.acs_is_default = true;
-
-    let pending = PendingLogoutRequest::from_snapshot(snapshot)?;
-
-    assert_eq!(pending.request_binding(), LogoutBinding::Post);
-    assert_eq!(pending.response_binding(), LogoutBinding::Post);
-    Ok(())
-}
-
-#[test]
-fn typed_bindings_pending_logout_snapshot_rejects_mismatched_request_binding() {
-    let mut snapshot = valid_logout_snapshot();
-    snapshot.request_binding = Some(Binding::Redirect.short_name().to_string());
+    snapshot.binding = Binding::Artifact.short_name().to_string();
 
     assert!(matches!(
         PendingLogoutRequest::from_snapshot(snapshot),
-        Err(SamlError::Invalid(_))
+        Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact,
+            ..
+        })
     ));
+}
+
+#[test]
+fn typed_bindings_pending_logout_snapshot_stores_issue_and_expiration_instants_together() {
+    for (issued_at, expires_at) in [
+        (None, Some("2026-07-04T12:05:00Z".to_string())),
+        (Some("2026-07-04T12:00:00Z".to_string()), None),
+    ] {
+        let snapshot = PendingLogoutRequestSnapshot {
+            issued_at,
+            expires_at,
+            ..valid_logout_snapshot()
+        };
+
+        assert!(matches!(
+            PendingLogoutRequest::from_snapshot(snapshot),
+            Err(SamlError::Invalid(_))
+        ));
+    }
 }

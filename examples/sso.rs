@@ -8,9 +8,9 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
         AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, IdpConfig,
-        IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, PrivateKeyPem,
-        RelayStateParam, ReplayPolicy, RespondSso, Saml, SamlValidationContext, SpConfig,
-        SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject,
+        IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
+        ReplayPolicy, RespondSso, Saml, SamlValidationContext, SpConfig, SpDescriptor,
+        SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject,
     };
     use std::time::SystemTime;
 
@@ -52,12 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         MetadataTrustPolicy::AllowUnsigned,
     )?;
 
-    let relay_state = RelayStateParam::try_from_option(Some("demo-state".to_string()))?;
+    let relay_state = RelayState::try_new("demo-state")?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
-    println!(
-        "SP  -> AuthnRequest id = {}",
-        started.pending.request_id().as_str()
-    );
+    println!("SP  -> AuthnRequest id = {}", started.pending.id().as_str());
 
     let request = idp.receive_sso(
         &sp_descriptor,

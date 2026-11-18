@@ -13,8 +13,9 @@ use saml_rs::error::SignatureVerificationReason;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, BrowserInput, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    LogoutPolicy, LogoutRequest, MetadataTrustPolicy, ReplayCache, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    LogoutPolicy, LogoutRequest, MetadataTrustPolicy, RelayState, ReplayCache, ReplayPolicy, Saml,
+    SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -218,7 +219,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
         [SHIBBOLETH_SESSION_INDEX]
     );
     assert_eq!(message.raw_flow().sig_alg.as_deref(), Some(RSA_SHA256));
-    assert_eq!(received.relay_state().as_deref(), None);
+    assert_eq!(received.relay_state().map(RelayState::as_str), None);
     assert_redirect_wire(fixture_query(SHIBBOLETH_QUERY), None);
     assert_eq!(
         cache.seen.keys().next().map(String::as_str),
@@ -287,7 +288,7 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
     );
     assert_eq!(message.raw_flow().sig_alg.as_deref(), Some(RSA_SHA256));
     assert_eq!(
-        received.relay_state().as_deref(),
+        received.relay_state().map(RelayState::as_str),
         Some("simplesamlphp-sp-state")
     );
     assert_redirect_wire(

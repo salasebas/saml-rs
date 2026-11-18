@@ -13,10 +13,9 @@ use saml_rs::{
     template::{LoginResponseAttribute, LoginResponseTemplate},
 };
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, EndpointUrl, FormField, LogoutRequest, LogoutResponse,
-    MessageId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, PendingAuthnRequest,
-    RelayState, RelayStateParam, SamlError, SamlInstant, SsoRequestBinding, SsoResponse,
-    SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
+    AuthnRequest, BrowserInput, EndpointUrl, FormField, LogoutRequest, LogoutResponse, MessageId,
+    NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, RelayState, SamlError,
+    SamlInstant, SsoResponse, SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
 };
 
 #[cfg(crypto)]
@@ -52,22 +51,8 @@ fn typed_models_endpoint_url_rejects_relative_urls() {
 }
 
 #[test]
-fn typed_models_relay_state_preserves_tri_state() -> Result<(), Box<dyn std::error::Error>> {
-    assert_eq!(RelayStateParam::absent(), RelayStateParam::Absent);
-    assert_eq!(
-        RelayStateParam::present_empty(),
-        RelayStateParam::PresentEmpty
-    );
-    assert_eq!(
-        RelayStateParam::try_from_option(Some("state".to_string()))?,
-        RelayStateParam::PresentValue(RelayState::try_new("state")?)
-    );
-    Ok(())
-}
-
-#[test]
-fn typed_models_relay_state_try_from_option_rejects_overlong_values() {
-    let result = RelayStateParam::try_from_option(Some("a".repeat(81)));
+fn typed_models_relay_state_rejects_overlong_values() {
+    let result = RelayState::try_new("a".repeat(81));
 
     assert!(matches!(result, Err(SamlError::Invalid(_))));
 }
@@ -736,11 +721,14 @@ fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_messa
 }
 
 #[test]
-fn typed_models_simplesign_browser_input_accepts_raw_body_only(
+fn typed_models_simplesign_browser_input_signs_decoded_field_values(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let input = BrowserInput::<AuthnRequest>::simple_sign_body(
-        "SAMLRequest=PHNhbWxwOkF1dGhuUmVxdWVzdC8%2B&RelayState=relay&SigAlg=alg&Signature=sig",
-    );
+    let input = BrowserInput::<AuthnRequest>::simple_sign(vec![
+        FormField::new("SAMLRequest", "PHNhbWxwOkF1dGhuUmVxdWVzdC8+"),
+        FormField::new("RelayState", "relay"),
+        FormField::new("SigAlg", "alg"),
+        FormField::new("Signature", "sig"),
+    ]);
 
     let request = saml_rs::raw::HttpRequest::try_from(input)?;
 
@@ -1844,72 +1832,6 @@ fn typed_models_existing_login_response_flow_preserves_multi_value_attributes(
             .collect::<Vec<_>>(),
         vec!["users", "examplerole1"]
     );
-    Ok(())
-}
-
-#[test]
-fn typed_models_pending_snapshot_round_trips_without_raw_state(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let pending = PendingAuthnRequest::try_new(
-        MessageId::try_new("_request123")?,
-        RelayStateParam::try_from_option(Some("relay".to_string()))?,
-        AcsEndpoint::post("https://sp.example.com/acs")?.with_index(3),
-        SsoResponseBinding::Post,
-        saml_rs::EntityId::try_new("https://idp.example.com/metadata")?,
-    )?
-    .with_request_binding(SsoRequestBinding::Redirect)
-    .with_issue_instant(SamlInstant::try_new("2026-07-04T12:00:00Z")?)
-    .with_expiration(SamlInstant::try_new("2026-07-04T12:05:00Z")?);
-
-    let snapshot = pending.snapshot();
-    let snapshot_debug = format!("{snapshot:?}");
-    let restored = PendingAuthnRequest::from_snapshot(snapshot)?;
-
-    assert_eq!(restored.id().as_str(), "_request123");
-    assert_eq!(
-        restored.relay_state(),
-        &RelayStateParam::PresentValue(RelayState::try_new("relay")?)
-    );
-    assert_eq!(
-        restored.request_binding(),
-        Some(SsoRequestBinding::Redirect)
-    );
-    assert_eq!(restored.response_binding(), SsoResponseBinding::Post);
-    assert_eq!(restored.acs().index(), Some(3));
-    assert_eq!(
-        restored.peer_entity_id().as_str(),
-        "https://idp.example.com/metadata"
-    );
-    assert_eq!(
-        restored.issued_at().map(SamlInstant::as_str),
-        Some("2026-07-04T12:00:00Z")
-    );
-    assert_eq!(
-        restored.expires_at().map(SamlInstant::as_str),
-        Some("2026-07-04T12:05:00Z")
-    );
-    assert!(!snapshot_debug.contains("PRIVATE KEY"));
-    assert!(!snapshot_debug.contains("<EntityDescriptor"));
-    Ok(())
-}
-
-#[test]
-fn typed_models_pending_snapshot_validates_expiration_requires_issue_instant(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let pending = PendingAuthnRequest::try_new(
-        MessageId::try_new("_request123")?,
-        RelayStateParam::Absent,
-        AcsEndpoint::post("https://sp.example.com/acs")?,
-        SsoResponseBinding::Post,
-        saml_rs::EntityId::try_new("https://idp.example.com/metadata")?,
-    )?;
-    let mut snapshot = pending.snapshot();
-    snapshot.expires_at = Some(SamlInstant::try_new("2026-07-04T12:05:00Z")?);
-
-    assert!(matches!(
-        PendingAuthnRequest::from_snapshot(snapshot),
-        Err(SamlError::Invalid(_))
-    ));
     Ok(())
 }
 

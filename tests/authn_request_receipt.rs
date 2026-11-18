@@ -47,7 +47,7 @@ fn validation() -> SamlValidationContext<'static> {
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,

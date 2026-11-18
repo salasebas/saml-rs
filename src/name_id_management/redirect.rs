@@ -6,7 +6,7 @@ use crate::browser::NameIdManagementBinding;
 use crate::config::EntityId;
 use crate::config::HmacSecret;
 use crate::config::IdentifierEncryptionPolicy;
-use crate::constants::{CertUse, ParserType};
+use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::flow::{
@@ -207,7 +207,7 @@ fn parse_signed(
 ) -> Result<FlowResult, SamlError> {
     let signing_certs = peer_meta.x509_certificates(CertUse::Signing);
     let options = FlowOptions {
-        binding: Some(NameIdManagementBinding::Redirect.as_binding()),
+        binding: Some(Binding::from(NameIdManagementBinding::Redirect)),
         parser_type: Some(parser_type),
         // SAML Profiles 2.0 §4.5.3.1 and §4.5.3.2 require a signed message on
         // HTTP-Redirect.
@@ -244,7 +244,7 @@ fn bind_signed(
     relay_state: Option<&str>,
     parser_type: ParserType,
 ) -> Result<BindingContext, SamlError> {
-    let binding = NameIdManagementBinding::Redirect.as_binding();
+    let binding = Binding::from(NameIdManagementBinding::Redirect);
     let (context, signature, sig_alg) =
         sign_browser_message(setting, binding, xml, destination, relay_state, parser_type)?;
     Ok(BindingContext {

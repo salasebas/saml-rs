@@ -31,7 +31,7 @@ fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs/post")?.mark_default())
+            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs/post")?.with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended())
             .build()?,

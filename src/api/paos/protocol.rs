@@ -1,7 +1,7 @@
 //! SOAP envelopes and the PAOS HTTP header for Enhanced Client/Proxy SSO.
 
 use crate::error::SamlError;
-use crate::model::RelayStateParam;
+use crate::model::RelayState;
 use crate::soap::{self, HeaderEntry, UnderstoodHeader};
 use crate::xml::write::XmlWriter;
 use crate::xml::XmlLimits;
@@ -137,7 +137,7 @@ pub(super) fn soap_fault_envelope() -> String {
 
 pub(super) struct SoapBody {
     pub(super) element_xml: String,
-    pub(super) relay_state: RelayStateParam,
+    pub(super) relay_state: Option<RelayState>,
 }
 
 /// Header entries the service provider processes on the PAOS response.
@@ -181,15 +181,15 @@ fn envelope(header_xml: &str, body_xml: &str) -> String {
     )
 }
 
-fn relay_state_header(header: &[HeaderEntry]) -> Result<RelayStateParam, SamlError> {
+fn relay_state_header(header: &[HeaderEntry]) -> Result<Option<RelayState>, SamlError> {
     let relay_states: Vec<&HeaderEntry> = header
         .iter()
         .filter(|entry| entry.node.local_name == "RelayState")
         .collect();
     match relay_states.as_slice() {
-        [] => Ok(RelayStateParam::absent()),
+        [] => Ok(None),
         [relay_state] if relay_state.namespace == ECP_PROFILE => {
-            RelayStateParam::try_from_option(Some(relay_state.node.text.clone()))
+            RelayState::try_new(relay_state.node.text.clone()).map(Some)
         }
         [_] => Err(SamlError::ProtocolProfile(
             "RelayState header must use the ECP profile namespace".into(),
@@ -338,7 +338,10 @@ mod tests {
                 "<samlp:AuthnRequest xmlns:SOAP-ENV=\"{SOAP_ENVELOPE_NS}\" xmlns:samlp=\"{PROTOCOL_NS}\" ID=\"_1\"></samlp:AuthnRequest>"
             )
         );
-        assert_eq!(body.relay_state.as_deref(), Some("state"));
+        assert_eq!(
+            body.relay_state.as_ref().map(RelayState::as_str),
+            Some("state")
+        );
         assert!(envelope.contains("responseConsumerURL=\"https://sp.example.com/acs\""));
         assert!(envelope.contains(&format!("service=\"{ECP_PROFILE}\"")));
         Ok(())
@@ -355,7 +358,10 @@ mod tests {
             XmlLimits::default(),
             SP_UNDERSTOOD_HEADERS,
         )?;
-        assert_eq!(body.relay_state.as_deref(), Some("state"));
+        assert_eq!(
+            body.relay_state.as_ref().map(RelayState::as_str),
+            Some("state")
+        );
         Ok(())
     }
 

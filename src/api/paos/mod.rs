@@ -13,8 +13,8 @@ use crate::flow::HttpRequest;
 use crate::idp::LoginResponseOverrides;
 use crate::model::{
     Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
-    OutstandingLogout, RelayStateParam, SamlValidationContext, SessionIndex, SsoResponse,
-    SsoSession, Status, Subject, TopLevelStatusCode,
+    OutstandingLogout, RelayState, SamlValidationContext, SessionIndex, SsoResponse, SsoSession,
+    Status, Subject, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput, WebBrowserSsoProducer};
 use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
@@ -71,7 +71,7 @@ impl PaosClientRequest {
 #[derive(Debug, Clone)]
 pub struct StartPaosSso {
     soap_endpoint: EndpointUrl,
-    relay_state: RelayStateParam,
+    relay_state: Option<RelayState>,
     force_authn: Option<ForceAuthn>,
     is_passive: Option<IsPassive>,
     provider_name: Option<String>,
@@ -88,7 +88,7 @@ impl StartPaosSso {
     pub fn to_soap_endpoint(soap_endpoint: impl Into<String>) -> Result<Self, SamlError> {
         Ok(Self {
             soap_endpoint: EndpointUrl::try_new(soap_endpoint)?,
-            relay_state: RelayStateParam::absent(),
+            relay_state: None,
             force_authn: None,
             is_passive: None,
             provider_name: None,
@@ -98,8 +98,9 @@ impl StartPaosSso {
     }
 
     /// Set the `ecp:RelayState` value the enhanced client must bring back.
-    pub fn relay_state(mut self, relay_state: RelayStateParam) -> Self {
-        self.relay_state = relay_state;
+    /// The request carries none by default.
+    pub fn relay_state(mut self, relay_state: RelayState) -> Self {
+        self.relay_state = Some(relay_state);
         self
     }
 
@@ -209,26 +210,26 @@ impl RespondPaosSso {
 /// Correlation state for a PAOS login the service provider has started.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPaosSso {
-    request_id: MessageId,
-    relay_state: RelayStateParam,
-    idp_entity_id: EntityId,
+    id: MessageId,
+    relay_state: Option<RelayState>,
+    peer_entity_id: EntityId,
     acs_url: EndpointUrl,
 }
 
 impl PendingPaosSso {
     /// AuthnRequest ID the response must cite.
-    pub fn request_id(&self) -> &MessageId {
-        &self.request_id
+    pub fn id(&self) -> &MessageId {
+        &self.id
     }
 
     /// RelayState the service provider asked the enhanced client to return.
-    pub fn relay_state(&self) -> &RelayStateParam {
-        &self.relay_state
+    pub fn relay_state(&self) -> Option<&RelayState> {
+        self.relay_state.as_ref()
     }
 
     /// Identity provider this login was addressed to.
-    pub fn idp_entity_id(&self) -> &EntityId {
-        &self.idp_entity_id
+    pub fn peer_entity_id(&self) -> &EntityId {
+        &self.peer_entity_id
     }
 
     /// Assertion consumer the response must target.
@@ -239,9 +240,12 @@ impl PendingPaosSso {
     /// Correlation fields for the caller to store.
     pub fn snapshot(&self) -> PendingPaosSsoSnapshot {
         PendingPaosSsoSnapshot {
-            request_id: self.request_id.as_str().to_string(),
-            relay_state: self.relay_state.clone(),
-            idp_entity_id: self.idp_entity_id.as_str().to_string(),
+            id: self.id.as_str().to_string(),
+            relay_state: self
+                .relay_state
+                .as_ref()
+                .map(|relay_state| relay_state.as_str().to_string()),
+            peer_entity_id: self.peer_entity_id.as_str().to_string(),
             acs_url: self.acs_url.as_str().to_string(),
         }
     }
@@ -250,14 +254,13 @@ impl PendingPaosSso {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the request ID, identity-provider entity ID,
-    /// or assertion consumer URL is not usable.
+    /// Returns [`SamlError`] when the request ID, RelayState,
+    /// identity-provider entity ID, or assertion consumer URL is not usable.
     pub fn from_snapshot(snapshot: PendingPaosSsoSnapshot) -> Result<Self, SamlError> {
-        snapshot.relay_state.validate()?;
         Ok(Self {
-            request_id: MessageId::try_new(snapshot.request_id)?,
-            relay_state: snapshot.relay_state,
-            idp_entity_id: EntityId::try_new(snapshot.idp_entity_id)?,
+            id: MessageId::try_new(snapshot.id)?,
+            relay_state: snapshot.relay_state.map(RelayState::try_new).transpose()?,
+            peer_entity_id: EntityId::try_new(snapshot.peer_entity_id)?,
             acs_url: EndpointUrl::try_new(snapshot.acs_url)?,
         })
     }
@@ -267,11 +270,12 @@ impl PendingPaosSso {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPaosSsoSnapshot {
     /// AuthnRequest ID.
-    pub request_id: String,
-    /// RelayState the service provider sent, including absent and empty.
-    pub relay_state: RelayStateParam,
+    pub id: String,
+    /// `ecp:RelayState` the service provider sent. `None` when it sent none,
+    /// and an empty string when it sent an empty one.
+    pub relay_state: Option<String>,
     /// Identity provider entity ID.
-    pub idp_entity_id: String,
+    pub peer_entity_id: String,
     /// Assertion consumer URL placed on the AuthnRequest.
     pub acs_url: String,
 }
@@ -494,9 +498,9 @@ impl Saml<Sp> {
         options: StartPaosSso,
     ) -> Result<StartedPaosSso, SamlError> {
         idp.ensure_valid_at(SystemTime::now())?;
-        options.relay_state.validate()?;
-        if let Some(relay_state) = options.relay_state.as_deref() {
-            if !relay_state.chars().all(is_xml_char) {
+        if let Some(relay_state) = &options.relay_state {
+            relay_state.ensure_sendable()?;
+            if !relay_state.as_str().chars().all(is_xml_char) {
                 return Err(SamlError::Invalid(
                     "relay state must not contain a character XML 1.0 forbids".into(),
                 ));
@@ -526,14 +530,14 @@ impl Saml<Sp> {
             issuer: &issuer,
             identity_provider_id: idp.entity_id().as_str(),
             identity_provider_loc: options.soap_endpoint.as_str(),
-            relay_state: options.relay_state.as_deref(),
+            relay_state: options.relay_state.as_ref().map(RelayState::as_str),
             authn_request_xml: &authn_request_xml,
         });
         Ok(StartedPaosSso {
             pending: PendingPaosSso {
-                request_id: MessageId::try_new(request_id)?,
+                id: MessageId::try_new(request_id)?,
                 relay_state: options.relay_state,
-                idp_entity_id: idp.entity_id().clone(),
+                peer_entity_id: idp.entity_id().clone(),
                 acs_url: assertion_consumer,
             },
             http_response: PaosHttpResponse::from_parts(PAOS_MEDIA_TYPE, envelope),
@@ -593,7 +597,7 @@ impl Saml<Sp> {
         response: &PaosSsoResponse,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
-        ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
+        ensure_entity_id(pending.peer_entity_id(), idp.entity_id())?;
         let limits = self.raw_service_provider().setting.xml_limits;
         let body = read_soap_body(
             &response.envelope,
@@ -616,7 +620,7 @@ impl Saml<Sp> {
                 raw_idp,
                 crate::constants::Binding::Post,
                 &request,
-                pending.request_id().as_str(),
+                pending.id().as_str(),
                 LoginResponseParseOptions::at(
                     validation.now(),
                     validation.clock_skew().as_millis(),
@@ -624,7 +628,7 @@ impl Saml<Sp> {
                 .with_expected_recipient(pending.acs_url().as_str()),
             )?;
         // The expected value is compared after the response signature verifies.
-        super::raw_mapping::ensure_relay_state(pending.relay_state(), &body.relay_state)?;
+        super::raw_mapping::ensure_relay_state(pending.relay_state(), body.relay_state.as_ref())?;
         super::sp::session_from_verified_flow(parsed, body.relay_state)
     }
 }
@@ -697,7 +701,7 @@ impl Saml<Idp> {
         validation.check_and_store_message_replay(crate::model::ReplayKey::AuthnRequest(
             authn.id().clone(),
         ))?;
-        Ok(crate::model::Received::new(authn))
+        Ok(crate::model::Received::new(authn, None))
     }
 
     /// Answer a PAOS login with a success response for `subject`.

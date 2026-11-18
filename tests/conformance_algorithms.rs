@@ -101,7 +101,7 @@ fn peers_with_profiles(
     idp_xml_signatures: XmlSignatureProfile,
 ) -> Result<Peers, SamlError> {
     let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
         .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
         .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
         .credentials(sp.credentials)

@@ -9,6 +9,7 @@ use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use saml_rs::constants::Binding;
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, BrowserInput,
     EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
@@ -36,7 +37,7 @@ fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
     Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
             .acs_endpoint(AcsEndpoint::post(FIRST_ACS)?.with_index(0))
-            .acs_endpoint(AcsEndpoint::post(DEFAULT_ACS)?.with_index(1).mark_default())
+            .acs_endpoint(AcsEndpoint::post(DEFAULT_ACS)?.with_index(1).with_default())
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::compatibility())
             .build()?,
@@ -123,7 +124,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
             .acs_endpoint(
                 AcsEndpoint::simple_sign(DEFAULT_ACS)?
                     .with_index(1)
-                    .mark_default(),
+                    .with_default(),
             )
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::compatibility())
@@ -259,7 +260,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                 .acs_endpoint(
                     AcsEndpoint::new(global_binding, EndpointUrl::try_new(DEFAULT_ACS)?)
                         .with_index(0)
-                        .mark_default(),
+                        .with_default(),
                 )
                 .acs_endpoint(
                     AcsEndpoint::new(binding, EndpointUrl::try_new(FIRST_ACS)?).with_index(1),
@@ -273,7 +274,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
             " Version=",
             &format!(
                 " ProtocolBinding=\"{}\" Version=",
-                binding.as_binding().urn()
+                Binding::from(binding).urn()
             ),
         );
         let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
@@ -291,7 +292,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                 assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
                 let raw_response = idp.raw_identity_provider().create_login_response(
                     sp.raw_service_provider(),
-                    binding.as_binding(),
+                    Binding::from(binding),
                     &saml_rs::entity::User::new("alice@example.com"),
                     &saml_rs::idp::LoginResponseOptions::default(),
                 )?;

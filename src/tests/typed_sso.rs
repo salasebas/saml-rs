@@ -37,7 +37,7 @@ use saml_rs::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, CertificatePem,
     ClockSkew, EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
     LogoutRequest, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PendingAuthnRequest,
-    PendingSnapshot, Received, RelayStateParam, ReplayCache, ReplayPolicy, RequestAgePolicy,
+    PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
     RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding,
     StartSso, Status, Subject, SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage,
@@ -126,11 +126,11 @@ fn sp_config_with_default_response_binding(
     let post = AcsEndpoint::post(SP_ACS_POST)?;
     let simple_sign = AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?;
     let (post, simple_sign) = match binding {
-        SsoResponseBinding::Post => (post.mark_default(), simple_sign),
-        SsoResponseBinding::SimpleSign => (post, simple_sign.mark_default()),
+        SsoResponseBinding::Post => (post.with_default(), simple_sign),
+        SsoResponseBinding::SimpleSign => (post, simple_sign.with_default()),
         binding => {
             return Err(SamlError::UnsupportedBinding {
-                binding: binding.as_binding(),
+                binding: Binding::from(binding),
             })
         }
     };
@@ -148,7 +148,7 @@ fn response_signature_required_sp_config() -> Result<SpConfig, SamlError> {
         ..signing_sp_validation()
     };
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
         .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
         .credentials(signing_credentials())
         .validation(validation)
@@ -162,7 +162,7 @@ fn response_root_only_sp_config() -> Result<SpConfig, SamlError> {
         ..signing_sp_validation()
     };
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
         .credentials(signing_credentials())
         .validation(validation)
         .build()
@@ -202,7 +202,7 @@ fn signed_idp_metadata() -> Result<String, SamlError> {
 
 fn sp_with_validation(validation: SpValidationPolicy) -> Result<SpConfig, SamlError> {
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
         .credentials(signing_credentials())
         .validation(validation)
         .build()
@@ -219,7 +219,7 @@ fn idp_with_validation(validation: IdpValidationPolicy) -> Result<IdpConfig, Sam
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_sp_config() -> Result<SpConfig, SamlError> {
     SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
         .credentials(encryption_credentials())
         .validation(signing_sp_validation())
         .xml(encrypted_xml_policy())
@@ -238,7 +238,7 @@ fn encrypted_idp_config() -> Result<IdpConfig, SamlError> {
 
 fn hostile_sp_config() -> Result<SpConfig, SamlError> {
     SpConfig::builder(EntityId::try_new(HOSTILE_SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(HOSTILE_ACS_URL)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(HOSTILE_ACS_URL)?.with_default())
         .credentials(signing_credentials())
         .validation(signing_sp_validation())
         .name_id_format(NameIdFormat::Custom(HOSTILE_NAME_ID_FORMAT.to_string()))
@@ -261,7 +261,7 @@ fn facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
 
 fn compatibility_facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
     let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
         .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
         .credentials(signing_credentials())
         .validation(SpValidationPolicy::compatibility())
@@ -452,7 +452,7 @@ fn start_receive_respond_with(
 }
 
 fn start_receive_respond() -> Result<SsoExchange, SamlError> {
-    let relay_state = RelayStateParam::try_from_option(Some("state-123".to_string()))?;
+    let relay_state = RelayState::try_new("state-123")?;
     start_receive_respond_with(
         StartSso::post().relay_state(relay_state),
         RespondSso::post(),
@@ -479,7 +479,7 @@ fn typed_builder_authn_request_escapes_hostile_values_for_all_bindings(
         StartSso::post(),
         StartSso::simple_sign(),
     ] {
-        let relay_state = RelayStateParam::try_from_option(Some("typed-state".to_string()))?;
+        let relay_state = RelayState::try_new("typed-state")?;
         let started = sp.start_sso(
             &idp_descriptor,
             start
@@ -627,7 +627,7 @@ fn typed_detached_authn_requests_parse_with_relay_state() -> Result<(), Box<dyn 
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     for start in [StartSso::redirect(), StartSso::simple_sign()] {
-        let relay_state = RelayStateParam::try_from_option(Some("signed-state".to_string()))?;
+        let relay_state = RelayState::try_new("signed-state")?;
         let started = sp.start_sso(&idp_descriptor, start.relay_state(relay_state))?;
         let received = idp.receive_sso(
             &sp_descriptor,
@@ -635,7 +635,7 @@ fn typed_detached_authn_requests_parse_with_relay_state() -> Result<(), Box<dyn 
             validation(),
         )?;
 
-        assert_eq!(received.message().id(), started.pending.request_id());
+        assert_eq!(received.message().id(), started.pending.id());
         assert_eq!(
             started.outbound.relay_state().map(|state| state.as_str()),
             Some("signed-state")
@@ -1144,11 +1144,7 @@ fn typed_facade_start_sso_redirect_returns_url() -> Result<(), Box<dyn std::erro
 
     let redirect_url = started.outbound.redirect_url()?;
     assert!(redirect_url.starts_with(IDP_SSO_REDIRECT));
-    assert_eq!(started.pending.request_id(), started.outbound.id());
-    assert_eq!(
-        started.pending.request_binding(),
-        Some(saml_rs::SsoRequestBinding::Redirect)
-    );
+    assert_eq!(started.pending.id(), started.outbound.id());
     Ok(())
 }
 
@@ -1158,7 +1154,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
 
     assert_eq!(
         exchange.received.relay_state(),
-        &RelayStateParam::try_from_option(Some("state-123".to_string()))?
+        Some(&RelayState::try_new("state-123")?)
     );
 
     let session = exchange.sp.finish_sso(
@@ -1169,10 +1165,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
     )?;
 
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
-    assert_eq!(
-        session.in_response_to(),
-        Some(exchange.pending.request_id())
-    );
+    assert_eq!(session.in_response_to(), Some(exchange.pending.id()));
     assert_eq!(session.relay_state(), exchange.pending.relay_state());
     assert_eq!(
         session.response_issue_instant(),
@@ -1181,10 +1174,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
     assert!(session.response_issue_instant().as_str().ends_with('Z'));
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert!(!session.raw_flow().saml_content.is_empty());
-    assert_eq!(
-        exchange.received.message().id(),
-        exchange.pending.request_id()
-    );
+    assert_eq!(exchange.received.message().id(), exchange.pending.id());
     assert_eq!(
         exchange
             .idp
@@ -1457,7 +1447,7 @@ fn typed_facade_runs_simplesign_sso_response_binding() -> Result<(), Box<dyn std
         validation(),
     )?;
 
-    assert_eq!(session.in_response_to(), Some(started.pending.request_id()));
+    assert_eq!(session.in_response_to(), Some(started.pending.id()));
     assert_eq!(
         session.response_issue_instant(),
         session.assertion_issue_instant()
@@ -1550,7 +1540,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
     )?;
 
     assert_eq!(
-        started.pending.response_binding(),
+        started.pending.acs().binding(),
         SsoResponseBinding::SimpleSign
     );
     assert_eq!(started.pending.acs().index(), Some(1));
@@ -1559,7 +1549,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
     assert_eq!(snapshot.acs_index, Some(1));
     let restored = PendingAuthnRequest::from_snapshot(snapshot)?;
     assert_eq!(restored.acs().index(), Some(1));
-    assert_eq!(restored.response_binding(), SsoResponseBinding::SimpleSign);
+    assert_eq!(restored.acs().binding(), SsoResponseBinding::SimpleSign);
 
     let request_input = BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?);
     let received = idp.receive_sso(&sp_descriptor, request_input, validation())?;
@@ -1576,7 +1566,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
         validation(),
     )?;
 
-    assert_eq!(session.in_response_to(), Some(restored.request_id()));
+    assert_eq!(session.in_response_to(), Some(restored.id()));
     Ok(())
 }
 
@@ -1588,7 +1578,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
     const PEER_SP_ENTITY_ID: &str = "sp.example.org";
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
             .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
             .credentials(signing_credentials())
             .validation(signing_sp_validation())
@@ -1631,13 +1621,13 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 
     let started = sp.start_sso(&peer_idp_descriptor, StartSso::post())?;
     let pending = PendingAuthnRequest::from_snapshot(started.pending.snapshot())?;
-    assert_eq!(pending.idp_entity_id().as_str(), PEER_IDP_ENTITY_ID);
+    assert_eq!(pending.peer_entity_id().as_str(), PEER_IDP_ENTITY_ID);
     let response = peer_idp.create_login_response(
         &local_sp,
         Binding::Post,
         &User::new("alice@example.com"),
         &LoginResponseOptions {
-            in_response_to: Some(pending.request_id().as_str()),
+            in_response_to: Some(pending.id().as_str()),
             ..LoginResponseOptions::default()
         },
     )?;
@@ -1742,13 +1732,10 @@ fn typed_facade_rejects_response_with_wrong_sp_descriptor() -> Result<(), Box<dy
 #[test]
 fn typed_facade_rejects_response_binding_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
-    let pending = PendingAuthnRequest::try_new(
-        exchange.pending.request_id().clone(),
-        exchange.pending.relay_state().clone(),
-        AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?,
-        SsoResponseBinding::SimpleSign,
-        exchange.pending.idp_entity_id().clone(),
-    )?;
+    let mut snapshot = exchange.pending.snapshot();
+    snapshot.acs_binding = "simpleSign".to_string();
+    snapshot.acs_url = SP_ACS_SIMPLESIGN.to_string();
+    let pending = PendingAuthnRequest::from_snapshot(snapshot)?;
 
     match exchange.sp.finish_sso(
         &exchange.idp_descriptor,
@@ -1780,14 +1767,31 @@ fn typed_facade_rejects_relay_state_mismatch() -> Result<(), Box<dyn std::error:
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(
-                expected,
-                RelayStateParam::try_from_option(Some("state-123".to_string()))?
-            );
-            assert_eq!(
-                actual,
-                RelayStateParam::try_from_option(Some("other-state".to_string()))?
-            );
+            assert_eq!(expected, Some(RelayState::try_new("state-123")?));
+            assert_eq!(actual, Some(RelayState::try_new("other-state")?));
+            Ok(())
+        }
+        other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
+    }
+}
+
+#[test]
+fn typed_facade_rejects_a_response_without_the_relay_state_the_request_carried(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut exchange = start_receive_respond()?;
+    exchange
+        .response_fields
+        .retain(|field| field.name() != "RelayState");
+
+    match exchange.sp.finish_sso(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        BrowserInput::<SsoResponse>::post(exchange.response_fields),
+        validation(),
+    ) {
+        Err(SamlError::RelayStateMismatch { expected, actual }) => {
+            assert_eq!(expected, Some(RelayState::try_new("state-123")?));
+            assert_eq!(actual, None);
             Ok(())
         }
         other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
@@ -1797,10 +1801,7 @@ fn typed_facade_rejects_relay_state_mismatch() -> Result<(), Box<dyn std::error:
 #[test]
 fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for added in [
-        RelayStateParam::try_from_option(Some("added".to_string()))?,
-        RelayStateParam::PresentEmpty,
-    ] {
+    for added in [RelayState::try_new("added")?, RelayState::try_new("")?] {
         let exchange = start_receive_respond_with(
             StartSso::post(),
             RespondSso::post().relay_state(added.clone()),
@@ -1813,74 +1814,40 @@ fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
             validation(),
         )?;
 
-        assert_eq!(session.relay_state(), &added);
+        assert_eq!(session.relay_state(), Some(&added));
     }
     Ok(())
 }
 
 #[test]
-fn typed_facade_allows_respond_sso_to_suppress_relay_state_echo(
+fn respond_sso_refuses_to_replace_the_relay_state_the_request_carried(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let relay_state = RelayStateParam::try_from_option(Some("state-123".to_string()))?;
-    let exchange = start_receive_respond_with(
-        StartSso::post().relay_state(relay_state),
-        RespondSso::post().relay_state(RelayStateParam::absent()),
-    )?;
+    for received in ["state-123", ""] {
+        let exchange = start_receive_respond_with(
+            StartSso::post().relay_state(RelayState::try_new(received)?),
+            RespondSso::post(),
+        )?;
 
-    match exchange.sp.finish_sso(
-        &exchange.idp_descriptor,
-        &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
-        validation(),
-    ) {
-        Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(
-                expected,
-                RelayStateParam::try_from_option(Some("state-123".to_string()))?
-            );
-            assert_eq!(actual, RelayStateParam::Absent);
-            Ok(())
-        }
-        other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
+        let result = exchange.idp.respond_sso(
+            &exchange.sp_descriptor,
+            &exchange.received,
+            subject(),
+            RespondSso::post().relay_state(RelayState::try_new("override")?),
+        );
+
+        assert!(
+            matches!(result, Err(SamlError::ProtocolProfile(_))),
+            "received {received:?}: {:?}",
+            result.map(|outbound| outbound.relay_state().cloned())
+        );
     }
-}
-
-#[test]
-fn typed_facade_allows_respond_sso_to_override_relay_state_echo(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let relay_state = RelayStateParam::try_from_option(Some("state-123".to_string()))?;
-    let exchange = start_receive_respond_with(
-        StartSso::post().relay_state(relay_state),
-        RespondSso::post().relay_state(RelayStateParam::try_from_option(Some(
-            "override".to_string(),
-        ))?),
-    )?;
-
-    match exchange.sp.finish_sso(
-        &exchange.idp_descriptor,
-        &exchange.pending,
-        BrowserInput::<SsoResponse>::post(exchange.response_fields),
-        validation(),
-    ) {
-        Err(SamlError::RelayStateMismatch { expected, actual }) => {
-            assert_eq!(
-                expected,
-                RelayStateParam::try_from_option(Some("state-123".to_string()))?
-            );
-            assert_eq!(
-                actual,
-                RelayStateParam::try_from_option(Some("override".to_string()))?
-            );
-            Ok(())
-        }
-        other => Err(format!("expected RelayStateMismatch, got {other:?}").into()),
-    }
+    Ok(())
 }
 
 #[test]
 fn typed_facade_rejects_wrong_pending_request_id() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
-    let mut snapshot: PendingSnapshot<AuthnRequest> = exchange.pending.snapshot();
+    let mut snapshot: PendingAuthnRequestSnapshot = exchange.pending.snapshot();
     snapshot.id = "_different_request".to_string();
     let wrong_pending = PendingAuthnRequest::from_snapshot(snapshot)?;
 
@@ -1892,10 +1859,7 @@ fn typed_facade_rejects_wrong_pending_request_id() -> Result<(), Box<dyn std::er
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected.as_deref(), Some("_different_request"));
-            assert_eq!(
-                actual.as_deref(),
-                Some(exchange.pending.request_id().as_str())
-            );
+            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -1914,10 +1878,7 @@ fn typed_facade_rejects_solicited_response_as_unsolicited() -> Result<(), Box<dy
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected, None);
-            assert_eq!(
-                actual.as_deref(),
-                Some(exchange.pending.request_id().as_str())
-            );
+            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -2019,7 +1980,7 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
 
-    let mut snapshot: PendingSnapshot<AuthnRequest> = started.pending.snapshot();
+    let mut snapshot: PendingAuthnRequestSnapshot = started.pending.snapshot();
     snapshot.id = "_different_request".to_string();
     match sp.finish_sso(
         &idp_descriptor,
@@ -2076,7 +2037,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
             .credentials(encryption_credentials())
             .validation(signing_sp_validation())
             .build()?,
@@ -2114,7 +2075,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
         STANDARD.encode(xml.as_bytes()),
     )];
 
-    let mut snapshot: PendingSnapshot<AuthnRequest> = started.pending.snapshot();
+    let mut snapshot: PendingAuthnRequestSnapshot = started.pending.snapshot();
     snapshot.id = "_different_request".to_string();
     match sp.finish_sso(
         &idp_descriptor,
@@ -2143,7 +2104,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
 fn typed_finish_sso_checks_in_response_to_before_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = error_response_exchange()?;
-    let mut snapshot: PendingSnapshot<AuthnRequest> = exchange.pending.snapshot();
+    let mut snapshot: PendingAuthnRequestSnapshot = exchange.pending.snapshot();
     snapshot.id = "_different_request".to_string();
     let wrong_pending = PendingAuthnRequest::from_snapshot(snapshot)?;
 
@@ -2155,10 +2116,7 @@ fn typed_finish_sso_checks_in_response_to_before_error_status(
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected.as_deref(), Some("_different_request"));
-            assert_eq!(
-                actual.as_deref(),
-                Some(exchange.pending.request_id().as_str())
-            );
+            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -2417,7 +2375,7 @@ fn typed_facade_accepts_unsolicited_sso_explicitly() -> Result<(), Box<dyn std::
     let response = idp.initiate_sso(
         &sp_descriptor,
         subject(),
-        RespondSso::post().relay_state(RelayStateParam::present_empty()),
+        RespondSso::post().relay_state(RelayState::try_new("")?),
     )?;
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
@@ -3102,7 +3060,7 @@ fn sp_with_validation_and_xml(
     validation: SpValidationPolicy,
 ) -> Result<saml_rs::SpConfigBuilder, SamlError> {
     Ok(SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.mark_default())
+        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
         .credentials(encryption_credentials())
         .validation(validation)
         .xml(encrypted_xml_policy()))
@@ -3249,7 +3207,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
         BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.request_id());
+    assert_eq!(received.message().id(), started.pending.id());
 
     let wrong_destination = authn_request_xml(&started.outbound)?
         .replace(IDP_SSO_POST, "https://idp.example.com/sso/wrong");
@@ -3322,7 +3280,7 @@ fn recommended_idp_receive_ignores_a_spurious_post_signature_field(
         BrowserInput::<AuthnRequest>::post(fields),
         validation(),
     )?;
-    assert_eq!(received.message().id(), started.pending.request_id());
+    assert_eq!(received.message().id(), started.pending.id());
     Ok(())
 }
 
@@ -3415,9 +3373,6 @@ fn typed_facade_accepts_metadata_and_response_that_start_with_a_byte_order_mark(
     )?;
 
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
-    assert_eq!(
-        session.in_response_to(),
-        Some(exchange.pending.request_id())
-    );
+    assert_eq!(session.in_response_to(), Some(exchange.pending.id()));
     Ok(())
 }

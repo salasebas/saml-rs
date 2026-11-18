@@ -13,15 +13,15 @@ use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, ArtifactDereference, ArtifactResolutionService, ArtifactUses, AuthnRequest,
     BrowserInput, EndpointUrl, EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, IssuedArtifacts, IssuedMessage, LogoutBinding,
-    LogoutRequest, LogoutResponse, LogoutSubject, ManageNameIdRequest, ManageNameIdResponse,
-    ManageNameIdService, MessageId, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange,
-    NameIdFormat, NameIdManagementBinding, Outbound, PaosClientRequest, PendingLogoutRequest,
-    PendingManageNameIdRequest, ReceiveNameIdManagement, ReceivedNameIdManagement, RelayStateParam,
-    ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError, SamlValidationContext,
-    SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
-    Status,
+    IdpDescriptor, IdpValidationPolicy, IssuedArtifacts, IssuedMessage, LogoutRequest,
+    LogoutResponse, LogoutSubject, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
+    MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, Outbound,
+    PaosClientRequest, PendingLogoutRequest, PendingLogoutRequestSnapshot,
+    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, ReceiveNameIdManagement,
+    ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError,
+    SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo,
+    StartSso, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -44,7 +44,7 @@ fn whole_seconds_from_now(seconds: u64) -> Result<SystemTime, Box<dyn std::error
 
 fn sp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Sp>, SamlError> {
     let builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.mark_default())
+        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?.with_default())
         .validation(SpValidationPolicy::compatibility());
     let builder = match lifetime {
         Some(lifetime) => builder.metadata_lifetime(lifetime),
@@ -489,18 +489,20 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
 fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wrong_peer = EntityId::try_new("https://other.example.com/metadata")?;
-    let logout_pending = PendingLogoutRequest::try_new(
-        MessageId::try_new("_logout")?,
-        RelayStateParam::absent(),
-        LogoutBinding::Redirect,
-        wrong_peer.clone(),
-    )?;
-    let manage_pending = PendingManageNameIdRequest::try_new(
-        MessageId::try_new("_manage")?,
-        RelayStateParam::absent(),
-        NameIdManagementBinding::Redirect,
-        wrong_peer,
-    )?;
+    let logout_pending = PendingLogoutRequest::from_snapshot(PendingLogoutRequestSnapshot {
+        id: "_logout".to_string(),
+        relay_state: None,
+        peer_entity_id: wrong_peer.as_str().to_string(),
+        binding: "redirect".to_string(),
+        issued_at: None,
+        expires_at: None,
+    })?;
+    let manage_pending =
+        PendingManageNameIdRequest::from_snapshot(PendingManageNameIdRequestSnapshot {
+            id: "_manage".to_string(),
+            relay_state: None,
+            peer_entity_id: wrong_peer.as_str().to_string(),
+        })?;
     for valid_until in [at(Y2001), whole_seconds_from_now(3600)?] {
         let (sp, idp) = browser_facades(valid_until)?;
         let sp_peer = sp_descriptor(&sp)?;

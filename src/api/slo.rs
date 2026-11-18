@@ -9,7 +9,7 @@ use crate::logout::{
 };
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, ReplayKey,
+    LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject, Received, RelayState, ReplayKey,
     SamlInstant, SamlValidationContext, SessionIndex, Status,
 };
 use crate::xml::OutboundNameIdQualifiers;
@@ -468,7 +468,9 @@ fn start_slo_impl(
     options: StartSlo,
     role: StartSloRole,
 ) -> Result<Started<LogoutRequest>, SamlError> {
-    options.relay_state.validate()?;
+    if let Some(relay_state) = &options.relay_state {
+        relay_state.ensure_sendable()?;
+    }
     let follows_rules = options.follows_generation_rules();
     if follows_rules && matches!(options.signing, LogoutSigning::DoNotSign) {
         return Err(SamlError::ProtocolProfile(
@@ -531,9 +533,9 @@ fn start_slo_impl(
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
-        binding: options.binding.as_binding(),
+        binding: Binding::from(options.binding),
         subject: &request_subject,
-        relay_state: options.relay_state.as_deref(),
+        relay_state: options.relay_state.as_ref().map(RelayState::as_str),
         want_signed,
         message_id: None,
         name_id_format,
@@ -543,20 +545,22 @@ fn start_slo_impl(
         name_id_encryption: options.identifier_encryption,
     })?;
     let outbound = Outbound::<LogoutRequest>::try_from(created.context)?;
-    let mut pending = PendingLogoutRequest::try_new(
+    let mut pending = PendingLogoutRequest::new(
         outbound.id().clone(),
         options.relay_state,
-        options.binding,
         peer.entity_id.clone(),
-    )?;
+        options.binding,
+    );
     if matches!(role, StartSloRole::SessionAuthority { .. }) {
-        pending = pending.with_issue_instant(SamlInstant::try_new(created.issue_instant)?);
         let expiration = created.not_on_or_after.ok_or_else(|| {
             SamlError::Invalid(
                 "Session Authority LogoutRequest is missing its generated expiration".into(),
             )
         })?;
-        pending = pending.with_expiration(SamlInstant::try_new(expiration)?);
+        pending = pending.with_validity(
+            SamlInstant::try_new(created.issue_instant)?,
+            SamlInstant::try_new(expiration)?,
+        );
     }
     Ok(Started { pending, outbound })
 }
@@ -602,7 +606,7 @@ fn receive_slo_impl(
         replay_deadline,
     )?;
     let logout = decrypt_encrypted_id(logout, local_setting, authentication)?;
-    Ok(Received::new(logout).with_relay_state(relay_state))
+    Ok(Received::new(logout, relay_state))
 }
 
 fn respond_slo_impl(
@@ -623,16 +627,15 @@ fn respond_slo_impl(
             EndpointDirection::Response,
         )?;
     }
-    let relay_state = request.relay_state();
-    relay_state.validate_echoed()?;
+    let relay_state = request.relay_state().map(RelayState::as_str);
     let status = options.status.clone().unwrap_or_else(Status::success);
     let context = create_logout_response_inner(LogoutResponseInput {
         init_setting: local_setting,
         init_meta: local_metadata,
         target_meta: peer.metadata,
-        binding: options.binding.as_binding(),
+        binding: Binding::from(options.binding),
         in_response_to: Some(request.message().id().as_str()),
-        relay_state: relay_state.as_deref(),
+        relay_state,
         // SAML Profiles 2.0 §§4.4.3.4 and 4.4.4.2 require front-channel
         // LogoutResponses to authenticate the responder and protect integrity.
         want_signed: true,
@@ -651,9 +654,9 @@ fn finish_slo_impl(
     mut validation: SamlValidationContext<'_>,
 ) -> Result<LogoutCompleted, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;
-    let binding = logout_response_binding(input_binding(&input), pending.request_binding())?;
+    let binding = logout_response_binding(input_binding(&input), pending.binding())?;
     let relay_state = relay_state_from_input(&input)?;
-    ensure_relay_state(pending.relay_state(), &relay_state)?;
+    ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
     // A SOAP response returns on this party's own HTTP exchange, so no local
     // endpoint received it.
     let expected_recipient = match binding {
@@ -709,7 +712,7 @@ fn enforce_participant_https(
     if !follows_rules || allow_http {
         return Ok(());
     }
-    let destination = peer_logout_endpoint(peer_metadata, binding.as_binding(), direction)?;
+    let destination = peer_logout_endpoint(peer_metadata, Binding::from(binding), direction)?;
     ensure_https_endpoint(
         &destination,
         "Single Logout",
@@ -764,7 +767,8 @@ fn logout_recipient_endpoint(
     direction: EndpointDirection,
     validation: &SamlValidationContext<'_>,
 ) -> Result<String, SamlError> {
-    let locations = local_metadata.single_logout_service_locations(binding.as_binding(), direction);
+    let locations =
+        local_metadata.single_logout_service_locations(Binding::from(binding), direction);
     if locations.is_empty() {
         return Err(SamlError::MissingMetadata("SingleLogoutService".into()));
     }
