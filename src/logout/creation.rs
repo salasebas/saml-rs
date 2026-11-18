@@ -122,7 +122,6 @@ fn compatibility_logout_request(
 
 pub(crate) struct CreatedLogoutRequest {
     pub(crate) context: BindingContext,
-    pub(crate) issue_instant: String,
     pub(crate) not_on_or_after: Option<String>,
 }
 
@@ -325,7 +324,6 @@ pub(crate) fn create_logout_request_for_subject_inner(
             signature,
             sig_alg,
         },
-        issue_instant: issue_instant.to_string(),
         not_on_or_after: not_on_or_after.map(str::to_string),
     })
 }

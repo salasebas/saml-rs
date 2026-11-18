@@ -545,23 +545,16 @@ fn start_slo_impl(
         name_id_encryption: options.identifier_encryption,
     })?;
     let outbound = Outbound::<LogoutRequest>::try_from(created.context)?;
-    let mut pending = PendingLogoutRequest::new(
+    let pending = PendingLogoutRequest::new(
         outbound.id().clone(),
         options.relay_state,
         peer.entity_id.clone(),
         options.binding,
+        created
+            .not_on_or_after
+            .map(SamlInstant::try_new)
+            .transpose()?,
     );
-    if matches!(role, StartSloRole::SessionAuthority { .. }) {
-        let expiration = created.not_on_or_after.ok_or_else(|| {
-            SamlError::Invalid(
-                "Session Authority LogoutRequest is missing its generated expiration".into(),
-            )
-        })?;
-        pending = pending.with_validity(
-            SamlInstant::try_new(created.issue_instant)?,
-            SamlInstant::try_new(expiration)?,
-        );
-    }
     Ok(Started { pending, outbound })
 }
 
@@ -654,7 +647,7 @@ fn finish_slo_impl(
     mut validation: SamlValidationContext<'_>,
 ) -> Result<LogoutCompleted, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;
-    let binding = logout_response_binding(input_binding(&input), pending.binding())?;
+    let binding = logout_response_binding(input_binding(&input), pending.request_binding())?;
     let relay_state = relay_state_from_input(&input)?;
     ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
     // A SOAP response returns on this party's own HTTP exchange, so no local
@@ -678,7 +671,7 @@ fn finish_slo_impl(
         peer.metadata,
         receipt,
         &request,
-        pending.id().as_str(),
+        pending.request_id().as_str(),
         LogoutFlowValidation::typed(
             expected_recipient.as_deref(),
             validation.now(),

@@ -797,7 +797,7 @@ fn finish_custom_logout_response(
             let xml = logout_response_xml(
                 &response_id,
                 IDP_ENTITY_ID,
-                started.pending.id().as_str(),
+                started.pending.request_id().as_str(),
                 destination,
             );
             let input = match protection {
@@ -814,7 +814,7 @@ fn finish_custom_logout_response(
             let xml = logout_response_xml(
                 &response_id,
                 SP_ENTITY_ID,
-                started.pending.id().as_str(),
+                started.pending.request_id().as_str(),
                 destination,
             );
             let input = match protection {
@@ -1037,18 +1037,21 @@ fn typed_slo_start_and_response_bindings_use_peer_endpoints(
         .outbound
         .redirect_url()?
         .starts_with(IDP_SLO_REDIRECT));
-    assert_eq!(redirect.pending.binding(), LogoutBinding::Redirect);
+    assert_eq!(redirect.pending.request_binding(), LogoutBinding::Redirect);
 
     let post = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     assert_eq!(post.outbound.post_form()?.action().as_str(), IDP_SLO_POST);
-    assert_eq!(post.pending.binding(), LogoutBinding::Post);
+    assert_eq!(post.pending.request_binding(), LogoutBinding::Post);
 
     let simple_sign = sp.start_slo(&idp_descriptor, subject()?, StartSlo::simple_sign())?;
     let simple_sign_form = simple_sign.outbound.post_form()?;
     assert_eq!(simple_sign_form.action().as_str(), IDP_SLO_SIMPLESIGN);
     assert!(simple_sign_form.value("SigAlg").is_some());
     assert!(simple_sign_form.value("Signature").is_some());
-    assert_eq!(simple_sign.pending.binding(), LogoutBinding::SimpleSign);
+    assert_eq!(
+        simple_sign.pending.request_binding(),
+        LogoutBinding::SimpleSign
+    );
 
     let exchange = sp_started_exchange()?;
     let redirect_response =
@@ -1155,8 +1158,8 @@ fn typed_facade_starts_slo_redirect() -> Result<(), Box<dyn std::error::Error>> 
 
     let redirect_url = started.outbound.redirect_url()?;
     assert!(redirect_url.starts_with(IDP_SLO_REDIRECT));
-    assert_eq!(started.pending.id(), started.outbound.id());
-    assert_eq!(started.pending.binding(), LogoutBinding::Redirect);
+    assert_eq!(started.pending.request_id(), started.outbound.id());
+    assert_eq!(started.pending.request_binding(), LogoutBinding::Redirect);
     assert_eq!(started.pending.peer_entity_id().as_str(), IDP_ENTITY_ID);
     Ok(())
 }
@@ -1185,14 +1188,20 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
     );
     let response = completed.response();
     assert_eq!(response.status(), &Status::success());
-    assert_eq!(response.in_response_to(), Some(exchange.pending.id()));
+    assert_eq!(
+        response.in_response_to(),
+        Some(exchange.pending.request_id())
+    );
     assert_eq!(
         response.issue_instant().as_str(),
         response.issue_instant().as_str().trim()
     );
     assert!(response.issue_instant().as_str().ends_with('Z'));
     assert!(!completed.raw_flow().saml_content.is_empty());
-    assert_eq!(exchange.received.message().id(), exchange.pending.id());
+    assert_eq!(
+        exchange.received.message().id(),
+        exchange.pending.request_id()
+    );
     assert_eq!(exchange.sp_descriptor.entity_id().as_str(), SP_ENTITY_ID);
     assert_eq!(
         exchange
@@ -1216,7 +1225,7 @@ fn typed_facade_finish_slo_rejects_a_signed_response_from_a_foreign_issuer(
     let xml = logout_response_xml(
         "_foreign_issuer_response",
         foreign_issuer,
-        started.pending.id().as_str(),
+        started.pending.request_id().as_str(),
         Some(SP_SLO_POST),
     );
     let input = signed_logout_response_input(&xml, LogoutBinding::Post)?;
@@ -1850,7 +1859,7 @@ fn typed_facade_rejects_qualified_logout_response_destination(
     let xml = logout_response_xml(
         "_qualified_response_destination",
         IDP_ENTITY_ID,
-        started.pending.id().as_str(),
+        started.pending.request_id().as_str(),
         Some(SP_SLO_POST),
     )
     .replace(" Destination=", " samlp:Destination=");
@@ -1999,7 +2008,7 @@ fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error
     assert_eq!(completed.peer_entity_id().as_str(), SP_ENTITY_ID);
     assert_eq!(
         completed.response().in_response_to(),
-        Some(started.pending.id())
+        Some(started.pending.request_id())
     );
     Ok(())
 }
@@ -2032,11 +2041,10 @@ fn typed_session_authority_slo_uses_configured_expiration_for_every_binding(
         let expiration_time = OffsetDateTime::parse(expiration, &Rfc3339)?;
         assert_eq!(expiration_time - issue_time, time::Duration::minutes(13));
         assert_eq!(
-            started.pending.issued_at().map(|value| value.as_str()),
-            Some(issue_instant)
-        );
-        assert_eq!(
-            started.pending.expires_at().map(|value| value.as_str()),
+            started
+                .pending
+                .not_on_or_after()
+                .map(|value| value.as_str()),
             Some(expiration)
         );
 
@@ -2206,11 +2214,10 @@ fn typed_session_authority_slo_preserves_configured_subsecond_expiration(
         time::Duration::new(13, 123_456_789)
     );
     assert_eq!(
-        started.pending.issued_at().map(|value| value.as_str()),
-        Some(issue_instant)
-    );
-    assert_eq!(
-        started.pending.expires_at().map(|value| value.as_str()),
+        started
+            .pending
+            .not_on_or_after()
+            .map(|value| value.as_str()),
         Some(expiration)
     );
     Ok(())
@@ -2249,11 +2256,12 @@ fn typed_session_authority_pending_snapshot_round_trips_issuance_window(
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
-    let issued_at = started.pending.issued_at().cloned();
-    let expires_at = started.pending.expires_at().cloned();
     let restored = PendingLogoutRequest::from_snapshot(started.pending.snapshot())?;
-    assert_eq!(restored.issued_at(), issued_at.as_ref());
-    assert_eq!(restored.expires_at(), expires_at.as_ref());
+    assert!(restored.not_on_or_after().is_some());
+    assert_eq!(
+        restored.not_on_or_after(),
+        started.pending.not_on_or_after()
+    );
 
     let received = sp.receive_slo(
         &idp_descriptor,
@@ -2280,8 +2288,7 @@ fn typed_session_participant_slo_keeps_generated_expiration_unset_for_every_bind
         let started = sp.start_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding)?)?;
         let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
         assert!(!xml.contains("NotOnOrAfter="));
-        assert!(started.pending.issued_at().is_none());
-        assert!(started.pending.expires_at().is_none());
+        assert!(started.pending.not_on_or_after().is_none());
     }
     Ok(())
 }
@@ -2302,6 +2309,7 @@ fn typed_session_participant_preserves_unrecognized_expiration_placeholder(
             .attr("NotOnOrAfter"),
         Some("{NotOnOrAfter}")
     );
+    assert_eq!(started.pending.not_on_or_after(), None);
     Ok(())
 }
 
@@ -2357,7 +2365,10 @@ fn typed_session_authority_custom_logout_template_placeholder_succeeds(
             .message()
             .not_on_or_after()
             .map(|value| value.as_str()),
-        started.pending.expires_at().map(|value| value.as_str())
+        started
+            .pending
+            .not_on_or_after()
+            .map(|value| value.as_str())
     );
     Ok(())
 }
@@ -2402,7 +2413,10 @@ fn typed_session_authority_custom_logout_template_escapes_subject_values(
             .message()
             .not_on_or_after()
             .map(|value| value.as_str()),
-        started.pending.expires_at().map(|value| value.as_str())
+        started
+            .pending
+            .not_on_or_after()
+            .map(|value| value.as_str())
     );
     Ok(())
 }
@@ -2715,7 +2729,7 @@ fn typed_facade_checks_destination_for_the_binding_the_response_arrived_on(
         &logout_response_xml(
             "_post_response_for_redirect",
             IDP_ENTITY_ID,
-            started.pending.id().as_str(),
+            started.pending.request_id().as_str(),
             Some(SP_SLO_REDIRECT),
         ),
         LogoutBinding::Post,
@@ -2748,7 +2762,7 @@ fn typed_facade_rejects_a_response_binding_the_local_metadata_does_not_publish(
         &logout_response_xml(
             "_post_response_without_post_endpoint",
             IDP_ENTITY_ID,
-            started.pending.id().as_str(),
+            started.pending.request_id().as_str(),
             Some(SP_SLO_POST),
         ),
         LogoutBinding::Post,
@@ -2767,10 +2781,11 @@ fn typed_facade_rejects_slo_response_crossing_the_soap_exchange(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange()?;
     let soap_pending = PendingLogoutRequest::new(
-        exchange.pending.id().clone(),
+        exchange.pending.request_id().clone(),
         None,
         exchange.pending.peer_entity_id().clone(),
         LogoutBinding::Soap,
+        None,
     );
     let post_response: Vec<FormField> = exchange
         .response_fields
@@ -2782,7 +2797,7 @@ fn typed_facade_rejects_slo_response_crossing_the_soap_exchange(
         &logout_response_xml(
             "_soap_response",
             IDP_ENTITY_ID,
-            exchange.pending.id().as_str(),
+            exchange.pending.request_id().as_str(),
             None,
         ),
         LogoutBinding::Soap,
@@ -2835,7 +2850,7 @@ fn typed_facade_rejects_slo_relay_state_mismatch() -> Result<(), Box<dyn std::er
 fn typed_facade_rejects_slo_wrong_pending_request_id() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange()?;
     let mut snapshot: PendingLogoutRequestSnapshot = exchange.pending.snapshot();
-    snapshot.id = "_different_logout".to_string();
+    snapshot.request_id = "_different_logout".to_string();
     let wrong_pending = PendingLogoutRequest::from_snapshot(snapshot)?;
 
     match exchange.sp.finish_slo(
@@ -2846,7 +2861,10 @@ fn typed_facade_rejects_slo_wrong_pending_request_id() -> Result<(), Box<dyn std
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected.as_deref(), Some("_different_logout"));
-            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
+            assert_eq!(
+                actual.as_deref(),
+                Some(exchange.pending.request_id().as_str())
+            );
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -2915,7 +2933,7 @@ fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
     let exchange =
         sp_started_exchange_answered_with(RespondSlo::post().status(refused_logout_status()))?;
     let mut snapshot: PendingLogoutRequestSnapshot = exchange.pending.snapshot();
-    snapshot.id = "_different_logout".to_string();
+    snapshot.request_id = "_different_logout".to_string();
     let wrong_pending = PendingLogoutRequest::from_snapshot(snapshot)?;
 
     match exchange.sp.finish_slo(
@@ -2926,7 +2944,10 @@ fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected.as_deref(), Some("_different_logout"));
-            assert_eq!(actual.as_deref(), Some(exchange.pending.id().as_str()));
+            assert_eq!(
+                actual.as_deref(),
+                Some(exchange.pending.request_id().as_str())
+            );
             Ok(())
         }
         other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
@@ -2943,7 +2964,7 @@ fn typed_facade_finish_slo_requires_signature_before_error_status(
         let xml = logout_response_xml(
             &format!("_unsigned_refusal_{binding:?}"),
             IDP_ENTITY_ID,
-            started.pending.id().as_str(),
+            started.pending.request_id().as_str(),
             None,
         )
         .replace(
@@ -3149,7 +3170,7 @@ fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
         &logout_response_xml(
             "_repeated_relay_state",
             IDP_ENTITY_ID,
-            started.pending.id().as_str(),
+            started.pending.request_id().as_str(),
             None,
         ),
         None,
@@ -4072,7 +4093,7 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
 
     let snapshot = started.pending.snapshot();
     let pending = PendingLogoutRequest::from_snapshot(snapshot)?;
-    assert_eq!(pending.binding(), LogoutBinding::Soap);
+    assert_eq!(pending.request_binding(), LogoutBinding::Soap);
 
     let received = idp.receive_slo(
         &sp_descriptor,
@@ -4102,7 +4123,7 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
         saml_rs::constants::status_code::SUCCESS
     );
     let response = completed.response();
-    assert_eq!(response.in_response_to(), Some(pending.id()));
+    assert_eq!(response.in_response_to(), Some(pending.request_id()));
     Ok(())
 }
 
@@ -4367,7 +4388,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
     let response_xml = logout_response_xml(
         "_soap_mutual_tls_response",
         IDP_ENTITY_ID,
-        started.pending.id().as_str(),
+        started.pending.request_id().as_str(),
         None,
     );
     let response_envelope = SoapProtocolMessage::response_envelope(&response_xml)?;

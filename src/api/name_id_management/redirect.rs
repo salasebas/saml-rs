@@ -572,7 +572,7 @@ fn finish(
         local.setting,
         peer.metadata,
         &request,
-        pending.id().as_str(),
+        pending.request_id().as_str(),
         InboundValidation {
             expected_recipient: &expected_recipient,
             peer_hmac_secret: peer.hmac_secret,

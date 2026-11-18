@@ -51,9 +51,9 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
     assert_send_sync::<NameIdCreationRequest>();
 
     let pending = PendingAuthnRequest::from_snapshot(PendingAuthnRequestSnapshot {
-        id: "_request123".to_string(),
+        request_id: "_request123".to_string(),
         relay_state: Some("relay".to_string()),
-        peer_entity_id: "https://idp.example.com/metadata".to_string(),
+        idp_entity_id: "https://idp.example.com/metadata".to_string(),
         acs_binding: "post".to_string(),
         acs_url: "https://sp.example.com/acs".to_string(),
         acs_index: None,
@@ -62,14 +62,13 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
     let _: &AcsEndpoint = pending.acs();
     let _: SsoResponseBinding = pending.acs().binding();
     let logout_pending = PendingLogoutRequest::from_snapshot(PendingLogoutRequestSnapshot {
-        id: "_logout123".to_string(),
+        request_id: "_logout123".to_string(),
         relay_state: Some(String::new()),
         peer_entity_id: "https://idp.example.com/metadata".to_string(),
-        binding: "redirect".to_string(),
-        issued_at: None,
-        expires_at: None,
+        request_binding: "redirect".to_string(),
+        not_on_or_after: None,
     })?;
-    let _: LogoutBinding = logout_pending.binding();
+    let _: LogoutBinding = logout_pending.request_binding();
     let _ = SsoEndpoint::redirect("https://idp.example.com/sso")?;
     let _ = SloEndpoint::new(
         LogoutBinding::Redirect,

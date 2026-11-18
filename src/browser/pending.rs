@@ -31,14 +31,8 @@ pub struct AuthnPendingDetails {
 #[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogoutPendingDetails {
-    binding: LogoutBinding,
-    validity: Option<LogoutRequestValidity>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct LogoutRequestValidity {
-    issued_at: SamlInstant,
-    expires_at: SamlInstant,
+    request_binding: LogoutBinding,
+    not_on_or_after: Option<SamlInstant>,
 }
 
 impl sealed::Sealed for AuthnRequest {}
@@ -66,7 +60,7 @@ impl PendingMessage for ManageNameIdRequest {
 /// operation, which checks that the response answers this request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pending<Message: PendingMessage> {
-    id: MessageId,
+    request_id: MessageId,
     relay_state: Option<RelayState>,
     peer_entity_id: EntityId,
     details: Message::Details,
@@ -84,13 +78,13 @@ pub type PendingManageNameIdRequest = Pending<ManageNameIdRequest>;
 
 impl<Message: PendingMessage> Pending<Message> {
     fn with_details(
-        id: MessageId,
+        request_id: MessageId,
         relay_state: Option<RelayState>,
         peer_entity_id: EntityId,
         details: Message::Details,
     ) -> Self {
         Self {
-            id,
+            request_id,
             relay_state,
             peer_entity_id,
             details,
@@ -99,8 +93,8 @@ impl<Message: PendingMessage> Pending<Message> {
     }
 
     /// `ID` of the request. The response's `InResponseTo` must equal it.
-    pub fn id(&self) -> &MessageId {
-        &self.id
+    pub fn request_id(&self) -> &MessageId {
+        &self.request_id
     }
 
     /// RelayState the request carried. The response must return it unchanged.
@@ -108,21 +102,32 @@ impl<Message: PendingMessage> Pending<Message> {
         self.relay_state.as_ref()
     }
 
-    /// Entity ID of the peer the request went to. The response must come
-    /// from it.
-    pub fn peer_entity_id(&self) -> &EntityId {
-        &self.peer_entity_id
+    fn stored_relay_state(&self) -> Option<String> {
+        self.relay_state
+            .as_ref()
+            .map(|relay_state| relay_state.as_str().to_string())
     }
 }
 
 impl Pending<AuthnRequest> {
     pub(crate) fn new(
-        id: MessageId,
+        request_id: MessageId,
         relay_state: Option<RelayState>,
-        peer_entity_id: EntityId,
+        idp_entity_id: EntityId,
         acs: AcsEndpoint,
     ) -> Self {
-        Self::with_details(id, relay_state, peer_entity_id, AuthnPendingDetails { acs })
+        Self::with_details(
+            request_id,
+            relay_state,
+            idp_entity_id,
+            AuthnPendingDetails { acs },
+        )
+    }
+
+    /// Entity ID of the identity provider the AuthnRequest went to. The
+    /// response must come from it.
+    pub fn idp_entity_id(&self) -> &EntityId {
+        &self.peer_entity_id
     }
 
     /// Assertion consumer service the AuthnRequest asked for. The response
@@ -135,12 +140,9 @@ impl Pending<AuthnRequest> {
     pub fn snapshot(&self) -> PendingAuthnRequestSnapshot {
         let acs = &self.details.acs;
         PendingAuthnRequestSnapshot {
-            id: self.id.as_str().to_string(),
-            relay_state: self
-                .relay_state
-                .as_ref()
-                .map(|relay_state| relay_state.as_str().to_string()),
-            peer_entity_id: self.peer_entity_id.as_str().to_string(),
+            request_id: self.request_id.as_str().to_string(),
+            relay_state: self.stored_relay_state(),
+            idp_entity_id: self.peer_entity_id.as_str().to_string(),
             acs_binding: Binding::from(acs.binding()).short_name().to_string(),
             acs_url: acs.location().as_str().to_string(),
             acs_index: acs.index(),
@@ -165,9 +167,9 @@ impl Pending<AuthnRequest> {
     /// use saml_rs::{PendingAuthnRequest, PendingAuthnRequestSnapshot};
     ///
     /// let snapshot = PendingAuthnRequestSnapshot {
-    ///     id: "_request123".to_string(),
+    ///     request_id: "_request123".to_string(),
     ///     relay_state: Some("return-to-cart".to_string()),
-    ///     peer_entity_id: "https://idp.example.com/metadata".to_string(),
+    ///     idp_entity_id: "https://idp.example.com/metadata".to_string(),
     ///     acs_binding: "post".to_string(),
     ///     acs_url: "https://sp.example.com/acs".to_string(),
     ///     acs_index: None,
@@ -175,7 +177,7 @@ impl Pending<AuthnRequest> {
     /// };
     /// let pending = PendingAuthnRequest::from_snapshot(snapshot.clone())?;
     ///
-    /// assert_eq!(pending.peer_entity_id().as_str(), "https://idp.example.com/metadata");
+    /// assert_eq!(pending.idp_entity_id().as_str(), "https://idp.example.com/metadata");
     /// assert_eq!(pending.snapshot(), snapshot);
     /// # Ok::<(), saml_rs::SamlError>(())
     /// ```
@@ -189,9 +191,9 @@ impl Pending<AuthnRequest> {
             acs = acs.with_default();
         }
         Ok(Self::new(
-            MessageId::try_new(snapshot.id)?,
+            MessageId::try_new(snapshot.request_id)?,
             snapshot.relay_state.map(RelayState::try_new).transpose()?,
-            EntityId::try_new(snapshot.peer_entity_id)?,
+            EntityId::try_new(snapshot.idp_entity_id)?,
             acs,
         ))
     }
@@ -199,69 +201,59 @@ impl Pending<AuthnRequest> {
 
 impl Pending<LogoutRequest> {
     pub(crate) fn new(
-        id: MessageId,
+        request_id: MessageId,
         relay_state: Option<RelayState>,
         peer_entity_id: EntityId,
-        binding: LogoutBinding,
+        request_binding: LogoutBinding,
+        not_on_or_after: Option<SamlInstant>,
     ) -> Self {
         Self::with_details(
-            id,
+            request_id,
             relay_state,
             peer_entity_id,
             LogoutPendingDetails {
-                binding,
-                validity: None,
+                request_binding,
+                not_on_or_after,
             },
         )
     }
 
-    pub(crate) fn with_validity(mut self, issued_at: SamlInstant, expires_at: SamlInstant) -> Self {
-        self.details.validity = Some(LogoutRequestValidity {
-            issued_at,
-            expires_at,
-        });
-        self
+    /// Entity ID of the peer the LogoutRequest went to. The response must
+    /// come from it.
+    pub fn peer_entity_id(&self) -> &EntityId {
+        &self.peer_entity_id
     }
 
     /// Binding the LogoutRequest was sent with.
     ///
     /// `finish_slo` accepts the response over SOAP when this is
     /// [`LogoutBinding::Soap`], and otherwise over any front-channel binding.
-    pub fn binding(&self) -> LogoutBinding {
-        self.details.binding
+    pub fn request_binding(&self) -> LogoutBinding {
+        self.details.request_binding
     }
 
-    /// `IssueInstant` of a LogoutRequest a session authority sent. `None` for
-    /// a session participant.
-    pub fn issued_at(&self) -> Option<&SamlInstant> {
-        self.details
-            .validity
-            .as_ref()
-            .map(|validity| &validity.issued_at)
-    }
-
-    /// `NotOnOrAfter` of a LogoutRequest a session authority sent. `None` for
-    /// a session participant.
-    pub fn expires_at(&self) -> Option<&SamlInstant> {
-        self.details
-            .validity
-            .as_ref()
-            .map(|validity| &validity.expires_at)
+    /// `NotOnOrAfter` saml-rs wrote on a session authority's LogoutRequest,
+    /// after which the peer discards the request.
+    ///
+    /// `None` for a session participant, including when its custom
+    /// LogoutRequest template writes a `NotOnOrAfter`.
+    pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
+        self.details.not_on_or_after.as_ref()
     }
 
     /// Fields to store until the response arrives.
     pub fn snapshot(&self) -> PendingLogoutRequestSnapshot {
         PendingLogoutRequestSnapshot {
-            id: self.id.as_str().to_string(),
-            relay_state: self
-                .relay_state
-                .as_ref()
-                .map(|relay_state| relay_state.as_str().to_string()),
+            request_id: self.request_id.as_str().to_string(),
+            relay_state: self.stored_relay_state(),
             peer_entity_id: self.peer_entity_id.as_str().to_string(),
-            binding: Binding::from(self.details.binding).short_name().to_string(),
-            issued_at: self.issued_at().map(|instant| instant.as_str().to_string()),
-            expires_at: self
-                .expires_at()
+            request_binding: Binding::from(self.details.request_binding)
+                .short_name()
+                .to_string(),
+            not_on_or_after: self
+                .details
+                .not_on_or_after
+                .as_ref()
                 .map(|instant| instant.as_str().to_string()),
         }
     }
@@ -273,10 +265,10 @@ impl Pending<LogoutRequest> {
     /// Returns [`SamlError`] when a field fails the check of its type:
     /// [`MessageId::try_new`], [`RelayState::try_new`], [`EntityId::try_new`],
     /// or [`SamlInstant::try_new`]. Returns [`SamlError::Invalid`] when
-    /// `binding` is not a binding name or only one of `issued_at` and
-    /// `expires_at` is set, [`SamlError::UnsupportedBinding`] when `binding`
-    /// names a binding logout cannot use, and [`SamlError::ProtocolProfile`]
-    /// when a SOAP request has RelayState.
+    /// `request_binding` is not a binding name,
+    /// [`SamlError::UnsupportedBinding`] when it names a binding logout cannot
+    /// use, and [`SamlError::ProtocolProfile`] when a SOAP request has
+    /// RelayState.
     ///
     /// # Examples
     ///
@@ -284,60 +276,56 @@ impl Pending<LogoutRequest> {
     /// use saml_rs::{LogoutBinding, PendingLogoutRequest, PendingLogoutRequestSnapshot};
     ///
     /// let pending = PendingLogoutRequest::from_snapshot(PendingLogoutRequestSnapshot {
-    ///     id: "_logout123".to_string(),
+    ///     request_id: "_logout123".to_string(),
     ///     relay_state: None,
     ///     peer_entity_id: "https://idp.example.com/metadata".to_string(),
-    ///     binding: "post".to_string(),
-    ///     issued_at: None,
-    ///     expires_at: None,
+    ///     request_binding: "post".to_string(),
+    ///     not_on_or_after: None,
     /// })?;
     ///
-    /// assert_eq!(pending.binding(), LogoutBinding::Post);
+    /// assert_eq!(pending.request_binding(), LogoutBinding::Post);
     /// # Ok::<(), saml_rs::SamlError>(())
     /// ```
     pub fn from_snapshot(snapshot: PendingLogoutRequestSnapshot) -> Result<Self, SamlError> {
-        let binding: LogoutBinding = snapshot_binding(&snapshot.binding)?;
+        let request_binding: LogoutBinding = snapshot_binding(&snapshot.request_binding)?;
         let relay_state = snapshot.relay_state.map(RelayState::try_new).transpose()?;
         crate::logout::reject_soap_relay_state(
-            Binding::from(binding),
+            Binding::from(request_binding),
             relay_state.as_ref().map(RelayState::as_str),
         )?;
-        let pending = Self::new(
-            MessageId::try_new(snapshot.id)?,
+        Ok(Self::new(
+            MessageId::try_new(snapshot.request_id)?,
             relay_state,
             EntityId::try_new(snapshot.peer_entity_id)?,
-            binding,
-        );
-        match (snapshot.issued_at, snapshot.expires_at) {
-            (None, None) => Ok(pending),
-            (Some(issued_at), Some(expires_at)) => Ok(pending.with_validity(
-                SamlInstant::try_new(issued_at)?,
-                SamlInstant::try_new(expires_at)?,
-            )),
-            (Some(_), None) | (None, Some(_)) => Err(SamlError::Invalid(
-                "a pending logout snapshot stores issued_at and expires_at together".into(),
-            )),
-        }
+            request_binding,
+            snapshot
+                .not_on_or_after
+                .map(SamlInstant::try_new)
+                .transpose()?,
+        ))
     }
 }
 
 impl Pending<ManageNameIdRequest> {
     pub(crate) fn new(
-        id: MessageId,
+        request_id: MessageId,
         relay_state: Option<RelayState>,
         peer_entity_id: EntityId,
     ) -> Self {
-        Self::with_details(id, relay_state, peer_entity_id, ())
+        Self::with_details(request_id, relay_state, peer_entity_id, ())
+    }
+
+    /// Entity ID of the peer the ManageNameIDRequest went to. The response
+    /// must come from it.
+    pub fn peer_entity_id(&self) -> &EntityId {
+        &self.peer_entity_id
     }
 
     /// Fields to store until the response arrives.
     pub fn snapshot(&self) -> PendingManageNameIdRequestSnapshot {
         PendingManageNameIdRequestSnapshot {
-            id: self.id.as_str().to_string(),
-            relay_state: self
-                .relay_state
-                .as_ref()
-                .map(|relay_state| relay_state.as_str().to_string()),
+            request_id: self.request_id.as_str().to_string(),
+            relay_state: self.stored_relay_state(),
             peer_entity_id: self.peer_entity_id.as_str().to_string(),
         }
     }
@@ -352,7 +340,7 @@ impl Pending<ManageNameIdRequest> {
     /// [`EntityId::try_new`].
     pub fn from_snapshot(snapshot: PendingManageNameIdRequestSnapshot) -> Result<Self, SamlError> {
         Ok(Self::new(
-            MessageId::try_new(snapshot.id)?,
+            MessageId::try_new(snapshot.request_id)?,
             snapshot.relay_state.map(RelayState::try_new).transpose()?,
             EntityId::try_new(snapshot.peer_entity_id)?,
         ))
@@ -366,12 +354,12 @@ impl Pending<ManageNameIdRequest> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingAuthnRequestSnapshot {
     /// `ID` of the AuthnRequest.
-    pub id: String,
+    pub request_id: String,
     /// RelayState the request carried. `None` when it carried none, and an
     /// empty string when it carried an empty one.
     pub relay_state: Option<String>,
-    /// Entity ID of the identity provider.
-    pub peer_entity_id: String,
+    /// Entity ID of the identity provider the request went to.
+    pub idp_entity_id: String,
     /// Binding of the requested assertion consumer service.
     pub acs_binding: String,
     /// Location of the requested assertion consumer service.
@@ -390,27 +378,23 @@ pub struct PendingAuthnRequestSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingLogoutRequestSnapshot {
     /// `ID` of the LogoutRequest.
-    pub id: String,
+    pub request_id: String,
     /// RelayState the request carried. `None` when it carried none, and an
     /// empty string when it carried an empty one.
     pub relay_state: Option<String>,
     /// Entity ID of the peer the request went to.
     pub peer_entity_id: String,
     /// Binding the request was sent with.
-    pub binding: String,
-    /// `IssueInstant` of a session authority's request. Set together with
-    /// `expires_at`.
-    pub issued_at: Option<String>,
-    /// `NotOnOrAfter` of a session authority's request. Set together with
-    /// `issued_at`.
-    pub expires_at: Option<String>,
+    pub request_binding: String,
+    /// `NotOnOrAfter` saml-rs wrote on a session authority's request.
+    pub not_on_or_after: Option<String>,
 }
 
 /// Stored fields of a [`PendingManageNameIdRequest`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingManageNameIdRequestSnapshot {
     /// `ID` of the ManageNameIDRequest.
-    pub id: String,
+    pub request_id: String,
     /// RelayState the request carried. `None` when it carried none, and an
     /// empty string when it carried an empty one.
     pub relay_state: Option<String>,

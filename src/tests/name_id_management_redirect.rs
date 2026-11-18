@@ -1006,7 +1006,7 @@ fn error_status_is_reported_only_for_an_authenticated_matching_response() -> Tes
         &NameIdChange::Terminate,
         StartNameIdManagement::redirect(),
     )?;
-    let request_id = started.pending.id().as_str();
+    let request_id = started.pending.request_id().as_str();
 
     let unsigned = unsigned_response_input(&sp_error_response_xml(request_id))?;
     match idp.finish_name_id_management_redirect(&sp_peer, &started.pending, unsigned, validation())
@@ -1273,7 +1273,7 @@ fn a_response_with_two_statuses_is_rejected() -> TestResult {
             r#"</samlp:ManageNameIDResponse>"#,
         ),
         destination = IDP_MANAGE,
-        in_response_to = started.pending.id().as_str(),
+        in_response_to = started.pending.request_id().as_str(),
         issuer = SP_ENTITY_ID,
         success = status_code::SUCCESS,
         requester = status_code::REQUESTER,

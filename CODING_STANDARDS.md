@@ -38,6 +38,12 @@ stays constructible.
 
 These rules apply when an API is added or redesigned.
 
+- Name an item for the value it returns or the action it performs. Give it
+  the name of a sibling item only when both mean the same thing, such as one
+  SAML attribute read from two types. When the precise name differs from the
+  siblings' names, use the precise name: `PendingAuthnRequest::idp_entity_id()`
+  next to `PendingLogoutRequest::peer_entity_id()`.
+- A value the crate cannot guarantee or never reads is deleted, not renamed.
 - A value that is not a dedicated builder configures with
   `with_foo(self, value) -> Self`, which leaves `foo()` for reading.
 - A single-valued setter replaces its value. For a repeated element, the

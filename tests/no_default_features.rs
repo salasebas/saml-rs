@@ -236,7 +236,7 @@ fn typed_facade_creates_and_receives_unsigned_protocol_sso_without_default_crypt
         received.message().issuer().as_str(),
         "https://sp.example.com/metadata"
     );
-    assert_eq!(received.message().id(), started.pending.id());
+    assert_eq!(received.message().id(), started.pending.request_id());
     Ok(())
 }
 

@@ -258,9 +258,9 @@ fn typed_bindings_relay_state_enforces_saml_bindings_byte_limit(
 
 fn valid_authn_snapshot() -> PendingAuthnRequestSnapshot {
     PendingAuthnRequestSnapshot {
-        id: "_request123".to_string(),
+        request_id: "_request123".to_string(),
         relay_state: None,
-        peer_entity_id: "https://idp.example.com/metadata".to_string(),
+        idp_entity_id: "https://idp.example.com/metadata".to_string(),
         acs_binding: Binding::Post.short_name().to_string(),
         acs_url: "https://sp.example.com/acs".to_string(),
         acs_index: None,
@@ -270,12 +270,11 @@ fn valid_authn_snapshot() -> PendingAuthnRequestSnapshot {
 
 fn valid_logout_snapshot() -> PendingLogoutRequestSnapshot {
     PendingLogoutRequestSnapshot {
-        id: "_logout123".to_string(),
+        request_id: "_logout123".to_string(),
         relay_state: None,
         peer_entity_id: "https://idp.example.com/metadata".to_string(),
-        binding: Binding::Post.short_name().to_string(),
-        issued_at: None,
-        expires_at: None,
+        request_binding: Binding::Post.short_name().to_string(),
+        not_on_or_after: None,
     }
 }
 
@@ -291,7 +290,7 @@ fn typed_bindings_pending_authn_request_snapshot_round_trips(
 
     let restored = PendingAuthnRequest::from_snapshot(snapshot.clone())?;
 
-    assert_eq!(restored.id().as_str(), "_request123");
+    assert_eq!(restored.request_id().as_str(), "_request123");
     assert_eq!(restored.relay_state(), Some(&RelayState::try_new("relay")?));
     assert_eq!(
         restored.acs(),
@@ -300,7 +299,7 @@ fn typed_bindings_pending_authn_request_snapshot_round_trips(
             .with_default()
     );
     assert_eq!(
-        restored.peer_entity_id().as_str(),
+        restored.idp_entity_id().as_str(),
         "https://idp.example.com/metadata"
     );
     assert_eq!(restored.snapshot(), snapshot);
@@ -332,22 +331,17 @@ fn typed_bindings_pending_logout_request_snapshot_round_trips_supported_bindings
     ] {
         let snapshot = PendingLogoutRequestSnapshot {
             relay_state: relay_state.map(str::to_string),
-            binding: Binding::from(binding).short_name().to_string(),
-            issued_at: Some("2026-07-04T12:00:00Z".to_string()),
-            expires_at: Some("2026-07-04T12:05:00Z".to_string()),
+            request_binding: Binding::from(binding).short_name().to_string(),
+            not_on_or_after: Some("2026-07-04T12:05:00Z".to_string()),
             ..valid_logout_snapshot()
         };
 
         let restored = PendingLogoutRequest::from_snapshot(snapshot.clone())?;
 
-        assert_eq!(restored.binding(), binding);
+        assert_eq!(restored.request_binding(), binding);
         assert_eq!(restored.relay_state().map(RelayState::as_str), relay_state);
         assert_eq!(
-            restored.issued_at().map(SamlInstant::as_str),
-            Some("2026-07-04T12:00:00Z")
-        );
-        assert_eq!(
-            restored.expires_at().map(SamlInstant::as_str),
+            restored.not_on_or_after().map(SamlInstant::as_str),
             Some("2026-07-04T12:05:00Z")
         );
         assert_eq!(restored.snapshot(), snapshot);
@@ -358,7 +352,7 @@ fn typed_bindings_pending_logout_request_snapshot_round_trips_supported_bindings
 #[test]
 fn typed_bindings_pending_snapshot_validates_request_id() {
     let mut snapshot = valid_authn_snapshot();
-    snapshot.id.clear();
+    snapshot.request_id.clear();
 
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
@@ -390,9 +384,9 @@ fn typed_bindings_pending_snapshot_rejects_an_overlong_relay_state() {
 }
 
 #[test]
-fn typed_bindings_pending_snapshot_validates_peer_entity_id() {
+fn typed_bindings_pending_snapshot_validates_idp_entity_id() {
     let mut snapshot = valid_authn_snapshot();
-    snapshot.peer_entity_id.clear();
+    snapshot.idp_entity_id.clear();
 
     assert!(matches!(
         PendingAuthnRequest::from_snapshot(snapshot),
@@ -440,7 +434,7 @@ fn typed_bindings_pending_snapshot_validates_acs_binding() {
 #[test]
 fn typed_bindings_pending_logout_snapshot_validates_binding() {
     let mut snapshot = valid_logout_snapshot();
-    snapshot.binding = Binding::Artifact.short_name().to_string();
+    snapshot.request_binding = Binding::Artifact.short_name().to_string();
 
     assert!(matches!(
         PendingLogoutRequest::from_snapshot(snapshot),
@@ -455,7 +449,7 @@ fn typed_bindings_pending_logout_snapshot_validates_binding() {
 fn typed_bindings_pending_logout_snapshot_rejects_relay_state_on_soap() {
     let snapshot = PendingLogoutRequestSnapshot {
         relay_state: Some(String::new()),
-        binding: Binding::Soap.short_name().to_string(),
+        request_binding: Binding::Soap.short_name().to_string(),
         ..valid_logout_snapshot()
     };
 
@@ -463,23 +457,4 @@ fn typed_bindings_pending_logout_snapshot_rejects_relay_state_on_soap() {
         PendingLogoutRequest::from_snapshot(snapshot),
         Err(SamlError::ProtocolProfile(_))
     ));
-}
-
-#[test]
-fn typed_bindings_pending_logout_snapshot_stores_issue_and_expiration_instants_together() {
-    for (issued_at, expires_at) in [
-        (None, Some("2026-07-04T12:05:00Z".to_string())),
-        (Some("2026-07-04T12:00:00Z".to_string()), None),
-    ] {
-        let snapshot = PendingLogoutRequestSnapshot {
-            issued_at,
-            expires_at,
-            ..valid_logout_snapshot()
-        };
-
-        assert!(matches!(
-            PendingLogoutRequest::from_snapshot(snapshot),
-            Err(SamlError::Invalid(_))
-        ));
-    }
 }
