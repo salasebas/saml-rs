@@ -86,7 +86,7 @@ pub enum ManageNameIdResponse {}
 /// `Response` is the answer for the binding: [`SoapResponse`] over SOAP, and
 /// [`Outbound<ManageNameIdResponse>`](crate::Outbound) over HTTP-Redirect.
 #[derive(Debug, Clone)]
-pub enum ReceivedNameIdManagement<Response = SoapResponse> {
+pub enum NameIdManagementReceipt<Response = SoapResponse> {
     /// Apply the change, then answer with
     /// [`Saml::respond_name_id_management`](crate::Saml::respond_name_id_management),
     /// or its `_redirect` counterpart for HTTP-Redirect.
@@ -308,7 +308,7 @@ pub(crate) fn receive(
     request_envelope: &str,
     channel: SoapChannel,
     mut validation: SamlValidationContext<'_>,
-) -> Result<ReceivedNameIdManagement, SamlError> {
+) -> Result<NameIdManagementReceipt, SamlError> {
     let locations = local_services(idp.metadata)?;
     require_channel(channel)?;
     let body = read_soap_body(request_envelope, idp.setting.xml_limits, &[])?;
@@ -356,7 +356,7 @@ pub(crate) fn receive(
     validation.check_manage_name_id_request_issue_instant(&issue_instant)?;
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdRequest(id.clone()))?;
     match plaintext_content(&body.xml, identifier, change, idp.setting) {
-        Ok((name_id, change)) => Ok(ReceivedNameIdManagement::Request(Box::new(Received::new(
+        Ok((name_id, change)) => Ok(NameIdManagementReceipt::Request(Box::new(Received::new(
             ManageNameIdRequest {
                 id,
                 issuer: sp_entity_id.clone(),
@@ -396,8 +396,8 @@ fn refused(
     in_response_to: &MessageId,
     reason: NameIdManagementRefusal,
     decryption_error: Option<SamlError>,
-) -> Result<ReceivedNameIdManagement, SamlError> {
-    Ok(ReceivedNameIdManagement::Refused(
+) -> Result<NameIdManagementReceipt, SamlError> {
+    Ok(NameIdManagementReceipt::Refused(
         RefusedNameIdManagement::new(
             response(idp_entity_id, in_response_to, &reason.status())?,
             reason,

@@ -22,8 +22,8 @@ use saml_rs::{
     IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
     ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MessageConfidentiality,
     MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
-    NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
-    ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml,
+    NameIdManagementReceipt, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
+    ReceiveNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml,
     SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SoapRequest, SpConfig,
     SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, X509Credential,
 };
@@ -65,7 +65,7 @@ fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
 }
 
 fn encrypted() -> StartNameIdManagement {
-    StartNameIdManagement::redirect()
+    StartNameIdManagement::new()
         .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers)
 }
 
@@ -237,10 +237,10 @@ fn identity_provider_encrypts_the_identifier_and_new_value_for_the_service_provi
     )?;
     encrypted_identifier_and_new_value(&redirect_message_xml(&started.outbound)?)?;
 
-    let ReceivedNameIdManagement::Request(request) = sp.receive_name_id_management_redirect(
+    let NameIdManagementReceipt::Request(request) = sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
-        ReceiveNameIdManagement::redirect(),
+        ReceiveNameIdManagement::new(),
         validation(),
     )?
     else {
@@ -255,7 +255,7 @@ fn identity_provider_encrypts_the_identifier_and_new_value_for_the_service_provi
     let response = sp.respond_name_id_management_redirect(
         &idp_peer,
         &request,
-        RespondNameIdManagement::redirect(),
+        RespondNameIdManagement::new(),
     )?;
     idp.finish_name_id_management_redirect(
         &sp_peer,
@@ -281,10 +281,10 @@ fn service_provider_encrypts_the_identifier_and_new_value_for_the_identity_provi
     )?;
     encrypted_identifier_and_new_value(&redirect_message_xml(&started.outbound)?)?;
 
-    let ReceivedNameIdManagement::Request(request) = idp.receive_name_id_management_redirect(
+    let NameIdManagementReceipt::Request(request) = idp.receive_name_id_management_redirect(
         &sp_peer,
         request_input(&started.outbound)?,
-        ReceiveNameIdManagement::redirect(),
+        ReceiveNameIdManagement::new(),
         validation(),
     )?
     else {
@@ -299,7 +299,7 @@ fn service_provider_encrypts_the_identifier_and_new_value_for_the_identity_provi
     let response = idp.respond_name_id_management_redirect(
         &sp_peer,
         &request,
-        RespondNameIdManagement::redirect(),
+        RespondNameIdManagement::new(),
     )?;
     sp.finish_name_id_management_redirect(
         &idp_peer,
@@ -332,10 +332,10 @@ fn identity_provider_decrypts_identifiers_made_for_either_published_certificate(
         )?;
         encrypted_identifier_and_new_value(&redirect_message_xml(&started.outbound)?)?;
 
-        let ReceivedNameIdManagement::Request(request) = idp.receive_name_id_management_redirect(
+        let NameIdManagementReceipt::Request(request) = idp.receive_name_id_management_redirect(
             &sp_peer,
             request_input(&started.outbound)?,
-            ReceiveNameIdManagement::redirect(),
+            ReceiveNameIdManagement::new(),
             validation(),
         )?
         else {
@@ -370,17 +370,18 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
         &sp_soap_peer,
         &alice(),
         &NameIdChange::NewId("alice-2".into()),
-        IdentifierEncryptionPolicy::EncryptIdentifiers,
+        StartNameIdManagement::new()
+            .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers),
         authenticated(),
     )?;
     let soap_xml = SoapProtocolMessage::from_envelope(started.request().envelope())?
         .xml()
         .to_string();
     let (encrypted_id, new_encrypted_id) = encrypted_identifier_and_new_value(&soap_xml)?;
-    let ReceivedNameIdManagement::Request(request) = sp.receive_name_id_management_redirect(
+    let NameIdManagementReceipt::Request(request) = sp.receive_name_id_management_redirect(
         &idp_peer,
         idp_request_input(&format!("{encrypted_id}{new_encrypted_id}"))?,
-        ReceiveNameIdManagement::redirect(),
+        ReceiveNameIdManagement::new(),
         validation(),
     )?
     else {
@@ -407,7 +408,7 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
             r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_soap" Version="2.0" IssueInstant="2026-01-01T00:00:00Z"><saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>{encrypted_id}{new_encrypted_id}</samlp:ManageNameIDRequest>"#
         ),
     )?;
-    let ReceivedNameIdManagement::Request(request) = idp.receive_name_id_management(
+    let NameIdManagementReceipt::Request(request) = idp.receive_name_id_management(
         &sp_peer,
         envelope.envelope(),
         authenticated(),
@@ -437,10 +438,10 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
         encrypted(),
     )?;
 
-    let ReceivedNameIdManagement::Refused(refused) = sp.receive_name_id_management_redirect(
+    let NameIdManagementReceipt::Refused(refused) = sp.receive_name_id_management_redirect(
         &idp_peer,
         request_input(&started.outbound)?,
-        ReceiveNameIdManagement::redirect(),
+        ReceiveNameIdManagement::new(),
         validation(),
     )?
     else {
@@ -491,7 +492,7 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
         sp.receive_name_id_management_redirect(
             &idp_peer,
             request_input(&started.outbound)?,
-            ReceiveNameIdManagement::redirect(),
+            ReceiveNameIdManagement::new(),
             SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache))
                 .with_replay_retention(Duration::from_secs(300))
                 .with_manage_name_id_request_age(RequestAgePolicy::Bounded {
@@ -501,7 +502,7 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
     };
 
     let mut cache = InMemoryReplayCache::with_clock(|| SystemTime::UNIX_EPOCH);
-    let ReceivedNameIdManagement::Refused(_) = receive(SystemTime::now(), &mut cache)? else {
+    let NameIdManagementReceipt::Refused(_) = receive(SystemTime::now(), &mut cache)? else {
         return Err("an identifier that does not decrypt was not refused".into());
     };
     match receive(SystemTime::now(), &mut cache) {
@@ -541,17 +542,17 @@ fn the_answer_to_a_refused_request_goes_to_an_http_endpoint_only_when_allowed() 
     match sp.receive_name_id_management_redirect(
         &http_idp_peer,
         input()?,
-        ReceiveNameIdManagement::redirect(),
+        ReceiveNameIdManagement::new(),
         validation(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("https") => {}
         other => return Err(format!("expected an https rejection, got {other:?}").into()),
     }
 
-    let ReceivedNameIdManagement::Refused(refused) = sp.receive_name_id_management_redirect(
+    let NameIdManagementReceipt::Refused(refused) = sp.receive_name_id_management_redirect(
         &http_idp_peer,
         input()?,
-        ReceiveNameIdManagement::redirect().allow_http_name_id_management(),
+        ReceiveNameIdManagement::new().allow_http(),
         validation(),
     )?
     else {

@@ -124,7 +124,7 @@ impl CommonDomainCookie {
     }
 }
 
-pub(crate) fn remember_identity_provider(
+pub(crate) fn common_domain_cookie(
     entity_id: &str,
     options: RememberIdentityProvider<'_>,
 ) -> Result<CommonDomainCookie, SamlError> {

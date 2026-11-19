@@ -11,10 +11,10 @@ use common::signing_credentials;
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound, PaosAuthnRequest,
-    PaosClientRequest, ReplayPolicy, Saml, SamlError, SamlValidationContext, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound, ReplayPolicy, Saml,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartPaosSso, StartSso,
 };
 use url::Url;
 
@@ -157,14 +157,14 @@ fn unsigned_paos_request_is_rejected_when_sp_metadata_sets_authn_requests_signed
 
     let unsigned = signing_sp.start_paos_sso(
         &idp_descriptor,
-        PaosClientRequest::headers_checked_by_caller(),
-        StartPaosSso::to_soap_endpoint(IDP_SOAP)?.allow_unsigned_authn_request(),
+        StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?).allow_unsigned_authn_request(),
     )?;
     let unsigned_envelope = envelope_for_idp(unsigned.http_response.envelope())?;
     assert!(!unsigned_envelope.contains("<ds:Signature"));
     match idp.receive_paos_sso(
         &signing_descriptor,
-        &PaosAuthnRequest::from_envelope(unsigned_envelope, IDP_SOAP)?,
+        &unsigned_envelope,
+        &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     ) {
         Err(SamlError::SignatureMissing) => {}
@@ -173,15 +173,12 @@ fn unsigned_paos_request_is_rejected_when_sp_metadata_sets_authn_requests_signed
 
     let signed = signing_sp.start_paos_sso(
         &idp_descriptor,
-        PaosClientRequest::headers_checked_by_caller(),
-        StartPaosSso::to_soap_endpoint(IDP_SOAP)?,
+        StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?),
     )?;
     let received = idp.receive_paos_sso(
         &signing_descriptor,
-        &PaosAuthnRequest::from_envelope(
-            envelope_for_idp(signed.http_response.envelope())?,
-            IDP_SOAP,
-        )?,
+        &envelope_for_idp(signed.http_response.envelope())?,
+        &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
     assert_eq!(received.message().id(), signed.pending.request_id());

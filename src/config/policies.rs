@@ -418,10 +418,9 @@ pub enum AssertionEncryptionPolicy {
 ///
 /// [`crate::StartSlo::identifier_encryption`] selects it for one
 /// `LogoutRequest`, on either role.
-/// [`crate::StartNameIdManagement::identifier_encryption`] and the
-/// `identifier_encryption` argument of
-/// [`crate::Saml::start_name_id_management`] select it, for the `<NameID>`
-/// and `<NewID>`, for one `ManageNameIDRequest`.
+/// [`crate::StartNameIdManagement::identifier_encryption`] selects it, for
+/// the `<NameID>` and `<NewID>`, for one `ManageNameIDRequest` over SOAP or
+/// HTTP-Redirect.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum IdentifierEncryptionPolicy {
     /// Do not encrypt identifiers.
@@ -752,7 +751,7 @@ pub struct TemplatePolicy {
     /// placeholders is omitted when there is no value for it.
     ///
     /// Typed Session Authority generation, and typed SP generation with
-    /// [`crate::StartSlo::apply_single_logout_generation_rules`], reject a
+    /// [`crate::StartSlo::apply_producer_rules`], reject a
     /// template whose `NameID` attributes differ from the ones sent for the
     /// subject. Other typed SP generation sends the template's `NameID`
     /// attributes as written.

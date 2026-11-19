@@ -1,7 +1,8 @@
-use crate::config::{IdentifierEncryptionPolicy, SpDescriptor};
-use crate::model::{NameId, Received, SamlValidationContext, Status};
+use crate::config::SpDescriptor;
+use crate::constants::Binding;
+use crate::model::{NameId, Received, RelayState, SamlValidationContext, Status};
 use crate::name_id_management::{
-    self, LocalIdentityProvider, ManageNameIdRequest, NameIdChange, ReceivedNameIdManagement,
+    self, LocalIdentityProvider, ManageNameIdRequest, NameIdChange, NameIdManagementReceipt,
     StartedNameIdManagement,
 };
 use crate::soap::{SoapChannel, SoapResponse};
@@ -9,9 +10,9 @@ use std::time::SystemTime;
 
 mod redirect;
 
-pub use redirect::ReceivedNameIdManagementRedirect;
+pub use redirect::NameIdManagementRedirectReceipt;
 
-use super::{Idp, Saml, SamlError};
+use super::{Idp, RespondNameIdManagement, Saml, SamlError, StartNameIdManagement};
 
 impl Saml<Idp> {
     /// Send `ManageNameIDRequest` to the service provider's SOAP
@@ -23,11 +24,15 @@ impl Saml<Idp> {
     /// identifier without `NameQualifier` or `SPNameQualifier` is sent with
     /// this identity provider and the service provider as those qualifiers.
     ///
-    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`] sends the
+    /// [`StartNameIdManagement::identifier_encryption`] with
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers) sends the
     /// identifier as `EncryptedID`, and a new value as `NewEncryptedID`, for
     /// the first encryption certificate in the service provider's metadata.
-    /// [`IdentifierEncryptionPolicy::PlaintextIdentifiers`] sends `NameID`
-    /// and `NewID`.
+    /// The default, [`IdentifierEncryptionPolicy::PlaintextIdentifiers`](crate::IdentifierEncryptionPolicy::PlaintextIdentifiers),
+    /// sends `NameID` and `NewID`. A SOAP request carries no RelayState, so
+    /// [`StartNameIdManagement::relay_state`] must stay unset.
+    /// [`StartNameIdManagement::allow_http`] has no effect here: the
+    /// deployment sends the request and chooses its transport.
     ///
     /// To end the principal's sessions before [`NameIdChange::Terminate`],
     /// send `LogoutRequest` first: a `LogoutRequest` must not follow the
@@ -39,14 +44,16 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::MissingMetadata`] when this identity provider
-    /// publishes no SOAP `ManageNameIDService`, or the service provider's
-    /// metadata has none. Returns [`SamlError::SoapChannelProtection`] when
-    /// `channel` does not authenticate both parties and protect integrity.
-    /// Returns [`SamlError::Invalid`] when a persistent or transient new value
-    /// is longer than 256 characters, or when the NameID format is not an
+    /// Returns [`SamlError::ProtocolProfile`] when
+    /// [`StartNameIdManagement::relay_state`] is set. Returns
+    /// [`SamlError::MissingMetadata`] when this identity provider publishes no
+    /// SOAP `ManageNameIDService`, or the service provider's metadata has
+    /// none. Returns [`SamlError::SoapChannelProtection`] when `channel` does
+    /// not authenticate both parties and protect integrity. Returns
+    /// [`SamlError::Invalid`] when a persistent or transient new value is
+    /// longer than 256 characters, or when the NameID format is not an
     /// absolute URI reference. With
-    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`], returns
+    /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`](crate::IdentifierEncryptionPolicy::EncryptIdentifiers), returns
     /// [`SamlError::MissingMetadata`] when the service provider publishes no
     /// encryption certificate.
     ///
@@ -54,7 +61,7 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     IdentifierEncryptionPolicy, NameId, NameIdChange, Saml, SoapChannel, SpDescriptor,
+    ///     NameId, NameIdChange, Saml, SoapChannel, SpDescriptor, StartNameIdManagement,
     /// };
     ///
     /// # fn change(
@@ -67,7 +74,7 @@ impl Saml<Idp> {
     ///     sp,
     ///     &current,
     ///     &NameIdChange::NewId("new-value".into()),
-    ///     IdentifierEncryptionPolicy::PlaintextIdentifiers,
+    ///     StartNameIdManagement::new(),
     ///     SoapChannel::mutually_authenticated_confidential(),
     /// )?;
     /// let envelope = started.request().envelope();
@@ -80,25 +87,29 @@ impl Saml<Idp> {
         sp: &SpDescriptor,
         name_id: &NameId,
         change: &NameIdChange,
-        identifier_encryption: IdentifierEncryptionPolicy,
+        options: StartNameIdManagement,
         channel: SoapChannel,
     ) -> Result<StartedNameIdManagement, SamlError> {
+        crate::logout::reject_soap_relay_state(
+            Binding::Soap,
+            options.relay_state.as_ref().map(RelayState::as_str),
+        )?;
         sp.ensure_valid_at(SystemTime::now())?;
         name_id_management::start(
             &self.local_identity_provider()?,
             sp,
             name_id,
             change,
-            identifier_encryption,
+            options.identifier_encryption,
             channel,
         )
     }
 
     /// Read a service provider's SOAP `ManageNameIDRequest`.
     ///
-    /// A [`ReceivedNameIdManagement::Request`] is ready for the caller to
+    /// A [`NameIdManagementReceipt::Request`] is ready for the caller to
     /// apply. Answer it with [`Self::respond_name_id_management`]. A
-    /// [`ReceivedNameIdManagement::Refused`] already carries the SOAP response
+    /// [`NameIdManagementReceipt::Refused`] already carries the SOAP response
     /// to return.
     ///
     /// `sp` is the service provider the deployment authenticated on
@@ -124,7 +135,7 @@ impl Saml<Idp> {
         request_envelope: &str,
         channel: SoapChannel,
         validation: SamlValidationContext<'_>,
-    ) -> Result<ReceivedNameIdManagement, SamlError> {
+    ) -> Result<NameIdManagementReceipt, SamlError> {
         sp.ensure_valid_at(validation.now())?;
         name_id_management::receive(
             &self.local_identity_provider()?,
@@ -137,12 +148,16 @@ impl Saml<Idp> {
 
     /// Answer a received `ManageNameIDRequest` with `ManageNameIDResponse`.
     ///
-    /// Pass [`Status::success`] after applying the change. After a
-    /// [`NameIdChange::NewId`], send that value as the identifier's
-    /// `SPProvidedID` from then on: [`Self::respond_sso`] writes it from
-    /// [`NameId::with_sp_provided_id`]. When the identifier is unknown, pass
-    /// [`Status::requester`] or [`Status::responder`], optionally with
+    /// The response carries [`RespondNameIdManagement::status`], or top-level
+    /// `Success` when it is unset. Answer with `Success` after applying the
+    /// change. After a [`NameIdChange::NewId`], send that value as the
+    /// identifier's `SPProvidedID` from then on: [`Self::respond_sso`] writes
+    /// it from [`NameId::with_sp_provided_id`]. When the identifier is
+    /// unknown, set [`Status::requester`] or [`Status::responder`], optionally
+    /// with
     /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
+    /// [`RespondNameIdManagement::allow_http`] has no effect here: the
+    /// response is the body of the HTTP response to the SOAP request.
     ///
     /// # Errors
     ///
@@ -153,8 +168,8 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     ReceivedNameIdManagement, ReplayPolicy, Saml, SamlValidationContext,
-    ///     SoapChannel, SpDescriptor, Status,
+    ///     NameIdManagementReceipt, ReplayPolicy, RespondNameIdManagement, Saml,
+    ///     SamlValidationContext, SoapChannel, SpDescriptor,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -172,12 +187,12 @@ impl Saml<Idp> {
     ///     validation,
     /// )?;
     /// let response = match received {
-    ///     ReceivedNameIdManagement::Request(request) => {
+    ///     NameIdManagementReceipt::Request(request) => {
     ///         let change = request.message().change();
     ///         # let _ = change;
-    ///         idp.respond_name_id_management(sp, &request, &Status::success())?
+    ///         idp.respond_name_id_management(sp, &request, RespondNameIdManagement::new())?
     ///     }
-    ///     ReceivedNameIdManagement::Refused(refused) => refused.response().clone(),
+    ///     NameIdManagementReceipt::Refused(refused) => refused.response().clone(),
     /// };
     /// let envelope = response.envelope();
     /// # let _ = envelope;
@@ -187,10 +202,11 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: &Received<ManageNameIdRequest>,
-        status: &Status,
+        options: RespondNameIdManagement,
     ) -> Result<SoapResponse, SamlError> {
         sp.ensure_valid_at(SystemTime::now())?;
-        name_id_management::respond(&self.local_identity_provider()?, sp, request, status)
+        let status = options.status.unwrap_or_else(Status::success);
+        name_id_management::respond(&self.local_identity_provider()?, sp, request, &status)
     }
 
     fn local_identity_provider(&self) -> Result<LocalIdentityProvider<'_>, SamlError> {

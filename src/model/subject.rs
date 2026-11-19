@@ -351,7 +351,7 @@ impl SubjectConfirmation {
 
 /// Subject requested by an `<AuthnRequest>` (Core §3.4.1).
 ///
-/// Under `RespondSso::apply_web_browser_sso_generation_rules`, and always in
+/// Under `RespondSso::apply_producer_rules`, and always in
 /// `respond_paos_sso`, a success response returns [`SamlError::Invalid`]
 /// unless the issued `NameId` has the requested `<NameID>` value, `Format`,
 /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. An omitted

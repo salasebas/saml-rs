@@ -14,7 +14,7 @@ pub struct StartSso {
     pub(super) relay_state: Option<RelayState>,
     pub(super) force_authn: Option<ForceAuthn>,
     pub(super) acs_index: Option<u16>,
-    pub(super) is_passive: Option<IsPassive>,
+    pub(super) passive: Option<IsPassive>,
     pub(super) provider_name: Option<String>,
     pub(super) requested_authn_context: Option<RequestedAuthnContext>,
     pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
@@ -43,7 +43,7 @@ impl StartSso {
             relay_state: None,
             force_authn: None,
             acs_index: None,
-            is_passive: None,
+            passive: None,
             provider_name: None,
             requested_authn_context: None,
             web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
@@ -78,18 +78,17 @@ impl StartSso {
     /// visible control of the user interface. Omitted by default.
     ///
     /// Requires the built-in AuthnRequest renderer.
-    #[allow(
-        clippy::wrong_self_convention,
-        reason = "the builder name is the SAML IsPassive attribute, matching StartPaosSso"
-    )]
-    pub fn is_passive(mut self, is_passive: IsPassive) -> Self {
-        self.is_passive = Some(is_passive);
+    pub fn passive(mut self, passive: IsPassive) -> Self {
+        self.passive = Some(passive);
         self
     }
 
     /// Set the requester's human-readable `ProviderName`. Omitted by default.
     ///
-    /// Requires the built-in AuthnRequest renderer.
+    /// The name may be empty and may contain any character XML 1.0 allows.
+    /// [`Saml<Sp>::start_sso`](crate::Saml::start_sso) returns
+    /// [`SamlError::Invalid`](crate::SamlError::Invalid) for a name with a
+    /// character XML 1.0 forbids. Requires the built-in AuthnRequest renderer.
     pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
         self.provider_name = Some(provider_name.into());
         self
@@ -103,8 +102,8 @@ impl StartSso {
         self
     }
 
-    /// Select an AssertionConsumerServiceIndex.
-    pub fn assertion_consumer_service_index(mut self, acs_index: u16) -> Self {
+    /// Set the `AssertionConsumerServiceIndex` of the AuthnRequest.
+    pub fn acs_index(mut self, acs_index: u16) -> Self {
         self.acs_index = Some(acs_index);
         self
     }
@@ -116,7 +115,7 @@ impl StartSso {
     /// `NameIDPolicy` omits `AllowCreate`. SAML Core forbids that attribute on
     /// a transient identifier request. Signing stays on
     /// [`crate::AuthnRequestSigningPolicy`] and is not turned on here.
-    pub fn apply_web_browser_sso_generation_rules(mut self) -> Self {
+    pub fn apply_producer_rules(mut self) -> Self {
         self.web_browser_sso_producer = WebBrowserSsoProducer::Follow;
         self
     }
@@ -230,7 +229,7 @@ impl<Delivery> RespondSso<Delivery> {
     /// Pass the context in which the subject was actually authenticated.
     /// Omitting it writes the unspecified class. An error response writes no
     /// assertion. The response is rejected when
-    /// [`Self::apply_web_browser_sso_generation_rules`] is not selected, since
+    /// [`Self::apply_producer_rules`] is not selected, since
     /// no `AuthnStatement` is written then.
     ///
     /// When the request's [`crate::RequestedAuthnContext`] uses
@@ -254,7 +253,7 @@ impl<Delivery> RespondSso<Delivery> {
     ///
     /// The response is rejected when the written instant is later than the
     /// response `IssueInstant` or before year 1, and when
-    /// [`Self::apply_web_browser_sso_generation_rules`] is not selected, since
+    /// [`Self::apply_producer_rules`] is not selected, since
     /// no `AuthnStatement` is written then.
     pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
         self.authn_instant = Some(authn_instant);
@@ -310,7 +309,7 @@ impl<Delivery> RespondSso<Delivery> {
     /// bearer subject confirmation data. CBC response signing is unchanged: it
     /// stays on unless
     /// [`Self::allow_unsigned_encrypted_cbc`] is selected.
-    pub fn apply_web_browser_sso_generation_rules(mut self) -> Self {
+    pub fn apply_producer_rules(mut self) -> Self {
         self.web_browser_sso_producer = WebBrowserSsoProducer::Follow;
         self
     }
@@ -376,21 +375,28 @@ impl SingleLogoutGeneration {
     }
 }
 
-/// HTTPS recommendation for a session participant's logout exchange.
+/// HTTPS recommendation for a message the user agent carries to a peer
+/// endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum ParticipantLogoutTransport {
-    /// Send the user agent to an `https` `SingleLogoutService`.
+enum PeerEndpointTransport {
+    /// Send the user agent to an `https` peer endpoint.
     #[default]
     RequireHttps,
-    /// Allow an `http` `SingleLogoutService`.
+    /// Allow an `http` peer endpoint.
     AllowHttp,
+}
+
+impl PeerEndpointTransport {
+    fn allows_http(self) -> bool {
+        matches!(self, Self::AllowHttp)
+    }
 }
 
 /// Producer-rule selection shared by logout requests and responses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct SingleLogoutRules {
     generation: SingleLogoutGeneration,
-    transport: ParticipantLogoutTransport,
+    transport: PeerEndpointTransport,
 }
 
 impl SingleLogoutRules {
@@ -400,7 +406,7 @@ impl SingleLogoutRules {
     }
 
     fn allow_http(mut self) -> Self {
-        self.transport = ParticipantLogoutTransport::AllowHttp;
+        self.transport = PeerEndpointTransport::AllowHttp;
         self
     }
 
@@ -409,7 +415,7 @@ impl SingleLogoutRules {
     }
 
     fn allows_http(self) -> bool {
-        matches!(self.transport, ParticipantLogoutTransport::AllowHttp)
+        self.transport.allows_http()
     }
 }
 
@@ -446,7 +452,7 @@ impl StartSlo {
     /// rejected, and a service provider includes at least one `SessionIndex`.
     /// The request carries no RelayState, so a present
     /// [`Self::relay_state`] is rejected. The `https` check and
-    /// [`Self::allow_http_single_logout`] apply only to the browser bindings.
+    /// [`Self::allow_http`] apply only to the browser bindings.
     ///
     /// POST [`Outbound::soap_request`](crate::Outbound::soap_request) with the
     /// deployment's HTTP client, then pass the SOAP response body to
@@ -506,11 +512,11 @@ impl StartSlo {
     /// A service provider, acting as a session participant, includes at least
     /// one `SessionIndex` and sends the user agent to an `https`
     /// `SingleLogoutService` unless
-    /// [`Self::allow_http_single_logout`] is selected.
+    /// [`Self::allow_http`] is selected.
     /// An identity provider, acting as a session authority, still emits
     /// `NotOnOrAfter` and may omit `SessionIndex`. The `https` recommendation
     /// is not applied to that role.
-    pub fn apply_single_logout_generation_rules(mut self) -> Self {
+    pub fn apply_producer_rules(mut self) -> Self {
         self.rules = self.rules.apply_generation_rules();
         self
     }
@@ -521,7 +527,7 @@ impl StartSlo {
     /// This relaxes the Single Logout recommendation to protect the HTTP
     /// exchange with TLS. It does not remove `SessionIndex`, the request
     /// signature, or session-authority `NotOnOrAfter`.
-    pub fn allow_http_single_logout(mut self) -> Self {
+    pub fn allow_http(mut self) -> Self {
         self.rules = self.rules.allow_http();
         self
     }
@@ -596,9 +602,9 @@ impl RespondSlo {
     /// off. Typed responses are already signed. When a service provider
     /// selects these rules, the response is delivered to an `https`
     /// `SingleLogoutService` unless
-    /// [`Self::allow_http_single_logout`] is selected.
+    /// [`Self::allow_http`] is selected.
     /// An identity provider response does not gain that transport check.
-    pub fn apply_single_logout_generation_rules(mut self) -> Self {
+    pub fn apply_producer_rules(mut self) -> Self {
         self.rules = self.rules.apply_generation_rules();
         self
     }
@@ -608,7 +614,7 @@ impl RespondSlo {
     ///
     /// This relaxes the Single Logout recommendation to protect that HTTP
     /// exchange with TLS. The response remains signed.
-    pub fn allow_http_single_logout(mut self) -> Self {
+    pub fn allow_http(mut self) -> Self {
         self.rules = self.rules.allow_http();
         self
     }
@@ -622,36 +628,25 @@ impl RespondSlo {
     }
 }
 
-/// TLS recommendation for a name identifier management exchange.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum NameIdManagementTransport {
-    /// Send the user agent to an `https` `ManageNameIDService`.
-    #[default]
-    RequireHttps,
-    /// Allow an `http` `ManageNameIDService`.
-    AllowHttp,
-}
-
 /// Options for issuing a `<ManageNameIDRequest>`.
 ///
-/// The request is always signed. It goes to an `https` peer
-/// `ManageNameIDService` unless [`Self::allow_http_name_id_management`] is
-/// selected.
-#[derive(Debug, Clone)]
+/// [`Saml<Idp>::start_name_id_management`](crate::Saml::start_name_id_management)
+/// sends the request over SOAP, and `start_name_id_management_redirect` sends
+/// it over HTTP-Redirect. Over HTTP-Redirect the request is always signed and
+/// goes to an `https` peer `ManageNameIDService` unless [`Self::allow_http`]
+/// is selected.
+#[derive(Debug, Clone, Default)]
 pub struct StartNameIdManagement {
     pub(super) relay_state: Option<RelayState>,
     pub(super) identifier_encryption: IdentifierEncryptionPolicy,
-    transport: NameIdManagementTransport,
+    transport: PeerEndpointTransport,
 }
 
 impl StartNameIdManagement {
-    /// Send the request over HTTP-Redirect.
-    pub fn redirect() -> Self {
-        Self {
-            relay_state: None,
-            identifier_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
-            transport: NameIdManagementTransport::default(),
-        }
+    /// Start with no RelayState, plaintext identifiers, and an `https` peer
+    /// endpoint.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Set the RelayState the ManageNameIDRequest carries. The request
@@ -659,7 +654,10 @@ impl StartNameIdManagement {
     ///
     /// The response must return it unchanged. A value longer than
     /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES) fails the start
-    /// operation.
+    /// operation. A SOAP request carries no RelayState:
+    /// [`Saml<Idp>::start_name_id_management`](crate::Saml::start_name_id_management)
+    /// returns [`SamlError::ProtocolProfile`](crate::SamlError::ProtocolProfile)
+    /// when one is set.
     pub fn relay_state(mut self, relay_state: RelayState) -> Self {
         self.relay_state = Some(relay_state);
         self
@@ -671,25 +669,26 @@ impl StartNameIdManagement {
     /// The default is [`IdentifierEncryptionPolicy::PlaintextIdentifiers`].
     /// [`IdentifierEncryptionPolicy::EncryptIdentifiers`] encrypts both for
     /// the first encryption certificate in the peer's metadata, with the
-    /// configured data and key encryption algorithms, before the request is
-    /// signed. A peer without that certificate returns
-    /// [`crate::SamlError::MissingMetadata`].
+    /// configured data and key encryption algorithms. Over HTTP-Redirect
+    /// that happens before the request is signed. A peer without that
+    /// certificate returns [`crate::SamlError::MissingMetadata`].
     pub fn identifier_encryption(mut self, policy: IdentifierEncryptionPolicy) -> Self {
         self.identifier_encryption = policy;
         self
     }
 
-    /// Allow delivery to an `http` `ManageNameIDService`.
+    /// Allow delivery over HTTP-Redirect to an `http` `ManageNameIDService`.
     ///
-    /// This relaxes the Profiles §4.5.3.1 recommendation to protect the HTTP
-    /// exchange with TLS. The request stays signed.
-    pub fn allow_http_name_id_management(mut self) -> Self {
-        self.transport = NameIdManagementTransport::AllowHttp;
+    /// This relaxes the recommendation to protect the HTTP exchange with TLS.
+    /// The request stays signed. It has no effect over SOAP, where the
+    /// deployment sends the request itself.
+    pub fn allow_http(mut self) -> Self {
+        self.transport = PeerEndpointTransport::AllowHttp;
         self
     }
 
     pub(super) fn allows_http(&self) -> bool {
-        matches!(self.transport, NameIdManagementTransport::AllowHttp)
+        self.transport.allows_http()
     }
 }
 
@@ -697,76 +696,73 @@ impl StartNameIdManagement {
 ///
 /// A request that the provider answers without processing it, see
 /// [`crate::NameIdManagementRefusal`], gets a signed response to an `https`
-/// peer `ManageNameIDService` unless [`Self::allow_http_name_id_management`]
-/// is selected.
-#[derive(Debug, Clone)]
+/// peer `ManageNameIDService` unless [`Self::allow_http`] is selected.
+#[derive(Debug, Clone, Default)]
 pub struct ReceiveNameIdManagement {
-    transport: NameIdManagementTransport,
+    transport: PeerEndpointTransport,
 }
 
 impl ReceiveNameIdManagement {
-    /// Read the request from HTTP-Redirect.
-    pub fn redirect() -> Self {
-        Self {
-            transport: NameIdManagementTransport::default(),
-        }
+    /// Answer a refused request at an `https` peer endpoint only.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Allow the response to a refused request to go to an `http`
     /// `ManageNameIDService`.
     ///
-    /// This relaxes the Profiles §4.5.3.2 recommendation to protect the HTTP
-    /// exchange with TLS. The response stays signed.
-    pub fn allow_http_name_id_management(mut self) -> Self {
-        self.transport = NameIdManagementTransport::AllowHttp;
+    /// This relaxes the recommendation to protect the HTTP exchange with TLS.
+    /// The response stays signed.
+    pub fn allow_http(mut self) -> Self {
+        self.transport = PeerEndpointTransport::AllowHttp;
         self
     }
 
     pub(super) fn allows_http(&self) -> bool {
-        matches!(self.transport, NameIdManagementTransport::AllowHttp)
+        self.transport.allows_http()
     }
 }
 
 /// Options for answering a `<ManageNameIDRequest>`.
 ///
-/// The response is always signed and carries the exact RelayState received
-/// with the request. It goes to an `https` peer `ManageNameIDService` unless
-/// [`Self::allow_http_name_id_management`] is selected.
-#[derive(Debug, Clone)]
+/// [`Saml<Idp>::respond_name_id_management`](crate::Saml::respond_name_id_management)
+/// answers over SOAP, and `respond_name_id_management_redirect` answers over
+/// HTTP-Redirect. Over HTTP-Redirect the response is always signed, carries
+/// the exact RelayState received with the request, and goes to an `https`
+/// peer `ManageNameIDService` unless [`Self::allow_http`] is selected.
+#[derive(Debug, Clone, Default)]
 pub struct RespondNameIdManagement {
     pub(super) status: Option<Status>,
-    transport: NameIdManagementTransport,
+    transport: PeerEndpointTransport,
 }
 
 impl RespondNameIdManagement {
-    /// Send the response over HTTP-Redirect.
-    pub fn redirect() -> Self {
-        Self {
-            status: None,
-            transport: NameIdManagementTransport::default(),
-        }
+    /// Start with a `Success` status and an `https` peer endpoint.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Set the response status. Omitting it emits top-level `Success`.
     ///
     /// For a `<NameID>` this provider does not recognize, pass an error
-    /// status. [`crate::SubordinateStatusCode::unknown_principal`] is the
-    /// subordinate code Core §3.6.3 names for it.
+    /// status, optionally with
+    /// [`crate::SubordinateStatusCode::unknown_principal`].
     pub fn status(mut self, status: Status) -> Self {
         self.status = Some(status);
         self
     }
 
-    /// Allow delivery to an `http` `ManageNameIDService`.
+    /// Allow delivery over HTTP-Redirect to an `http` `ManageNameIDService`.
     ///
-    /// This relaxes the Profiles §4.5.3.2 recommendation to protect the HTTP
-    /// exchange with TLS. The response stays signed.
-    pub fn allow_http_name_id_management(mut self) -> Self {
-        self.transport = NameIdManagementTransport::AllowHttp;
+    /// This relaxes the recommendation to protect the HTTP exchange with TLS.
+    /// The response stays signed. It has no effect over SOAP, where the
+    /// response is the body of the HTTP response to the request.
+    pub fn allow_http(mut self) -> Self {
+        self.transport = PeerEndpointTransport::AllowHttp;
         self
     }
 
     pub(super) fn allows_http(&self) -> bool {
-        matches!(self.transport, NameIdManagementTransport::AllowHttp)
+        self.transport.allows_http()
     }
 }

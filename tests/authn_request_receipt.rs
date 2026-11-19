@@ -851,7 +851,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
             &receipt.sp_descriptor,
             &receipt.received,
             &subject(),
-            options.apply_web_browser_sso_generation_rules(),
+            options.apply_producer_rules(),
         )
     };
 
@@ -920,7 +920,7 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
             &receipt.received,
             &NameId::new("alice@example.com"),
             RespondSso::post()
-                .apply_web_browser_sso_generation_rules()
+                .apply_producer_rules()
                 .authn_context(AuthnContextReference::declaration(DECLARATION)?),
         )?,
     )?;
@@ -974,7 +974,7 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
             options,
         )
     };
-    let rules = || RespondSso::post().apply_web_browser_sso_generation_rules();
+    let rules = || RespondSso::post().apply_producer_rules();
 
     for format in [
         PERSISTENT_FORMAT.to_string(),
@@ -1040,7 +1040,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
             .idp
             .respond_sso(&receipt.sp_descriptor, &receipt.received, &name_id, options)
     };
-    let rules = || RespondSso::post().apply_web_browser_sso_generation_rules();
+    let rules = || RespondSso::post().apply_producer_rules();
     let persistent = |value: &str| NameId::new(value).with_format(NameIdFormat::Persistent);
     let is_refused = |result: &Result<Outbound<saml_rs::SsoResponse>, SamlError>| matches!(result, Err(SamlError::Invalid(message)) if message.contains("requested Subject"));
 

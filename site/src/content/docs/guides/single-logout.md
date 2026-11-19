@@ -20,7 +20,7 @@ let subject = session
 let logout = sp.start_slo(
     &idp,
     subject,
-    StartSlo::post().apply_single_logout_generation_rules(),
+    StartSlo::post().apply_producer_rules(),
 )?;
 store_with_session(logout.pending.snapshot());
 
@@ -34,7 +34,7 @@ let completed = sp.finish_slo(
 let status = completed.response().status();
 ```
 
-`redirect()`, `post()`, and `simple_sign()` leave the logout generation rules off until you call `apply_single_logout_generation_rules()`. With those rules selected, a session participant signs the request and sends the browser to an `https` logout URL. `StartSlo::allow_http_single_logout()` relaxes the `https` recommendation only.
+`redirect()`, `post()`, and `simple_sign()` leave the logout generation rules off until you call `apply_producer_rules()`. With those rules selected, a session participant signs the request and sends the browser to an `https` logout URL. `StartSlo::allow_http()` relaxes the `https` recommendation only.
 
 ## Identity provider
 

@@ -140,7 +140,7 @@ fn session_participant_generation_rules_sign_and_require_session_index(
     let started = sp.start_slo(
         &idp_descriptor,
         subject_with_session()?,
-        StartSlo::post().apply_single_logout_generation_rules(),
+        StartSlo::post().apply_producer_rules(),
     )?;
     let xml = post_xml(&started.outbound)?;
 
@@ -153,7 +153,7 @@ fn session_participant_generation_rules_sign_and_require_session_index(
     match sp.start_slo(
         &idp_descriptor,
         subject_without_session(),
-        StartSlo::post().apply_single_logout_generation_rules(),
+        StartSlo::post().apply_producer_rules(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("SessionIndex") => Ok(()),
         other => Err(format!("expected a SessionIndex rejection, got {other:?}").into()),
@@ -201,7 +201,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
     match sp.start_slo(
         &idp_descriptor,
         subject_with_session()?,
-        StartSlo::post().apply_single_logout_generation_rules(),
+        StartSlo::post().apply_producer_rules(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("https") => {}
         other => {
@@ -212,9 +212,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
     match sp.start_slo(
         &idp_descriptor,
         subject_without_session(),
-        StartSlo::post()
-            .apply_single_logout_generation_rules()
-            .allow_http_single_logout(),
+        StartSlo::post().apply_producer_rules().allow_http(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("SessionIndex") => {}
         other => {
@@ -226,8 +224,8 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
         &idp_descriptor,
         subject_with_session()?,
         StartSlo::post()
-            .apply_single_logout_generation_rules()
-            .allow_http_single_logout()
+            .apply_producer_rules()
+            .allow_http()
             .signing(LogoutSigning::DoNotSign),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("signature") => {}
@@ -239,9 +237,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
     let started = sp.start_slo(
         &idp_descriptor,
         subject_with_session()?,
-        StartSlo::post()
-            .apply_single_logout_generation_rules()
-            .allow_http_single_logout(),
+        StartSlo::post().apply_producer_rules().allow_http(),
     )?;
     let xml = post_xml(&started.outbound)?;
     assert!(xml.contains("ds:Signature"));
@@ -274,7 +270,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
     let started = idp.start_slo(
         &sp_descriptor,
         subject_without_session(),
-        StartSlo::post().apply_single_logout_generation_rules(),
+        StartSlo::post().apply_producer_rules(),
     )?;
     let xml = post_xml(&started.outbound)?;
     assert!(xml.contains("NotOnOrAfter="));
@@ -316,7 +312,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
     let response = idp.respond_slo(
         &sp_descriptor,
         &received_by_authority,
-        RespondSlo::post().apply_single_logout_generation_rules(),
+        RespondSlo::post().apply_producer_rules(),
     )?;
     let response_xml = post_xml(&response)?;
     assert!(response_xml.contains("ds:Signature"));
@@ -341,7 +337,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     let started = idp.start_slo(
         &sp_descriptor,
         subject_with_session()?,
-        StartSlo::post().apply_single_logout_generation_rules(),
+        StartSlo::post().apply_producer_rules(),
     )?;
     let received = sp.receive_slo(
         &idp_descriptor,
@@ -352,7 +348,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     match sp.respond_slo(
         &idp_descriptor,
         &received,
-        RespondSlo::post().apply_single_logout_generation_rules(),
+        RespondSlo::post().apply_producer_rules(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("https") => {}
         other => {
@@ -363,9 +359,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     let response = sp.respond_slo(
         &idp_descriptor,
         &received,
-        RespondSlo::post()
-            .apply_single_logout_generation_rules()
-            .allow_http_single_logout(),
+        RespondSlo::post().apply_producer_rules().allow_http(),
     )?;
     let xml = post_xml(&response)?;
     assert!(xml.contains("ds:Signature"));
@@ -472,7 +466,7 @@ fn signed_logout_response(
             let started = sp.start_slo(
                 &idp_descriptor,
                 subject_with_session()?,
-                StartSlo::post().apply_single_logout_generation_rules(),
+                StartSlo::post().apply_producer_rules(),
             )?;
             let received = idp.receive_slo(
                 &sp_descriptor,
@@ -486,7 +480,7 @@ fn signed_logout_response(
             let started = idp.start_slo(
                 &sp_descriptor,
                 subject_without_session(),
-                StartSlo::post().apply_single_logout_generation_rules(),
+                StartSlo::post().apply_producer_rules(),
             )?;
             let received = sp.receive_slo(
                 &idp_descriptor,

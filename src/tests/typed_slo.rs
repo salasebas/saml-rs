@@ -3789,7 +3789,7 @@ fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     for format in ["", "   ", "local-format", "urn:", "urn:%zz"] {
         for options in [StartSlo::post as fn() -> StartSlo, || {
-            StartSlo::post().apply_single_logout_generation_rules()
+            StartSlo::post().apply_producer_rules()
         }] {
             for result in [
                 idp.start_slo(&sp_descriptor, custom_format_subject(format)?, options()),
@@ -3846,17 +3846,17 @@ fn typed_logout_request_keeps_whitespace_in_a_name_id_format_under_generation_ru
             template_idp.start_slo(
                 &sp_descriptor,
                 custom_format_subject(format)?,
-                StartSlo::post().apply_single_logout_generation_rules(),
+                StartSlo::post().apply_producer_rules(),
             )?,
             idp.start_slo(
                 &sp_descriptor,
                 custom_format_subject(format)?,
-                StartSlo::post().apply_single_logout_generation_rules(),
+                StartSlo::post().apply_producer_rules(),
             )?,
             sp.start_slo(
                 &idp_descriptor,
                 custom_format_subject(format)?,
-                StartSlo::post().apply_single_logout_generation_rules(),
+                StartSlo::post().apply_producer_rules(),
             )?,
         ] {
             let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
@@ -3914,10 +3914,7 @@ fn typed_session_authority_logout_request_without_any_format_omits_format_like_t
         without_format
     );
 
-    for options in [
-        StartSlo::post(),
-        StartSlo::post().apply_single_logout_generation_rules(),
-    ] {
+    for options in [StartSlo::post(), StartSlo::post().apply_producer_rules()] {
         let started = idp.start_slo(&sp_descriptor, subject()?, options)?;
         let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
         assert_eq!(logout_request_name_id(&xml)?, without_format);
@@ -4007,7 +4004,7 @@ fn typed_slo_logout_request_template_fixed_format_must_match_a_subject_without_f
         Ok(sp.start_slo(
             &idp_descriptor,
             subject()?,
-            StartSlo::post().apply_single_logout_generation_rules(),
+            StartSlo::post().apply_producer_rules(),
         ))
     };
 
@@ -4155,7 +4152,7 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
     let response = sp.respond_slo(
         &idp_descriptor,
         &received,
-        RespondSlo::soap().apply_single_logout_generation_rules(),
+        RespondSlo::soap().apply_producer_rules(),
     )?;
     let response_xml = soap_body_xml(response.soap_response()?.envelope())?;
     assert!(root_has_signature(&response_xml)?);

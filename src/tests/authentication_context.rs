@@ -181,7 +181,7 @@ fn signed_requests_round_trip_context_passive_and_provider_for_all_bindings(
                         start
                             .clone()
                             .requested_authn_context(requested.clone())
-                            .is_passive(passive)
+                            .passive(passive)
                             .provider_name(PROVIDER),
                     )?;
                     let xml = request_xml(&started.outbound)?;
@@ -245,7 +245,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
             &received,
             &principal(),
             RespondSso::post()
-                .apply_web_browser_sso_generation_rules()
+                .apply_producer_rules()
                 .authn_context(reference.clone()),
         )?;
         let session = sp.finish_sso(
@@ -279,7 +279,7 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
         &sp_descriptor,
         &principal(),
         RespondSso::post()
-            .apply_web_browser_sso_generation_rules()
+            .apply_producer_rules()
             .authn_context(AuthnContextReference::class(MFA)?),
     )?;
     let session =
@@ -310,9 +310,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         &sp_descriptor,
         &received,
         &principal(),
-        RespondSso::post()
-            .apply_web_browser_sso_generation_rules()
-            .sign_response(),
+        RespondSso::post().apply_producer_rules().sign_response(),
     )?;
     let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
     let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
@@ -499,7 +497,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
         &received,
         &principal(),
         RespondSso::post()
-            .apply_web_browser_sso_generation_rules()
+            .apply_producer_rules()
             .authn_context(AuthnContextReference::class(MFA)?),
     )?;
     let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
@@ -545,7 +543,7 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
     );
     sp.start_sso(&idp_descriptor, StartSso::post())?;
     for start in [
-        StartSso::post().is_passive(IsPassive::Required),
+        StartSso::post().passive(IsPassive::Required),
         StartSso::post().provider_name(PROVIDER),
         StartSso::post().requested_authn_context(RequestedAuthnContext::try_new(
             AuthnContextComparison::Exact,

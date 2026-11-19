@@ -563,11 +563,8 @@ fn typed_builder_authn_request_options_render_force_authn_and_acs_index(
     }
 
     let xml = authn_request_xml(
-        &sp.start_sso(
-            &idp_descriptor,
-            StartSso::post().assertion_consumer_service_index(1),
-        )?
-        .outbound,
+        &sp.start_sso(&idp_descriptor, StartSso::post().acs_index(1))?
+            .outbound,
     )?;
     assert!(xml.contains("AssertionConsumerServiceIndex=\"1\""));
     assert!(!xml.contains("AssertionConsumerServiceURL="));
@@ -584,7 +581,7 @@ fn typed_builder_rejects_acs_index_response_binding_mismatch(
     match sp.start_sso(
         &idp_descriptor,
         StartSso::post()
-            .assertion_consumer_service_index(1)
+            .acs_index(1)
             .response_binding(SsoResponseBinding::Post),
     ) {
         Err(SamlError::Invalid(message)) => {
@@ -600,10 +597,7 @@ fn typed_facade_rejects_unknown_acs_index() -> Result<(), Box<dyn std::error::Er
     let (sp, idp) = facades()?;
     let (_sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
-    match sp.start_sso(
-        &idp_descriptor,
-        StartSso::post().assertion_consumer_service_index(99),
-    ) {
+    match sp.start_sso(&idp_descriptor, StartSso::post().acs_index(99)) {
         Err(SamlError::MissingMetadata(name)) => {
             assert_eq!(name, "AssertionConsumerService");
             Ok(())
@@ -630,10 +624,7 @@ fn typed_facade_honors_custom_acs_index_from_metadata() -> Result<(), Box<dyn st
         MetadataTrustPolicy::AllowUnsigned,
     )?;
 
-    let started = sp.start_sso(
-        &idp_descriptor,
-        StartSso::post().assertion_consumer_service_index(7),
-    )?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post().acs_index(7))?;
     let xml = authn_request_xml(&started.outbound)?;
 
     assert_eq!(started.pending.acs().index(), Some(7));
@@ -1562,10 +1553,7 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(
-        &idp_descriptor,
-        StartSso::post().assertion_consumer_service_index(1),
-    )?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post().acs_index(1))?;
 
     assert_eq!(
         started.pending.acs().binding(),
@@ -2331,7 +2319,7 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
     let ruled = idp.initiate_sso(
         &sp_descriptor,
         &principal(),
-        RespondSso::post().apply_web_browser_sso_generation_rules(),
+        RespondSso::post().apply_producer_rules(),
     )?;
     let ruled_fields = post_fields(&ruled)?;
     let ruled_xml = response_xml_from_fields(&ruled_fields)?;
