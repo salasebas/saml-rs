@@ -18,13 +18,15 @@ use saml_rs::constants::transform_algorithm;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
-    AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactResolutionService, AuthnRequest,
-    DeliveredArtifact, EndpointUrl, EntityId, FormField, Idp, IdpConfig, IdpDescriptor, Inbound,
-    IssuedArtifacts, LoginResponseTemplate, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage, RespondSso,
-    Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint,
-    SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status, SubordinateStatusCode,
-    TemplatePolicy, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
+    AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactRelease, ArtifactResolutionService,
+    ArtifactWithheld, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField, Idp,
+    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, LoginResponseTemplate,
+    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, Outbound,
+    PartyAuthentication, PendingAuthnRequest, Received, RelayState, ReplayPolicy,
+    ResolvedProtocolMessage, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp,
+    SpConfig, SpDescriptor, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
+    Status, SubordinateStatusCode, TemplatePolicy, TransformAlgorithm,
+    MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -1226,5 +1228,44 @@ fn a_login_response_template_with_another_root_is_not_stored_as_a_response(
         matches!(&result, Err(SamlError::ProtocolProfile(message)) if message == "Web Browser SSO artifact message must be a protocol Response"),
         "{result:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn a_typed_sso_artifact_response_is_withheld_without_confidentiality(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let (_, request) = requested(&parties, None)?;
+    let response = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        &principal(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    )?;
+    let delivered = delivered_by(&response)?;
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        delivered.artifact(),
+        confidential(),
+        validation(),
+    )?;
+
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &mut issued,
+        SoapChannel::new(
+            PartyAuthentication::Mutual,
+            MessageIntegrity::Protected,
+            MessageConfidentiality::Absent,
+        ),
+    )?;
+    assert_eq!(
+        answer.release(),
+        ArtifactRelease::Withheld(ArtifactWithheld::Channel)
+    );
+    assert!(!answer.response().envelope().contains("Assertion"));
     Ok(())
 }
