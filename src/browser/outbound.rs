@@ -43,40 +43,41 @@ impl OutboundAction {
 /// # Examples
 ///
 /// ```
-/// use saml_rs::{AuthnRequest, Outbound};
-/// # use saml_rs::raw::{Binding, BindingContext};
+/// use saml_rs::{AuthnRequest, Outbound, StartSso};
+/// # use saml_rs::{
+/// #     AcsEndpoint, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
+/// #     Saml, SpConfig, SpValidationPolicy, SsoEndpoint,
+/// # };
 /// #
-/// # fn redirect_context() -> BindingContext {
-/// #     BindingContext {
-/// #         id: "_request123".to_string(),
-/// #         context: "https://idp.example.com/sso?SAMLRequest=abc".to_string(),
-/// #         relay_state: None,
-/// #         entity_endpoint: "https://idp.example.com/sso".to_string(),
-/// #         binding: Binding::Redirect,
-/// #         request_type: "SAMLRequest",
-/// #         signature: None,
-/// #         sig_alg: None,
-/// #     }
-/// # }
-/// # fn post_context() -> BindingContext {
-/// #     BindingContext {
-/// #         id: "_request456".to_string(),
-/// #         context: "PHNhbWxwOkF1dGhuUmVxdWVzdA==".to_string(),
-/// #         relay_state: None,
-/// #         entity_endpoint: "https://idp.example.com/sso".to_string(),
-/// #         binding: Binding::Post,
-/// #         request_type: "SAMLRequest",
-/// #         signature: None,
-/// #         sig_alg: None,
-/// #     }
-/// # }
-///
-/// let redirect = Outbound::<AuthnRequest>::try_from(redirect_context())?;
+/// # fn main() -> Result<(), saml_rs::SamlError> {
+/// # let sp = Saml::sp(
+/// #     SpConfig::builder(
+/// #         EntityId::try_new("https://sp.example.com/metadata")?,
+/// #         AcsEndpoint::post("https://sp.example.com/acs")?,
+/// #     )
+/// #     .validation(SpValidationPolicy::compatibility())
+/// #     .build()?,
+/// # );
+/// # let idp = Saml::idp(
+/// #     IdpConfig::builder(
+/// #         EntityId::try_new("https://idp.example.com/metadata")?,
+/// #         SsoEndpoint::redirect("https://idp.example.com/sso/redirect")?,
+/// #     )
+/// #     .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
+/// #     .validation(IdpValidationPolicy::compatibility())
+/// #     .build()?,
+/// # );
+/// # let idp = IdpDescriptor::from_metadata_xml(
+/// #     EntityId::try_new("https://idp.example.com/metadata")?,
+/// #     idp.metadata_xml(),
+/// #     MetadataTrustPolicy::AllowUnsigned,
+/// # )?;
+/// let redirect: Outbound<AuthnRequest> = sp.start_sso(&idp, StartSso::redirect())?.outbound;
 /// assert!(redirect.redirect_url()?.contains("SAMLRequest="));
 ///
-/// let post = Outbound::<AuthnRequest>::try_from(post_context())?;
-/// assert_eq!(post.post_form()?.action().as_str(), "https://idp.example.com/sso");
-/// # Ok::<(), saml_rs::SamlError>(())
+/// let post = sp.start_sso(&idp, StartSso::post())?.outbound;
+/// assert_eq!(post.post_form()?.action().as_str(), "https://idp.example.com/sso/post");
+/// # Ok(()) }
 /// ```
 #[derive(Debug, Clone)]
 pub struct Outbound<Message> {

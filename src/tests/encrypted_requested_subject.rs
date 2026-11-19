@@ -19,9 +19,9 @@ use saml_rs::crypto::{
 };
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, NameIdFormat,
-    PrivateKeyPem, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, Saml, SamlError,
+    AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem,
+    ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, Saml, SamlError,
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
     X509Credential,
 };
@@ -175,7 +175,7 @@ fn received_by(
     };
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+        Inbound::post(vec![FormField::new(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )]),

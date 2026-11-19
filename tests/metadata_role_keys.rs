@@ -7,10 +7,10 @@ use std::time::SystemTime;
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::util::normalize_cert_string;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
+    AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
     RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponse, StartSso, Subject, X509Credential,
+    SsoEndpoint, StartSso, Subject, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -56,7 +56,7 @@ fn sso_response_from(
     let started = sp.start_sso(idp_descriptor, StartSso::post())?;
     let received = responder.receive_sso(
         sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = responder.respond_sso(
@@ -68,7 +68,7 @@ fn sso_response_from(
     Ok(sp.finish_sso(
         idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     ))
 }
@@ -389,13 +389,13 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
         let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
         idp.receive_sso(
             &sp_descriptor,
-            BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+            Inbound::post(started.outbound.post_form()?.fields().to_vec()),
             validation(),
         )?;
         let forged = signed_with_saml11_role_key.start_sso(&idp_descriptor, StartSso::post())?;
         let rejected = idp.receive_sso(
             &sp_descriptor,
-            BrowserInput::<AuthnRequest>::post(forged.outbound.post_form()?.fields().to_vec()),
+            Inbound::post(forged.outbound.post_form()?.fields().to_vec()),
             validation(),
         );
         assert!(

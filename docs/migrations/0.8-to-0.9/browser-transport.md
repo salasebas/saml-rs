@@ -1,4 +1,4 @@
-# Upgrade RelayState, pending state, and browser input code
+# Upgrade RelayState, pending state, and inbound message code
 
 [How to upgrade from 0.8 to 0.9](README.md)
 
@@ -191,12 +191,103 @@ Each value has one accessor, named for what it is:
 `with_expiration` are removed. Take pending state from the start operation,
 or rebuild it from stored fields with `from_snapshot`.
 
-## Pass parsed fields to `BrowserInput::simple_sign`
+## Build received messages with `Inbound`
 
-`BrowserInput::simple_sign_body` is removed, and
-`BrowserInput::SimpleSignPost` no longer has a `raw_body` field. The
+**Affects:** every call that passes a received message to `receive_sso`,
+`finish_sso`, `accept_unsolicited_sso`, `receive_slo`, `finish_slo`,
+`receive_name_id_management_redirect`, or
+`finish_name_id_management_redirect`.
+
+`BrowserInput<Message>` is renamed `Inbound<Message>`, the received
+counterpart of `Outbound<Message>`. A browser does not deliver SOAP input, so
+the old name did not fit.
+
+The constructors now take `Message` from the operation you pass the value to.
+In 0.8, `BrowserInput::post(fields)` failed with error E0034, because each
+message type had its own `post`, so every call named the message type.
+`Inbound::post(fields)` compiles wherever the operation fixes the type. A call
+that names the type, such as `Inbound::<SsoResponse>::post(fields)`, still
+compiles.
+
+`Inbound` is a struct with private fields. The variants `Redirect`, `Post`,
+`SimpleSignPost`, `Artifact`, and `Soap` are gone. Build the value with a
+constructor. If you matched on the variant to learn the binding, call
+`Inbound::binding`. A variant built directly could pair a message with a
+binding saml-rs does not receive it over, such as an `SsoResponse` over
+HTTP-Redirect. That pair failed when the operation ran, and it no longer
+compiles.
+
+`BrowserInput::soap(envelope)` and `soap_with_channel(envelope, channel)` are
+now one constructor, `Inbound::soap(envelope, channel)`. Where you called
+`soap`, pass `SoapChannel::unattested()`. The message must then carry an XML
+signature, as before.
+
+| Before | After |
+| --- | --- |
+| `BrowserInput<Message>` | `Inbound<Message>` |
+| `BrowserInput::<AuthnRequest>::redirect(query)` | `Inbound::redirect(query)` |
+| `BrowserInput::<SsoResponse>::post(fields)` | `Inbound::post(fields)` |
+| `BrowserInput::<LogoutRequest>::simple_sign(fields)` | `Inbound::simple_sign(fields)` |
+| `BrowserInput::<SsoResponse>::artifact(delivered, resolved)` | `Inbound::artifact(delivered, resolved)` |
+| `BrowserInput::<LogoutRequest>::soap(envelope)` | `Inbound::soap(envelope, SoapChannel::unattested())` |
+| `BrowserInput::<LogoutResponse>::soap_with_channel(envelope, channel)` | `Inbound::soap(envelope, channel)` |
+| `BrowserInput::Post { fields, _message: PhantomData }` | `Inbound::post(fields)` |
+| `match input { BrowserInput::Soap { .. } => .., .. }` | `match input.binding() { Binding::Soap => .., .. }` |
+
+Before the upgrade, each call named the message type.
+
+```rust,ignore
+let session = sp.finish_sso(&idp, &pending, BrowserInput::<SsoResponse>::post(fields), validation)?;
+let request = idp.receive_slo(&sp, BrowserInput::<LogoutRequest>::soap(body), validation)?;
+```
+
+After the upgrade, the operation fixes the message type.
+
+```rust
+# use saml_rs::{
+#     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, Saml, SamlError,
+#     SamlValidationContext, SoapChannel, Sp, SpDescriptor,
+# };
+# fn finish(
+#     sp: &Saml<Sp>, idp: &IdpDescriptor, pending: &PendingAuthnRequest, fields: Vec<FormField>,
+#     validation: SamlValidationContext<'_>,
+# ) -> Result<(), SamlError> {
+let session = sp.finish_sso(idp, pending, Inbound::post(fields), validation)?;
+# let _ = session;
+# Ok(())
+# }
+# fn receive(
+#     idp: &Saml<saml_rs::Idp>, sp: &SpDescriptor, body: String,
+#     validation: SamlValidationContext<'_>,
+# ) -> Result<(), SamlError> {
+let request = idp.receive_slo(sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;
+# let _ = (request, ReplayPolicy::Disabled);
+# Ok(())
+# }
+```
+
+A helper that is generic over the message type bounds it with the trait of
+the constructor it calls: `RedirectMessage`, `PostMessage`, or `SoapMessage`.
+`PostMessage` covers HTTP-POST and HTTP-POST-SimpleSign. saml-rs implements
+these sealed traits for the messages it receives over each binding.
+
+```rust
+# use saml_rs::{FormField, Inbound, PostMessage};
+fn posted<Message: PostMessage>(form: Vec<(String, String)>) -> Inbound<Message> {
+    let fields = form
+        .into_iter()
+        .map(|(name, value)| FormField::new(name, value))
+        .collect();
+    Inbound::post(fields)
+}
+```
+
+## Pass parsed fields to `Inbound::simple_sign`
+
+`BrowserInput::simple_sign_body` is removed, and the `raw_body` field of
+`BrowserInput::SimpleSignPost` is gone with the variant. The
 HTTP-POST-SimpleSign signature covers the decoded field values, so the raw
-body was not needed. Parse the form as you do for `BrowserInput::post`.
+body was not needed. Parse the form as you do for `Inbound::post`.
 
 Before the upgrade, you passed the raw body.
 
@@ -207,13 +298,13 @@ let input = BrowserInput::<SsoResponse>::simple_sign_body(body);
 After the upgrade, pass the parsed fields.
 
 ```rust
-# use saml_rs::{BrowserInput, FormField, SsoResponse};
-# fn input(form: Vec<(String, String)>) -> BrowserInput<SsoResponse> {
+# use saml_rs::{FormField, Inbound, SsoResponse};
+# fn input(form: Vec<(String, String)>) -> Inbound<SsoResponse> {
 let fields = form
     .into_iter()
     .map(|(name, value)| FormField::new(name, value))
     .collect();
-let input = BrowserInput::<SsoResponse>::simple_sign(fields);
+let input = Inbound::simple_sign(fields);
 # input
 # }
 ```

@@ -32,9 +32,9 @@ version needs, build with resolver `"3"` or
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, BrowserInput, CertificatePem, EntityId, FormField, IdpDescriptor,
+    AcsEndpoint, CertificatePem, EntityId, FormField, IdpDescriptor, Inbound,
     MetadataTrustPolicy, ReplayCache, ReplayPolicy, Saml, SamlError, SamlValidationContext,
-    SpConfig, SsoResponse, StartSso,
+    SpConfig, StartSso,
 };
 
 fn sign_in(
@@ -67,7 +67,7 @@ fn sign_in(
     let session = sp.finish_sso(
         &idp,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(posted_form),
+        Inbound::post(posted_form),
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(replay_cache)),
     )?;
     println!("{redirect_url} signed in {}", session.name_id().value());

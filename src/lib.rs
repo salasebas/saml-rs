@@ -40,9 +40,8 @@
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     AcsEndpoint, BrowserInput, EntityId, FormField, IdpDescriptor,
-//!     MetadataTrustPolicy, ReplayPolicy, Saml, SamlValidationContext, SpConfig,
-//!     SpValidationPolicy, SsoResponse, StartSso,
+//!     AcsEndpoint, EntityId, FormField, IdpDescriptor, Inbound, MetadataTrustPolicy, ReplayPolicy,
+//!     Saml, SamlValidationContext, SpConfig, SpValidationPolicy, StartSso,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -72,7 +71,7 @@
 //! let session = sp.finish_sso(
 //!     &idp,
 //!     &started.pending,
-//!     BrowserInput::<SsoResponse>::post(form_fields),
+//!     Inbound::post(form_fields),
 //!     validation,
 //! )?;
 //! let name_id = session.name_id().value();
@@ -95,10 +94,7 @@
 //! caller choice rather than a missing pending request.
 //!
 //! ```no_run
-//! use saml_rs::{
-//!     BrowserInput, FormField, IdpDescriptor, ReplayPolicy, Saml,
-//!     SamlValidationContext, SsoResponse,
-//! };
+//! use saml_rs::{FormField, IdpDescriptor, Inbound, ReplayPolicy, Saml, SamlValidationContext};
 //! use std::time::SystemTime;
 //!
 //! # fn accept(
@@ -112,7 +108,7 @@
 //! );
 //! let session = sp.accept_unsolicited_sso(
 //!     idp,
-//!     BrowserInput::<SsoResponse>::post(form_fields),
+//!     Inbound::post(form_fields),
 //!     validation,
 //! )?;
 //! let issuer = session.issuer().as_str();
@@ -127,8 +123,8 @@
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     AuthnRequest, BrowserInput, FormField, NameId, ReplayPolicy, RespondSso,
-//!     Saml, SamlValidationContext, SpDescriptor, Subject,
+//!     FormField, Inbound, NameId, ReplayPolicy, RespondSso, Saml, SamlValidationContext,
+//!     SpDescriptor, Subject,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -143,7 +139,7 @@
 //! );
 //! let request = idp.receive_sso(
 //!     sp,
-//!     BrowserInput::<AuthnRequest>::post(request_fields),
+//!     Inbound::post(request_fields),
 //!     validation,
 //! )?;
 //! let response = idp.respond_sso(
@@ -178,16 +174,16 @@
 //!
 //! [`StartSlo::soap`] and [`RespondSlo::soap`] run the same four calls over
 //! SOAP. [`Outbound::soap_request`] is the envelope the deployment POSTs, and
-//! [`BrowserInput::soap`] reads the envelope that comes back. Each SOAP
+//! [`Inbound::soap`] reads the envelope that comes back. Each SOAP
 //! logout message saml-rs writes carries an XML signature and no RelayState.
-//! A received one must be signed, unless
-//! [`BrowserInput::soap_with_channel`] attests that the deployment mutually
-//! authenticated the peer.
+//! A received one must be signed, unless the [`SoapChannel`] passed to
+//! [`Inbound::soap`] attests that the deployment mutually authenticated the
+//! peer.
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     BrowserInput, FormField, IdpDescriptor, LogoutResponse, ReplayPolicy,
-//!     Saml, SamlValidationContext, SsoSession, StartSlo,
+//!     FormField, IdpDescriptor, Inbound, ReplayPolicy, Saml, SamlValidationContext, SsoSession,
+//!     StartSlo,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -206,7 +202,7 @@
 //!     let completed = sp.finish_slo(
 //!         idp,
 //!         &started.pending,
-//!         BrowserInput::<LogoutResponse>::post(response_fields),
+//!         Inbound::post(response_fields),
 //!         validation,
 //!     )?;
 //!     let peer = completed.peer_entity_id().as_str();
@@ -222,15 +218,14 @@
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     BrowserInput, IdpDescriptor, PendingLogoutRequest, Saml,
-//!     SamlValidationContext, SsoResponse,
+//!     IdpDescriptor, Inbound, PendingLogoutRequest, Saml, SamlValidationContext, SsoResponse,
 //! };
 //!
 //! fn wrong(
 //!     sp: &Saml<saml_rs::Sp>,
 //!     idp: &IdpDescriptor,
 //!     pending: &PendingLogoutRequest,
-//!     input: BrowserInput<SsoResponse>,
+//!     input: Inbound<SsoResponse>,
 //!     validation: SamlValidationContext<'_>,
 //! ) -> Result<(), saml_rs::SamlError> {
 //!     let _ = sp.finish_sso(idp, pending, input, validation)?;
@@ -300,7 +295,7 @@
 //! [`Saml<Idp>::initiate_sso_artifact`] store a Web SSO `<Response>` and
 //! return the browser action that carries its artifact. The service provider
 //! reads the artifact with [`DeliveredArtifact`], resolves it with
-//! [`Saml<Sp>::resolve_artifact`], and passes [`BrowserInput::artifact`] to
+//! [`Saml<Sp>::resolve_artifact`], and passes [`Inbound::artifact`] to
 //! [`Saml<Sp>::finish_sso`] or [`Saml<Sp>::accept_unsolicited_sso`]. An
 //! `<AuthnRequest>` is not delivered as an artifact.
 //!
@@ -435,11 +430,12 @@ pub use artifact::{
     ArtifactUses, ArtifactWithheld, IssuedArtifacts, IssuedMessage, ResolvedProtocolMessage,
 };
 pub use browser::{
-    AcsEndpoint, ArtifactDelivery, BrowserInput, DeliveredArtifact, EndpointUrl, FormField,
+    AcsEndpoint, ArtifactDelivery, DeliveredArtifact, EndpointUrl, FormField, Inbound,
     LogoutBinding, NameIdManagementBinding, Outbound, Pending, PendingAuthnRequest,
     PendingAuthnRequestSnapshot, PendingLogoutRequest, PendingLogoutRequestSnapshot,
-    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, PostForm, SloEndpoint,
-    SsoEndpoint, SsoRequestBinding, SsoResponseBinding, Started,
+    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, PostForm, PostMessage,
+    RedirectMessage, SloEndpoint, SoapMessage, SsoEndpoint, SsoRequestBinding, SsoResponseBinding,
+    Started,
 };
 pub use config::{
     AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,

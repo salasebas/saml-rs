@@ -12,10 +12,9 @@ use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
-    AcsEndpoint, BrowserInput, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    LogoutPolicy, LogoutRequest, MetadataTrustPolicy, RelayState, ReplayCache, ReplayPolicy, Saml,
-    SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint,
+    AcsEndpoint, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutPolicy,
+    MetadataTrustPolicy, RelayState, ReplayCache, ReplayPolicy, Saml, SamlError,
+    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -191,7 +190,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
 
     let received = sp.receive_slo(
         &idp,
-        BrowserInput::<LogoutRequest>::redirect(fixture_query(SHIBBOLETH_QUERY)),
+        Inbound::redirect(fixture_query(SHIBBOLETH_QUERY)),
         validation_at(SHIBBOLETH_ISSUE_INSTANT, &mut cache)?,
     )?;
     let message = received.message();
@@ -239,7 +238,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
     let mut tampered_cache = RecordingReplayCache::default();
     let result = sp.receive_slo(
         &idp,
-        BrowserInput::<LogoutRequest>::redirect(tampered_query),
+        Inbound::redirect(tampered_query),
         validation_at(SHIBBOLETH_ISSUE_INSTANT, &mut tampered_cache)?,
     );
     assert!(matches!(
@@ -263,7 +262,7 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
 
     let received = idp.receive_slo(
         &sp,
-        BrowserInput::<LogoutRequest>::redirect(fixture_query(SIMPLESAMLPHP_QUERY)),
+        Inbound::redirect(fixture_query(SIMPLESAMLPHP_QUERY)),
         validation_at(SIMPLESAMLPHP_ISSUE_INSTANT, &mut cache)?,
     )?;
     let message = received.message();
@@ -313,7 +312,7 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
     let mut tampered_cache = RecordingReplayCache::default();
     let result = idp.receive_slo(
         &sp,
-        BrowserInput::<LogoutRequest>::redirect(tampered_query),
+        Inbound::redirect(tampered_query),
         validation_at(SIMPLESAMLPHP_ISSUE_INSTANT, &mut tampered_cache)?,
     );
     assert!(matches!(

@@ -76,7 +76,8 @@ impl ManageNameIdRequest {
     }
 }
 
-/// Marker for a `ManageNameIDResponse` in browser input and outbound actions.
+/// Marker for a `ManageNameIDResponse` in [`Inbound`](crate::Inbound) and
+/// [`Outbound`](crate::Outbound).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManageNameIdResponse {}
 

@@ -1,5 +1,5 @@
 use crate::browser::{
-    field_value, parse_form_fields, AcsEndpoint, BrowserInput, SsoResponseBinding,
+    field_value, parse_form_fields, AcsEndpoint, Inbound, SsoResponseBinding, Transport,
 };
 use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::{url_params, Binding};
@@ -101,34 +101,24 @@ fn marked_default(acs: AcsEndpoint, is_default: bool) -> AcsEndpoint {
     }
 }
 
-pub(super) fn input_binding<Message>(input: &BrowserInput<Message>) -> Binding {
-    match input {
-        BrowserInput::Redirect { .. } => Binding::Redirect,
-        BrowserInput::Post { .. } => Binding::Post,
-        BrowserInput::SimpleSignPost { .. } => Binding::SimpleSign,
-        BrowserInput::Artifact { .. } => Binding::Artifact,
-        BrowserInput::Soap { .. } => Binding::Soap,
-    }
-}
-
 pub(super) fn relay_state_from_input<Message>(
-    input: &BrowserInput<Message>,
+    input: &Inbound<Message>,
 ) -> Result<Option<RelayState>, SamlError> {
     let received = |value: Option<&str>| {
         value
             .map(|value| RelayState::received(value.to_string()))
             .transpose()
     };
-    match input {
-        BrowserInput::Redirect { raw_query, .. } => {
+    match &input.transport {
+        Transport::Redirect { raw_query } => {
             let params = parse_form_fields(raw_query.trim_start_matches('?'));
             received(field_value(&params, url_params::RELAY_STATE)?)
         }
-        BrowserInput::Post { fields, .. } | BrowserInput::SimpleSignPost { fields, .. } => {
+        Transport::Post { fields } | Transport::SimpleSign { fields } => {
             received(field_value(fields, url_params::RELAY_STATE)?)
         }
-        BrowserInput::Artifact { delivered, .. } => Ok(delivered.relay_state().cloned()),
-        BrowserInput::Soap { .. } => Ok(None),
+        Transport::Artifact { delivered, .. } => Ok(delivered.relay_state().cloned()),
+        Transport::Soap { .. } => Ok(None),
     }
 }
 

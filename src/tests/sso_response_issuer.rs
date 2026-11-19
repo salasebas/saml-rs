@@ -12,10 +12,10 @@ use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy,
-    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponse, SsoSession, StartSso, Subject,
+    AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoSession, StartSso, Subject,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -91,7 +91,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
             let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
             let received = idp.receive_sso(
                 &sp_descriptor,
-                BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+                Inbound::post(post_fields(&started.outbound)?),
                 validation(),
             )?;
             let response =
@@ -150,7 +150,7 @@ fn assertion_signed_with_response_issuer(exchange: &Exchange, issuer: &str) -> T
 }
 
 fn accept(exchange: &Exchange, xml: &str) -> Result<SsoSession, SamlError> {
-    let input = BrowserInput::<SsoResponse>::post(vec![FormField::new(
+    let input = Inbound::post(vec![FormField::new(
         "SAMLResponse",
         STANDARD.encode(xml.as_bytes()),
     )]);

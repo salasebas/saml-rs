@@ -54,7 +54,7 @@ const pages = {
 	'web-browser-sso-artifact.md': {
 		title: 'HTTP-Artifact response',
 		description:
-			'Rules for a typed Web Browser SSO response delivered as an HTTP-Artifact: respond_sso_artifact, initiate_sso_artifact, and finish_sso with BrowserInput::artifact.',
+			'Rules for a typed Web Browser SSO response delivered as an HTTP-Artifact: respond_sso_artifact, initiate_sso_artifact, and finish_sso with Inbound::artifact.',
 	},
 	'web-browser-sso-generation.md': {
 		title: 'SSO generation',

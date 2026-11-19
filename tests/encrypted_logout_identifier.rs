@@ -17,14 +17,13 @@ use saml_rs::binding::deflate_raw_decode;
 use saml_rs::constants::status_code;
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache,
-    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem,
-    Received, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
-    SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, StartSlo, StartSso, Status, Subject, SubordinateStatusCode, X509Credential,
-    XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound, LogoutBinding,
+    LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
+    NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy,
+    RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint,
+    SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso,
+    Status, Subject, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -223,18 +222,15 @@ fn redirect_query<Message>(outbound: &Outbound<Message>) -> Result<String, SamlE
 fn request_input(
     outbound: &Outbound<LogoutRequest>,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutRequest>, SamlError> {
+) -> Result<Inbound<LogoutRequest>, SamlError> {
     Ok(match binding {
-        LogoutBinding::Post => BrowserInput::<LogoutRequest>::post(post_fields(outbound)?),
-        LogoutBinding::Redirect => {
-            BrowserInput::<LogoutRequest>::redirect(redirect_query(outbound)?)
-        }
-        LogoutBinding::SimpleSign => {
-            BrowserInput::<LogoutRequest>::simple_sign(post_fields(outbound)?)
-        }
-        LogoutBinding::Soap => {
-            BrowserInput::<LogoutRequest>::soap(outbound.soap_request()?.envelope())
-        }
+        LogoutBinding::Post => Inbound::post(post_fields(outbound)?),
+        LogoutBinding::Redirect => Inbound::redirect(redirect_query(outbound)?),
+        LogoutBinding::SimpleSign => Inbound::simple_sign(post_fields(outbound)?),
+        LogoutBinding::Soap => Inbound::soap(
+            outbound.soap_request()?.envelope(),
+            SoapChannel::unattested(),
+        ),
         binding => {
             return Err(SamlError::Invalid(format!(
                 "test helper has no {binding:?} case"
@@ -246,18 +242,15 @@ fn request_input(
 fn response_input(
     outbound: &Outbound<LogoutResponse>,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutResponse>, SamlError> {
+) -> Result<Inbound<LogoutResponse>, SamlError> {
     Ok(match binding {
-        LogoutBinding::Post => BrowserInput::<LogoutResponse>::post(post_fields(outbound)?),
-        LogoutBinding::Redirect => {
-            BrowserInput::<LogoutResponse>::redirect(redirect_query(outbound)?)
-        }
-        LogoutBinding::SimpleSign => {
-            BrowserInput::<LogoutResponse>::simple_sign(post_fields(outbound)?)
-        }
-        LogoutBinding::Soap => {
-            BrowserInput::<LogoutResponse>::soap(outbound.soap_response()?.envelope())
-        }
+        LogoutBinding::Post => Inbound::post(post_fields(outbound)?),
+        LogoutBinding::Redirect => Inbound::redirect(redirect_query(outbound)?),
+        LogoutBinding::SimpleSign => Inbound::simple_sign(post_fields(outbound)?),
+        LogoutBinding::Soap => Inbound::soap(
+            outbound.soap_response()?.envelope(),
+            SoapChannel::unattested(),
+        ),
         binding => {
             return Err(SamlError::Invalid(format!(
                 "test helper has no {binding:?} case"
@@ -311,7 +304,7 @@ fn start(parties: &Parties, initiator: Initiator, options: StartSlo) -> Result<S
 fn receive(
     parties: &Parties,
     initiator: Initiator,
-    input: BrowserInput<LogoutRequest>,
+    input: Inbound<LogoutRequest>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
     match initiator {
         Initiator::Sp => parties
@@ -631,7 +624,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
         .start_sso(&parties.idp_descriptor, StartSso::post())?;
     let authn_request = parties.idp.receive_sso(
         &parties.sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started_sso.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started_sso.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let sso_response = parties.idp.respond_sso(
@@ -667,7 +660,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     match parties.sp.finish_sso_with_outstanding_logout(
         &parties.idp_descriptor,
         &started_sso.pending,
-        BrowserInput::<SsoResponse>::post(sso_response.post_form()?.fields().to_vec()),
+        Inbound::post(sso_response.post_form()?.fields().to_vec()),
         validation(),
         &outstanding,
     ) {

@@ -20,8 +20,8 @@ use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, Attribute,
     AttributeEncryptionPolicy, AttributeNameFormat, AttributeValue, Attributes,
-    AudienceValidationPolicy, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId,
-    FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    AudienceValidationPolicy, CertificatePem, Credentials, EntityId, FormField,
+    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
     MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso,
     ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
@@ -191,7 +191,7 @@ fn exchange_between(
     let started = sp.start_sso(idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -204,7 +204,7 @@ fn exchange_between(
     let session = sp.finish_sso(
         idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     );
     Ok(Exchange { xml, session })
@@ -585,7 +585,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         )?;
         let received = idp.receive_sso(
             &sp_descriptor,
-            BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+            Inbound::post(started.outbound.post_form()?.fields().to_vec()),
             validation(),
         )?;
         let response = idp.respond_sso(
@@ -597,7 +597,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         let session = sp.finish_sso(
             &idp_descriptor,
             &started.pending,
-            BrowserInput::<SsoResponse>::simple_sign(response.post_form()?.fields().to_vec()),
+            Inbound::simple_sign(response.post_form()?.fields().to_vec()),
             validation(),
         )?;
         assert_eq!(session.name_id(), &alice(), "{sp_encryption:?}");
@@ -715,7 +715,7 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -742,7 +742,7 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
     match sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     ) {
         Err(SamlError::PotentialWrappingAttack) => Ok(()),
@@ -785,7 +785,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -821,7 +821,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
         let session = sp.finish_sso(
             &idp_descriptor,
             &started.pending,
-            BrowserInput::<SsoResponse>::post(fields),
+            Inbound::post(fields),
             validation(),
         )?;
         assert_eq!(session.name_id(), &alice());

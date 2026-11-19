@@ -18,8 +18,8 @@ use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserTyp
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, BrowserInput, CertificatePem, Credentials, EndpointUrl, EntityId,
-    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache,
+    AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentifierEncryptionPolicy,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
     ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MessageConfidentiality,
     MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
@@ -150,18 +150,14 @@ fn redirect_query<Message>(outbound: &Outbound<Message>) -> Result<String, SamlE
 
 fn request_input(
     outbound: &Outbound<ManageNameIdRequest>,
-) -> Result<BrowserInput<ManageNameIdRequest>, SamlError> {
-    Ok(BrowserInput::<ManageNameIdRequest>::redirect(
-        redirect_query(outbound)?,
-    ))
+) -> Result<Inbound<ManageNameIdRequest>, SamlError> {
+    Ok(Inbound::redirect(redirect_query(outbound)?))
 }
 
 fn response_input(
     outbound: &Outbound<ManageNameIdResponse>,
-) -> Result<BrowserInput<ManageNameIdResponse>, SamlError> {
-    Ok(BrowserInput::<ManageNameIdResponse>::redirect(
-        redirect_query(outbound)?,
-    ))
+) -> Result<Inbound<ManageNameIdResponse>, SamlError> {
+    Ok(Inbound::redirect(redirect_query(outbound)?))
 }
 
 /// The SAML message XML carried by an HTTP-Redirect browser action.
@@ -206,7 +202,7 @@ fn encrypted_identifier_and_new_value(
 
 /// A `ManageNameIDRequest` from the identity provider to the service
 /// provider, signed for HTTP-Redirect.
-fn idp_request_input(content: &str) -> Result<BrowserInput<ManageNameIdRequest>, SamlError> {
+fn idp_request_input(content: &str) -> Result<Inbound<ManageNameIdRequest>, SamlError> {
     let xml = format!(
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_manage1" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" Destination="{SP_MANAGE}"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>{content}</samlp:ManageNameIDRequest>"#
     );
@@ -217,7 +213,7 @@ fn idp_request_input(content: &str) -> Result<BrowserInput<ManageNameIdRequest>,
     let (_, query) = url
         .split_once('?')
         .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-    Ok(BrowserInput::<ManageNameIdRequest>::redirect(query))
+    Ok(Inbound::redirect(query))
 }
 
 fn authenticated() -> SoapChannel {
@@ -542,9 +538,8 @@ fn the_answer_to_a_refused_request_goes_to_an_http_endpoint_only_when_allowed() 
         &NameIdChange::Terminate,
         encrypted(),
     )?;
-    let input = || -> Result<BrowserInput<ManageNameIdRequest>, SamlError> {
-        request_input(&started.outbound)
-    };
+    let input =
+        || -> Result<Inbound<ManageNameIdRequest>, SamlError> { request_input(&started.outbound) };
 
     match sp.receive_name_id_management_redirect(
         &http_idp_peer,

@@ -17,8 +17,8 @@ use saml_rs::raw::{Binding, HttpRequest};
 use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, ForceAuthn,
-    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId,
     NameIdCreationPolicy, NameIdFormat, Outbound, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlInstant, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
     SsoEndpoint, SsoResponse, StartSso, Status, Subject, SubjectConfirmation,
@@ -184,7 +184,7 @@ fn typed_sso_response_carries_profile_authentication_statement(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -222,7 +222,7 @@ fn typed_sso_response_carries_profile_authentication_statement(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -244,7 +244,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let respond = |authn_instant: SystemTime| {
@@ -263,7 +263,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(
@@ -311,7 +311,7 @@ fn typed_unsolicited_sso_omits_in_response_to_under_producer_rules(
 
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(session.in_response_to(), None);
@@ -336,7 +336,7 @@ fn typed_sso_rejects_a_subject_with_caller_supplied_confirmations(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
 
@@ -385,11 +385,8 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
         Binding::Post,
         &raw_request,
     )?;
-    let session = sp.accept_unsolicited_sso(
-        &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    )?;
+    let session =
+        sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation())?;
     assert_eq!(session.in_response_to(), None);
     Ok(())
 }
@@ -434,17 +431,14 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
         Binding::Post,
         &raw_request,
     )?;
-    let session = sp.accept_unsolicited_sso(
-        &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    )?;
+    let session =
+        sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation())?;
     assert_eq!(session.in_response_to(), None);
 
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let request_id = received.message().id().as_str().to_string();
@@ -461,7 +455,7 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(solicited.post_form()?.fields().to_vec()),
+        Inbound::post(solicited.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(
@@ -494,7 +488,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
 
         let session = sp.accept_unsolicited_sso(
             &idp_descriptor,
-            BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+            Inbound::post(response.post_form()?.fields().to_vec()),
             validation(),
         )?;
         assert_eq!(session.name_id().format(), None);
@@ -570,7 +564,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
 
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let logout_subject = session
@@ -732,7 +726,7 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
     let url = Url::parse(started.outbound.redirect_url()?)?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(url.query().unwrap_or_default()),
+        Inbound::redirect(url.query().unwrap_or_default()),
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
@@ -753,7 +747,7 @@ fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_reque
     assert!(url.query_pairs().any(|(key, _)| key == "Signature"));
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(url.query().unwrap_or_default()),
+        Inbound::redirect(url.query().unwrap_or_default()),
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
@@ -804,7 +798,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -856,7 +850,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
 
@@ -872,7 +866,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(signed.post_form()?.fields().to_vec()),
+        Inbound::post(signed.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -892,7 +886,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     match sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(unsigned_fields.clone()),
+        Inbound::post(unsigned_fields.clone()),
         validation(),
     ) {
         Err(SamlError::SignatureMissing) => {}
@@ -912,7 +906,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let session = permissive.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(unsigned_fields),
+        Inbound::post(unsigned_fields),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -983,7 +977,7 @@ fn typed_plaintext_response_stays_accepted_without_producer_rules(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -992,7 +986,7 @@ fn typed_plaintext_response_stays_accepted_without_producer_rules(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -1029,7 +1023,7 @@ fn typed_sso_error_response_carries_caller_status_and_no_assertions(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let request_id = received.message().id().as_str().to_string();
@@ -1093,7 +1087,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
 

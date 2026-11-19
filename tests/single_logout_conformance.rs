@@ -10,11 +10,11 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning,
-    LogoutSubject, MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy,
-    RespondSlo, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo,
+    AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    LogoutPolicy, LogoutResponse, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
+    MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy, RespondSlo, Saml,
+    SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSlo,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -178,7 +178,7 @@ fn compatibility_session_participant_logout_stays_unsigned_without_session_index
     assert!(!xml.contains("NotOnOrAfter"));
     assert!(xml.contains(&format!("Destination=\"{IDP_SLO_HTTP}\"")));
 
-    let input = BrowserInput::<LogoutRequest>::post(post_input(&started.outbound)?);
+    let input = Inbound::post(post_input(&started.outbound)?);
     identity_provider.receive_slo(&sp_descriptor, input.clone(), validation())?;
 
     let rejecting = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
@@ -251,7 +251,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
 
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(post_input(&started.outbound)?),
+        Inbound::post(post_input(&started.outbound)?),
         validation(),
     )?;
     assert_eq!(
@@ -295,7 +295,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
 
     let received = sp.receive_slo(
         &idp_descriptor,
-        BrowserInput::<LogoutRequest>::post(post_input(&started.outbound)?),
+        Inbound::post(post_input(&started.outbound)?),
         validation(),
     )?;
     assert_eq!(
@@ -310,7 +310,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
         sp.start_slo(&idp_descriptor, subject_with_session()?, StartSlo::post())?;
     let received_by_authority = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(post_input(&participant_started.outbound)?),
+        Inbound::post(post_input(&participant_started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_slo(
@@ -325,7 +325,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
     let completed = sp.finish_slo(
         &idp_descriptor,
         &participant_started.pending,
-        BrowserInput::<LogoutResponse>::post(post_input(&response)?),
+        Inbound::post(post_input(&response)?),
         validation(),
     )?;
     assert_eq!(completed.peer_entity_id().as_str(), IDP_ENTITY_ID);
@@ -345,7 +345,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     )?;
     let received = sp.receive_slo(
         &idp_descriptor,
-        BrowserInput::<LogoutRequest>::post(post_input(&started.outbound)?),
+        Inbound::post(post_input(&started.outbound)?),
         validation(),
     )?;
 
@@ -375,7 +375,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     let completed = idp.finish_slo(
         &sp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(post_input(&response)?),
+        Inbound::post(post_input(&response)?),
         validation(),
     )?;
     assert_eq!(completed.peer_entity_id().as_str(), SP_ENTITY_ID);
@@ -420,13 +420,13 @@ fn finish_rejects_unsigned_response(role: LocalRole) -> Result<(), Box<dyn std::
         LocalRole::Sp => service_provider.finish_slo(
             &idp_descriptor,
             &pending,
-            BrowserInput::<LogoutResponse>::post(unsigned.clone()),
+            Inbound::post(unsigned.clone()),
             validation(),
         ),
         LocalRole::Idp => identity_provider.finish_slo(
             &sp_descriptor,
             &pending,
-            BrowserInput::<LogoutResponse>::post(unsigned.clone()),
+            Inbound::post(unsigned.clone()),
             validation(),
         ),
     };
@@ -443,13 +443,13 @@ fn finish_rejects_unsigned_response(role: LocalRole) -> Result<(), Box<dyn std::
         LocalRole::Sp => compatible_sp.finish_slo(
             &idp_descriptor,
             &pending,
-            BrowserInput::<LogoutResponse>::post(unsigned),
+            Inbound::post(unsigned),
             validation(),
         )?,
         LocalRole::Idp => compatible_idp.finish_slo(
             &sp_descriptor,
             &pending,
-            BrowserInput::<LogoutResponse>::post(unsigned),
+            Inbound::post(unsigned),
             validation(),
         )?,
     };
@@ -476,7 +476,7 @@ fn signed_logout_response(
             )?;
             let received = idp.receive_slo(
                 &sp_descriptor,
-                BrowserInput::<LogoutRequest>::post(post_input(&started.outbound)?),
+                Inbound::post(post_input(&started.outbound)?),
                 validation(),
             )?;
             let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
@@ -490,7 +490,7 @@ fn signed_logout_response(
             )?;
             let received = sp.receive_slo(
                 &idp_descriptor,
-                BrowserInput::<LogoutRequest>::post(post_input(&started.outbound)?),
+                Inbound::post(post_input(&started.outbound)?),
                 validation(),
             )?;
             let response = sp.respond_slo(&idp_descriptor, &received, RespondSlo::post())?;

@@ -18,10 +18,10 @@ use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeValue, Attributes,
-    AudienceValidationPolicy, AuthnRequest, BrowserInput, EntityId, FormField, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, PendingAuthnRequest,
-    ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso, Subject,
+    AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, MetadataTrustPolicy, NameId, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    SsoSession, StartSso, Subject,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -86,7 +86,7 @@ impl SignedExchange {
         let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
         let received = idp.receive_sso(
             &sp_descriptor,
-            BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+            Inbound::post(started.outbound.post_form()?.fields().to_vec()),
             validation(),
         )?;
         let role = Attribute::new("role", None, vec![AttributeValue::new(ROLE)]);
@@ -128,7 +128,7 @@ impl SignedExchange {
         self.sp.finish_sso(
             &self.idp_descriptor,
             &self.pending,
-            BrowserInput::<SsoResponse>::post(fields),
+            Inbound::post(fields),
             validation(),
         )
     }

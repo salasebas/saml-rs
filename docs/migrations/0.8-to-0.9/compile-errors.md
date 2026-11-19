@@ -45,7 +45,8 @@
 | `RelayStateParam`, or a `relay_state` setter or getter | Setters take `RelayState`, getters return `Option<&RelayState>` | [RelayState](browser-transport.md#replace-relaystateparam-with-relaystate) |
 | `PendingSnapshot`, `Pending::try_new`, or a pending `with_*` setter | Use the snapshot for the message and `from_snapshot` | [Pending snapshots](browser-transport.md#store-pending-state-with-the-snapshot-for-its-message) |
 | Pending `id()`, `issued_at()`, `expires_at()`, or `response_binding()`; `PendingAuthnRequest::peer_entity_id()`; `request_binding()` on `PendingAuthnRequest` or `PendingManageNameIdRequest` | Renamed or removed | [Pending accessors](browser-transport.md#read-pending-state-through-one-accessor-each) |
-| `BrowserInput::simple_sign_body` or `SimpleSignPost { raw_body, .. }` | Pass parsed fields to `simple_sign` | [SimpleSign input](browser-transport.md#pass-parsed-fields-to-browserinputsimple_sign) |
+| `BrowserInput`, a `BrowserInput` variant, `BrowserInput::soap`, or `soap_with_channel` | Renamed to `Inbound`. Build it with a constructor. `soap` takes the channel | [Inbound messages](browser-transport.md#build-received-messages-with-inbound) |
+| `BrowserInput::simple_sign_body` or `SimpleSignPost { raw_body, .. }` | Pass parsed fields to `simple_sign` | [SimpleSign input](browser-transport.md#pass-parsed-fields-to-inboundsimple_sign) |
 | `AcsEndpoint::mark_default`, `as_binding()`, `Received::new`, or `PostForm::new` | Renamed or removed | [Remaining calls](browser-transport.md#rename-the-remaining-calls) |
 | `SamlError::StatusNotSuccess { top, second }`, `ReplayDetected { key }` as a string, `UndefinedBinding`, `UndefinedStatus`, `Xml(message)`, `Crypto(message)`, `Base64(error)`, `Deflate(error)`, or `?` from a `base64::DecodeError` or `std::io::Error` into `SamlError` | Typed payloads, new variants, and no third-party `From` | [Typed errors](errors.md) |
 

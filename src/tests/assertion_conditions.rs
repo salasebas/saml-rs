@@ -21,11 +21,11 @@ use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AuthnRequest, BrowserInput, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    SsoSession, StartSso, Subject, VerifiedXmlSignatureCoverage,
+    AcsEndpoint, AssertionSignaturePolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest,
+    ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession, StartSso, Subject,
+    VerifiedXmlSignatureCoverage,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -108,7 +108,7 @@ fn exchange_for(
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -241,7 +241,7 @@ fn accept_with<'a>(
     validation: SamlValidationContext<'a>,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let fields = fields_with_xml(exchange.response_fields.clone(), xml)?;
-    let input = BrowserInput::<SsoResponse>::post(fields);
+    let input = Inbound::post(fields);
     if let Some(pending) = &exchange.pending {
         return Ok(exchange
             .sp
@@ -390,7 +390,7 @@ fn accept_simple_sign(
     let fields = simple_sign_fields(&exchange.response_fields, xml)?;
     Ok(exchange.sp.accept_unsolicited_sso(
         &exchange.idp_descriptor,
-        BrowserInput::<SsoResponse>::simple_sign(fields),
+        Inbound::simple_sign(fields),
         validation(),
     )?)
 }

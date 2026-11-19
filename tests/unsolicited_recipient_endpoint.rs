@@ -15,9 +15,9 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService, ArtifactUses,
-    BrowserInput, DeliveredArtifact, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor,
+    DeliveredArtifact, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor, Inbound,
     IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint, SsoResponse,
+    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint,
     SsoResponseBinding, SsoSession, Subject,
 };
 
@@ -122,9 +122,9 @@ fn accept(
             let response = idp.initiate_sso(&sender_view, subject(), options)?;
             let fields = response.post_form()?.fields().to_vec();
             if binding == SsoResponseBinding::SimpleSign {
-                BrowserInput::<SsoResponse>::simple_sign(fields)
+                Inbound::simple_sign(fields)
             } else {
-                BrowserInput::<SsoResponse>::post(fields)
+                Inbound::post(fields)
             }
         }
         SsoResponseBinding::Artifact => {
@@ -150,7 +150,7 @@ fn accept(
                 &mut issued,
                 SoapChannel::mutually_authenticated_confidential(),
             )?;
-            BrowserInput::<SsoResponse>::artifact(delivered, resolution.finish(answer.envelope())?)
+            Inbound::artifact(delivered, resolution.finish(answer.envelope())?)
         }
         _ => return Err("unsupported response binding".into()),
     };

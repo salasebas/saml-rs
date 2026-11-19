@@ -7,10 +7,10 @@
 #[cfg(crypto)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
-        AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, IdpConfig,
-        IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
+        AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
+        IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
         ReplayPolicy, RespondSso, Saml, SamlValidationContext, SpConfig, SpDescriptor,
-        SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject, X509Credential,
+        SpValidationPolicy, SsoEndpoint, StartSso, Subject, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let request = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     println!(
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     );
     let session = session?;

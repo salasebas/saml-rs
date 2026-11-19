@@ -19,8 +19,8 @@ use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService,
-    ArtifactUses, AuthnRequest, BrowserInput, DeliveredArtifact, EndpointUrl, EntityId, FormField,
-    Idp, IdpConfig, IdpDescriptor, IssuedArtifacts, IssuedMessage, MetadataTrustPolicy, NameId,
+    ArtifactUses, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField, Idp,
+    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, IssuedMessage, MetadataTrustPolicy, NameId,
     Outbound, PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage,
     RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor,
     SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status, Subject,
@@ -145,7 +145,7 @@ fn requested(
     let url = Url::parse(started.outbound.redirect_url()?)?;
     let request = parties.idp.receive_sso(
         &parties.sp_metadata,
-        BrowserInput::<AuthnRequest>::redirect(url.query().ok_or("missing query")?),
+        Inbound::redirect(url.query().ok_or("missing query")?),
         validation(),
     )?;
     Ok((started.pending, request))
@@ -251,7 +251,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
     let session = parties.sp.finish_sso(
         &parties.idp_metadata,
         &pending,
-        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        Inbound::artifact(delivered, resolved),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), USER);
@@ -357,11 +357,10 @@ fn a_received_relay_state_up_to_the_receive_limit_travels_with_the_artifact(
     )?;
     let url = Url::parse(started.outbound.redirect_url()?)?;
     let query = format!("{}&RelayState={long}", url.query().ok_or("missing query")?);
-    let request = parties.idp.receive_sso(
-        &parties.sp_metadata,
-        BrowserInput::<AuthnRequest>::redirect(query),
-        validation(),
-    )?;
+    let request =
+        parties
+            .idp
+            .receive_sso(&parties.sp_metadata, Inbound::redirect(query), validation())?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.respond_sso_artifact(
@@ -420,7 +419,7 @@ fn resolve_and_finish(
     Ok(parties.sp.finish_sso(
         &parties.idp_metadata,
         pending,
-        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        Inbound::artifact(delivered, resolved),
         validation(),
     )?)
 }
@@ -511,7 +510,7 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
     let result = parties.sp.finish_sso(
         &parties.idp_metadata,
         &pending,
-        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        Inbound::artifact(delivered, resolved),
         validation(),
     );
     match result {
@@ -552,7 +551,7 @@ fn an_unsolicited_artifact_response_establishes_the_session(
     let resolved = resolve(&parties, &delivered, &mut issued)?;
     let session = parties.sp.accept_unsolicited_sso(
         &parties.idp_metadata,
-        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        Inbound::artifact(delivered, resolved),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), USER);
@@ -621,7 +620,7 @@ fn a_message_resolved_from_another_artifact_is_rejected() -> Result<(), Box<dyn 
         parties.sp.finish_sso(
             &parties.idp_metadata,
             &pending,
-            BrowserInput::<SsoResponse>::artifact(first, resolved_second),
+            Inbound::artifact(first, resolved_second),
             validation(),
         ),
         Err(SamlError::Invalid(_))
@@ -653,7 +652,7 @@ fn a_resolved_response_is_not_accepted_at_a_post_consumer() -> Result<(), Box<dy
         parties.sp.finish_sso(
             &parties.idp_metadata,
             &started.pending,
-            BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+            Inbound::artifact(delivered, resolved),
             validation(),
         ),
         Err(SamlError::UnsupportedBinding { .. })
@@ -821,7 +820,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
     assert!(matches!(
         parties.sp.accept_unsolicited_sso(
             &parties.idp_metadata,
-            BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+            Inbound::artifact(delivered, resolved),
             validation(),
         ),
         Err(SamlError::IssuerMismatch { .. })
@@ -953,7 +952,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
     let resolved = resolution.finish(answer.envelope())?;
     let session = sp.accept_unsolicited_sso(
         &parties.idp_metadata,
-        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        Inbound::artifact(delivered, resolved),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), USER);
@@ -1031,7 +1030,7 @@ fn a_request_for_a_posted_response_is_not_answered_with_an_artifact(
     let url = Url::parse(started.outbound.redirect_url()?)?;
     let request = parties.idp.receive_sso(
         &parties.sp_metadata,
-        BrowserInput::<AuthnRequest>::redirect(url.query().ok_or("missing query")?),
+        Inbound::redirect(url.query().ok_or("missing query")?),
         validation(),
     )?;
     assert_eq!(
@@ -1136,7 +1135,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
     let session = parties.sp.finish_sso(
         &parties.idp_metadata,
         &pending,
-        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        Inbound::artifact(delivered, resolved),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), USER);
@@ -1168,7 +1167,7 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
     let session = parties.sp.finish_sso(
         &parties.idp_metadata,
         &pending,
-        BrowserInput::<SsoResponse>::artifact(delivered, resolved),
+        Inbound::artifact(delivered, resolved),
         validation(),
     )?;
     let accepted = session

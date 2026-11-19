@@ -126,9 +126,9 @@ let top_level_uri = completed.status().ok_or("missing status")?;
 After the upgrade, read the fields from the completion returned by `finish_slo`.
 
 ```rust
-# use saml_rs::{BrowserInput, IdpDescriptor, LogoutResponse, PendingLogoutRequest, Saml, SamlError, SamlValidationContext, Sp};
+# use saml_rs::{IdpDescriptor, Inbound, LogoutResponse, PendingLogoutRequest, Saml, SamlError, SamlValidationContext, Sp};
 # fn finish(sp: &Saml<Sp>, idp: &IdpDescriptor, pending: &PendingLogoutRequest,
-#     input: BrowserInput<LogoutResponse>, validation: SamlValidationContext<'_>) -> Result<(), SamlError> {
+#     input: Inbound<LogoutResponse>, validation: SamlValidationContext<'_>) -> Result<(), SamlError> {
 let completed = sp.finish_slo(idp, pending, input, validation)?;
 let response = completed.response();
 let raw = completed.raw_flow();

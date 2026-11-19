@@ -11,12 +11,11 @@ use common::signing_credentials;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnSession, BrowserInput, ClockSkew, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, MetadataTrustPolicy,
-    NameId, NameIdFormat, OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy,
-    RespondSso, Saml, SamlError, SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
-    Subject,
+    AcsEndpoint, AuthnSession, ClockSkew, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, InMemoryReplayCache, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
+    OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy, RespondSso, Saml, SamlError,
+    SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, SsoSession, StartSso, Subject,
 };
 use time::OffsetDateTime;
 
@@ -73,7 +72,7 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     let started = sp.start_sso(&idp_descriptor, StartSso::post().relay_state(relay_state))?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         open_validation(unix_seconds()?)?,
     )?;
     let response = idp.respond_sso(
@@ -165,7 +164,7 @@ fn finish(
     outstanding: Option<&OutstandingLogout>,
 ) -> Result<SsoSession, SamlError> {
     let validation = validation_at(seconds, skew)?;
-    let input = BrowserInput::<SsoResponse>::post(issued.fields.clone());
+    let input = Inbound::post(issued.fields.clone());
     match outstanding {
         Some(outstanding) => issued.sp.finish_sso_with_outstanding_logout(
             &issued.idp_descriptor,
@@ -187,7 +186,7 @@ fn accept_unsolicited(
     outstanding: Option<&OutstandingLogout>,
 ) -> Result<SsoSession, SamlError> {
     let validation = validation_at(seconds, skew)?;
-    let input = BrowserInput::<SsoResponse>::post(issued.unsolicited_fields.clone());
+    let input = Inbound::post(issued.unsolicited_fields.clone());
     match outstanding {
         Some(outstanding) => issued.sp.accept_unsolicited_sso_with_outstanding_logout(
             &issued.idp_descriptor,
@@ -427,7 +426,7 @@ fn rejected_outstanding_logout_still_records_the_bearer_assertion(
     match issued.sp.finish_sso_with_outstanding_logout(
         &issued.idp_descriptor,
         &issued.pending,
-        BrowserInput::<SsoResponse>::post(issued.fields.clone()),
+        Inbound::post(issued.fields.clone()),
         validation,
         &outstanding,
     ) {
@@ -443,7 +442,7 @@ fn rejected_outstanding_logout_still_records_the_bearer_assertion(
     match issued.sp.finish_sso(
         &issued.idp_descriptor,
         &issued.pending,
-        BrowserInput::<SsoResponse>::post(issued.fields.clone()),
+        Inbound::post(issued.fields.clone()),
         SamlValidationContext::new(system_time_at(now)?, ReplayPolicy::RequireCache(&mut cache)),
     ) {
         Err(SamlError::ReplayDetected { .. }) => Ok(()),

@@ -1,10 +1,9 @@
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, MetadataTrustPolicy, PaosAuthnRequest, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SchemaValidator, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSso, XmlPolicy,
+    AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    MetadataTrustPolicy, PaosAuthnRequest, ReplayPolicy, Saml, SamlError, SamlValidationContext,
+    SchemaValidator, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, XmlPolicy,
 };
 
 const SP: &str = "https://sp.example.com/metadata";
@@ -112,21 +111,9 @@ fn typed_schema_policy_is_isolated_and_can_be_disabled() -> Result<(), Box<dyn s
     )?;
     let started = sp.start_sso(&destination, StartSso::post())?;
     let fields: Vec<FormField> = started.outbound.post_form()?.fields().to_vec();
-    assert_rejected(rejecting.receive_sso(
-        &peer,
-        BrowserInput::<AuthnRequest>::post(fields.clone()),
-        validation(),
-    ));
-    accepting.receive_sso(
-        &peer,
-        BrowserInput::<AuthnRequest>::post(fields.clone()),
-        validation(),
-    )?;
-    assert_rejected(rejecting.receive_sso(
-        &peer,
-        BrowserInput::<AuthnRequest>::post(fields),
-        validation(),
-    ));
+    assert_rejected(rejecting.receive_sso(&peer, Inbound::post(fields.clone()), validation()));
+    accepting.receive_sso(&peer, Inbound::post(fields.clone()), validation())?;
+    assert_rejected(rejecting.receive_sso(&peer, Inbound::post(fields), validation()));
     Ok(())
 }
 

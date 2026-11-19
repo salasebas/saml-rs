@@ -33,7 +33,7 @@ let sp = SpDescriptor::from_metadata_xml(
 
 let request = idp.receive_sso(
     &sp,
-    BrowserInput::<AuthnRequest>::post(request_fields),
+    Inbound::post(request_fields),
     validation,
 )?;
 

@@ -8,11 +8,10 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    BrowserInput, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, MetadataTrustPolicy, PrivateKeyPem, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
-    X509Credential,
+    AcsEndpoint, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem,
+    Credentials, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    MetadataTrustPolicy, PrivateKeyPem, ReplayPolicy, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -109,7 +108,7 @@ fn receive(
 ) -> Result<(), SamlError> {
     idp.receive_sso(
         sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(form),
+        Inbound::post(form),
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
     )
     .map(drop)

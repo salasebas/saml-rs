@@ -6,11 +6,10 @@
 #[cfg(crypto)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
-        AcsEndpoint, AuthnRequest, BrowserInput, CertificatePem, Credentials, EntityId, IdpConfig,
-        IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutResponse, MetadataTrustPolicy,
-        NameId, PrivateKeyPem, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlValidationContext,
-        SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-        StartSlo, StartSso, Subject, X509Credential,
+        AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
+        IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
+        RespondSlo, RespondSso, Saml, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor,
+        SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, Subject, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -62,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sso = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let request = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(sso.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(sso.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = idp.respond_sso(
@@ -74,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session = sp.finish_sso(
         &idp_descriptor,
         &sso.pending,
-        BrowserInput::<SsoResponse>::post(response.post_form()?.fields().to_vec()),
+        Inbound::post(response.post_form()?.fields().to_vec()),
         validation(),
     )?;
 
@@ -89,14 +88,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let logout_request = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(logout.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(logout.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let logout_response = idp.respond_slo(&sp_descriptor, &logout_request, RespondSlo::post())?;
     let completed = sp.finish_slo(
         &idp_descriptor,
         &logout.pending,
-        BrowserInput::<LogoutResponse>::post(logout_response.post_form()?.fields().to_vec()),
+        Inbound::post(logout_response.post_form()?.fields().to_vec()),
         validation(),
     )?;
     println!(

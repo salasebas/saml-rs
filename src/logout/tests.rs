@@ -1,7 +1,7 @@
 #![allow(deprecated)]
 use super::*;
 use crate::binding::{decode_base64, deflate_raw_decode, encode_base64};
-use crate::browser::BrowserInput;
+use crate::browser::Inbound;
 use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting, User};
 use crate::error::SamlError;
@@ -184,7 +184,7 @@ fn parse_unsigned_logout_request_at(
     parse_logout_request_at(
         &receiver.setting,
         sender.metadata.as_metadata(),
-        LogoutReceipt::of_input(&BrowserInput::<crate::LogoutRequest>::post(Vec::new()))?,
+        LogoutReceipt::of_input(&Inbound::<crate::LogoutRequest>::post(Vec::new()))?,
         &logout_request_request(issue_instant, not_on_or_after),
         LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_drifts, None),
     )

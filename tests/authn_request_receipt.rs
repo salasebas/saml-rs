@@ -16,8 +16,8 @@ use base64::Engine;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, BrowserInput,
-    EntityId, ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, IsPassive,
+    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
+    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
     MetadataTrustPolicy, NameId, NameIdFormat, NameIdPolicy, Outbound, Received, ReplayPolicy,
     RequestedSubject, RequestedSubjectIdentifier, RespondSso, Saml, SamlError,
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
@@ -95,7 +95,7 @@ fn receive(
     let xml = edit(authn_request_xml(&started.outbound)?)?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+        Inbound::post(vec![FormField::new(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )]),

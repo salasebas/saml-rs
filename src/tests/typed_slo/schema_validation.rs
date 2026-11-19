@@ -29,7 +29,7 @@ fn schema_policy_covers_both_logout_soap_directions() -> Result<(), Box<dyn std:
     let envelope = started.outbound.soap_request()?.envelope();
     let result = rejecting_idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(envelope),
+        Inbound::soap(envelope, SoapChannel::unattested()),
         validation(),
     );
     assert!(
@@ -38,14 +38,17 @@ fn schema_policy_covers_both_logout_soap_directions() -> Result<(), Box<dyn std:
     );
     let received = accepting_idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(envelope),
+        Inbound::soap(envelope, SoapChannel::unattested()),
         validation(),
     )?;
     let response = accepting_idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
     let result = sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::soap(response.soap_response()?.envelope()),
+        Inbound::soap(
+            response.soap_response()?.envelope(),
+            SoapChannel::unattested(),
+        ),
         validation(),
     );
     assert!(
@@ -85,26 +88,19 @@ fn schema_policy_covers_both_logout_post_directions() -> Result<(), Box<dyn std:
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let fields = post_fields(&started.outbound)?;
-    let result = rejecting_idp.receive_slo(
-        &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(fields.clone()),
-        validation(),
-    );
+    let result =
+        rejecting_idp.receive_slo(&sp_descriptor, Inbound::post(fields.clone()), validation());
     assert!(
         matches!(result, Err(SamlError::Invalid(ref reason)) if reason == "schema rejected logout document"),
         "expected rejection of the request document, got {result:?}"
     );
-    let received = idp.receive_slo(
-        &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(fields),
-        validation(),
-    )?;
+    let received = idp.receive_slo(&sp_descriptor, Inbound::post(fields), validation())?;
     let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
     let fields = post_fields(&response)?;
     let result = rejecting_sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(fields.clone()),
+        Inbound::post(fields.clone()),
         validation(),
     );
     assert!(
@@ -114,7 +110,7 @@ fn schema_policy_covers_both_logout_post_directions() -> Result<(), Box<dyn std:
     sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     )?;
     Ok(())

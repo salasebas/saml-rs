@@ -41,11 +41,11 @@ let validation = SamlValidationContext::new(
     now,
     ReplayPolicy::RequireCache(&mut replay_cache),
 );
-let pending = Pending::<AuthnRequest>::from_snapshot(load_snapshot())?;
+let pending = PendingAuthnRequest::from_snapshot(load_snapshot())?;
 let session = sp.finish_sso(
     &idp,
     &pending,
-    BrowserInput::<SsoResponse>::post(form_fields),
+    Inbound::post(form_fields),
     validation,
 )?;
 

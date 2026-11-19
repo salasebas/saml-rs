@@ -1,12 +1,14 @@
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, EndpointUrl, Idp, LogoutBinding, MessageId, NameIdCreationRequest,
-    PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    AcsEndpoint, AuthnRequest, EndpointUrl, FormField, Idp, Inbound, LogoutBinding, MessageId,
+    NameIdCreationRequest, PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, RelayState, Saml, SamlError, SamlInstant, SloEndpoint, Sp,
-    SsoEndpoint, SsoRequestBinding, SsoResponseBinding, VerifiedXmlSignature,
+    SsoEndpoint, SsoRequestBinding, SsoResponse, SsoResponseBinding, VerifiedXmlSignature,
     VerifiedXmlSignatureCoverage,
 };
 
 fn assert_send_sync<T: Send + Sync>() {}
+
+fn assert_eq_trait<T: Eq>() {}
 
 #[test]
 fn typed_api_contract_exposes_role_markers() {
@@ -45,6 +47,7 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
     assert_send_sync::<RelayState>();
     assert_send_sync::<SamlInstant>();
     assert_send_sync::<PendingAuthnRequest>();
+    assert_eq_trait::<PendingAuthnRequest>();
     assert_send_sync::<PendingAuthnRequestSnapshot>();
     assert_send_sync::<PendingLogoutRequest>();
     assert_send_sync::<PendingLogoutRequestSnapshot>();
@@ -79,6 +82,23 @@ fn typed_api_contract_reexports_typed_binding_building_blocks(
 }
 
 #[test]
+fn typed_api_contract_compares_inbound_messages_by_binding_and_content() {
+    let fields = vec![FormField::new("SAMLResponse", "PHNhbWxwOlJlc3BvbnNlLz4=")];
+    let post: Inbound<SsoResponse> = Inbound::post(fields.clone());
+    assert_eq_trait::<Inbound<SsoResponse>>();
+
+    assert_eq!(post, Inbound::post(fields.clone()));
+    assert_ne!(
+        post,
+        Inbound::post(vec![FormField::new(
+            "SAMLResponse",
+            "PHNhbWxwOkxvZ291dFJlc3BvbnNlLz4="
+        )])
+    );
+    assert_ne!(post, Inbound::simple_sign(fields));
+}
+
+#[test]
 fn typed_api_contract_reexports_browser_and_model_types() {
     let _: for<'a> fn(&'a AuthnRequest) -> &'a SamlInstant = AuthnRequest::issue_instant;
     let _: fn(&AuthnRequest) -> Option<saml_rs::ForceAuthn> = AuthnRequest::force_authn;
@@ -99,7 +119,7 @@ fn typed_api_contract_reexports_browser_and_model_types() {
     let _: for<'a> fn(&'a VerifiedXmlSignature) -> &'a str = VerifiedXmlSignature::algorithm_uri;
     let _: fn(&VerifiedXmlSignature) -> VerifiedXmlSignatureCoverage =
         VerifiedXmlSignature::coverage;
-    let _ = std::any::type_name::<saml_rs::BrowserInput<saml_rs::AuthnRequest>>();
+    let _ = std::any::type_name::<saml_rs::Inbound<saml_rs::AuthnRequest>>();
     let _ = std::any::type_name::<saml_rs::FormField>();
     let _ = std::any::type_name::<saml_rs::Outbound<saml_rs::AuthnRequest>>();
     let _ = std::any::type_name::<saml_rs::Pending<saml_rs::AuthnRequest>>();

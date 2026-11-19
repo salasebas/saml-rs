@@ -15,12 +15,12 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::deflate_raw_decode;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, Credentials, EntityId,
-    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
-    PrivateKeyPem, RelayState, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject,
-    TemplatePolicy, X509Credential, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
+    AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
+    ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSso, Subject, TemplatePolicy, X509Credential,
+    MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 use url::Url;
 
@@ -178,11 +178,7 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
         .ok_or("missing query")?
         .1
         .replace(&"a".repeat(MAX_RELAY_STATE_BYTES), &"a".repeat(200));
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(query),
-        validation(),
-    )?;
+    let received = idp.receive_sso(&sp_descriptor, Inbound::redirect(query), validation())?;
     let reused = received
         .relay_state()
         .cloned()
@@ -231,7 +227,7 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
 
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(request_query(&long)?),
+        Inbound::redirect(request_query(&long)?),
         validation(),
     )?;
     assert_eq!(
@@ -253,7 +249,7 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(response_fields),
+        Inbound::post(response_fields),
         validation(),
     )?;
     assert_eq!(
@@ -264,11 +260,8 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
     let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
     let mut fields = unsolicited.post_form()?.fields().to_vec();
     fields.push(FormField::new("RelayState", long.as_str()));
-    let session = sp.accept_unsolicited_sso(
-        &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    )?;
+    let session =
+        sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation())?;
     assert_eq!(
         session.relay_state().map(RelayState::as_str),
         Some(long.as_str())
@@ -293,7 +286,7 @@ fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
 
     match idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(format!("{query}&RelayState={too_long}")),
+        Inbound::redirect(format!("{query}&RelayState={too_long}")),
         validation(),
     ) {
         Err(SamlError::LimitExceeded {
@@ -308,11 +301,7 @@ fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
     let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
     let mut fields = response.post_form()?.fields().to_vec();
     fields.push(FormField::new("RelayState", too_long));
-    match sp.accept_unsolicited_sso(
-        &idp_descriptor,
-        BrowserInput::<SsoResponse>::post(fields),
-        validation(),
-    ) {
+    match sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation()) {
         Err(SamlError::LimitExceeded {
             limit: saml_rs::ResourceLimit::RelayStateBytes,
             maximum: saml_rs::MAX_RECEIVED_RELAY_STATE_BYTES,
@@ -348,17 +337,13 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
     let mut request_fields = started.outbound.post_form()?.fields().to_vec();
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         validation(),
     )?;
     request_fields.push(FormField::new("RelayState", "https://evil.example/"));
     expect_ambiguous_relay_state(
         "receive_sso over HTTP-POST",
-        idp.receive_sso(
-            &sp_descriptor,
-            BrowserInput::<AuthnRequest>::post(request_fields),
-            validation(),
-        ),
+        idp.receive_sso(&sp_descriptor, Inbound::post(request_fields), validation()),
     )?;
 
     let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
@@ -369,7 +354,7 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
         sp.finish_sso(
             &idp_descriptor,
             &started.pending,
-            BrowserInput::<SsoResponse>::post(response_fields),
+            Inbound::post(response_fields),
             validation(),
         ),
     )?;
@@ -382,7 +367,7 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
         "accept_unsolicited_sso",
         sp.accept_unsolicited_sso(
             &idp_descriptor,
-            BrowserInput::<SsoResponse>::post(unsolicited_fields),
+            Inbound::post(unsolicited_fields),
             validation(),
         ),
     )?;
@@ -395,7 +380,7 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
             "receive_sso over unsigned HTTP-Redirect",
             idp.receive_sso(
                 &sp_descriptor,
-                BrowserInput::<AuthnRequest>::redirect(format!("{query}&{repeated}")),
+                Inbound::redirect(format!("{query}&{repeated}")),
                 validation(),
             ),
         )?;
@@ -466,11 +451,7 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
     let mut segments: Vec<&str> = query.split('&').collect();
     segments.rotate_left(1);
     let reordered = segments.join("&");
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(reordered),
-        validation(),
-    )?;
+    let received = idp.receive_sso(&sp_descriptor, Inbound::redirect(reordered), validation())?;
     assert_eq!(received.message().id(), started.pending.request_id());
     assert_eq!(
         received.relay_state().map(RelayState::as_str),
@@ -493,7 +474,7 @@ fn typed_simplesign_binds_relay_state_to_the_raw_xml_signature(
     let fields = started.outbound.post_form()?.fields().to_vec();
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::simple_sign(fields.clone()),
+        Inbound::simple_sign(fields.clone()),
         validation(),
     )?;
     assert_eq!(
@@ -509,7 +490,7 @@ fn typed_simplesign_binds_relay_state_to_the_raw_xml_signature(
     *relay = FormField::new("RelayState", "other-state");
     match idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::simple_sign(tampered),
+        Inbound::simple_sign(tampered),
         validation(),
     ) {
         Err(SamlError::SignatureVerification { .. }) => Ok(()),
@@ -534,11 +515,7 @@ fn typed_simplesign_requires_the_sig_alg_field() -> Result<(), Box<dyn std::erro
         .filter(|field| field.name() != "SigAlg")
         .cloned()
         .collect();
-    let result = idp.receive_sso(
-        &sp_descriptor,
-        BrowserInput::<AuthnRequest>::simple_sign(fields),
-        validation(),
-    );
+    let result = idp.receive_sso(&sp_descriptor, Inbound::simple_sign(fields), validation());
     assert!(
         matches!(
             result,
