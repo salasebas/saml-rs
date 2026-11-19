@@ -17,7 +17,7 @@ use saml_rs::{
     AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
     RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSlo, StartSso, Subject,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSlo, StartSso,
     XmlPolicy,
 };
 
@@ -176,7 +176,7 @@ fn finish_padded_sso_response(padding: usize) -> TestResult<Result<(), SamlError
     let response = parties.idp.respond_sso(
         &parties.sp_descriptor,
         &received,
-        Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+        &NameId::new("alice@example.com"),
         RespondSso::simple_sign(),
     )?;
     let fields = padded(response.post_form()?.fields(), "SAMLResponse", padding)?;
@@ -195,7 +195,7 @@ fn receive_padded_logout_request(padding: usize) -> TestResult<Result<(), SamlEr
     let parties = parties()?;
     let started = parties.sp.start_slo(
         &parties.idp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com", None))
+        LogoutSubject::new(NameId::new("alice@example.com"))
             .with_session_index(SessionIndex::try_new("_session123")?),
         StartSlo::simple_sign(),
     )?;

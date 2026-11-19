@@ -15,7 +15,7 @@ use saml_rs::{
     IdpValidationPolicy, InMemoryReplayCache, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
     OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoSession, StartSso, Subject,
+    SpValidationPolicy, SsoEndpoint, SsoSession, StartSso,
 };
 use time::OffsetDateTime;
 
@@ -25,7 +25,7 @@ const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO: &str = "https://idp.example.com/sso";
 
 fn principal() -> NameId {
-    NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress))
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 struct IssuedSso {
@@ -78,12 +78,12 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        Subject::new(name_id.clone(), Vec::new()),
+        &name_id,
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
-        Subject::new(name_id.clone(), Vec::new()),
+        &name_id,
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     Ok(IssuedSso {
@@ -306,7 +306,7 @@ fn outstanding_logout_does_not_reject_a_different_principal_or_session(
     let accepted = finish(&issued, now, ClockSkew::strict(), None)?;
     let index = session_index(&accepted)?;
     let other_principal = logout(
-        NameId::new("bob@example.com", Some(NameIdFormat::EmailAddress)),
+        NameId::new("bob@example.com").with_format(NameIdFormat::EmailAddress),
         vec![index.clone()],
         now + 120,
     )?;
@@ -316,7 +316,7 @@ fn outstanding_logout_does_not_reject_a_different_principal_or_session(
         now + 120,
     )?;
     let other_format = logout(
-        NameId::new("alice@example.com", Some(NameIdFormat::Persistent)),
+        NameId::new("alice@example.com").with_format(NameIdFormat::Persistent),
         vec![index],
         now + 120,
     )?;
@@ -345,13 +345,13 @@ fn outstanding_logout_does_not_reject_a_different_principal_or_session(
 #[test]
 fn outstanding_logout_with_unspecified_format_rejects_an_assertion_without_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let issued = issued_sso_for(NameId::new("alice@example.com", None))?;
+    let issued = issued_sso_for(NameId::new("alice@example.com"))?;
     let now = unix_seconds()? + 2;
     let accepted = finish(&issued, now, ClockSkew::strict(), None)?;
     assert_eq!(accepted.name_id().format(), None);
 
     let outstanding = logout(
-        NameId::new("alice@example.com", Some(NameIdFormat::Unspecified)),
+        NameId::new("alice@example.com").with_format(NameIdFormat::Unspecified),
         Vec::new(),
         now + 120,
     )?;
@@ -377,10 +377,7 @@ fn outstanding_logout_with_a_custom_spelling_of_the_format_rejects_the_assertion
         format!(" {unspecified} "),
     ] {
         let outstanding = logout(
-            NameId::new(
-                "alice@example.com",
-                Some(NameIdFormat::Custom(spelling.clone())),
-            ),
+            NameId::new("alice@example.com").with_format(NameIdFormat::Custom(spelling.clone())),
             Vec::new(),
             now + 120,
         )?;
@@ -399,11 +396,7 @@ fn outstanding_logout_without_a_session_index_rejects_every_session_of_the_princ
 ) -> Result<(), Box<dyn std::error::Error>> {
     let issued = issued_sso()?;
     let now = unix_seconds()? + 2;
-    let value_only = logout(
-        NameId::new("alice@example.com", None),
-        Vec::new(),
-        now + 120,
-    )?;
+    let value_only = logout(NameId::new("alice@example.com"), Vec::new(), now + 120)?;
     match finish(&issued, now, ClockSkew::strict(), Some(&value_only)) {
         Err(SamlError::AssertionMatchesOutstandingLogout) => Ok(()),
         other => Err(format!(

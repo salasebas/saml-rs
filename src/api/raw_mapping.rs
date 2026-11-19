@@ -3,10 +3,9 @@ use crate::browser::{
 };
 use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::{url_params, Binding};
-use crate::entity::User;
 use crate::idp::IdentityProvider;
 use crate::metadata::Metadata;
-use crate::model::{RelayState, Subject};
+use crate::model::RelayState;
 use crate::sp::ServiceProvider;
 use std::time::SystemTime;
 
@@ -169,13 +168,4 @@ pub(super) fn ensure_sso_response_binding(
         return Ok(());
     }
     Err(SamlError::UnsupportedBinding { binding: actual })
-}
-
-pub(super) fn user_from_subject(subject: &Subject) -> Result<User, SamlError> {
-    if !subject.confirmations().is_empty() {
-        return Err(SamlError::Unsupported(
-            "an issued assertion takes no caller-supplied SubjectConfirmation; the identity provider writes its own bearer confirmation".into(),
-        ));
-    }
-    Ok(User::new(subject.name_id().value()))
 }

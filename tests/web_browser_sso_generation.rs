@@ -21,8 +21,7 @@ use saml_rs::{
     IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId,
     NameIdCreationPolicy, NameIdFormat, Outbound, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlInstant, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoResponse, StartSso, Status, Subject, SubjectConfirmation,
-    SubordinateStatusCode,
+    SsoEndpoint, SsoResponse, StartSso, Status, SubordinateStatusCode,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -59,8 +58,8 @@ fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     }
 }
 
-fn subject() -> Subject {
-    Subject::new(NameId::new("alice@example.com", None), Vec::new())
+fn principal() -> NameId {
+    NameId::new("alice@example.com")
 }
 
 fn validation() -> SamlValidationContext<'static> {
@@ -190,7 +189,7 @@ fn typed_sso_response_carries_profile_authentication_statement(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let xml = response_xml(&response)?;
@@ -251,7 +250,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
         idp.respond_sso(
             &sp_descriptor,
             &received,
-            subject(),
+            &principal(),
             RespondSso::post()
                 .apply_web_browser_sso_generation_rules()
                 .authn_instant(authn_instant),
@@ -267,7 +266,10 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
         validation(),
     )?;
     assert_eq!(
-        session.authn_session().authn_instant(),
+        session
+            .authn_sessions()
+            .first()
+            .and_then(|statement| statement.authn_instant()),
         Some(&SamlInstant::try_new(AUTHENTICATED)?)
     );
 
@@ -281,7 +283,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
     let without_rules = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post().authn_instant(authenticated),
     );
     assert!(
@@ -299,7 +301,7 @@ fn typed_unsolicited_sso_omits_in_response_to_under_producer_rules(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let xml = response_xml(&response)?;
@@ -320,52 +322,13 @@ fn typed_unsolicited_sso_omits_in_response_to_under_producer_rules(
 }
 
 #[test]
-fn typed_sso_rejects_a_subject_with_caller_supplied_confirmations(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended(), false)?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let holder_of_key = || {
-        Subject::new(
-            NameId::new("alice@example.com", None),
-            vec![SubjectConfirmation::from_raw_xml(
-                "<saml:SubjectConfirmation xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" Method=\"urn:oasis:names:tc:SAML:2.0:cm:holder-of-key\"/>",
-            )],
-        )
-    };
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
-        validation(),
-    )?;
-
-    let solicited = idp.respond_sso(
-        &sp_descriptor,
-        &received,
-        holder_of_key(),
-        RespondSso::post(),
-    );
-    assert!(
-        matches!(solicited, Err(SamlError::Unsupported(_))),
-        "a caller-supplied SubjectConfirmation is not dropped silently"
-    );
-    let unsolicited = idp.initiate_sso(&sp_descriptor, holder_of_key(), RespondSso::post());
-    assert!(
-        matches!(unsolicited, Err(SamlError::Unsupported(_))),
-        "a caller-supplied SubjectConfirmation is not dropped silently"
-    );
-    Ok(())
-}
-
-#[test]
 #[allow(deprecated)]
 fn typed_sso_compatibility_generation_keeps_todays_response_shape(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
     let idp = idp_with(signed_authn_request_idp_validation(), true)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let response = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
     let xml = response_xml(&response)?;
 
     assert!(!xml.contains("InResponseTo"));
@@ -413,7 +376,7 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
     let idp = Saml::idp(idp_config);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
-    let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let unsolicited = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
     let unsolicited_xml = response_xml(&unsolicited)?;
     assert!(
         !unsolicited_xml.contains("InResponseTo"),
@@ -442,7 +405,7 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
         validation(),
     )?;
     let request_id = received.message().id().as_str().to_string();
-    let solicited = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let solicited = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
     let solicited_xml = response_xml(&solicited)?;
     assert_eq!(
         solicited_xml
@@ -482,7 +445,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
         RespondSso::post(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     ] {
-        let response = idp.initiate_sso(&sp_descriptor, subject(), options)?;
+        let response = idp.initiate_sso(&sp_descriptor, &principal(), options)?;
         let xml = response_xml(&response)?;
         assert!(xml.contains("<saml:NameID>alice@example.com</saml:NameID>"));
 
@@ -510,7 +473,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
     .build()?;
     let template_idp = Saml::idp(template_config);
     let (sp_descriptor, _) = descriptors(&sp, &template_idp)?;
-    let response = template_idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let response = template_idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
     assert!(response_xml(&response)?.contains("<saml:NameID>alice@example.com</saml:NameID>"));
     Ok(())
 }
@@ -531,7 +494,7 @@ fn typed_sso_assertion_name_id_keeps_the_configured_format(
     );
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
-    let response = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let response = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
     assert_eq!(
         name_id_tag(&response_xml(&response)?),
         format!(" Format=\"{}\"", NameIdFormat::EmailAddress.as_uri()),
@@ -547,7 +510,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let xml = response_xml(&response)?;
@@ -582,7 +545,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let (sp_descriptor, _) = descriptors(&sp, &idp_without_logout)?;
     let response = idp_without_logout.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let xml = response_xml(&response)?;
@@ -603,7 +566,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let (sp_descriptor, _) = descriptors(&sp, &soap_only_idp)?;
     let response = soap_only_idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let xml = response_xml(&response)?;
@@ -797,7 +760,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
         Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
-    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let response = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
 
     let xml = response_xml(&response)?;
     assert!(xml.contains("<é:EncryptedAssertion "), "{xml}");
@@ -850,7 +813,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let signed = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     )?;
     let signed_xml = response_xml(&signed)?;
@@ -867,7 +830,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let unsigned = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post()
             .apply_web_browser_sso_generation_rules()
             .allow_unsigned_encrypted_cbc(),
@@ -949,7 +912,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     match idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().apply_web_browser_sso_generation_rules(),
     ) {
         Err(SamlError::Invalid(message))
@@ -973,7 +936,7 @@ fn typed_plaintext_response_stays_accepted_without_producer_rules(
         Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
-    let response = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let response = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
     let xml = response_xml(&response)?;
     assert!(!xml.contains("AuthnStatement"));
     let session = sp.finish_sso(
@@ -1024,7 +987,7 @@ fn typed_sso_error_response_carries_caller_status_and_no_assertions(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post()
             .apply_web_browser_sso_generation_rules()
             .status(
@@ -1053,7 +1016,7 @@ fn typed_sso_error_response_carries_caller_status_and_no_assertions(
     let requester = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post().status(Status::requester()),
     )?;
     let requester_xml = response_xml(&requester)?;
@@ -1084,7 +1047,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
         validation(),
     )?;
 
-    let solicited = idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+    let solicited = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
     let solicited_xml = response_xml(&solicited)?;
     assert!(solicited_xml.contains("<saml:Assertion"));
     assert!(solicited_xml.contains("alice@example.com"));
@@ -1100,7 +1063,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
     let explicit_success = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post().status(Status::success()),
     )?;
     let explicit_xml = response_xml(&explicit_success)?;
@@ -1110,7 +1073,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
         status_element(&solicited_xml)?
     );
 
-    let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let unsolicited = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
     let unsolicited_xml = response_xml(&unsolicited)?;
     assert!(unsolicited_xml.contains("<saml:Assertion"));
     assert_eq!(
@@ -1121,7 +1084,7 @@ fn typed_sso_without_error_status_keeps_success_and_assertions(
     let success_with_detail = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post().status(
             Status::success()
                 .with_subordinate(SubordinateStatusCode::try_new(status_code::REQUEST_DENIED)?),
@@ -1152,7 +1115,7 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
 
     let ruled = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post()
             .apply_web_browser_sso_generation_rules()
             .status(Status::version_mismatch()),
@@ -1173,7 +1136,7 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
 
     let compatibility = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().status(Status::version_mismatch()),
     )?;
     let compatibility_xml = response_xml(&compatibility)?;
@@ -1207,7 +1170,7 @@ fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dy
 
     match idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().status(Status::responder()),
     ) {
         Err(SamlError::Invalid(message))
@@ -1235,7 +1198,7 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::simple_sign().status(Status::responder()),
     )?;
     let form = response.post_form()?;
@@ -1274,7 +1237,7 @@ fn typed_error_response_stays_plaintext_when_assertion_encryption_is_on(
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post().status(Status::responder()),
     )?;
     let xml = response_xml(&response)?;

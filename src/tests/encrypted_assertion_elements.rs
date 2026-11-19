@@ -25,7 +25,7 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso,
     ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
-    Subject, X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -134,21 +134,18 @@ fn descriptors(
 }
 
 fn alice() -> NameId {
-    NameId::new("alice-persistent-id", Some(NameIdFormat::Persistent))
+    NameId::new("alice-persistent-id").with_format(NameIdFormat::Persistent)
 }
 
 fn attributes() -> Attributes {
     Attributes::new(vec![
-        Attribute::with_name_format(
-            "mail",
-            AttributeNameFormat::Basic,
-            vec![AttributeValue::new("alice@example.com")],
-        ),
-        Attribute::with_name_format(
+        Attribute::new("mail", vec![AttributeValue::new("alice@example.com")])
+            .with_name_format(AttributeNameFormat::Basic),
+        Attribute::new(
             "eduPersonAffiliation",
-            AttributeNameFormat::Basic,
             vec![AttributeValue::new("member"), AttributeValue::new("staff")],
-        ),
+        )
+        .with_name_format(AttributeNameFormat::Basic),
     ])
 }
 
@@ -197,7 +194,7 @@ fn exchange_between(
     let response = idp.respond_sso(
         sp_descriptor,
         &received,
-        Subject::new(alice(), Vec::new()),
+        &alice(),
         RespondSso::post().attributes(attributes()),
     )?;
     let xml = response_xml(&response)?;
@@ -589,7 +586,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            Subject::new(alice(), Vec::new()),
+            &alice(),
             RespondSso::simple_sign().attributes(attributes()),
         )?;
         let session = sp.finish_sso(
@@ -719,7 +716,7 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        Subject::new(alice(), Vec::new()),
+        &alice(),
         RespondSso::post().allow_unsigned_encrypted_cbc(),
     )?;
     let xml = response_xml(&response)?;
@@ -789,7 +786,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        Subject::new(alice(), Vec::new()),
+        &alice(),
         RespondSso::post().attributes(attributes()),
     )?;
     let xml = response_xml(&response)?;

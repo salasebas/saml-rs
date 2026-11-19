@@ -1,6 +1,8 @@
-use crate::constants::{attribute_name_format, namespace};
+use crate::constants::namespace;
 use crate::error::SamlError;
-use crate::model::{Attribute, AuthnContextReference, AuthnContextReferenceKind, Status};
+use crate::model::{
+    Attribute, AttributeNameFormat, AuthnContextReference, AuthnContextReferenceKind, Status,
+};
 use crate::template::{write_login_response_attribute_statement, LoginResponseAttribute};
 use crate::xml::any_uri::is_absolute_uri_reference;
 use crate::xml::name::is_name;
@@ -238,7 +240,8 @@ fn write_attribute_statement(
     let value_name = qname(prefix, "AttributeValue");
     writer.start(&statement_name, &[]);
     for attribute in attributes {
-        if let Some(name_format) = attribute.name_format() {
+        let name_format = attribute.name_format().map(AttributeNameFormat::as_uri);
+        if let Some(name_format) = name_format {
             if !is_absolute_uri_reference(name_format) {
                 return Err(SamlError::Invalid(format!(
                     "attribute `{}` NameFormat must be an absolute URI reference with at least one non-whitespace character",
@@ -246,7 +249,7 @@ fn write_attribute_statement(
                 )));
             }
         }
-        if attribute.name_format() == Some(attribute_name_format::BASIC)
+        if attribute.name_format() == Some(&AttributeNameFormat::Basic)
             && !is_name(attribute.name())
         {
             return Err(SamlError::Invalid(format!(
@@ -255,7 +258,7 @@ fn write_attribute_statement(
             )));
         }
         let mut attrs = vec![("Name", attribute.name())];
-        if let Some(name_format) = attribute.name_format() {
+        if let Some(name_format) = name_format {
             attrs.push(("NameFormat", name_format));
         }
         if attribute.values().is_empty() {

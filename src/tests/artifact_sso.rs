@@ -23,7 +23,7 @@ use saml_rs::{
     IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, IssuedMessage, MetadataTrustPolicy, NameId,
     Outbound, PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage,
     RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor,
-    SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status, Subject,
+    SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status,
     SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
@@ -122,8 +122,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn subject() -> Subject {
-    Subject::new(NameId::new(USER, None), Vec::new())
+fn principal() -> NameId {
+    NameId::new(USER)
 }
 
 fn confidential() -> SoapChannel {
@@ -184,7 +184,7 @@ fn a_response_delivered_as_an_artifact_establishes_the_session(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -226,7 +226,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -268,7 +268,7 @@ fn relay_state_travels_with_the_artifact() -> Result<(), Box<dyn std::error::Err
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -296,7 +296,7 @@ fn an_artifact_redirect_keeps_the_consumer_fragment_after_the_query(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -321,7 +321,7 @@ fn a_relay_state_the_service_provider_did_not_send_is_rejected(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -366,7 +366,7 @@ fn a_received_relay_state_up_to_the_receive_limit_travels_with_the_artifact(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -462,7 +462,7 @@ fn an_artifact_delivered_in_a_form_establishes_the_session(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::post_form(0)),
         &mut issued,
     )?;
@@ -495,7 +495,7 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)).status(
             Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?),
         ),
@@ -540,7 +540,7 @@ fn an_unsolicited_artifact_response_establishes_the_session(
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)).relay_state(relay_state.clone()),
         &mut issued,
     )?;
@@ -571,7 +571,7 @@ fn a_request_for_an_artifact_response_is_not_answered_over_post(
         parties.idp.respond_sso(
             &parties.sp_metadata,
             &request,
-            subject(),
+            &principal(),
             RespondSso::post()
         ),
         Err(SamlError::Invalid(_))
@@ -588,7 +588,7 @@ fn a_missing_resolution_service_is_rejected() -> Result<(), Box<dyn std::error::
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
             &request,
-            subject(),
+            &principal(),
             RespondSso::artifact(ArtifactDelivery::redirect(7)),
             &mut issued,
         ),
@@ -607,7 +607,7 @@ fn a_message_resolved_from_another_artifact_is_rejected() -> Result<(), Box<dyn 
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
             &request,
-            subject(),
+            &principal(),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             issued,
         )
@@ -641,7 +641,7 @@ fn a_resolved_response_is_not_accepted_at_a_post_consumer() -> Result<(), Box<dy
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &parties.sp_metadata,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -690,7 +690,7 @@ fn unsigned_response(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         issued,
     )?;
@@ -798,7 +798,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = other.initiate_sso_artifact(
         &parties.sp_metadata,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -876,7 +876,7 @@ fn a_pending_artifact_login_survives_a_snapshot() -> Result<(), Box<dyn std::err
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -892,7 +892,7 @@ fn an_unsolicited_artifact_is_not_sent_when_the_default_consumer_has_another_bin
     assert!(matches!(
         parties.idp.initiate_sso_artifact(
             &parties.sp_metadata,
-            subject(),
+            &principal(),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             &mut IssuedArtifacts::expire_after(ARTIFACT_LIFETIME),
         ),
@@ -927,7 +927,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let response = parties.idp.initiate_sso_artifact(
         &sp_metadata,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::post_form(0)),
         &mut issued,
     )?;
@@ -1043,7 +1043,7 @@ fn a_request_for_a_posted_response_is_not_answered_with_an_artifact(
         parties.idp.respond_sso_artifact(
             &parties.sp_metadata,
             &request,
-            subject(),
+            &principal(),
             RespondSso::artifact(ArtifactDelivery::redirect(0)),
             &mut issued,
         ),
@@ -1118,7 +1118,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
@@ -1151,7 +1151,7 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,
-        subject(),
+        &principal(),
         RespondSso::artifact(ArtifactDelivery::redirect(0))
             .apply_web_browser_sso_generation_rules(),
         &mut issued,

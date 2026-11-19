@@ -5,7 +5,7 @@ use super::extract::{
 };
 use super::identifiers::{MessageId, SamlInstant};
 use super::subject::{NameId, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier};
-use super::{EndpointUrl, ReplayKey, SamlValidationContext};
+use super::EndpointUrl;
 use crate::browser::SsoResponseBinding;
 use crate::config::EntityId;
 use crate::constants::Binding;
@@ -159,20 +159,6 @@ impl AuthnRequest {
         self.requested_authn_context.as_ref()
     }
 
-    /// Check and store this AuthnRequest's replay key using caller cache state.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::ReplayDetected`] when the request ID has already
-    /// been seen. Cache implementations may also return storage-specific
-    /// failures mapped to [`SamlError`].
-    pub fn check_and_store_replay(
-        &self,
-        validation: &mut SamlValidationContext<'_>,
-    ) -> Result<(), SamlError> {
-        validation.check_and_store_message_replay(ReplayKey::AuthnRequest(self.id.clone()))
-    }
-
     /// Raw validated flow result.
     pub fn raw_flow(&self) -> &FlowResult {
         &self.raw_flow
@@ -312,7 +298,7 @@ fn name_id_from_extract(extract: &crate::util::Value, value: &str) -> Result<Nam
         "AuthnRequest NameID Format",
     )?
     .map(name_id_format_from_uri);
-    Ok(NameId::with_qualifiers(
+    Ok(NameId::from_parts(
         value.to_string(),
         format,
         optional_attribute(extract, "requestedNameQualifier", "NameQualifier")?,

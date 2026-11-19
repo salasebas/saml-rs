@@ -18,10 +18,10 @@ use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
-    MetadataTrustPolicy, NameId, NameIdFormat, NameIdPolicy, Outbound, Received, ReplayPolicy,
-    RequestedSubject, RequestedSubjectIdentifier, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
-    Status, Subject, SubordinateStatusCode,
+    MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
+    Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, RespondSso, Saml,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    StartSso, Status, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -427,7 +427,7 @@ fn received_authn_request_accepts_these_fields_under_recommended_and_compatibili
         let response = receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+            &NameId::new("alice@example.com"),
             RespondSso::post(),
         )?;
         assert_eq!(response.raw_context().request_type, "SAMLResponse");
@@ -492,10 +492,8 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
     assert_eq!(message.is_passive(), Some(IsPassive::NotRequired));
     assert_eq!(message.acs_index(), Some(0));
     assert_eq!(
-        message
-            .name_id_policy()
-            .and_then(|policy| policy.allow_create()),
-        Some(true)
+        message.name_id_policy().map(NameIdPolicy::creation_request),
+        Some(NameIdCreationRequest::AllowCreate)
     );
     Ok(())
 }
@@ -598,9 +596,18 @@ fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
             )
         },
     )?;
+    let policy = qualifier_only
+        .received
+        .message()
+        .name_id_policy()
+        .ok_or("missing NameIDPolicy")?;
     assert_eq!(
-        qualifier_only.received.message().name_id_policy(),
-        Some(&NameIdPolicy::unspecified(None).with_sp_name_qualifier(AFFILIATION))
+        (
+            policy.format(),
+            policy.sp_name_qualifier(),
+            policy.creation_request()
+        ),
+        (None, Some(AFFILIATION), NameIdCreationRequest::Unspecified)
     );
 
     let every_attribute = receive(
@@ -615,11 +622,21 @@ fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
             )
         },
     )?;
+    let policy = every_attribute
+        .received
+        .message()
+        .name_id_policy()
+        .ok_or("missing NameIDPolicy")?;
     assert_eq!(
-        every_attribute.received.message().name_id_policy(),
-        Some(
-            &NameIdPolicy::allow_creation(Some(NameIdFormat::EmailAddress))
-                .with_sp_name_qualifier(AFFILIATION)
+        (
+            policy.format(),
+            policy.sp_name_qualifier(),
+            policy.creation_request()
+        ),
+        (
+            Some(&NameIdFormat::EmailAddress),
+            Some(AFFILIATION),
+            NameIdCreationRequest::AllowCreate
         )
     );
 
@@ -828,12 +845,12 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
         StartSso::post(),
         |xml| insert_after_name_id_policy(xml, &requested_authn_context("", &class_ref(SMARTCARD))),
     )?;
-    let subject = || Subject::new(NameId::new("alice@example.com", None), Vec::new());
+    let subject = || NameId::new("alice@example.com");
     let respond = |options: RespondSso| {
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            subject(),
+            &subject(),
             options.apply_web_browser_sso_generation_rules(),
         )
     };
@@ -874,7 +891,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     let compatibility = response_xml(&receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
-        subject(),
+        &subject(),
         RespondSso::post(),
     )?)?;
     assert!(!compatibility.contains("AuthnStatement"));
@@ -901,7 +918,7 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
         &receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+            &NameId::new("alice@example.com"),
             RespondSso::post()
                 .apply_web_browser_sso_generation_rules()
                 .authn_context(AuthnContextReference::declaration(DECLARATION)?),
@@ -920,7 +937,7 @@ fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules
     let response = receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
-        Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+        &NameId::new("alice@example.com"),
         RespondSso::post().authn_context(AuthnContextReference::class(SMARTCARD)?),
     );
     assert!(
@@ -945,19 +962,15 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         )
     };
     let respond = |receipt: &Receipt, sp_name_qualifier: Option<&str>, options: RespondSso| {
+        let pseudonym = NameId::new("pseudonym").with_format(NameIdFormat::Persistent);
+        let pseudonym = match sp_name_qualifier {
+            Some(sp_name_qualifier) => pseudonym.with_sp_name_qualifier(sp_name_qualifier),
+            None => pseudonym,
+        };
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            Subject::new(
-                NameId::with_qualifiers(
-                    "pseudonym",
-                    Some(NameIdFormat::Persistent),
-                    None,
-                    sp_name_qualifier.map(str::to_string),
-                    None,
-                ),
-                Vec::new(),
-            ),
+            &pseudonym,
             options,
         )
     };
@@ -1023,15 +1036,12 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         )
     };
     let respond = |receipt: &Receipt, name_id: NameId, options: RespondSso| {
-        receipt.idp.respond_sso(
-            &receipt.sp_descriptor,
-            &receipt.received,
-            Subject::new(name_id, Vec::new()),
-            options,
-        )
+        receipt
+            .idp
+            .respond_sso(&receipt.sp_descriptor, &receipt.received, &name_id, options)
     };
     let rules = || RespondSso::post().apply_web_browser_sso_generation_rules();
-    let persistent = |value: &str| NameId::new(value, Some(NameIdFormat::Persistent));
+    let persistent = |value: &str| NameId::new(value).with_format(NameIdFormat::Persistent);
     let is_refused = |result: &Result<Outbound<saml_rs::SsoResponse>, SamlError>| matches!(result, Err(SamlError::Invalid(message)) if message.contains("requested Subject"));
 
     let receipt = receive_subject(
@@ -1040,14 +1050,10 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     )?;
     for issued in [
         persistent("bob"),
-        NameId::new("alice", None),
-        NameId::with_qualifiers(
-            "alice",
-            Some(NameIdFormat::Persistent),
-            None,
-            Some(SP_ENTITY_ID.to_string()),
-            None,
-        ),
+        NameId::new("alice"),
+        NameId::new("alice")
+            .with_format(NameIdFormat::Persistent)
+            .with_sp_name_qualifier(SP_ENTITY_ID),
     ] {
         let refused = respond(&receipt, issued.clone(), rules());
         assert!(is_refused(&refused), "{issued:?}: {refused:?}");
@@ -1056,7 +1062,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     assert!(answered.is_ok(), "{answered:?}");
     let policy_format = respond(
         &receipt,
-        NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress)),
+        NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
         rules(),
     );
     assert!(policy_format.is_ok(), "{policy_format:?}");
@@ -1079,7 +1085,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     )?;
     let other_format = respond(
         &without_policy_format,
-        NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress)),
+        NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
         rules(),
     );
     assert!(is_refused(&other_format), "{other_format:?}");
@@ -1090,10 +1096,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     )?;
     let unspecified = respond(
         &omitted_format,
-        NameId::new(
-            "alice",
-            Some(NameIdFormat::Custom(UNSPECIFIED_FORMAT.to_string())),
-        ),
+        NameId::new("alice").with_format(NameIdFormat::Custom(UNSPECIFIED_FORMAT.to_string())),
         rules(),
     );
     assert!(unspecified.is_ok(), "{unspecified:?}");

@@ -21,7 +21,7 @@ use saml_rs::{
     AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
     Inbound, MetadataTrustPolicy, NameId, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
     SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoSession, StartSso, Subject,
+    SsoSession, StartSso,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -89,11 +89,11 @@ impl SignedExchange {
             Inbound::post(started.outbound.post_form()?.fields().to_vec()),
             validation(),
         )?;
-        let role = Attribute::new("role", None, vec![AttributeValue::new(ROLE)]);
+        let role = Attribute::new("role", vec![AttributeValue::new(ROLE)]);
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            Subject::new(NameId::new(NAME_ID, None), Vec::new()),
+            &NameId::new(NAME_ID),
             RespondSso::post().attributes(Attributes::new(vec![role])),
         )?;
         let fields = response.post_form()?.fields().to_vec();

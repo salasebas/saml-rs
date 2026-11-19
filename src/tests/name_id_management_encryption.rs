@@ -135,7 +135,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn alice() -> NameId {
-    NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress))
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 fn redirect_query<Message>(outbound: &Outbound<Message>) -> Result<String, SamlError> {

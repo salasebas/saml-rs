@@ -198,18 +198,6 @@ pub(crate) fn assertion_replays(xml: &str) -> Result<Vec<AssertionReplayId>, Sam
         .collect())
 }
 
-/// Assertion `ID` values in document order.
-///
-/// # Errors
-///
-/// Returns [`SamlError`] when `xml` cannot be parsed.
-pub(crate) fn assertion_ids(xml: &str) -> Result<Vec<String>, SamlError> {
-    Ok(assertion_replays(xml)?
-        .into_iter()
-        .map(|replay| replay.id)
-        .collect())
-}
-
 fn subject_confirmations(assertion: &Node) -> impl Iterator<Item = &Node> {
     assertion
         .children

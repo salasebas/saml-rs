@@ -882,10 +882,8 @@ fn typed_models_authn_request_from_flow_result_exposes_typed_fields(
     assert_eq!(request.protocol_binding(), Some(SsoResponseBinding::Post));
     assert_eq!(request.acs_index(), Some(3));
     assert_eq!(
-        request
-            .name_id_policy()
-            .and_then(saml_rs::NameIdPolicy::allow_create),
-        Some(true)
+        request.name_id_policy().map(NameIdPolicy::creation_request),
+        Some(NameIdCreationRequest::AllowCreate)
     );
     assert_eq!(request.force_authn(), None);
     assert_eq!(request.is_passive(), None);
@@ -1024,72 +1022,6 @@ fn typed_models_authn_request_without_name_id_policy_stays_absent(
 
     assert_eq!(request.name_id_policy(), None);
     Ok(())
-}
-
-#[test]
-fn typed_models_name_id_policy_constructors_use_typed_creation_request() {
-    let unspecified = NameIdPolicy::unspecified(None);
-    let allow = NameIdPolicy::allow_creation(None);
-    let disallow = NameIdPolicy::disallow_creation(None);
-
-    assert_eq!(
-        unspecified.creation_request(),
-        NameIdCreationRequest::Unspecified
-    );
-    assert_eq!(unspecified.allow_create(), None);
-    assert_eq!(allow.creation_request(), NameIdCreationRequest::AllowCreate);
-    assert_eq!(allow.allow_create(), Some(true));
-    assert_eq!(
-        disallow.creation_request(),
-        NameIdCreationRequest::DoNotAllowCreate
-    );
-    assert_eq!(disallow.allow_create(), Some(false));
-}
-
-#[test]
-fn typed_models_sso_response_from_flow_result_normalizes_issue_instant(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let response = SsoResponse::try_from(minimal_sso_flow_with_issue_instants(
-        Some(" \t\n2024-01-01T00:00:00Z\r "),
-        Some("2024-01-01T00:00:01Z"),
-        None,
-    ))?;
-
-    assert_eq!(response.response_id().as_str(), "_response123");
-    assert_eq!(response.issue_instant().as_str(), "2024-01-01T00:00:00Z");
-    Ok(())
-}
-
-#[test]
-fn typed_models_sso_response_rejects_missing_issue_instant_with_profile_context() {
-    let result = SsoResponse::try_from(minimal_sso_flow_with_issue_instants(
-        None,
-        Some("2024-01-01T00:00:01Z"),
-        None,
-    ));
-
-    assert!(matches!(
-        result,
-        Err(SamlError::ProtocolProfile(message))
-            if message.contains("Response is missing required unqualified attribute IssueInstant")
-    ));
-}
-
-#[test]
-fn typed_models_sso_response_rejects_malformed_issue_instant_with_profile_context() {
-    let result = SsoResponse::try_from(minimal_sso_flow_with_issue_instants(
-        Some("not-an-instant"),
-        Some("2024-01-01T00:00:01Z"),
-        None,
-    ));
-
-    assert!(matches!(
-        result,
-        Err(SamlError::ProtocolProfile(message))
-            if message.contains(
-                "Response IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z"
-            )
-    ));
 }
 
 #[test]
@@ -1287,10 +1219,6 @@ fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
         session.assertion_issue_instant().as_str(),
         "2024-01-01T00:00:01Z"
     );
-    assert_eq!(
-        session.assertion().id().map(saml_rs::AssertionId::as_str),
-        Some("_assertion123")
-    );
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert_eq!(session.name_id().format(), Some(&NameIdFormat::Persistent));
     assert_eq!(
@@ -1303,10 +1231,11 @@ fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
     );
     assert_eq!(
         session
-            .authn_session()
-            .session_index()
-            .map(|id| id.as_str()),
-        Some("_session123")
+            .authn_sessions()
+            .iter()
+            .map(|statement| statement.session_index().map(|id| id.as_str()))
+            .collect::<Vec<_>>(),
+        [Some("_session123")]
     );
     assert_eq!(session.sig_alg(), Some("sig-alg"));
     Ok(())
@@ -1336,7 +1265,7 @@ fn typed_models_sso_session_preserves_repeated_authn_statements_in_order(
             (
                 authn.session_index().map(|value| value.as_str()),
                 authn.authn_instant().map(SamlInstant::as_str),
-                authn.not_on_or_after().map(SamlInstant::as_str),
+                authn.session_not_on_or_after().map(SamlInstant::as_str),
             )
         })
         .collect::<Vec<_>>();
@@ -1356,28 +1285,17 @@ fn typed_models_sso_session_preserves_repeated_authn_statements_in_order(
             ),
         ]
     );
-    assert_eq!(
-        session
-            .authn_session()
-            .session_index()
-            .map(|value| value.as_str()),
-        Some("_session1")
-    );
     Ok(())
 }
 
 #[test]
-fn typed_models_sso_session_without_authn_statements_has_empty_views(
+fn typed_models_sso_session_without_authn_statements_has_no_authn_sessions(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let missing = SsoSession::try_from(minimal_sso_flow(None))?;
     let empty_array = SsoSession::try_from(minimal_sso_flow(Some(Value::Array(Vec::new()))))?;
 
     assert!(missing.authn_sessions().is_empty());
-    assert!(missing.authn_session().session_index().is_none());
-    assert!(missing.authn_session().authn_instant().is_none());
-    assert!(missing.authn_session().not_on_or_after().is_none());
     assert!(empty_array.authn_sessions().is_empty());
-    assert!(empty_array.authn_session().session_index().is_none());
     Ok(())
 }
 

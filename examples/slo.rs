@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
         IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
         RespondSlo, RespondSso, Saml, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor,
-        SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, Subject, X509Credential,
+        SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = idp.respond_sso(
         &sp_descriptor,
         &request,
-        Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+        &NameId::new("alice@example.com"),
         RespondSso::post(),
     )?;
     let session = sp.finish_sso(

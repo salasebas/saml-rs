@@ -365,7 +365,7 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 
     assert_unsupported(sp.start_slo(
         &idp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com", None)),
+        LogoutSubject::new(NameId::new("alice@example.com")),
         StartSlo::post().signing(LogoutSigning::Sign),
     ));
     Ok(())

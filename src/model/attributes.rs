@@ -55,7 +55,22 @@ impl AttributeNameFormat {
     }
 }
 
-/// SAML attribute with one or more values.
+/// A SAML `<Attribute>`: a name, an optional `NameFormat`, and its values.
+///
+/// # Examples
+///
+/// ```
+/// use saml_rs::{Attribute, AttributeNameFormat, AttributeValue};
+///
+/// let groups = Attribute::new(
+///     "groups",
+///     [AttributeValue::new("staff"), AttributeValue::new("admins")],
+/// )
+/// .with_name_format(AttributeNameFormat::Basic);
+///
+/// assert_eq!(groups.name_format(), Some(&AttributeNameFormat::Basic));
+/// assert_eq!(groups.values().len(), 2);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute {
     name: String,
@@ -64,61 +79,43 @@ pub struct Attribute {
 }
 
 impl Attribute {
-    /// Create a SAML attribute.
+    /// Create an attribute without `NameFormat`, in which case SAML treats
+    /// its name as [`AttributeNameFormat::Unspecified`].
     ///
-    /// `name_format` is the `NameFormat` URI. `None` omits it.
-    /// [`crate::RespondSso::attributes`] rejects one that is not an absolute
-    /// URI reference.
-    pub fn new(
-        name: impl Into<String>,
-        name_format: Option<String>,
-        values: Vec<AttributeValue>,
-    ) -> Self {
+    /// The values are kept in order. An attribute without values writes no
+    /// `AttributeValue`.
+    pub fn new(name: impl Into<String>, values: impl IntoIterator<Item = AttributeValue>) -> Self {
         Self {
             name: name.into(),
-            name_format: name_format.as_deref().map(AttributeNameFormat::from_uri),
-            values,
+            name_format: None,
+            values: values.into_iter().collect(),
         }
     }
 
-    /// Create a SAML attribute whose name is classified by `name_format`.
+    /// Replace the `NameFormat`.
     ///
     /// [`AttributeNameFormat::Custom`] with the URI of another variant is
     /// stored as that variant. [`crate::RespondSso::attributes`] rejects an
     /// [`AttributeNameFormat::Basic`] attribute whose name is not an XML name,
     /// and a `NameFormat` that is not an absolute URI reference.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use saml_rs::{Attribute, AttributeNameFormat, AttributeValue};
-    ///
-    /// let mail = Attribute::with_name_format(
-    ///     "mail",
-    ///     AttributeNameFormat::Basic,
-    ///     vec![AttributeValue::new("alice@example.com")],
-    /// );
-    ///
-    /// assert_eq!(mail.format(), Some(&AttributeNameFormat::Basic));
-    /// assert_eq!(
-    ///     mail.name_format(),
-    ///     Some("urn:oasis:names:tc:SAML:2.0:attrname-format:basic")
-    /// );
-    /// ```
-    pub fn with_name_format(
-        name: impl Into<String>,
-        name_format: AttributeNameFormat,
-        values: Vec<AttributeValue>,
-    ) -> Self {
-        let name_format = match name_format {
+    pub fn with_name_format(mut self, name_format: AttributeNameFormat) -> Self {
+        self.name_format = Some(match name_format {
             AttributeNameFormat::Custom(uri) => AttributeNameFormat::from_uri(&uri),
             AttributeNameFormat::Unspecified
             | AttributeNameFormat::Uri
             | AttributeNameFormat::Basic => name_format,
-        };
+        });
+        self
+    }
+
+    pub(super) fn received(
+        name: &str,
+        name_format: Option<&str>,
+        values: Vec<AttributeValue>,
+    ) -> Self {
         Self {
-            name: name.into(),
-            name_format: Some(name_format),
+            name: name.to_string(),
+            name_format: name_format.map(AttributeNameFormat::from_uri),
             values,
         }
     }
@@ -128,38 +125,59 @@ impl Attribute {
         &self.name
     }
 
-    /// `NameFormat` URI, when the attribute carries one.
-    pub fn name_format(&self) -> Option<&str> {
-        self.name_format.as_ref().map(AttributeNameFormat::as_uri)
-    }
-
     /// `NameFormat`, when the attribute carries one.
     ///
     /// `None` means the `<Attribute>` has no `NameFormat`. SAML treats that
     /// name as [`AttributeNameFormat::Unspecified`].
-    pub fn format(&self) -> Option<&AttributeNameFormat> {
+    /// [`AttributeNameFormat::as_uri`] gives the URI.
+    pub fn name_format(&self) -> Option<&AttributeNameFormat> {
         self.name_format.as_ref()
     }
 
-    /// Attribute values.
+    /// Attribute values, in order.
     pub fn values(&self) -> &[AttributeValue] {
         &self.values
     }
 }
 
-/// Collection of SAML attributes.
+/// The attributes of an assertion, in order.
+///
+/// # Examples
+///
+/// ```
+/// use saml_rs::{Attribute, AttributeValue, Attributes};
+///
+/// let attributes = Attributes::new([
+///     Attribute::new("mail", [AttributeValue::new("alice@example.com")]),
+///     Attribute::new("groups", [AttributeValue::new("staff"), AttributeValue::new("admins")]),
+/// ]);
+///
+/// assert_eq!(attributes.first_value("mail"), Some("alice@example.com"));
+/// assert_eq!(attributes.first_value("groups"), Some("staff"));
+///
+/// let mut names = Vec::new();
+/// for attribute in &attributes {
+///     names.push(attribute.name());
+/// }
+/// assert_eq!(names, ["mail", "groups"]);
+/// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Attributes(Vec<Attribute>);
 
 impl Attributes {
-    /// Create an attribute collection.
-    pub fn new(values: Vec<Attribute>) -> Self {
-        Self(values)
+    /// Create an attribute collection in the given order.
+    pub fn new(attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        attributes.into_iter().collect()
     }
 
     /// Borrow the attributes as a slice.
     pub fn as_slice(&self) -> &[Attribute] {
         &self.0
+    }
+
+    /// Iterate over the attributes in order.
+    pub fn iter(&self) -> std::slice::Iter<'_, Attribute> {
+        self.0.iter()
     }
 
     /// Find the first attribute with `name`.
@@ -169,6 +187,21 @@ impl Attributes {
     pub fn get(&self, name: &str) -> Option<&Attribute> {
         self.0.iter().find(|attribute| attribute.name() == name)
     }
+
+    /// The first value of the attribute [`Self::get`] finds for `name`.
+    ///
+    /// `None` when no attribute has `name` or that attribute has no value.
+    /// The other values are ignored; read [`Attribute::values`] for an
+    /// attribute that can have several.
+    pub fn first_value(&self, name: &str) -> Option<&str> {
+        self.get(name)?.values().first().map(AttributeValue::as_str)
+    }
+}
+
+impl FromIterator<Attribute> for Attributes {
+    fn from_iter<I: IntoIterator<Item = Attribute>>(attributes: I) -> Self {
+        Self(attributes.into_iter().collect())
+    }
 }
 
 impl IntoIterator for Attributes {
@@ -177,5 +210,14 @@ impl IntoIterator for Attributes {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Attributes {
+    type Item = &'a Attribute;
+    type IntoIter = std::slice::Iter<'a, Attribute>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }

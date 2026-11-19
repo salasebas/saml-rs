@@ -32,7 +32,7 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
     );
     let started = idp.start_name_id_management(
         &sp,
-        &NameId::new("current-value", None),
+        &NameId::new("current-value"),
         &NameIdChange::NewId("new-value".into()),
         IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),

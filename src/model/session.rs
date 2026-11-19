@@ -14,18 +14,10 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 pub struct AuthnSession {
     session_index: Option<SessionIndex>,
     authn_instant: Option<SamlInstant>,
-    not_on_or_after: Option<SamlInstant>,
+    session_not_on_or_after: Option<SamlInstant>,
     authn_context: Option<AuthnContext>,
     subject_locality: Option<SubjectLocality>,
 }
-
-pub(super) static EMPTY_AUTHN_SESSION: AuthnSession = AuthnSession {
-    session_index: None,
-    authn_instant: None,
-    not_on_or_after: None,
-    authn_context: None,
-    subject_locality: None,
-};
 
 pub(crate) fn earliest_authn_session_expiration<'a>(
     values: impl IntoIterator<Item = &'a str>,
@@ -43,16 +35,15 @@ pub(crate) fn earliest_authn_session_expiration<'a>(
 }
 
 impl AuthnSession {
-    /// Create session data.
-    pub fn new(
+    pub(super) fn new(
         session_index: Option<SessionIndex>,
         authn_instant: Option<SamlInstant>,
-        not_on_or_after: Option<SamlInstant>,
+        session_not_on_or_after: Option<SamlInstant>,
     ) -> Self {
         Self {
             session_index,
             authn_instant,
-            not_on_or_after,
+            session_not_on_or_after,
             authn_context: None,
             subject_locality: None,
         }
@@ -88,8 +79,12 @@ impl AuthnSession {
         self.authn_instant.as_ref()
     }
 
-    /// SessionNotOnOrAfter, when present.
-    pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
-        self.not_on_or_after.as_ref()
+    /// `SessionNotOnOrAfter`, when present: the instant after which the
+    /// identity provider asks the service provider to end this session.
+    ///
+    /// The assertion's `Conditions@NotOnOrAfter` is
+    /// [`crate::SsoSession::not_on_or_after`].
+    pub fn session_not_on_or_after(&self) -> Option<&SamlInstant> {
+        self.session_not_on_or_after.as_ref()
     }
 }

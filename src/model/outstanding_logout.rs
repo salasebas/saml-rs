@@ -30,10 +30,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 ///
 /// # fn main() -> Result<(), saml_rs::SamlError> {
 /// let logout = OutstandingLogout::try_new(
-///     NameId::new(
-///         "alice@example.com",
-///         Some(NameIdFormat::EmailAddress),
-///     ),
+///     NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
 ///     vec![SessionIndex::try_new("_session")?],
 ///     SamlInstant::try_new("2026-10-06T00:00:00Z")?,
 /// )?;

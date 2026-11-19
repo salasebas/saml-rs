@@ -13,15 +13,13 @@ use crate::flow::HttpRequest;
 use crate::idp::LoginResponseOverrides;
 use crate::model::{
     Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
-    OutstandingLogout, RelayState, SamlValidationContext, SessionIndex, SsoResponse, SsoSession,
-    Status, Subject, TopLevelStatusCode,
+    NameId, OutstandingLogout, RelayState, SamlValidationContext, SessionIndex, SsoResponse,
+    SsoSession, Status, TopLevelStatusCode,
 };
 use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput, WebBrowserSsoProducer};
 use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
 
-use super::raw_mapping::{
-    ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor, user_from_subject,
-};
+use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
 use super::{Idp, Saml, SamlError, Sp};
 use protocol::{
@@ -702,7 +700,7 @@ impl Saml<Idp> {
         Ok(crate::model::Received::new(authn, None))
     }
 
-    /// Answer a PAOS login with a success response for `subject`.
+    /// Answer a PAOS login with a success response for `name_id`.
     ///
     /// A request that names no assertion consumer URL or index is answered at
     /// the service provider role's default assertion consumer. A default that
@@ -711,28 +709,27 @@ impl Saml<Idp> {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the request has no usable assertion consumer,
-    /// the issuer does not match, the persistent or transient `NameID` of
-    /// `subject` is longer than 256 characters, the NameID format is not an
-    /// absolute URI reference, [`RespondPaosSso::attributes`] is combined with
-    /// a login response template, names a basic attribute that is not an XML
-    /// name, or has a `NameFormat` that is not an absolute URI reference, the
+    /// the issuer does not match, a persistent or transient `name_id` is
+    /// longer than 256 characters, the NameID format is not an absolute URI
+    /// reference, [`RespondPaosSso::attributes`] is combined with a login
+    /// response template, names a basic attribute that is not an XML name, or
+    /// has a `NameFormat` that is not an absolute URI reference, the
     /// authentication context does not meet an exact `RequestedAuthnContext`,
     /// [`RespondPaosSso::authn_instant`] is later than the response
-    /// `IssueInstant` or before year 1, the `subject` `SPNameQualifier` is not the one the request's
-    /// `NameIDPolicy` asks for with a SAML-defined format other than
-    /// `unspecified` or `encrypted`, the `subject` `NameId` does not strongly
-    /// match the request's `Subject` (see
+    /// `IssueInstant` or before year 1, the `name_id` `SPNameQualifier` is not
+    /// the one the request's `NameIDPolicy` asks for with a SAML-defined
+    /// format other than `unspecified` or `encrypted`, the `name_id` does not
+    /// strongly match the request's `Subject` (see
     /// [`RequestedSubject`](crate::RequestedSubject)), or the response cannot
-    /// be signed. Returns [`SamlError::Unsupported`] when `subject` has
-    /// confirmations.
+    /// be signed.
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,
         request: &crate::model::Received<AuthnRequest>,
-        subject: Subject,
+        name_id: &NameId,
         options: RespondPaosSso,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
-        self.issue_paos_sso(sp, request, Some(subject), None, &options)
+        self.issue_paos_sso(sp, request, Some(name_id), None, &options)
     }
 
     /// End a PAOS login with a SAML error status and no assertion.
@@ -762,7 +759,7 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: &crate::model::Received<AuthnRequest>,
-        subject: Option<Subject>,
+        name_id: Option<&NameId>,
         status: Option<Status>,
         options: &RespondPaosSso,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
@@ -780,22 +777,15 @@ impl Saml<Idp> {
                 &setting.data_encryption_algorithm,
             )
         };
-        let name_id_format = subject
-            .as_ref()
-            .and_then(|subject| subject.name_id().format())
-            .map(NameIdFormat::as_uri);
-        let user = match &subject {
-            Some(subject) => user_from_subject(subject)?,
-            None => User::new(""),
-        };
+        let name_id_format = name_id.and_then(NameId::format).map(NameIdFormat::as_uri);
+        let user = User::new(name_id.map_or("", NameId::value));
         let overrides = LoginResponseOverrides {
             acs: Some(acs.as_str()),
             name_id_format,
-            name_id_qualifiers: subject
-                .as_ref()
-                .map_or_else(OutboundNameIdQualifiers::default, |subject| {
-                    OutboundNameIdQualifiers::from(subject.name_id())
-                }),
+            name_id_qualifiers: name_id.map_or_else(
+                OutboundNameIdQualifiers::default,
+                OutboundNameIdQualifiers::from,
+            ),
             issuance_lifetime: Some(self.0.issuance_lifetime),
             web_browser_sso_producer: WebBrowserSsoProducer::Follow,
             status: status.as_ref(),

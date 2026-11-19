@@ -150,14 +150,10 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
             }
         }
     }
-    Ok(Attributes::new(
-        attributes
-            .into_iter()
-            .map(|(name, name_format, values)| {
-                Attribute::new(name, name_format.map(str::to_string), values)
-            })
-            .collect(),
-    ))
+    Ok(attributes
+        .into_iter()
+        .map(|(name, name_format, values)| Attribute::received(name, name_format, values))
+        .collect())
 }
 
 pub(super) fn subject_confirmations_from_extract(extract: &Value) -> Vec<SubjectConfirmation> {

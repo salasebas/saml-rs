@@ -139,7 +139,7 @@ fn request(
 }
 
 fn alice() -> NameId {
-    NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress))
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 /// The SAML message XML carried by an HTTP-Redirect browser action.
@@ -491,13 +491,10 @@ fn persistent_identifier_carries_the_qualifiers_core_names() -> TestResult {
     let idp = idp()?;
     let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
     let persistent = NameId::persistent("pseudonym-1")?;
-    let expected = NameId::with_qualifiers(
-        "pseudonym-1",
-        Some(NameIdFormat::Persistent),
-        Some(IDP_ENTITY_ID.into()),
-        Some(SP_ENTITY_ID.into()),
-        None,
-    );
+    let expected = NameId::new("pseudonym-1")
+        .with_format(NameIdFormat::Persistent)
+        .with_name_qualifier(IDP_ENTITY_ID)
+        .with_sp_name_qualifier(SP_ENTITY_ID);
 
     let from_idp = idp.start_name_id_management_redirect(
         &sp_peer,
@@ -527,13 +524,11 @@ fn persistent_identifier_carries_the_qualifiers_core_names() -> TestResult {
     )?)?;
     assert_eq!(received.message().name_id(), &expected.clone());
 
-    let qualified = NameId::with_qualifiers(
-        "pseudonym-1",
-        Some(NameIdFormat::Persistent),
-        Some("https://other-idp.example.com".into()),
-        Some("https://affiliation.example.com".into()),
-        Some("alias-7".into()),
-    );
+    let qualified = NameId::new("pseudonym-1")
+        .with_format(NameIdFormat::Persistent)
+        .with_name_qualifier("https://other-idp.example.com")
+        .with_sp_name_qualifier("https://affiliation.example.com")
+        .with_sp_provided_id("alias-7");
     let as_given = sp.start_name_id_management_redirect(
         &idp_peer,
         &qualified,
@@ -558,7 +553,7 @@ fn identity_provider_sends_an_unformatted_identifier_with_its_first_configured_f
     let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
     let started = idp.start_name_id_management_redirect(
         &sp_peer,
-        &NameId::new("alice@example.com", None),
+        &NameId::new("alice@example.com"),
         &NameIdChange::Terminate,
         StartNameIdManagement::redirect(),
     )?;
@@ -586,7 +581,7 @@ fn transient_identifier_is_not_managed() -> TestResult {
         ),
         idp.start_name_id_management_redirect(
             &sp_peer,
-            &NameId::new("_unformatted", None),
+            &NameId::new("_unformatted"),
             &NameIdChange::Terminate,
             StartNameIdManagement::redirect(),
         ),

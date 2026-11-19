@@ -23,7 +23,7 @@ use saml_rs::{
     NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy,
     RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint,
     SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso,
-    Status, Subject, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -168,7 +168,7 @@ fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
 }
 
 fn principal() -> NameId {
-    NameId::new(PRINCIPAL, Some(NameIdFormat::Persistent))
+    NameId::new(PRINCIPAL).with_format(NameIdFormat::Persistent)
 }
 
 fn subject() -> Result<LogoutSubject, SamlError> {
@@ -627,7 +627,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     let sso_response = parties.idp.respond_sso(
         &parties.sp_descriptor,
         &authn_request,
-        Subject::new(principal(), Vec::new()),
+        &principal(),
         RespondSso::post(),
     )?;
 

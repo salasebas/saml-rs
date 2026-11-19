@@ -72,13 +72,11 @@ response, and `respond_sso` and `initiate_sso` write the
 ```rust
 use saml_rs::{Attribute, AttributeNameFormat, AttributeValue, Attributes, RespondSso};
 
-let options = RespondSso::post().attributes(Attributes::new(vec![
-    Attribute::with_name_format(
-        "urn:oid:0.9.2342.19200300.100.1.3",
-        AttributeNameFormat::Uri,
-        vec![AttributeValue::new("alice@example.com")],
-    ),
-]));
+let options = RespondSso::post().attributes(Attributes::new([Attribute::new(
+    "urn:oid:0.9.2342.19200300.100.1.3",
+    [AttributeValue::new("alice@example.com")],
+)
+.with_name_format(AttributeNameFormat::Uri)]));
 ```
 
 `RespondSso::attributes` cannot be combined with a login response template,

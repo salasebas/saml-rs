@@ -48,15 +48,35 @@ pub(crate) fn validate_issued_name_id_length(
 
 /// NameID value, format, and optional qualifier attributes.
 ///
-/// [`Self::new`] leaves the qualifiers unset. Response generation writes the
-/// value, format, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`.
+/// [`Self::new`] leaves the `Format` and the qualifiers unset; the `with_`
+/// methods set them. Response generation writes the value, `Format`,
+/// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`.
 ///
 /// [`Self::generate_transient`], [`Self::generate_persistent`], and
 /// [`Self::persistent`] create the identifiers an identity provider issues in
-/// those two formats. [`Self::new`] takes any value in any format. An identity
-/// provider response rejects a persistent or transient value longer than 256
-/// characters, whichever constructor created it. A message that writes the
-/// `NameId` rejects a format that is not an absolute URI reference.
+/// those two formats. [`Self::new`] takes any value, and
+/// [`Self::with_format`] any format. An identity provider response rejects a
+/// persistent or transient value longer than 256 characters, whichever
+/// constructor created it. A message that writes the `NameId` rejects a
+/// format that is not an absolute URI reference.
+///
+/// # Examples
+///
+/// ```
+/// use saml_rs::{NameId, NameIdFormat};
+///
+/// let mail = NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress);
+/// assert_eq!(mail.format(), Some(&NameIdFormat::EmailAddress));
+/// assert_eq!(mail.sp_name_qualifier(), None);
+///
+/// let pseudonym =
+///     NameId::generate_persistent().with_sp_name_qualifier("https://affiliation.example.com");
+/// assert_eq!(pseudonym.format(), Some(&NameIdFormat::Persistent));
+/// assert_eq!(
+///     pseudonym.sp_name_qualifier(),
+///     Some("https://affiliation.example.com")
+/// );
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameId {
     value: String,
@@ -67,9 +87,11 @@ pub struct NameId {
 }
 
 impl NameId {
-    /// Create a NameID value.
-    pub fn new(value: impl Into<String>, format: Option<NameIdFormat>) -> Self {
-        Self::with_qualifiers(value, format, None, None, None)
+    /// Create a NameID with no `Format` and no qualifiers.
+    ///
+    /// A `<NameID>` without `Format` is in the `unspecified` format.
+    pub fn new(value: impl Into<String>) -> Self {
+        Self::from_parts(value, None, None, None, None)
     }
 
     /// Create a new transient identifier.
@@ -77,7 +99,7 @@ impl NameId {
     /// The value is 160 random bits, written as an XML ID of 41 characters.
     /// Each call returns a different value.
     pub fn generate_transient() -> Self {
-        Self::new(generate_id(), Some(NameIdFormat::Transient))
+        Self::new(generate_id()).with_format(NameIdFormat::Transient)
     }
 
     /// Create a new persistent identifier for one principal at one service
@@ -89,7 +111,7 @@ impl NameId {
     /// to [`Self::persistent`] on later responses. Do not issue it for another
     /// principal.
     pub fn generate_persistent() -> Self {
-        Self::new(generate_id(), Some(NameIdFormat::Persistent))
+        Self::new(generate_id()).with_format(NameIdFormat::Persistent)
     }
 
     /// Wrap a persistent identifier this identity provider already
@@ -120,13 +142,35 @@ impl NameId {
     pub fn persistent(value: impl Into<String>) -> Result<Self, SamlError> {
         let value = value.into();
         validate_issued_name_id_length(Some(name_id_format::PERSISTENT), &value)?;
-        Ok(Self::new(value, Some(NameIdFormat::Persistent)))
+        Ok(Self::new(value).with_format(NameIdFormat::Persistent))
     }
 
-    /// Create a NameID with qualifier attributes.
-    ///
-    /// `None` omits the attribute. `Some("")` is an empty value.
-    pub fn with_qualifiers(
+    /// Replace the `Format`.
+    pub fn with_format(mut self, format: NameIdFormat) -> Self {
+        self.format = Some(format);
+        self
+    }
+
+    /// Set the `NameQualifier`. An empty value writes an empty attribute.
+    pub fn with_name_qualifier(mut self, name_qualifier: impl Into<String>) -> Self {
+        self.name_qualifier = Some(name_qualifier.into());
+        self
+    }
+
+    /// Set the `SPNameQualifier`. An empty value writes an empty attribute.
+    pub fn with_sp_name_qualifier(mut self, sp_name_qualifier: impl Into<String>) -> Self {
+        self.sp_name_qualifier = Some(sp_name_qualifier.into());
+        self
+    }
+
+    /// Set the `SPProvidedID`. An empty value writes an empty attribute.
+    pub fn with_sp_provided_id(mut self, sp_provided_id: impl Into<String>) -> Self {
+        self.sp_provided_id = Some(sp_provided_id.into());
+        self
+    }
+
+    /// A received `<NameID>`. `None` is an omitted attribute.
+    pub(crate) fn from_parts(
         value: impl Into<String>,
         format: Option<NameIdFormat>,
         name_qualifier: Option<String>,
@@ -147,7 +191,7 @@ impl NameId {
         &self.value
     }
 
-    /// NameID format, when extracted.
+    /// `Format`, when set.
     pub fn format(&self) -> Option<&NameIdFormat> {
         self.format.as_ref()
     }
@@ -178,7 +222,10 @@ impl<'a> From<&'a NameId> for OutboundNameIdQualifiers<'a> {
     }
 }
 
-/// AuthnRequest NameIDPolicy.
+/// The `<NameIDPolicy>` of a received `<AuthnRequest>`.
+///
+/// [`crate::AuthnRequest::name_id_policy`] returns it. A service provider
+/// configures the `NameIDPolicy` it sends on its `SpConfig`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIdPolicy {
     format: Option<NameIdFormat>,
@@ -198,36 +245,6 @@ pub enum NameIdCreationRequest {
 }
 
 impl NameIdPolicy {
-    /// Create a NameIDPolicy model.
-    pub fn new(format: Option<NameIdFormat>, creation_request: NameIdCreationRequest) -> Self {
-        Self {
-            format,
-            sp_name_qualifier: None,
-            creation_request,
-        }
-    }
-
-    /// Create a NameIDPolicy without an AllowCreate preference.
-    pub fn unspecified(format: Option<NameIdFormat>) -> Self {
-        Self::new(format, NameIdCreationRequest::Unspecified)
-    }
-
-    /// Create a NameIDPolicy allowing the IdP to create a new identifier.
-    pub fn allow_creation(format: Option<NameIdFormat>) -> Self {
-        Self::new(format, NameIdCreationRequest::AllowCreate)
-    }
-
-    /// Create a NameIDPolicy forbidding the IdP from creating a new identifier.
-    pub fn disallow_creation(format: Option<NameIdFormat>) -> Self {
-        Self::new(format, NameIdCreationRequest::DoNotAllowCreate)
-    }
-
-    /// Set the requested `SPNameQualifier`.
-    pub fn with_sp_name_qualifier(mut self, sp_name_qualifier: impl Into<String>) -> Self {
-        self.sp_name_qualifier = Some(sp_name_qualifier.into());
-        self
-    }
-
     pub(crate) fn from_parsed(
         format: Option<NameIdFormat>,
         sp_name_qualifier: Option<String>,
@@ -298,68 +315,27 @@ impl NameIdPolicy {
             NameIdFormat::Unspecified | NameIdFormat::Custom(_) => false,
         }
     }
-
-    /// Whether the IdP may create a new identifier.
-    pub fn allow_create(&self) -> Option<bool> {
-        match self.creation_request {
-            NameIdCreationRequest::Unspecified => None,
-            NameIdCreationRequest::AllowCreate => Some(true),
-            NameIdCreationRequest::DoNotAllowCreate => Some(false),
-        }
-    }
 }
 
-/// SubjectConfirmation captured from the validated flow result.
+/// A received `<SubjectConfirmation>` element.
+///
+/// [`crate::SsoSession::subject_confirmations`] and
+/// [`RequestedSubject::confirmations`] return it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubjectConfirmation {
     raw_xml: String,
 }
 
 impl SubjectConfirmation {
-    /// Create a subject confirmation from extractor context XML.
-    pub fn from_raw_xml(raw_xml: impl Into<String>) -> Self {
+    pub(crate) fn from_raw_xml(raw_xml: impl Into<String>) -> Self {
         Self {
             raw_xml: raw_xml.into(),
         }
     }
 
-    /// Borrow the raw confirmation XML captured by the extractor.
+    /// The `<SubjectConfirmation>` element as XML text.
     pub fn raw_xml(&self) -> &str {
         &self.raw_xml
-    }
-}
-
-/// SAML subject.
-///
-/// An accepted assertion's subject lists its `<SubjectConfirmation>` elements
-/// in [`Self::confirmations`]. The identity provider methods that issue an
-/// assertion, such as `respond_sso`, take only the `NameId` and write their own
-/// bearer confirmation. They return [`SamlError::Unsupported`] for a subject
-/// with confirmations, including the subject of an accepted assertion; build a
-/// new subject from its `NameId` to re-issue it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Subject {
-    name_id: NameId,
-    confirmations: Vec<SubjectConfirmation>,
-}
-
-impl Subject {
-    /// Create a subject.
-    pub fn new(name_id: NameId, confirmations: Vec<SubjectConfirmation>) -> Self {
-        Self {
-            name_id,
-            confirmations,
-        }
-    }
-
-    /// Subject NameID.
-    pub fn name_id(&self) -> &NameId {
-        &self.name_id
-    }
-
-    /// Subject confirmations.
-    pub fn confirmations(&self) -> &[SubjectConfirmation] {
-        &self.confirmations
     }
 }
 

@@ -187,10 +187,9 @@ fn received_by(
 }
 
 fn alice() -> RequestedSubjectIdentifier {
-    RequestedSubjectIdentifier::NameId(NameId::new(
-        "alice@example.com",
-        Some(NameIdFormat::EmailAddress),
-    ))
+    RequestedSubjectIdentifier::NameId(
+        NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+    )
 }
 
 #[test]

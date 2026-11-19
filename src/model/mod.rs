@@ -40,13 +40,11 @@ pub use received::Received;
 pub use relay::{RelayState, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES};
 pub use replay_cache::InMemoryReplayCache;
 pub use session::AuthnSession;
-pub use sso::{
-    Assertion, SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage,
-};
+pub use sso::{SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage};
 pub use status::{Status, SubordinateStatusCode, TopLevelStatusCode};
 pub use subject::{
     NameId, NameIdCreationRequest, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier,
-    Subject, SubjectConfirmation,
+    SubjectConfirmation,
 };
 pub use validation::{
     ClockSkew, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy, SamlValidationContext,
