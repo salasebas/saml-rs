@@ -77,7 +77,7 @@ fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> 
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
-        .manage_name_id_service(EndpointUrl::try_new(SP_MANAGE)?)
+        .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
         .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
         .validation(SpValidationPolicy::recommended())
         .build()?,

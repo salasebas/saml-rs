@@ -56,7 +56,7 @@ impl ManageNameIdService {
     /// Publish a SOAP name identifier management endpoint.
     ///
     /// Only an identity provider publishes it:
-    /// [`SpConfigBuilder::manage_name_id_service`](crate::SpConfigBuilder::manage_name_id_service)
+    /// [`SpConfigBuilder::manage_name_id_redirect_service`](crate::SpConfigBuilder::manage_name_id_redirect_service)
     /// publishes an HTTP-Redirect endpoint.
     pub fn soap(location: EndpointUrl) -> Self {
         Self {

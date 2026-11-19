@@ -54,7 +54,7 @@ fn builders_write_metadata_element_groups_in_the_order_set(
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
     .slo_endpoint(SloEndpoint::redirect("https://sp.example.com/slo")?)
-    .manage_name_id_service(EndpointUrl::try_new("https://sp.example.com/nameid")?)
+    .manage_name_id_redirect_service(EndpointUrl::try_new("https://sp.example.com/nameid")?)
     .name_id_format(NameIdFormat::Persistent)
     .credentials(signing_credentials())
     .validation(SpValidationPolicy::compatibility())

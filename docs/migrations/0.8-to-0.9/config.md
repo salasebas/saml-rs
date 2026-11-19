@@ -81,14 +81,14 @@ compares it.
 **Affects:** service providers that call `SpConfigBuilder::manage_name_id_service`.
 
 **Before:** it took a `ManageNameIdService`. `build()` returned
-`SamlError::Unsupported` for `ManageNameIdService::soap`, because a service
-provider has no SOAP endpoint for name identifier management.
+`SamlError::Unsupported` for `ManageNameIdService::soap`, because saml-rs does
+not implement SOAP name identifier management for a service provider.
 
-**Now:** it takes the `EndpointUrl` of the HTTP-Redirect endpoint. The
-identity provider's `manage_name_id_service` still takes a
-`ManageNameIdService`.
+**Now:** the method is `manage_name_id_redirect_service`, and it takes the
+`EndpointUrl` of the HTTP-Redirect endpoint. The identity provider's
+`manage_name_id_service` still takes a `ManageNameIdService`.
 
-**Upgrade:** pass the URL:
+**Upgrade:** rename the call and pass the URL:
 
 ```rust
 // Before
@@ -97,7 +97,7 @@ let builder = builder.manage_name_id_service(ManageNameIdService::redirect(
 ));
 
 // Now
-let builder = builder.manage_name_id_service(EndpointUrl::try_new(
+let builder = builder.manage_name_id_redirect_service(EndpointUrl::try_new(
     "https://sp.example.com/nameid",
 )?);
 ```

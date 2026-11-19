@@ -54,7 +54,7 @@ fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
             .credentials(signing_credentials())
             .validation(SpValidationPolicy::recommended());
     for endpoint in endpoints {
-        builder = builder.manage_name_id_service(EndpointUrl::try_new(*endpoint)?);
+        builder = builder.manage_name_id_redirect_service(EndpointUrl::try_new(*endpoint)?);
     }
     Ok(Saml::sp(builder.build()?))
 }
@@ -1182,7 +1182,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
     let (idp_algorithms, idp_credentials) = hmac(b"identity-provider-hmac-secret")?;
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
-            .manage_name_id_service(EndpointUrl::try_new(SP_MANAGE)?)
+            .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
             .credentials(sp_credentials)
             .algorithms(sp_algorithms)
             .validation(SpValidationPolicy::recommended())
@@ -1331,7 +1331,7 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
     };
     let sp = Saml::sp(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
-            .manage_name_id_service(EndpointUrl::try_new(SP_MANAGE)?)
+            .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
             .credentials(signing_credentials())
             .xml(saml_rs::XmlPolicy {
                 limits,

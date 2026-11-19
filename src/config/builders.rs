@@ -171,8 +171,9 @@ impl SpConfigBuilder {
     /// Append an HTTP-Redirect `ManageNameIDService` endpoint at `location`.
     ///
     /// This turns on name identifier management over HTTP-Redirect for this
-    /// service provider. A service provider has no SOAP endpoint for it.
-    pub fn manage_name_id_service(mut self, location: EndpointUrl) -> Self {
+    /// service provider. saml-rs does not implement SOAP name identifier
+    /// management for a service provider.
+    pub fn manage_name_id_redirect_service(mut self, location: EndpointUrl) -> Self {
         self.metadata
             .manage_name_id_services
             .push(ManageNameIdService::redirect(location));

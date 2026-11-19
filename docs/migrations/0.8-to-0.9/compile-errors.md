@@ -29,7 +29,7 @@
 | `metadata::try_generate_idp_metadata` | Removed; call `generate_idp_metadata` | [1.18](#118-call-generate_idp_metadata) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | Returns the facade, not a `Result` | [Typed config](config.md#remove-the--after-samlsp-and-samlidp) |
-| `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
+| `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
 | `elements_order(Vec<String>)` on a typed builder | Takes `SpMetadataElement` or `IdpMetadataElement` values | [Typed config](config.md#name-metadata-element-groups-with-spmetadataelement-and-idpmetadataelement) |
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
@@ -284,8 +284,8 @@ let sp = Saml::sp(config);
 `SpConfig::builder` takes the first ACS endpoint and `IdpConfig::builder` the
 first SSO endpoint. Each other metadata field has a builder setter:
 `acs_endpoint`, `sso_endpoint`, `slo_endpoint`, `artifact_resolution_service`,
-`manage_name_id_service`, `name_id_format`, and `contact` append one entry
-each, in call order. `acs_endpoints`, `sso_endpoints`, `slo_endpoints`,
+`manage_name_id_service` (`manage_name_id_redirect_service` on the SP),
+`name_id_format`, and `contact` append one entry each, in call order. `acs_endpoints`, `sso_endpoints`, `slo_endpoints`,
 `name_id_formats`, and `contacts` append several. `elements_order`,
 `organization`, `error_url`, and `metadata_lifetime` set the rest.
 Policy fields have the setters `credentials`, `validation`, `algorithms`,

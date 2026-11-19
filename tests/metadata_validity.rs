@@ -361,7 +361,7 @@ fn browser_facades(
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
         .slo_endpoint(SloEndpoint::redirect("https://sp.example.com/slo")?)
-        .manage_name_id_service(EndpointUrl::try_new("https://sp.example.com/nameid")?)
+        .manage_name_id_redirect_service(EndpointUrl::try_new("https://sp.example.com/nameid")?)
         .metadata_lifetime(MetadataLifetime::ValidUntil(valid_until))
         .credentials(signing_credentials())
         .build()?,
