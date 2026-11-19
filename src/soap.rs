@@ -159,7 +159,7 @@ impl SoapRequest {
     /// # Errors
     ///
     /// Returns [`SamlError`] when `protocol_xml` is not a single element.
-    pub fn new(endpoint: EndpointUrl, protocol_xml: &str) -> Result<Self, SamlError> {
+    pub fn try_new(endpoint: EndpointUrl, protocol_xml: &str) -> Result<Self, SamlError> {
         Ok(Self {
             endpoint,
             envelope: envelope(&single_element(protocol_xml)?),
@@ -198,7 +198,7 @@ impl SoapResponse {
     /// # Errors
     ///
     /// Returns [`SamlError`] when `protocol_xml` is not a single element.
-    pub fn new(protocol_xml: &str) -> Result<Self, SamlError> {
+    pub fn try_new(protocol_xml: &str) -> Result<Self, SamlError> {
         Ok(Self {
             envelope: envelope(&single_element(protocol_xml)?),
         })
@@ -545,7 +545,7 @@ mod tests {
     fn soap_channel_round_trips_another_protocol_element() -> Result<(), SamlError> {
         let logout = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#;
         let endpoint = EndpointUrl::try_new("https://idp.example.com/artifact")?;
-        let request = SoapRequest::new(endpoint, logout)?;
+        let request = SoapRequest::try_new(endpoint, logout)?;
         let message = SoapProtocolMessage::from_envelope(request.envelope())?;
 
         assert_eq!(message.local_name(), "LogoutRequest");

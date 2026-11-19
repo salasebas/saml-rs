@@ -47,7 +47,7 @@ for header in request.headers() {
 let response = post.body(request.envelope().to_string()).send()?;
 ```
 
-## Build SOAP envelopes with `SoapRequest::new` and `SoapResponse::new`
+## Build SOAP envelopes with `SoapRequest::try_new` and `SoapResponse::try_new`
 
 **Affects:** callers of `SoapProtocolMessage::request` or
 `SoapProtocolMessage::response_envelope`.
@@ -56,15 +56,15 @@ let response = post.body(request.envelope().to_string()).send()?;
 `SoapRequest`, and `SoapProtocolMessage::response_envelope(xml)` returned the
 envelope as a `String`.
 
-**Now:** both are removed. `SoapRequest::new(endpoint, xml)` and
-`SoapResponse::new(xml)` build the values, and `envelope()` returns the
+**Now:** both are removed. `SoapRequest::try_new(endpoint, xml)` and
+`SoapResponse::try_new(xml)` build the values, and `envelope()` returns the
 envelope. `SoapProtocolMessage` only reads a received envelope, with
 `SoapProtocolMessage::from_envelope`.
 
 | Before | After |
 | --- | --- |
-| `SoapProtocolMessage::request(endpoint, xml)?` | `SoapRequest::new(endpoint, xml)?` |
-| `SoapProtocolMessage::response_envelope(xml)?` | `SoapResponse::new(xml)?.envelope().to_string()` |
+| `SoapProtocolMessage::request(endpoint, xml)?` | `SoapRequest::try_new(endpoint, xml)?` |
+| `SoapProtocolMessage::response_envelope(xml)?` | `SoapResponse::try_new(xml)?.envelope().to_string()` |
 
 ## Read the artifact response from `AnsweredArtifact::response`
 
@@ -93,8 +93,9 @@ rejected the other kind.
 and reads the element. It releases a `<Response>` only over a channel that is
 mutually authenticated, integrity protected, and confidential, and any other
 protocol element over a mutually authenticated, integrity-protected channel.
-Those are the rules the two constructors selected. An element outside the SAML
-protocol namespace returns `SamlError::ProtocolProfile`, as before.
+Those are the rules the two constructors selected. Malformed XML returns
+`SamlError::Xml`, and an element outside the SAML protocol namespace returns
+`SamlError::ProtocolProfile`, as before.
 
 **Upgrade:**
 
@@ -141,6 +142,12 @@ To answer an `AuthnRequest` with an artifact, keep using
   `SamlError::ReplayDetected`, as before. A context with a cache and no
   retention returns `SamlError::TimeWindowInvalid` with
   `TimeWindowField::ReplayExpiration`, and stores nothing.
+- The call stores the artifact before it sends `ArtifactResolve`, so a
+  forged `SAMLart` value also takes a cache entry. A cache with an entry
+  limit, such as `InMemoryReplayCache::with_max_entries`, needs room for one
+  entry per artifact received during the retention. Otherwise pass a separate
+  cache for `resolve_artifact`, so a flood of artifacts cannot fill the cache
+  that `finish_sso` uses.
 - `ReplayPolicy::Disabled` skips the check, as `allow_reuse()` did. The
   identity provider still returns the message only once.
 - The context time is the instant at which the identity provider metadata

@@ -360,6 +360,47 @@ pub(crate) fn issue(
     issued: &mut IssuedArtifacts,
 ) -> Result<Artifact, SamlError> {
     let (message_xml, required_channel) = stored_message(protocol_xml)?;
+    store(
+        metadata,
+        service_provider,
+        message_xml,
+        required_channel,
+        endpoint_index,
+        issued,
+    )
+}
+
+pub(crate) fn issue_sso_response(
+    metadata: &IdpMetadata,
+    service_provider: &SpDescriptor,
+    response_xml: &str,
+    endpoint_index: u16,
+    issued: &mut IssuedArtifacts,
+) -> Result<Artifact, SamlError> {
+    let (message_xml, required_channel) = stored_message(response_xml)?;
+    if required_channel != RequiredChannel::Confidential {
+        return Err(SamlError::ProtocolProfile(
+            "Web Browser SSO artifact message must be a protocol Response".into(),
+        ));
+    }
+    store(
+        metadata,
+        service_provider,
+        message_xml,
+        required_channel,
+        endpoint_index,
+        issued,
+    )
+}
+
+fn store(
+    metadata: &IdpMetadata,
+    service_provider: &SpDescriptor,
+    message_xml: String,
+    required_channel: RequiredChannel,
+    endpoint_index: u16,
+    issued: &mut IssuedArtifacts,
+) -> Result<Artifact, SamlError> {
     let entity_id = metadata
         .as_metadata()
         .entity_id()
@@ -435,7 +476,8 @@ pub(crate) fn resolve(
     writer.text_element("saml:Issuer", &[], requester_entity_id);
     writer.text_element("samlp:Artifact", &[], artifact.as_str());
     writer.end("samlp:ArtifactResolve");
-    let request = SoapRequest::new(EndpointUrl::try_new(service.location())?, &writer.finish())?;
+    let request =
+        SoapRequest::try_new(EndpointUrl::try_new(service.location())?, &writer.finish())?;
     validation.check_and_store_message_replay(ReplayKey::Artifact(artifact.clone()))?;
     Ok(ArtifactResolution {
         request,
@@ -567,7 +609,7 @@ fn answered(
     }
     writer.end("samlp:ArtifactResponse");
     Ok(AnsweredArtifact {
-        response: SoapResponse::new(&writer.finish())?,
+        response: SoapResponse::try_new(&writer.finish())?,
         release,
     })
 }
@@ -709,7 +751,7 @@ mod tests {
             Ok(())
         }
         let unchecked = ArtifactResolution {
-            request: SoapRequest::new(
+            request: SoapRequest::try_new(
                 crate::EndpointUrl::try_new("https://idp.example.com/artifact")?,
                 r#"<samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
             )?,

@@ -736,7 +736,8 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
 }
 
 #[test]
-fn another_protocol_message_uses_the_same_soap_channel() -> Result<(), Box<dyn std::error::Error>> {
+fn the_issuer_releases_another_protocol_message_without_confidentiality(
+) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let artifact = issue(&parties, &logout_request(), &mut issued)?;
@@ -1216,13 +1217,30 @@ fn the_service_provider_resolves_only_over_a_confidential_channel(
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let artifact = issue(&parties, &logout_request(), &mut issued)?;
     let mut uses = InMemoryReplayCache::new();
-    let refused = parties.sp.resolve_artifact(
-        &parties.idp_metadata,
-        &artifact,
+    for weak in [
         authenticated_without_confidentiality(),
-        single_use(&mut uses),
-    );
-    assert!(matches!(refused, Err(SamlError::SoapChannelProtection)));
+        SoapChannel::new(
+            PartyAuthentication::Absent,
+            MessageIntegrity::Protected,
+            MessageConfidentiality::Protected,
+        ),
+        SoapChannel::new(
+            PartyAuthentication::Mutual,
+            MessageIntegrity::Absent,
+            MessageConfidentiality::Protected,
+        ),
+    ] {
+        let refused = parties.sp.resolve_artifact(
+            &parties.idp_metadata,
+            &artifact,
+            weak,
+            single_use(&mut uses),
+        );
+        assert!(
+            matches!(refused, Err(SamlError::SoapChannelProtection)),
+            "{weak:?}"
+        );
+    }
     parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,

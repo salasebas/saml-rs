@@ -113,9 +113,11 @@ fn sp_terminate_request() -> Result<String, SamlError> {
     let xml = format!(
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_manage_request" Version="2.0" IssueInstant="2024-01-01T00:00:00Z" Destination="{IDP_NIM_URL}"><saml:Issuer>{SP_ENTITY_ID}</saml:Issuer><saml:NameID Format="{PERSISTENT}" NameQualifier="{IDP_ENTITY_ID}" SPNameQualifier="{SP_ENTITY_ID}">current-value</saml:NameID><samlp:Terminate/></samlp:ManageNameIDRequest>"#
     );
-    Ok(SoapRequest::new(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
-        .envelope()
-        .to_string())
+    Ok(
+        SoapRequest::try_new(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
+            .envelope()
+            .to_string(),
+    )
 }
 
 fn artifact_message() -> String {
@@ -184,6 +186,35 @@ fn receive_sso_compares_valid_until_with_the_context_clock(
         posted_authn_request(&sp, &idp)?,
         context(valid_until),
     );
+
+    assert!(is_valid_until_error(&at_valid_until));
+    Ok(())
+}
+
+#[test]
+fn resolve_artifact_compares_valid_until_with_the_context_clock(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let valid_until = whole_seconds_from_now(3600)?;
+    let idp = idp(Some(MetadataLifetime::ValidUntil(valid_until)))?;
+    let sp = sp(None)?;
+    let descriptor = idp_descriptor(&idp)?;
+    let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
+    let artifact = idp.issue_artifact(
+        &soap_name_id_sp_descriptor(&sp)?,
+        &artifact_message(),
+        0,
+        &mut issued,
+    )?;
+    let channel = SoapChannel::mutually_authenticated_confidential();
+    let context = |now| SamlValidationContext::new(now, ReplayPolicy::Disabled);
+
+    sp.resolve_artifact(
+        &descriptor,
+        &artifact,
+        channel,
+        context(valid_until - Duration::from_secs(1)),
+    )?;
+    let at_valid_until = sp.resolve_artifact(&descriptor, &artifact, channel, context(valid_until));
 
     assert!(is_valid_until_error(&at_valid_until));
     Ok(())

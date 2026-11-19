@@ -332,7 +332,7 @@ impl Saml<Idp> {
             in_response_to,
             overrides,
         )?;
-        let artifact = artifact::issue(
+        let artifact = artifact::issue_sso_response(
             &self.raw_identity_provider().metadata,
             sp,
             &rendered.xml,

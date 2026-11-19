@@ -299,7 +299,7 @@ impl TryFrom<BindingContext> for Outbound<LogoutRequest> {
         if raw_context.binding == Binding::Soap {
             validate_context_message_kind(&raw_context, MessageField::Request)?;
             let endpoint = EndpointUrl::try_new(raw_context.entity_endpoint.clone())?;
-            let request = SoapRequest::new(endpoint, &raw_context.context)?;
+            let request = SoapRequest::try_new(endpoint, &raw_context.context)?;
             return soap_outbound(raw_context, OutboundAction::SoapRequest(request));
         }
         outbound_from_context(
@@ -332,7 +332,7 @@ impl Outbound<LogoutResponse> {
     ) -> Result<Self, SamlError> {
         if raw_context.binding == Binding::Soap {
             validate_context_message_kind(&raw_context, MessageField::Response)?;
-            let response = SoapResponse::new(&raw_context.context)?;
+            let response = SoapResponse::try_new(&raw_context.context)?;
             return soap_outbound(raw_context, OutboundAction::SoapResponse(response));
         }
         outbound_from_context(raw_context, true, MessageField::Response, relay_state)

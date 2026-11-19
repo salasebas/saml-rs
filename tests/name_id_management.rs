@@ -128,9 +128,11 @@ fn sp_request_with(attributes: &str, issuer: &str, content: &str) -> Result<Stri
     let xml = format!(
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="{SP_REQUEST_ID}" IssueInstant="2024-01-01T00:00:00Z" {attributes}>{issuer}{content}</samlp:ManageNameIDRequest>"#
     );
-    Ok(SoapRequest::new(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
-        .envelope()
-        .to_string())
+    Ok(
+        SoapRequest::try_new(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
+            .envelope()
+            .to_string(),
+    )
 }
 
 fn sp_request(content: &str) -> Result<String, SamlError> {
@@ -149,7 +151,7 @@ fn current_name_id_xml() -> String {
 
 /// A `ManageNameIDResponse` from the service provider, in a SOAP envelope.
 fn sp_response(in_response_to: &str, issuer: &str, status: &str) -> Result<String, SamlError> {
-    Ok(SoapResponse::new(&format!(
+    Ok(SoapResponse::try_new(&format!(
         r#"<samlp:ManageNameIDResponse xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z" InResponseTo="{in_response_to}"><saml:Issuer>{issuer}</saml:Issuer><samlp:Status>{status}</samlp:Status></samlp:ManageNameIDResponse>"#
     ))?
     .envelope()

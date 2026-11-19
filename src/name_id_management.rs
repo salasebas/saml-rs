@@ -292,7 +292,7 @@ pub(crate) fn start(
         idp.setting,
         service_provider.metadata().as_metadata(),
     )?;
-    let request = SoapRequest::new(EndpointUrl::try_new(destination)?, &xml)?;
+    let request = SoapRequest::try_new(EndpointUrl::try_new(destination)?, &xml)?;
     Ok(StartedNameIdManagement {
         request,
         request_id,
@@ -411,7 +411,7 @@ fn response(
     in_response_to: &MessageId,
     status: &Status,
 ) -> Result<SoapResponse, SamlError> {
-    SoapResponse::new(&render_response(
+    SoapResponse::try_new(&render_response(
         &Prefixes::SOAP,
         &ResponseXml {
             id: &generate_id(),
@@ -607,7 +607,7 @@ mod tests {
             Ok(())
         }
         let unchecked = StartedNameIdManagement {
-            request: SoapRequest::new(
+            request: SoapRequest::try_new(
                 EndpointUrl::try_new("https://sp.example.com/manage")?,
                 r#"<samlp:ManageNameIDRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
             )?,

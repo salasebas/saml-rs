@@ -481,7 +481,7 @@ fn tampered_logout_request_expiration_input(
             }
         }
         LogoutBinding::Soap => Ok(Inbound::soap(
-            SoapResponse::new(&tampered)?.envelope().to_string(),
+            SoapResponse::try_new(&tampered)?.envelope().to_string(),
             SoapChannel::unattested(),
         )),
     }
@@ -612,7 +612,7 @@ fn signed_logout_request_input(
         LogoutBinding::Soap => {
             let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(Inbound::soap(
-                SoapResponse::new(&signed)?.envelope().to_string(),
+                SoapResponse::try_new(&signed)?.envelope().to_string(),
                 SoapChannel::unattested(),
             ))
         }
@@ -644,7 +644,7 @@ fn unsigned_logout_request_input(
             "SimpleSign input requires its binding-level signature".into(),
         )),
         LogoutBinding::Soap => Ok(Inbound::soap(
-            SoapResponse::new(xml)?.envelope().to_string(),
+            SoapResponse::try_new(xml)?.envelope().to_string(),
             SoapChannel::unattested(),
         )),
     }
@@ -736,7 +736,7 @@ fn signed_logout_response_input(
         LogoutBinding::Soap => {
             let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
             Ok(Inbound::soap(
-                SoapResponse::new(&signed)?.envelope().to_string(),
+                SoapResponse::try_new(&signed)?.envelope().to_string(),
                 SoapChannel::unattested(),
             ))
         }
@@ -768,7 +768,7 @@ fn unsigned_logout_response_input(
             "SimpleSign input requires its binding-level signature".into(),
         )),
         LogoutBinding::Soap => Ok(Inbound::soap(
-            SoapResponse::new(xml)?.envelope().to_string(),
+            SoapResponse::try_new(xml)?.envelope().to_string(),
             SoapChannel::unattested(),
         )),
     }
@@ -4267,7 +4267,7 @@ fn soap_logout_rejects_an_inclusive_c14n_signature_made_outside_the_envelope(
     let (sp, idp) = facades()?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let xml = logout_request_xml("_soap_c14n_signed_alone", SP_ENTITY_ID, None);
-    let envelope = SoapResponse::new(&inclusive_c14n_signed(&xml)?)?
+    let envelope = SoapResponse::try_new(&inclusive_c14n_signed(&xml)?)?
         .envelope()
         .to_string();
     match idp.receive_slo(
@@ -4297,7 +4297,7 @@ fn soap_logout_accepts_an_inclusive_c14n_signature_made_inside_the_envelope(
     if signed == signed_in_scope {
         return Err("failed to move the soap namespace to the envelope".into());
     }
-    let envelope = SoapResponse::new(&signed)?.envelope().to_string();
+    let envelope = SoapResponse::try_new(&signed)?.envelope().to_string();
     let received = idp.receive_slo(
         &sp_descriptor,
         Inbound::soap(envelope.as_str(), SoapChannel::unattested()),
@@ -4374,7 +4374,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
     );
 
     let request_xml = logout_request_xml("_soap_mutual_tls", SP_ENTITY_ID, Some(IDP_SLO_SOAP));
-    let request_envelope = SoapRequest::new(EndpointUrl::try_new(IDP_SLO_SOAP)?, &request_xml)?
+    let request_envelope = SoapRequest::try_new(EndpointUrl::try_new(IDP_SLO_SOAP)?, &request_xml)?
         .envelope()
         .to_string();
     match idp.receive_slo(
@@ -4399,7 +4399,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
         started.pending.request_id().as_str(),
         None,
     );
-    let response_envelope = SoapResponse::new(&response_xml)?.envelope().to_string();
+    let response_envelope = SoapResponse::try_new(&response_xml)?.envelope().to_string();
     match sp.finish_slo(
         &idp_descriptor,
         &started.pending,
@@ -4432,7 +4432,7 @@ fn soap_logout_verifies_a_present_signature_over_an_attested_mutual_channel(
     match idp.receive_slo(
         &sp_descriptor,
         Inbound::soap(
-            SoapResponse::new(&tampered)?.envelope().to_string(),
+            SoapResponse::try_new(&tampered)?.envelope().to_string(),
             mutual_tls(),
         ),
         validation(),

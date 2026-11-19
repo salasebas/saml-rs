@@ -22,10 +22,11 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::ProtocolProfile`] when `protocol_xml` is not one
-    /// element in the SAML protocol namespace, and another [`SamlError`] when
-    /// metadata has no SOAP `ArtifactResolutionService` at `endpoint_index` or
-    /// the artifact value is already outstanding.
+    /// Returns [`SamlError::Xml`] when `protocol_xml` is not one well-formed
+    /// element, [`SamlError::ProtocolProfile`] when that element is outside the
+    /// SAML protocol namespace, and another [`SamlError`] when metadata has no
+    /// SOAP `ArtifactResolutionService` at `endpoint_index` or the artifact
+    /// value is already outstanding.
     pub fn issue_artifact(
         &self,
         service_provider: &SpDescriptor,
@@ -243,6 +244,12 @@ impl Saml<Sp> {
     /// this resolution did not complete. [`ReplayPolicy::Disabled`](crate::ReplayPolicy::Disabled)
     /// skips the check; the identity provider still returns the message only
     /// once.
+    ///
+    /// The artifact is stored before the identity provider confirms it, so a
+    /// forged `SAMLart` value also takes an entry. Give a cache with an entry
+    /// limit room for every artifact received during the retention, or pass a
+    /// separate cache here so a flood of artifacts cannot fill the cache that
+    /// [`Self::finish_sso`] uses.
     ///
     /// # Errors
     ///
