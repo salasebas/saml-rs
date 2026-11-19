@@ -287,8 +287,11 @@
 //! `ArtifactResponse` only when the presenter is that provider.
 //! [`Saml<Sp>::resolve_artifact`] sends `ArtifactResolve` to the identity
 //! provider's `ArtifactResolutionService`, and [`ArtifactResolution::finish`]
-//! reads the message back. The deployment POSTs the SOAP envelope. This does
-//! not claim the IdP or SP operational mode.
+//! reads the message back. The deployment POSTs the SOAP envelope with
+//! [`SoapRequest::headers`] and answers with [`SoapResponse::headers`]. The
+//! service provider stores each artifact it resolves in its
+//! [`ReplayCache`], like the message IDs it receives. This does not claim the
+//! IdP or SP operational mode.
 //!
 //! # HTTP-Artifact response
 //!
@@ -420,15 +423,15 @@ pub mod xml;
 mod tests;
 
 pub use api::{
-    ForceAuthn, HttpHeader, Idp, IsPassive, LogoutSigning, MessageDelivery, PaosAuthnRequest,
+    ForceAuthn, Idp, IsPassive, LogoutSigning, MessageDelivery, PaosAuthnRequest,
     PaosClientRequest, PaosHttpResponse, PaosSsoResponse, PendingPaosSso, PendingPaosSsoSnapshot,
     ReceiveNameIdManagement, ReceivedNameIdManagementRedirect, RespondNameIdManagement,
     RespondPaosSso, RespondSlo, RespondSso, Saml, SoapFault, Sp, StartNameIdManagement,
     StartPaosSso, StartSlo, StartSso, StartedPaosSso, Unknown,
 };
 pub use artifact::{
-    AnsweredArtifact, Artifact, ArtifactDereference, ArtifactRelease, ArtifactResolution,
-    ArtifactUses, ArtifactWithheld, IssuedArtifacts, IssuedMessage, ResolvedProtocolMessage,
+    AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,
+    IssuedArtifacts, ResolvedProtocolMessage,
 };
 pub use browser::{
     AcsEndpoint, ArtifactDelivery, DeliveredArtifact, EndpointUrl, FormField, Inbound,
@@ -463,6 +466,7 @@ pub use error::{
     SubjectConfirmationReason, TimeWindowField,
 };
 #[cfg(crypto)]
+#[allow(deprecated)]
 pub use metadata::MetadataSignatureVerification;
 pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};
 pub use model::{
@@ -482,6 +486,6 @@ pub use name_id_management::{
     ReceivedNameIdManagement, RefusedNameIdManagement, StartedNameIdManagement,
 };
 pub use soap::{
-    MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
+    HttpHeader, MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
     SoapProtocolMessage, SoapRequest, SoapResponse,
 };

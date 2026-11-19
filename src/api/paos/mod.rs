@@ -22,10 +22,12 @@ use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
 use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
 use super::{Idp, Saml, SamlError, Sp};
+use crate::soap::{
+    HttpHeader, PRAGMA, RESPONSE_CACHE_CONTROL, RESPONSE_HEADERS as SOAP_RESPONSE_HEADERS,
+};
 use protocol::{
     idp_to_ecp_envelope, parse_client_headers, read_soap_body, soap_fault_envelope,
-    sp_to_ecp_envelope, IdpToEcp, SpToEcp, E54_PAOS_HEADER, PAOS_MEDIA_TYPE, SOAP_MEDIA_TYPE,
-    SP_UNDERSTOOD_HEADERS,
+    sp_to_ecp_envelope, IdpToEcp, SpToEcp, E54_PAOS_HEADER, PAOS_MEDIA_TYPE, SP_UNDERSTOOD_HEADERS,
 };
 
 /// HTTP headers an enhanced client sends when it can carry this login.
@@ -287,30 +289,17 @@ pub struct StartedPaosSso {
     pub http_response: PaosHttpResponse<AuthnRequest>,
 }
 
-/// One HTTP header on a PAOS or SOAP response.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HttpHeader {
-    name: String,
-    value: String,
-}
-
-impl HttpHeader {
-    /// Header field name.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Header field value.
-    pub fn value(&self) -> &str {
-        &self.value
-    }
-}
+const PAOS_REQUEST_HEADERS: &[HttpHeader] = &[
+    HttpHeader::new("Content-Type", PAOS_MEDIA_TYPE),
+    RESPONSE_CACHE_CONTROL,
+    PRAGMA,
+];
 
 /// HTTP response carrying a SOAP envelope.
 #[derive(Debug, Clone)]
 pub struct PaosHttpResponse<Message> {
     status: u16,
-    headers: Vec<HttpHeader>,
+    headers: &'static [HttpHeader],
     soap_envelope: String,
     session_index: Option<SessionIndex>,
     _message: PhantomData<Message>,
@@ -325,7 +314,7 @@ impl<Message> PaosHttpResponse<Message> {
 
     /// HTTP headers to send with the envelope.
     pub fn headers(&self) -> &[HttpHeader] {
-        &self.headers
+        self.headers
     }
 
     /// SOAP envelope body.
@@ -333,31 +322,18 @@ impl<Message> PaosHttpResponse<Message> {
         &self.soap_envelope
     }
 
-    fn from_parts(content_type: &str, soap_envelope: String) -> Self {
+    fn from_parts(headers: &'static [HttpHeader], soap_envelope: String) -> Self {
         Self {
             status: 200,
-            headers: vec![
-                HttpHeader {
-                    name: "Content-Type".into(),
-                    value: content_type.into(),
-                },
-                HttpHeader {
-                    name: "Cache-Control".into(),
-                    value: "no-cache, no-store, must-revalidate, private".into(),
-                },
-                HttpHeader {
-                    name: "Pragma".into(),
-                    value: "no-cache".into(),
-                },
-            ],
+            headers,
             soap_envelope,
             session_index: None,
             _message: PhantomData,
         }
     }
 
-    fn fault(content_type: &str, soap_envelope: String) -> Self {
-        let mut response = Self::from_parts(content_type, soap_envelope);
+    fn fault(soap_envelope: String) -> Self {
+        let mut response = Self::from_parts(SOAP_RESPONSE_HEADERS, soap_envelope);
         response.status = 500;
         response
     }
@@ -536,7 +512,7 @@ impl Saml<Sp> {
                 idp_entity_id: idp.entity_id().clone(),
                 acs_url: assertion_consumer,
             },
-            http_response: PaosHttpResponse::from_parts(PAOS_MEDIA_TYPE, envelope),
+            http_response: PaosHttpResponse::from_parts(PAOS_REQUEST_HEADERS, envelope),
         })
     }
 
@@ -637,7 +613,7 @@ impl Saml<Idp> {
     /// response stays HTTP 200.
     pub fn paos_soap_fault(&self) -> PaosHttpResponse<SoapFault> {
         let _ = self;
-        PaosHttpResponse::fault(SOAP_MEDIA_TYPE, soap_fault_envelope())
+        PaosHttpResponse::fault(soap_fault_envelope())
     }
 
     /// Read the SOAP AuthnRequest an enhanced client forwarded.
@@ -808,7 +784,7 @@ impl Saml<Idp> {
             assertion_consumer_service_url: acs.as_str(),
             response_xml: &issued.xml,
         });
-        let mut response = PaosHttpResponse::from_parts(SOAP_MEDIA_TYPE, envelope);
+        let mut response = PaosHttpResponse::from_parts(SOAP_RESPONSE_HEADERS, envelope);
         response.session_index = issued.session_index;
         Ok(response)
     }

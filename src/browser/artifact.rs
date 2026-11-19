@@ -136,7 +136,7 @@ impl DeliveredArtifact {
         )?;
         let relay_state = single_parameter(pairs, url_params::RELAY_STATE)?;
         Ok(Self {
-            artifact: Artifact::try_from_encoded(artifact)?,
+            artifact: Artifact::try_new(artifact)?,
             relay_state: relay_state
                 .map(|value| RelayState::received(value.to_string()))
                 .transpose()?,

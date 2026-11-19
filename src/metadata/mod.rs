@@ -12,6 +12,7 @@ mod validity;
 mod write;
 
 #[cfg(crypto)]
+#[allow(deprecated)]
 pub use crate::crypto::MetadataSignatureVerification;
 pub use description::{ContactPerson, ContactType, LocalizedValue, Organization};
 pub use generate::{

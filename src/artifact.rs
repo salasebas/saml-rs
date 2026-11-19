@@ -4,7 +4,7 @@
 //! answers `ArtifactResolve`. The service provider sends that request and
 //! returns the protocol message from `ArtifactResponse`.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
@@ -16,10 +16,8 @@ use crate::constants::{namespace, status_code};
 use crate::entity::{generate_id, now_iso8601};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
-use crate::model::{EndpointUrl, ReplayKey};
-use crate::soap::{
-    read_soap_body, MessageConfidentiality, SoapChannel, SoapProtocolMessage, SoapRequest,
-};
+use crate::model::{EndpointUrl, ReplayKey, SamlValidationContext};
+use crate::soap::{read_soap_body, MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse};
 use crate::xml::fragment::standalone_element;
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
@@ -42,14 +40,16 @@ pub struct Artifact {
 }
 
 impl Artifact {
-    /// Decode a type 0x0004 artifact.
+    /// Decode the base64 value of a type 0x0004 artifact.
+    ///
+    /// Padding may be omitted. [`Self::as_str`] returns the padded value.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when `encoded` is not a 44-byte type
+    /// Returns [`SamlError::Invalid`] when `value` is not a 44-byte type
     /// 0x0004 artifact.
-    pub fn try_from_encoded(encoded: impl Into<String>) -> Result<Self, SamlError> {
-        let encoded = encoded.into();
+    pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
+        let encoded = value.into();
         if encoded.chars().any(char::is_whitespace) {
             return Err(SamlError::Invalid(
                 "artifact must not contain whitespace".into(),
@@ -91,110 +91,14 @@ impl Artifact {
     }
 }
 
-/// Which artifact dereference the service provider is performing.
+/// Channel protection the release of a stored message requires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ArtifactDereference {
-    web_browser_sso: bool,
-    channel: SoapChannel,
-}
-
-impl ArtifactDereference {
-    /// Resolve a SAML protocol message other than a Web Browser SSO `<Response>`.
-    ///
-    /// The channel must authenticate both parties and protect integrity.
-    /// Confidentiality is required only by [`Self::web_browser_sso`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::SoapChannelProtection`] when `channel` does not.
-    pub fn protocol(channel: SoapChannel) -> Result<Self, SamlError> {
-        require_channel(channel, false)?;
-        Ok(Self {
-            web_browser_sso: false,
-            channel,
-        })
-    }
-
-    /// Dereference of a Web Browser SSO `<Response>` artifact.
-    ///
-    /// The channel must authenticate both parties and protect integrity and
-    /// confidentiality.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::SoapChannelProtection`] when `channel` does not.
-    pub fn web_browser_sso(channel: SoapChannel) -> Result<Self, SamlError> {
-        require_channel(channel, true)?;
-        Ok(Self {
-            web_browser_sso: true,
-            channel,
-        })
-    }
-
-    /// Channel protection supplied for this dereference.
-    pub fn channel(self) -> SoapChannel {
-        self.channel
-    }
-}
-
-/// Protocol message an artifact issuer retains for one service provider.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IssuedMessage {
-    xml: String,
-    web_browser_sso_response: bool,
-}
-
-impl IssuedMessage {
-    /// Retain a SAML protocol element that is not a Web Browser SSO response.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when `xml` is not one element in the SAML protocol
-    /// namespace.
-    pub fn protocol(xml: impl Into<String>) -> Result<Self, SamlError> {
-        Self::parse(xml.into(), false)
-    }
-
-    /// Retain a Web Browser SSO `<Response>`.
-    ///
-    /// Releasing it requires a mutually authenticated, integrity-protected,
-    /// and confidential channel.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when `xml` is not one protocol `<Response>`.
-    pub fn web_browser_sso_response(xml: impl Into<String>) -> Result<Self, SamlError> {
-        Self::parse(xml.into(), true)
-    }
-
-    /// XML that will be placed in `ArtifactResponse`.
-    pub fn xml(&self) -> &str {
-        &self.xml
-    }
-
-    fn parse(xml: String, web_browser_sso_response: bool) -> Result<Self, SamlError> {
-        let element = parse_saml(xml.as_str())?;
-        if element.namespace != namespace::PROTOCOL {
-            return Err(SamlError::ProtocolProfile(
-                "stored artifact message must be a SAML protocol element".into(),
-            ));
-        }
-        if web_browser_sso_response && element.local_name != "Response" {
-            return Err(SamlError::ProtocolProfile(
-                "Web Browser SSO artifact message must be a protocol Response".into(),
-            ));
-        }
-        if !web_browser_sso_response && element.local_name == "Response" {
-            return Err(SamlError::ProtocolProfile(
-                "a protocol Response must be stored with IssuedMessage::web_browser_sso_response"
-                    .into(),
-            ));
-        }
-        Ok(Self {
-            xml: xml[element.span].to_string(),
-            web_browser_sso_response,
-        })
-    }
+enum RequiredChannel {
+    /// Mutual authentication and integrity protection.
+    Authenticated,
+    /// Mutual authentication, integrity protection, and confidentiality, for
+    /// a protocol `Response`.
+    Confidential,
 }
 
 /// Artifacts an identity provider has issued and not yet resolved.
@@ -214,7 +118,7 @@ struct IssuedEntry {
     issued_at: Instant,
     service_provider: String,
     message_xml: String,
-    web_browser_sso_response: bool,
+    required_channel: RequiredChannel,
 }
 
 impl IssuedArtifacts {
@@ -222,9 +126,9 @@ impl IssuedArtifacts {
     ///
     /// Choose the shortest `lifetime` in which the service provider receives
     /// the artifact and sends `ArtifactResolve`. A later `ArtifactResolve`
-    /// gets Success without the message. The service provider's
-    /// [`ArtifactUses::enforce_single_use`] period should be longer. A zero
-    /// `lifetime` resolves nothing.
+    /// gets Success without the message. The replay retention the service
+    /// provider passes to [`Saml<Sp>::resolve_artifact`](crate::Saml::resolve_artifact)
+    /// should be longer. A zero `lifetime` resolves nothing.
     pub fn expire_after(lifetime: Duration) -> Self {
         Self {
             lifetime,
@@ -266,71 +170,6 @@ impl IssuedArtifacts {
     }
 }
 
-/// Artifacts a receiver has already accepted for resolution.
-///
-/// Build it with [`Self::enforce_single_use`], which follows the receiver
-/// single-use recommendation, or with [`Self::allow_reuse`], which relaxes it.
-#[derive(Debug)]
-pub struct ArtifactUses {
-    blocked: Option<BlockedArtifacts>,
-}
-
-#[derive(Debug)]
-struct BlockedArtifacts {
-    period: Duration,
-    values: HashSet<String>,
-    oldest_first: VecDeque<(Instant, String)>,
-}
-
-impl ArtifactUses {
-    /// Reject a second resolution of the same artifact value for `period`.
-    ///
-    /// Choose a `period` longer than the identity provider would still resolve
-    /// the artifact. Each resolution drops the values recorded more than
-    /// `period` ago, so memory holds only the artifacts of the last `period`.
-    pub fn enforce_single_use(period: Duration) -> Self {
-        Self {
-            blocked: Some(BlockedArtifacts {
-                period,
-                values: HashSet::new(),
-                oldest_first: VecDeque::new(),
-            }),
-        }
-    }
-
-    /// Allow the same artifact value to be resolved again.
-    ///
-    /// This relaxes the receiver single-use recommendation. The artifact issuer
-    /// still returns the message only once.
-    pub fn allow_reuse() -> Self {
-        Self { blocked: None }
-    }
-
-    fn record(&mut self, artifact: &Artifact, now: Instant) -> Result<(), SamlError> {
-        let Some(blocked) = &mut self.blocked else {
-            return Ok(());
-        };
-        while blocked
-            .oldest_first
-            .front()
-            .is_some_and(|(at, _)| now.saturating_duration_since(*at) >= blocked.period)
-        {
-            if let Some((_, expired)) = blocked.oldest_first.pop_front() {
-                blocked.values.remove(&expired);
-            }
-        }
-        if !blocked.values.insert(artifact.as_str().to_string()) {
-            return Err(SamlError::ReplayDetected {
-                key: ReplayKey::Artifact(artifact.clone()),
-            });
-        }
-        blocked
-            .oldest_first
-            .push_back((now, artifact.as_str().to_string()));
-        Ok(())
-    }
-}
-
 /// Why an understood `ArtifactResolve` did not include the protocol message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -360,34 +199,19 @@ pub enum ArtifactRelease {
 /// SOAP `ArtifactResponse` produced for one `ArtifactResolve`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnsweredArtifact {
-    envelope: String,
+    response: SoapResponse,
     release: ArtifactRelease,
 }
 
 impl AnsweredArtifact {
-    /// SOAP envelope to return to the requester.
-    pub fn envelope(&self) -> &str {
-        &self.envelope
+    /// SOAP response to return to the requester.
+    pub fn response(&self) -> &SoapResponse {
+        &self.response
     }
 
     /// Whether the protocol message was included.
     pub fn release(&self) -> ArtifactRelease {
         self.release
-    }
-
-    /// `Cache-Control` value a responder should send.
-    pub fn cache_control(&self) -> &'static str {
-        crate::soap::response_cache_control()
-    }
-
-    /// `Pragma` value a responder should send.
-    pub fn pragma(&self) -> &'static str {
-        crate::soap::response_pragma()
-    }
-
-    /// `Content-Type` for SOAP 1.1.
-    pub fn content_type(&self) -> &'static str {
-        crate::soap::response_content_type()
     }
 }
 
@@ -401,7 +225,6 @@ pub struct ArtifactResolution {
     request_id: String,
     identity_provider: String,
     artifact: String,
-    web_browser_sso: bool,
     xml_limits: XmlLimits,
     schema_validator: Option<crate::SchemaValidator>,
 }
@@ -413,7 +236,6 @@ impl PartialEq for ArtifactResolution {
             request_id,
             identity_provider,
             artifact,
-            web_browser_sso,
             xml_limits,
             schema_validator,
         } = self;
@@ -421,7 +243,6 @@ impl PartialEq for ArtifactResolution {
             && request_id == &other.request_id
             && identity_provider == &other.identity_provider
             && artifact == &other.artifact
-            && web_browser_sso == &other.web_browser_sso
             && xml_limits == &other.xml_limits
             && crate::schema::validator_addresses_equal(*schema_validator, other.schema_validator)
     }
@@ -440,9 +261,8 @@ impl ArtifactResolution {
     /// # Errors
     ///
     /// Returns [`SamlError`] when the envelope is not an `ArtifactResponse`
-    /// from the identity provider, the status is not success, the response
-    /// does not contain the protocol message, or the message is a `Response`
-    /// and the dereference is not [`ArtifactDereference::web_browser_sso`].
+    /// from the identity provider, the status is not success, or the response
+    /// does not contain one SAML protocol element.
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
         let body = read_soap_body(response_envelope, self.xml_limits, &[])?;
         crate::schema::validate(response_envelope, self.schema_validator)?;
@@ -494,17 +314,6 @@ impl ArtifactResolution {
                 "ArtifactResponse payload must be a SAML protocol element".into(),
             ));
         }
-        if self.web_browser_sso && message.local_name != "Response" {
-            return Err(SamlError::ProtocolProfile(
-                "Web Browser SSO artifact payload must be a Response".into(),
-            ));
-        }
-        if !self.web_browser_sso && message.local_name == "Response" {
-            return Err(SamlError::ProtocolProfile(
-                "a protocol Response must be dereferenced with ArtifactDereference::web_browser_sso"
-                    .into(),
-            ));
-        }
         Ok(ResolvedProtocolMessage {
             local_name: message.local_name.clone(),
             xml: standalone_element(&body.xml, message.span.start, message.span.end)?,
@@ -550,10 +359,11 @@ impl ResolvedProtocolMessage {
 pub(crate) fn issue(
     metadata: &IdpMetadata,
     service_provider: &SpDescriptor,
-    message: IssuedMessage,
+    protocol_xml: &str,
     endpoint_index: u16,
     issued: &mut IssuedArtifacts,
 ) -> Result<Artifact, SamlError> {
+    let (message_xml, required_channel) = stored_message(protocol_xml)?;
     let entity_id = metadata
         .as_metadata()
         .entity_id()
@@ -566,29 +376,47 @@ pub(crate) fn issue(
             "artifact value is already outstanding".into(),
         ));
     }
-    let artifact = Artifact::try_from_encoded(encoded)?;
+    let artifact = Artifact::try_new(encoded)?;
     issued.insert(
         artifact.as_str().to_string(),
         IssuedEntry {
             issued_at: Instant::now(),
             service_provider: service_provider.entity_id().as_str().to_string(),
-            message_xml: message.xml,
-            web_browser_sso_response: message.web_browser_sso_response,
+            message_xml,
+            required_channel,
         },
     );
     Ok(artifact)
+}
+
+/// The protocol element of `xml`, and the channel its release requires.
+fn stored_message(xml: &str) -> Result<(String, RequiredChannel), SamlError> {
+    let element = parse_saml(xml)?;
+    if element.namespace != namespace::PROTOCOL {
+        return Err(SamlError::ProtocolProfile(
+            "stored artifact message must be a SAML protocol element".into(),
+        ));
+    }
+    let required_channel = if element.local_name == "Response" {
+        RequiredChannel::Confidential
+    } else {
+        RequiredChannel::Authenticated
+    };
+    Ok((xml[element.span].to_string(), required_channel))
 }
 
 pub(crate) fn resolve(
     requester_entity_id: &str,
     identity_provider: &IdpDescriptor,
     artifact: &Artifact,
-    dereference: ArtifactDereference,
-    uses: &mut ArtifactUses,
+    channel: SoapChannel,
+    validation: &mut SamlValidationContext<'_>,
     xml_limits: XmlLimits,
     schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<ArtifactResolution, SamlError> {
-    require_channel(dereference.channel, dereference.web_browser_sso)?;
+    if !channel_allows(channel, RequiredChannel::Confidential) {
+        return Err(SamlError::SoapChannelProtection);
+    }
     let idp_entity_id = identity_provider.entity_id().as_str();
     let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(idp_entity_id.as_bytes()).into();
     if artifact.source_id != source_id {
@@ -612,15 +440,13 @@ pub(crate) fn resolve(
     writer.text_element("saml:Issuer", &[], requester_entity_id);
     writer.text_element("samlp:Artifact", &[], artifact.as_str());
     writer.end("samlp:ArtifactResolve");
-    let request =
-        SoapProtocolMessage::request(EndpointUrl::try_new(service.location())?, &writer.finish())?;
-    uses.record(artifact, Instant::now())?;
+    let request = SoapRequest::new(EndpointUrl::try_new(service.location())?, &writer.finish())?;
+    validation.check_and_store_message_replay(ReplayKey::Artifact(artifact.clone()))?;
     Ok(ArtifactResolution {
         request,
         request_id,
         identity_provider: idp_entity_id.to_string(),
         artifact: artifact.as_str().to_string(),
-        web_browser_sso: dereference.web_browser_sso,
         xml_limits,
         schema_validator,
     })
@@ -657,7 +483,7 @@ pub(crate) fn answer(
             ArtifactRelease::VersionMismatch,
         );
     }
-    let Ok(artifact) = Artifact::try_from_encoded(&request.artifact) else {
+    let Ok(artifact) = Artifact::try_new(request.artifact.as_str()) else {
         return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
     };
     let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(entity_id.as_bytes()).into();
@@ -677,7 +503,7 @@ pub(crate) fn answer(
         } else {
             return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
         }
-        if !channel_allows(channel, entry.web_browser_sso_response) {
+        if !channel_allows(channel, entry.required_channel) {
             return success_without(&entity_id, &request.id, ArtifactWithheld::Channel);
         }
         let presenter_id = presenter.entity_id().as_str();
@@ -746,25 +572,18 @@ fn answered(
     }
     writer.end("samlp:ArtifactResponse");
     Ok(AnsweredArtifact {
-        envelope: SoapProtocolMessage::response_envelope(&writer.finish())?,
+        response: SoapResponse::new(&writer.finish())?,
         release,
     })
 }
 
-fn require_channel(channel: SoapChannel, web_browser_sso: bool) -> Result<(), SamlError> {
-    if channel_allows(channel, web_browser_sso) {
-        Ok(())
-    } else {
-        Err(SamlError::SoapChannelProtection)
-    }
-}
-
-fn channel_allows(channel: SoapChannel, web_browser_sso: bool) -> bool {
+fn channel_allows(channel: SoapChannel, required: RequiredChannel) -> bool {
     let authenticated = channel.authenticates_peer();
-    if web_browser_sso {
-        authenticated && channel.confidentiality() == MessageConfidentiality::Protected
-    } else {
-        authenticated
+    match required {
+        RequiredChannel::Authenticated => authenticated,
+        RequiredChannel::Confidential => {
+            authenticated && channel.confidentiality() == MessageConfidentiality::Protected
+        }
     }
 }
 
@@ -895,14 +714,13 @@ mod tests {
             Ok(())
         }
         let unchecked = ArtifactResolution {
-            request: SoapProtocolMessage::request(
+            request: SoapRequest::new(
                 crate::EndpointUrl::try_new("https://idp.example.com/artifact")?,
                 r#"<samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
             )?,
             request_id: "_request".into(),
             identity_provider: "https://idp.example.com/metadata".into(),
             artifact: "artifact".into(),
-            web_browser_sso: true,
             xml_limits: XmlLimits::default(),
             schema_validator: None,
         };
@@ -922,34 +740,6 @@ mod tests {
     }
 
     #[test]
-    fn single_use_blocks_an_artifact_only_for_the_period() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let period = Duration::from_secs(60);
-        let start = Instant::now();
-        let mut uses = ArtifactUses::enforce_single_use(period);
-        let artifact = |n: u32| {
-            let mut handle = [0u8; SOURCE_ID_LEN];
-            handle[..4].copy_from_slice(&n.to_be_bytes());
-            Artifact::try_from_encoded(encode_artifact(0, [0u8; SOURCE_ID_LEN], handle))
-        };
-        for n in 0u32..1_000 {
-            uses.record(&artifact(n)?, start)?;
-        }
-        let first = artifact(0)?;
-        let repeated = uses.record(&first, start + period - Duration::from_secs(1));
-        assert!(matches!(
-            repeated,
-            Err(SamlError::ReplayDetected { key: ReplayKey::Artifact(replayed) }) if replayed == first
-        ));
-
-        uses.record(&first, start + period)?;
-        let blocked = uses.blocked.as_ref().ok_or("single use is enforced")?;
-        assert_eq!(blocked.values, HashSet::from([first.as_str().to_string()]));
-        assert_eq!(blocked.oldest_first.len(), 1);
-        Ok(())
-    }
-
-    #[test]
     fn issued_artifacts_resolve_and_are_kept_only_for_the_lifetime() {
         let lifetime = Duration::from_secs(60);
         let start = Instant::now();
@@ -957,7 +747,7 @@ mod tests {
             issued_at,
             service_provider: "sp".into(),
             message_xml: String::new(),
-            web_browser_sso_response: false,
+            required_channel: RequiredChannel::Authenticated,
         };
         let mut issued = IssuedArtifacts::expire_after(lifetime);
         for n in 0u32..1_000 {

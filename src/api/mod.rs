@@ -118,9 +118,8 @@ pub use options::{
     RespondNameIdManagement, RespondSlo, RespondSso, StartNameIdManagement, StartSlo, StartSso,
 };
 pub use paos::{
-    HttpHeader, PaosAuthnRequest, PaosClientRequest, PaosHttpResponse, PaosSsoResponse,
-    PendingPaosSso, PendingPaosSsoSnapshot, RespondPaosSso, SoapFault, StartPaosSso,
-    StartedPaosSso,
+    PaosAuthnRequest, PaosClientRequest, PaosHttpResponse, PaosSsoResponse, PendingPaosSso,
+    PendingPaosSsoSnapshot, RespondPaosSso, SoapFault, StartPaosSso, StartedPaosSso,
 };
 
 /// Typed SAML facade for high-level browser SSO/SLO flows.

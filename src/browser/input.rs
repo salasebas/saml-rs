@@ -252,8 +252,7 @@ impl Inbound<SsoResponse> {
     /// message it resolved to.
     ///
     /// `resolved` comes from
-    /// [`ArtifactResolution::finish`](crate::ArtifactResolution::finish) on a
-    /// [`ArtifactDereference::web_browser_sso`](crate::ArtifactDereference::web_browser_sso)
+    /// [`ArtifactResolution::finish`](crate::ArtifactResolution::finish) on the
     /// resolution of [`DeliveredArtifact::artifact`].
     pub fn artifact(delivered: DeliveredArtifact, resolved: ResolvedProtocolMessage) -> Self {
         Self::from_transport(Transport::Artifact {

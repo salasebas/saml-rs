@@ -14,7 +14,7 @@ use crate::model::{
     SsoResponse,
 };
 use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
-use crate::soap::{SoapProtocolMessage, SoapRequest, SoapResponse};
+use crate::soap::{SoapRequest, SoapResponse};
 
 #[derive(Debug, Clone)]
 enum OutboundAction {
@@ -298,7 +298,7 @@ impl TryFrom<BindingContext> for Outbound<LogoutRequest> {
         if raw_context.binding == Binding::Soap {
             validate_context_message_kind(&raw_context, MessageField::Request)?;
             let endpoint = EndpointUrl::try_new(raw_context.entity_endpoint.clone())?;
-            let request = SoapProtocolMessage::request(endpoint, &raw_context.context)?;
+            let request = SoapRequest::new(endpoint, &raw_context.context)?;
             return soap_outbound(raw_context, OutboundAction::SoapRequest(request));
         }
         outbound_from_context(

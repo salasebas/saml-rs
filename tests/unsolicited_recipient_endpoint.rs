@@ -14,11 +14,10 @@ use common::signing_credentials;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::{
-    AcsEndpoint, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService, ArtifactUses,
-    DeliveredArtifact, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor, Inbound,
-    IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint,
-    SsoResponseBinding, SsoSession,
+    AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, DeliveredArtifact, EndpointUrl,
+    EntityId, Idp, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MetadataTrustPolicy, NameId,
+    ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig,
+    SpDescriptor, SsoEndpoint, SsoResponseBinding, SsoSession,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -139,10 +138,8 @@ fn accept(
             let resolution = receiver.resolve_artifact(
                 &idp_descriptor,
                 delivered.artifact(),
-                ArtifactDereference::web_browser_sso(
-                    SoapChannel::mutually_authenticated_confidential(),
-                )?,
-                &mut ArtifactUses::enforce_single_use(Duration::from_secs(600)),
+                SoapChannel::mutually_authenticated_confidential(),
+                SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
             )?;
             let answer = idp.answer_artifact_resolve(
                 &sender_view,
@@ -150,7 +147,7 @@ fn accept(
                 &mut issued,
                 SoapChannel::mutually_authenticated_confidential(),
             )?;
-            Inbound::artifact(delivered, resolution.finish(answer.envelope())?)
+            Inbound::artifact(delivered, resolution.finish(answer.response().envelope())?)
         }
         _ => return Err("unsupported response binding".into()),
     };

@@ -11,17 +11,18 @@
 #[path = "artifact_resolution/schema_validation.rs"]
 mod schema_validation;
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::XmlLimits;
 use saml_rs::{
-    AcsEndpoint, Artifact, ArtifactDereference, ArtifactRelease, ArtifactResolutionService,
-    ArtifactUses, ArtifactWithheld, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, IssuedArtifacts, IssuedMessage, MessageConfidentiality, MessageIntegrity,
-    MetadataTrustPolicy, PartyAuthentication, Saml, SamlError, SoapChannel, Sp, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, XmlPolicy,
+    AcsEndpoint, Artifact, ArtifactRelease, ArtifactResolutionService, ArtifactWithheld,
+    EndpointUrl, EntityId, HttpHeader, Idp, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    InMemoryReplayCache, IssuedArtifacts, MessageConfidentiality, MessageIntegrity,
+    MetadataTrustPolicy, PartyAuthentication, ReplayKey, ReplayPolicy, Saml, SamlError,
+    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, TimeWindowField, XmlPolicy,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -108,16 +109,33 @@ fn service_provider(
     ))
 }
 
-fn web_sso_response() -> Result<IssuedMessage, SamlError> {
-    IssuedMessage::web_browser_sso_response(format!(
+fn web_sso_response() -> String {
+    format!(
         r#"<samlp:Response xmlns:samlp="{PROTOCOL}" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{WEB_SSO_MARKER}</samlp:Response>"#
-    ))
+    )
 }
 
-fn logout_request() -> Result<IssuedMessage, SamlError> {
-    IssuedMessage::protocol(format!(
+fn logout_request() -> String {
+    format!(
         r#"<samlp:LogoutRequest xmlns:samlp="{PROTOCOL}" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{LOGOUT_MARKER}</samlp:LogoutRequest>"#
-    ))
+    )
+}
+
+/// A context that stores each resolved artifact in `cache` for `BLOCKED_FOR`.
+fn single_use(cache: &mut InMemoryReplayCache) -> SamlValidationContext<'_> {
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(cache))
+        .with_replay_retention(BLOCKED_FOR)
+}
+
+fn without_replay_cache() -> SamlValidationContext<'static> {
+    SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+}
+
+fn header_pairs(headers: &[HttpHeader]) -> Vec<(&str, &str)> {
+    headers
+        .iter()
+        .map(|header| (header.name(), header.value()))
+        .collect()
 }
 
 fn confidential() -> SoapChannel {
@@ -134,7 +152,7 @@ fn authenticated_without_confidentiality() -> SoapChannel {
 
 fn issue(
     parties: &Parties,
-    message: IssuedMessage,
+    message: &str,
     issued: &mut IssuedArtifacts,
 ) -> Result<Artifact, SamlError> {
     parties
@@ -152,7 +170,7 @@ fn recode(
 ) -> Result<Artifact, Box<dyn std::error::Error>> {
     let mut bytes = decode_artifact(artifact)?;
     edit(&mut bytes);
-    Ok(Artifact::try_from_encoded(STANDARD.encode(bytes))?)
+    Ok(Artifact::try_new(STANDARD.encode(bytes))?)
 }
 
 fn remove_attribute(xml: &str, name: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -188,23 +206,28 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
 {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let request = resolution.request();
     assert_eq!(request.endpoint().as_str(), RESOLUTION_URL);
     assert_eq!(
-        request.soap_action(),
-        "http://www.oasis-open.org/committees/security"
+        header_pairs(request.headers()),
+        [
+            ("Content-Type", "text/xml; charset=utf-8"),
+            (
+                "SOAPAction",
+                "http://www.oasis-open.org/committees/security"
+            ),
+            ("Cache-Control", "no-cache, no-store"),
+            ("Pragma", "no-cache"),
+        ]
     );
-    assert_eq!(request.cache_control(), "no-cache, no-store");
-    assert_eq!(request.pragma(), "no-cache");
-    assert_eq!(request.content_type(), "text/xml; charset=utf-8");
     assert!(request.envelope().contains("ArtifactResolve"));
     assert!(request.envelope().contains(artifact.as_str()));
     assert!(request
@@ -223,16 +246,21 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
     )?;
     assert_eq!(answer.release(), ArtifactRelease::Returned);
     assert_eq!(
-        answer.cache_control(),
-        "no-cache, no-store, must-revalidate, private"
+        header_pairs(answer.response().headers()),
+        [
+            ("Content-Type", "text/xml; charset=utf-8"),
+            (
+                "Cache-Control",
+                "no-cache, no-store, must-revalidate, private"
+            ),
+            ("Pragma", "no-cache"),
+        ]
     );
-    assert_eq!(answer.pragma(), "no-cache");
-    assert_eq!(answer.content_type(), "text/xml; charset=utf-8");
-    assert!(answer.envelope().contains("ArtifactResponse"));
-    assert!(answer.envelope().contains(SUCCESS));
-    assert!(answer.envelope().contains(WEB_SSO_MARKER));
+    assert!(answer.response().envelope().contains("ArtifactResponse"));
+    assert!(answer.response().envelope().contains(SUCCESS));
+    assert!(answer.response().envelope().contains(WEB_SSO_MARKER));
 
-    let resolved = resolution.finish(answer.envelope())?;
+    let resolved = resolution.finish(answer.response().envelope())?;
     assert_eq!(resolved.local_name(), "Response");
     assert!(resolved.xml().contains(WEB_SSO_MARKER));
     assert!(!resolved.xml().contains("ArtifactResponse"));
@@ -243,13 +271,13 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
 fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let hostile = parties.other.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.other_metadata,
@@ -261,15 +289,15 @@ fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn st
         answer.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::DifferentPresenter)
     );
-    assert!(answer.envelope().contains(SUCCESS));
-    assert!(!answer.envelope().contains(WEB_SSO_MARKER));
-    assert!(hostile.finish(answer.envelope()).is_err());
+    assert!(answer.response().envelope().contains(SUCCESS));
+    assert!(!answer.response().envelope().contains(WEB_SSO_MARKER));
+    assert!(hostile.finish(answer.response().envelope()).is_err());
 
     let legitimate = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let second = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -278,7 +306,7 @@ fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn st
         channel,
     )?;
     assert_eq!(second.release(), ArtifactRelease::Returned);
-    assert!(second.envelope().contains(WEB_SSO_MARKER));
+    assert!(second.response().envelope().contains(WEB_SSO_MARKER));
     Ok(())
 }
 
@@ -286,20 +314,15 @@ fn a_different_presenter_does_not_receive_the_message() -> Result<(), Box<dyn st
 fn web_sso_without_confidentiality_withholds_the_message() -> Result<(), Box<dyn std::error::Error>>
 {
     let weak = authenticated_without_confidentiality();
-    assert!(matches!(
-        ArtifactDereference::web_browser_sso(weak),
-        Err(SamlError::SoapChannelProtection)
-    ));
-
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -311,8 +334,8 @@ fn web_sso_without_confidentiality_withholds_the_message() -> Result<(), Box<dyn
         answer.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::Channel)
     );
-    assert!(answer.envelope().contains(SUCCESS));
-    assert!(!answer.envelope().contains(WEB_SSO_MARKER));
+    assert!(answer.response().envelope().contains(SUCCESS));
+    assert!(!answer.response().envelope().contains(WEB_SSO_MARKER));
     Ok(())
 }
 
@@ -320,13 +343,13 @@ fn web_sso_without_confidentiality_withholds_the_message() -> Result<(), Box<dyn
 fn the_issuer_returns_a_web_sso_message_only_once() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let first_resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let first = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -338,8 +361,8 @@ fn the_issuer_returns_a_web_sso_message_only_once() -> Result<(), Box<dyn std::e
     let second_resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let second = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -351,7 +374,7 @@ fn the_issuer_returns_a_web_sso_message_only_once() -> Result<(), Box<dyn std::e
         second.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::NotOutstanding)
     );
-    assert!(!second.envelope().contains(WEB_SSO_MARKER));
+    assert!(!second.response().envelope().contains(WEB_SSO_MARKER));
     Ok(())
 }
 
@@ -380,7 +403,7 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let missing = without.issue_artifact(&peer, web_sso_response()?, 0, &mut issued);
+    let missing = without.issue_artifact(&peer, &web_sso_response(), 0, &mut issued);
     assert!(matches!(
         missing,
         Err(SamlError::MissingMetadata(detail)) if detail == "ArtifactResolutionService"
@@ -409,7 +432,7 @@ fn artifact_source_id_is_the_sha1_of_the_issuer_entity_id() -> Result<(), Box<dy
 {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let bytes = decode_artifact(&artifact)?;
     assert_eq!(bytes.len(), 44);
     assert_eq!(&bytes[0..2], &[0x00, 0x04]);
@@ -421,8 +444,8 @@ fn artifact_source_id_is_the_sha1_of_the_issuer_entity_id() -> Result<(), Box<dy
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let unpadded = artifact.as_str().trim_end_matches('=').to_string();
     assert_ne!(unpadded, artifact.as_str());
@@ -437,7 +460,7 @@ fn artifact_source_id_is_the_sha1_of_the_issuer_entity_id() -> Result<(), Box<dy
         channel,
     )?;
     assert_eq!(answer.release(), ArtifactRelease::Returned);
-    assert!(answer.envelope().contains(WEB_SSO_MARKER));
+    assert!(answer.response().envelope().contains(WEB_SSO_MARKER));
     Ok(())
 }
 
@@ -445,13 +468,13 @@ fn artifact_source_id_is_the_sha1_of_the_issuer_entity_id() -> Result<(), Box<dy
 fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let mismatched =
         resolution
@@ -465,9 +488,9 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
         channel,
     )?;
     assert_eq!(rejected.release(), ArtifactRelease::VersionMismatch);
-    assert!(rejected.envelope().contains(VERSION_MISMATCH));
-    assert!(!rejected.envelope().contains(SUCCESS));
-    assert!(!rejected.envelope().contains(WEB_SSO_MARKER));
+    assert!(rejected.response().envelope().contains(VERSION_MISMATCH));
+    assert!(!rejected.response().envelope().contains(SUCCESS));
+    assert!(!rejected.response().envelope().contains(WEB_SSO_MARKER));
 
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -476,7 +499,7 @@ fn a_version_mismatch_does_not_consume_the_artifact() -> Result<(), Box<dyn std:
         channel,
     )?;
     assert_eq!(accepted.release(), ArtifactRelease::Returned);
-    assert!(accepted.envelope().contains(WEB_SSO_MARKER));
+    assert!(accepted.response().envelope().contains(WEB_SSO_MARKER));
     Ok(())
 }
 
@@ -485,13 +508,13 @@ fn an_unknown_or_unreadable_artifact_does_not_consume_another(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let unknown = recode(&artifact, |bytes| {
         bytes[43] ^= 0xff;
@@ -541,13 +564,13 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let redirected = resolution.request().envelope().replace(
         &format!("Destination=\"{RESOLUTION_URL}\""),
@@ -563,7 +586,7 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
         answer.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::Destination)
     );
-    assert!(!answer.envelope().contains(WEB_SSO_MARKER));
+    assert!(!answer.response().envelope().contains(WEB_SSO_MARKER));
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
@@ -578,35 +601,65 @@ fn a_destination_mismatch_withholds_the_message_and_leaves_it_outstanding(
 fn the_service_provider_rejects_a_repeated_artifact() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
-    let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);
+    let mut uses = InMemoryReplayCache::new();
     parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut uses,
+        channel,
+        single_use(&mut uses),
     )?;
     let repeated = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut uses,
+        channel,
+        single_use(&mut uses),
     );
-    assert!(matches!(repeated, Err(SamlError::ReplayDetected { .. })));
+    assert!(matches!(
+        repeated,
+        Err(SamlError::ReplayDetected { key: ReplayKey::Artifact(replayed) }) if replayed == artifact
+    ));
 
-    let mut relaxed = ArtifactUses::allow_reuse();
     parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut relaxed,
+        channel,
+        without_replay_cache(),
     )?;
     parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut relaxed,
+        channel,
+        without_replay_cache(),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn a_replay_cache_without_retention_records_nothing() -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
+    let mut uses = InMemoryReplayCache::new();
+    let unbounded = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        confidential(),
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut uses)),
+    );
+    assert!(matches!(
+        unbounded,
+        Err(SamlError::TimeWindowInvalid {
+            field: TimeWindowField::ReplayExpiration,
+            ..
+        })
+    ));
+    parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        confidential(),
+        single_use(&mut uses),
     )?;
     Ok(())
 }
@@ -616,24 +669,24 @@ fn an_artifact_from_another_issuer_is_rejected_before_it_is_recorded(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let foreign = recode(&artifact, |bytes| {
         bytes[4] ^= 0xff;
     })?;
     let channel = confidential();
-    let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);
+    let mut uses = InMemoryReplayCache::new();
     let first = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &foreign,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut uses,
+        channel,
+        single_use(&mut uses),
     );
     assert!(matches!(first, Err(SamlError::IssuerMismatch { .. })));
     let second = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &foreign,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut uses,
+        channel,
+        single_use(&mut uses),
     );
     assert!(matches!(second, Err(SamlError::IssuerMismatch { .. })));
     Ok(())
@@ -644,7 +697,7 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
 {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let other_index = recode(&artifact, |bytes| {
         let index = 7u16.to_be_bytes();
         bytes[2] = index[0];
@@ -654,8 +707,8 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
     let missing = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &other_index,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     );
     assert!(matches!(
         missing,
@@ -675,12 +728,10 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
         &posted,
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    let unsupported = parties.sp.resolve_artifact(
-        &peer,
-        &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
-    );
+    let unsupported =
+        parties
+            .sp
+            .resolve_artifact(&peer, &artifact, channel, without_replay_cache());
     assert!(matches!(unsupported, Err(SamlError::Unsupported(_))));
     Ok(())
 }
@@ -689,22 +740,21 @@ fn a_missing_or_non_soap_resolution_service_is_not_used() -> Result<(), Box<dyn 
 fn another_protocol_message_uses_the_same_soap_channel() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, logout_request()?, &mut issued)?;
-    let channel = authenticated_without_confidentiality();
+    let artifact = issue(&parties, &logout_request(), &mut issued)?;
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::protocol(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        confidential(),
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
         &mut issued,
-        channel,
+        authenticated_without_confidentiality(),
     )?;
     assert_eq!(answer.release(), ArtifactRelease::Returned);
-    let resolved = resolution.finish(answer.envelope())?;
+    let resolved = resolution.finish(answer.response().envelope())?;
     assert_eq!(resolved.local_name(), "LogoutRequest");
     assert!(resolved.xml().contains(LOGOUT_MARKER));
     Ok(())
@@ -715,13 +765,13 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let required = resolution.request().envelope().replacen(
         "<soap:Body>",
@@ -746,7 +796,7 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
         channel,
     )?;
     assert_eq!(accepted.release(), ArtifactRelease::Returned);
-    let resolved = resolution.finish(accepted.envelope())?;
+    let resolved = resolution.finish(accepted.response().envelope())?;
     assert!(resolved.xml().contains(WEB_SSO_MARKER));
     Ok(())
 }
@@ -756,13 +806,13 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -770,7 +820,7 @@ fn the_service_provider_rejects_an_artifact_response_it_cannot_attribute(
         &mut issued,
         channel,
     )?;
-    let envelope = answer.envelope();
+    let envelope = answer.response().envelope();
     let missing_issuer =
         envelope.replace(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>"), "");
     assert!(matches!(
@@ -798,13 +848,13 @@ fn a_non_entity_resolve_issuer_does_not_receive_the_message(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let email_issuer = resolution.request().envelope().replace(
         "<saml:Issuer>",
@@ -820,7 +870,7 @@ fn a_non_entity_resolve_issuer_does_not_receive_the_message(
         withheld.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::DifferentPresenter)
     );
-    assert!(!withheld.envelope().contains(WEB_SSO_MARKER));
+    assert!(!withheld.response().envelope().contains(WEB_SSO_MARKER));
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
         resolution.request().envelope(),
@@ -843,19 +893,16 @@ fn a_release_that_cannot_be_built_leaves_the_artifact_outstanding(
     let text_len = limit
         .checked_sub(prefix.len() + suffix.len() + 256)
         .ok_or("XML byte limit is smaller than the response shell")?;
-    let message = IssuedMessage::web_browser_sso_response(format!(
-        "{prefix}{}{suffix}",
-        "m".repeat(text_len)
-    ))?;
-    assert!(message.xml().len() < limit);
+    let message = format!("{prefix}{}{suffix}", "m".repeat(text_len));
+    assert!(message.len() < limit);
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, message, &mut issued)?;
+    let artifact = issue(&parties, &message, &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let first = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -875,19 +922,14 @@ fn a_release_that_cannot_be_built_leaves_the_artifact_outstanding(
 }
 
 #[test]
-fn a_response_must_be_stored_as_a_web_sso_response() -> Result<(), Box<dyn std::error::Error>> {
-    let response = format!(
-        r#"<samlp:Response xmlns:samlp="{PROTOCOL}" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{WEB_SSO_MARKER}</samlp:Response>"#
+fn only_a_saml_protocol_element_is_stored() -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let assertion = format!(
+        r#"<saml:Assertion xmlns:saml="{ASSERTION}" ID="_assertion" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#
     );
     assert!(matches!(
-        IssuedMessage::protocol(response),
-        Err(SamlError::ProtocolProfile(_))
-    ));
-    let logout = format!(
-        r#"<samlp:LogoutRequest xmlns:samlp="{PROTOCOL}" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{LOGOUT_MARKER}</samlp:LogoutRequest>"#
-    );
-    assert!(matches!(
-        IssuedMessage::web_browser_sso_response(logout),
+        issue(&parties, &assertion, &mut issued),
         Err(SamlError::ProtocolProfile(_))
     ));
     Ok(())
@@ -898,13 +940,13 @@ fn the_service_provider_rejects_an_artifact_response_without_id_or_instant(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -912,7 +954,7 @@ fn the_service_provider_rejects_an_artifact_response_without_id_or_instant(
         &mut issued,
         channel,
     )?;
-    let envelope = answer.envelope();
+    let envelope = answer.response().envelope();
     let without_id = remove_attribute(envelope, "ID")?;
     assert!(matches!(
         resolution.finish(&without_id),
@@ -937,13 +979,13 @@ fn a_foreign_artifact_sibling_does_not_release_the_message(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let foreign = resolution.request().envelope().replacen(
         "</samlp:Artifact>",
@@ -963,7 +1005,7 @@ fn a_foreign_artifact_sibling_does_not_release_the_message(
         channel,
     )?;
     assert_eq!(accepted.release(), ArtifactRelease::Returned);
-    assert!(accepted.envelope().contains(WEB_SSO_MARKER));
+    assert!(accepted.response().envelope().contains(WEB_SSO_MARKER));
     Ok(())
 }
 
@@ -972,7 +1014,7 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let mut posted = parties.idp.metadata_xml().to_string();
     let replaced = posted.replacen(RESOLUTION_URL, "urn:example:artifact", 1);
     assert_ne!(replaced, posted);
@@ -983,20 +1025,17 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     let channel = confidential();
-    let mut uses = ArtifactUses::enforce_single_use(BLOCKED_FOR);
-    let first = parties.sp.resolve_artifact(
-        &peer,
-        &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut uses,
-    );
+    let mut uses = InMemoryReplayCache::new();
+    let first = parties
+        .sp
+        .resolve_artifact(&peer, &artifact, channel, single_use(&mut uses));
     assert!(matches!(first, Err(SamlError::Invalid(_))));
 
     let second = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut uses,
+        channel,
+        single_use(&mut uses),
     )?;
     assert!(second.request().envelope().contains("ArtifactResolve"));
     assert!(second.request().envelope().contains(artifact.as_str()));
@@ -1007,13 +1046,13 @@ fn a_non_http_resolution_location_does_not_consume_single_use(
 fn a_duplicate_resolve_issuer_is_refused_as_malformed() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let duplicated = resolution.request().envelope().replacen(
         "</saml:Issuer>",
@@ -1043,13 +1082,13 @@ fn the_service_provider_rejects_an_artifact_response_with_two_statuses(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -1057,7 +1096,7 @@ fn the_service_provider_rejects_an_artifact_response_with_two_statuses(
         &mut issued,
         channel,
     )?;
-    let envelope = answer.envelope();
+    let envelope = answer.response().envelope();
     let status_end_tag = "</samlp:Status>";
     let start = envelope
         .find("<samlp:Status")
@@ -1080,13 +1119,13 @@ fn the_service_provider_reports_an_artifact_response_without_a_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -1094,7 +1133,7 @@ fn the_service_provider_reports_an_artifact_response_without_a_status(
         &mut issued,
         channel,
     )?;
-    let envelope = answer.envelope();
+    let envelope = answer.response().envelope();
     let status_end_tag = "</samlp:Status>";
     let start = envelope
         .find("<samlp:Status")
@@ -1118,13 +1157,13 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let declarations = format!(r#" xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}""#);
     let hoisted_request = resolution
@@ -1145,7 +1184,7 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
     )?;
     assert_eq!(answer.release(), ArtifactRelease::Returned);
 
-    let inherited_payload = answer.envelope().replace(
+    let inherited_payload = answer.response().envelope().replace(
         &format!(r#"<samlp:Response xmlns:samlp="{PROTOCOL}""#),
         "<samlp:Response",
     );
@@ -1172,30 +1211,25 @@ fn namespaces_declared_on_the_soap_envelope_reach_the_protocol_message(
 }
 
 #[test]
-fn a_protocol_dereference_does_not_return_a_response() -> Result<(), Box<dyn std::error::Error>> {
+fn the_service_provider_resolves_only_over_a_confidential_channel(
+) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, logout_request()?, &mut issued)?;
-    let channel = authenticated_without_confidentiality();
-    let resolution = parties.sp.resolve_artifact(
+    let artifact = issue(&parties, &logout_request(), &mut issued)?;
+    let mut uses = InMemoryReplayCache::new();
+    let refused = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::protocol(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        authenticated_without_confidentiality(),
+        single_use(&mut uses),
+    );
+    assert!(matches!(refused, Err(SamlError::SoapChannelProtection)));
+    parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        &artifact,
+        confidential(),
+        single_use(&mut uses),
     )?;
-    let answer = parties.idp.answer_artifact_resolve(
-        &parties.sp_metadata,
-        resolution.request().envelope(),
-        &mut issued,
-        channel,
-    )?;
-    let as_response = answer
-        .envelope()
-        .replace("samlp:LogoutRequest", "samlp:Response");
-    assert!(matches!(
-        resolution.finish(&as_response),
-        Err(SamlError::ProtocolProfile(_))
-    ));
     Ok(())
 }
 
@@ -1203,13 +1237,13 @@ fn a_protocol_dereference_does_not_return_a_response() -> Result<(), Box<dyn std
 fn a_removed_artifact_is_no_longer_outstanding() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     assert!(issued.remove(&artifact));
     assert!(!issued.remove(&artifact));
@@ -1231,13 +1265,13 @@ fn an_artifact_past_its_lifetime_is_no_longer_outstanding() -> Result<(), Box<dy
 {
     let parties = parties()?;
     let mut issued = IssuedArtifacts::expire_after(Duration::ZERO);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        channel,
+        without_replay_cache(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -1249,14 +1283,14 @@ fn an_artifact_past_its_lifetime_is_no_longer_outstanding() -> Result<(), Box<dy
         answer.release(),
         ArtifactRelease::Withheld(ArtifactWithheld::NotOutstanding)
     );
-    assert!(answer.envelope().contains(SUCCESS));
-    assert!(!answer.envelope().contains(WEB_SSO_MARKER));
+    assert!(answer.response().envelope().contains(SUCCESS));
+    assert!(!answer.response().envelope().contains(WEB_SSO_MARKER));
     assert!(matches!(
-        resolution.finish(answer.envelope()),
+        resolution.finish(answer.response().envelope()),
         Err(SamlError::ArtifactNotReturned)
     ));
 
-    let expired = issue(&parties, web_sso_response()?, &mut issued)?;
+    let expired = issue(&parties, &web_sso_response(), &mut issued)?;
     assert!(!issued.remove(&expired));
     Ok(())
 }
@@ -1273,13 +1307,13 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
         ..XmlPolicy::default()
     })?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let artifact = issue(&parties, web_sso_response()?, &mut issued)?;
+    let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         &artifact,
-        ArtifactDereference::web_browser_sso(channel)?,
-        &mut ArtifactUses::allow_reuse(),
+        channel,
+        without_replay_cache(),
     )?;
     let deep_header =
         "<soap:Header><a><b><c><d><e>note</e></d></c></b></a></soap:Header><soap:Body>";
@@ -1316,7 +1350,10 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
         &mut issued,
         channel,
     )?;
-    let deep_response = answer.envelope().replacen("<soap:Body>", deep_header, 1);
+    let deep_response = answer
+        .response()
+        .envelope()
+        .replacen("<soap:Body>", deep_header, 1);
     let refused = resolution.finish(&deep_response);
     assert!(
         matches!(
@@ -1329,10 +1366,10 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits(
         "{refused:?}"
     );
     assert!(resolution
-        .finish(answer.envelope())?
+        .finish(answer.response().envelope())?
         .xml()
         .contains(WEB_SSO_MARKER));
-    let wide_response = answer.envelope().replacen(
+    let wide_response = answer.response().envelope().replacen(
         "<samlp:ArtifactResponse ",
         &format!("<samlp:ArtifactResponse {consent}"),
         1,
