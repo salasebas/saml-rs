@@ -3154,6 +3154,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
+    assert!(session.audience_restrictions().is_empty());
 
     let validate_omission = Saml::sp(sp_with_validation(SpValidationPolicy {
         audience: AudienceValidationPolicy::RequireRestriction,

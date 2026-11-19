@@ -539,12 +539,12 @@ fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
     let both = resigned(&insert_after_audience_restriction(
         &original,
         &format!(
-            "<saml:AudienceRestriction><saml:Audience>{SP_ENTITY_ID}</saml:Audience></saml:AudienceRestriction>"
+            "<saml:AudienceRestriction><saml:Audience>{OTHER_AUDIENCE}</saml:Audience><saml:Audience>{SP_ENTITY_ID}</saml:Audience></saml:AudienceRestriction>"
         ),
     )?)?;
     assert_eq!(
         audience_groups(&accept(&exchange, &both)?),
-        [[SP_ENTITY_ID], [SP_ENTITY_ID]]
+        [vec![SP_ENTITY_ID], vec![OTHER_AUDIENCE, SP_ENTITY_ID]]
     );
 
     let alternatives = resigned(&original.replacen(

@@ -209,9 +209,11 @@ let audiences: Vec<&str> = session
 ```
 
 Under `AudienceValidationPolicy::Skip`, `finish_sso` does not check the
-audience. If you check it yourself, require your entity ID in every
-restriction. A search of the flat list accepts an assertion with a second
-restriction that leaves you out.
+audience. `EvaluatePresentRestrictions` and `RequireRestriction` check it for
+every bearer assertion of the response, so prefer one of them. The session
+lists only the restrictions of its own assertion. If you check the audience
+yourself, require your entity ID in every restriction. A search of the flat
+list accepts an assertion with a second restriction that leaves you out.
 
 Before the upgrade:
 
@@ -231,8 +233,11 @@ let addressed = session
 # }
 ```
 
-`all` returns `true` for an assertion without `<AudienceRestriction>`, as
-`AudienceValidationPolicy::EvaluatePresentRestrictions` accepts it.
+The old `contains` check also rejected an assertion without
+`<AudienceRestriction>`. `all` returns `true` for it, as
+`EvaluatePresentRestrictions` accepts it. To keep rejecting it, also require
+`!session.audience_restrictions().is_empty()`, or select
+`RequireRestriction`.
 
 `binding_signature_algorithm_uri()` returns the value that `sig_alg()`
 returned: the `SigAlg` of a verified HTTP-POST-SimpleSign signature, which

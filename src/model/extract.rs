@@ -256,9 +256,7 @@ pub(super) fn audience_restrictions_from_extract(
             let restriction = dom::parse_fragment_with_limits(xml, XmlLimits::unbounded())?;
             restriction
                 .root
-                .children
-                .iter()
-                .filter(|child| child.local_name == "Audience")
+                .children_named("Audience")
                 .map(|audience| EntityId::try_new(audience.text.as_str()))
                 .collect::<Result<Vec<_>, _>>()
                 .map(AudienceRestriction::new)

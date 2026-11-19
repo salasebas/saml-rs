@@ -68,7 +68,7 @@ A new validation context allows five minutes of clock skew. Pass `ClockSkew::str
 
 `recommended()` is the preset for claimed features. It does not require a signature on the Assertion, and it does not select the RSA-SHA2 XML-DSig profile. Add either one by name. The calls are in [Validation](validation-preset.md).
 
-`finish_sso` records embedded XML signature evidence on `verified_xml_signatures()`. `sig_alg()` is only the detached `SigAlg` from HTTP-Redirect or HTTP-POST-SimpleSign.
+`finish_sso` records embedded XML signature evidence on `verified_xml_signatures()`. `binding_signature_algorithm_uri()` is only the `SigAlg` of an HTTP-POST-SimpleSign signature, which travels next to the message instead of inside the XML.
 
 ## Next
 
