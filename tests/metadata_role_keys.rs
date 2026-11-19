@@ -24,11 +24,10 @@ const IDP_ROLE_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privke
 const IDP_ROLE_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 
 fn credentials(key: &str, cert: &str) -> Credentials {
-    Credentials::default().with_signing_credential(X509Credential {
-        certificate: CertificatePem::new(cert),
-        key: PrivateKeyPem::new(key),
-        passphrase: None,
-    })
+    Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new(cert),
+        PrivateKeyPem::new(key),
+    ))
 }
 
 fn idp_signing_with(key: &str, cert: &str) -> Result<Saml<saml_rs::Idp>, SamlError> {

@@ -124,16 +124,14 @@ impl fmt::Debug for HmacSecret {
 /// use saml_rs::{CertificatePem, Credentials, PrivateKeyPem, X509Credential};
 ///
 /// let credentials = Credentials::default()
-///     .with_signing_credential(X509Credential {
-///         certificate: CertificatePem::new("signing certificate PEM"),
-///         key: PrivateKeyPem::new("signing key PEM"),
-///         passphrase: None,
-///     })
-///     .with_decryption_credential(X509Credential {
-///         certificate: CertificatePem::new("encryption certificate PEM"),
-///         key: PrivateKeyPem::new("decryption key PEM"),
-///         passphrase: None,
-///     });
+///     .with_signing_credential(X509Credential::new(
+///         CertificatePem::new("signing certificate PEM"),
+///         PrivateKeyPem::new("signing key PEM"),
+///     ))
+///     .with_decryption_credential(X509Credential::new(
+///         CertificatePem::new("encryption certificate PEM"),
+///         PrivateKeyPem::new("decryption key PEM"),
+///     ));
 /// # let _ = credentials;
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -141,8 +139,7 @@ pub struct Credentials {
     signing: Option<X509Credential>,
     additional_signing_certificates: Vec<CertificatePem>,
     hmac_secret: Option<HmacSecret>,
-    decryption: Option<X509Credential>,
-    additional_decryption: Vec<X509Credential>,
+    decryption: Vec<X509Credential>,
 }
 
 impl Credentials {
@@ -177,27 +174,27 @@ impl Credentials {
         self
     }
 
-    /// Replace the primary decryption key and the encryption certificate
-    /// peers use for it.
+    /// Append a decryption key and the encryption certificate peers use for
+    /// it.
     ///
-    /// Decryption tries this key first. Metadata publishes its certificate as
-    /// the first encryption `KeyDescriptor`.
+    /// Decryption tries the keys in the order added and keeps the first that
+    /// decrypts. Metadata publishes each certificate in its own encryption
+    /// `KeyDescriptor`, in the same order, so a peer may encrypt for any of
+    /// them. To roll over the encryption key, append the next credential and
+    /// wait until every peer has refreshed this entity's metadata. Drop the
+    /// old credential once no peer encrypts for it.
     pub fn with_decryption_credential(mut self, credential: X509Credential) -> Self {
-        self.decryption = Some(credential);
+        self.decryption.push(credential);
         self
     }
 
-    /// Append a decryption credential, tried in the order added after the
-    /// primary one.
-    ///
-    /// Each certificate is published in metadata after the primary encryption
-    /// certificate, so a peer may encrypt for any of them. To roll over the
-    /// encryption key, add the next credential here. Then make it the primary
-    /// decryption credential and add the old one here. Drop the old one once
-    /// every peer has refreshed this entity's metadata. A config with an
-    /// additional decryption credential and no primary one fails to build.
-    pub fn with_additional_decryption_credential(mut self, credential: X509Credential) -> Self {
-        self.additional_decryption.push(credential);
+    /// Append decryption credentials, in iteration order, as
+    /// [`Self::with_decryption_credential`] appends one.
+    pub fn with_decryption_credentials(
+        mut self,
+        credentials: impl IntoIterator<Item = X509Credential>,
+    ) -> Self {
+        self.decryption.extend(credentials);
         self
     }
 
@@ -216,14 +213,9 @@ impl Credentials {
         self.hmac_secret.as_ref()
     }
 
-    /// The primary decryption key, its certificate, and its passphrase.
-    pub fn decryption_credential(&self) -> Option<&X509Credential> {
-        self.decryption.as_ref()
-    }
-
-    /// The additional decryption credentials, in decryption order.
-    pub fn additional_decryption_credentials(&self) -> &[X509Credential] {
-        &self.additional_decryption
+    /// The decryption credentials, in decryption and publication order.
+    pub fn decryption_credentials(&self) -> &[X509Credential] {
+        &self.decryption
     }
 }
 
@@ -234,10 +226,39 @@ impl Credentials {
 /// publishes the certificate for that use.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct X509Credential {
-    /// Certificate of [`Self::key`].
-    pub certificate: CertificatePem,
-    /// Private key.
-    pub key: PrivateKeyPem,
-    /// Passphrase that unlocks [`Self::key`], when it is encrypted.
-    pub passphrase: Option<Passphrase>,
+    certificate: CertificatePem,
+    key: PrivateKeyPem,
+    passphrase: Option<Passphrase>,
+}
+
+impl X509Credential {
+    /// Pair `key` with `certificate`, the certificate of its public key.
+    pub fn new(certificate: CertificatePem, key: PrivateKeyPem) -> Self {
+        Self {
+            certificate,
+            key,
+            passphrase: None,
+        }
+    }
+
+    /// Set the passphrase that unlocks the key, when the key is encrypted.
+    pub fn with_passphrase(mut self, passphrase: Passphrase) -> Self {
+        self.passphrase = Some(passphrase);
+        self
+    }
+
+    /// The certificate of the key's public key.
+    pub fn certificate(&self) -> &CertificatePem {
+        &self.certificate
+    }
+
+    /// The private key.
+    pub fn key(&self) -> &PrivateKeyPem {
+        &self.key
+    }
+
+    /// The passphrase that unlocks the key, when it is encrypted.
+    pub fn passphrase(&self) -> Option<&Passphrase> {
+        self.passphrase.as_ref()
+    }
 }

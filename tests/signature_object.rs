@@ -32,11 +32,10 @@ struct Parties {
 }
 
 fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
-    let credentials = Credentials::default().with_signing_credential(X509Credential {
-        certificate: CertificatePem::new(CERT),
-        key: PrivateKeyPem::new(KEY),
-        passphrase: None,
-    });
+    let credentials = Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new(CERT),
+        PrivateKeyPem::new(KEY),
+    ));
     let sp = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,

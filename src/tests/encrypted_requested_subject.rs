@@ -50,11 +50,10 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(
-            Credentials::default().with_signing_credential(X509Credential {
-                certificate: CertificatePem::new(CERT),
-                key: PrivateKeyPem::new(PRIVKEY),
-                passphrase: None,
-            }),
+            Credentials::default().with_signing_credential(X509Credential::new(
+                CertificatePem::new(CERT),
+                PrivateKeyPem::new(PRIVKEY),
+            )),
         )
         .validation(SpValidationPolicy::recommended())
         .build()?,
@@ -67,16 +66,14 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 
 fn idp_credentials() -> Credentials {
     Credentials::default()
-        .with_signing_credential(X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        })
-        .with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        })
+        .with_signing_credential(X509Credential::new(
+            CertificatePem::new(CERT),
+            PrivateKeyPem::new(PRIVKEY),
+        ))
+        .with_decryption_credential(X509Credential::new(
+            CertificatePem::new(CERT),
+            PrivateKeyPem::new(PRIVKEY),
+        ))
 }
 
 fn idp_with_credentials(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -226,12 +223,11 @@ fn unsigned_request_encrypted_id_is_decrypted_only_with_gcm(
 #[test]
 fn encrypted_id_made_for_either_published_certificate_is_the_requested_name_id(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp_with_credentials(idp_credentials().with_additional_decryption_credential(
-        X509Credential {
-            certificate: CertificatePem::new(NEXT_CERT),
-            key: PrivateKeyPem::new(NEXT_PRIVKEY),
-            passphrase: None,
-        },
+    let idp = idp_with_credentials(idp_credentials().with_decryption_credential(
+        X509Credential::new(
+            CertificatePem::new(NEXT_CERT),
+            PrivateKeyPem::new(NEXT_PRIVKEY),
+        ),
     ))?;
     for encryption_cert in [CERT, NEXT_CERT] {
         let encrypted = encrypted_id_for(encryption_cert, AES128_GCM)?;

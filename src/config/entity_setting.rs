@@ -2,7 +2,7 @@ use crate::entity::EntitySetting;
 
 use super::algorithms::{name_id_format_uris, transform_algorithm_uris, NameIdFormat};
 use super::builders::{IdpConfigBuilder, SpConfigBuilder};
-use super::credentials::Credentials;
+use super::credentials::{Credentials, X509Credential};
 use super::descriptors::EntityId;
 use super::policies::{
     assertion_signature_required, audience_restriction_required, audience_validation_enabled,
@@ -71,7 +71,10 @@ fn common_setting(
     templates: &TemplatePolicy,
 ) -> EntitySetting {
     let signing = credentials.signing_credential();
-    let decryption = credentials.decryption_credential();
+    let (decryption, additional_decryption) = match credentials.decryption_credentials() {
+        [first, rest @ ..] => (Some(first), rest),
+        [] => (None, &[][..]),
+    };
     EntitySetting {
         entity_id: Some(entity_id.as_str().to_string()),
         request_signature_algorithm: algorithms.signature.as_uri().to_string(),
@@ -96,18 +99,18 @@ fn common_setting(
             .allows_rsa15_key_transport_decryption(),
         max_decryption_work: xml.encryption.max_decryption_work,
         name_id_format: name_id_format_uris(name_id_format),
-        private_key: signing.map(|credential| credential.key.as_str().to_string()),
+        private_key: signing.map(|credential| credential.key().as_str().to_string()),
         private_key_pass: signing
-            .and_then(|credential| credential.passphrase.as_ref())
+            .and_then(X509Credential::passphrase)
             .map(|passphrase| passphrase.as_str().to_string()),
-        signing_cert: signing.map(|credential| credential.certificate.as_str().to_string()),
+        signing_cert: signing.map(|credential| credential.certificate().as_str().to_string()),
         hmac_secret: credentials.hmac_secret().cloned(),
-        encrypt_cert: decryption.map(|credential| credential.certificate.as_str().to_string()),
-        enc_private_key: decryption.map(|credential| credential.key.as_str().to_string()),
+        encrypt_cert: decryption.map(|credential| credential.certificate().as_str().to_string()),
+        enc_private_key: decryption.map(|credential| credential.key().as_str().to_string()),
         enc_private_key_pass: decryption
-            .and_then(|credential| credential.passphrase.as_ref())
+            .and_then(X509Credential::passphrase)
             .map(|passphrase| passphrase.as_str().to_string()),
-        additional_decryption_keys: credentials.additional_decryption_credentials().to_vec(),
+        additional_decryption_keys: additional_decryption.to_vec(),
         redirect_inflate_max_bytes: xml.redirect_inflate_max_bytes,
         xml_limits: xml.limits,
         schema_validator: xml.schema_validator,

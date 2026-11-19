@@ -54,16 +54,14 @@ const IDP_NEXT_ENCRYPTION_CERT: &str =
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     Credentials::default()
-        .with_signing_credential(X509Credential {
-            certificate: CertificatePem::new(SIGNING_CERT),
-            key: PrivateKeyPem::new(SIGNING_KEY),
-            passphrase: None,
-        })
-        .with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(encryption_cert),
-            key: PrivateKeyPem::new(decryption_key),
-            passphrase: None,
-        })
+        .with_signing_credential(X509Credential::new(
+            CertificatePem::new(SIGNING_CERT),
+            PrivateKeyPem::new(SIGNING_KEY),
+        ))
+        .with_decryption_credential(X509Credential::new(
+            CertificatePem::new(encryption_cert),
+            PrivateKeyPem::new(decryption_key),
+        ))
 }
 
 fn encrypted() -> StartNameIdManagement {
@@ -317,12 +315,11 @@ fn identity_provider_decrypts_identifiers_made_for_either_published_certificate(
     let sp = sp()?;
     let sp_peer = sp_descriptor(&sp)?;
     let idp = idp_with(
-        credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY).with_additional_decryption_credential(
-            X509Credential {
-                certificate: CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
-                key: PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
-                passphrase: None,
-            },
+        credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY).with_decryption_credential(
+            X509Credential::new(
+                CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
+                PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
+            ),
         ),
     )?;
     for encryption_cert in [IDP_ENCRYPTION_CERT, IDP_NEXT_ENCRYPTION_CERT] {

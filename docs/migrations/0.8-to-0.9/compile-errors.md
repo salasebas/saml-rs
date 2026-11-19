@@ -334,16 +334,17 @@ The same borrowing pattern applies to `credentials`, `algorithms`, `xml`, and
 its fields.
 
 `DecryptionCredential` is renamed `X509Credential`: a private key, the
-certificate of its public key, and an optional passphrase. Signing takes one
-too. Start from `Credentials::default()` and chain one method per value:
+certificate of its public key, and an optional passphrase. Its fields are
+private. Build one with `X509Credential::new(certificate, key)`, and add
+`.with_passphrase(passphrase)` for an encrypted key. Signing takes one too.
+Start from `Credentials::default()` and chain one method per value:
 
 | Former field | Method |
 | --- | --- |
-| `signing_key`, `signing_key_passphrase`, and `signing_certificate` | `with_signing_credential(X509Credential { certificate, key, passphrase })` |
+| `signing_key`, `signing_key_passphrase`, and `signing_certificate` | `with_signing_credential(X509Credential::new(certificate, key))` |
 | `additional_signing_certificates` | `with_additional_signing_certificate(certificate)`, once per certificate, in publication order |
 | `hmac_secret` | `with_hmac_secret(secret)` |
-| `encryption_certificate`, `decryption_key`, and `decryption_key_passphrase` | `with_decryption_credential(X509Credential { certificate, key, passphrase })` |
-| `additional_decryption_keys` | `with_additional_decryption_credential(credential)`, once per credential, in decryption order |
+| `encryption_certificate`, `decryption_key`, `decryption_key_passphrase`, and `additional_decryption_keys` | `with_decryption_credential(credential)` once per credential, or `with_decryption_credentials(credentials)`, in decryption order. Pass the former primary key first |
 
 Before:
 
@@ -361,19 +362,17 @@ After:
 
 ```rust
 let credentials = Credentials::default()
-    .with_signing_credential(X509Credential {
-        certificate: CertificatePem::new(signing_cert_pem),
-        key: PrivateKeyPem::new(signing_key_pem),
-        passphrase: None,
-    })
-    .with_decryption_credential(X509Credential {
-        certificate: CertificatePem::new(encryption_cert_pem),
-        key: PrivateKeyPem::new(decryption_key_pem),
-        passphrase: None,
-    });
+    .with_signing_credential(X509Credential::new(
+        CertificatePem::new(signing_cert_pem),
+        PrivateKeyPem::new(signing_key_pem),
+    ))
+    .with_decryption_credential(X509Credential::new(
+        CertificatePem::new(encryption_cert_pem),
+        PrivateKeyPem::new(decryption_key_pem),
+    ));
 ```
 
-Each key now travels with its certificate and passphrase. Three combinations
+Each key now travels with its certificate and passphrase. These combinations
 can no longer be expressed:
 
 - A passphrase without its key. `build()` used to reject it with
@@ -390,23 +389,25 @@ can no longer be expressed:
   certificate without a decryption key. Give `with_decryption_credential` the
   certificate that peers encrypt for. That certificate is published in your
   metadata, as before.
+- An additional decryption key without a primary one, which `build()`
+  rejected with `SamlError::MissingKey("decryption_key")`. The decryption
+  credentials are now one list. Decryption tries them, and metadata publishes
+  their certificates, in the order added.
 
 The `MissingKey` values that `build()` returns name the credential.
 `"signing_credential"` replaces `"signing_key"` for a policy that signs
 without one. `"decryption_credential"` replaces `"decryption_key"` for
-selected encryption without a decryption credential, and for an additional
-decryption credential without a primary one. Update a check that compares
-these strings.
+selected encryption without a decryption credential. Update a check that
+compares these strings.
 
 To read credentials, use the getters:
 
 | Former field read | Getter |
 | --- | --- |
-| `signing_key`, `signing_key_passphrase`, `signing_certificate` | `signing_credential()`, then its `key`, `passphrase`, and `certificate` fields |
+| `signing_key`, `signing_key_passphrase`, `signing_certificate` | `signing_credential()`, then its `key()`, `passphrase()`, and `certificate()` getters |
 | `hmac_secret` | `hmac_secret()`, an `Option` of a reference |
 | `additional_signing_certificates` | `additional_signing_certificates()`, a slice |
-| `encryption_certificate`, `decryption_key`, `decryption_key_passphrase` | `decryption_credential()`, then its `certificate`, `key`, and `passphrase` fields |
-| `additional_decryption_keys` | `additional_decryption_credentials()`, a slice |
+| `encryption_certificate`, `decryption_key`, `decryption_key_passphrase`, `additional_decryption_keys` | `decryption_credentials()`, a slice in decryption order. The first credential holds the former primary key |
 
 The getters return the typed wrappers, which no longer give the PEM text or
 secret back. See [1.3](#13-keep-your-own-copy-of-credential-material).

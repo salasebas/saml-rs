@@ -1085,13 +1085,9 @@ fn encrypted_assertion_parties(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::artifact(SP_ACS_ARTIFACT)?,
         )
-        .credentials(
-            signing_credentials().with_decryption_credential(saml_rs::X509Credential {
-                certificate: CertificatePem::new(CERT),
-                key: PrivateKeyPem::new(PRIVKEY),
-                passphrase: None,
-            }),
-        )
+        .credentials(signing_credentials().with_decryption_credential(
+            saml_rs::X509Credential::new(CertificatePem::new(CERT), PrivateKeyPem::new(PRIVKEY)),
+        ))
         .xml(encryption())
         .build()?,
     );

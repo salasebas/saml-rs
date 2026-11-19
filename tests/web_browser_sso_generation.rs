@@ -770,13 +770,9 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
-        .credentials(
-            signing_credentials().with_decryption_credential(saml_rs::X509Credential {
-                certificate: CertificatePem::new(CERT),
-                key: PrivateKeyPem::new(PRIVKEY),
-                passphrase: None,
-            }),
-        )
+        .credentials(signing_credentials().with_decryption_credential(
+            saml_rs::X509Credential::new(CertificatePem::new(CERT), PrivateKeyPem::new(PRIVKEY)),
+        ))
         .validation(signing_sp_validation())
         .build()?,
     );
@@ -820,12 +816,9 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         },
         ..XmlPolicy::default()
     };
-    let encrypted_credentials =
-        signing_credentials().with_decryption_credential(saml_rs::X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        });
+    let encrypted_credentials = signing_credentials().with_decryption_credential(
+        saml_rs::X509Credential::new(CertificatePem::new(CERT), PrivateKeyPem::new(PRIVKEY)),
+    );
     let sp = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,

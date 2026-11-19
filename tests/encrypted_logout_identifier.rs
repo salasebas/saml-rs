@@ -53,18 +53,18 @@ enum Initiator {
 
 const INITIATORS: [Initiator; 2] = [Initiator::Sp, Initiator::Idp];
 
+fn signing_credentials() -> Credentials {
+    Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new(CERT),
+        PrivateKeyPem::new(PRIVKEY),
+    ))
+}
+
 fn credentials() -> Credentials {
-    Credentials::default()
-        .with_signing_credential(X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        })
-        .with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        })
+    signing_credentials().with_decryption_credential(X509Credential::new(
+        CertificatePem::new(CERT),
+        PrivateKeyPem::new(PRIVKEY),
+    ))
 }
 
 fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
@@ -391,20 +391,18 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
 #[test]
 fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certificate(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_credential(X509Credential {
-        certificate: CertificatePem::new(NEXT_CERT),
-        key: PrivateKeyPem::new(NEXT_PRIVKEY),
-        passphrase: None,
-    });
+    let rolling = credentials().with_decryption_credential(X509Credential::new(
+        CertificatePem::new(NEXT_CERT),
+        PrivateKeyPem::new(NEXT_PRIVKEY),
+    ));
     for encryption_cert in [CERT, NEXT_CERT] {
         let published = idp_with_credentials(
             LogoutPolicy::recommended(),
             XmlEncryptionPolicy::default(),
-            credentials().with_decryption_credential(X509Credential {
-                certificate: CertificatePem::new(encryption_cert),
-                key: PrivateKeyPem::new(PRIVKEY),
-                passphrase: None,
-            }),
+            signing_credentials().with_decryption_credential(X509Credential::new(
+                CertificatePem::new(encryption_cert),
+                PrivateKeyPem::new(PRIVKEY),
+            )),
         )?;
         let parties = Parties {
             idp: idp_with_credentials(
@@ -438,11 +436,10 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
     let published = idp_with_credentials(
         LogoutPolicy::recommended(),
         XmlEncryptionPolicy::default(),
-        credentials().with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(NEXT_CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        }),
+        signing_credentials().with_decryption_credential(X509Credential::new(
+            CertificatePem::new(NEXT_CERT),
+            PrivateKeyPem::new(PRIVKEY),
+        )),
     )?;
     let parties = Parties {
         idp: idp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
@@ -677,11 +674,10 @@ fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
     let unloadable_key = idp_with_credentials(
         LogoutPolicy::recommended(),
         XmlEncryptionPolicy::default(),
-        credentials().with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new("not a private key"),
-            passphrase: None,
-        }),
+        signing_credentials().with_decryption_credential(X509Credential::new(
+            CertificatePem::new(CERT),
+            PrivateKeyPem::new("not a private key"),
+        )),
     )?;
     let options =
         StartSlo::post().identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);

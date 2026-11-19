@@ -67,11 +67,10 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     )
     .name_id_format(NameIdFormat::EmailAddress)
     .credentials(
-        Credentials::default().with_signing_credential(X509Credential {
-            certificate: CertificatePem::new("dummy-signing-certificate-for-conversion-test"),
-            key: PrivateKeyPem::new("dummy-private-key-for-conversion-test"),
-            passphrase: None,
-        }),
+        Credentials::default().with_signing_credential(X509Credential::new(
+            CertificatePem::new("dummy-signing-certificate-for-conversion-test"),
+            PrivateKeyPem::new("dummy-private-key-for-conversion-test"),
+        )),
     )
     .validation(SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,

@@ -41,18 +41,18 @@ const NEXT_PRIVKEY: &str =
 const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
+fn signing_credentials() -> Credentials {
+    Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new(CERT),
+        PrivateKeyPem::new(PRIVKEY),
+    ))
+}
+
 fn credentials() -> Credentials {
-    Credentials::default()
-        .with_signing_credential(X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        })
-        .with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        })
+    signing_credentials().with_decryption_credential(X509Credential::new(
+        CertificatePem::new(CERT),
+        PrivateKeyPem::new(PRIVKEY),
+    ))
 }
 
 fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
@@ -268,11 +268,10 @@ fn encrypted_attribute_carries_each_attribute_to_the_service_provider(
 }
 
 fn next_decryption_key() -> X509Credential {
-    X509Credential {
-        certificate: CertificatePem::new(NEXT_CERT),
-        key: PrivateKeyPem::new(NEXT_PRIVKEY),
-        passphrase: None,
-    }
+    X509Credential::new(
+        CertificatePem::new(NEXT_CERT),
+        PrivateKeyPem::new(NEXT_PRIVKEY),
+    )
 }
 
 /// SSO in which the identity provider encrypts for `encryption_cert` and the
@@ -290,11 +289,10 @@ fn exchange_encrypted_for(
     let published = sp_with_credentials(
         XmlEncryptionPolicy::default(),
         sp_validation(),
-        credentials().with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(encryption_cert),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        }),
+        signing_credentials().with_decryption_credential(X509Credential::new(
+            CertificatePem::new(encryption_cert),
+            PrivateKeyPem::new(PRIVKEY),
+        )),
     )?;
     let idp = idp(encryption)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&published, &idp)?;
@@ -385,7 +383,7 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
 #[test]
 fn metadata_publishes_each_encryption_certificate_in_order(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_credential(next_decryption_key());
+    let rolling = credentials().with_decryption_credential(next_decryption_key());
     let sp = sp_with_credentials(
         XmlEncryptionPolicy::default(),
         sp_validation(),
@@ -430,7 +428,7 @@ fn metadata_publishes_each_encryption_certificate_in_order(
 #[test]
 fn service_provider_decrypts_elements_made_for_either_published_certificate(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_credential(next_decryption_key());
+    let rolling = credentials().with_decryption_credential(next_decryption_key());
     for encryption in each_encrypted_element() {
         for encryption_cert in [CERT, NEXT_CERT] {
             let exchange = exchange_encrypted_for(encryption, encryption_cert, rolling.clone())?;
@@ -450,7 +448,7 @@ fn service_provider_decrypts_elements_made_for_either_published_certificate(
 #[test]
 fn service_provider_without_the_key_keeps_the_single_key_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rolling = credentials().with_additional_decryption_credential(next_decryption_key());
+    let rolling = credentials().with_decryption_credential(next_decryption_key());
     for encryption in each_encrypted_element() {
         let single_key = exchange_encrypted_for(encryption, UNKNOWN_CERT, credentials())?.session;
         let both_keys = exchange_encrypted_for(encryption, UNKNOWN_CERT, rolling.clone())?.session;

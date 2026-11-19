@@ -271,19 +271,19 @@ impl SpConfigBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI
-    /// reference of at most 1024 characters, the organization, contacts, or
-    /// error URI are invalid, an additional decryption credential has no
-    /// primary one, the selected policy needs a credential that is not set,
-    /// the algorithm policy is not supported, the selected policy requires
-    /// crypto in a build without a crypto provider, the protocol and
-    /// assertion tag prefixes are not two different XML NCNames, or a tag
-    /// prefix or the `SignatureConfig` prefix is not an XML NCName or begins
-    /// with `xml` in any case. Also returns the errors of generating SP
-    /// metadata from the config: a NameID format that is not an absolute URI
-    /// reference, two ACS endpoints with the same index, more ACS endpoints
-    /// than `unsignedShort` indexes, a repeated element ordering group, or a
-    /// `validUntil` outside the years 0001 through 9999.
+    /// Returns [`SamlError`] when:
+    ///
+    /// - the entity ID is not an absolute URI reference of at most 1024
+    ///   characters, or the organization, contacts, or error URI are invalid;
+    /// - the selected policy needs a credential that is not set, or crypto
+    ///   that a build without a crypto provider lacks;
+    /// - the algorithm policy is not supported;
+    /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
+    ///   begins with `xml` in any case, or the two tag prefixes are equal;
+    /// - generating SP metadata fails: a NameID format that is not an absolute
+    ///   URI reference, two ACS endpoints with the same index, more ACS
+    ///   endpoints than `unsignedShort` indexes, a repeated element ordering
+    ///   group, or a `validUntil` outside the years 0001 through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         let service_provider = self.service_provider()?;
         validate_sp_policy(&self)?;
@@ -580,19 +580,21 @@ impl IdpConfigBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI
-    /// reference of at most 1024 characters, two
-    /// `ArtifactResolutionService` endpoints share an index, the organization,
-    /// contacts, or error URI are invalid, an additional decryption credential
-    /// has no primary one, the issuance lifetime is zero or outside the internal
-    /// supported range, the algorithm policy is not supported, the selected
-    /// policy requires crypto in a build without a crypto provider, the
-    /// protocol and assertion tag prefixes are not two different XML NCNames,
-    /// or a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
-    /// begins with `xml` in any case. Also returns the errors of generating
-    /// IdP metadata from the config: a NameID format that is not an absolute
-    /// URI reference, a repeated element ordering group, or a `validUntil`
-    /// outside the years 0001 through 9999.
+    /// Returns [`SamlError`] when:
+    ///
+    /// - the entity ID is not an absolute URI reference of at most 1024
+    ///   characters, or the organization, contacts, or error URI are invalid;
+    /// - two `ArtifactResolutionService` endpoints share an index;
+    /// - the issuance lifetime is zero or outside the internal supported
+    ///   range;
+    /// - the selected policy requires crypto that a build without a crypto
+    ///   provider lacks;
+    /// - the algorithm policy is not supported;
+    /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
+    ///   begins with `xml` in any case, or the two tag prefixes are equal;
+    /// - generating IdP metadata fails: a NameID format that is not an
+    ///   absolute URI reference, a repeated element ordering group, or a
+    ///   `validUntil` outside the years 0001 through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         self.metadata.ensure_unique_artifact_resolution_indexes()?;
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
@@ -613,16 +615,10 @@ impl IdpConfigBuilder {
 }
 
 fn validate_shared_policy(
-    credentials: &Credentials,
     algorithms: &AlgorithmPolicy,
     templates: &TemplatePolicy,
 ) -> Result<(), SamlError> {
     super::encryption::validate_algorithms(algorithms)?;
-    if !credentials.additional_decryption_credentials().is_empty()
-        && credentials.decryption_credential().is_none()
-    {
-        return Err(SamlError::MissingKey("decryption_credential".into()));
-    }
     validate_tag_prefixes(
         &templates.tag_prefix_protocol,
         &templates.tag_prefix_assertion,
@@ -635,7 +631,7 @@ fn validate_shared_policy(
 
 fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     validate_sp_crypto_support(config)?;
-    validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)?;
+    validate_shared_policy(&config.algorithms, &config.templates)?;
     if matches!(
         config.validation.authn_requests,
         AuthnRequestSigningPolicy::Sign
@@ -643,7 +639,7 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
         validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
     }
     if config.xml.encryption.selects_any_element()
-        && config.credentials.decryption_credential().is_none()
+        && config.credentials.decryption_credentials().is_empty()
     {
         return Err(SamlError::MissingKey("decryption_credential".into()));
     }
@@ -652,7 +648,7 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
 
 fn validate_idp_policy(config: &IdpConfigBuilder) -> Result<(), SamlError> {
     validate_idp_crypto_support(config)?;
-    validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)
+    validate_shared_policy(&config.algorithms, &config.templates)
 }
 
 fn validated_idp_issuance_lifetime(

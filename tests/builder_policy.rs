@@ -182,13 +182,13 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
 }
 
 fn signing_credentials() -> Credentials {
-    Credentials::default().with_signing_credential(X509Credential {
-        certificate: CertificatePem::new("test signing certificate"),
-        key: PrivateKeyPem::new("test signing key"),
-        passphrase: None,
-    })
+    Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new("test signing certificate"),
+        PrivateKeyPem::new("test signing key"),
+    ))
 }
 
+#[cfg(crypto)]
 fn assert_missing_key(result: Result<impl Sized, SamlError>, field: &str) {
     assert!(matches!(
         result,
@@ -557,28 +557,6 @@ fn config_builders_reject_an_entity_id_that_is_not_a_uri_of_at_most_1024_charact
         assert!(matches!(sp, Err(SamlError::Invalid(_))), "{value}");
         assert!(matches!(idp, Err(SamlError::Invalid(_))), "{value}");
     }
-    Ok(())
-}
-
-#[test]
-fn sp_builder_rejects_additional_decryption_keys_without_decryption_key(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let credentials =
-        Credentials::default().with_additional_decryption_credential(X509Credential {
-            certificate: CertificatePem::new("certificate"),
-            key: PrivateKeyPem::new("key"),
-            passphrase: None,
-        });
-
-    let result = SpConfig::builder(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        AcsEndpoint::post("https://sp.example.com/acs")?,
-    )
-    .validation(SpValidationPolicy::compatibility())
-    .credentials(credentials)
-    .build();
-
-    assert_missing_key(result, "decryption_credential");
     Ok(())
 }
 

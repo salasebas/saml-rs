@@ -17,11 +17,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let privkey = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     let cert = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     let credentials = || {
-        Credentials::default().with_signing_credential(X509Credential {
-            certificate: CertificatePem::new(cert),
-            key: PrivateKeyPem::new(privkey),
-            passphrase: None,
-        })
+        Credentials::default().with_signing_credential(X509Credential::new(
+            CertificatePem::new(cert),
+            PrivateKeyPem::new(privkey),
+        ))
     };
     // Disabled preserves the raw API, which has no replay cache.
     let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);

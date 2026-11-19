@@ -32,10 +32,9 @@ pub(crate) fn load_decryption_keys(
     std::iter::once(read_private_key(pem, password))
         .chain(additional.iter().map(|credential| {
             read_private_key(
-                credential.key.as_str(),
+                credential.key().as_str(),
                 credential
-                    .passphrase
-                    .as_ref()
+                    .passphrase()
                     .map(|passphrase| passphrase.as_str()),
             )
         }))
@@ -115,11 +114,11 @@ mod tests {
         let keys = load_decryption_keys(
             SP_PRIVKEY,
             None,
-            &[X509Credential {
-                certificate: CertificatePem::new(SP_CERT),
-                key: PrivateKeyPem::new(SP_PRIVKEY_ENC),
-                passphrase: Some(Passphrase::new(SP_PASS)),
-            }],
+            &[X509Credential::new(
+                CertificatePem::new(SP_CERT),
+                PrivateKeyPem::new(SP_PRIVKEY_ENC),
+            )
+            .with_passphrase(Passphrase::new(SP_PASS))],
         )?;
         assert_eq!(keys.len(), 2);
         assert!(keys.iter().all(Key::has_private_key));

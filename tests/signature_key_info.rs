@@ -24,11 +24,10 @@ const IDP_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkc
 const IDP_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 
 fn credentials(key: &str, cert: &str) -> Credentials {
-    Credentials::default().with_signing_credential(X509Credential {
-        certificate: CertificatePem::new(cert),
-        key: PrivateKeyPem::new(key),
-        passphrase: None,
-    })
+    Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new(cert),
+        PrivateKeyPem::new(key),
+    ))
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {

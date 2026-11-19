@@ -57,16 +57,14 @@ fn signed_with(algorithms: AlgorithmPolicy, key: &str, cert: &str) -> Side {
     Side {
         algorithms,
         credentials: Credentials::default()
-            .with_signing_credential(X509Credential {
-                certificate: CertificatePem::new(cert),
-                key: PrivateKeyPem::new(key),
-                passphrase: None,
-            })
-            .with_decryption_credential(saml_rs::X509Credential {
-                certificate: CertificatePem::new(RSA_CERT),
-                key: PrivateKeyPem::new(RSA_KEY),
-                passphrase: None,
-            }),
+            .with_signing_credential(X509Credential::new(
+                CertificatePem::new(cert),
+                PrivateKeyPem::new(key),
+            ))
+            .with_decryption_credential(saml_rs::X509Credential::new(
+                CertificatePem::new(RSA_CERT),
+                PrivateKeyPem::new(RSA_KEY),
+            )),
     }
 }
 

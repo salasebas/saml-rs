@@ -7,7 +7,7 @@ use crate::sp::ServiceProvider;
 
 use super::algorithms::name_id_format_uris;
 use super::builders::{IdpConfigBuilder, SpConfigBuilder};
-use super::credentials::Credentials;
+use super::credentials::{Credentials, X509Credential};
 use super::descriptors::ManageNameIdService;
 use super::policies::{
     AssertionSignaturePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
@@ -111,7 +111,7 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
 fn signing_certificates(credentials: &Credentials) -> Vec<String> {
     credentials
         .signing_credential()
-        .map(|credential| &credential.certificate)
+        .map(X509Credential::certificate)
         .into_iter()
         .chain(credentials.additional_signing_certificates())
         .map(|certificate| certificate.as_str().to_string())
@@ -120,9 +120,8 @@ fn signing_certificates(credentials: &Credentials) -> Vec<String> {
 
 fn encryption_certificates(credentials: &Credentials) -> Vec<String> {
     credentials
-        .decryption_credential()
-        .into_iter()
-        .chain(credentials.additional_decryption_credentials())
-        .map(|credential| credential.certificate.as_str().to_string())
+        .decryption_credentials()
+        .iter()
+        .map(|credential| credential.certificate().as_str().to_string())
         .collect()
 }

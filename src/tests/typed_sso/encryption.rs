@@ -180,21 +180,17 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
     let range = document.node_range(key).ok_or("missing key range")?;
     let candidate = &xml[range];
     let config = sp_with_validation_and_xml(recommended_sso_accept_validation())?.credentials(
-        encryption_credentials()
-            .with_decryption_credential(X509Credential {
-                certificate: CertificatePem::new(include_str!(
-                    "../../../tests/fixtures/key/idp/cert.cer"
-                )),
-                key: PrivateKeyPem::new(include_str!(
+        signing_credentials()
+            .with_decryption_credential(X509Credential::new(
+                CertificatePem::new(include_str!("../../../tests/fixtures/key/idp/cert.cer")),
+                PrivateKeyPem::new(include_str!(
                     "../../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem"
                 )),
-                passphrase: None,
-            })
-            .with_additional_decryption_credential(X509Credential {
-                certificate: CertificatePem::new(CERT),
-                key: PrivateKeyPem::new(PRIVKEY),
-                passphrase: None,
-            }),
+            ))
+            .with_decryption_credential(X509Credential::new(
+                CertificatePem::new(CERT),
+                PrivateKeyPem::new(PRIVKEY),
+            )),
     );
     for (maximum, count, accepted) in [
         (16, 1, true),
@@ -256,16 +252,14 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
     const PASSPHRASE: &str = "VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px";
     use saml_rs::{Credentials, Passphrase};
     let credentials = Credentials::default()
-        .with_signing_credential(X509Credential {
-            certificate: CertificatePem::new(KEY_CERT),
-            key: PrivateKeyPem::new(KEY),
-            passphrase: Some(Passphrase::new(PASSPHRASE)),
-        })
-        .with_decryption_credential(X509Credential {
-            certificate: CertificatePem::new(KEY_CERT),
-            key: PrivateKeyPem::new(KEY),
-            passphrase: Some(Passphrase::new(PASSPHRASE)),
-        });
+        .with_signing_credential(
+            X509Credential::new(CertificatePem::new(KEY_CERT), PrivateKeyPem::new(KEY))
+                .with_passphrase(Passphrase::new(PASSPHRASE)),
+        )
+        .with_decryption_credential(
+            X509Credential::new(CertificatePem::new(KEY_CERT), PrivateKeyPem::new(KEY))
+                .with_passphrase(Passphrase::new(PASSPHRASE)),
+        );
     let sp = Saml::sp(
         sp_with_validation_and_xml(signing_sp_validation())?
             .credentials(credentials)
