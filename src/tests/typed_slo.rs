@@ -37,8 +37,8 @@ use saml_rs::xml::extract;
 use saml_rs::xml::fields::login_response_fields;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, BrowserInput, ClockSkew, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutBinding, LogoutCompleted, LogoutPolicy,
+    AuthnRequestValidationPolicy, ClockSkew, Credentials, EntityId, FormField, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, LogoutBinding, LogoutCompleted, LogoutPolicy,
     LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
     PartyAuthentication, PendingLogoutRequest, PendingLogoutRequestSnapshot, Received, RelayState,
@@ -346,21 +346,20 @@ fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, 
 fn logout_request_input(
     outbound: &Outbound<LogoutRequest>,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutRequest>, SamlError> {
+) -> Result<Inbound<LogoutRequest>, SamlError> {
     match binding {
         LogoutBinding::Redirect => {
             let url = outbound.redirect_url()?;
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-            Ok(BrowserInput::<LogoutRequest>::redirect(query))
+            Ok(Inbound::redirect(query))
         }
-        LogoutBinding::Post => Ok(BrowserInput::<LogoutRequest>::post(post_fields(outbound)?)),
-        LogoutBinding::SimpleSign => Ok(BrowserInput::<LogoutRequest>::simple_sign(post_fields(
-            outbound,
-        )?)),
-        LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
+        LogoutBinding::Post => Ok(Inbound::post(post_fields(outbound)?)),
+        LogoutBinding::SimpleSign => Ok(Inbound::simple_sign(post_fields(outbound)?)),
+        LogoutBinding::Soap => Ok(Inbound::soap(
             outbound.soap_request()?.envelope(),
+            SoapChannel::unattested(),
         )),
     }
 }
@@ -368,21 +367,20 @@ fn logout_request_input(
 fn logout_response_input(
     outbound: &Outbound<LogoutResponse>,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutResponse>, SamlError> {
+) -> Result<Inbound<LogoutResponse>, SamlError> {
     match binding {
         LogoutBinding::Redirect => {
             let url = outbound.redirect_url()?;
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-            Ok(BrowserInput::<LogoutResponse>::redirect(query))
+            Ok(Inbound::redirect(query))
         }
-        LogoutBinding::Post => Ok(BrowserInput::<LogoutResponse>::post(post_fields(outbound)?)),
-        LogoutBinding::SimpleSign => Ok(BrowserInput::<LogoutResponse>::simple_sign(post_fields(
-            outbound,
-        )?)),
-        LogoutBinding::Soap => Ok(BrowserInput::<LogoutResponse>::soap(
+        LogoutBinding::Post => Ok(Inbound::post(post_fields(outbound)?)),
+        LogoutBinding::SimpleSign => Ok(Inbound::simple_sign(post_fields(outbound)?)),
+        LogoutBinding::Soap => Ok(Inbound::soap(
             outbound.soap_response()?.envelope(),
+            SoapChannel::unattested(),
         )),
     }
 }
@@ -408,7 +406,7 @@ fn sp_slo_endpoint(binding: LogoutBinding) -> Result<&'static str, SamlError> {
 fn tampered_logout_request_expiration_input(
     outbound: &Outbound<LogoutRequest>,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutRequest>, Box<dyn std::error::Error>> {
+) -> Result<Inbound<LogoutRequest>, Box<dyn std::error::Error>> {
     let xml = outbound_xml(outbound, "SAMLRequest")?;
     let expiration = parse_document(&xml, saml_rs::XmlLimits::default())?
         .root
@@ -454,7 +452,7 @@ fn tampered_logout_request_expiration_input(
             if !replaced {
                 return Err("redirect URL is missing SAMLRequest".into());
             }
-            Ok(BrowserInput::<LogoutRequest>::redirect(query))
+            Ok(Inbound::redirect(query))
         }
         LogoutBinding::Post | LogoutBinding::SimpleSign => {
             let fields = post_fields(outbound)?
@@ -468,13 +466,14 @@ fn tampered_logout_request_expiration_input(
                 })
                 .collect();
             match binding {
-                LogoutBinding::Post => Ok(BrowserInput::<LogoutRequest>::post(fields)),
-                LogoutBinding::SimpleSign => Ok(BrowserInput::<LogoutRequest>::simple_sign(fields)),
+                LogoutBinding::Post => Ok(Inbound::post(fields)),
+                LogoutBinding::SimpleSign => Ok(Inbound::simple_sign(fields)),
                 _ => Err("unsupported binding".into()),
             }
         }
-        LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
+        LogoutBinding::Soap => Ok(Inbound::soap(
             SoapProtocolMessage::response_envelope(&tampered)?,
+            SoapChannel::unattested(),
         )),
     }
 }
@@ -573,12 +572,12 @@ fn logout_request_xml(id: &str, issuer: &str, destination: Option<&str>) -> Stri
 fn signed_logout_request_input(
     xml: &str,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutRequest>, SamlError> {
+) -> Result<Inbound<LogoutRequest>, SamlError> {
     let key = read_private_key(PRIVKEY, None)?;
     match binding {
         LogoutBinding::Post => {
             let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
-            Ok(BrowserInput::<LogoutRequest>::post(vec![FormField::new(
+            Ok(Inbound::post(vec![FormField::new(
                 "SAMLRequest",
                 STANDARD.encode(signed.as_bytes()),
             )]))
@@ -590,12 +589,12 @@ fn signed_logout_request_input(
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-            Ok(BrowserInput::<LogoutRequest>::redirect(query))
+            Ok(Inbound::redirect(query))
         }
         LogoutBinding::SimpleSign => {
             let octet = format!("SAMLRequest={xml}&SigAlg={RSA_SHA256}");
             let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-            Ok(BrowserInput::<LogoutRequest>::simple_sign(vec![
+            Ok(Inbound::simple_sign(vec![
                 FormField::new("SAMLRequest", STANDARD.encode(xml.as_bytes())),
                 FormField::new("SigAlg", RSA_SHA256),
                 FormField::new("Signature", signature),
@@ -603,8 +602,9 @@ fn signed_logout_request_input(
         }
         LogoutBinding::Soap => {
             let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
-            Ok(BrowserInput::<LogoutRequest>::soap(
+            Ok(Inbound::soap(
                 SoapProtocolMessage::response_envelope(&signed)?,
+                SoapChannel::unattested(),
             ))
         }
     }
@@ -613,9 +613,9 @@ fn signed_logout_request_input(
 fn unsigned_logout_request_input(
     xml: &str,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutRequest>, SamlError> {
+) -> Result<Inbound<LogoutRequest>, SamlError> {
     match binding {
-        LogoutBinding::Post => Ok(BrowserInput::<LogoutRequest>::post(vec![FormField::new(
+        LogoutBinding::Post => Ok(Inbound::post(vec![FormField::new(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )])),
@@ -629,13 +629,14 @@ fn unsigned_logout_request_input(
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-            Ok(BrowserInput::<LogoutRequest>::redirect(query))
+            Ok(Inbound::redirect(query))
         }
         LogoutBinding::SimpleSign => Err(SamlError::Invalid(
             "SimpleSign input requires its binding-level signature".into(),
         )),
-        LogoutBinding::Soap => Ok(BrowserInput::<LogoutRequest>::soap(
+        LogoutBinding::Soap => Ok(Inbound::soap(
             SoapProtocolMessage::response_envelope(xml)?,
+            SoapChannel::unattested(),
         )),
     }
 }
@@ -695,12 +696,12 @@ fn logout_response_xml(
 fn signed_logout_response_input(
     xml: &str,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutResponse>, SamlError> {
+) -> Result<Inbound<LogoutResponse>, SamlError> {
     let key = read_private_key(PRIVKEY, None)?;
     match binding {
         LogoutBinding::Post => {
             let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
-            Ok(BrowserInput::<LogoutResponse>::post(vec![FormField::new(
+            Ok(Inbound::post(vec![FormField::new(
                 "SAMLResponse",
                 STANDARD.encode(signed.as_bytes()),
             )]))
@@ -712,12 +713,12 @@ fn signed_logout_response_input(
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-            Ok(BrowserInput::<LogoutResponse>::redirect(query))
+            Ok(Inbound::redirect(query))
         }
         LogoutBinding::SimpleSign => {
             let octet = format!("SAMLResponse={xml}&SigAlg={RSA_SHA256}");
             let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
-            Ok(BrowserInput::<LogoutResponse>::simple_sign(vec![
+            Ok(Inbound::simple_sign(vec![
                 FormField::new("SAMLResponse", STANDARD.encode(xml.as_bytes())),
                 FormField::new("SigAlg", RSA_SHA256),
                 FormField::new("Signature", signature),
@@ -725,8 +726,9 @@ fn signed_logout_response_input(
         }
         LogoutBinding::Soap => {
             let signed = sign_saml_xml(xml, true, &key, CERT, RSA_SHA256, &[], None)?;
-            Ok(BrowserInput::<LogoutResponse>::soap(
+            Ok(Inbound::soap(
                 SoapProtocolMessage::response_envelope(&signed)?,
+                SoapChannel::unattested(),
             ))
         }
     }
@@ -735,9 +737,9 @@ fn signed_logout_response_input(
 fn unsigned_logout_response_input(
     xml: &str,
     binding: LogoutBinding,
-) -> Result<BrowserInput<LogoutResponse>, SamlError> {
+) -> Result<Inbound<LogoutResponse>, SamlError> {
     match binding {
-        LogoutBinding::Post => Ok(BrowserInput::<LogoutResponse>::post(vec![FormField::new(
+        LogoutBinding::Post => Ok(Inbound::post(vec![FormField::new(
             "SAMLResponse",
             STANDARD.encode(xml.as_bytes()),
         )])),
@@ -751,13 +753,14 @@ fn unsigned_logout_response_input(
             let (_, query) = url
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-            Ok(BrowserInput::<LogoutResponse>::redirect(query))
+            Ok(Inbound::redirect(query))
         }
         LogoutBinding::SimpleSign => Err(SamlError::Invalid(
             "SimpleSign input requires its binding-level signature".into(),
         )),
-        LogoutBinding::Soap => Ok(BrowserInput::<LogoutResponse>::soap(
+        LogoutBinding::Soap => Ok(Inbound::soap(
             SoapProtocolMessage::response_envelope(xml)?,
+            SoapChannel::unattested(),
         )),
     }
 }
@@ -933,7 +936,7 @@ fn sp_started_exchange_answered_with(answer: RespondSlo) -> Result<SloExchange, 
     )?;
     assert_eq!(started.outbound.raw_context().request_type, "SAMLRequest");
 
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
     assert_eq!(
@@ -1092,7 +1095,7 @@ fn typed_slo_signs_front_channel_responses_despite_compatibility_policy(
     )?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
 
     let post = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
@@ -1176,7 +1179,7 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
     let completed = exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     )?;
 
@@ -1252,7 +1255,7 @@ fn typed_facade_rejects_missing_logout_response_issue_instant_in_real_flow(
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(response_fields),
+        Inbound::post(response_fields),
         validation(),
     ) {
         Err(SamlError::ProtocolProfile(message))
@@ -1277,7 +1280,7 @@ fn typed_facade_receive_slo_checks_logout_request_replay() -> Result<(), Box<dyn
 
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         validation_with_cache(&mut cache),
     )?;
     let replay_key = format!("logout_request_id:{}", received.message().id().as_str());
@@ -1285,7 +1288,7 @@ fn typed_facade_receive_slo_checks_logout_request_replay() -> Result<(), Box<dyn
 
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields),
+        Inbound::post(request_fields),
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
@@ -1632,7 +1635,7 @@ fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
 
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         SamlValidationContext::new(first_now, ReplayPolicy::RequireCache(&mut cache))
             .with_clock_skew(skew),
     )?;
@@ -1649,7 +1652,7 @@ fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
     );
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
             .with_clock_skew(skew),
     ) {
@@ -1664,7 +1667,7 @@ fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
     );
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields),
+        Inbound::post(request_fields),
         SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache))
             .with_clock_skew(skew),
     ) {
@@ -1688,7 +1691,7 @@ fn typed_facade_receive_slo_requires_replay_retention_for_logout_request(
 
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation,
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -1725,26 +1728,26 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
     let request_fields = post_fields(&started.outbound)?;
     idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         validation(),
     )?;
     idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         validation(),
     )?;
 
     let mut request_cache = RecordingReplayCache::default();
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields.clone()),
+        Inbound::post(request_fields.clone()),
         validation_with_cache(&mut request_cache),
     )?;
     let request_key = format!("logout_request_id:{}", received.message().id().as_str());
     assert!(request_cache.seen.contains_key(&request_key));
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields),
+        Inbound::post(request_fields),
         validation_with_cache(&mut request_cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => assert_eq!(key.cache_key(), request_key),
@@ -1761,13 +1764,13 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
     sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(response_fields.clone()),
+        Inbound::post(response_fields.clone()),
         validation(),
     )?;
     sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(response_fields.clone()),
+        Inbound::post(response_fields.clone()),
         validation(),
     )?;
 
@@ -1775,7 +1778,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
     let completed = sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(response_fields.clone()),
+        Inbound::post(response_fields.clone()),
         validation_with_cache(&mut response_cache),
     )?;
     let response_id = completed.response().id().as_str();
@@ -1784,7 +1787,7 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
     match sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(response_fields),
+        Inbound::post(response_fields),
         validation_with_cache(&mut response_cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
@@ -1807,7 +1810,7 @@ fn typed_facade_finish_slo_checks_logout_response_replay() -> Result<(), Box<dyn
     let completed = exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields.clone()),
+        Inbound::post(exchange.response_fields.clone()),
         validation_with_cache(&mut cache),
     )?;
     let response = completed.response();
@@ -1817,7 +1820,7 @@ fn typed_facade_finish_slo_checks_logout_response_replay() -> Result<(), Box<dyn
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation_with_cache(&mut cache),
     ) {
         Err(SamlError::ReplayDetected { key }) => {
@@ -1971,7 +1974,7 @@ fn typed_facade_finish_slo_requires_replay_retention_for_logout_response(
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation,
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -1993,7 +1996,7 @@ fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error
         StartSlo::post().relay_state(relay_state),
     )?;
 
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = sp.receive_slo(&idp_descriptor, request_input, validation())?;
     assert_eq!(received.message().issuer().as_str(), IDP_ENTITY_ID);
 
@@ -2001,7 +2004,7 @@ fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error
     let completed = idp.finish_slo(
         &sp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     )?;
 
@@ -2257,11 +2260,8 @@ fn typed_session_authority_pending_snapshot_round_trips_issuance_window(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
     let restored = PendingLogoutRequest::from_snapshot(started.pending.snapshot())?;
-    assert!(restored.not_on_or_after().is_some());
-    assert_eq!(
-        restored.not_on_or_after(),
-        started.pending.not_on_or_after()
-    );
+    assert!(started.pending.not_on_or_after().is_some());
+    assert_eq!(restored, started.pending);
 
     let received = sp.receive_slo(
         &idp_descriptor,
@@ -2272,7 +2272,7 @@ fn typed_session_authority_pending_snapshot_round_trips_issuance_window(
     let completed = idp.finish_slo(
         &sp_descriptor,
         &restored,
-        BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     )?;
     assert_eq!(completed.peer_entity_id().as_str(), SP_ENTITY_ID);
@@ -2657,7 +2657,7 @@ fn typed_facade_rejects_slo_pending_peer_mismatch() -> Result<(), Box<dyn std::e
     match exchange.sp.finish_slo(
         &other_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::IssuerMismatch { expected, actual }) => {
@@ -2803,11 +2803,7 @@ fn typed_facade_rejects_slo_response_crossing_the_soap_exchange(
         LogoutBinding::Soap,
     )?;
     let cases = [
-        (
-            soap_pending,
-            BrowserInput::<LogoutResponse>::post(post_response),
-            Binding::Post,
-        ),
+        (soap_pending, Inbound::post(post_response), Binding::Post),
         (exchange.pending.clone(), soap_response, Binding::Soap),
     ];
     for (pending, input, expected) in cases {
@@ -2834,7 +2830,7 @@ fn typed_facade_rejects_slo_relay_state_mismatch() -> Result<(), Box<dyn std::er
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
@@ -2856,7 +2852,7 @@ fn typed_facade_rejects_slo_wrong_pending_request_id() -> Result<(), Box<dyn std
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &wrong_pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
@@ -2886,7 +2882,7 @@ fn typed_facade_finish_slo_returns_partial_logout_under_success(
     let completed = exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     )?;
 
@@ -2907,7 +2903,7 @@ fn typed_facade_finish_slo_reports_signed_correlated_error_status(
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::StatusNotSuccess { status }) => {
@@ -2939,7 +2935,7 @@ fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &wrong_pending,
-        BrowserInput::<LogoutResponse>::post(exchange.response_fields),
+        Inbound::post(exchange.response_fields),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
@@ -3001,7 +2997,7 @@ fn typed_facade_rejects_a_slo_response_that_dropped_the_relay_state(
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &exchange.pending,
-        BrowserInput::<LogoutResponse>::post(without_relay_state),
+        Inbound::post(without_relay_state),
         validation(),
     ) {
         Err(SamlError::RelayStateMismatch { expected, actual }) => {
@@ -3023,7 +3019,7 @@ fn typed_facade_accepts_slo_relay_state_the_responder_adds_to_a_request_without_
         ("", RelayState::try_new("")?),
     ] {
         let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-        let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+        let request_input = Inbound::post(post_fields(&started.outbound)?);
         let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
         let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
         let mut response_fields = post_fields(&response)?;
@@ -3032,7 +3028,7 @@ fn typed_facade_accepts_slo_relay_state_the_responder_adds_to_a_request_without_
         let completed = sp.finish_slo(
             &idp_descriptor,
             &started.pending,
-            BrowserInput::<LogoutResponse>::post(response_fields),
+            Inbound::post(response_fields),
             validation(),
         )?;
 
@@ -3056,7 +3052,7 @@ fn typed_facade_respond_slo_echoes_the_received_relay_state_exactly(
             None => StartSlo::post(),
         };
         let started = sp.start_slo(&idp_descriptor, subject()?, options)?;
-        let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+        let request_input = Inbound::post(post_fields(&started.outbound)?);
         let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
         let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
         let echoed = response.post_form()?.value("RelayState");
@@ -3075,11 +3071,7 @@ fn typed_facade_slo_accepts_and_echoes_received_relay_state_up_to_the_receive_li
     let mut request_fields = post_fields(&started.outbound)?;
     request_fields.push(FormField::new("RelayState", long.as_str()));
 
-    let received = idp.receive_slo(
-        &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields),
-        validation(),
-    )?;
+    let received = idp.receive_slo(&sp_descriptor, Inbound::post(request_fields), validation())?;
     assert_eq!(
         received.relay_state().map(RelayState::as_str),
         Some(long.as_str())
@@ -3094,7 +3086,7 @@ fn typed_facade_slo_accepts_and_echoes_received_relay_state_up_to_the_receive_li
     let completed = sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(post_fields(&response)?),
+        Inbound::post(post_fields(&response)?),
         validation(),
     )?;
     assert_eq!(
@@ -3113,11 +3105,7 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let mut request_fields = post_fields(&started.outbound)?;
     request_fields.push(FormField::new("RelayState", too_long.as_str()));
-    match idp.receive_slo(
-        &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request_fields),
-        validation(),
-    ) {
+    match idp.receive_slo(&sp_descriptor, Inbound::post(request_fields), validation()) {
         Err(SamlError::LimitExceeded {
             limit: saml_rs::ResourceLimit::RelayStateBytes,
             ..
@@ -3129,7 +3117,7 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
 
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
@@ -3138,7 +3126,7 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
     match sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(response_fields),
+        Inbound::post(response_fields),
         validation(),
     ) {
         Err(SamlError::LimitExceeded {
@@ -3180,7 +3168,7 @@ fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
     for repeated in ["RelayState=a&RelayState=b", "RelayState=a&Rel%61yState=b"] {
         match idp.receive_slo(
             &sp_descriptor,
-            BrowserInput::<LogoutRequest>::redirect(format!("{request_query}&{repeated}")),
+            Inbound::redirect(format!("{request_query}&{repeated}")),
             validation(),
         ) {
             Err(SamlError::DuplicateBindingParameter { name: "RelayState" }) => {}
@@ -3193,7 +3181,7 @@ fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
         match sp.finish_slo(
             &idp_descriptor,
             &started.pending,
-            BrowserInput::<LogoutResponse>::redirect(format!("{response_query}&{repeated}")),
+            Inbound::redirect(format!("{response_query}&{repeated}")),
             validation(),
         ) {
             Err(SamlError::DuplicateBindingParameter { name: "RelayState" }) => {}
@@ -3214,7 +3202,7 @@ fn typed_facade_rejects_custom_logout_response_in_response_to_mismatch(
     let idp = Saml::idp(bad_template_idp_config()?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
 
     match idp.respond_slo(&sp_descriptor, &received, RespondSlo::post()) {
@@ -3234,7 +3222,7 @@ fn typed_facade_rejects_custom_logout_response_profile_before_correlation(
     let idp = Saml::idp(bad_profile_template_idp_config()?)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let request_input = BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?);
+    let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
 
     match idp.respond_slo(&sp_descriptor, &received, RespondSlo::post()) {
@@ -4097,7 +4085,7 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
 
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(request.envelope()),
+        Inbound::soap(request.envelope(), SoapChannel::unattested()),
         validation(),
     )?;
     assert_eq!(received.relay_state(), None);
@@ -4115,7 +4103,7 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
     let completed = sp.finish_slo(
         &idp_descriptor,
         &pending,
-        BrowserInput::<LogoutResponse>::soap(response_envelope),
+        Inbound::soap(response_envelope, SoapChannel::unattested()),
         validation(),
     )?;
     assert_eq!(
@@ -4145,7 +4133,7 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
 
     let received = sp.receive_slo(
         &idp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(request.envelope()),
+        Inbound::soap(request.envelope(), SoapChannel::unattested()),
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), IDP_ENTITY_ID);
@@ -4166,7 +4154,10 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
     let completed = idp.finish_slo(
         &sp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::soap(response.soap_response()?.envelope()),
+        Inbound::soap(
+            response.soap_response()?.envelope(),
+            SoapChannel::unattested(),
+        ),
         validation(),
     )?;
     assert_eq!(completed.peer_entity_id().as_str(), SP_ENTITY_ID);
@@ -4266,7 +4257,7 @@ fn soap_logout_rejects_an_inclusive_c14n_signature_made_outside_the_envelope(
     let envelope = SoapProtocolMessage::response_envelope(&inclusive_c14n_signed(&xml)?)?;
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(envelope.as_str()),
+        Inbound::soap(envelope.as_str(), SoapChannel::unattested()),
         validation(),
     ) {
         Err(SamlError::SignatureVerification {
@@ -4294,7 +4285,7 @@ fn soap_logout_accepts_an_inclusive_c14n_signature_made_inside_the_envelope(
     let envelope = SoapProtocolMessage::response_envelope(&signed)?;
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(envelope.as_str()),
+        Inbound::soap(envelope.as_str(), SoapChannel::unattested()),
         validation(),
     )?;
     assert_eq!(
@@ -4339,7 +4330,7 @@ fn soap_respond_slo_rejects_a_request_with_relay_state() -> Result<(), Box<dyn s
     )?;
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(post_fields(&started.outbound)?),
+        Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
     match idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap()) {
@@ -4371,7 +4362,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
     let request_envelope = SoapProtocolMessage::response_envelope(&request_xml)?;
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap_with_channel(&request_envelope, server_only),
+        Inbound::soap(&request_envelope, server_only),
         validation(),
     ) {
         Err(SamlError::SignatureMissing) => {}
@@ -4379,7 +4370,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
     }
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap_with_channel(&request_envelope, mutual_tls()),
+        Inbound::soap(&request_envelope, mutual_tls()),
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
@@ -4395,7 +4386,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
     match sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::soap(&response_envelope),
+        Inbound::soap(&response_envelope, SoapChannel::unattested()),
         validation(),
     ) {
         Err(SamlError::SignatureMissing) => {}
@@ -4404,7 +4395,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
     sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::soap_with_channel(&response_envelope, mutual_tls()),
+        Inbound::soap(&response_envelope, mutual_tls()),
         validation(),
     )?;
     Ok(())
@@ -4423,7 +4414,7 @@ fn soap_logout_verifies_a_present_signature_over_an_attested_mutual_channel(
     }
     match idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap_with_channel(
+        Inbound::soap(
             SoapProtocolMessage::response_envelope(&tampered)?,
             mutual_tls(),
         ),
@@ -4464,7 +4455,10 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
 
     let refused = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(request.replacen("<soap:Body>", deep_header, 1)),
+        Inbound::soap(
+            request.replacen("<soap:Body>", deep_header, 1),
+            SoapChannel::unattested(),
+        ),
         validation(),
     );
     assert!(
@@ -4480,7 +4474,7 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
 
     let received = idp.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(request),
+        Inbound::soap(request, SoapChannel::unattested()),
         validation(),
     )?;
     let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
@@ -4488,11 +4482,10 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
     let refused = sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::soap(response_envelope.replacen(
-            "<soap:Body>",
-            deep_header,
-            1,
-        )),
+        Inbound::soap(
+            response_envelope.replacen("<soap:Body>", deep_header, 1),
+            SoapChannel::unattested(),
+        ),
         validation(),
     );
     assert!(
@@ -4508,7 +4501,7 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
     sp.finish_slo(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::soap(response_envelope),
+        Inbound::soap(response_envelope, SoapChannel::unattested()),
         validation(),
     )?;
     Ok(())

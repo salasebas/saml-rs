@@ -303,6 +303,13 @@ fn typed_bindings_pending_authn_request_snapshot_round_trips(
         "https://idp.example.com/metadata"
     );
     assert_eq!(restored.snapshot(), snapshot);
+    assert_ne!(
+        restored,
+        PendingAuthnRequest::from_snapshot(PendingAuthnRequestSnapshot {
+            acs_index: Some(3),
+            ..snapshot
+        })?
+    );
     Ok(())
 }
 

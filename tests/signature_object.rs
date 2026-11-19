@@ -7,13 +7,12 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, BrowserInput, CertificatePem,
-    Credentials, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest,
-    LogoutResponse, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, PaosAuthnRequest,
-    PaosClientRequest, PaosSsoResponse, PrivateKeyPem, ReplayPolicy, RespondPaosSso, RespondSlo,
-    RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartPaosSso, StartSlo, StartSso,
-    Subject, XmlSignatureProfile,
+    AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EntityId, FormField,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy,
+    NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest, PaosSsoResponse, PrivateKeyPem,
+    ReplayPolicy, RespondPaosSso, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
+    SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartPaosSso, StartSlo, StartSso, Subject, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -164,18 +163,16 @@ fn post_authn_request_with_object_is_rejected_unless_the_compatibility_profile_i
         let form = post_authn_request_with_object(&parties)?;
         assert_object_rejected(parties.idp.receive_sso(
             &parties.sp_descriptor,
-            BrowserInput::<AuthnRequest>::post(form),
+            Inbound::post(form),
             validation(),
         ));
     }
 
     let parties = parties(XmlSignatureProfile::AllowWeakAlgorithms)?;
     let form = post_authn_request_with_object(&parties)?;
-    parties.idp.receive_sso(
-        &parties.sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(form),
-        validation(),
-    )?;
+    parties
+        .idp
+        .receive_sso(&parties.sp_descriptor, Inbound::post(form), validation())?;
     Ok(())
 }
 
@@ -187,7 +184,7 @@ fn post_response_with_object_is_rejected() -> Result<(), Box<dyn std::error::Err
         .start_sso(&parties.idp_descriptor, StartSso::post())?;
     let received = parties.idp.receive_sso(
         &parties.sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     for respond in [RespondSso::post(), RespondSso::post().sign_response()] {
@@ -199,7 +196,7 @@ fn post_response_with_object_is_rejected() -> Result<(), Box<dyn std::error::Err
         assert_object_rejected(parties.sp.finish_sso(
             &parties.idp_descriptor,
             &started.pending,
-            BrowserInput::<SsoResponse>::post(form),
+            Inbound::post(form),
             validation(),
         ));
     }
@@ -254,15 +251,14 @@ fn post_logout_request_and_response_with_object_are_rejected(
     let request = started.outbound.post_form()?.fields().to_vec();
     assert_object_rejected(parties.idp.receive_slo(
         &parties.sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(form_with_object(&request, "SAMLRequest")?),
+        Inbound::post(form_with_object(&request, "SAMLRequest")?),
         validation(),
     ));
 
-    let received = parties.idp.receive_slo(
-        &parties.sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(request),
-        validation(),
-    )?;
+    let received =
+        parties
+            .idp
+            .receive_slo(&parties.sp_descriptor, Inbound::post(request), validation())?;
     let response =
         parties
             .idp
@@ -270,7 +266,7 @@ fn post_logout_request_and_response_with_object_are_rejected(
     assert_object_rejected(parties.sp.finish_slo(
         &parties.idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::post(form_with_object(
+        Inbound::post(form_with_object(
             response.post_form()?.fields(),
             "SAMLResponse",
         )?),
@@ -290,13 +286,13 @@ fn soap_logout_request_and_response_with_object_are_rejected(
     let request = started.outbound.soap_request()?.envelope().to_string();
     assert_object_rejected(parties.idp.receive_slo(
         &parties.sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(with_object(&request)?),
+        Inbound::soap(with_object(&request)?, SoapChannel::unattested()),
         validation(),
     ));
 
     let received = parties.idp.receive_slo(
         &parties.sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(request),
+        Inbound::soap(request, SoapChannel::unattested()),
         validation(),
     )?;
     let response =
@@ -306,7 +302,10 @@ fn soap_logout_request_and_response_with_object_are_rejected(
     assert_object_rejected(parties.sp.finish_slo(
         &parties.idp_descriptor,
         &started.pending,
-        BrowserInput::<LogoutResponse>::soap(with_object(response.soap_response()?.envelope())?),
+        Inbound::soap(
+            with_object(response.soap_response()?.envelope())?,
+            SoapChannel::unattested(),
+        ),
         validation(),
     ));
     Ok(())

@@ -8,20 +8,19 @@ use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AlgorithmPolicy, AuthnRequest, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, BrowserInput, CertificatePem, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutSubject,
-    MetadataTrustPolicy, NameId, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSlo, StartSso, Subject,
-    TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
+    AcsEndpoint, AlgorithmPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
+    PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
+    SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession,
+    StartSlo, StartSso, Subject, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
     Attribute, AttributeValue, Attributes, DataEncryptionAlgorithm, DigestAlgorithm,
     KeyEncryptionAlgorithm, MaskGenerationFunction, XmlEncryptionPolicy,
 };
 #[cfg(feature = "crypto-rustcrypto")]
-use saml_rs::{HmacSecret, SignatureAlgorithm};
+use saml_rs::{AuthnRequest, HmacSecret, SignatureAlgorithm};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -179,7 +178,7 @@ fn signed_redirect_request_then_post_response(
 
     let received = peers.idp.receive_sso(
         &peers.sp_descriptor,
-        BrowserInput::<AuthnRequest>::redirect(url.query().unwrap_or_default()),
+        Inbound::redirect(url.query().unwrap_or_default()),
         validation(),
     )?;
     let subject = Subject::new(NameId::new("alice@example.com", None), Vec::new());
@@ -197,7 +196,7 @@ fn signed_redirect_request_then_post_response(
     let session = peers.sp.finish_sso(
         &peers.idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(fields),
+        Inbound::post(fields),
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -431,26 +430,24 @@ fn rsa_sha1_peers(
 #[cfg(feature = "crypto-rustcrypto")]
 fn redirect_authn_request(
     peers: &Peers,
-) -> Result<BrowserInput<AuthnRequest>, Box<dyn std::error::Error>> {
+) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
     let redirect = peers
         .sp
         .start_sso(&peers.idp_descriptor, StartSso::redirect())?;
     let url = Url::parse(redirect.outbound.redirect_url()?)?;
-    Ok(BrowserInput::<AuthnRequest>::redirect(
-        url.query().unwrap_or_default(),
-    ))
+    Ok(Inbound::redirect(url.query().unwrap_or_default()))
 }
 
 #[cfg(feature = "crypto-rustcrypto")]
 fn redirect_and_post_authn_requests(
     peers: &Peers,
-) -> Result<[BrowserInput<AuthnRequest>; 2], Box<dyn std::error::Error>> {
+) -> Result<[Inbound<AuthnRequest>; 2], Box<dyn std::error::Error>> {
     let post = peers
         .sp
         .start_sso(&peers.idp_descriptor, StartSso::post())?;
     Ok([
         redirect_authn_request(peers)?,
-        BrowserInput::<AuthnRequest>::post(post_fields(&post.outbound)?),
+        Inbound::post(post_fields(&post.outbound)?),
     ])
 }
 
@@ -506,7 +503,7 @@ fn strict_rsa_sha2_at_the_service_provider_rejects_an_rsa_sha1_sig_alg(
             .any(|(key, value)| key == "SigAlg" && value == signature_algorithm::RSA_SHA1));
         let received = peers.sp.receive_slo(
             &peers.idp_descriptor,
-            BrowserInput::<LogoutRequest>::redirect(url.query().unwrap_or_default()),
+            Inbound::redirect(url.query().unwrap_or_default()),
             validation(),
         );
         if accepted {
@@ -722,7 +719,7 @@ fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn s
     );
     peers.sp.receive_slo(
         &peers.idp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(envelope),
+        Inbound::soap(envelope, SoapChannel::unattested()),
         validation(),
     )?;
     Ok(())
@@ -885,7 +882,7 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
     let url = Url::parse(started.outbound.redirect_url()?)?;
     let received = peers.idp.receive_slo(
         &peers.sp_descriptor,
-        BrowserInput::<LogoutRequest>::redirect(url.query().unwrap_or_default()),
+        Inbound::redirect(url.query().unwrap_or_default()),
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
@@ -906,7 +903,7 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
     );
     peers.idp.receive_slo(
         &peers.sp_descriptor,
-        BrowserInput::<LogoutRequest>::soap(envelope),
+        Inbound::soap(envelope, SoapChannel::unattested()),
         validation(),
     )?;
     Ok(())

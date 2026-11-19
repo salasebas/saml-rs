@@ -14,11 +14,10 @@ use saml_rs::raw::Binding;
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, IsPassive, MetadataTrustPolicy, NameId,
-    Outbound, ReplayPolicy, RequestedAuthnContext, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
-    StartSso, Subject,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId, Outbound,
+    ReplayPolicy, RequestedAuthnContext, RespondSso, Saml, SamlError, SamlValidationContext,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject,
 };
 
 const SP: &str = "https://sp.example.com";
@@ -108,33 +107,25 @@ fn request_xml(outbound: &Outbound<AuthnRequest>) -> Result<String, Box<dyn std:
     Ok(String::from_utf8(bytes)?)
 }
 
-fn request_input(
-    outbound: &Outbound<AuthnRequest>,
-) -> Result<BrowserInput<AuthnRequest>, SamlError> {
+fn request_input(outbound: &Outbound<AuthnRequest>) -> Result<Inbound<AuthnRequest>, SamlError> {
     match outbound.raw_context().binding {
-        Binding::Redirect => Ok(BrowserInput::<AuthnRequest>::redirect(
+        Binding::Redirect => Ok(Inbound::redirect(
             outbound
                 .redirect_url()?
                 .split_once('?')
                 .ok_or_else(|| SamlError::Invalid("missing query".into()))?
                 .1,
         )),
-        Binding::Post => Ok(BrowserInput::<AuthnRequest>::post(
-            outbound.post_form()?.fields().to_vec(),
-        )),
-        Binding::SimpleSign => Ok(BrowserInput::<AuthnRequest>::simple_sign(
+        Binding::Post => Ok(Inbound::post(outbound.post_form()?.fields().to_vec())),
+        Binding::SimpleSign => Ok(Inbound::simple_sign(
             outbound.post_form()?.fields().to_vec(),
         )),
         binding => Err(SamlError::UnsupportedBinding { binding }),
     }
 }
 
-fn response_input(
-    outbound: &Outbound<SsoResponse>,
-) -> Result<BrowserInput<SsoResponse>, SamlError> {
-    Ok(BrowserInput::<SsoResponse>::post(
-        outbound.post_form()?.fields().to_vec(),
-    ))
+fn response_input(outbound: &Outbound<SsoResponse>) -> Result<Inbound<SsoResponse>, SamlError> {
+    Ok(Inbound::post(outbound.post_form()?.fields().to_vec()))
 }
 
 #[test]
@@ -416,7 +407,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
     let session = sp.finish_sso(
         &idp_descriptor,
         &started.pending,
-        BrowserInput::<SsoResponse>::post(vec![FormField::new(
+        Inbound::post(vec![FormField::new(
             "SAMLResponse",
             STANDARD.encode(signed.as_bytes()),
         )]),
@@ -614,7 +605,7 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
                 {
                     redirected.query_pairs_mut().append_pair(&name, &value);
                 }
-                BrowserInput::<AuthnRequest>::redirect(redirected.query().ok_or("missing query")?)
+                Inbound::redirect(redirected.query().ok_or("missing query")?)
             }
             Binding::Post | Binding::SimpleSign => {
                 let fields = started
@@ -631,9 +622,9 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
                     })
                     .collect();
                 if context.binding == Binding::Post {
-                    BrowserInput::<AuthnRequest>::post(fields)
+                    Inbound::post(fields)
                 } else {
-                    BrowserInput::<AuthnRequest>::simple_sign(fields)
+                    Inbound::simple_sign(fields)
                 }
             }
             _ => return Err("unexpected request binding".into()),
@@ -676,7 +667,7 @@ fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
     )?;
     let received = idp.receive_sso(
         &sp_descriptor,
-        BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+        Inbound::post(vec![FormField::new(
             "SAMLRequest",
             STANDARD.encode(signed.as_bytes()),
         )]),

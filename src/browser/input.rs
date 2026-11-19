@@ -1,4 +1,4 @@
-//! Inbound browser message conversion helpers.
+//! Inbound SAML messages, in the form their binding delivered them.
 //!
 //! References: SAML Bindings 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf> and HTTP POST-SimpleSign <https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign.html>.
 
@@ -19,101 +19,235 @@ use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
 use crate::soap::{read_soap_body, SoapChannel};
 use crate::xml::XmlLimits;
 
-/// Typed browser input for inbound SAML messages, or the SOAP message of a
-/// back-channel exchange.
+mod sealed {
+    pub trait Sealed {}
+}
+
+/// A protocol message saml-rs receives over HTTP-Redirect.
+///
+/// It bounds [`Inbound::redirect`]. The trait is sealed: saml-rs implements
+/// it for the messages it reads from HTTP-Redirect, and other crates cannot.
+#[diagnostic::on_unimplemented(
+    message = "saml-rs does not receive `{Self}` over HTTP-Redirect",
+    label = "no HTTP-Redirect input for `{Self}`"
+)]
+pub trait RedirectMessage: sealed::Sealed {}
+
+/// A protocol message saml-rs receives over HTTP-POST or HTTP-POST-SimpleSign.
+///
+/// It bounds [`Inbound::post`] and [`Inbound::simple_sign`]. The trait is
+/// sealed: saml-rs implements it for the messages it reads from both POST
+/// bindings, and other crates cannot.
+#[diagnostic::on_unimplemented(
+    message = "saml-rs does not receive `{Self}` over HTTP-POST",
+    label = "no HTTP-POST input for `{Self}`"
+)]
+pub trait PostMessage: sealed::Sealed {}
+
+/// A Single Logout message that [`Inbound::soap`] reads from a SOAP exchange.
+///
+/// It bounds [`Inbound::soap`]. The trait is sealed: saml-rs implements it for
+/// `LogoutRequest` and `LogoutResponse`, and other crates cannot. A PAOS
+/// message and a SOAP `ManageNameIDRequest` have their own operations, which
+/// take the envelope.
+#[diagnostic::on_unimplemented(
+    message = "`Inbound::soap` does not read `{Self}`",
+    label = "no `Inbound::soap` input for `{Self}`",
+    note = "`Inbound::soap` reads SOAP Single Logout messages; PAOS and SOAP name identifier management have their own operations"
+)]
+pub trait SoapMessage: sealed::Sealed {}
+
+impl sealed::Sealed for AuthnRequest {}
+impl sealed::Sealed for SsoResponse {}
+impl sealed::Sealed for LogoutRequest {}
+impl sealed::Sealed for LogoutResponse {}
+impl sealed::Sealed for ManageNameIdRequest {}
+impl sealed::Sealed for ManageNameIdResponse {}
+
+impl RedirectMessage for AuthnRequest {}
+impl RedirectMessage for LogoutRequest {}
+impl RedirectMessage for LogoutResponse {}
+impl RedirectMessage for ManageNameIdRequest {}
+impl RedirectMessage for ManageNameIdResponse {}
+
+impl PostMessage for AuthnRequest {}
+impl PostMessage for SsoResponse {}
+impl PostMessage for LogoutRequest {}
+impl PostMessage for LogoutResponse {}
+
+impl SoapMessage for LogoutRequest {}
+impl SoapMessage for LogoutResponse {}
+
+/// A SAML message the deployment received, in the form its binding delivered
+/// it.
+///
+/// Build it with the constructor for the binding the message arrived on and
+/// pass it to the operation that reads `Message`. The operation's parameter
+/// fixes `Message`, so the call needs no type annotation. A constructor exists
+/// only for the bindings saml-rs receives `Message` over: see
+/// [`RedirectMessage`], [`PostMessage`], and [`SoapMessage`]. Only an
+/// [`SsoResponse`] arrives as a resolved artifact.
 ///
 /// # Examples
 ///
 /// ```
-/// use saml_rs::{AuthnRequest, BrowserInput, FormField, SsoResponse};
+/// use saml_rs::{
+///     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, Saml, SamlError,
+///     SamlValidationContext, Sp, SsoSession,
+/// };
+/// use std::time::SystemTime;
 ///
-/// let redirect = BrowserInput::<AuthnRequest>::redirect("SAMLRequest=...");
-/// let post = BrowserInput::<SsoResponse>::post(vec![
-///     FormField::new("SAMLResponse", "..."),
-/// ]);
-///
-/// # let _ = (redirect, post);
+/// fn finish(
+///     sp: &Saml<Sp>,
+///     idp: &IdpDescriptor,
+///     pending: &PendingAuthnRequest,
+///     fields: Vec<FormField>,
+/// ) -> Result<SsoSession, SamlError> {
+///     let validation = SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
+///     sp.finish_sso(idp, pending, Inbound::post(fields), validation)
+/// }
+/// # let _ = finish;
 /// ```
 ///
-/// SSO responses are received through POST-family bindings or as a resolved
-/// artifact, not Redirect:
+/// An SSO response does not arrive over HTTP-Redirect:
 ///
-/// ```compile_fail
-/// use saml_rs::{BrowserInput, SsoResponse};
+/// ```compile_fail,E0277
+/// use saml_rs::{Inbound, SsoResponse};
 ///
-/// let _ = BrowserInput::<SsoResponse>::redirect("SAMLResponse=...");
+/// let _: Inbound<SsoResponse> = Inbound::redirect("SAMLResponse=...");
 /// ```
+#[derive(Debug, Clone)]
+pub struct Inbound<Message> {
+    pub(crate) transport: Transport,
+    _message: PhantomData<Message>,
+}
+
+impl<Message> PartialEq for Inbound<Message> {
+    fn eq(&self, other: &Self) -> bool {
+        self.transport == other.transport
+    }
+}
+
+impl<Message> Eq for Inbound<Message> {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum BrowserInput<Message> {
-    /// HTTP-Redirect input as a raw query string.
+pub(crate) enum Transport {
     Redirect {
-        /// Raw URL query, with or without a leading `?`.
         raw_query: String,
-        /// Message marker.
-        _message: PhantomData<Message>,
     },
-    /// HTTP-POST input as parsed form fields.
     Post {
-        /// Parsed form fields.
         fields: Vec<FormField>,
-        /// Message marker.
-        _message: PhantomData<Message>,
     },
-    /// HTTP-POST-SimpleSign input as parsed form fields.
-    SimpleSignPost {
-        /// Parsed form fields.
+    SimpleSign {
         fields: Vec<FormField>,
-        /// Message marker.
-        _message: PhantomData<Message>,
     },
-    /// HTTP-Artifact input, after the artifact was resolved.
     Artifact {
-        /// Artifact and RelayState the browser delivered.
         delivered: DeliveredArtifact,
-        /// Message the artifact issuer returned for that artifact.
         resolved: ResolvedProtocolMessage,
-        /// Message marker.
-        _message: PhantomData<Message>,
     },
-    /// SOAP 1.1 envelope of a synchronous exchange.
     Soap {
-        /// SOAP envelope received as an HTTP body.
         envelope: String,
-        /// Protection the deployment attests for this exchange.
         channel: SoapChannel,
-        /// Message marker.
-        _message: PhantomData<Message>,
     },
 }
 
-impl BrowserInput<AuthnRequest> {
-    /// Create Redirect input from a raw query string.
-    pub fn redirect(raw_query: impl Into<String>) -> Self {
-        redirect_input(raw_query)
+impl<Message> Inbound<Message> {
+    /// Create HTTP-Redirect input from the raw URL query, with or without a
+    /// leading `?`.
+    ///
+    /// Pass the query as received, still URL-encoded: a Redirect signature
+    /// covers the encoded parameters.
+    pub fn redirect(raw_query: impl Into<String>) -> Self
+    where
+        Message: RedirectMessage,
+    {
+        Self::from_transport(Transport::Redirect {
+            raw_query: raw_query.into(),
+        })
     }
 
-    /// Create POST input from parsed fields.
-    pub fn post(fields: Vec<FormField>) -> Self {
-        post_input(fields)
+    /// Create HTTP-POST input from the parsed form fields.
+    ///
+    /// `Inbound::post` requires a message type that implements [`PostMessage`]:
+    ///
+    /// ```compile_fail,E0277
+    /// use saml_rs::{Inbound, ManageNameIdRequest};
+    ///
+    /// let _: Inbound<ManageNameIdRequest> = Inbound::post(Vec::new());
+    /// ```
+    pub fn post(fields: Vec<FormField>) -> Self
+    where
+        Message: PostMessage,
+    {
+        Self::from_transport(Transport::Post { fields })
     }
 
-    /// Create SimpleSign input from parsed fields.
-    pub fn simple_sign(fields: Vec<FormField>) -> Self {
-        simple_sign_input(fields)
+    /// Create HTTP-POST-SimpleSign input from the parsed form fields.
+    ///
+    /// `Inbound::simple_sign` requires a message type that implements
+    /// [`PostMessage`]:
+    ///
+    /// ```compile_fail,E0277
+    /// use saml_rs::{Inbound, ManageNameIdRequest};
+    ///
+    /// let _: Inbound<ManageNameIdRequest> = Inbound::simple_sign(Vec::new());
+    /// ```
+    pub fn simple_sign(fields: Vec<FormField>) -> Self
+    where
+        Message: PostMessage,
+    {
+        Self::from_transport(Transport::SimpleSign { fields })
     }
 
-    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
-        http_request_from_input(self, true, MessageField::Request, limits)
+    /// Create SOAP input from the envelope of a synchronous exchange.
+    ///
+    /// `channel` records the protection the deployment established for the
+    /// exchange. With [`SoapChannel::unattested`], the message must carry an
+    /// XML signature. When `channel` attests mutual authentication and
+    /// integrity, an unsigned message is accepted, and a present signature is
+    /// still verified. Attest that only when the credential that
+    /// authenticated the peer belongs to the peer descriptor of the receiving
+    /// operation: the TLS or HTTP client credential for a `LogoutRequest`
+    /// passed to `receive_slo`, or the TLS server certificate for a
+    /// `LogoutResponse` passed to `finish_slo`.
+    ///
+    /// `Inbound::soap` requires a message type that implements [`SoapMessage`]:
+    ///
+    /// ```compile_fail,E0277
+    /// use saml_rs::{AuthnRequest, Inbound, SoapChannel};
+    ///
+    /// let _: Inbound<AuthnRequest> = Inbound::soap("<soap:Envelope/>", SoapChannel::unattested());
+    /// ```
+    pub fn soap(envelope: impl Into<String>, channel: SoapChannel) -> Self
+    where
+        Message: SoapMessage,
+    {
+        Self::from_transport(Transport::Soap {
+            envelope: envelope.into(),
+            channel,
+        })
+    }
+
+    /// Binding the message arrived on.
+    pub fn binding(&self) -> Binding {
+        match self.transport {
+            Transport::Redirect { .. } => Binding::Redirect,
+            Transport::Post { .. } => Binding::Post,
+            Transport::SimpleSign { .. } => Binding::SimpleSign,
+            Transport::Artifact { .. } => Binding::Artifact,
+            Transport::Soap { .. } => Binding::Soap,
+        }
+    }
+
+    fn from_transport(transport: Transport) -> Self {
+        Self {
+            transport,
+            _message: PhantomData,
+        }
     }
 }
 
-impl BrowserInput<SsoResponse> {
-    /// Create POST input from parsed fields.
-    pub fn post(fields: Vec<FormField>) -> Self {
-        post_input(fields)
-    }
-
+impl Inbound<SsoResponse> {
     /// Create HTTP-Artifact input from the delivered artifact and the
     /// message it resolved to.
     ///
@@ -122,211 +256,122 @@ impl BrowserInput<SsoResponse> {
     /// [`ArtifactDereference::web_browser_sso`](crate::ArtifactDereference::web_browser_sso)
     /// resolution of [`DeliveredArtifact::artifact`].
     pub fn artifact(delivered: DeliveredArtifact, resolved: ResolvedProtocolMessage) -> Self {
-        Self::Artifact {
+        Self::from_transport(Transport::Artifact {
             delivered,
             resolved,
-            _message: PhantomData,
-        }
-    }
-
-    /// Create SimpleSign input from parsed fields.
-    pub fn simple_sign(fields: Vec<FormField>) -> Self {
-        simple_sign_input(fields)
+        })
     }
 
     pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
-        http_request_from_input(self, false, MessageField::Response, limits)
+        http_request_from_transport(self.transport, false, MessageField::Response, limits)
     }
 }
 
-impl BrowserInput<LogoutRequest> {
-    /// Create Redirect input from a raw query string.
-    pub fn redirect(raw_query: impl Into<String>) -> Self {
-        redirect_input(raw_query)
+impl Inbound<AuthnRequest> {
+    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
+        http_request_from_transport(self.transport, true, MessageField::Request, limits)
     }
+}
 
-    /// Create SOAP input from the envelope POSTed to a SOAP
-    /// `SingleLogoutService`.
-    ///
-    /// The `LogoutRequest` must carry an XML signature.
-    pub fn soap(envelope: impl Into<String>) -> Self {
-        soap_input(envelope, SoapChannel::unattested())
-    }
-
-    /// Create SOAP input from an exchange the deployment protected itself.
-    ///
-    /// When `channel` attests mutual authentication and integrity, an
-    /// unsigned `LogoutRequest` is accepted. Attest that only when the TLS
-    /// or HTTP credential that authenticated the client belongs to the peer
-    /// descriptor passed to `receive_slo`. A present XML signature is still
-    /// verified.
-    pub fn soap_with_channel(envelope: impl Into<String>, channel: SoapChannel) -> Self {
-        soap_input(envelope, channel)
-    }
-
-    /// Create POST input from parsed fields.
-    pub fn post(fields: Vec<FormField>) -> Self {
-        post_input(fields)
-    }
-
-    /// Create SimpleSign input from parsed fields.
-    pub fn simple_sign(fields: Vec<FormField>) -> Self {
-        simple_sign_input(fields)
-    }
-
+impl Inbound<LogoutRequest> {
     pub(crate) fn into_http_request(
         self,
         limits: XmlLimits,
         schema_validator: Option<crate::SchemaValidator>,
     ) -> Result<HttpRequest, SamlError> {
-        logout_http_request(self, MessageField::Request, limits, schema_validator)
+        logout_http_request(
+            self.transport,
+            MessageField::Request,
+            limits,
+            schema_validator,
+        )
     }
 }
 
-impl BrowserInput<LogoutResponse> {
-    /// Create Redirect input from a raw query string.
-    pub fn redirect(raw_query: impl Into<String>) -> Self {
-        redirect_input(raw_query)
-    }
-
-    /// Create SOAP input from the response body of a SOAP logout request.
-    ///
-    /// The `LogoutResponse` must carry an XML signature.
-    pub fn soap(envelope: impl Into<String>) -> Self {
-        soap_input(envelope, SoapChannel::unattested())
-    }
-
-    /// Create SOAP input from an exchange the deployment protected itself.
-    ///
-    /// When `channel` attests mutual authentication and integrity, an
-    /// unsigned `LogoutResponse` is accepted. Attest that only when the TLS
-    /// server certificate belongs to the peer descriptor passed to
-    /// `finish_slo`. A present XML signature is still verified.
-    pub fn soap_with_channel(envelope: impl Into<String>, channel: SoapChannel) -> Self {
-        soap_input(envelope, channel)
-    }
-
-    /// Create POST input from parsed fields.
-    pub fn post(fields: Vec<FormField>) -> Self {
-        post_input(fields)
-    }
-
-    /// Create SimpleSign input from parsed fields.
-    pub fn simple_sign(fields: Vec<FormField>) -> Self {
-        simple_sign_input(fields)
-    }
-
+impl Inbound<LogoutResponse> {
     pub(crate) fn into_http_request(
         self,
         limits: XmlLimits,
         schema_validator: Option<crate::SchemaValidator>,
     ) -> Result<HttpRequest, SamlError> {
-        logout_http_request(self, MessageField::Response, limits, schema_validator)
+        logout_http_request(
+            self.transport,
+            MessageField::Response,
+            limits,
+            schema_validator,
+        )
     }
 }
 
-impl BrowserInput<ManageNameIdRequest> {
-    /// Create Redirect input from a raw query string.
-    pub fn redirect(raw_query: impl Into<String>) -> Self {
-        redirect_input(raw_query)
-    }
-}
-
-impl BrowserInput<ManageNameIdResponse> {
-    /// Create Redirect input from a raw query string.
-    pub fn redirect(raw_query: impl Into<String>) -> Self {
-        redirect_input(raw_query)
-    }
-}
-
-impl TryFrom<BrowserInput<AuthnRequest>> for HttpRequest {
+impl TryFrom<Inbound<AuthnRequest>> for HttpRequest {
     type Error = SamlError;
 
-    fn try_from(value: BrowserInput<AuthnRequest>) -> Result<Self, Self::Error> {
+    fn try_from(value: Inbound<AuthnRequest>) -> Result<Self, Self::Error> {
         value.into_http_request(XmlLimits::default())
     }
 }
 
-impl TryFrom<BrowserInput<SsoResponse>> for HttpRequest {
+impl TryFrom<Inbound<SsoResponse>> for HttpRequest {
     type Error = SamlError;
 
-    fn try_from(value: BrowserInput<SsoResponse>) -> Result<Self, Self::Error> {
+    fn try_from(value: Inbound<SsoResponse>) -> Result<Self, Self::Error> {
         value.into_http_request(XmlLimits::default())
     }
 }
 
-impl TryFrom<BrowserInput<LogoutRequest>> for HttpRequest {
+impl TryFrom<Inbound<LogoutRequest>> for HttpRequest {
     type Error = SamlError;
 
-    fn try_from(value: BrowserInput<LogoutRequest>) -> Result<Self, Self::Error> {
+    fn try_from(value: Inbound<LogoutRequest>) -> Result<Self, Self::Error> {
         value.into_http_request(XmlLimits::default(), None)
     }
 }
 
-impl TryFrom<BrowserInput<LogoutResponse>> for HttpRequest {
+impl TryFrom<Inbound<LogoutResponse>> for HttpRequest {
     type Error = SamlError;
 
-    fn try_from(value: BrowserInput<LogoutResponse>) -> Result<Self, Self::Error> {
+    fn try_from(value: Inbound<LogoutResponse>) -> Result<Self, Self::Error> {
         value.into_http_request(XmlLimits::default(), None)
     }
 }
 
-impl TryFrom<BrowserInput<ManageNameIdRequest>> for HttpRequest {
+impl TryFrom<Inbound<ManageNameIdRequest>> for HttpRequest {
     type Error = SamlError;
 
-    fn try_from(value: BrowserInput<ManageNameIdRequest>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, true, MessageField::Request, XmlLimits::default())
+    fn try_from(value: Inbound<ManageNameIdRequest>) -> Result<Self, Self::Error> {
+        http_request_from_transport(
+            value.transport,
+            true,
+            MessageField::Request,
+            XmlLimits::default(),
+        )
     }
 }
 
-impl TryFrom<BrowserInput<ManageNameIdResponse>> for HttpRequest {
+impl TryFrom<Inbound<ManageNameIdResponse>> for HttpRequest {
     type Error = SamlError;
 
-    fn try_from(value: BrowserInput<ManageNameIdResponse>) -> Result<Self, Self::Error> {
-        http_request_from_input(value, true, MessageField::Response, XmlLimits::default())
+    fn try_from(value: Inbound<ManageNameIdResponse>) -> Result<Self, Self::Error> {
+        http_request_from_transport(
+            value.transport,
+            true,
+            MessageField::Response,
+            XmlLimits::default(),
+        )
     }
 }
 
-fn redirect_input<Message>(raw_query: impl Into<String>) -> BrowserInput<Message> {
-    BrowserInput::Redirect {
-        raw_query: raw_query.into(),
-        _message: PhantomData,
-    }
-}
-
-fn post_input<Message>(fields: Vec<FormField>) -> BrowserInput<Message> {
-    BrowserInput::Post {
-        fields,
-        _message: PhantomData,
-    }
-}
-
-fn simple_sign_input<Message>(fields: Vec<FormField>) -> BrowserInput<Message> {
-    BrowserInput::SimpleSignPost {
-        fields,
-        _message: PhantomData,
-    }
-}
-
-fn soap_input<Message>(envelope: impl Into<String>, channel: SoapChannel) -> BrowserInput<Message> {
-    BrowserInput::Soap {
-        envelope: envelope.into(),
-        channel,
-        _message: PhantomData,
-    }
-}
-
-fn logout_http_request<Message>(
-    value: BrowserInput<Message>,
+fn logout_http_request(
+    transport: Transport,
     expected_message: MessageField,
     limits: XmlLimits,
     schema_validator: Option<crate::SchemaValidator>,
 ) -> Result<HttpRequest, SamlError> {
-    match value {
-        BrowserInput::Soap { envelope, .. } => {
+    match transport {
+        Transport::Soap { envelope, .. } => {
             soap_request(&envelope, expected_message, limits, schema_validator)
         }
-        other => http_request_from_input(other, true, expected_message, limits),
+        other => http_request_from_transport(other, true, expected_message, limits),
     }
 }
 
@@ -345,14 +390,14 @@ fn soap_request(
     )]))
 }
 
-fn http_request_from_input<Message>(
-    value: BrowserInput<Message>,
+fn http_request_from_transport(
+    transport: Transport,
     allow_redirect: bool,
     expected_message: MessageField,
     limits: XmlLimits,
 ) -> Result<HttpRequest, SamlError> {
-    match value {
-        BrowserInput::Redirect { raw_query, .. } => {
+    match transport {
+        Transport::Redirect { raw_query } => {
             if !allow_redirect {
                 return Err(SamlError::UnsupportedBinding {
                     binding: Binding::Redirect,
@@ -367,20 +412,20 @@ fn http_request_from_input<Message>(
                 ..Default::default()
             })
         }
-        BrowserInput::Post { fields, .. } => {
+        Transport::Post { fields } => {
             validate_form_message_kind(&fields, expected_message)?;
             Ok(HttpRequest::post(fields_to_pairs(fields)))
         }
-        BrowserInput::SimpleSignPost { fields, .. } => {
+        Transport::SimpleSign { fields } => {
             let octet_string = simplesign_octet_from_fields(&fields, expected_message, limits)?;
             let mut request = HttpRequest::post(fields_to_pairs(fields));
             request.octet_string = Some(octet_string);
             Ok(request)
         }
-        BrowserInput::Artifact { .. } => Err(SamlError::UnsupportedBinding {
+        Transport::Artifact { .. } => Err(SamlError::UnsupportedBinding {
             binding: Binding::Artifact,
         }),
-        BrowserInput::Soap { .. } => Err(SamlError::UnsupportedBinding {
+        Transport::Soap { .. } => Err(SamlError::UnsupportedBinding {
             binding: Binding::Soap,
         }),
     }

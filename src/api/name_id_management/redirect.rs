@@ -1,5 +1,5 @@
 use crate::browser::{
-    BrowserInput, NameIdManagementBinding, Outbound, PendingManageNameIdRequest, Started,
+    Inbound, NameIdManagementBinding, Outbound, PendingManageNameIdRequest, Started,
 };
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::constants::Binding;
@@ -21,8 +21,7 @@ use crate::name_id_management::{
 use std::time::SystemTime;
 
 use super::super::raw_mapping::{
-    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, input_binding,
-    relay_state_from_input, RawPeer,
+    ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
 use super::super::{
     Idp, ReceiveNameIdManagement, RespondNameIdManagement, Saml, SamlError, Sp,
@@ -109,8 +108,7 @@ impl Saml<Sp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the input is not HTTP-Redirect, relay state
-    /// is invalid, the signature is missing or does not verify, the issuer is
+    /// Returns [`SamlError`] when relay state is invalid, the signature is missing or does not verify, the issuer is
     /// not the identity provider, `Destination` is missing or is not the
     /// receiving `ManageNameIDService`, this service provider publishes no
     /// HTTP-Redirect `ManageNameIDService` or several without
@@ -124,7 +122,7 @@ impl Saml<Sp> {
     pub fn receive_name_id_management_redirect(
         &self,
         idp: &IdpDescriptor,
-        input: BrowserInput<ManageNameIdRequest>,
+        input: Inbound<ManageNameIdRequest>,
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
@@ -175,7 +173,7 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         pending: &PendingManageNameIdRequest,
-        input: BrowserInput<ManageNameIdResponse>,
+        input: Inbound<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Option<RelayState>, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
@@ -275,8 +273,8 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     BrowserInput, ManageNameIdRequest, ReceiveNameIdManagement, ReceivedNameIdManagement,
-    ///     ReplayPolicy, RespondNameIdManagement, Saml, SamlValidationContext, SpDescriptor,
+    ///     Inbound, ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy,
+    ///     RespondNameIdManagement, Saml, SamlValidationContext, SpDescriptor,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -287,7 +285,7 @@ impl Saml<Idp> {
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation =
     ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
-    /// let input = BrowserInput::<ManageNameIdRequest>::redirect(raw_query);
+    /// let input = Inbound::redirect(raw_query);
     /// let received = idp.receive_name_id_management_redirect(
     ///     sp,
     ///     input,
@@ -306,7 +304,7 @@ impl Saml<Idp> {
     pub fn receive_name_id_management_redirect(
         &self,
         sp: &SpDescriptor,
-        input: BrowserInput<ManageNameIdRequest>,
+        input: Inbound<ManageNameIdRequest>,
         options: ReceiveNameIdManagement,
         validation: SamlValidationContext<'_>,
     ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
@@ -349,7 +347,7 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         pending: &PendingManageNameIdRequest,
-        input: BrowserInput<ManageNameIdResponse>,
+        input: Inbound<ManageNameIdResponse>,
         validation: SamlValidationContext<'_>,
     ) -> Result<Option<RelayState>, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
@@ -438,7 +436,7 @@ fn start(
 fn receive(
     local: Local<'_>,
     peer: RawPeer<'_>,
-    input: BrowserInput<ManageNameIdRequest>,
+    input: Inbound<ManageNameIdRequest>,
     options: ReceiveNameIdManagement,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<ReceivedNameIdManagementRedirect, SamlError> {
@@ -558,7 +556,7 @@ fn finish(
     local: Local<'_>,
     peer: RawPeer<'_>,
     pending: &PendingManageNameIdRequest,
-    input: BrowserInput<ManageNameIdResponse>,
+    input: Inbound<ManageNameIdResponse>,
     mut validation: SamlValidationContext<'_>,
 ) -> Result<Option<RelayState>, SamlError> {
     ensure_entity_id(pending.peer_entity_id(), peer.entity_id)?;
@@ -586,8 +584,8 @@ fn finish(
     Ok(relay_state)
 }
 
-fn require_redirect_input<Message>(input: &BrowserInput<Message>) -> Result<(), SamlError> {
-    let binding = input_binding(input);
+fn require_redirect_input<Message>(input: &Inbound<Message>) -> Result<(), SamlError> {
+    let binding = input.binding();
     if binding == Binding::from(NameIdManagementBinding::Redirect) {
         return Ok(());
     }

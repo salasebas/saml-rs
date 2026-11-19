@@ -1,4 +1,6 @@
-use crate::browser::{BrowserInput, Outbound, PendingAuthnRequest, SsoResponseBinding, Started};
+use crate::browser::{
+    Inbound, Outbound, PendingAuthnRequest, SsoResponseBinding, Started, Transport,
+};
 use crate::config::IdpDescriptor;
 use crate::constants::Binding;
 use crate::flow::{FlowResultWithSignatureEvidence, HttpRequest, SignedMessageDestination};
@@ -13,8 +15,8 @@ use crate::xml::XmlLimits;
 use std::time::SystemTime;
 
 use super::raw_mapping::{
-    ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, input_binding,
-    raw_idp_descriptor, relay_state_from_input, selected_acs,
+    ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, raw_idp_descriptor,
+    relay_state_from_input, selected_acs,
 };
 use super::{ForceAuthn, Saml, SamlError, Sp, StartSso};
 
@@ -48,25 +50,22 @@ impl ResponseParseInput {
     /// for the delivered artifact. Its XML is parsed as an HTTP-POST response.
     fn try_new(
         idp: &IdpDescriptor,
-        input: BrowserInput<SsoResponse>,
+        input: Inbound<SsoResponse>,
         limits: XmlLimits,
     ) -> Result<Self, SamlError> {
-        let (delivered, resolved) = match input {
-            BrowserInput::Artifact {
+        let (delivered, resolved) = match input.transport {
+            Transport::Artifact {
                 delivered,
                 resolved,
-                ..
             } => (delivered, resolved),
-            BrowserInput::Soap { .. } => {
+            Transport::Soap { .. } => {
                 return Err(SamlError::UnsupportedBinding {
                     binding: Binding::Soap,
                 })
             }
-            BrowserInput::Redirect { .. }
-            | BrowserInput::Post { .. }
-            | BrowserInput::SimpleSignPost { .. } => {
+            Transport::Redirect { .. } | Transport::Post { .. } | Transport::SimpleSign { .. } => {
                 return Ok(Self {
-                    binding: input_binding(&input),
+                    binding: input.binding(),
                     request: input.into_http_request(limits)?,
                     signed_destination: SignedMessageDestination::Required,
                 });
@@ -231,7 +230,7 @@ impl Saml<Sp> {
     /// that matches one.
     ///
     /// A response delivered as an HTTP-Artifact is passed as
-    /// [`BrowserInput::artifact`], after [`Self::resolve_artifact`]. It needs
+    /// [`Inbound::artifact`], after [`Self::resolve_artifact`]. It needs
     /// an XML signature on the `Response` or on each assertion, as an
     /// HTTP-POST response does.
     ///
@@ -253,8 +252,8 @@ impl Saml<Sp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     BrowserInput, FormField, IdpDescriptor, PendingAuthnRequest, ReplayPolicy, Saml,
-    ///     SamlValidationContext, SsoResponse,
+    ///     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, Saml,
+    ///     SamlValidationContext,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -268,7 +267,7 @@ impl Saml<Sp> {
     ///     SystemTime::now(),
     ///     ReplayPolicy::Disabled,
     /// );
-    /// let input = BrowserInput::<SsoResponse>::post(fields);
+    /// let input = Inbound::post(fields);
     /// let session = sp.finish_sso(idp, pending, input, validation)?;
     ///
     /// let name_id = session.name_id().value();
@@ -279,7 +278,7 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         pending: &PendingAuthnRequest,
-        input: BrowserInput<SsoResponse>,
+        input: Inbound<SsoResponse>,
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_sso_session(idp, pending, input, &validation)?;
@@ -299,7 +298,7 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         pending: &PendingAuthnRequest,
-        input: BrowserInput<SsoResponse>,
+        input: Inbound<SsoResponse>,
         mut validation: SamlValidationContext<'_>,
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
@@ -318,7 +317,7 @@ impl Saml<Sp> {
     /// [`SamlValidationContext::with_recipient_endpoint`]; it must be published
     /// for the incoming binding. When omitted, the expected URL is this service
     /// provider's default assertion consumer for the incoming binding, and the
-    /// default HTTP-Artifact consumer for a [`BrowserInput::artifact`] response.
+    /// default HTTP-Artifact consumer for a [`Inbound::artifact`] response.
     ///
     /// # Errors
     ///
@@ -341,7 +340,7 @@ impl Saml<Sp> {
     pub fn accept_unsolicited_sso(
         &self,
         idp: &IdpDescriptor,
-        input: BrowserInput<SsoResponse>,
+        input: Inbound<SsoResponse>,
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_unsolicited_session(idp, input, &validation)?;
@@ -357,7 +356,7 @@ impl Saml<Sp> {
     pub fn accept_unsolicited_sso_with_outstanding_logout(
         &self,
         idp: &IdpDescriptor,
-        input: BrowserInput<SsoResponse>,
+        input: Inbound<SsoResponse>,
         mut validation: SamlValidationContext<'_>,
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
@@ -369,11 +368,11 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         pending: &PendingAuthnRequest,
-        input: BrowserInput<SsoResponse>,
+        input: Inbound<SsoResponse>,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
-        ensure_sso_response_binding(input_binding(&input), pending.acs().binding())?;
+        ensure_sso_response_binding(input.binding(), pending.acs().binding())?;
         let relay_state = relay_state_from_input(&input)?;
         ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
@@ -397,11 +396,11 @@ impl Saml<Sp> {
     fn parsed_unsolicited_session(
         &self,
         idp: &IdpDescriptor,
-        input: BrowserInput<SsoResponse>,
+        input: Inbound<SsoResponse>,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let relay_state = relay_state_from_input(&input)?;
-        let binding = SsoResponseBinding::try_from(input_binding(&input))?;
+        let binding = SsoResponseBinding::try_from(input.binding())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let metadata = &self.raw_service_provider().metadata;
         let expected_recipient = match validation.recipient_endpoint() {

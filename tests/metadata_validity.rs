@@ -12,11 +12,10 @@ use saml_rs::error::TimeWindowField;
 use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, ArtifactDereference, ArtifactResolutionService, ArtifactUses, AuthnRequest,
-    BrowserInput, EndpointUrl, EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, IssuedArtifacts, IssuedMessage, LogoutRequest,
-    LogoutResponse, LogoutSubject, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
-    MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, Outbound,
-    PaosClientRequest, PendingLogoutRequest, PendingLogoutRequestSnapshot,
+    EndpointUrl, EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, IssuedArtifacts, IssuedMessage, LogoutSubject,
+    ManageNameIdService, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
+    Outbound, PaosClientRequest, PendingLogoutRequest, PendingLogoutRequestSnapshot,
     PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, ReceiveNameIdManagement,
     ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError,
     SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig,
@@ -138,13 +137,13 @@ fn is_valid_until_error<T>(result: &Result<T, SamlError>) -> bool {
 fn posted_authn_request(
     sp: &Saml<saml_rs::Sp>,
     idp: &Saml<saml_rs::Idp>,
-) -> Result<BrowserInput<AuthnRequest>, Box<dyn std::error::Error>> {
+) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
     let started = sp.start_sso(&idp_descriptor(idp)?, StartSso::post())?;
     let context = started.outbound.raw_context();
     if context.binding != Binding::Post {
         return Err("expected an HTTP-POST AuthnRequest".into());
     }
-    Ok(BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+    Ok(Inbound::post(vec![FormField::new(
         "SAMLRequest",
         context.context.clone(),
     )]))
@@ -401,7 +400,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
     let started = sp.start_slo(&current_idp, subject.clone(), StartSlo::redirect())?;
     let logout = idp.receive_slo(
         &current_sp,
-        BrowserInput::<LogoutRequest>::redirect(redirect_query(&started.outbound)?),
+        Inbound::redirect(redirect_query(&started.outbound)?),
         now(),
     )?;
     let started = sp.start_name_id_management_redirect(
@@ -412,7 +411,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
     )?;
     let ReceivedNameIdManagement::Request(manage) = idp.receive_name_id_management_redirect(
         &current_sp,
-        BrowserInput::<ManageNameIdRequest>::redirect(redirect_query(&started.outbound)?),
+        Inbound::redirect(redirect_query(&started.outbound)?),
         ReceiveNameIdManagement::redirect(),
         now(),
     )?
@@ -511,21 +510,13 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
             let received_slo = [
                 (
                     "SP receive_slo",
-                    sp.receive_slo(
-                        &idp_peer,
-                        BrowserInput::<LogoutRequest>::post(vec![]),
-                        validation(),
-                    )
-                    .map(drop),
+                    sp.receive_slo(&idp_peer, Inbound::post(vec![]), validation())
+                        .map(drop),
                 ),
                 (
                     "IdP receive_slo",
-                    idp.receive_slo(
-                        &sp_peer,
-                        BrowserInput::<LogoutRequest>::post(vec![]),
-                        validation(),
-                    )
-                    .map(drop),
+                    idp.receive_slo(&sp_peer, Inbound::post(vec![]), validation())
+                        .map(drop),
                 ),
             ];
             for (operation, result) in received_slo {
@@ -543,10 +534,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     "SP receive_name_id_management_redirect",
                     sp.receive_name_id_management_redirect(
                         &idp_peer,
-                        BrowserInput::Post {
-                            fields: vec![],
-                            _message: Default::default(),
-                        },
+                        Inbound::redirect(""),
                         ReceiveNameIdManagement::redirect(),
                         validation(),
                     )
@@ -556,10 +544,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     "IdP receive_name_id_management_redirect",
                     idp.receive_name_id_management_redirect(
                         &sp_peer,
-                        BrowserInput::Post {
-                            fields: vec![],
-                            _message: Default::default(),
-                        },
+                        Inbound::redirect(""),
                         ReceiveNameIdManagement::redirect(),
                         validation(),
                     )
@@ -573,8 +558,8 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     assert!(
                         matches!(
                             result,
-                            Err(SamlError::UnsupportedBinding {
-                                binding: Binding::Post,
+                            Err(SamlError::MissingBindingParameter {
+                                name: "SAMLRequest",
                                 ..
                             })
                         ),
@@ -588,7 +573,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     sp.finish_slo(
                         &idp_peer,
                         &logout_pending,
-                        BrowserInput::<LogoutResponse>::redirect(""),
+                        Inbound::redirect(""),
                         validation(),
                     )
                     .map(drop),
@@ -598,7 +583,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     idp.finish_slo(
                         &sp_peer,
                         &logout_pending,
-                        BrowserInput::<LogoutResponse>::redirect(""),
+                        Inbound::redirect(""),
                         validation(),
                     )
                     .map(drop),
@@ -608,7 +593,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     sp.finish_name_id_management_redirect(
                         &idp_peer,
                         &manage_pending,
-                        BrowserInput::<ManageNameIdResponse>::redirect(""),
+                        Inbound::redirect(""),
                         validation(),
                     )
                     .map(drop),
@@ -618,7 +603,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     idp.finish_name_id_management_redirect(
                         &sp_peer,
                         &manage_pending,
-                        BrowserInput::<ManageNameIdResponse>::redirect(""),
+                        Inbound::redirect(""),
                         validation(),
                     )
                     .map(drop),

@@ -10,10 +10,10 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
-    BrowserInput, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    LogoutRequest, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
-    RespondSlo, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo,
+    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSigning,
+    LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo, Saml, SamlError,
+    SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartSlo,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -92,7 +92,7 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
     )?;
     let received = identity_provider.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let other = SpDescriptor::from_metadata_xml(
@@ -157,7 +157,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
     )?;
     let received = identity_provider.receive_slo(
         &sp_for_responses,
-        BrowserInput::<LogoutRequest>::post(request.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(request.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response =
@@ -225,15 +225,12 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
     )?;
     let received = identity_provider.receive_slo(
         &sp_descriptor,
-        BrowserInput::<LogoutRequest>::post(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = identity_provider.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
-    let response_input = || -> Result<_, SamlError> {
-        Ok(BrowserInput::<saml_rs::LogoutResponse>::post(
-            response.post_form()?.fields().to_vec(),
-        ))
-    };
+    let response_input =
+        || -> Result<_, SamlError> { Ok(Inbound::post(response.post_form()?.fields().to_vec())) };
     let wrong_handler = service_provider.finish_slo(
         &idp_descriptor,
         &started.pending,
@@ -282,7 +279,7 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
         )
     };
     let input = |xml: &str| {
-        BrowserInput::<LogoutRequest>::post(vec![FormField::new(
+        Inbound::post(vec![FormField::new(
             "SAMLRequest",
             STANDARD.encode(xml.as_bytes()),
         )])
@@ -377,7 +374,7 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
 
     let received = service_provider.receive_slo(
         &idp_peer,
-        BrowserInput::<LogoutRequest>::post(request.fields().to_vec()),
+        Inbound::post(request.fields().to_vec()),
         validation(),
     )?;
     let response = service_provider.respond_slo(&idp_peer, &received, RespondSlo::post())?;
@@ -387,7 +384,7 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
     identity_provider.finish_slo(
         &sp_peer,
         &started.pending,
-        BrowserInput::<saml_rs::LogoutResponse>::post(response.fields().to_vec()),
+        Inbound::post(response.fields().to_vec()),
         validation(),
     )?;
     Ok(())

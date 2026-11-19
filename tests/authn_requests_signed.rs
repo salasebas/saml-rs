@@ -11,8 +11,8 @@ use common::signing_credentials;
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, BrowserInput, EntityId, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, Outbound, PaosAuthnRequest,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EntityId, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound, PaosAuthnRequest,
     PaosClientRequest, ReplayPolicy, Saml, SamlError, SamlValidationContext, SpConfig,
     SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
 };
@@ -73,19 +73,15 @@ fn descriptors(
 
 fn post_input(
     outbound: &Outbound<AuthnRequest>,
-) -> Result<BrowserInput<AuthnRequest>, Box<dyn std::error::Error>> {
-    Ok(BrowserInput::<AuthnRequest>::post(
-        outbound.post_form()?.fields().to_vec(),
-    ))
+) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
+    Ok(Inbound::post(outbound.post_form()?.fields().to_vec()))
 }
 
 fn redirect_input(
     outbound: &Outbound<AuthnRequest>,
-) -> Result<BrowserInput<AuthnRequest>, Box<dyn std::error::Error>> {
+) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
     let url = Url::parse(outbound.redirect_url()?)?;
-    Ok(BrowserInput::<AuthnRequest>::redirect(
-        url.query().unwrap_or_default(),
-    ))
+    Ok(Inbound::redirect(url.query().unwrap_or_default()))
 }
 
 fn envelope_for_idp(sp_soap: &str) -> Result<String, Box<dyn std::error::Error>> {

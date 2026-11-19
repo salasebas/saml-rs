@@ -67,7 +67,7 @@ impl ArtifactDelivery {
 /// Resolve [`Self::artifact`] with
 /// [`Saml<Sp>::resolve_artifact`](crate::Saml::resolve_artifact), then pass
 /// this value and the resolved message to
-/// [`BrowserInput::artifact`](crate::BrowserInput::artifact).
+/// [`Inbound::artifact`](crate::Inbound::artifact).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeliveredArtifact {
     artifact: Artifact,

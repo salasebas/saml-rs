@@ -13,12 +13,12 @@ use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::xml::dom::DEFAULT_XML_MAX_BYTES;
 use saml_rs::XmlLimits;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, BrowserInput, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutSubject,
-    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
-    SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoResponse, SsoResponseBinding, StartSlo, StartSso, Subject, XmlPolicy,
+    AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
+    AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
+    RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSlo, StartSso, Subject,
+    XmlPolicy,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -156,7 +156,7 @@ fn receive_padded_authn_request(padding: usize) -> TestResult<Result<(), SamlErr
         .idp
         .receive_sso(
             &parties.sp_descriptor,
-            BrowserInput::<AuthnRequest>::simple_sign(fields),
+            Inbound::simple_sign(fields),
             validation(),
         )
         .map(drop))
@@ -170,7 +170,7 @@ fn finish_padded_sso_response(padding: usize) -> TestResult<Result<(), SamlError
     )?;
     let received = parties.idp.receive_sso(
         &parties.sp_descriptor,
-        BrowserInput::<AuthnRequest>::simple_sign(started.outbound.post_form()?.fields().to_vec()),
+        Inbound::simple_sign(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     let response = parties.idp.respond_sso(
@@ -185,7 +185,7 @@ fn finish_padded_sso_response(padding: usize) -> TestResult<Result<(), SamlError
         .finish_sso(
             &parties.idp_descriptor,
             &started.pending,
-            BrowserInput::<SsoResponse>::simple_sign(fields),
+            Inbound::simple_sign(fields),
             validation(),
         )
         .map(drop))
@@ -208,7 +208,7 @@ fn receive_padded_logout_request(padding: usize) -> TestResult<Result<(), SamlEr
         .idp
         .receive_slo(
             &parties.sp_descriptor,
-            BrowserInput::<LogoutRequest>::simple_sign(fields),
+            Inbound::simple_sign(fields),
             validation(),
         )
         .map(drop))

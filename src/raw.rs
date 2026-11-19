@@ -17,7 +17,7 @@
 //! | [`logout::create_logout_response`], [`logout::create_logout_response_with_id`] | `Saml::respond_slo` |
 //! | [`logout::parse_logout_response`], [`logout::parse_logout_response_without_request_id`] | `Saml::finish_slo` |
 //! | [`flow()`] | The typed receive operation for the message |
-//! | [`HttpRequest::redirect`] | [`BrowserInput::redirect`](crate::BrowserInput) with the raw query string |
+//! | [`HttpRequest::redirect`] | [`Inbound::redirect`](crate::Inbound) with the raw query string |
 //!
 //! Raw APIs expose compatibility types such as [`FlowResult`],
 //! [`BindingContext`], [`HttpRequest`], and [`EntitySetting`]. Because those

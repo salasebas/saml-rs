@@ -13,7 +13,7 @@ use saml_rs::{
     template::{LoginResponseAttribute, LoginResponseTemplate},
 };
 use saml_rs::{
-    AuthnRequest, BrowserInput, EndpointUrl, FormField, LogoutRequest, LogoutResponse, MessageId,
+    AuthnRequest, EndpointUrl, FormField, Inbound, LogoutRequest, LogoutResponse, MessageId,
     NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, RelayState, SamlError,
     SamlInstant, SsoResponse, SsoResponseBinding, SsoSession, Status, SubordinateStatusCode,
 };
@@ -117,18 +117,18 @@ fn signed_response_binding_context(binding: Binding) -> Result<BindingContext, S
     Ok(context)
 }
 
-fn assert_browser_input_invalid<Message>(input: BrowserInput<Message>)
+fn assert_browser_input_invalid<Message>(input: Inbound<Message>)
 where
-    saml_rs::raw::HttpRequest: TryFrom<BrowserInput<Message>, Error = SamlError>,
+    saml_rs::raw::HttpRequest: TryFrom<Inbound<Message>, Error = SamlError>,
 {
     let result = saml_rs::raw::HttpRequest::try_from(input);
 
     assert!(matches!(result, Err(SamlError::Invalid(_))));
 }
 
-fn browser_input_error<Message>(input: BrowserInput<Message>) -> Option<SamlError>
+fn browser_input_error<Message>(input: Inbound<Message>) -> Option<SamlError>
 where
-    saml_rs::raw::HttpRequest: TryFrom<BrowserInput<Message>, Error = SamlError>,
+    saml_rs::raw::HttpRequest: TryFrom<Inbound<Message>, Error = SamlError>,
 {
     saml_rs::raw::HttpRequest::try_from(input).err()
 }
@@ -402,7 +402,7 @@ fn typed_models_logout_response_outbound_rejects_saml_request_context(
 #[test]
 fn typed_models_redirect_browser_input_converts_to_http_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let input = BrowserInput::<AuthnRequest>::redirect(
+    let input = Inbound::<AuthnRequest>::redirect(
         "?SAMLRequest=abc&RelayState=relay&SigAlg=alg&Signature=sig",
     );
 
@@ -425,33 +425,15 @@ fn typed_models_redirect_browser_input_converts_to_http_request(
 }
 
 #[test]
-fn typed_models_sso_response_browser_input_rejects_redirect() {
-    let input = BrowserInput::<SsoResponse>::Redirect {
-        raw_query: "?SAMLResponse=abc&SigAlg=alg&Signature=sig".to_string(),
-        _message: std::marker::PhantomData,
-    };
-
-    let result = saml_rs::raw::HttpRequest::try_from(input);
-
-    assert!(matches!(
-        result,
-        Err(SamlError::UnsupportedBinding {
-            binding: Binding::Redirect,
-            ..
-        })
-    ));
-}
-
-#[test]
 fn typed_models_redirect_browser_input_rejects_marker_field_mismatch() {
-    assert_browser_input_invalid(BrowserInput::<AuthnRequest>::redirect("SAMLResponse=abc"));
-    assert_browser_input_invalid(BrowserInput::<LogoutResponse>::redirect("SAMLRequest=abc"));
+    assert_browser_input_invalid(Inbound::<AuthnRequest>::redirect("SAMLResponse=abc"));
+    assert_browser_input_invalid(Inbound::<LogoutResponse>::redirect("SAMLRequest=abc"));
 }
 
 #[test]
 fn typed_models_redirect_browser_input_uses_canonical_signed_octets_with_extra_params(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let input = BrowserInput::<AuthnRequest>::redirect(
+    let input = Inbound::<AuthnRequest>::redirect(
         "?ignored=before&Signature=sig&SAMLRequest=abc%2Bdef&RelayState=relay%20state&extra=after&SigAlg=http%3A%2F%2Fexample.com%2Falg",
     );
 
@@ -490,7 +472,7 @@ fn typed_models_redirect_browser_input_rejects_duplicate_signed_fields() {
             "SAMLRequest=abc&SigAlg=alg&Signature=one&Signature=two",
         ),
     ] {
-        let input = BrowserInput::<AuthnRequest>::redirect(raw_query);
+        let input = Inbound::<AuthnRequest>::redirect(raw_query);
 
         let result = saml_rs::raw::HttpRequest::try_from(input);
 
@@ -507,7 +489,7 @@ fn typed_models_redirect_browser_input_rejects_duplicate_signed_fields() {
 #[test]
 fn typed_models_redirect_browser_input_rejects_missing_or_both_message_fields() {
     assert!(matches!(
-        browser_input_error(BrowserInput::<AuthnRequest>::redirect(
+        browser_input_error(Inbound::<AuthnRequest>::redirect(
             "RelayState=relay&SigAlg=alg&Signature=sig",
         )),
         Some(SamlError::MissingBindingParameter {
@@ -515,14 +497,14 @@ fn typed_models_redirect_browser_input_rejects_missing_or_both_message_fields() 
             ..
         })
     ));
-    assert_browser_input_invalid(BrowserInput::<AuthnRequest>::redirect(
+    assert_browser_input_invalid(Inbound::<AuthnRequest>::redirect(
         "SAMLRequest=abc&SAMLResponse=def&SigAlg=alg&Signature=sig",
     ));
 }
 
 #[test]
 fn typed_models_post_browser_input_preserves_fields() -> Result<(), Box<dyn std::error::Error>> {
-    let input = BrowserInput::<AuthnRequest>::post(vec![
+    let input = Inbound::<AuthnRequest>::post(vec![
         FormField::new("SAMLRequest", "abc"),
         FormField::new("RelayState", ""),
     ]);
@@ -543,11 +525,11 @@ fn typed_models_post_browser_input_preserves_fields() -> Result<(), Box<dyn std:
 #[test]
 fn typed_models_post_browser_input_accepts_response_markers(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sso = BrowserInput::<SsoResponse>::post(vec![
+    let sso = Inbound::<SsoResponse>::post(vec![
         FormField::new("SAMLResponse", "abc"),
         FormField::new("RelayState", "relay"),
     ]);
-    let logout = BrowserInput::<LogoutResponse>::post(vec![FormField::new("SAMLResponse", "def")]);
+    let logout = Inbound::<LogoutResponse>::post(vec![FormField::new("SAMLResponse", "def")]);
 
     let sso_request = saml_rs::raw::HttpRequest::try_from(sso)?;
     let logout_request = saml_rs::raw::HttpRequest::try_from(logout)?;
@@ -568,19 +550,19 @@ fn typed_models_post_browser_input_accepts_response_markers(
 
 #[test]
 fn typed_models_post_browser_input_rejects_marker_field_mismatch() {
-    assert_browser_input_invalid(BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+    assert_browser_input_invalid(Inbound::<AuthnRequest>::post(vec![FormField::new(
         "SAMLResponse",
         "abc",
     )]));
-    assert_browser_input_invalid(BrowserInput::<LogoutRequest>::post(vec![FormField::new(
+    assert_browser_input_invalid(Inbound::<LogoutRequest>::post(vec![FormField::new(
         "SAMLResponse",
         "abc",
     )]));
-    assert_browser_input_invalid(BrowserInput::<SsoResponse>::post(vec![FormField::new(
+    assert_browser_input_invalid(Inbound::<SsoResponse>::post(vec![FormField::new(
         "SAMLRequest",
         "abc",
     )]));
-    assert_browser_input_invalid(BrowserInput::<LogoutResponse>::post(vec![FormField::new(
+    assert_browser_input_invalid(Inbound::<LogoutResponse>::post(vec![FormField::new(
         "SAMLRequest",
         "abc",
     )]));
@@ -589,7 +571,7 @@ fn typed_models_post_browser_input_rejects_marker_field_mismatch() {
 #[test]
 fn typed_models_post_browser_input_rejects_missing_duplicate_or_both_message_fields() {
     assert!(matches!(
-        browser_input_error(BrowserInput::<AuthnRequest>::post(vec![FormField::new(
+        browser_input_error(Inbound::<AuthnRequest>::post(vec![FormField::new(
             "RelayState",
             "relay",
         )])),
@@ -599,7 +581,7 @@ fn typed_models_post_browser_input_rejects_missing_duplicate_or_both_message_fie
         })
     ));
     assert!(matches!(
-        browser_input_error(BrowserInput::<AuthnRequest>::post(vec![
+        browser_input_error(Inbound::<AuthnRequest>::post(vec![
             FormField::new("SAMLRequest", "abc"),
             FormField::new("SAMLRequest", "def"),
         ])),
@@ -608,7 +590,7 @@ fn typed_models_post_browser_input_rejects_missing_duplicate_or_both_message_fie
             ..
         })
     ));
-    assert_browser_input_invalid(BrowserInput::<AuthnRequest>::post(vec![
+    assert_browser_input_invalid(Inbound::<AuthnRequest>::post(vec![
         FormField::new("SAMLRequest", "abc"),
         FormField::new("SAMLResponse", "def"),
     ]));
@@ -617,7 +599,7 @@ fn typed_models_post_browser_input_rejects_missing_duplicate_or_both_message_fie
 #[test]
 fn typed_models_simplesign_browser_input_derives_signed_octets(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let input = BrowserInput::<AuthnRequest>::simple_sign(vec![
+    let input = Inbound::<AuthnRequest>::simple_sign(vec![
         FormField::new("SAMLRequest", "PHNhbWxwOkF1dGhuUmVxdWVzdC8+"),
         FormField::new("RelayState", "relay"),
         FormField::new("SigAlg", "alg"),
@@ -638,13 +620,13 @@ fn typed_models_simplesign_browser_input_accepts_response_markers(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sso_xml = "<samlp:Response/>";
     let logout_xml = "<samlp:LogoutResponse/>";
-    let sso = BrowserInput::<SsoResponse>::simple_sign(vec![
+    let sso = Inbound::<SsoResponse>::simple_sign(vec![
         FormField::new("SAMLResponse", STANDARD.encode(sso_xml.as_bytes())),
         FormField::new("RelayState", "relay"),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]);
-    let logout = BrowserInput::<LogoutResponse>::simple_sign(vec![
+    let logout = Inbound::<LogoutResponse>::simple_sign(vec![
         FormField::new("SAMLResponse", STANDARD.encode(logout_xml.as_bytes())),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
@@ -666,22 +648,22 @@ fn typed_models_simplesign_browser_input_accepts_response_markers(
 
 #[test]
 fn typed_models_simplesign_browser_input_rejects_marker_field_mismatch() {
-    assert_browser_input_invalid(BrowserInput::<AuthnRequest>::simple_sign(vec![
+    assert_browser_input_invalid(Inbound::<AuthnRequest>::simple_sign(vec![
         FormField::new("SAMLResponse", STANDARD.encode(b"<samlp:Response/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
-    assert_browser_input_invalid(BrowserInput::<LogoutRequest>::simple_sign(vec![
+    assert_browser_input_invalid(Inbound::<LogoutRequest>::simple_sign(vec![
         FormField::new("SAMLResponse", STANDARD.encode(b"<samlp:LogoutResponse/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
-    assert_browser_input_invalid(BrowserInput::<SsoResponse>::simple_sign(vec![
+    assert_browser_input_invalid(Inbound::<SsoResponse>::simple_sign(vec![
         FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
     ]));
-    assert_browser_input_invalid(BrowserInput::<LogoutResponse>::simple_sign(vec![
+    assert_browser_input_invalid(Inbound::<LogoutResponse>::simple_sign(vec![
         FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:LogoutRequest/>")),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
@@ -691,7 +673,7 @@ fn typed_models_simplesign_browser_input_rejects_marker_field_mismatch() {
 #[test]
 fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_message_fields() {
     assert!(matches!(
-        browser_input_error(BrowserInput::<AuthnRequest>::simple_sign(vec![
+        browser_input_error(Inbound::<AuthnRequest>::simple_sign(vec![
             FormField::new("SigAlg", "alg"),
             FormField::new("Signature", "sig"),
         ])),
@@ -701,7 +683,7 @@ fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_messa
         })
     ));
     assert!(matches!(
-        browser_input_error(BrowserInput::<AuthnRequest>::simple_sign(vec![
+        browser_input_error(Inbound::<AuthnRequest>::simple_sign(vec![
             FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
             FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
             FormField::new("SigAlg", "alg"),
@@ -712,7 +694,7 @@ fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_messa
             ..
         })
     ));
-    assert_browser_input_invalid(BrowserInput::<AuthnRequest>::simple_sign(vec![
+    assert_browser_input_invalid(Inbound::<AuthnRequest>::simple_sign(vec![
         FormField::new("SAMLRequest", STANDARD.encode(b"<samlp:AuthnRequest/>")),
         FormField::new("SAMLResponse", STANDARD.encode(b"<samlp:Response/>")),
         FormField::new("SigAlg", "alg"),
@@ -723,7 +705,7 @@ fn typed_models_simplesign_browser_input_rejects_missing_duplicate_or_both_messa
 #[test]
 fn typed_models_simplesign_browser_input_signs_decoded_field_values(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let input = BrowserInput::<AuthnRequest>::simple_sign(vec![
+    let input = Inbound::<AuthnRequest>::simple_sign(vec![
         FormField::new("SAMLRequest", "PHNhbWxwOkF1dGhuUmVxdWVzdC8+"),
         FormField::new("RelayState", "relay"),
         FormField::new("SigAlg", "alg"),
@@ -754,10 +736,10 @@ fn typed_models_simplesign_browser_input_signs_decoded_field_values(
 #[test]
 fn typed_models_logout_browser_input_preserves_detached_signature_octets(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let redirect = BrowserInput::<LogoutRequest>::redirect(
+    let redirect = Inbound::<LogoutRequest>::redirect(
         "?SAMLRequest=abc&RelayState=relay&SigAlg=alg&Signature=sig",
     );
-    let simple_sign = BrowserInput::<LogoutResponse>::simple_sign(vec![
+    let simple_sign = Inbound::<LogoutResponse>::simple_sign(vec![
         FormField::new("SAMLResponse", "PHNhbWxwOkxvZ291dFJlc3BvbnNlLz4="),
         FormField::new("RelayState", "relay"),
         FormField::new("SigAlg", "alg"),
@@ -781,7 +763,7 @@ fn typed_models_logout_browser_input_preserves_detached_signature_octets(
 #[test]
 fn typed_models_simplesign_browser_input_bounds_decoded_xml() {
     let too_large = vec![b'a'; XmlLimits::default().max_bytes + 1];
-    let input = BrowserInput::<AuthnRequest>::simple_sign(vec![
+    let input = Inbound::<AuthnRequest>::simple_sign(vec![
         FormField::new("SAMLRequest", STANDARD.encode(&too_large)),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
@@ -1840,7 +1822,7 @@ fn typed_models_simplesign_browser_input_error_does_not_keep_the_message_bytes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut bytes = vec![b'a'; 4096];
     bytes.push(0xff);
-    let error = browser_input_error(BrowserInput::<AuthnRequest>::simple_sign(vec![
+    let error = browser_input_error(Inbound::<AuthnRequest>::simple_sign(vec![
         FormField::new("SAMLRequest", STANDARD.encode(&bytes)),
         FormField::new("SigAlg", "alg"),
         FormField::new("Signature", "sig"),
@@ -1860,21 +1842,4 @@ fn typed_models_simplesign_browser_input_error_does_not_keep_the_message_bytes(
     let debug = format!("{error:?}");
     assert!(debug.len() < 512, "the error kept the input: {debug:.200}");
     Ok(())
-}
-
-#[test]
-fn typed_models_soap_authn_request_input_is_not_a_raw_http_request() {
-    let input = BrowserInput::<AuthnRequest>::Soap {
-        envelope: "<soap:Envelope/>".to_string(),
-        channel: saml_rs::SoapChannel::unattested(),
-        _message: std::marker::PhantomData,
-    };
-
-    assert!(matches!(
-        browser_input_error(input),
-        Some(SamlError::UnsupportedBinding {
-            binding: Binding::Soap,
-            ..
-        })
-    ));
 }

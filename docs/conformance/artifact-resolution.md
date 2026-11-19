@@ -116,7 +116,7 @@ Profiles §4.1.4.4 applies only when the caller stores the message with
 The binding, not a message signature, is the authentication mechanism from
 §4.1.4.4 for this dereference. `ArtifactResolution::finish` returns the
 message and does not accept a session. `finish_sso` accepts it through
-`BrowserInput::artifact`, under the rules in
+`Inbound::artifact`, under the rules in
 [HTTP-Artifact response](web-browser-sso-artifact.md).
 
 ## Service provider acceptance

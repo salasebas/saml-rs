@@ -27,14 +27,13 @@ use saml_rs::constants::{
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, BrowserInput, ClockSkew, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
-    MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound,
-    Pending, PendingManageNameIdRequest, ReceiveNameIdManagement, Received,
-    ReceivedNameIdManagement, ReceivedNameIdManagementRedirect, RelayState, ReplayCache,
-    ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartNameIdManagement, Status, SubordinateStatusCode,
+    AcsEndpoint, ClockSkew, EndpointUrl, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MetadataTrustPolicy,
+    NameId, NameIdChange, NameIdFormat, NameIdManagementRefusal, Outbound,
+    PendingManageNameIdRequest, ReceiveNameIdManagement, Received, ReceivedNameIdManagement,
+    ReceivedNameIdManagementRedirect, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
+    RespondNameIdManagement, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -119,18 +118,14 @@ fn redirect_query<Message>(outbound: &Outbound<Message>) -> Result<String, SamlE
 
 fn request_input(
     outbound: &Outbound<ManageNameIdRequest>,
-) -> Result<BrowserInput<ManageNameIdRequest>, SamlError> {
-    Ok(BrowserInput::<ManageNameIdRequest>::redirect(
-        redirect_query(outbound)?,
-    ))
+) -> Result<Inbound<ManageNameIdRequest>, SamlError> {
+    Ok(Inbound::redirect(redirect_query(outbound)?))
 }
 
 fn response_input(
     outbound: &Outbound<ManageNameIdResponse>,
-) -> Result<BrowserInput<ManageNameIdResponse>, SamlError> {
-    Ok(BrowserInput::<ManageNameIdResponse>::redirect(
-        redirect_query(outbound)?,
-    ))
+) -> Result<Inbound<ManageNameIdResponse>, SamlError> {
+    Ok(Inbound::redirect(redirect_query(outbound)?))
 }
 
 /// The request a responder is ready to apply.
@@ -166,10 +161,10 @@ fn redirect_message_xml<Message>(
 
 /// The pending request, persisted and restored as a deployment would.
 fn restored(pending: &PendingManageNameIdRequest) -> Result<PendingManageNameIdRequest, SamlError> {
-    Pending::<ManageNameIdRequest>::from_snapshot(pending.snapshot())
+    PendingManageNameIdRequest::from_snapshot(pending.snapshot())
 }
 
-fn signed_request_input(xml: &str) -> Result<BrowserInput<ManageNameIdRequest>, SamlError> {
+fn signed_request_input(xml: &str) -> Result<Inbound<ManageNameIdRequest>, SamlError> {
     let key = read_private_key(PRIVKEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdRequest, xml, None, RSA_SHA256)?;
     let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
@@ -177,10 +172,10 @@ fn signed_request_input(xml: &str) -> Result<BrowserInput<ManageNameIdRequest>, 
     let (_, query) = url
         .split_once('?')
         .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-    Ok(BrowserInput::<ManageNameIdRequest>::redirect(query))
+    Ok(Inbound::redirect(query))
 }
 
-fn signed_response_input(xml: &str) -> Result<BrowserInput<ManageNameIdResponse>, SamlError> {
+fn signed_response_input(xml: &str) -> Result<Inbound<ManageNameIdResponse>, SamlError> {
     let key = read_private_key(PRIVKEY, None)?;
     let octet = build_redirect_octet(ParserType::ManageNameIdResponse, xml, None, RSA_SHA256)?;
     let signature = sign_octet_string(&octet, &key, RSA_SHA256)?;
@@ -188,10 +183,10 @@ fn signed_response_input(xml: &str) -> Result<BrowserInput<ManageNameIdResponse>
     let (_, query) = url
         .split_once('?')
         .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-    Ok(BrowserInput::<ManageNameIdResponse>::redirect(query))
+    Ok(Inbound::redirect(query))
 }
 
-fn unsigned_response_input(xml: &str) -> Result<BrowserInput<ManageNameIdResponse>, SamlError> {
+fn unsigned_response_input(xml: &str) -> Result<Inbound<ManageNameIdResponse>, SamlError> {
     let url = saml_rs::binding::build_redirect_url(
         IDP_MANAGE,
         ParserType::ManageNameIdResponse,
@@ -201,7 +196,7 @@ fn unsigned_response_input(xml: &str) -> Result<BrowserInput<ManageNameIdRespons
     let (_, query) = url
         .split_once('?')
         .ok_or_else(|| SamlError::Invalid("redirect URL is missing a query".into()))?;
-    Ok(BrowserInput::<ManageNameIdResponse>::redirect(query))
+    Ok(Inbound::redirect(query))
 }
 
 /// An error `ManageNameIDResponse` from the service provider to the identity
@@ -379,7 +374,7 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
         let relay_state = sp.finish_name_id_management_redirect(
             &idp_peer,
             &started.pending,
-            BrowserInput::<ManageNameIdResponse>::redirect(query),
+            Inbound::redirect(query),
             validation(),
         )?;
 
@@ -415,7 +410,7 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
 
     let request = request(idp.receive_name_id_management_redirect(
         &sp_peer,
-        BrowserInput::<ManageNameIdRequest>::redirect(query),
+        Inbound::redirect(query),
         ReceiveNameIdManagement::redirect(),
         validation(),
     )?)?;
@@ -655,7 +650,7 @@ fn unsigned_request_is_rejected() -> TestResult {
         .collect();
     match sp.receive_name_id_management_redirect(
         &idp_peer,
-        BrowserInput::<ManageNameIdRequest>::redirect(unsigned.join("&")),
+        Inbound::redirect(unsigned.join("&")),
         ReceiveNameIdManagement::redirect(),
         validation(),
     ) {
