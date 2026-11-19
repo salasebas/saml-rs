@@ -145,9 +145,10 @@ To answer an `AuthnRequest` with an artifact, keep using
 - The call stores the artifact before it sends `ArtifactResolve`, so a
   forged `SAMLart` value also takes a cache entry. A cache with an entry
   limit, such as `InMemoryReplayCache::with_max_entries`, needs room for one
-  entry per artifact received during the retention. Otherwise pass a separate
-  cache for `resolve_artifact`, so a flood of artifacts cannot fill the cache
-  that `finish_sso` uses.
+  entry per artifact received during the retention. A full cache returns
+  `SamlError::ReplayCacheUnavailable`. Otherwise pass a separate cache for
+  `resolve_artifact`, so a flood of artifacts cannot fill the cache that
+  `finish_sso` uses.
 - `ReplayPolicy::Disabled` skips the check, as `allow_reuse()` did. The
   identity provider still returns the message only once.
 - The context time is the instant at which the identity provider metadata

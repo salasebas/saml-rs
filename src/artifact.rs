@@ -359,7 +359,12 @@ pub(crate) fn issue(
     endpoint_index: u16,
     issued: &mut IssuedArtifacts,
 ) -> Result<Artifact, SamlError> {
-    let (message_xml, required_channel) = stored_message(protocol_xml)?;
+    let (message_xml, local_name) = stored_message(protocol_xml)?;
+    let required_channel = if local_name == "Response" {
+        RequiredChannel::Confidential
+    } else {
+        RequiredChannel::Authenticated
+    };
     store(
         metadata,
         service_provider,
@@ -377,8 +382,8 @@ pub(crate) fn issue_sso_response(
     endpoint_index: u16,
     issued: &mut IssuedArtifacts,
 ) -> Result<Artifact, SamlError> {
-    let (message_xml, required_channel) = stored_message(response_xml)?;
-    if required_channel != RequiredChannel::Confidential {
+    let (message_xml, local_name) = stored_message(response_xml)?;
+    if local_name != "Response" {
         return Err(SamlError::ProtocolProfile(
             "Web Browser SSO artifact message must be a protocol Response".into(),
         ));
@@ -387,7 +392,7 @@ pub(crate) fn issue_sso_response(
         metadata,
         service_provider,
         message_xml,
-        required_channel,
+        RequiredChannel::Confidential,
         endpoint_index,
         issued,
     )
@@ -426,19 +431,14 @@ fn store(
     Ok(artifact)
 }
 
-fn stored_message(xml: &str) -> Result<(String, RequiredChannel), SamlError> {
+fn stored_message(xml: &str) -> Result<(String, String), SamlError> {
     let element = parse_saml(xml)?;
     if element.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "stored artifact message must be a SAML protocol element".into(),
         ));
     }
-    let required_channel = if element.local_name == "Response" {
-        RequiredChannel::Confidential
-    } else {
-        RequiredChannel::Authenticated
-    };
-    Ok((xml[element.span].to_string(), required_channel))
+    Ok((xml[element.span].to_string(), element.local_name))
 }
 
 pub(crate) fn resolve(

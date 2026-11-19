@@ -1223,7 +1223,7 @@ fn a_login_response_template_with_another_root_is_not_stored_as_a_response(
         &mut issued,
     );
     assert!(
-        matches!(&result, Err(SamlError::ProtocolProfile(_))),
+        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message == "Web Browser SSO artifact message must be a protocol Response"),
         "{result:?}"
     );
     Ok(())

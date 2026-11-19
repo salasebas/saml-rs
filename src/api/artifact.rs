@@ -255,8 +255,10 @@ impl Saml<Sp> {
     ///
     /// Returns [`SamlError::SoapChannelProtection`] when `channel` lacks one
     /// of the three properties, [`SamlError::ReplayDetected`] for an artifact
-    /// already stored, [`SamlError::TimeWindowInvalid`] when a replay cache is
-    /// passed without a retention, and another [`SamlError`] when the artifact
+    /// already stored, [`SamlError::ReplayCacheUnavailable`] when the cache
+    /// cannot store it, for example because it is full,
+    /// [`SamlError::TimeWindowInvalid`] when a replay cache is passed without
+    /// a retention, and another [`SamlError`] when the artifact
     /// was not issued by `identity_provider` or metadata has no SOAP
     /// resolution service at the artifact's index.
     pub fn resolve_artifact(
