@@ -208,6 +208,25 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
 }
 
 #[test]
+fn typed_sso_request_without_relay_state_sends_and_records_none(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    let redirect = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let names = query_names(redirect.outbound.redirect_url()?)?;
+    assert!(!names.iter().any(|name| name == "RelayState"), "{names:?}");
+    assert_eq!(redirect.pending.relay_state(), None);
+
+    let post = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let form = post.outbound.post_form()?;
+    assert!(form.fields().iter().all(|field| field.name() != "RelayState"));
+    assert_eq!(post.pending.relay_state(), None);
+    Ok(())
+}
+
+#[test]
 fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let long = "c".repeat(200);

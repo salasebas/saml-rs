@@ -214,7 +214,7 @@ impl Saml<Sp> {
         let outbound = Outbound::<AuthnRequest>::try_from(context)?;
         let pending = PendingAuthnRequest::new(
             outbound.id().clone(),
-            options.relay_state,
+            outbound.relay_state().cloned(),
             idp.entity_id().clone(),
             acs,
         );
