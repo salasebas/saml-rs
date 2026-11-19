@@ -233,7 +233,7 @@ fn received_authn_request_exposes_force_authn_when_set_and_leaves_it_absent_when
 fn received_authn_request_exposes_is_passive_when_set_and_leaves_it_absent_when_omitted(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let omitted = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
-    assert_eq!(omitted.received.message().is_passive(), None);
+    assert_eq!(omitted.received.message().passive(), None);
 
     let required = receive(
         IdpValidationPolicy::recommended(),
@@ -241,7 +241,7 @@ fn received_authn_request_exposes_is_passive_when_set_and_leaves_it_absent_when_
         |xml| insert_root_attribute(xml, "IsPassive", "true"),
     )?;
     assert_eq!(
-        required.received.message().is_passive(),
+        required.received.message().passive(),
         Some(IsPassive::Required)
     );
 
@@ -251,7 +251,7 @@ fn received_authn_request_exposes_is_passive_when_set_and_leaves_it_absent_when_
         |xml| insert_root_attribute(xml, "IsPassive", "false"),
     )?;
     assert_eq!(
-        not_required.received.message().is_passive(),
+        not_required.received.message().passive(),
         Some(IsPassive::NotRequired)
     );
 
@@ -261,7 +261,7 @@ fn received_authn_request_exposes_is_passive_when_set_and_leaves_it_absent_when_
         |xml| insert_root_attribute(xml, "IsPassive", "0"),
     )?;
     assert_eq!(
-        numeric.received.message().is_passive(),
+        numeric.received.message().passive(),
         Some(IsPassive::NotRequired)
     );
     Ok(())
@@ -415,7 +415,7 @@ fn received_authn_request_accepts_these_fields_under_recommended_and_compatibili
         })?;
         let message = receipt.received.message();
         assert_eq!(message.force_authn(), Some(ForceAuthn::Required));
-        assert_eq!(message.is_passive(), Some(IsPassive::Required));
+        assert_eq!(message.passive(), Some(IsPassive::Required));
         assert_eq!(
             message
                 .requested_subject()
@@ -489,7 +489,7 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
     )?;
     let message = receipt.received.message();
     assert_eq!(message.force_authn(), Some(ForceAuthn::Required));
-    assert_eq!(message.is_passive(), Some(IsPassive::NotRequired));
+    assert_eq!(message.passive(), Some(IsPassive::NotRequired));
     assert_eq!(message.acs_index(), Some(0));
     assert_eq!(
         message.name_id_policy().map(NameIdPolicy::creation_request),

@@ -14,9 +14,10 @@ use std::fmt;
 pub enum SignatureVerificationReason {
     /// Enveloped XML-DSig verification failed.
     XmlSignature,
-    /// HTTP-Redirect or SimpleSign detached message signature verification failed.
-    DetachedMessageSignature,
-    /// Detached signature input could not be correlated with consumed RelayState.
+    /// The `Signature` that HTTP-Redirect or HTTP-POST-SimpleSign carries
+    /// beside the message failed verification.
+    BindingSignature,
+    /// Binding signature input could not be correlated with consumed RelayState.
     RelayStateCorrelation,
     /// Signed reference digest verification failed.
     ReferenceDigest,
@@ -26,7 +27,7 @@ impl fmt::Display for SignatureVerificationReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::XmlSignature => f.write_str("xml signature"),
-            Self::DetachedMessageSignature => f.write_str("detached message signature"),
+            Self::BindingSignature => f.write_str("binding signature"),
             Self::RelayStateCorrelation => f.write_str("relay state correlation"),
             Self::ReferenceDigest => f.write_str("reference digest"),
         }

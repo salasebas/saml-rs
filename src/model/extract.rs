@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::attributes::{Attribute, AttributeValue, Attributes};
+use super::audience_restriction::AudienceRestriction;
 use super::authn_statement::AuthnStatement;
 use super::endpoint::EndpointUrl;
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
@@ -10,7 +11,7 @@ use crate::constants::{attribute_name_format, name_id_format};
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::validator::conditions_time_bounds;
-use crate::xml::{xs_boolean, xs_unsigned_short};
+use crate::xml::{dom, xs_boolean, xs_unsigned_short, XmlLimits};
 
 pub(super) fn required_str<'a>(extract: &'a Value, path: &str) -> Result<&'a str, SamlError> {
     extract
@@ -243,13 +244,23 @@ pub(super) fn authn_statements_from_extract(
     super::authn_details::attach_statement_details(extract, saml_content, sessions)
 }
 
-pub(super) fn entity_ids_from_value(value: Option<&Value>) -> Result<Vec<EntityId>, SamlError> {
-    let Some(value) = value else {
+pub(super) fn audience_restrictions_from_extract(
+    extract: &Value,
+) -> Result<Vec<AudienceRestriction>, SamlError> {
+    let Some(value) = extract.get("audienceRestriction") else {
         return Ok(Vec::new());
     };
     value_strings(value)
-        .into_iter()
-        .map(EntityId::try_new)
+        .iter()
+        .map(|xml| {
+            let restriction = dom::parse_fragment_with_limits(xml, XmlLimits::unbounded())?;
+            restriction
+                .root
+                .children_named("Audience")
+                .map(|audience| EntityId::try_new(audience.text.as_str()))
+                .collect::<Result<Vec<_>, _>>()
+                .map(AudienceRestriction::new)
+        })
         .collect()
 }
 

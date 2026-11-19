@@ -165,6 +165,89 @@ let expires = session
 could not read. `finish_sso` and the other receiving methods already store
 the keys in the `ReplayCache` of the validation context.
 
+## Read audiences per restriction and call the renamed accessors
+
+**Affects:** service providers that call `SsoSession::audience()` or
+`SsoSession::sig_alg()`, and identity providers that call
+`AuthnRequest::is_passive()`.
+
+| Before | After |
+| --- | --- |
+| `session.audience()` | `session.audience_restrictions()`, then `restriction.audiences()` on each |
+| `session.sig_alg()` | `session.binding_signature_algorithm_uri()` |
+| `request.is_passive()` | `request.passive()` |
+
+`audience()` returned the `<Audience>` values of every `<AudienceRestriction>`
+in one list. That list loses which restriction each audience belongs to.
+SAML Core §2.5.1.4 needs that grouping: the relying party must be in every
+restriction, and one audience is enough within a restriction.
+`audience_restrictions()` returns one `AudienceRestriction` for each element,
+in document order.
+
+To list the audiences, flatten the restrictions.
+
+Before the upgrade:
+
+```rust,ignore
+let audiences: Vec<&str> = session.audience().iter().map(EntityId::as_str).collect();
+```
+
+After the upgrade:
+
+```rust
+# fn read(session: &saml_rs::SsoSession) {
+use saml_rs::{AudienceRestriction, EntityId};
+
+let audiences: Vec<&str> = session
+	.audience_restrictions()
+	.iter()
+	.flat_map(AudienceRestriction::audiences)
+	.map(EntityId::as_str)
+	.collect();
+# let _ = audiences;
+# }
+```
+
+Under `AudienceValidationPolicy::Skip`, `finish_sso` does not check the
+audience. `EvaluatePresentRestrictions` and `RequireRestriction` check it for
+every bearer assertion of the response, so prefer one of them. The session
+lists only the restrictions of its own assertion. If you check the audience
+yourself, require your entity ID in every restriction. A search of the flat
+list accepts an assertion with a second restriction that leaves you out.
+
+Before the upgrade:
+
+```rust,ignore
+let addressed = session.audience().contains(&sp_entity_id);
+```
+
+After the upgrade:
+
+```rust
+# fn check(session: &saml_rs::SsoSession, sp_entity_id: &saml_rs::EntityId) -> bool {
+let addressed = session
+	.audience_restrictions()
+	.iter()
+	.all(|restriction| restriction.audiences().contains(sp_entity_id));
+# addressed
+# }
+```
+
+The old `contains` check also rejected an assertion without
+`<AudienceRestriction>`. `all` returns `true` for it, as
+`EvaluatePresentRestrictions` accepts it. To keep rejecting it, also require
+`!session.audience_restrictions().is_empty()`, or select
+`RequireRestriction`.
+
+`binding_signature_algorithm_uri()` returns the value that `sig_alg()`
+returned: the `SigAlg` of a verified HTTP-POST-SimpleSign signature, which
+travels next to the message. A response signed only inside the XML still
+returns `None`. Read its algorithms from `verified_xml_signatures()`.
+
+`passive()` returns the same `Option<IsPassive>` as `is_passive()`. A Rust
+method that starts with `is_` returns `bool`, and this one does not. `None`
+still means that the request omitted `IsPassive`.
+
 ## Let the receiving method check replay
 
 **Affects:** callers of `SsoSession::check_and_store_replay` or

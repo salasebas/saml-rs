@@ -199,6 +199,13 @@ pub enum AudienceValidationPolicy {
     /// A bearer assertion that omits the element is not rejected.
     EvaluatePresentRestrictions,
     /// Skip audience evaluation, preserving the samlify port.
+    ///
+    /// A caller that evaluates the audience itself reads
+    /// [`crate::SsoSession::audience_restrictions`] and requires its entity ID
+    /// in every restriction. An empty slice means that the assertion has no
+    /// restriction, which [`Self::RequireRestriction`] rejects. The session
+    /// lists only the restrictions of its own assertion. Another bearer
+    /// assertion in the response is evaluated only by the other variants.
     Skip,
 }
 

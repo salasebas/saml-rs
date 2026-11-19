@@ -1,8 +1,9 @@
 use super::attributes::Attributes;
+use super::audience_restriction::AudienceRestriction;
 use super::authn_statement::AuthnStatement;
 use super::extract::{
-    attributes_from_extract, authn_statements_from_extract, conditions_instants,
-    entity_ids_from_value, name_id_format_from_uri, optional_request_id, required_str,
+    attributes_from_extract, audience_restrictions_from_extract, authn_statements_from_extract,
+    conditions_instants, name_id_format_from_uri, optional_request_id, required_str,
     subject_confirmations_from_extract,
 };
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
@@ -99,10 +100,10 @@ pub struct SsoSession {
     subject_confirmations: Vec<SubjectConfirmation>,
     attributes: Attributes,
     authn_statements: Vec<AuthnStatement>,
-    audience: Vec<EntityId>,
+    audience_restrictions: Vec<AudienceRestriction>,
     not_before: Option<SamlInstant>,
     not_on_or_after: Option<SamlInstant>,
-    sig_alg: Option<String>,
+    binding_signature_algorithm_uri: Option<String>,
     verified_xml_signatures: Vec<VerifiedXmlSignature>,
     raw_flow: FlowResult,
 }
@@ -176,17 +177,22 @@ impl SsoSession {
         &self.authn_statements
     }
 
-    /// Audience restrictions.
-    pub fn audience(&self) -> &[EntityId] {
-        &self.audience
+    /// The `<AudienceRestriction>` elements of the assertion `Conditions`, in
+    /// document order.
+    ///
+    /// Each value keeps the audiences of one restriction. The assertion is
+    /// addressed to a relying party that is in every restriction. The slice
+    /// is empty when the assertion has no `AudienceRestriction`.
+    pub fn audience_restrictions(&self) -> &[AudienceRestriction] {
+        &self.audience_restrictions
     }
 
-    /// Conditions NotBefore.
+    /// The `NotBefore` of the assertion `Conditions`, when present.
     pub fn not_before(&self) -> Option<&SamlInstant> {
         self.not_before.as_ref()
     }
 
-    /// Conditions NotOnOrAfter.
+    /// The `NotOnOrAfter` of the assertion `Conditions`, when present.
     ///
     /// The `SessionNotOnOrAfter` of a statement is
     /// [`AuthnStatement::session_not_on_or_after`].
@@ -194,13 +200,16 @@ impl SsoSession {
         self.not_on_or_after.as_ref()
     }
 
-    /// Verified detached Redirect or HTTP-POST-SimpleSign algorithm, when applicable.
+    /// The `SigAlg` URI of the verified binding signature, when the response
+    /// carried one.
     ///
-    /// Embedded XML signatures are exposed separately through
-    /// [`Self::verified_xml_signatures`] because a message can contain multiple
-    /// verified signatures with different algorithms and coverage.
-    pub fn sig_alg(&self) -> Option<&str> {
-        self.sig_alg.as_deref()
+    /// A binding signature travels as a parameter next to the message: an
+    /// HTTP-POST-SimpleSign signature, or an HTTP-Redirect signature on a
+    /// session built with [`TryFrom<FlowResult>`]. Every other response
+    /// returns `None`, including one signed only inside the XML. Those
+    /// signatures are in [`Self::verified_xml_signatures`].
+    pub fn binding_signature_algorithm_uri(&self) -> Option<&str> {
+        self.binding_signature_algorithm_uri.as_deref()
     }
 
     /// Successfully verified embedded XML signatures that authenticate this
@@ -450,9 +459,9 @@ impl SsoSession {
         let attributes = attributes_from_extract(&raw_flow.extract)?;
         let authn_statements =
             authn_statements_from_extract(&raw_flow.extract, &raw_flow.saml_content)?;
-        let audience = entity_ids_from_value(raw_flow.extract.get("audience"))?;
+        let audience_restrictions = audience_restrictions_from_extract(&raw_flow.extract)?;
         let (not_before, not_on_or_after) = conditions_instants(&raw_flow.extract)?;
-        let sig_alg = raw_flow.sig_alg.clone();
+        let binding_signature_algorithm_uri = raw_flow.sig_alg.clone();
         Ok(Self {
             response_id,
             response_issue_instant,
@@ -465,10 +474,10 @@ impl SsoSession {
             subject_confirmations,
             attributes,
             authn_statements,
-            audience,
+            audience_restrictions,
             not_before,
             not_on_or_after,
-            sig_alg,
+            binding_signature_algorithm_uri,
             verified_xml_signatures,
             raw_flow,
         })

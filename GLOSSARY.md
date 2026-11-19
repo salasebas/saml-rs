@@ -94,3 +94,10 @@ _Avoid_: OASIS relaxation, recommended, default
 Historical configuration that predates the validation presets. Its defaults
 are independent of Compatibility.
 _Avoid_: compatibility, recommended
+
+**Binding signature**:
+The signature that HTTP-Redirect or HTTP-POST-SimpleSign carries in the
+`Signature` and `SigAlg` parameters beside the SAML message, not inside its
+XML.
+_Avoid_: detached signature, in API names, because XML-DSig uses that term for
+an XML signature

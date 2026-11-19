@@ -948,7 +948,7 @@ fn hmac_sha1_signature_needs_the_signers_secret() -> Result<(), Box<dyn std::err
         matches!(
             error,
             SamlError::SignatureVerification {
-                reason: SignatureVerificationReason::DetachedMessageSignature,
+                reason: SignatureVerificationReason::BindingSignature,
                 ..
             }
         )

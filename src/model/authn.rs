@@ -48,7 +48,7 @@ impl ForceAuthn {
 ///
 /// [`Self::Required`] is `true`: do not take visible control of the user
 /// interface. [`Self::NotRequired`] is `false`. Omission leaves
-/// [`AuthnRequest::is_passive`] as `None`.
+/// [`AuthnRequest::passive`] as `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsPassive {
     /// `IsPassive="true"`.
@@ -86,7 +86,7 @@ pub struct AuthnRequest {
     acs_index: Option<u16>,
     name_id_policy: Option<NameIdPolicy>,
     force_authn: Option<ForceAuthn>,
-    is_passive: Option<IsPassive>,
+    passive: Option<IsPassive>,
     provider_name: Option<String>,
     requested_subject: Option<RequestedSubject>,
     requested_authn_context: Option<RequestedAuthnContext>,
@@ -140,8 +140,8 @@ impl AuthnRequest {
     }
 
     /// `IsPassive`, when set. See [`IsPassive`].
-    pub fn is_passive(&self) -> Option<IsPassive> {
-        self.is_passive
+    pub fn passive(&self) -> Option<IsPassive> {
+        self.passive
     }
 
     /// The requester's human-readable `ProviderName`, when present.
@@ -208,7 +208,7 @@ impl AuthnRequest {
         let name_id_policy = name_id_policy_from_extract(&raw_flow.extract)?;
         let force_authn = optional_flag(&raw_flow.extract, "request.forceAuthn", "ForceAuthn")?
             .map(ForceAuthn::from_bool);
-        let is_passive = optional_flag(&raw_flow.extract, "request.isPassive", "IsPassive")?
+        let passive = optional_flag(&raw_flow.extract, "request.isPassive", "IsPassive")?
             .map(IsPassive::from_bool);
         let requested_subject = requested_subject_from_extract(&raw_flow.extract)?;
         let requested_authn_context = requested_authn_context_from_extract(&raw_flow.extract)?;
@@ -222,7 +222,7 @@ impl AuthnRequest {
             acs_index,
             name_id_policy,
             force_authn,
-            is_passive,
+            passive,
             provider_name: raw_flow
                 .extract
                 .get_str("request.providerName")

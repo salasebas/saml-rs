@@ -206,7 +206,7 @@ fn signed_requests_round_trip_context_passive_and_provider_for_all_bindings(
                         received.message().requested_authn_context(),
                         Some(&requested)
                     );
-                    assert_eq!(received.message().is_passive(), Some(passive));
+                    assert_eq!(received.message().passive(), Some(passive));
                     assert_eq!(received.message().provider_name(), Some(PROVIDER));
                 }
             }

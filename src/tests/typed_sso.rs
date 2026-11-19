@@ -1235,7 +1235,7 @@ fn typed_http_post_exposes_verified_assertion_signature_evidence(
         signature.coverage(),
         VerifiedXmlSignatureCoverage::ConsumedAssertion
     );
-    assert_eq!(session.sig_alg(), None);
+    assert_eq!(session.binding_signature_algorithm_uri(), None);
     Ok(())
 }
 
@@ -1272,7 +1272,7 @@ fn typed_http_post_exposes_verified_response_root_signature_evidence(
         signature.coverage(),
         VerifiedXmlSignatureCoverage::ResponseRoot
     );
-    assert_eq!(session.sig_alg(), None);
+    assert_eq!(session.binding_signature_algorithm_uri(), None);
     Ok(())
 }
 
@@ -1302,7 +1302,7 @@ fn typed_http_post_preserves_distinct_response_and_assertion_signature_evidence(
         signature.algorithm_uri() == RSA_SHA256
             && signature.coverage() == VerifiedXmlSignatureCoverage::ConsumedAssertion
     }));
-    assert_eq!(session.sig_alg(), None);
+    assert_eq!(session.binding_signature_algorithm_uri(), None);
     Ok(())
 }
 
@@ -1481,7 +1481,7 @@ fn typed_facade_runs_simplesign_sso_response_binding() -> Result<(), Box<dyn std
         session.assertion_issue_instant()
     );
     assert_eq!(session.name_id().value(), "alice@example.com");
-    assert_eq!(session.sig_alg(), Some(RSA_SHA256));
+    assert_eq!(session.binding_signature_algorithm_uri(), Some(RSA_SHA256));
     let [signature] = session.verified_xml_signatures() else {
         return Err("expected one verified embedded XML signature".into());
     };
@@ -2293,10 +2293,7 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
 
     match finish(tampered) {
         Err(SamlError::SignatureVerification { reason }) => {
-            assert_eq!(
-                reason,
-                SignatureVerificationReason::DetachedMessageSignature
-            );
+            assert_eq!(reason, SignatureVerificationReason::BindingSignature);
         }
         other => return Err(format!("expected SignatureVerification, got {other:?}").into()),
     }
@@ -3154,6 +3151,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
         validation(),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
+    assert!(session.audience_restrictions().is_empty());
 
     let validate_omission = Saml::sp(sp_with_validation(SpValidationPolicy {
         audience: AudienceValidationPolicy::RequireRestriction,

@@ -141,8 +141,8 @@ certificate.
 
 `SsoSession::verified_xml_signatures` reports the `SignatureMethod` URI of each
 verified signature over the Response root or the consumed Assertion, and
-`SsoSession::sig_alg` the accepted detached `SigAlg`. Neither applies
-an allowlist.
+`SsoSession::binding_signature_algorithm_uri` the accepted detached
+`SigAlg`. Neither applies an allowlist.
 
 ### Provider-supported set
 

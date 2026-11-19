@@ -82,10 +82,11 @@
 //! [`SsoSession::verified_xml_signatures`] preserves structured evidence for
 //! each successfully verified embedded XML signature that covers the Response
 //! root or consumed Assertion. Its exact algorithm URI comes from the same
-//! verifier-owned signature node as the successful verdict. This is separate
-//! from [`SsoSession::sig_alg`], which retains its singular detached
-//! HTTP-Redirect or HTTP-POST-SimpleSign meaning; neither accessor imposes an
-//! application algorithm allowlist.
+//! verifier-owned signature node as the successful verdict.
+//! [`SsoSession::binding_signature_algorithm_uri`] reports the `SigAlg` of a
+//! verified HTTP-POST-SimpleSign signature, which travels next to the message
+//! instead of inside the XML. Neither accessor imposes an application
+//! algorithm allowlist.
 //!
 //! # IdP-initiated SSO
 //!
@@ -465,15 +466,16 @@ pub use error::{
 pub use metadata::MetadataSignatureVerification;
 pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};
 pub use model::{
-    AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContext,
-    AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, AuthnRequest,
-    AuthnStatement, ClockSkew, InMemoryReplayCache, LogoutCompleted, LogoutRequest, LogoutResponse,
-    LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy, OutstandingLogout,
-    Received, RelayState, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy,
-    RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,
-    SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, SubjectConfirmation,
-    SubjectLocality, SubordinateStatusCode, TopLevelStatusCode, VerifiedXmlSignature,
-    VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AudienceRestriction,
+    AuthnContext, AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind,
+    AuthnRequest, AuthnStatement, ClockSkew, InMemoryReplayCache, LogoutCompleted, LogoutRequest,
+    LogoutResponse, LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy,
+    OutstandingLogout, Received, RelayState, ReplayCache, ReplayKey, ReplayPolicy,
+    RequestAgePolicy, RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier,
+    SamlInstant, SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status,
+    SubjectConfirmation, SubjectLocality, SubordinateStatusCode, TopLevelStatusCode,
+    VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES,
+    MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
     ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementRefusal,

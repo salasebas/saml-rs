@@ -11,7 +11,7 @@ fn decoded_octet_params(octet: &str) -> Vec<(String, String)> {
 
 fn detached_signature_verification() -> SamlError {
     SamlError::SignatureVerification {
-        reason: SignatureVerificationReason::DetachedMessageSignature,
+        reason: SignatureVerificationReason::BindingSignature,
     }
 }
 
