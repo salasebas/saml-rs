@@ -7,17 +7,21 @@ use base64::Engine;
 use saml_rs::constants::{signature_algorithm, transform_algorithm};
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::error::SignatureVerificationReason;
+#[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
+use saml_rs::Rsa15KeyTransportPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
     CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
     PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
     SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession,
-    StartSlo, StartSso, Subject, TransformAlgorithm, XmlPolicy, XmlSignatureProfile,
+    StartSlo, StartSso, Subject, TransformAlgorithm, X509Credential, XmlPolicy,
+    XmlSignatureProfile,
 };
 use saml_rs::{
-    Attribute, AttributeValue, Attributes, DataEncryptionAlgorithm, DigestAlgorithm,
-    KeyEncryptionAlgorithm, MaskGenerationFunction, XmlEncryptionPolicy,
+    AssertionEncryptionPolicy, Attribute, AttributeEncryptionPolicy, AttributeValue, Attributes,
+    DataEncryptionAlgorithm, DigestAlgorithm, IdentifierEncryptionPolicy, KeyEncryptionAlgorithm,
+    MaskGenerationFunction, XmlEncryptionPolicy,
 };
 #[cfg(feature = "crypto-rustcrypto")]
 use saml_rs::{AuthnRequest, HmacSecret, SignatureAlgorithm};
@@ -53,13 +57,14 @@ fn signed_with(algorithms: AlgorithmPolicy, key: &str, cert: &str) -> Side {
     Side {
         algorithms,
         credentials: Credentials::default()
-            .with_signing_key(PrivateKeyPem::new(key))
-            .with_signing_certificate(CertificatePem::new(cert))
-            .with_decryption(saml_rs::DecryptionCredential {
-                certificate: CertificatePem::new(RSA_CERT),
-                key: PrivateKeyPem::new(RSA_KEY),
-                passphrase: None,
-            }),
+            .with_signing_credential(X509Credential::new(
+                CertificatePem::new(cert),
+                PrivateKeyPem::new(key),
+            ))
+            .with_decryption_credential(saml_rs::X509Credential::new(
+                CertificatePem::new(RSA_CERT),
+                PrivateKeyPem::new(RSA_KEY),
+            )),
     }
 }
 
@@ -70,7 +75,10 @@ fn rsa(algorithms: AlgorithmPolicy) -> Side {
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_assertions() -> XmlPolicy {
     XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     }
 }
@@ -99,35 +107,39 @@ fn peers_with_profiles(
     sp_xml_signatures: XmlSignatureProfile,
     idp_xml_signatures: XmlSignatureProfile,
 ) -> Result<Peers, SamlError> {
-    let sp = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-        .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
-        .credentials(sp.credentials)
-        .validation(SpValidationPolicy {
-            authn_requests: AuthnRequestSigningPolicy::Sign,
-            xml_signatures: sp_xml_signatures,
-            ..SpValidationPolicy::recommended()
-        })
-        .algorithms(sp.algorithms)
-        .xml(xml)
-        .build()?;
-    let idp = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
-        .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
-        .credentials(idp.credentials)
-        .validation(IdpValidationPolicy {
-            authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-            xml_signatures: idp_xml_signatures,
-            ..IdpValidationPolicy::recommended()
-        })
-        .algorithms(idp.algorithms)
-        .xml(xml)
-        .build()?;
-    let sp = Saml::sp(sp)?;
-    let idp = Saml::idp(idp)?;
+    let sp = SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+    )
+    .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
+    .credentials(sp.credentials)
+    .validation(SpValidationPolicy {
+        authn_requests: AuthnRequestSigningPolicy::Sign,
+        xml_signatures: sp_xml_signatures,
+        ..SpValidationPolicy::recommended()
+    })
+    .algorithms(sp.algorithms)
+    .xml(xml)
+    .build()?;
+    let idp = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
+    .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
+    .credentials(idp.credentials)
+    .validation(IdpValidationPolicy {
+        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        xml_signatures: idp_xml_signatures,
+        ..IdpValidationPolicy::recommended()
+    })
+    .algorithms(idp.algorithms)
+    .xml(xml)
+    .build()?;
+    let sp = Saml::sp(sp);
+    let idp = Saml::idp(idp);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -230,12 +242,24 @@ fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn
 {
     for (encryption, wrapper) in [
         (
-            XmlEncryptionPolicy::encrypt_assertions(),
+            XmlEncryptionPolicy {
+                assertions: AssertionEncryptionPolicy::EncryptAssertions,
+                ..XmlEncryptionPolicy::default()
+            },
             "EncryptedAssertion",
         ),
-        (XmlEncryptionPolicy::encrypt_ids(), "EncryptedID"),
         (
-            XmlEncryptionPolicy::encrypt_attributes(),
+            XmlEncryptionPolicy {
+                identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+                ..XmlEncryptionPolicy::default()
+            },
+            "EncryptedID",
+        ),
+        (
+            XmlEncryptionPolicy {
+                attributes: AttributeEncryptionPolicy::EncryptAttributes,
+                ..XmlEncryptionPolicy::default()
+            },
             "EncryptedAttribute",
         ),
     ] {
@@ -750,9 +774,10 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
                     ..AlgorithmPolicy::default()
                 }),
                 XmlPolicy {
-                    encryption: encrypted_assertions()
-                        .encryption
-                        .with_rsa15_key_transport_decryption_allowed(),
+                    encryption: XmlEncryptionPolicy {
+                        rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
+                        ..encrypted_assertions().encryption
+                    },
                     ..XmlPolicy::default()
                 },
             )?;
@@ -775,8 +800,14 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
         ..AlgorithmPolicy::default()
     };
     for encryption in [
-        XmlEncryptionPolicy::encrypt_assertions(),
-        XmlEncryptionPolicy::encrypt_ids(),
+        XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
+        XmlEncryptionPolicy {
+            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+            ..XmlEncryptionPolicy::default()
+        },
     ] {
         let default = peers(
             rsa(AlgorithmPolicy::default()),
@@ -801,7 +832,10 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
             rsa(AlgorithmPolicy::default()),
             rsa(rsa15.clone()),
             XmlPolicy {
-                encryption: encryption.with_rsa15_key_transport_decryption_allowed(),
+                encryption: XmlEncryptionPolicy {
+                    rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
+                    ..encryption
+                },
                 ..XmlPolicy::default()
             },
         )?;

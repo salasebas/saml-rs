@@ -40,7 +40,7 @@ use super::policies::XmlSignatureProfile;
 ///         trusted_certificates: &certificates,
 ///     },
 /// )?;
-/// assert!(idp.metadata_signature_verified());
+/// assert!(idp.signed_metadata_xml().is_some());
 /// # Ok(()) }
 /// ```
 #[derive(Debug, Clone, Copy)]

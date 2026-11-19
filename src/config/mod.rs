@@ -23,7 +23,7 @@ pub use algorithms::{
 };
 pub use builders::{IdpConfig, IdpConfigBuilder, SpConfig, SpConfigBuilder};
 pub use credentials::{
-    CertificatePem, Credentials, DecryptionCredential, HmacSecret, Passphrase, PrivateKeyPem,
+    CertificatePem, Credentials, HmacSecret, Passphrase, PrivateKeyPem, X509Credential,
 };
 pub(crate) use descriptors::validate_entity_id_syntax;
 pub use descriptors::{
@@ -35,7 +35,7 @@ pub use policies::{
     AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
     AttributeEncryptionPolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, IdentifierEncryptionPolicy, IdpValidationPolicy, LogoutPolicy,
-    LogoutSignaturePolicy, NameIdCreationPolicy, ResponseSignaturePolicy, SpValidationPolicy,
-    TemplatePolicy, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
+    LogoutSignaturePolicy, NameIdCreationPolicy, ResponseSignaturePolicy, Rsa15KeyTransportPolicy,
+    SpValidationPolicy, TemplatePolicy, XmlEncryptionPolicy, XmlPolicy, XmlSignatureProfile,
 };
 pub(crate) use policies::{AssertionElementEncryption, ReceivedEncryptedElements};

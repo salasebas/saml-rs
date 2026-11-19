@@ -31,27 +31,31 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(signing_credentials())
-            .validation(SpValidationPolicy {
-                authn_requests,
-                ..SpValidationPolicy::recommended()
-            })
-            .build()?,
-    )
+    Ok(Saml::sp(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(signing_credentials())
+        .validation(SpValidationPolicy {
+            authn_requests,
+            ..SpValidationPolicy::recommended()
+        })
+        .build()?,
+    ))
 }
 
 fn idp(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-            .credentials(signing_credentials())
-            .validation(validation)
-            .build()?,
-    )
+    Ok(Saml::idp(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+        .credentials(signing_credentials())
+        .validation(validation)
+        .build()?,
+    ))
 }
 
 fn descriptors(

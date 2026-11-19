@@ -427,7 +427,7 @@ fn start(
     let outbound = Outbound::<ManageNameIdRequest>::try_from(context)?;
     let pending = PendingManageNameIdRequest::new(
         outbound.id().clone(),
-        options.relay_state,
+        outbound.relay_state().cloned(),
         peer.entity_id.clone(),
     );
     Ok(Started { pending, outbound })

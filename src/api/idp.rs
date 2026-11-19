@@ -378,11 +378,10 @@ impl Saml<Idp> {
     /// };
     ///
     /// let idp = Saml::idp(
-    ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-    ///         .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
+    ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::post("https://idp.example.com/sso")?)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
-    /// )?;
+    /// );
     /// let cookie = idp.remember_identity_provider(RememberIdentityProvider::new(
     ///     "example.org",
     ///     CommonDomainCookieLifetime::Session,

@@ -545,7 +545,7 @@ fn start_slo_impl(
     let outbound = Outbound::<LogoutRequest>::try_from(created.context)?;
     let pending = PendingLogoutRequest::new(
         outbound.id().clone(),
-        options.relay_state,
+        outbound.relay_state().cloned(),
         peer.entity_id.clone(),
         options.binding,
         created

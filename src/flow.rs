@@ -7,7 +7,7 @@ use crate::binding::{
     MAX_DEFLATE_RAW_DECODE_BYTES,
 };
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
-use crate::config::{DecryptionCredential, HmacSecret};
+use crate::config::{HmacSecret, X509Credential};
 use crate::constants::{Binding, ParserType};
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
@@ -130,7 +130,7 @@ pub struct FlowOptions<'a> {
     pub decrypt_key_pass: Option<&'a str>,
     /// More decryption keys, tried in order after `decrypt_key`. Each one's
     /// passphrase is its own.
-    pub additional_decrypt_keys: &'a [DecryptionCredential],
+    pub additional_decrypt_keys: &'a [X509Credential],
     /// Typed SP: assertion children that arrive encrypted. They are decrypted
     /// with `element_decrypt_key` after a signature verifies.
     pub(crate) assertion_elements: AssertionElementEncryption,
@@ -144,7 +144,7 @@ pub struct FlowOptions<'a> {
     /// decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
-    /// See [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),

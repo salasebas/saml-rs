@@ -21,28 +21,32 @@ const IDP_SLO_POST: &str = "https://idp.example.com/slo/post";
 fn assert_send_sync<T: Send + Sync>() {}
 
 fn sp_config() -> Result<SpConfig, SamlError> {
-    SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
-        .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
-        .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
-        .build()
+    SpConfig::builder(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        AcsEndpoint::post(SP_ACS_POST)?,
+    )
+    .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
+    .credentials(signing_credentials())
+    .validation(SpValidationPolicy::recommended())
+    .build()
 }
 
 fn idp_config() -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-        .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
+    .credentials(signing_credentials())
+    .validation(IdpValidationPolicy::recommended())
+    .build()
 }
 
 #[test]
 fn builder_entrypoints_construct_facades_without_raw_mutation(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_config()?)?;
-    let idp = Saml::idp(idp_config()?)?;
+    let sp = Saml::sp(sp_config()?);
+    let idp = Saml::idp(idp_config()?);
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),

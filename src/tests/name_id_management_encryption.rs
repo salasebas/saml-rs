@@ -18,15 +18,14 @@ use saml_rs::constants::{signature_algorithm::RSA_SHA256, status_code, ParserTyp
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, CertificatePem, Credentials, DecryptionCredential, EndpointUrl, EntityId,
-    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache,
-    Inbound, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
-    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
-    NameIdFormat, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
-    ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy,
-    RespondNameIdManagement, Saml, SamlError, SamlValidationContext, SoapChannel,
-    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartNameIdManagement,
+    AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentifierEncryptionPolicy,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
+    ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MessageConfidentiality,
+    MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
+    NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
+    ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml,
+    SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -55,13 +54,14 @@ const IDP_NEXT_ENCRYPTION_CERT: &str =
 
 fn credentials(encryption_cert: &str, decryption_key: &str) -> Credentials {
     Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(SIGNING_KEY))
-        .with_signing_certificate(CertificatePem::new(SIGNING_CERT))
-        .with_decryption(DecryptionCredential {
-            certificate: CertificatePem::new(encryption_cert),
-            key: PrivateKeyPem::new(decryption_key),
-            passphrase: None,
-        })
+        .with_signing_credential(X509Credential::new(
+            CertificatePem::new(SIGNING_CERT),
+            PrivateKeyPem::new(SIGNING_KEY),
+        ))
+        .with_decryption_credential(X509Credential::new(
+            CertificatePem::new(encryption_cert),
+            PrivateKeyPem::new(decryption_key),
+        ))
 }
 
 fn encrypted() -> StartNameIdManagement {
@@ -72,16 +72,16 @@ fn encrypted() -> StartNameIdManagement {
 /// A service provider that publishes `encryption_cert` and decrypts with its
 /// own key.
 fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                SP_MANAGE,
-            )?))
-            .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
-    )
+    Ok(Saml::sp(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
+        .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
+    ))
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -93,19 +93,21 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                IDP_MANAGE,
-            )?))
-            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-                IDP_MANAGE_SOAP,
-            )?))
-            .credentials(credentials)
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
-    )
+    Ok(Saml::idp(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+            IDP_MANAGE,
+        )?))
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            IDP_MANAGE_SOAP,
+        )?))
+        .credentials(credentials)
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
+    ))
 }
 
 fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
@@ -313,12 +315,11 @@ fn identity_provider_decrypts_identifiers_made_for_either_published_certificate(
     let sp = sp()?;
     let sp_peer = sp_descriptor(&sp)?;
     let idp = idp_with(
-        credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY).with_additional_decryption_key(
-            DecryptionCredential {
-                certificate: CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
-                key: PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
-                passphrase: None,
-            },
+        credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY).with_decryption_credential(
+            X509Credential::new(
+                CertificatePem::new(IDP_NEXT_ENCRYPTION_CERT),
+                PrivateKeyPem::new(IDP_NEXT_DECRYPTION_KEY),
+            ),
         ),
     )?;
     for encryption_cert in [IDP_ENCRYPTION_CERT, IDP_NEXT_ENCRYPTION_CERT] {

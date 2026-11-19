@@ -56,16 +56,18 @@ fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
 
 fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .artifact_resolution_service(ArtifactResolutionService::new(
-                0,
-                EndpointUrl::try_new(RESOLUTION_URL)?,
-            ))
-            .xml(xml)
-            .validation(IdpValidationPolicy::compatibility())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new(RESOLUTION_URL)?,
+        ))
+        .xml(xml)
+        .validation(IdpValidationPolicy::compatibility())
+        .build()?,
+    );
     let sp = service_provider(SP_ENTITY_ID, "https://sp.example.com/acs", xml)?;
     let other = service_provider(OTHER_ENTITY_ID, "https://other.example.com/acs", xml)?;
     let idp_metadata = IdpDescriptor::from_metadata_xml(
@@ -99,12 +101,11 @@ fn service_provider(
     xml: XmlPolicy,
 ) -> Result<Saml<Sp>, Box<dyn std::error::Error>> {
     Ok(Saml::sp(
-        SpConfig::builder(EntityId::try_new(entity_id)?)
-            .acs_endpoint(AcsEndpoint::post(acs)?)
+        SpConfig::builder(EntityId::try_new(entity_id)?, AcsEndpoint::post(acs)?)
             .xml(xml)
             .validation(SpValidationPolicy::compatibility())
             .build()?,
-    )?)
+    ))
 }
 
 fn web_sso_response() -> Result<IssuedMessage, SamlError> {
@@ -365,11 +366,13 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
     assert!(xml.contains("index=\"0\""));
 
     let without = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .validation(IdpValidationPolicy::compatibility())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .validation(IdpValidationPolicy::compatibility())
+        .build()?,
+    );
     assert!(!without.metadata_xml().contains("ArtifactResolutionService"));
     let peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -389,12 +392,14 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
 fn duplicate_resolution_indexes_are_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let location = EndpointUrl::try_new(RESOLUTION_URL)?;
     let other = EndpointUrl::try_new("https://idp.example.com/artifact-other")?;
-    let built = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-        .artifact_resolution_service(ArtifactResolutionService::new(0, location))
-        .artifact_resolution_service(ArtifactResolutionService::new(0, other))
-        .validation(IdpValidationPolicy::compatibility())
-        .build();
+    let built = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::redirect("https://idp.example.com/sso")?,
+    )
+    .artifact_resolution_service(ArtifactResolutionService::new(0, location))
+    .artifact_resolution_service(ArtifactResolutionService::new(0, other))
+    .validation(IdpValidationPolicy::compatibility())
+    .build();
     assert!(matches!(built, Err(SamlError::Invalid(detail)) if detail.contains("duplicate")));
     Ok(())
 }

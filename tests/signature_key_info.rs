@@ -11,7 +11,7 @@ use saml_rs::{
     AcsEndpoint, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem,
     Credentials, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
     MetadataTrustPolicy, PrivateKeyPem, ReplayPolicy, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -24,35 +24,40 @@ const IDP_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkc
 const IDP_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
 
 fn credentials(key: &str, cert: &str) -> Credentials {
-    Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(key))
-        .with_signing_certificate(CertificatePem::new(cert))
+    Credentials::default().with_signing_credential(X509Credential::new(
+        CertificatePem::new(cert),
+        PrivateKeyPem::new(key),
+    ))
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .credentials(credentials(key, cert))
-            .validation(SpValidationPolicy {
-                authn_requests: AuthnRequestSigningPolicy::Sign,
-                ..SpValidationPolicy::recommended()
-            })
-            .build()?,
-    )
+    Ok(Saml::sp(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .credentials(credentials(key, cert))
+        .validation(SpValidationPolicy {
+            authn_requests: AuthnRequestSigningPolicy::Sign,
+            ..SpValidationPolicy::recommended()
+        })
+        .build()?,
+    ))
 }
 
 fn idp_requiring_signed_authn_requests() -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-            .credentials(credentials(IDP_KEY, IDP_CERT))
-            .validation(IdpValidationPolicy {
-                authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-                ..IdpValidationPolicy::recommended()
-            })
-            .build()?,
-    )
+    Ok(Saml::idp(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .credentials(credentials(IDP_KEY, IDP_CERT))
+        .validation(IdpValidationPolicy {
+            authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+            ..IdpValidationPolicy::recommended()
+        })
+        .build()?,
+    ))
 }
 
 fn sp_descriptor_with_signing_cert(cert: &str) -> Result<SpDescriptor, SamlError> {

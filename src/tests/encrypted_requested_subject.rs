@@ -19,10 +19,11 @@ use saml_rs::crypto::{
 };
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, CertificatePem, Credentials, DecryptionCredential, EntityId, FormField, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
-    PrivateKeyPem, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, Saml, SamlError,
+    AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem,
+    ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, Saml, SamlError,
     SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
+    X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -43,17 +44,20 @@ const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-            .credentials(
-                Credentials::default()
-                    .with_signing_key(PrivateKeyPem::new(PRIVKEY))
-                    .with_signing_certificate(CertificatePem::new(CERT)),
-            )
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
-    )
+    Ok(Saml::sp(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(
+            Credentials::default().with_signing_credential(X509Credential::new(
+                CertificatePem::new(CERT),
+                PrivateKeyPem::new(PRIVKEY),
+            )),
+        )
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
+    ))
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -62,23 +66,26 @@ fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 
 fn idp_credentials() -> Credentials {
     Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
-        .with_signing_certificate(CertificatePem::new(CERT))
-        .with_decryption(DecryptionCredential {
-            certificate: CertificatePem::new(CERT),
-            key: PrivateKeyPem::new(PRIVKEY),
-            passphrase: None,
-        })
+        .with_signing_credential(X509Credential::new(
+            CertificatePem::new(CERT),
+            PrivateKeyPem::new(PRIVKEY),
+        ))
+        .with_decryption_credential(X509Credential::new(
+            CertificatePem::new(CERT),
+            PrivateKeyPem::new(PRIVKEY),
+        ))
 }
 
 fn idp_with_credentials(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .credentials(credentials)
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
-    )
+    Ok(Saml::idp(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .credentials(credentials)
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
+    ))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -216,12 +223,11 @@ fn unsigned_request_encrypted_id_is_decrypted_only_with_gcm(
 #[test]
 fn encrypted_id_made_for_either_published_certificate_is_the_requested_name_id(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp_with_credentials(idp_credentials().with_additional_decryption_key(
-        DecryptionCredential {
-            certificate: CertificatePem::new(NEXT_CERT),
-            key: PrivateKeyPem::new(NEXT_PRIVKEY),
-            passphrase: None,
-        },
+    let idp = idp_with_credentials(idp_credentials().with_decryption_credential(
+        X509Credential::new(
+            CertificatePem::new(NEXT_CERT),
+            PrivateKeyPem::new(NEXT_PRIVKEY),
+        ),
     ))?;
     for encryption_cert in [CERT, NEXT_CERT] {
         let encrypted = encrypted_id_for(encryption_cert, AES128_GCM)?;

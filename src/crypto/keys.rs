@@ -1,7 +1,7 @@
 //! Key, certificate and KeyInfo helpers backed by the selected `bergshamra`
 //! provider.
 
-use crate::config::{DecryptionCredential, HmacSecret};
+use crate::config::{HmacSecret, X509Credential};
 use crate::error::{crypto_err, SamlError};
 use crate::util::normalize_cert_string;
 use bergshamra::keys::keyinfo::build_x509_key_info;
@@ -27,15 +27,14 @@ pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key,
 pub(crate) fn load_decryption_keys(
     pem: &str,
     password: Option<&str>,
-    additional: &[DecryptionCredential],
+    additional: &[X509Credential],
 ) -> Result<Vec<Key>, SamlError> {
     std::iter::once(read_private_key(pem, password))
         .chain(additional.iter().map(|credential| {
             read_private_key(
-                credential.key.as_str(),
+                credential.key().as_str(),
                 credential
-                    .passphrase
-                    .as_ref()
+                    .passphrase()
                     .map(|passphrase| passphrase.as_str()),
             )
         }))
@@ -115,11 +114,11 @@ mod tests {
         let keys = load_decryption_keys(
             SP_PRIVKEY,
             None,
-            &[DecryptionCredential {
-                certificate: CertificatePem::new(SP_CERT),
-                key: PrivateKeyPem::new(SP_PRIVKEY_ENC),
-                passphrase: Some(Passphrase::new(SP_PASS)),
-            }],
+            &[X509Credential::new(
+                CertificatePem::new(SP_CERT),
+                PrivateKeyPem::new(SP_PRIVKEY_ENC),
+            )
+            .with_passphrase(Passphrase::new(SP_PASS))],
         )?;
         assert_eq!(keys.len(), 2);
         assert!(keys.iter().all(Key::has_private_key));

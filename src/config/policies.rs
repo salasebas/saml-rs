@@ -177,7 +177,7 @@ pub enum LogoutSignaturePolicy {
 /// Whether an accepting service provider evaluates `<AudienceRestriction>`.
 ///
 /// [`Self::EvaluatePresentRestrictions`] checks restrictions that are present.
-/// [`Self::Validate`] also rejects a bearer assertion that omits one.
+/// [`Self::RequireRestriction`] also rejects a bearer assertion that omits one.
 /// [`Self::Skip`] skips the check. The accept combination is
 /// classified in `docs/conformance/web-browser-sso-acceptance.md`.
 ///
@@ -193,7 +193,7 @@ pub enum AudienceValidationPolicy {
     ///
     /// Rejecting a missing restriction is library hardening. Recommended uses
     /// [`Self::EvaluatePresentRestrictions`].
-    Validate,
+    RequireRestriction,
     /// Evaluate `<AudienceRestriction>` elements that are present.
     ///
     /// A bearer assertion that omits the element is not rejected.
@@ -441,7 +441,31 @@ pub enum AttributeEncryptionPolicy {
     EncryptAttributes,
 }
 
+/// Whether an entity decrypts an `<EncryptedKey>` that uses RSA-v1.5 key
+/// transport.
+///
+/// It applies to every encrypted element the entity receives, such as an
+/// `<EncryptedAssertion>`, `<EncryptedID>`, or `<EncryptedAttribute>`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Rsa15KeyTransportPolicy {
+    /// Reject an encrypted element whose `<EncryptedKey>` names RSA-v1.5 with
+    /// [`SamlError::Unsupported`](crate::SamlError::Unsupported) before any
+    /// key is decrypted.
+    #[default]
+    Reject,
+    /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5.
+    ///
+    /// RSA-v1.5 is open to Bleichenbacher's chosen-ciphertext attack. Select
+    /// it only for a peer that cannot send RSA-OAEP. It needs
+    /// `crypto-legacy-algorithms`.
+    AllowDecryption,
+}
+
 /// XML encryption policy.
+///
+/// [`Default`](Default::default) encrypts nothing, rejects RSA-v1.5 key
+/// transport, and allows [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK)
+/// units of decryption work.
 ///
 /// # Examples
 ///
@@ -450,15 +474,23 @@ pub enum AttributeEncryptionPolicy {
 /// XML-Enc backend and deployment credentials.
 ///
 /// ```
-/// use saml_rs::{EntityId, IdpConfig, SsoEndpoint, XmlEncryptionPolicy, XmlPolicy};
+/// use saml_rs::{
+///     AssertionEncryptionPolicy, EntityId, IdpConfig, SsoEndpoint, XmlEncryptionPolicy,
+///     XmlPolicy,
+/// };
 ///
 /// let xml = XmlPolicy {
-///     encryption: XmlEncryptionPolicy::encrypt_assertions(),
+///     encryption: XmlEncryptionPolicy {
+///         assertions: AssertionEncryptionPolicy::EncryptAssertions,
+///         ..XmlEncryptionPolicy::default()
+///     },
 ///     ..XmlPolicy::default()
 /// };
-/// let idp_builder = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-///     .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-///     .xml(xml);
+/// let idp_builder = IdpConfig::builder(
+///     EntityId::try_new("https://idp.example.com/metadata")?,
+///     SsoEndpoint::post("https://idp.example.com/sso")?,
+/// )
+/// .xml(xml);
 /// # let _ = idp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
@@ -467,10 +499,13 @@ pub enum AttributeEncryptionPolicy {
 /// not select attribute or assertion encryption:
 ///
 /// ```
-/// use saml_rs::{AttributeEncryptionPolicy, XmlEncryptionPolicy};
+/// use saml_rs::{AttributeEncryptionPolicy, IdentifierEncryptionPolicy, XmlEncryptionPolicy};
 ///
-/// let mut encryption = XmlEncryptionPolicy::encrypt_ids();
-/// encryption.attributes = AttributeEncryptionPolicy::EncryptAttributes;
+/// let encryption = XmlEncryptionPolicy {
+///     identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+///     attributes: AttributeEncryptionPolicy::EncryptAttributes,
+///     ..XmlEncryptionPolicy::default()
+/// };
 /// # let _ = encryption;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -481,8 +516,21 @@ pub struct XmlEncryptionPolicy {
     pub identifiers: IdentifierEncryptionPolicy,
     /// `<EncryptedAttribute>` behavior for assertion attribute statements.
     pub attributes: AttributeEncryptionPolicy,
-    allow_rsa15_key_transport_decryption: bool,
-    max_decryption_work: usize,
+    /// Whether a received `<EncryptedKey>` that uses RSA-v1.5 key transport
+    /// is decrypted.
+    pub rsa15_key_transport: Rsa15KeyTransportPolicy,
+    /// Maximum estimated decryption work per inbound message.
+    ///
+    /// Each XML Encryption `EncryptedData`, `EncryptedKey`, and `DerivedKey`
+    /// costs one unit per configured local decryption key, including rollover
+    /// keys. Revealed encrypted content shares the allowance. Unused
+    /// candidates count even when an earlier key succeeds. Zero refuses all
+    /// encrypted input. Exceeding the allowance returns
+    /// [`SamlError::LimitExceeded`](crate::SamlError::LimitExceeded) with
+    /// [`ResourceLimit::DecryptionWork`](crate::ResourceLimit::DecryptionWork).
+    /// The limit is an estimate of possible work, not a count of actual
+    /// operations or a CPU-time guarantee.
+    pub max_decryption_work: usize,
 }
 
 impl Default for XmlEncryptionPolicy {
@@ -491,76 +539,18 @@ impl Default for XmlEncryptionPolicy {
             assertions: AssertionEncryptionPolicy::default(),
             identifiers: IdentifierEncryptionPolicy::default(),
             attributes: AttributeEncryptionPolicy::default(),
-            allow_rsa15_key_transport_decryption: false,
+            rsa15_key_transport: Rsa15KeyTransportPolicy::default(),
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
         }
     }
 }
 
 impl XmlEncryptionPolicy {
-    /// Set the maximum estimated decryption work per inbound message.
-    ///
-    /// Each XML Encryption `EncryptedData`, `EncryptedKey`, and `DerivedKey`
-    /// costs one unit per configured local decryption key, including rollover
-    /// keys. Revealed encrypted content shares the allowance. Unused
-    /// candidates count even when an earlier key succeeds.
-    ///
-    /// Defaults to [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK),
-    /// currently 16. Zero refuses all encrypted input. Exceeding the allowance
-    /// returns [`SamlError::LimitExceeded`](crate::SamlError::LimitExceeded)
-    /// with [`ResourceLimit::DecryptionWork`](crate::ResourceLimit::DecryptionWork).
-    /// The limit is an estimate of possible work, not a count of actual
-    /// operations or a CPU-time guarantee.
-    pub fn with_max_decryption_work(mut self, maximum: usize) -> Self {
-        self.max_decryption_work = maximum;
-        self
-    }
-
-    /// The configured maximum estimated decryption work per inbound message.
-    pub fn max_decryption_work(self) -> usize {
-        self.max_decryption_work
-    }
-
-    /// Enable assertion encryption.
-    pub fn encrypt_assertions() -> Self {
-        Self {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..Self::default()
-        }
-    }
-
-    /// Enable `<EncryptedID>` for the assertion `<Subject>` identifier.
-    pub fn encrypt_ids() -> Self {
-        Self {
-            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
-            ..Self::default()
-        }
-    }
-
-    /// Enable `<EncryptedAttribute>` for assertion attributes.
-    pub fn encrypt_attributes() -> Self {
-        Self {
-            attributes: AttributeEncryptionPolicy::EncryptAttributes,
-            ..Self::default()
-        }
-    }
-
-    /// Return a copy whose service provider decrypts an `<EncryptedKey>` that
-    /// uses RSA-v1.5 key transport.
-    ///
-    /// Without it, a response whose encrypted assertion, `<EncryptedID>`, or
-    /// `<EncryptedAttribute>` names RSA-v1.5 is rejected with
-    /// [`SamlError::Unsupported`](crate::SamlError::Unsupported) before any
-    /// key is decrypted. RSA-v1.5 is open to Bleichenbacher's
-    /// chosen-ciphertext attack. Select it only for an identity provider that
-    /// cannot send RSA-OAEP. It needs `crypto-legacy-algorithms`.
-    pub fn with_rsa15_key_transport_decryption_allowed(mut self) -> Self {
-        self.allow_rsa15_key_transport_decryption = true;
-        self
-    }
-
     pub(super) fn allows_rsa15_key_transport_decryption(self) -> bool {
-        self.allow_rsa15_key_transport_decryption
+        match self.rsa15_key_transport {
+            Rsa15KeyTransportPolicy::Reject => false,
+            Rsa15KeyTransportPolicy::AllowDecryption => true,
+        }
     }
 
     pub(super) fn selects_any_element(self) -> bool {
@@ -620,14 +610,18 @@ pub(crate) enum ReceivedEncryptedElements {
 /// Encrypt assertions and keep the other defaults:
 ///
 /// ```
-/// use saml_rs::{AcsEndpoint, EntityId, SpConfig, XmlEncryptionPolicy, XmlPolicy};
+/// use saml_rs::{
+///     AcsEndpoint, AssertionEncryptionPolicy, EntityId, SpConfig, XmlEncryptionPolicy, XmlPolicy,
+/// };
 ///
 /// let xml = XmlPolicy {
-///     encryption: XmlEncryptionPolicy::encrypt_assertions(),
+///     encryption: XmlEncryptionPolicy {
+///         assertions: AssertionEncryptionPolicy::EncryptAssertions,
+///         ..XmlEncryptionPolicy::default()
+///     },
 ///     ..XmlPolicy::default()
 /// };
-/// let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-///     .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+/// let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
 ///     .xml(xml);
 /// # let _ = sp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())
@@ -714,20 +708,19 @@ impl Default for AlgorithmPolicy {
 /// Template and XML tag-prefix customization.
 #[derive(Debug, Clone)]
 pub struct TemplatePolicy {
-    /// Default RelayState.
-    pub relay_state: String,
-    /// IdP protocol tag prefix for generated messages.
+    /// Protocol tag prefix of the messages this entity generates.
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
-    /// IdP assertion tag prefix for generated messages.
+    /// Assertion tag prefix of the messages this entity generates, including
+    /// a generated `<EncryptedAssertion>`.
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// IdP tag prefix for generated `<EncryptedAssertion>` elements.
-    pub tag_prefix_encrypted_assertion: String,
     /// IdP login response template and attributes.
     ///
     /// `{NameIDFormat}` receives a format that has been checked to be an
@@ -767,16 +760,17 @@ pub struct TemplatePolicy {
     /// `{InResponseTo}` placeholder is omitted.
     pub logout_response_template: Option<String>,
     /// Embedded-signature placement and prefix.
+    ///
+    /// The prefix must be an XML NCName that does not begin with `xml` in
+    /// any case.
     pub signature_config: Option<SignatureConfig>,
 }
 
 impl Default for TemplatePolicy {
     fn default() -> Self {
         Self {
-            relay_state: String::new(),
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            tag_prefix_encrypted_assertion: "saml".to_string(),
             login_response_template: None,
             login_request_template: None,
             logout_request_template: None,
@@ -825,10 +819,11 @@ pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {
 pub(super) fn audience_validation_enabled(policy: AudienceValidationPolicy) -> bool {
     matches!(
         policy,
-        AudienceValidationPolicy::Validate | AudienceValidationPolicy::EvaluatePresentRestrictions
+        AudienceValidationPolicy::RequireRestriction
+            | AudienceValidationPolicy::EvaluatePresentRestrictions
     )
 }
 
 pub(super) fn audience_restriction_required(policy: AudienceValidationPolicy) -> bool {
-    matches!(policy, AudienceValidationPolicy::Validate)
+    matches!(policy, AudienceValidationPolicy::RequireRestriction)
 }

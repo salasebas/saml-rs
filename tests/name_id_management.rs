@@ -49,15 +49,17 @@ const TRANSIENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient";
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn identity_provider(service: Option<&str>) -> Result<Saml<Idp>, Box<dyn std::error::Error>> {
-    let mut builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-        .name_id_format(NameIdFormat::Persistent)
-        .validation(saml_rs::IdpValidationPolicy::compatibility());
+    let mut builder = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::redirect("https://idp.example.com/sso")?,
+    )
+    .name_id_format(NameIdFormat::Persistent)
+    .validation(saml_rs::IdpValidationPolicy::compatibility());
     if let Some(location) = service {
         builder = builder
             .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(location)?));
     }
-    Ok(Saml::idp(builder.build()?)?)
+    Ok(Saml::idp(builder.build()?))
 }
 
 /// A service provider whose metadata publishes `services` as
@@ -67,11 +69,13 @@ fn service_provider(
     services: &[(&str, &str)],
 ) -> Result<SpDescriptor, Box<dyn std::error::Error>> {
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(entity_id)?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .validation(SpValidationPolicy::compatibility())
-            .build()?,
-    )?;
+        SpConfig::builder(
+            EntityId::try_new(entity_id)?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(SpValidationPolicy::compatibility())
+        .build()?,
+    );
     let endpoints: String = services
         .iter()
         .map(|(binding, location)| {
@@ -343,15 +347,17 @@ fn a_response_for_another_request_or_from_another_issuer_is_rejected() -> TestRe
 fn a_transient_identifier_is_not_managed() -> TestResult {
     let sp = soap_service_provider()?;
     let transient_default = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .name_id_format(NameIdFormat::Transient)
-            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-                IDP_NIM_URL,
-            )?))
-            .validation(saml_rs::IdpValidationPolicy::compatibility())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .name_id_format(NameIdFormat::Transient)
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            IDP_NIM_URL,
+        )?))
+        .validation(saml_rs::IdpValidationPolicy::compatibility())
+        .build()?,
+    );
 
     for (idp, current) in [
         (
@@ -865,23 +871,25 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
 #[test]
 fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .name_id_format(NameIdFormat::Persistent)
-            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-                IDP_NIM_URL,
-            )?))
-            .xml(saml_rs::XmlPolicy {
-                limits: saml_rs::XmlLimits {
-                    max_depth: 6,
-                    max_attribute_value_bytes: 64 * 1024,
-                    ..saml_rs::XmlLimits::default()
-                },
-                ..saml_rs::XmlPolicy::default()
-            })
-            .validation(saml_rs::IdpValidationPolicy::compatibility())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .name_id_format(NameIdFormat::Persistent)
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            IDP_NIM_URL,
+        )?))
+        .xml(saml_rs::XmlPolicy {
+            limits: saml_rs::XmlLimits {
+                max_depth: 6,
+                max_attribute_value_bytes: 64 * 1024,
+                ..saml_rs::XmlLimits::default()
+            },
+            ..saml_rs::XmlPolicy::default()
+        })
+        .validation(saml_rs::IdpValidationPolicy::compatibility())
+        .build()?,
+    );
     let sp = soap_service_provider()?;
     let deep_header =
         "<soap:Header><a><b><c><d><e>note</e></d></c></b></a></soap:Header><soap:Body>";

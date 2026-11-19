@@ -5,7 +5,7 @@ use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
-use crate::config::{DecryptionCredential, DigestAlgorithm, HmacSecret, MaskGenerationFunction};
+use crate::config::{DigestAlgorithm, HmacSecret, MaskGenerationFunction, X509Credential};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
     MessageSignatureOrder,
@@ -46,7 +46,7 @@ pub struct EntitySetting {
     /// `SamlError::Unsupported` before any key is decrypted.
     pub allow_rsa15_key_transport_decryption: bool,
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
-    /// See [`crate::config::XmlEncryptionPolicy::with_max_decryption_work`].
+    /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
     /// Default RelayState.
     pub relay_state: String,
@@ -101,7 +101,7 @@ pub struct EntitySetting {
     /// Passphrase for `enc_private_key`.
     pub enc_private_key_pass: Option<String>,
     /// More decryption keys, tried in order after `enc_private_key`.
-    pub additional_decryption_keys: Vec<DecryptionCredential>,
+    pub additional_decryption_keys: Vec<X509Credential>,
     /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
     pub clock_drifts: (i64, i64),
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
@@ -116,12 +116,14 @@ pub struct EntitySetting {
     pub schema_validator: Option<crate::SchemaValidator>,
     /// IdP: protocol tag prefix for generated IdP messages (default `samlp`).
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
     /// IdP: assertion tag prefix for generated IdP messages (default `saml`).
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
     /// IdP: tag prefix for the `<EncryptedAssertion>` element (default `saml`).
@@ -284,6 +286,8 @@ pub enum SignatureAction {
 #[derive(Debug, Clone)]
 pub struct SignatureConfig {
     /// Element prefix for the signature (default `ds`).
+    ///
+    /// Must be an XML NCName that does not begin with `xml` in any case.
     pub prefix: String,
     /// `local-name()` XPath of the reference element; `None` keeps the default
     /// (after the signed target's `<Issuer>`).

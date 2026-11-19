@@ -299,11 +299,12 @@ let formats = config.metadata().name_id_formats();
 
 ## Read metadata signature status and evidence
 
-On both peer descriptors, `was_verified_with_pinned_certificates()` becomes
-`metadata_signature_verified()`. It records verification at import with the
+On both peer descriptors, `was_verified_with_pinned_certificates()` is
+removed. It returned `true` exactly when `signed_metadata_xml()` returns
+`Some`, so read that instead. `Some` records verification at import with the
 caller-pinned certificates under the selected policy. It does not check
 expiration and does not imply that the caller selected the default algorithm
-policy. Import with `AllowUnsigned` leaves it false even if XML has a signature.
+policy. Import with `AllowUnsigned` returns `None` even if XML has a signature.
 
 `signed_entity_descriptor_xml()` becomes `signed_metadata_xml()` on both
 peer descriptors and on `crypto::MetadataSignatureVerification`. The result
@@ -321,7 +322,7 @@ After:
 
 ```rust
 # fn run(idp: &saml_rs::IdpDescriptor) {
-let verified = idp.metadata_signature_verified();
 let evidence = idp.signed_metadata_xml();
+let verified = evidence.is_some();
 # }
 ```

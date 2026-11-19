@@ -19,7 +19,7 @@ use saml_rs::{
     AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
     ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSso, Subject, TemplatePolicy,
+    SpValidationPolicy, SsoEndpoint, StartSso, Subject, TemplatePolicy, X509Credential,
     MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 use url::Url;
@@ -52,16 +52,17 @@ const SIGNED_AUTHN_REQUEST_TEMPLATE: &str = r#"
 "#;
 
 fn credentials() -> Credentials {
-    Credentials::default()
-        .with_signing_key(PrivateKeyPem::new(PRIVKEY))
-        .with_signing_certificate(saml_rs::CertificatePem::new(CERT))
+    Credentials::default().with_signing_credential(X509Credential::new(
+        saml_rs::CertificatePem::new(CERT),
+        PrivateKeyPem::new(PRIVKEY),
+    ))
 }
 
 fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
-        audience: AudienceValidationPolicy::Validate,
+        audience: AudienceValidationPolicy::RequireRestriction,
         ..SpValidationPolicy::recommended()
     }
 }
@@ -85,27 +86,31 @@ fn sp_with(
     validation: SpValidationPolicy,
     templates: TemplatePolicy,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?.with_default())
-            .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
-            .credentials(credentials())
-            .validation(validation)
-            .templates(templates)
-            .build()?,
-    )
+    Ok(Saml::sp(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+        )
+        .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
+        .credentials(credentials())
+        .validation(validation)
+        .templates(templates)
+        .build()?,
+    ))
 }
 
 fn idp_with(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-            .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
-            .credentials(credentials())
-            .validation(validation)
-            .build()?,
-    )
+    Ok(Saml::idp(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+        .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
+        .credentials(credentials())
+        .validation(validation)
+        .build()?,
+    ))
 }
 
 fn descriptors(
@@ -198,16 +203,29 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
         }
     }
 
-    let templates = TemplatePolicy {
-        relay_state: "b".repeat(MAX_RELAY_STATE_BYTES + 1),
-        ..TemplatePolicy::default()
-    };
-    let sp = sp_with(SpValidationPolicy::recommended(), templates)?;
+    Ok(())
+}
+
+#[test]
+fn typed_sso_request_without_relay_state_sends_and_records_none(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(SpValidationPolicy::recommended(), TemplatePolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::recommended())?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    match sp.start_sso(&idp_descriptor, StartSso::redirect()) {
-        Err(SamlError::Invalid(message)) if message.contains("80") => Ok(()),
-        other => Err(format!("expected the 80-byte RelayState prohibition, got {other:?}").into()),
-    }
+
+    let redirect = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let names = query_names(redirect.outbound.redirect_url()?)?;
+    assert!(!names.iter().any(|name| name == "RelayState"), "{names:?}");
+    assert_eq!(redirect.pending.relay_state(), None);
+
+    let post = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let form = post.outbound.post_form()?;
+    assert!(form
+        .fields()
+        .iter()
+        .all(|field| field.name() != "RelayState"));
+    assert_eq!(post.pending.relay_state(), None);
+    Ok(())
 }
 
 #[test]

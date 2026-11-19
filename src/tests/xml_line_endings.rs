@@ -51,23 +51,27 @@ struct SignedExchange {
 impl SignedExchange {
     fn new() -> TestResult<Self> {
         let sp = Saml::sp(
-            SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-                .acs_endpoint(AcsEndpoint::post(SP_ACS)?.with_default())
-                .credentials(signing_credentials())
-                .validation(SpValidationPolicy {
-                    assertions: AssertionSignaturePolicy::RequireSigned,
-                    audience: AudienceValidationPolicy::Validate,
-                    ..SpValidationPolicy::recommended()
-                })
-                .build()?,
-        )?;
+            SpConfig::builder(
+                EntityId::try_new(SP_ENTITY_ID)?,
+                AcsEndpoint::post(SP_ACS)?.with_default(),
+            )
+            .credentials(signing_credentials())
+            .validation(SpValidationPolicy {
+                assertions: AssertionSignaturePolicy::RequireSigned,
+                audience: AudienceValidationPolicy::RequireRestriction,
+                ..SpValidationPolicy::recommended()
+            })
+            .build()?,
+        );
         let idp = Saml::idp(
-            IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-                .sso_endpoint(SsoEndpoint::post(IDP_SSO_POST)?)
-                .credentials(signing_credentials())
-                .validation(IdpValidationPolicy::recommended())
-                .build()?,
-        )?;
+            IdpConfig::builder(
+                EntityId::try_new(IDP_ENTITY_ID)?,
+                SsoEndpoint::post(IDP_SSO_POST)?,
+            )
+            .credentials(signing_credentials())
+            .validation(IdpValidationPolicy::recommended())
+            .build()?,
+        );
         let sp_descriptor = SpDescriptor::from_metadata_xml(
             EntityId::try_new(SP_ENTITY_ID)?,
             sp.metadata_xml(),

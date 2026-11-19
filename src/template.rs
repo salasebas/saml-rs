@@ -9,7 +9,7 @@
 use crate::binding::xml_escape;
 use crate::error::SamlError;
 use crate::util::camel_case;
-use crate::xml::name::is_ncname;
+use crate::xml::name::validate_namespace_prefix;
 use crate::xml::write::XmlWriter;
 
 /// Default `<AuthnRequest>` template.
@@ -73,31 +73,12 @@ pub(crate) fn validate_tag_prefixes(
     protocol_prefix: &str,
     assertion_prefix: &str,
 ) -> Result<(), SamlError> {
-    validate_tag_prefix("protocol", protocol_prefix)?;
-    validate_tag_prefix("assertion", assertion_prefix)?;
+    validate_namespace_prefix("protocol tag prefix", protocol_prefix)?;
+    validate_namespace_prefix("assertion tag prefix", assertion_prefix)?;
     if protocol_prefix == assertion_prefix {
         return Err(SamlError::Invalid(
             "protocol and assertion tag prefixes must differ".into(),
         ));
-    }
-    Ok(())
-}
-
-fn validate_tag_prefix(name: &str, prefix: &str) -> Result<(), SamlError> {
-    if prefix.is_empty() {
-        return Err(SamlError::Invalid(format!(
-            "{name} tag prefix cannot be empty"
-        )));
-    }
-    if matches!(prefix, "xml" | "xmlns") {
-        return Err(SamlError::Invalid(format!(
-            "{name} tag prefix `{prefix}` is reserved"
-        )));
-    }
-    if !is_ncname(prefix) {
-        return Err(SamlError::Invalid(format!(
-            "{name} tag prefix must be an XML NCName"
-        )));
     }
     Ok(())
 }

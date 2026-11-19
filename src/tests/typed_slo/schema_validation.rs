@@ -17,13 +17,13 @@ fn schema_policy_covers_both_logout_soap_directions() -> Result<(), Box<dyn std:
         sp_config_builder(signing_sp_validation(), None)?
             .xml(xml)
             .build()?,
-    )?;
+    );
     let rejecting_idp = Saml::idp(
         idp_config_builder(signed_authn_request_idp_validation(), None)?
             .xml(xml)
             .build()?,
-    )?;
-    let accepting_idp = Saml::idp(idp_config()?)?;
+    );
+    let accepting_idp = Saml::idp(idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &accepting_idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::soap())?;
     let envelope = started.outbound.soap_request()?.envelope();
@@ -79,12 +79,12 @@ fn schema_policy_covers_both_logout_post_directions() -> Result<(), Box<dyn std:
         idp_config_builder(signed_authn_request_idp_validation(), None)?
             .xml(xml)
             .build()?,
-    )?;
+    );
     let rejecting_sp = Saml::sp(
         sp_config_builder(signing_sp_validation(), None)?
             .xml(xml)
             .build()?,
-    )?;
+    );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let fields = post_fields(&started.outbound)?;

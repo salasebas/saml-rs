@@ -10,34 +10,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
         IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
         ReplayPolicy, RespondSso, Saml, SamlValidationContext, SpConfig, SpDescriptor,
-        SpValidationPolicy, SsoEndpoint, StartSso, Subject,
+        SpValidationPolicy, SsoEndpoint, StartSso, Subject, X509Credential,
     };
     use std::time::SystemTime;
 
     let privkey = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     let cert = include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
     let credentials = || {
-        Credentials::default()
-            .with_signing_key(PrivateKeyPem::new(privkey))
-            .with_signing_certificate(CertificatePem::new(cert))
+        Credentials::default().with_signing_credential(X509Credential::new(
+            CertificatePem::new(cert),
+            PrivateKeyPem::new(privkey),
+        ))
     };
     // Disabled preserves the raw API, which has no replay cache.
     let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
 
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .credentials(credentials())
-            .validation(SpValidationPolicy::recommended())
-            .build()?,
-    )?;
+        SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .credentials(credentials())
+        .validation(SpValidationPolicy::recommended())
+        .build()?,
+    );
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-            .credentials(credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .credentials(credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
+    );
 
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,

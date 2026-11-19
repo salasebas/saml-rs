@@ -1,15 +1,19 @@
 use std::time::Duration;
 
+use core::fmt;
+
 use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
+use crate::idp::IdentityProvider;
 use crate::metadata::MetadataLifetime;
+use crate::sp::ServiceProvider;
 use crate::template::validate_tag_prefixes;
+use crate::xml::name::validate_namespace_prefix;
 
 use super::algorithms::{NameIdFormat, SignatureAlgorithm};
 use super::credentials::Credentials;
 use super::descriptors::{
-    validate_entity_id_syntax, ArtifactResolutionService, EntityId, IdpMetadataConfig,
-    ManageNameIdService, SpMetadataConfig,
+    ArtifactResolutionService, EntityId, IdpMetadataConfig, ManageNameIdService, SpMetadataConfig,
 };
 use super::policies::{
     AlgorithmPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy, SpValidationPolicy,
@@ -20,27 +24,31 @@ use super::policies::{
     AssertionSignaturePolicy, AuthnRequestValidationPolicy, LogoutPolicy, LogoutSignaturePolicy,
     ResponseSignaturePolicy,
 };
+use crate::model::EndpointUrl;
 
 /// Typed Service Provider configuration.
 ///
 /// Build it with [`SpConfig::builder`]. A built config has passed every check
-/// in [`SpConfigBuilder::build`] and cannot be changed afterwards.
+/// in [`SpConfigBuilder::build`], holds the metadata `build` generated, and
+/// cannot be changed afterwards.
 ///
 /// # Examples
 ///
 /// ```
 /// use saml_rs::{AcsEndpoint, EntityId, SpConfig, SpValidationPolicy};
 ///
-/// let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-///     .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-///     .validation(SpValidationPolicy::compatibility())
-///     .build()?;
+/// let config = SpConfig::builder(
+///     EntityId::try_new("https://sp.example.com/metadata")?,
+///     AcsEndpoint::post("https://sp.example.com/acs")?,
+/// )
+/// .validation(SpValidationPolicy::compatibility())
+/// .build()?;
 ///
 /// assert_eq!(config.entity_id().as_str(), "https://sp.example.com/metadata");
 /// assert_eq!(config.validation(), &SpValidationPolicy::compatibility());
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SpConfig {
     entity_id: EntityId,
     metadata: SpMetadataConfig,
@@ -49,15 +57,39 @@ pub struct SpConfig {
     algorithms: AlgorithmPolicy,
     xml: XmlPolicy,
     templates: TemplatePolicy,
+    pub(crate) service_provider: ServiceProvider,
+}
+
+impl fmt::Debug for SpConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpConfig")
+            .field("entity_id", &self.entity_id)
+            .field("metadata", &self.metadata)
+            .field("credentials", &self.credentials)
+            .field("validation", &self.validation)
+            .field("algorithms", &self.algorithms)
+            .field("xml", &self.xml)
+            .field("templates", &self.templates)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SpConfig {
-    /// Start a dependency-free SP config builder on [`SpValidationPolicy::recommended`].
+    /// Start an SP config builder with its entity ID and first
+    /// `AssertionConsumerService` endpoint, on [`SpValidationPolicy::recommended`].
     ///
     /// [`SpValidationPolicy::compatibility`] remains the legacy permissive
     /// preset.
-    pub fn builder(entity_id: EntityId) -> SpConfigBuilder {
-        SpConfigBuilder::new(entity_id)
+    pub fn builder(entity_id: EntityId, acs: AcsEndpoint) -> SpConfigBuilder {
+        SpConfigBuilder {
+            entity_id,
+            metadata: SpMetadataConfig::new(acs),
+            credentials: Credentials::default(),
+            validation: SpValidationPolicy::recommended(),
+            algorithms: AlgorithmPolicy::default(),
+            xml: XmlPolicy::default(),
+            templates: TemplatePolicy::default(),
+        }
     }
 
     /// Local SP entity ID.
@@ -96,69 +128,70 @@ impl SpConfig {
     }
 }
 
-/// Dependency-free builder for [`SpConfig`].
+/// Builder for [`SpConfig`].
 #[derive(Debug, Clone)]
 pub struct SpConfigBuilder {
-    entity_id: EntityId,
-    metadata: SpMetadataConfig,
-    credentials: Credentials,
-    validation: SpValidationPolicy,
-    algorithms: AlgorithmPolicy,
-    xml: XmlPolicy,
-    templates: TemplatePolicy,
+    pub(super) entity_id: EntityId,
+    pub(super) metadata: SpMetadataConfig,
+    pub(super) credentials: Credentials,
+    pub(super) validation: SpValidationPolicy,
+    pub(super) algorithms: AlgorithmPolicy,
+    pub(super) xml: XmlPolicy,
+    pub(super) templates: TemplatePolicy,
 }
 
 impl SpConfigBuilder {
-    fn new(entity_id: EntityId) -> Self {
-        Self {
-            entity_id,
-            metadata: SpMetadataConfig::new(),
-            credentials: Credentials::default(),
-            validation: SpValidationPolicy::recommended(),
-            algorithms: AlgorithmPolicy::default(),
-            xml: XmlPolicy::default(),
-            templates: TemplatePolicy::default(),
-        }
-    }
-
-    /// Add an ACS endpoint.
+    /// Append an `AssertionConsumerService` endpoint after the ones added
+    /// before.
     pub fn acs_endpoint(mut self, endpoint: AcsEndpoint) -> Self {
-        self.metadata.assertion_consumer_service.push(endpoint);
+        self.metadata.acs_endpoints.push(endpoint);
         self
     }
 
-    /// Add an SLO endpoint.
+    /// Append `AssertionConsumerService` endpoints after the ones added
+    /// before, in iteration order.
+    pub fn acs_endpoints(mut self, endpoints: impl IntoIterator<Item = AcsEndpoint>) -> Self {
+        self.metadata.acs_endpoints.extend(endpoints);
+        self
+    }
+
+    /// Append a `SingleLogoutService` endpoint.
     pub fn slo_endpoint(mut self, endpoint: SloEndpoint) -> Self {
-        self.metadata.single_logout_service.push(endpoint);
+        self.metadata.slo_endpoints.push(endpoint);
         self
     }
 
-    /// Publish an HTTP-Redirect `ManageNameIDService` endpoint.
+    /// Append `SingleLogoutService` endpoints, in iteration order.
+    pub fn slo_endpoints(mut self, endpoints: impl IntoIterator<Item = SloEndpoint>) -> Self {
+        self.metadata.slo_endpoints.extend(endpoints);
+        self
+    }
+
+    /// Append an HTTP-Redirect `ManageNameIDService` endpoint at `location`.
     ///
     /// This turns on name identifier management over HTTP-Redirect for this
-    /// service provider. A SOAP endpoint makes [`Self::build`] fail.
-    pub fn manage_name_id_service(mut self, service: ManageNameIdService) -> Self {
-        self.metadata.manage_name_id_service.push(service);
+    /// service provider. saml-rs does not implement SOAP name identifier
+    /// management for a service provider.
+    pub fn manage_name_id_redirect_service(mut self, location: EndpointUrl) -> Self {
+        self.metadata
+            .manage_name_id_services
+            .push(ManageNameIdService::redirect(location));
         self
     }
 
-    /// Add an advertised NameID format.
+    /// Append an advertised NameID format.
     pub fn name_id_format(mut self, format: NameIdFormat) -> Self {
-        self.metadata.name_id_format.push(format);
+        self.metadata.name_id_formats.push(format);
         self
     }
 
-    /// Set generated metadata element ordering.
-    ///
-    /// Missing groups are inserted in schema-relative positions. Explicit
-    /// names retain their relative order. [`Self::build`] rejects unknown or
-    /// repeated group names with [`SamlError::Invalid`].
-    pub fn elements_order(mut self, elements_order: Vec<String>) -> Self {
-        self.metadata.elements_order = Some(elements_order);
+    /// Append advertised NameID formats, in iteration order.
+    pub fn name_id_formats(mut self, formats: impl IntoIterator<Item = NameIdFormat>) -> Self {
+        self.metadata.name_id_formats.extend(formats);
         self
     }
 
-    /// Publish the entity-level organization.
+    /// Set the entity-level organization.
     pub fn organization(mut self, organization: crate::metadata::Organization) -> Self {
         self.metadata.organization = Some(organization);
         self
@@ -170,13 +203,24 @@ impl SpConfigBuilder {
         self
     }
 
-    /// Publish an error information URI on the SSO role descriptor.
+    /// Append entity-level contacts, in iteration order.
+    pub fn contacts(
+        mut self,
+        contacts: impl IntoIterator<Item = crate::metadata::ContactPerson>,
+    ) -> Self {
+        self.metadata.contacts.extend(contacts);
+        self
+    }
+
+    /// Set the error information URI of the SSO role descriptor.
+    ///
+    /// [`Self::build`] rejects one that is not an absolute URI reference.
     pub fn error_url(mut self, error_url: impl Into<String>) -> Self {
         self.metadata.error_url = Some(error_url.into());
         self
     }
 
-    /// Write `validUntil`, `cacheDuration`, or both on generated metadata.
+    /// Set `validUntil`, `cacheDuration`, or both on generated metadata.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
         self.metadata.lifetime = Some(lifetime);
         self
@@ -216,24 +260,23 @@ impl SpConfigBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI
-    /// reference of at most 1024 characters, no ACS endpoint is set, a SOAP
-    /// `ManageNameIDService` is set, the organization, contacts, or error URI
-    /// are invalid, an additional decryption key has no primary one, the
-    /// selected policy needs credentials that are not set, the algorithm
-    /// policy is not supported, the selected policy requires crypto in a
-    /// build without a crypto provider, or the protocol and assertion tag
-    /// prefixes are not two different XML NCNames other than `xml` and
-    /// `xmlns`. Also returns the errors of generating SP metadata from the
-    /// config: a NameID format that is not an absolute URI reference, two ACS
-    /// endpoints with the same index, more ACS endpoints than `unsignedShort`
-    /// indexes, an unknown or repeated element ordering group, or a
-    /// `validUntil` outside the years 0001 through 9999.
-    /// [`Saml::sp`](crate::Saml::sp) accepts every config this returns.
+    /// Returns [`SamlError`] when:
+    ///
+    /// - the entity ID is not an absolute URI reference of at most 1024
+    ///   characters, or the organization, contacts, or error URI are invalid;
+    /// - the selected policy needs a credential that is not set, or crypto
+    ///   that a build without a crypto provider lacks;
+    /// - the algorithm policy is not supported;
+    /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
+    ///   begins with `xml` in any case, or the two tag prefixes are equal;
+    /// - generating SP metadata fails: a NameID format that is not an absolute
+    ///   URI reference, two ACS endpoints with the same index, more ACS
+    ///   endpoints than `unsignedShort` indexes, or a `validUntil` outside the
+    ///   years 0001 through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
-        validate_entity_id_syntax(self.entity_id.as_str())?;
-        self.metadata.validate()?;
-        let config = SpConfig {
+        let service_provider = self.service_provider()?;
+        validate_sp_policy(&self)?;
+        Ok(SpConfig {
             entity_id: self.entity_id,
             metadata: self.metadata,
             credentials: self.credentials,
@@ -241,17 +284,16 @@ impl SpConfigBuilder {
             algorithms: self.algorithms,
             xml: self.xml,
             templates: self.templates,
-        };
-        validate_sp_policy(&config)?;
-        config.to_service_provider()?;
-        Ok(config)
+            service_provider,
+        })
     }
 }
 
 /// Typed Identity Provider configuration.
 ///
 /// Build it with [`IdpConfig::builder`]. A built config has passed every check
-/// in [`IdpConfigBuilder::build`] and cannot be changed afterwards.
+/// in [`IdpConfigBuilder::build`], holds the metadata `build` generated, and
+/// cannot be changed afterwards.
 ///
 /// # Examples
 ///
@@ -263,33 +305,61 @@ impl SpConfigBuilder {
 /// use saml_rs::{EntityId, IdpConfig, IdpValidationPolicy, SsoEndpoint};
 /// use std::time::Duration;
 ///
-/// let config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-///     .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-///     .issuance_lifetime(Duration::from_secs(10 * 60))
-///     .validation(IdpValidationPolicy::compatibility())
-///     .build()?;
+/// let config = IdpConfig::builder(
+///     EntityId::try_new("https://idp.example.com/metadata")?,
+///     SsoEndpoint::post("https://idp.example.com/sso")?,
+/// )
+/// .issuance_lifetime(Duration::from_secs(10 * 60))
+/// .validation(IdpValidationPolicy::compatibility())
+/// .build()?;
 ///
 /// assert_eq!(config.entity_id().as_str(), "https://idp.example.com/metadata");
 /// assert_eq!(config.issuance_lifetime(), Duration::from_secs(10 * 60));
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct IdpConfig {
     entity_id: EntityId,
     metadata: IdpMetadataConfig,
     credentials: Credentials,
-    issuance_lifetime: time::Duration,
+    pub(crate) issuance_lifetime: time::Duration,
     validation: IdpValidationPolicy,
     algorithms: AlgorithmPolicy,
     xml: XmlPolicy,
     templates: TemplatePolicy,
+    pub(crate) identity_provider: IdentityProvider,
+}
+
+impl fmt::Debug for IdpConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IdpConfig")
+            .field("entity_id", &self.entity_id)
+            .field("metadata", &self.metadata)
+            .field("credentials", &self.credentials)
+            .field("issuance_lifetime", &self.issuance_lifetime)
+            .field("validation", &self.validation)
+            .field("algorithms", &self.algorithms)
+            .field("xml", &self.xml)
+            .field("templates", &self.templates)
+            .finish_non_exhaustive()
+    }
 }
 
 impl IdpConfig {
-    /// Start a dependency-free IdP config builder on [`IdpValidationPolicy::recommended`]
+    /// Start an IdP config builder with its entity ID and first
+    /// `SingleSignOnService` endpoint, on [`IdpValidationPolicy::recommended`]
     /// and a five-minute issuance lifetime.
-    pub fn builder(entity_id: EntityId) -> IdpConfigBuilder {
-        IdpConfigBuilder::new(entity_id)
+    pub fn builder(entity_id: EntityId, sso: SsoEndpoint) -> IdpConfigBuilder {
+        IdpConfigBuilder {
+            entity_id,
+            metadata: IdpMetadataConfig::new(sso),
+            credentials: Credentials::default(),
+            issuance_lifetime: Duration::from_secs(300),
+            validation: IdpValidationPolicy::recommended(),
+            algorithms: AlgorithmPolicy::default(),
+            xml: XmlPolicy::default(),
+            templates: TemplatePolicy::default(),
+        }
     }
 
     /// Local IdP entity ID.
@@ -338,58 +408,54 @@ impl IdpConfig {
     pub fn templates(&self) -> &TemplatePolicy {
         &self.templates
     }
-
-    pub(crate) fn issuance_period(&self) -> time::Duration {
-        self.issuance_lifetime
-    }
 }
 
-/// Dependency-free builder for [`IdpConfig`].
+/// Builder for [`IdpConfig`].
 #[derive(Debug, Clone)]
 pub struct IdpConfigBuilder {
-    entity_id: EntityId,
-    metadata: IdpMetadataConfig,
-    credentials: Credentials,
-    issuance_lifetime: Duration,
-    validation: IdpValidationPolicy,
-    algorithms: AlgorithmPolicy,
-    xml: XmlPolicy,
-    templates: TemplatePolicy,
+    pub(super) entity_id: EntityId,
+    pub(super) metadata: IdpMetadataConfig,
+    pub(super) credentials: Credentials,
+    pub(super) issuance_lifetime: Duration,
+    pub(super) validation: IdpValidationPolicy,
+    pub(super) algorithms: AlgorithmPolicy,
+    pub(super) xml: XmlPolicy,
+    pub(super) templates: TemplatePolicy,
 }
 
 impl IdpConfigBuilder {
-    fn new(entity_id: EntityId) -> Self {
-        Self {
-            entity_id,
-            metadata: IdpMetadataConfig::new(),
-            credentials: Credentials::default(),
-            issuance_lifetime: Duration::from_secs(300),
-            validation: IdpValidationPolicy::recommended(),
-            algorithms: AlgorithmPolicy::default(),
-            xml: XmlPolicy::default(),
-            templates: TemplatePolicy::default(),
-        }
-    }
-
-    /// Add an SSO endpoint.
+    /// Append a `SingleSignOnService` endpoint after the ones added before.
     pub fn sso_endpoint(mut self, endpoint: SsoEndpoint) -> Self {
-        self.metadata.single_sign_on_service.push(endpoint);
+        self.metadata.sso_endpoints.push(endpoint);
         self
     }
 
-    /// Add an SLO endpoint.
+    /// Append `SingleSignOnService` endpoints after the ones added before, in
+    /// iteration order.
+    pub fn sso_endpoints(mut self, endpoints: impl IntoIterator<Item = SsoEndpoint>) -> Self {
+        self.metadata.sso_endpoints.extend(endpoints);
+        self
+    }
+
+    /// Append a `SingleLogoutService` endpoint.
     pub fn slo_endpoint(mut self, endpoint: SloEndpoint) -> Self {
-        self.metadata.single_logout_service.push(endpoint);
+        self.metadata.slo_endpoints.push(endpoint);
         self
     }
 
-    /// Publish a SOAP `ArtifactResolutionService` endpoint.
+    /// Append `SingleLogoutService` endpoints, in iteration order.
+    pub fn slo_endpoints(mut self, endpoints: impl IntoIterator<Item = SloEndpoint>) -> Self {
+        self.metadata.slo_endpoints.extend(endpoints);
+        self
+    }
+
+    /// Append a SOAP `ArtifactResolutionService` endpoint.
     pub fn artifact_resolution_service(mut self, service: ArtifactResolutionService) -> Self {
-        self.metadata.artifact_resolution_service.push(service);
+        self.metadata.artifact_resolution_services.push(service);
         self
     }
 
-    /// Publish a SOAP or HTTP-Redirect `ManageNameIDService` endpoint.
+    /// Append a SOAP or HTTP-Redirect `ManageNameIDService` endpoint.
     ///
     /// This turns on name identifier management over that binding.
     /// [`Saml::start_name_id_management`](crate::Saml::start_name_id_management)
@@ -398,27 +464,23 @@ impl IdpConfigBuilder {
     /// fail without a SOAP endpoint, and the `_redirect` operations without an
     /// HTTP-Redirect one.
     pub fn manage_name_id_service(mut self, service: ManageNameIdService) -> Self {
-        self.metadata.manage_name_id_service.push(service);
+        self.metadata.manage_name_id_services.push(service);
         self
     }
 
-    /// Add an advertised NameID format.
+    /// Append an advertised NameID format.
     pub fn name_id_format(mut self, format: NameIdFormat) -> Self {
-        self.metadata.name_id_format.push(format);
+        self.metadata.name_id_formats.push(format);
         self
     }
 
-    /// Set generated metadata element ordering.
-    ///
-    /// Missing groups are inserted in schema-relative positions. Explicit
-    /// names retain their relative order. [`Self::build`] rejects unknown or
-    /// repeated group names with [`SamlError::Invalid`].
-    pub fn elements_order(mut self, elements_order: Vec<String>) -> Self {
-        self.metadata.elements_order = Some(elements_order);
+    /// Append advertised NameID formats, in iteration order.
+    pub fn name_id_formats(mut self, formats: impl IntoIterator<Item = NameIdFormat>) -> Self {
+        self.metadata.name_id_formats.extend(formats);
         self
     }
 
-    /// Publish the entity-level organization.
+    /// Set the entity-level organization.
     pub fn organization(mut self, organization: crate::metadata::Organization) -> Self {
         self.metadata.organization = Some(organization);
         self
@@ -430,13 +492,24 @@ impl IdpConfigBuilder {
         self
     }
 
-    /// Publish an error information URI on the SSO role descriptor.
+    /// Append entity-level contacts, in iteration order.
+    pub fn contacts(
+        mut self,
+        contacts: impl IntoIterator<Item = crate::metadata::ContactPerson>,
+    ) -> Self {
+        self.metadata.contacts.extend(contacts);
+        self
+    }
+
+    /// Set the error information URI of the SSO role descriptor.
+    ///
+    /// [`Self::build`] rejects one that is not an absolute URI reference.
     pub fn error_url(mut self, error_url: impl Into<String>) -> Self {
         self.metadata.error_url = Some(error_url.into());
         self
     }
 
-    /// Write `validUntil`, `cacheDuration`, or both on generated metadata.
+    /// Set `validUntil`, `cacheDuration`, or both on generated metadata.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
         self.metadata.lifetime = Some(lifetime);
         self
@@ -485,73 +558,75 @@ impl IdpConfigBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the entity ID is not an absolute URI
-    /// reference of at most 1024 characters, no SSO endpoint is set, two
-    /// `ArtifactResolutionService` endpoints share an index, the organization,
-    /// contacts, or error URI are invalid, an additional decryption key has no
-    /// primary one, the issuance lifetime is zero or outside the internal
-    /// supported range, the algorithm policy is not supported, the selected
-    /// policy requires crypto in a build without a crypto provider, or the
-    /// protocol and assertion tag prefixes are not two different XML NCNames
-    /// other than `xml` and `xmlns`. Also returns the errors of generating
-    /// IdP metadata from the config: a NameID format that is not an absolute
-    /// URI reference, an unknown or repeated element ordering group, or a
-    /// `validUntil` outside the years 0001 through 9999.
-    /// [`Saml::idp`](crate::Saml::idp) accepts every config this returns.
+    /// Returns [`SamlError`] when:
+    ///
+    /// - the entity ID is not an absolute URI reference of at most 1024
+    ///   characters, or the organization, contacts, or error URI are invalid;
+    /// - two `ArtifactResolutionService` endpoints share an index;
+    /// - the issuance lifetime is zero or outside the internal supported
+    ///   range;
+    /// - the selected policy requires crypto that a build without a crypto
+    ///   provider lacks;
+    /// - the algorithm policy is not supported;
+    /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
+    ///   begins with `xml` in any case, or the two tag prefixes are equal;
+    /// - generating IdP metadata fails: a NameID format that is not an
+    ///   absolute URI reference, or a `validUntil` outside the years 0001
+    ///   through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
-        validate_entity_id_syntax(self.entity_id.as_str())?;
-        self.metadata.validate()?;
-        let config = IdpConfig {
+        self.metadata.ensure_unique_artifact_resolution_indexes()?;
+        let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
+        let identity_provider = self.identity_provider()?;
+        validate_idp_policy(&self)?;
+        Ok(IdpConfig {
             entity_id: self.entity_id,
             metadata: self.metadata,
             credentials: self.credentials,
-            issuance_lifetime: validated_idp_issuance_lifetime(self.issuance_lifetime)?,
+            issuance_lifetime,
             validation: self.validation,
             algorithms: self.algorithms,
             xml: self.xml,
             templates: self.templates,
-        };
-        validate_idp_policy(&config)?;
-        config.to_identity_provider()?;
-        Ok(config)
+            identity_provider,
+        })
     }
 }
 
-fn validate_common_credentials(credentials: &Credentials) -> Result<(), SamlError> {
-    if !credentials.additional_decryption_keys().is_empty() && credentials.decryption().is_none() {
-        return Err(SamlError::MissingKey("decryption_key".into()));
+fn validate_shared_policy(
+    algorithms: &AlgorithmPolicy,
+    templates: &TemplatePolicy,
+) -> Result<(), SamlError> {
+    super::encryption::validate_algorithms(algorithms)?;
+    validate_tag_prefixes(
+        &templates.tag_prefix_protocol,
+        &templates.tag_prefix_assertion,
+    )?;
+    if let Some(signature) = &templates.signature_config {
+        validate_namespace_prefix("SignatureConfig.prefix XML prefix", &signature.prefix)?;
     }
     Ok(())
 }
 
-fn validate_sp_policy(config: &SpConfig) -> Result<(), SamlError> {
+fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     validate_sp_crypto_support(config)?;
-    super::encryption::validate_algorithms(&config.algorithms)?;
-    validate_common_credentials(&config.credentials)?;
-    validate_tag_prefixes(
-        &config.templates.tag_prefix_protocol,
-        &config.templates.tag_prefix_assertion,
-    )?;
+    validate_shared_policy(&config.algorithms, &config.templates)?;
     if matches!(
         config.validation.authn_requests,
         AuthnRequestSigningPolicy::Sign
     ) {
         validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
     }
-    if config.xml.encryption.selects_any_element() && config.credentials.decryption().is_none() {
-        return Err(SamlError::MissingKey("decryption_key".into()));
+    if config.xml.encryption.selects_any_element()
+        && config.credentials.decryption_credentials().is_empty()
+    {
+        return Err(SamlError::MissingKey("decryption_credential".into()));
     }
     Ok(())
 }
 
-fn validate_idp_policy(config: &IdpConfig) -> Result<(), SamlError> {
+fn validate_idp_policy(config: &IdpConfigBuilder) -> Result<(), SamlError> {
     validate_idp_crypto_support(config)?;
-    super::encryption::validate_algorithms(&config.algorithms)?;
-    validate_common_credentials(&config.credentials)?;
-    validate_tag_prefixes(
-        &config.templates.tag_prefix_protocol,
-        &config.templates.tag_prefix_assertion,
-    )
+    validate_shared_policy(&config.algorithms, &config.templates)
 }
 
 fn validated_idp_issuance_lifetime(
@@ -579,22 +654,19 @@ fn validate_signing_credentials(
         }
         return Ok(());
     }
-    if credentials.signing_key().is_none() {
-        return Err(SamlError::MissingKey("signing_key".into()));
-    }
-    if credentials.signing_certificate().is_none() {
-        return Err(SamlError::MissingKey("signing_certificate".into()));
+    if credentials.signing_credential().is_none() {
+        return Err(SamlError::MissingKey("signing_credential".into()));
     }
     Ok(())
 }
 
 #[cfg(crypto)]
-fn validate_sp_crypto_support(_config: &SpConfig) -> Result<(), SamlError> {
+fn validate_sp_crypto_support(_config: &SpConfigBuilder) -> Result<(), SamlError> {
     Ok(())
 }
 
 #[cfg(not(crypto))]
-fn validate_sp_crypto_support(config: &SpConfig) -> Result<(), SamlError> {
+fn validate_sp_crypto_support(config: &SpConfigBuilder) -> Result<(), SamlError> {
     if sp_config_requires_crypto(config) {
         return Err(SamlError::Unsupported(
             "selected SP config policy requires a crypto provider feature".into(),
@@ -604,12 +676,12 @@ fn validate_sp_crypto_support(config: &SpConfig) -> Result<(), SamlError> {
 }
 
 #[cfg(crypto)]
-fn validate_idp_crypto_support(_config: &IdpConfig) -> Result<(), SamlError> {
+fn validate_idp_crypto_support(_config: &IdpConfigBuilder) -> Result<(), SamlError> {
     Ok(())
 }
 
 #[cfg(not(crypto))]
-fn validate_idp_crypto_support(config: &IdpConfig) -> Result<(), SamlError> {
+fn validate_idp_crypto_support(config: &IdpConfigBuilder) -> Result<(), SamlError> {
     if idp_config_requires_crypto(config) {
         return Err(SamlError::Unsupported(
             "selected IdP config policy requires a crypto provider feature".into(),
@@ -619,7 +691,7 @@ fn validate_idp_crypto_support(config: &IdpConfig) -> Result<(), SamlError> {
 }
 
 #[cfg(not(crypto))]
-fn sp_config_requires_crypto(config: &SpConfig) -> bool {
+fn sp_config_requires_crypto(config: &SpConfigBuilder) -> bool {
     matches!(
         config.validation.assertions,
         AssertionSignaturePolicy::RequireSigned
@@ -634,7 +706,7 @@ fn sp_config_requires_crypto(config: &SpConfig) -> bool {
 }
 
 #[cfg(not(crypto))]
-fn idp_config_requires_crypto(config: &IdpConfig) -> bool {
+fn idp_config_requires_crypto(config: &IdpConfigBuilder) -> bool {
     matches!(
         config.validation.authn_requests,
         AuthnRequestValidationPolicy::RequireSigned
@@ -662,25 +734,32 @@ mod no_crypto_tests {
 
     #[test]
     fn recommended_builders_need_a_crypto_provider() -> Result<(), SamlError> {
-        let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .build();
+        let sp_builder = SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .build();
         assert!(matches!(sp_builder, Err(SamlError::Unsupported(_))));
 
-        let idp_builder =
-            IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-                .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-                .build();
+        let idp_builder = IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .build();
         assert!(matches!(idp_builder, Err(SamlError::Unsupported(_))));
 
-        SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .validation(SpValidationPolicy::compatibility())
-            .build()?;
-        IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-            .validation(IdpValidationPolicy::compatibility())
-            .build()?;
+        SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(SpValidationPolicy::compatibility())
+        .build()?;
+        IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .validation(IdpValidationPolicy::compatibility())
+        .build()?;
         Ok(())
     }
 }

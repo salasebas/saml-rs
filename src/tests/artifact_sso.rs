@@ -28,7 +28,8 @@ use saml_rs::{
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
-    CertificatePem, IdpConfigBuilder, PrivateKeyPem, SloEndpoint, XmlEncryptionPolicy, XmlPolicy,
+    AssertionEncryptionPolicy, CertificatePem, IdpConfigBuilder, PrivateKeyPem, SloEndpoint,
+    XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -81,23 +82,24 @@ fn parties_with_consumers(
     algorithms: AlgorithmPolicy,
 ) -> Result<Parties, SamlError> {
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-            .artifact_resolution_service(ArtifactResolutionService::new(
-                0,
-                EndpointUrl::try_new(RESOLUTION_URL)?,
-            ))
-            .credentials(signing_credentials())
-            .algorithms(algorithms)
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,
+        )
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new(RESOLUTION_URL)?,
+        ))
+        .credentials(signing_credentials())
+        .algorithms(algorithms)
+        .build()?,
+    );
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(post)
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, post)
             .acs_endpoint(artifact)
             .credentials(signing_credentials())
             .build()?,
-    )?;
+    );
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
@@ -776,15 +778,17 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = unsolicited_parties()?;
     let other = Saml::idp(
-        IdpConfig::builder(EntityId::try_new("https://other-idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::redirect("https://other-idp.example.com/sso")?)
-            .artifact_resolution_service(ArtifactResolutionService::new(
-                0,
-                EndpointUrl::try_new("https://other-idp.example.com/artifact")?,
-            ))
-            .credentials(signing_credentials())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new("https://other-idp.example.com/metadata")?,
+            SsoEndpoint::redirect("https://other-idp.example.com/sso")?,
+        )
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new("https://other-idp.example.com/artifact")?,
+        ))
+        .credentials(signing_credentials())
+        .build()?,
+    );
     let other_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://other-idp.example.com/metadata")?,
         other.metadata_xml(),
@@ -902,16 +906,18 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.with_index(1))
-            .acs_endpoint(
-                AcsEndpoint::artifact("https://sp.example.com/acs/default-artifact")?
-                    .with_index(2)
-                    .with_default(),
-            )
-            .credentials(signing_credentials())
-            .build()?,
-    )?;
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.with_index(1),
+        )
+        .acs_endpoint(
+            AcsEndpoint::artifact("https://sp.example.com/acs/default-artifact")?
+                .with_index(2)
+                .with_default(),
+        )
+        .credentials(signing_credentials())
+        .build()?,
+    );
     let sp_metadata = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -1047,36 +1053,44 @@ fn a_request_for_a_posted_response_is_not_answered_with_an_artifact(
 }
 
 #[cfg(not(feature = "crypto-fips"))]
+fn redirect_idp_builder() -> Result<IdpConfigBuilder, SamlError> {
+    Ok(IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,
+    ))
+}
+
+#[cfg(not(feature = "crypto-fips"))]
 fn encrypted_assertion_parties(
     idp: IdpConfigBuilder,
 ) -> Result<Parties, Box<dyn std::error::Error>> {
     let encryption = || XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
     let idp = Saml::idp(
-        idp.sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-            .artifact_resolution_service(ArtifactResolutionService::new(
-                0,
-                EndpointUrl::try_new(RESOLUTION_URL)?,
-            ))
-            .credentials(signing_credentials())
-            .xml(encryption())
-            .build()?,
-    )?;
+        idp.artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new(RESOLUTION_URL)?,
+        ))
+        .credentials(signing_credentials())
+        .xml(encryption())
+        .build()?,
+    );
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::artifact(SP_ACS_ARTIFACT)?)
-            .credentials(
-                signing_credentials().with_decryption(saml_rs::DecryptionCredential {
-                    certificate: CertificatePem::new(CERT),
-                    key: PrivateKeyPem::new(PRIVKEY),
-                    passphrase: None,
-                }),
-            )
-            .xml(encryption())
-            .build()?,
-    )?;
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::artifact(SP_ACS_ARTIFACT)?,
+        )
+        .credentials(signing_credentials().with_decryption_credential(
+            saml_rs::X509Credential::new(CertificatePem::new(CERT), PrivateKeyPem::new(PRIVKEY)),
+        ))
+        .xml(encryption())
+        .build()?,
+    );
     Ok(Parties {
         idp_metadata: IdpDescriptor::from_metadata_xml(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -1097,8 +1111,7 @@ fn encrypted_assertion_parties(
 #[test]
 fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let parties =
-        encrypted_assertion_parties(IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?))?;
+    let parties = encrypted_assertion_parties(redirect_idp_builder()?)?;
     let (pending, request) = requested(&parties, None)?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
@@ -1130,8 +1143,7 @@ fn an_encrypted_assertion_delivered_as_an_artifact_establishes_the_session(
 fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = encrypted_assertion_parties(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
+        redirect_idp_builder()?.slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?),
     )?;
     let (pending, request) = requested(&parties, None)?;
 

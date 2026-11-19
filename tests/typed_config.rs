@@ -5,10 +5,11 @@ use saml_rs::constants::{
 use saml_rs::flow::FlowOptions;
 use saml_rs::raw::EntitySetting;
 use saml_rs::{
-    CertificatePem, Credentials, DataEncryptionAlgorithm, DecryptionCredential, DigestAlgorithm,
-    EntityId, HmacSecret, IdpDescriptor, KeyEncryptionAlgorithm, MaskGenerationFunction,
-    MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem, SamlError, SignatureAlgorithm,
-    SpDescriptor, TransformAlgorithm,
+    AcsEndpoint, CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId,
+    HmacSecret, IdpConfig, IdpDescriptor, IdpValidationPolicy, KeyEncryptionAlgorithm,
+    MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
+    SamlError, SignatureAlgorithm, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    TransformAlgorithm, X509Credential,
 };
 
 const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");
@@ -65,24 +66,51 @@ fn hmac_secret_is_at_least_the_sha1_output_length() {
 }
 
 #[test]
-fn typed_config_credentials_debug_redacts_every_secret() {
+fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError> {
     let credentials = Credentials::default()
-        .with_encrypted_signing_key(
-            PrivateKeyPem::new("dummy-signing-key-for-credentials-debug-test"),
-            Passphrase::new("dummy-signing-pass-for-credentials-debug-test"),
+        .with_signing_credential(
+            X509Credential::new(
+                CertificatePem::new("dummy-signing-certificate-for-credentials-debug-test"),
+                PrivateKeyPem::new("dummy-signing-key-for-credentials-debug-test"),
+            )
+            .with_passphrase(Passphrase::new(
+                "dummy-signing-pass-for-credentials-debug-test",
+            )),
         )
-        .with_decryption(DecryptionCredential {
-            certificate: CertificatePem::new("dummy-certificate-for-credentials-debug-test"),
-            key: PrivateKeyPem::new("dummy-decryption-key-for-credentials-debug-test"),
-            passphrase: Some(Passphrase::new(
+        .with_decryption_credential(
+            X509Credential::new(
+                CertificatePem::new("dummy-certificate-for-credentials-debug-test"),
+                PrivateKeyPem::new("dummy-decryption-key-for-credentials-debug-test"),
+            )
+            .with_passphrase(Passphrase::new(
                 "dummy-decryption-pass-for-credentials-debug-test",
             )),
-        });
+        );
 
-    let debug = format!("{credentials:?}");
+    let sp = SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .credentials(credentials.clone())
+    .validation(SpValidationPolicy::compatibility())
+    .build()?;
+    let idp = IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::post("https://idp.example.com/sso")?,
+    )
+    .credentials(credentials.clone())
+    .validation(IdpValidationPolicy::compatibility())
+    .build()?;
 
-    assert!(debug.contains("redacted"), "{debug}");
-    assert!(!debug.contains("for-credentials-debug-test"), "{debug}");
+    for debug in [
+        format!("{credentials:?}"),
+        format!("{sp:?}"),
+        format!("{idp:?}"),
+    ] {
+        assert!(debug.contains("redacted"), "{debug}");
+        assert!(!debug.contains("for-credentials-debug-test"), "{debug}");
+    }
+    Ok(())
 }
 
 #[test]
@@ -228,7 +256,7 @@ fn typed_config_idp_descriptor_accepts_expected_unsigned_metadata(
         descriptor.entity_id().as_str(),
         "https://idp.example.com/metadata"
     );
-    assert!(!descriptor.metadata_signature_verified());
+    assert!(!descriptor.signed_metadata_xml().is_some());
     Ok(())
 }
 
@@ -267,7 +295,7 @@ fn typed_config_sp_descriptor_accepts_expected_unsigned_metadata(
         descriptor.entity_id().as_str(),
         "https://sp.example.org/metadata"
     );
-    assert!(!descriptor.metadata_signature_verified());
+    assert!(!descriptor.signed_metadata_xml().is_some());
     assert_eq!(descriptor.signed_metadata_xml(), None);
     Ok(())
 }

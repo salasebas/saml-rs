@@ -116,134 +116,92 @@ impl fmt::Debug for HmacSecret {
 /// Secret-bearing and certificate material for local SAML operations.
 ///
 /// Start from [`Credentials::default`] and add material with the `with_*`
-/// methods. A passphrase is only accepted together with the key it unlocks.
+/// methods.
 ///
 /// # Examples
 ///
 /// ```
-/// use saml_rs::{CertificatePem, Credentials, DecryptionCredential, PrivateKeyPem};
+/// use saml_rs::{CertificatePem, Credentials, PrivateKeyPem, X509Credential};
 ///
 /// let credentials = Credentials::default()
-///     .with_signing_key(PrivateKeyPem::new("signing key PEM"))
-///     .with_signing_certificate(CertificatePem::new("signing certificate PEM"))
-///     .with_decryption(DecryptionCredential {
-///         certificate: CertificatePem::new("encryption certificate PEM"),
-///         key: PrivateKeyPem::new("decryption key PEM"),
-///         passphrase: None,
-///     });
+///     .with_signing_credential(X509Credential::new(
+///         CertificatePem::new("signing certificate PEM"),
+///         PrivateKeyPem::new("signing key PEM"),
+///     ))
+///     .with_decryption_credential(X509Credential::new(
+///         CertificatePem::new("encryption certificate PEM"),
+///         PrivateKeyPem::new("decryption key PEM"),
+///     ));
 /// # let _ = credentials;
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Credentials {
-    signing_key: Option<SigningKey>,
-    signing_certificate: Option<CertificatePem>,
+    signing: Option<X509Credential>,
     additional_signing_certificates: Vec<CertificatePem>,
     hmac_secret: Option<HmacSecret>,
-    decryption: Option<DecryptionCredential>,
-    additional_decryption_keys: Vec<DecryptionCredential>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SigningKey {
-    key: PrivateKeyPem,
-    passphrase: Option<Passphrase>,
+    decryption: Vec<X509Credential>,
 }
 
 impl Credentials {
-    /// Sign with an unencrypted private key.
-    ///
-    /// Replaces any signing key set before.
-    pub fn with_signing_key(mut self, key: PrivateKeyPem) -> Self {
-        self.signing_key = Some(SigningKey {
-            key,
-            passphrase: None,
-        });
+    /// Replace the signing key and the signing certificate published for it
+    /// in metadata and in signatures.
+    pub fn with_signing_credential(mut self, credential: X509Credential) -> Self {
+        self.signing = Some(credential);
         self
     }
 
-    /// Sign with a private key that `passphrase` unlocks.
-    ///
-    /// Replaces any signing key set before.
-    pub fn with_encrypted_signing_key(
-        mut self,
-        key: PrivateKeyPem,
-        passphrase: Passphrase,
-    ) -> Self {
-        self.signing_key = Some(SigningKey {
-            key,
-            passphrase: Some(passphrase),
-        });
-        self
-    }
-
-    /// Set the signing certificate, published in metadata and in signatures.
-    pub fn with_signing_certificate(mut self, certificate: CertificatePem) -> Self {
-        self.signing_certificate = Some(certificate);
-        self
-    }
-
-    /// Publish one more signing certificate in metadata, after the signing
-    /// certificate and any added before.
+    /// Append a signing certificate published in metadata after the signing
+    /// credential's certificate and any added before.
     ///
     /// Each certificate gets its own signing `KeyDescriptor`, in the order
-    /// added. Signing still uses only the signing key and signing certificate.
-    /// To roll over the signing key, publish the next certificate here and wait
-    /// until every peer has refreshed this entity's metadata. Then switch the
-    /// signing key and certificate to the new pair and keep the old
-    /// certificate here during the overlap. Drop the old certificate when peers
-    /// no longer need to verify messages signed with it.
+    /// added. Signing still uses only the signing credential. To roll over
+    /// the signing key, publish the next certificate here and wait until
+    /// every peer has refreshed this entity's metadata. Then switch the
+    /// signing credential to the new pair and keep the old certificate here
+    /// during the overlap. Drop the old certificate when peers no longer need
+    /// to verify messages signed with it.
     pub fn with_additional_signing_certificate(mut self, certificate: CertificatePem) -> Self {
         self.additional_signing_certificates.push(certificate);
         self
     }
 
-    /// Set the secret for [`crate::SignatureAlgorithm::HmacSha1`].
+    /// Replace the secret for [`crate::SignatureAlgorithm::HmacSha1`].
     ///
-    /// Messages are signed with it instead of the signing key when that
-    /// algorithm is selected.
+    /// Messages are signed with it instead of the signing credential when
+    /// that algorithm is selected.
     pub fn with_hmac_secret(mut self, secret: HmacSecret) -> Self {
         self.hmac_secret = Some(secret);
         self
     }
 
-    /// Set the primary decryption key and the encryption certificate peers
-    /// use for it.
+    /// Append a decryption key and the encryption certificate peers use for
+    /// it.
     ///
-    /// Decryption tries this key first. Metadata publishes its certificate as
-    /// the first encryption `KeyDescriptor`.
-    pub fn with_decryption(mut self, credential: DecryptionCredential) -> Self {
-        self.decryption = Some(credential);
+    /// Decryption tries the keys in the order added and keeps the first that
+    /// decrypts. Metadata publishes each certificate in its own encryption
+    /// `KeyDescriptor`, in the same order, so a peer may encrypt for any of
+    /// them. To roll over the encryption key, append the next credential and
+    /// wait until every peer has refreshed this entity's metadata. Then list
+    /// the next credential first, and drop the old one once every peer has
+    /// refreshed again.
+    pub fn with_decryption_credential(mut self, credential: X509Credential) -> Self {
+        self.decryption.push(credential);
         self
     }
 
-    /// Add a decryption key, tried in the order added after the primary one.
-    ///
-    /// Each certificate is published in metadata after the primary encryption
-    /// certificate, so a peer may encrypt for any of them. To roll over the
-    /// encryption key, add the next key here. Then make it the primary
-    /// decryption credential and add the old key here. Drop the old key once
-    /// every peer has refreshed this entity's metadata. A config with an
-    /// additional key and no primary one fails to build.
-    pub fn with_additional_decryption_key(mut self, credential: DecryptionCredential) -> Self {
-        self.additional_decryption_keys.push(credential);
+    /// Append decryption credentials, in iteration order, as
+    /// [`Self::with_decryption_credential`] appends one.
+    pub fn with_decryption_credentials(
+        mut self,
+        credentials: impl IntoIterator<Item = X509Credential>,
+    ) -> Self {
+        self.decryption.extend(credentials);
         self
     }
 
-    /// The signing private key.
-    pub fn signing_key(&self) -> Option<&PrivateKeyPem> {
-        self.signing_key.as_ref().map(|signing| &signing.key)
-    }
-
-    /// The passphrase that unlocks the signing key, when it is encrypted.
-    pub fn signing_key_passphrase(&self) -> Option<&Passphrase> {
-        self.signing_key
-            .as_ref()
-            .and_then(|signing| signing.passphrase.as_ref())
-    }
-
-    /// The signing certificate.
-    pub fn signing_certificate(&self) -> Option<&CertificatePem> {
-        self.signing_certificate.as_ref()
+    /// The signing key, its certificate, and its passphrase.
+    pub fn signing_credential(&self) -> Option<&X509Credential> {
+        self.signing.as_ref()
     }
 
     /// The additional signing certificates, in publication order.
@@ -256,24 +214,52 @@ impl Credentials {
         self.hmac_secret.as_ref()
     }
 
-    /// The primary decryption key, with its certificate and passphrase.
-    pub fn decryption(&self) -> Option<&DecryptionCredential> {
-        self.decryption.as_ref()
-    }
-
-    /// The additional decryption keys, in decryption order.
-    pub fn additional_decryption_keys(&self) -> &[DecryptionCredential] {
-        &self.additional_decryption_keys
+    /// The decryption credentials, in decryption and publication order.
+    pub fn decryption_credentials(&self) -> &[X509Credential] {
+        &self.decryption
     }
 }
 
-/// A decryption private key and the encryption certificate peers use for it.
+/// A private key and the X.509 certificate of its public key.
+///
+/// [`Credentials::with_signing_credential`] signs with it and
+/// [`Credentials::with_decryption_credential`] decrypts with it. Metadata
+/// publishes the certificate for that use.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecryptionCredential {
-    /// Encryption certificate published for [`Self::key`].
-    pub certificate: CertificatePem,
-    /// Decryption private key.
-    pub key: PrivateKeyPem,
-    /// Passphrase for [`Self::key`].
-    pub passphrase: Option<Passphrase>,
+pub struct X509Credential {
+    certificate: CertificatePem,
+    key: PrivateKeyPem,
+    passphrase: Option<Passphrase>,
+}
+
+impl X509Credential {
+    /// Pair `key` with `certificate`, the certificate of its public key.
+    pub fn new(certificate: CertificatePem, key: PrivateKeyPem) -> Self {
+        Self {
+            certificate,
+            key,
+            passphrase: None,
+        }
+    }
+
+    /// Set the passphrase that unlocks the key, when the key is encrypted.
+    pub fn with_passphrase(mut self, passphrase: Passphrase) -> Self {
+        self.passphrase = Some(passphrase);
+        self
+    }
+
+    /// The certificate of the key's public key.
+    pub fn certificate(&self) -> &CertificatePem {
+        &self.certificate
+    }
+
+    /// The private key.
+    pub fn key(&self) -> &PrivateKeyPem {
+        &self.key
+    }
+
+    /// The passphrase that unlocks the key, when it is encrypted.
+    pub fn passphrase(&self) -> Option<&Passphrase> {
+        self.passphrase.as_ref()
+    }
 }

@@ -3,7 +3,6 @@
 
 use super::keys::{load_certificate, load_hmac_secret, read_private_key};
 use super::signature_profile::check_verification_key;
-use super::xml_syntax::validate_crypto_xml_prefix;
 use crate::binding::{decode_base64, encode_base64, xml_escape};
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
@@ -11,6 +10,7 @@ use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
 use crate::error::{crypto_err, xml_err, SamlError};
 use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node};
+use crate::xml::name::validate_namespace_prefix;
 use bergshamra::keys::Key;
 use bergshamra::{sign, DsigContext, KeysManager};
 use quick_xml::events::Event;
@@ -160,7 +160,7 @@ fn embed_signature(
         .ok_or_else(|| SamlError::crypto(format!("unknown signature algorithm: {sig_alg}")))?;
 
     let prefix = config.map(|c| c.prefix.as_str()).unwrap_or("ds");
-    validate_crypto_xml_prefix("SignatureConfig.prefix", prefix)?;
+    validate_namespace_prefix("SignatureConfig.prefix XML prefix", prefix)?;
     let key_info = cert
         .map(|cert| {
             let cert_b64 = xml_escape(&normalize_cert_string(cert));

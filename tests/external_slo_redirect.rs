@@ -77,13 +77,15 @@ fn assert_redirect_wire(query: &str, relay_state: Option<&str>) {
 fn sp_receiver() -> Result<Saml<saml_rs::Sp>, SamlError> {
     let mut validation = SpValidationPolicy::compatibility();
     validation.logout = LogoutPolicy::recommended();
-    Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS_POST)?)
-            .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
-            .validation(validation)
-            .build()?,
-    )
+    Ok(Saml::sp(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS_POST)?,
+        )
+        .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
+        .validation(validation)
+        .build()?,
+    ))
 }
 
 fn shibboleth_idp_descriptor() -> Result<IdpDescriptor, SamlError> {
@@ -97,13 +99,15 @@ fn shibboleth_idp_descriptor() -> Result<IdpDescriptor, SamlError> {
 fn idp_receiver() -> Result<Saml<saml_rs::Idp>, SamlError> {
     let mut validation = IdpValidationPolicy::compatibility();
     validation.logout = LogoutPolicy::recommended();
-    Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
-            .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
-            .validation(validation)
-            .build()?,
-    )
+    Ok(Saml::idp(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,
+        )
+        .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
+        .validation(validation)
+        .build()?,
+    ))
 }
 
 fn simplesamlphp_sp_descriptor() -> Result<SpDescriptor, SamlError> {

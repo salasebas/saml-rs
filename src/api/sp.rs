@@ -157,17 +157,15 @@ impl Saml<Sp> {
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
-    /// let sp_config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-    ///     .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
+    /// let sp_config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
     ///     .validation(SpValidationPolicy::compatibility())
     ///     .build()?;
-    /// let idp_config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-    ///     .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
+    /// let idp_config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
     ///     .validation(IdpValidationPolicy::compatibility())
     ///     .build()?;
     ///
-    /// let sp = Saml::sp(sp_config)?;
-    /// let idp = Saml::idp(idp_config)?;
+    /// let sp = Saml::sp(sp_config);
+    /// let idp = Saml::idp(idp_config);
     /// let idp = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
@@ -216,7 +214,7 @@ impl Saml<Sp> {
         let outbound = Outbound::<AuthnRequest>::try_from(context)?;
         let pending = PendingAuthnRequest::new(
             outbound.id().clone(),
-            options.relay_state,
+            outbound.relay_state().cloned(),
             idp.entity_id().clone(),
             acs,
         );

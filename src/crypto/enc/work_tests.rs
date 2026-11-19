@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::DecryptionCredential;
+use crate::config::X509Credential;
 use crate::constants::{
     data_encryption_algorithm::AES_256_GCM, key_encryption_algorithm::RSA_OAEP_MGF1P,
 };
@@ -102,7 +102,7 @@ fn other_inbound_encrypted_elements_preflight_the_document(
                 &request,
                 KEY,
                 None,
-                &[] as &[DecryptionCredential],
+                &[] as &[X509Credential],
                 options,
                 limits,
                 RequestAuthentication::Unauthenticated,

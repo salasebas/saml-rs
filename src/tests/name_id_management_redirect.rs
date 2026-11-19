@@ -49,16 +49,14 @@ const IDP_MANAGE: &str = "https://idp.example.com/manage-name-id";
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 
 fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    let mut builder = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
-        .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended());
+    let mut builder =
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
+            .credentials(signing_credentials())
+            .validation(SpValidationPolicy::recommended());
     for endpoint in endpoints {
-        builder = builder.manage_name_id_service(ManageNameIdService::redirect(
-            EndpointUrl::try_new(*endpoint)?,
-        ));
+        builder = builder.manage_name_id_redirect_service(EndpointUrl::try_new(*endpoint)?);
     }
-    Saml::sp(builder.build()?)
+    Ok(Saml::sp(builder.build()?))
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -66,17 +64,17 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
 }
 
 fn idp_with_formats(formats: &[NameIdFormat]) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    let mut builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-        .sso_endpoint(SsoEndpoint::redirect(IDP_SSO)?)
-        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-            IDP_MANAGE,
-        )?))
-        .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended());
-    for format in formats {
-        builder = builder.name_id_format(format.clone());
-    }
-    Saml::idp(builder.build()?)
+    let builder = IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::redirect(IDP_SSO)?,
+    )
+    .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+        IDP_MANAGE,
+    )?))
+    .credentials(signing_credentials())
+    .validation(IdpValidationPolicy::recommended())
+    .name_id_formats(formats.iter().cloned());
+    Ok(Saml::idp(builder.build()?))
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
@@ -1105,19 +1103,6 @@ fn a_provider_without_its_own_endpoint_neither_sends_nor_accepts() -> TestResult
 }
 
 #[test]
-fn a_service_provider_does_not_publish_a_soap_endpoint() -> TestResult {
-    let config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-        .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
-        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(SP_MANAGE)?))
-        .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
-        .build();
-
-    assert!(matches!(config, Err(SamlError::Unsupported(_))));
-    Ok(())
-}
-
-#[test]
 fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
     let sp = sp()?;
     let sp_metadata = sp.metadata_xml();
@@ -1135,18 +1120,20 @@ fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
     assert!(sp_positions.is_sorted());
 
     let both = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO)?)
-            .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-                "https://idp.example.com/manage-name-id/soap",
-            )?))
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                IDP_MANAGE,
-            )?))
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect(IDP_SSO)?,
+        )
+        .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
+            "https://idp.example.com/manage-name-id/soap",
+        )?))
+        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+            IDP_MANAGE,
+        )?))
+        .credentials(signing_credentials())
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
+    );
     let idp_metadata = both.metadata_xml();
     assert!(idp_metadata.contains(
         r#"<ManageNameIDService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp.example.com/manage-name-id/soap"/>"#
@@ -1194,27 +1181,26 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
     let (sp_algorithms, sp_credentials) = hmac(b"service-provider-hmac-secret")?;
     let (idp_algorithms, idp_credentials) = hmac(b"identity-provider-hmac-secret")?;
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                SP_MANAGE,
-            )?))
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
+            .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
             .credentials(sp_credentials)
             .algorithms(sp_algorithms)
             .validation(SpValidationPolicy::recommended())
             .build()?,
-    )?;
+    );
     let idp = Saml::idp(
-        IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?)
-            .sso_endpoint(SsoEndpoint::redirect(IDP_SSO)?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                IDP_MANAGE,
-            )?))
-            .credentials(idp_credentials)
-            .algorithms(idp_algorithms)
-            .validation(IdpValidationPolicy::recommended())
-            .build()?,
-    )?;
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect(IDP_SSO)?,
+        )
+        .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
+            IDP_MANAGE,
+        )?))
+        .credentials(idp_credentials)
+        .algorithms(idp_algorithms)
+        .validation(IdpValidationPolicy::recommended())
+        .build()?,
+    );
     let sp_peer =
         sp_descriptor(&sp)?.with_hmac_secret(HmacSecret::try_new(b"service-provider-hmac-secret")?);
     let idp_peer = idp_descriptor(&idp)?
@@ -1344,11 +1330,8 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
         ..saml_rs::XmlLimits::default()
     };
     let sp = Saml::sp(
-        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?)
-            .acs_endpoint(AcsEndpoint::post(SP_ACS)?)
-            .manage_name_id_service(ManageNameIdService::redirect(EndpointUrl::try_new(
-                SP_MANAGE,
-            )?))
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
+            .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
             .credentials(signing_credentials())
             .xml(saml_rs::XmlPolicy {
                 limits,
@@ -1356,7 +1339,7 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
             })
             .validation(SpValidationPolicy::recommended())
             .build()?,
-    )?;
+    );
     let idp = idp()?;
     let attributes: String = (0..65).map(|index| format!(r#" a{index}="v""#)).collect();
     let extensions = format!(

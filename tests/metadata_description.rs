@@ -124,25 +124,27 @@ fn raw_metadata_writes_descriptions_after_roles_with_every_order_profile() -> Te
 
 #[test]
 fn typed_builders_publish_the_same_descriptions() -> TestResult {
-    let mut sp = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .organization(organization())
-        .error_url(ERROR_URL)
-        .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
-        .validation(SpValidationPolicy::compatibility());
-    let mut idp = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-        .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-        .name_id_format(saml_rs::NameIdFormat::EmailAddress)
-        .organization(organization())
-        .error_url(ERROR_URL)
-        .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
-        .validation(IdpValidationPolicy::compatibility());
-    for contact in contacts() {
-        sp = sp.contact(contact.clone());
-        idp = idp.contact(contact);
-    }
-    let sp = Saml::sp(sp.build()?)?;
-    let idp = Saml::idp(idp.build()?)?;
+    let sp = SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .organization(organization())
+    .error_url(ERROR_URL)
+    .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
+    .contacts(contacts())
+    .validation(SpValidationPolicy::compatibility());
+    let idp = IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::post("https://idp.example.com/sso")?,
+    )
+    .name_id_format(saml_rs::NameIdFormat::EmailAddress)
+    .organization(organization())
+    .error_url(ERROR_URL)
+    .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
+    .contacts(contacts())
+    .validation(IdpValidationPolicy::compatibility());
+    let sp = Saml::sp(sp.build()?);
+    let idp = Saml::idp(idp.build()?);
     assert_eq!(sp.metadata_xml(), SP_XML.trim_end());
     assert_eq!(idp.metadata_xml(), IDP_XML.trim_end());
     let sp_peer = SpDescriptor::from_metadata_xml(
@@ -274,14 +276,16 @@ fn generation_validates_localized_values_contacts_and_error_uris() -> TestResult
         generate_idp_metadata(&cfg),
         Err(SamlError::Invalid(_))
     ));
-    let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .validation(SpValidationPolicy::compatibility())
-        .contact(ContactPerson {
-            email_addresses: vec!["invalid".into()],
-            ..ContactPerson::new(ContactType::Technical)
-        })
-        .build();
+    let config = SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .validation(SpValidationPolicy::compatibility())
+    .contact(ContactPerson {
+        email_addresses: vec!["invalid".into()],
+        ..ContactPerson::new(ContactType::Technical)
+    })
+    .build();
     assert!(matches!(config, Err(SamlError::Invalid(_))));
     Ok(())
 }

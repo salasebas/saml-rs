@@ -21,7 +21,7 @@ Properties of the crate. Metadata trust and replay are caller choices, covered i
 - Local digest and reference coverage is required.
 - HMAC output shorter than 160 bits is rejected.
 - The adapter skips X.509 chain and time checks because metadata certificates are pinned key material. Signature, digest, reference, duplicate-ID, and wrapping checks stay on.
-- RSA-v1.5 key-transport decryption is refused before any key is decrypted unless `XmlEncryptionPolicy::with_rsa15_key_transport_decryption_allowed` is selected.
+- RSA-v1.5 key-transport decryption is refused before any key is decrypted unless `XmlEncryptionPolicy::rsa15_key_transport` is `Rsa15KeyTransportPolicy::AllowDecryption`.
 
 Schema validation is optional defence in depth through `XmlPolicy::schema_validator`, scoped to each local role. It covers received protocol XML, SOAP and PAOS envelopes, and decrypted protocol documents. Import metadata with `IdpDescriptor::from_metadata_xml_with_policy` or `SpDescriptor::from_metadata_xml_with_policy` to apply the callback there too. See [XML schema validation](conformance/xml-schema-validation.md) for its scope.
 

@@ -14,12 +14,12 @@ use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataInput, SpMetadataInput
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    CertificatePem, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, RelayState,
-    ReplayPolicy, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso,
-    XmlEncryptionPolicy, XmlPolicy,
+    AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
+    AuthnRequestValidationPolicy, CertificatePem, EntityId, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
+    MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, Saml,
+    SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -65,35 +65,39 @@ fn assert_unsupported(result: Result<impl Sized, SamlError>) {
 }
 
 fn sp_config_builder() -> Result<saml_rs::SpConfigBuilder, SamlError> {
-    Ok(
-        SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .validation(SpValidationPolicy::compatibility()),
+    Ok(SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
     )
+    .validation(SpValidationPolicy::compatibility()))
 }
 
 fn idp_config_builder() -> Result<saml_rs::IdpConfigBuilder, SamlError> {
-    Ok(
-        IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .validation(IdpValidationPolicy::compatibility()),
+    Ok(IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
+    .validation(IdpValidationPolicy::compatibility()))
 }
 
 fn typed_sp_config() -> Result<SpConfig, SamlError> {
-    SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo")?)
-        .validation(SpValidationPolicy::compatibility())
-        .build()
+    SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo")?)
+    .validation(SpValidationPolicy::compatibility())
+    .build()
 }
 
 fn typed_idp_config() -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-        .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso")?)
-        .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo")?)
-        .validation(IdpValidationPolicy::compatibility())
-        .build()
+    IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::post("https://idp.example.com/sso")?,
+    )
+    .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo")?)
+    .validation(IdpValidationPolicy::compatibility())
+    .build()
 }
 
 fn typed_protocol_facades() -> Result<
@@ -105,8 +109,8 @@ fn typed_protocol_facades() -> Result<
     ),
     SamlError,
 > {
-    let sp = Saml::sp(typed_sp_config()?)?;
-    let idp = Saml::idp(typed_idp_config()?)?;
+    let sp = Saml::sp(typed_sp_config()?);
+    let idp = Saml::idp(typed_idp_config()?);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),
@@ -191,14 +195,18 @@ fn typed_metadata_require_signature_is_unsupported_without_default_crypto(
 #[test]
 fn typed_config_builders_construct_protocol_only_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp_config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-        .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-        .validation(SpValidationPolicy::compatibility())
-        .build()?;
-    let idp_config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-        .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-        .validation(IdpValidationPolicy::compatibility())
-        .build()?;
+    let sp_config = SpConfig::builder(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        AcsEndpoint::post("https://sp.example.com/acs")?,
+    )
+    .validation(SpValidationPolicy::compatibility())
+    .build()?;
+    let idp_config = IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::redirect("https://idp.example.com/sso")?,
+    )
+    .validation(IdpValidationPolicy::compatibility())
+    .build()?;
 
     assert_eq!(
         sp_config.entity_id().as_str(),
@@ -244,14 +252,18 @@ fn typed_facade_creates_and_receives_unsigned_protocol_sso_without_default_crypt
 fn typed_config_builders_return_unsupported_for_crypto_required_policy_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(
-        SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?)
-            .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs")?)
-            .build(),
+        SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .build(),
     );
     assert_unsupported(
-        IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?)
-            .sso_endpoint(SsoEndpoint::redirect("https://idp.example.com/sso")?)
-            .build(),
+        IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::redirect("https://idp.example.com/sso")?,
+        )
+        .build(),
     );
     Ok(())
 }
@@ -300,7 +312,10 @@ fn sp_signed_logout_policy_returns_unsupported_without_default_crypto(
 fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
 
@@ -332,7 +347,10 @@ fn idp_signed_logout_policy_returns_unsupported_without_default_crypto(
 fn idp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy::encrypt_assertions(),
+        encryption: XmlEncryptionPolicy {
+            assertions: AssertionEncryptionPolicy::EncryptAssertions,
+            ..XmlEncryptionPolicy::default()
+        },
         ..XmlPolicy::default()
     };
 
