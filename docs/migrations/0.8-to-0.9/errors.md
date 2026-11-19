@@ -86,9 +86,11 @@ fn replayed_assertion(error: &SamlError) -> Option<&str> {
 }
 ```
 
-A second resolution of the same artifact under
-`ArtifactUses::enforce_single_use` returns `ReplayKey::Artifact` with the
-artifact. Before the upgrade, `key` held the bare artifact value.
+A second resolution of the same artifact with a replay cache returns
+`ReplayKey::Artifact` with the artifact. Before the upgrade, `key` held the
+bare artifact value. The cache is now the `ReplayCache` of the validation
+context. See
+[Resolve an artifact](soap-artifact-discovery.md#resolve-an-artifact-with-a-channel-and-a-validation-context).
 `ReplayKey` is non-exhaustive, so a `match` on it needs a wildcard arm.
 
 ## Report replay cache failures with `ReplayCacheUnavailable`

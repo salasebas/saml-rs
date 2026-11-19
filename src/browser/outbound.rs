@@ -147,8 +147,9 @@ impl<Message> Outbound<Message> {
 impl Outbound<LogoutRequest> {
     /// SOAP request for a [`crate::LogoutBinding::Soap`] logout.
     ///
-    /// POST [`SoapRequest::envelope`] to [`SoapRequest::endpoint`] and pass the
-    /// SOAP response body to `finish_slo`.
+    /// POST [`SoapRequest::envelope`] to [`SoapRequest::endpoint`] with
+    /// [`SoapRequest::headers`], and pass the SOAP response body to
+    /// `finish_slo`.
     ///
     /// # Errors
     ///

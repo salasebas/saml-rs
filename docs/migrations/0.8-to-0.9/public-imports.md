@@ -22,6 +22,7 @@ warn, because Rust ignores `#[deprecated]` on a re-export.
 | `binding::base64_encode`, `binding::base64_decode` (deprecated) | The `base64` crate. See [2.1](#21-use-the-base64-crate) |
 | `template::attribute_statement_builder` (deprecated) | `RespondSso::attributes`. See [2.2](#22-pass-attributes-to-the-response) |
 | `crypto::keys::load_private_key`, `crypto::construct_saml_signature`, `crypto::construct_message_signature`, `crypto::verify_signature`, `crypto::verify_signature_with_limits`, `crypto::verify_message_signature`, `crypto::decrypt_assertion` (deprecated) | The typed API, or `bergshamra`. See [2.3](#23-sign-verify-and-decrypt-through-the-typed-api) |
+| `crypto::XmlSecurityBackend`, `crypto::BergshamraBackend` (deprecated) | The typed API, or `bergshamra`. See [2.3](#23-sign-verify-and-decrypt-through-the-typed-api) |
 | `crypto::verify_metadata_signature`, `verify_metadata_signature_with_limits`, `verify_metadata_signature_detailed`, `verify_metadata_signature_detailed_with_limits` (deprecated) | `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml`. See [7](metadata.md#7-verify-signed-metadata-on-import) |
 | `xml::dom::parse`, `parse_with_limits`, `parse_roots`, `parse_roots_with_limits`, `context::is_valid_xml` (deprecated) | An XML library. See [2.4](#24-parse-xml-with-an-xml-library) |
 
@@ -87,8 +88,10 @@ See [4](sso-attributes.md#4-give-each-login-response-template-attribute-a-value)
 
 **Affects:** callers of `saml_rs::crypto::keys::load_private_key`,
 `construct_saml_signature`, `construct_message_signature`, `verify_signature`,
-`verify_signature_with_limits`, `verify_message_signature`, or
-`decrypt_assertion`.
+`verify_signature_with_limits`, `verify_message_signature`,
+`decrypt_assertion`, or `BergshamraBackend::verify_signature` through the
+`XmlSecurityBackend` trait. No saml-rs operation takes an
+`XmlSecurityBackend`.
 
 **Now:** they are deprecated, and saml-rs has no public replacement for them.
 The typed API signs, verifies, and decrypts the messages it creates and

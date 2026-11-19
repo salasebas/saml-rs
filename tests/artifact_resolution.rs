@@ -121,7 +121,6 @@ fn logout_request() -> String {
     )
 }
 
-/// A context that stores each resolved artifact in `cache` for `BLOCKED_FOR`.
 fn single_use(cache: &mut InMemoryReplayCache) -> SamlValidationContext<'_> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(cache))
         .with_replay_retention(BLOCKED_FOR)

@@ -14,7 +14,7 @@ use crate::xml::XmlLimits;
 /// Success requires coverage of the document root or the direct assertions in
 /// a protocol response, as described by [`crate::crypto::verify_signature`].
 #[deprecated(
-    note = "`saml_rs::crypto` becomes crate-private in the next minor release, and nothing in saml-rs is generic over this trait. The typed API verifies the signatures it receives. To verify other XML, use `bergshamra` directly"
+    note = "`saml_rs::crypto` becomes crate-private in the next minor release. The typed API verifies the signatures it receives. To verify other XML, use `bergshamra` directly"
 )]
 #[derive(Debug, Default)]
 #[non_exhaustive]

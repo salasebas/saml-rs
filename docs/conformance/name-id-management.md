@@ -62,7 +62,7 @@ Profiles §4.5.3.1 and §4.5.4.1.
 | A `LogoutRequest` meant to end activity comes before the termination | Requester | Application | Mandatory ordering. Errata 05 E8: the requester must not send `LogoutRequest` after the `ManageNameIDRequest`. The method documentation states it. saml-rs does not track sessions |
 | Authenticate the requester and protect integrity | Requester | SOAP exchange | Mandatory. Profiles §4.5.3.1 and §4.5.4.1 allow a signature or a binding mechanism. The mechanism is `SoapChannel`: mutual authentication and integrity, or `SamlError::SoapChannelProtection` before a request is built. The request is not signed. Core §3.6.1 recommends a signature or binding protection; the channel is that protection |
 | The SOAP body contains exactly one SAML request | Requester | SOAP envelope | Mandatory. Bindings §3.2.2.1, as left by Errata 05 E19 |
-| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Requester | HTTP | Recommendation. Bindings §3.2.3.2. `SoapRequest` reports those values |
+| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Requester | HTTP | Recommendation. Bindings §3.2.3.2. `SoapRequest::headers` includes those values |
 
 ## SOAP: ManageNameIDResponse from the service provider
 
@@ -112,7 +112,7 @@ and 3.6.3, Profiles §4.5.3.2 and §4.5.4.1.
 | `Issuer` is present and omits `Format` | Responder | Generate ManageNameIDResponse | Mandatory. Profiles §4.5.4.2 allows an omitted `Format` or `entity`. Generation omits it |
 | The request came from the service provider being answered | Responder | Generate ManageNameIDResponse | Library policy. A request received from another `SpDescriptor` is `SamlError::IssuerMismatch` |
 | The responder authenticates itself and protects integrity | Responder | SOAP exchange | Mandatory. Profiles §4.5.4.2. The mechanism is the `SoapChannel` the request arrived on. The response is not signed |
-| `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` | Responder | HTTP | Recommendation. Bindings §3.2.3.2. `SoapResponse` reports those values |
+| `Cache-Control: no-cache, no-store, must-revalidate, private` and `Pragma: no-cache` | Responder | HTTP | Recommendation. Bindings §3.2.3.2. `SoapResponse::headers` includes those values |
 
 ## HTTP-Redirect: ManageNameIDRequest
 

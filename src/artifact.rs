@@ -91,13 +91,9 @@ impl Artifact {
     }
 }
 
-/// Channel protection the release of a stored message requires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RequiredChannel {
-    /// Mutual authentication and integrity protection.
     Authenticated,
-    /// Mutual authentication, integrity protection, and confidentiality, for
-    /// a protocol `Response`.
     Confidential,
 }
 
@@ -389,7 +385,6 @@ pub(crate) fn issue(
     Ok(artifact)
 }
 
-/// The protocol element of `xml`, and the channel its release requires.
 fn stored_message(xml: &str) -> Result<(String, RequiredChannel), SamlError> {
     let element = parse_saml(xml)?;
     if element.namespace != namespace::PROTOCOL {

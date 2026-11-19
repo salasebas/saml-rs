@@ -307,7 +307,7 @@ expiration and does not imply that the caller selected the default algorithm
 policy. Import with `AllowUnsigned` returns `None` even if XML has a signature.
 
 `signed_entity_descriptor_xml()` becomes `signed_metadata_xml()` on both
-peer descriptors and on `crypto::MetadataSignatureVerification`. The result
+peer descriptors and on the deprecated `MetadataSignatureVerification`. The result
 can be a signed `EntityDescriptor` or a covering `EntitiesDescriptor`, so the
 new name covers both. The original signed XML is retained.
 
