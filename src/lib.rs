@@ -399,6 +399,7 @@ pub mod entity;
 pub mod error;
 #[doc(hidden)]
 pub mod flow;
+mod http_header;
 #[doc(hidden)]
 pub mod idp;
 #[doc(hidden)]
@@ -465,6 +466,7 @@ pub use error::{
     ReferenceResolutionReason, ResourceLimit, SamlError, SignatureVerificationReason,
     SubjectConfirmationReason, TimeWindowField,
 };
+pub use http_header::HttpHeader;
 #[cfg(crypto)]
 #[allow(deprecated)]
 pub use metadata::MetadataSignatureVerification;
@@ -486,6 +488,6 @@ pub use name_id_management::{
     ReceivedNameIdManagement, RefusedNameIdManagement, StartedNameIdManagement,
 };
 pub use soap::{
-    HttpHeader, MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
+    MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,
     SoapProtocolMessage, SoapRequest, SoapResponse,
 };

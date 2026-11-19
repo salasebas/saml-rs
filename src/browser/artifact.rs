@@ -29,14 +29,6 @@ pub struct ArtifactDelivery {
 }
 
 impl ArtifactDelivery {
-    /// `Cache-Control` value to send with the HTTP response that carries the
-    /// artifact.
-    pub const CACHE_CONTROL: &'static str = "no-cache, no-store";
-
-    /// `Pragma` value to send with the HTTP response that carries the
-    /// artifact.
-    pub const PRAGMA: &'static str = "no-cache";
-
     /// Deliver the artifact in a redirect URL. Send it with HTTP 302 or 303.
     pub fn redirect(endpoint_index: u16) -> Self {
         Self {

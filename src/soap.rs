@@ -7,6 +7,7 @@ use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
 
 use crate::error::{xml_err, SamlError};
+use crate::http_header::{HttpHeader, CACHE_CONTROL, PRAGMA};
 use crate::model::EndpointUrl;
 use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::fragment::standalone_element;
@@ -15,7 +16,6 @@ use crate::xml::XmlLimits;
 
 const SOAP_NAMESPACE: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 const CONTENT_TYPE: HttpHeader = HttpHeader::new("Content-Type", "text/xml; charset=utf-8");
-pub(crate) const PRAGMA: HttpHeader = HttpHeader::new("Pragma", "no-cache");
 pub(crate) const RESPONSE_CACHE_CONTROL: HttpHeader = HttpHeader::new(
     "Cache-Control",
     "no-cache, no-store, must-revalidate, private",
@@ -26,33 +26,10 @@ const REQUEST_HEADERS: &[HttpHeader] = &[
         "SOAPAction",
         "http://www.oasis-open.org/committees/security",
     ),
-    HttpHeader::new("Cache-Control", "no-cache, no-store"),
+    CACHE_CONTROL,
     PRAGMA,
 ];
 pub(crate) const RESPONSE_HEADERS: &[HttpHeader] = &[CONTENT_TYPE, RESPONSE_CACHE_CONTROL, PRAGMA];
-
-/// One HTTP header field to send with a SOAP or PAOS message.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HttpHeader {
-    name: &'static str,
-    value: &'static str,
-}
-
-impl HttpHeader {
-    pub(crate) const fn new(name: &'static str, value: &'static str) -> Self {
-        Self { name, value }
-    }
-
-    /// Header field name.
-    pub fn name(&self) -> &str {
-        self.name
-    }
-
-    /// Header field value.
-    pub fn value(&self) -> &str {
-        self.value
-    }
-}
 
 /// Whether the deployment authenticated both SOAP parties.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

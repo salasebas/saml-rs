@@ -22,9 +22,8 @@ use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
 use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
 use super::{Idp, Saml, SamlError, Sp};
-use crate::soap::{
-    HttpHeader, PRAGMA, RESPONSE_CACHE_CONTROL, RESPONSE_HEADERS as SOAP_RESPONSE_HEADERS,
-};
+use crate::http_header::{HttpHeader, PRAGMA};
+use crate::soap::{RESPONSE_CACHE_CONTROL, RESPONSE_HEADERS as SOAP_RESPONSE_HEADERS};
 use protocol::{
     idp_to_ecp_envelope, parse_client_headers, read_soap_body, soap_fault_envelope,
     sp_to_ecp_envelope, IdpToEcp, SpToEcp, E54_PAOS_HEADER, PAOS_MEDIA_TYPE, SP_UNDERSTOOD_HEADERS,

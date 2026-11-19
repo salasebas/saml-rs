@@ -233,6 +233,45 @@ fn typed_sso_response_carries_profile_authentication_statement(
 }
 
 #[test]
+fn typed_redirect_and_post_messages_carry_the_no_cache_headers(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let no_cache = [
+        ("Cache-Control", "no-cache, no-store"),
+        ("Pragma", "no-cache"),
+    ];
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    let redirect = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    assert_eq!(header_pairs(&redirect.outbound), no_cache);
+
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    assert_eq!(header_pairs(&started.outbound), no_cache);
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        &principal(),
+        RespondSso::post().apply_web_browser_sso_generation_rules(),
+    )?;
+    assert_eq!(header_pairs(&response), no_cache);
+    Ok(())
+}
+
+fn header_pairs<Message>(outbound: &Outbound<Message>) -> Vec<(&str, &str)> {
+    outbound
+        .headers()
+        .iter()
+        .map(|header| (header.name(), header.value()))
+        .collect()
+}
+
+#[test]
 fn typed_sso_response_writes_the_caller_authentication_instant(
 ) -> Result<(), Box<dyn std::error::Error>> {
     const AUTHENTICATED: &str = "2026-01-01T08:00:00Z";

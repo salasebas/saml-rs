@@ -4076,6 +4076,7 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
 
     let request = started.outbound.soap_request()?;
     assert_eq!(request.endpoint().as_str(), IDP_SLO_SOAP);
+    assert_eq!(started.outbound.headers(), request.headers());
     assert_eq!(started.outbound.relay_state(), None);
     assert!(matches!(
         started.outbound.redirect_url(),
@@ -4103,6 +4104,7 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
     )?;
     assert_eq!(received.relay_state(), None);
     let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
+    assert_eq!(response.headers(), response.soap_response()?.headers());
     let response_envelope = response.soap_response()?.envelope();
     let response_xml = soap_body_xml(response_envelope)?;
     assert!(root_has_signature(&response_xml)?);

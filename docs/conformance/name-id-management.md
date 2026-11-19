@@ -132,6 +132,7 @@ Profiles §4.5.3.1 and §4.5.4.1, Bindings §3.4.
 | `RelayState` does not exceed 80 bytes and reveals as little as possible | Requester | Generate ManageNameIDRequest | Mandatory length, Bindings §3.4.3. The content is a recommendation, Profiles §4.5.3.1, and the caller chooses it with `StartNameIdManagement::relay_state` |
 | Send no `LogoutRequest` after a `ManageNameIDRequest` | Requester | Sequence of exchanges | Mandatory prohibition. Errata 05 E8. A logout, if intended, goes first. One call is one request, so the order belongs to the caller |
 | `EncryptedID` and `NewEncryptedID` | Requester | Generate ManageNameIDRequest | Optional. Core §3.6.1. See [EncryptedID and NewEncryptedID](#encryptedid-and-newencryptedid) |
+| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Requester | HTTP | Recommendation. Bindings §3.4.5.1. `Outbound::headers` includes those values. saml-rs does not send the HTTP response |
 
 ## HTTP-Redirect: receiving a ManageNameIDRequest
 
@@ -168,6 +169,7 @@ Profiles §4.5.3.2 and §4.5.4.2, Bindings §3.4.
 | Send the response to `ResponseLocation` when present, otherwise `Location` | Responder | Generate ManageNameIDResponse | Metadata §2.2.2. The peer's first HTTP-Redirect `ManageNameIDService` supplies it, and it is `Destination` |
 | Return the exact `RelayState` received with the request | Responder | Generate ManageNameIDResponse | Mandatory. Bindings §3.4.3. The response always echoes it. A responder may add `RelayState` to a request that had none; that is not implemented |
 | Send the user agent over TLS | Responder | Generate ManageNameIDResponse | Recommendation. Profiles §4.5.3.2. Same `https` rule, relaxed alone by `RespondNameIdManagement::allow_http_name_id_management`, and for the automatic refusal by `ReceiveNameIdManagement::allow_http_name_id_management` |
+| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Responder | HTTP | Recommendation. Bindings §3.4.5.1. `Outbound::headers` includes those values. saml-rs does not send the HTTP response |
 
 ## HTTP-Redirect: receiving a ManageNameIDResponse
 

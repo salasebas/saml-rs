@@ -3,8 +3,8 @@
 [How to upgrade from 0.8 to 0.9](README.md)
 
 This guide covers callers of `saml-rs`, `opensaml`, `samlify`, and `samlet`
-that send SAML messages over SOAP, resolve or answer artifacts, or write the
-`_saml_idp` cookie. Apply the sections that match your integration.
+that send SAML messages over SOAP or through the browser, resolve or answer
+artifacts, or write the `_saml_idp` cookie. Apply the sections that match your integration.
 
 ## Send the SOAP headers from `headers()`
 
@@ -18,7 +18,8 @@ constant on every value.
 `Content-Type`, `SOAPAction`, `Cache-Control`, and `Pragma`.
 `SoapResponse::headers()` returns `Content-Type`, `Cache-Control`, and
 `Pragma`. Both return `&[HttpHeader]`, like `PaosHttpResponse::headers()`.
-The values are unchanged.
+The values are unchanged. For a SOAP logout message, `Outbound::headers()`
+returns the same list.
 
 **Upgrade:** copy every header the slice holds onto the HTTP message.
 
@@ -45,6 +46,46 @@ for header in request.headers() {
 	post = post.header(header.name(), header.value());
 }
 let response = post.body(request.envelope().to_string()).send()?;
+```
+
+## Send the browser headers from `Outbound::headers`
+
+**Affects:** identity providers that send `ArtifactDelivery::CACHE_CONTROL` or
+`ArtifactDelivery::PRAGMA` with an artifact. Every caller that sends an
+`Outbound` should read the upgrade.
+
+**Before:** the two constants held the `Cache-Control` and `Pragma` values for
+the HTTP response that carries an artifact. Nothing gave those values for a
+plain redirect or POST form, although Bindings §3.4.5.1 and §3.5.5.1 recommend
+them there as well.
+
+**Now:** the two constants are removed. `Outbound::headers()` returns the
+headers to send with any outbound message. A redirect or a POST form, including
+one that carries an artifact, gets `Cache-Control: no-cache, no-store` and
+`Pragma: no-cache`. A SOAP logout message gets the `SoapRequest::headers()` or
+`SoapResponse::headers()` list. The slice does not hold `Location`, which is
+`redirect_url()`, or the `Content-Type` of the page that renders the form.
+
+**Upgrade:** copy every header the slice holds onto the HTTP response, for
+every redirect and form you send, not only for an artifact.
+
+```rust,ignore
+// Before
+let response = Response::builder()
+	.status(StatusCode::SEE_OTHER)
+	.header("Location", outbound.redirect_url()?)
+	.header("Cache-Control", ArtifactDelivery::CACHE_CONTROL)
+	.header("Pragma", ArtifactDelivery::PRAGMA)
+	.body(Body::empty())?;
+
+// After
+let mut response = Response::builder()
+	.status(StatusCode::SEE_OTHER)
+	.header("Location", outbound.redirect_url()?);
+for header in outbound.headers() {
+	response = response.header(header.name(), header.value());
+}
+let response = response.body(Body::empty())?;
 ```
 
 ## Build SOAP envelopes with `SoapRequest::try_new` and `SoapResponse::try_new`

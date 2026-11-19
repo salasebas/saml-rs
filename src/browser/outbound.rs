@@ -9,12 +9,15 @@ use crate::constants::url_params;
 use crate::constants::Binding;
 use crate::entity::BindingContext;
 use crate::error::SamlError;
+use crate::http_header::{HttpHeader, CACHE_CONTROL, PRAGMA};
 use crate::model::{
     AuthnRequest, EndpointUrl, LogoutRequest, LogoutResponse, MessageId, RelayState, SessionIndex,
     SsoResponse,
 };
 use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
 use crate::soap::{SoapRequest, SoapResponse};
+
+const BROWSER_HEADERS: &[HttpHeader] = &[CACHE_CONTROL, PRAGMA];
 
 #[derive(Debug, Clone)]
 enum OutboundAction {
@@ -39,6 +42,8 @@ impl OutboundAction {
 
 /// Typed outbound browser action, or the SOAP message of a back-channel
 /// exchange.
+///
+/// Send [`Self::headers`] with the HTTP message that carries it.
 ///
 /// # Examples
 ///
@@ -130,6 +135,24 @@ impl<Message> Outbound<Message> {
             OutboundAction::Redirect(_)
             | OutboundAction::SoapRequest(_)
             | OutboundAction::SoapResponse(_) => Err(self.action.binding_mismatch()),
+        }
+    }
+
+    /// HTTP headers to send with this message.
+    ///
+    /// A redirect or a POST form, including one that carries an artifact, gets
+    /// `Cache-Control: no-cache, no-store` and `Pragma: no-cache`. A SOAP
+    /// message gets the headers of [`SoapRequest::headers`] or
+    /// [`SoapResponse::headers`]. The slice does not hold `Location`, which is
+    /// [`Self::redirect_url`], or the `Content-Type` of the page that renders
+    /// [`Self::post_form`].
+    pub fn headers(&self) -> &[HttpHeader] {
+        match &self.action {
+            OutboundAction::Redirect(_)
+            | OutboundAction::Post(_)
+            | OutboundAction::SimpleSignPost(_) => BROWSER_HEADERS,
+            OutboundAction::SoapRequest(request) => request.headers(),
+            OutboundAction::SoapResponse(response) => response.headers(),
         }
     }
 
