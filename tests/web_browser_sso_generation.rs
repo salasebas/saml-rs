@@ -36,6 +36,10 @@ const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const IDP_SLO: &str = "https://idp.example.com/slo";
 const UNSPECIFIED_AUTHN_CONTEXT: &str = "urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified";
+const NO_CACHE_HEADERS: [(&str, &str); 2] = [
+    ("Cache-Control", "no-cache, no-store"),
+    ("Pragma", "no-cache"),
+];
 
 #[cfg(not(feature = "crypto-fips"))]
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -230,6 +234,41 @@ fn typed_sso_response_carries_profile_authentication_statement(
         Some(received.message().id().as_str())
     );
     Ok(())
+}
+
+#[test]
+fn typed_redirect_and_post_messages_carry_the_no_cache_headers(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+
+    let redirect = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    assert_eq!(header_pairs(&redirect.outbound), NO_CACHE_HEADERS);
+
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    assert_eq!(header_pairs(&started.outbound), NO_CACHE_HEADERS);
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        &principal(),
+        RespondSso::post().apply_web_browser_sso_generation_rules(),
+    )?;
+    assert_eq!(header_pairs(&response), NO_CACHE_HEADERS);
+    Ok(())
+}
+
+fn header_pairs<Message>(outbound: &Outbound<Message>) -> Vec<(&str, &str)> {
+    outbound
+        .headers()
+        .iter()
+        .map(|header| (header.name(), header.value()))
+        .collect()
 }
 
 #[test]
@@ -1209,6 +1248,7 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
     assert!(form.value("Signature").is_some());
     assert!(form.value("SigAlg").is_some());
     assert!(!xml.contains("<ds:Signature"));
+    assert_eq!(header_pairs(&response), NO_CACHE_HEADERS);
     Ok(())
 }
 

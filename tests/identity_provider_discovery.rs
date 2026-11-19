@@ -44,11 +44,8 @@ fn identity_provider_writes_a_session_common_domain_cookie(
         None,
     )?;
 
-    assert_eq!(cookie.name(), "_saml_idp");
     assert_eq!(cookie.value(), IDP_ENTITY_COOKIE_VALUE);
-    assert_eq!(cookie.path(), "/");
     assert_eq!(cookie.domain(), ".example.org");
-    assert!(cookie.secure());
     assert_eq!(cookie.lifetime(), CommonDomainCookieLifetime::Session);
     assert_eq!(
         cookie.set_cookie_header(),
@@ -448,7 +445,7 @@ fn discovery_cookie_rejects_input_that_cannot_be_written() -> Result<(), Box<dyn
         CommonDomainCookieLifetime::Session,
         None,
     )?;
-    assert_eq!(accepted.name(), "_saml_idp");
+    assert!(accepted.set_cookie_header().starts_with("_saml_idp="));
     let too_long = format!("{within}a");
     assert_invalid(
         remember(

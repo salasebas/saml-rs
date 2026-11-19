@@ -1,4 +1,4 @@
-use crate::artifact::{self, IssuedArtifacts, IssuedMessage};
+use crate::artifact::{self, IssuedArtifacts};
 use crate::browser::{ArtifactDelivery, Inbound, Outbound, SsoRequestBinding};
 use crate::config::{NameIdFormat, SpDescriptor};
 use crate::constants::Binding;
@@ -332,10 +332,10 @@ impl Saml<Idp> {
             in_response_to,
             overrides,
         )?;
-        let artifact = artifact::issue(
+        let artifact = artifact::issue_sso_response(
             &self.raw_identity_provider().metadata,
             sp,
-            IssuedMessage::web_browser_sso_response(rendered.xml)?,
+            &rendered.xml,
             delivery.endpoint_index(),
             issued,
         )?;
@@ -386,10 +386,10 @@ impl Saml<Idp> {
     ///     CommonDomainCookieLifetime::Session,
     /// ))?;
     ///
-    /// assert_eq!(cookie.name(), "_saml_idp");
     /// assert_eq!(cookie.domain(), ".example.org");
-    /// assert!(cookie.secure());
-    /// assert!(cookie.set_cookie_header().starts_with("_saml_idp="));
+    /// assert!(cookie
+    ///     .set_cookie_header()
+    ///     .ends_with("; Path=/; Domain=.example.org; Secure"));
     /// # Ok::<(), saml_rs::SamlError>(())
     /// ```
     pub fn remember_identity_provider(

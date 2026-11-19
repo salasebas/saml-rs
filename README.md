@@ -59,7 +59,8 @@ fn sign_in(
         },
     )?;
 
-    // Send the browser to `redirect_url` and keep `started.pending` in its session.
+    // Send the browser to `redirect_url` with `started.outbound.headers()`, and keep
+    // `started.pending` in its session.
     let started = sp.start_sso(&idp, StartSso::redirect())?;
     let redirect_url = started.outbound.redirect_url()?;
 

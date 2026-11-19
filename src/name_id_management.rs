@@ -14,7 +14,7 @@ use crate::model::{
     name_id_format_from_uri, EndpointUrl, MessageId, NameId, Received, ReplayKey, SamlInstant,
     SamlValidationContext, Status, SubordinateStatusCode,
 };
-use crate::soap::{read_soap_body, SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse};
+use crate::soap::{read_soap_body, SoapChannel, SoapRequest, SoapResponse};
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml_with_limits, read_status, SamlElement,
@@ -292,7 +292,7 @@ pub(crate) fn start(
         idp.setting,
         service_provider.metadata().as_metadata(),
     )?;
-    let request = SoapProtocolMessage::request(EndpointUrl::try_new(destination)?, &xml)?;
+    let request = SoapRequest::try_new(EndpointUrl::try_new(destination)?, &xml)?;
     Ok(StartedNameIdManagement {
         request,
         request_id,
@@ -411,7 +411,7 @@ fn response(
     in_response_to: &MessageId,
     status: &Status,
 ) -> Result<SoapResponse, SamlError> {
-    SoapResponse::new(&render_response(
+    SoapResponse::try_new(&render_response(
         &Prefixes::SOAP,
         &ResponseXml {
             id: &generate_id(),
@@ -607,7 +607,7 @@ mod tests {
             Ok(())
         }
         let unchecked = StartedNameIdManagement {
-            request: SoapProtocolMessage::request(
+            request: SoapRequest::try_new(
                 EndpointUrl::try_new("https://sp.example.com/manage")?,
                 r#"<samlp:ManageNameIDRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/>"#,
             )?,

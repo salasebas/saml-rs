@@ -1,6 +1,7 @@
 //! `bergshamra`-backed XML security for the selected provider feature.
 
 use crate::config::XmlSignatureProfile;
+#[allow(deprecated)]
 use crate::crypto::backend::XmlSecurityBackend;
 use crate::crypto::verify::verify_first_signature_with_profile;
 use crate::error::{SamlError, SignatureVerificationReason};
@@ -12,10 +13,14 @@ use crate::xml::XmlLimits;
 /// `trusted_keys_only` + `strict_verification` (see [`crate::crypto::verify`]).
 /// Success requires coverage of the document root or the direct assertions in
 /// a protocol response, as described by [`crate::crypto::verify_signature`].
+#[deprecated(
+    note = "`saml_rs::crypto` becomes crate-private in the next minor release. The typed API verifies the signatures it receives. To verify other XML, use `bergshamra` directly"
+)]
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct BergshamraBackend;
 
+#[allow(deprecated)]
 impl XmlSecurityBackend for BergshamraBackend {
     fn verify_signature(&self, xml: &str, cert_pem: &str) -> Result<(), SamlError> {
         match verify_first_signature_with_profile(

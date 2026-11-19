@@ -18,13 +18,15 @@ use saml_rs::constants::transform_algorithm;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
-    AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactDereference, ArtifactResolutionService,
-    ArtifactUses, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField, Idp,
-    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, IssuedMessage, MetadataTrustPolicy, NameId,
-    Outbound, PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage,
-    RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor,
-    SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status,
-    SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
+    AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactRelease, ArtifactResolutionService,
+    ArtifactWithheld, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField, Idp,
+    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, LoginResponseTemplate,
+    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, Outbound,
+    PartyAuthentication, PendingAuthnRequest, Received, RelayState, ReplayPolicy,
+    ResolvedProtocolMessage, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp,
+    SpConfig, SpDescriptor, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
+    Status, SubordinateStatusCode, TemplatePolicy, TransformAlgorithm,
+    MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -40,7 +42,6 @@ const SP_ACS_ARTIFACT: &str = "https://sp.example.com/acs/artifact";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
 const RESOLUTION_URL: &str = "https://idp.example.com/artifact";
 const ARTIFACT_LIFETIME: Duration = Duration::from_secs(60);
-const BLOCKED_FOR: Duration = Duration::from_secs(10 * 60);
 const USER: &str = "user@example.com";
 const AUTHN_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
 
@@ -234,8 +235,8 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         delivered.artifact(),
-        ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        confidential(),
+        validation(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -244,7 +245,7 @@ fn an_artifact_response_keeps_exclusive_canonicalization_inside_soap(
         confidential(),
     )?;
 
-    let envelope = answer.envelope();
+    let envelope = answer.response().envelope();
     assert!(envelope.contains(transform_algorithm::EXC_C14N));
     assert!(!envelope.contains(transform_algorithm::C14N));
     let resolved = resolution.finish(envelope)?;
@@ -432,8 +433,8 @@ fn resolve(
     let resolution = parties.sp.resolve_artifact(
         &parties.idp_metadata,
         delivered.artifact(),
-        ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        confidential(),
+        validation(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -441,7 +442,7 @@ fn resolve(
         issued,
         confidential(),
     )?;
-    Ok(resolution.finish(answer.envelope())?)
+    Ok(resolution.finish(answer.response().envelope())?)
 }
 
 fn saml_error(result: Result<SsoSession, Box<dyn std::error::Error>>) -> Option<SamlError> {
@@ -712,12 +713,9 @@ fn store_and_finish(
     xml: String,
     issued: &mut IssuedArtifacts,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let artifact = parties.idp.issue_artifact(
-        &parties.sp_metadata,
-        IssuedMessage::web_browser_sso_response(xml)?,
-        0,
-        issued,
-    )?;
+    let artifact = parties
+        .idp
+        .issue_artifact(&parties.sp_metadata, &xml, 0, issued)?;
     let delivered = DeliveredArtifact::from_form(&[FormField::new("SAMLart", artifact.as_str())])?;
     resolve_and_finish(parties, pending, delivered, issued)
 }
@@ -806,8 +804,8 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
     let resolution = parties.sp.resolve_artifact(
         &other_metadata,
         delivered.artifact(),
-        ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        confidential(),
+        validation(),
     )?;
     let answer = other.answer_artifact_resolve(
         &parties.sp_metadata,
@@ -815,7 +813,7 @@ fn a_response_resolved_from_another_identity_provider_is_rejected(
         &mut issued,
         confidential(),
     )?;
-    let resolved = resolution.finish(answer.envelope())?;
+    let resolved = resolution.finish(answer.response().envelope())?;
 
     assert!(matches!(
         parties.sp.accept_unsolicited_sso(
@@ -940,8 +938,8 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
     let resolution = sp.resolve_artifact(
         &parties.idp_metadata,
         delivered.artifact(),
-        ArtifactDereference::web_browser_sso(confidential())?,
-        &mut ArtifactUses::enforce_single_use(BLOCKED_FOR),
+        confidential(),
+        validation(),
     )?;
     let answer = parties.idp.answer_artifact_resolve(
         &sp_metadata,
@@ -949,7 +947,7 @@ fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
         &mut issued,
         confidential(),
     )?;
-    let resolved = resolution.finish(answer.envelope())?;
+    let resolved = resolution.finish(answer.response().envelope())?;
     let session = sp.accept_unsolicited_sso(
         &parties.idp_metadata,
         Inbound::artifact(delivered, resolved),
@@ -1173,5 +1171,101 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
         response.session_index().map(std::slice::from_ref),
         Some(accepted.session_indexes())
     );
+    Ok(())
+}
+
+#[test]
+fn an_artifact_for_another_protocol_message_does_not_establish_a_session(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let (pending, _) = requested(&parties, None)?;
+    let logout = format!(
+        r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer></samlp:LogoutRequest>"#
+    );
+
+    let result = store_and_finish(&parties, &pending, logout, &mut issued);
+    assert!(matches!(
+        saml_error(result),
+        Some(SamlError::ProtocolProfile(message)) if message == "artifact must resolve to a protocol Response"
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_login_response_template_with_another_root_is_not_stored_as_a_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = unsolicited_parties()?;
+    let template = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}"><saml:Issuer>{Issuer}</saml:Issuer></samlp:LogoutRequest>"#;
+    let idp = Saml::idp(
+        IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,
+        )
+        .artifact_resolution_service(ArtifactResolutionService::new(
+            0,
+            EndpointUrl::try_new(RESOLUTION_URL)?,
+        ))
+        .credentials(signing_credentials())
+        .templates(TemplatePolicy {
+            login_response_template: Some(LoginResponseTemplate {
+                context: Some(template.to_string()),
+                attributes: Vec::new(),
+            }),
+            ..TemplatePolicy::default()
+        })
+        .build()?,
+    );
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+
+    let result = idp.initiate_sso_artifact(
+        &parties.sp_metadata,
+        &principal(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    );
+    assert!(
+        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message == "Web Browser SSO artifact message must be a protocol Response"),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_typed_sso_artifact_response_is_withheld_without_confidentiality(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let (_, request) = requested(&parties, None)?;
+    let response = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        &principal(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    )?;
+    let delivered = delivered_by(&response)?;
+    let resolution = parties.sp.resolve_artifact(
+        &parties.idp_metadata,
+        delivered.artifact(),
+        confidential(),
+        validation(),
+    )?;
+
+    let answer = parties.idp.answer_artifact_resolve(
+        &parties.sp_metadata,
+        resolution.request().envelope(),
+        &mut issued,
+        SoapChannel::new(
+            PartyAuthentication::Mutual,
+            MessageIntegrity::Protected,
+            MessageConfidentiality::Absent,
+        ),
+    )?;
+    assert_eq!(
+        answer.release(),
+        ArtifactRelease::Withheld(ArtifactWithheld::Channel)
+    );
+    assert!(!answer.response().envelope().contains("Assertion"));
     Ok(())
 }

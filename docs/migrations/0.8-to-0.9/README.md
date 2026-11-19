@@ -25,5 +25,6 @@ Check the topics that affect your integration.
 - [Match typed `SamlError` variants](errors.md)
 - [Upgrade RelayState, pending state, and inbound message code](browser-transport.md)
 - [Upgrade typed config code](config.md)
+- [Upgrade SOAP, artifact resolution, and discovery cookie code](soap-artifact-discovery.md)
 
 [All migration guides](../README.md)

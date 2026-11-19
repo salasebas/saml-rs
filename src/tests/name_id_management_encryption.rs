@@ -24,8 +24,8 @@ use saml_rs::{
     MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem, ReceiveNameIdManagement,
     ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml,
-    SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, X509Credential,
+    SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SoapRequest, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -401,7 +401,7 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
     )?;
     let redirect_xml = redirect_message_xml(&redirect.outbound)?;
     let (encrypted_id, new_encrypted_id) = encrypted_identifier_and_new_value(&redirect_xml)?;
-    let envelope = SoapProtocolMessage::request(
+    let envelope = SoapRequest::try_new(
         EndpointUrl::try_new(IDP_MANAGE_SOAP)?,
         &format!(
             r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_soap" Version="2.0" IssueInstant="2026-01-01T00:00:00Z"><saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>{encrypted_id}{new_encrypted_id}</samlp:ManageNameIDRequest>"#

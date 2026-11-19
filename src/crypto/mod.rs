@@ -1,7 +1,7 @@
-//! XML security backend abstraction.
+//! XML signature and encryption for the typed flows.
 //!
-//! XML-DSig / XML-Enc / C14N live in `bergshamra`; `saml-rs` only orchestrates
-//! through the [`XmlSecurityBackend`] trait.
+//! XML-DSig, XML-Enc, and canonicalization live in `bergshamra`; this module
+//! calls it directly.
 
 mod backend;
 #[cfg(crypto)]
@@ -21,8 +21,10 @@ pub(crate) mod signature_profile;
 #[cfg(crypto)]
 pub mod verify;
 
+#[allow(deprecated)]
 pub use backend::XmlSecurityBackend;
 #[cfg(crypto)]
+#[allow(deprecated)]
 pub use bergshamra::BergshamraBackend;
 #[cfg(crypto)]
 pub use enc::*;
@@ -36,6 +38,7 @@ pub(crate) use sign::SigningCredential;
 #[cfg(crypto)]
 pub use sign::*;
 #[cfg(crypto)]
+#[allow(deprecated)]
 pub use verify::MetadataSignatureVerification;
 #[cfg(crypto)]
 #[allow(deprecated)]

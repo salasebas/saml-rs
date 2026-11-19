@@ -11,16 +11,15 @@ use std::time::{Duration, SystemTime};
 use saml_rs::error::TimeWindowField;
 use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, ArtifactDereference, ArtifactResolutionService, ArtifactUses, AuthnRequest,
-    EndpointUrl, EntityId, FormField, IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, IssuedArtifacts, IssuedMessage, LogoutSubject,
-    ManageNameIdService, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
-    Outbound, PaosClientRequest, PendingLogoutRequest, PendingLogoutRequestSnapshot,
-    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, ReceiveNameIdManagement,
-    ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError,
-    SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo,
-    StartSso, Status,
+    AcsEndpoint, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId, FormField,
+    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    IssuedArtifacts, LogoutSubject, ManageNameIdService, MetadataLifetime, MetadataTrustPolicy,
+    NameId, NameIdChange, NameIdFormat, Outbound, PaosClientRequest, PendingLogoutRequest,
+    PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
+    ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement,
+    RespondSlo, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel,
+    SoapRequest, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement,
+    StartPaosSso, StartSlo, StartSso, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -115,16 +114,16 @@ fn sp_terminate_request() -> Result<String, SamlError> {
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_manage_request" Version="2.0" IssueInstant="2024-01-01T00:00:00Z" Destination="{IDP_NIM_URL}"><saml:Issuer>{SP_ENTITY_ID}</saml:Issuer><saml:NameID Format="{PERSISTENT}" NameQualifier="{IDP_ENTITY_ID}" SPNameQualifier="{SP_ENTITY_ID}">current-value</saml:NameID><samlp:Terminate/></samlp:ManageNameIDRequest>"#
     );
     Ok(
-        SoapProtocolMessage::request(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
+        SoapRequest::try_new(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
             .envelope()
             .to_string(),
     )
 }
 
-fn artifact_message() -> Result<IssuedMessage, SamlError> {
-    IssuedMessage::protocol(format!(
+fn artifact_message() -> String {
+    format!(
         r#"<samlp:LogoutRequest xmlns:samlp="{PROTOCOL}" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#
-    ))
+    )
 }
 
 fn is_valid_until_error<T>(result: &Result<T, SamlError>) -> bool {
@@ -193,6 +192,35 @@ fn receive_sso_compares_valid_until_with_the_context_clock(
 }
 
 #[test]
+fn resolve_artifact_compares_valid_until_with_the_context_clock(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let valid_until = whole_seconds_from_now(3600)?;
+    let idp = idp(Some(MetadataLifetime::ValidUntil(valid_until)))?;
+    let sp = sp(None)?;
+    let descriptor = idp_descriptor(&idp)?;
+    let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
+    let artifact = idp.issue_artifact(
+        &soap_name_id_sp_descriptor(&sp)?,
+        &artifact_message(),
+        0,
+        &mut issued,
+    )?;
+    let channel = SoapChannel::mutually_authenticated_confidential();
+    let context = |now| SamlValidationContext::new(now, ReplayPolicy::Disabled);
+
+    sp.resolve_artifact(
+        &descriptor,
+        &artifact,
+        channel,
+        context(valid_until - Duration::from_secs(1)),
+    )?;
+    let at_valid_until = sp.resolve_artifact(&descriptor, &artifact, channel, context(valid_until));
+
+    assert!(is_valid_until_error(&at_valid_until));
+    Ok(())
+}
+
+#[test]
 fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let expired = Some(MetadataLifetime::ValidUntil(at(Y2001)));
@@ -205,14 +233,9 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
     let channel = SoapChannel::mutually_authenticated_confidential();
     let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
     let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
-    let artifact = idp.issue_artifact(&current_sp, artifact_message()?, 0, &mut issued)?;
+    let artifact = idp.issue_artifact(&current_sp, &artifact_message(), 0, &mut issued)?;
     let resolve_envelope = sp
-        .resolve_artifact(
-            &current_idp,
-            &artifact,
-            ArtifactDereference::web_browser_sso(channel)?,
-            &mut ArtifactUses::enforce_single_use(Duration::from_secs(600)),
-        )?
+        .resolve_artifact(&current_idp, &artifact, channel, now())?
         .request()
         .envelope()
         .to_string();
@@ -225,7 +248,7 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
     let results = [
         (
             "issue_artifact",
-            idp.issue_artifact(&expired_sp, artifact_message()?, 0, &mut issued)
+            idp.issue_artifact(&expired_sp, &artifact_message(), 0, &mut issued)
                 .map(drop),
         ),
         (
@@ -235,13 +258,8 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
         ),
         (
             "resolve_artifact",
-            sp.resolve_artifact(
-                &expired_idp,
-                &artifact,
-                ArtifactDereference::web_browser_sso(channel)?,
-                &mut ArtifactUses::enforce_single_use(Duration::from_secs(600)),
-            )
-            .map(drop),
+            sp.resolve_artifact(&expired_idp, &artifact, channel, now())
+                .map(drop),
         ),
         (
             "start_name_id_management",

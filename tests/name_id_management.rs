@@ -24,8 +24,8 @@ use saml_rs::{
     ManageNameIdService, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
     NameIdChange, NameIdFormat, NameIdManagementRefusal, PartyAuthentication,
     ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy, Saml, SamlError,
-    SamlValidationContext, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, Status, SubordinateStatusCode,
+    SamlValidationContext, SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, Status, SubordinateStatusCode,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -129,7 +129,7 @@ fn sp_request_with(attributes: &str, issuer: &str, content: &str) -> Result<Stri
         r#"<samlp:ManageNameIDRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="{SP_REQUEST_ID}" IssueInstant="2024-01-01T00:00:00Z" {attributes}>{issuer}{content}</samlp:ManageNameIDRequest>"#
     );
     Ok(
-        SoapProtocolMessage::request(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
+        SoapRequest::try_new(EndpointUrl::try_new(IDP_NIM_URL)?, &xml)?
             .envelope()
             .to_string(),
     )
@@ -151,9 +151,11 @@ fn current_name_id_xml() -> String {
 
 /// A `ManageNameIDResponse` from the service provider, in a SOAP envelope.
 fn sp_response(in_response_to: &str, issuer: &str, status: &str) -> Result<String, SamlError> {
-    SoapProtocolMessage::response_envelope(&format!(
+    Ok(SoapResponse::try_new(&format!(
         r#"<samlp:ManageNameIDResponse xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_sp_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z" InResponseTo="{in_response_to}"><saml:Issuer>{issuer}</saml:Issuer><samlp:Status>{status}</samlp:Status></samlp:ManageNameIDResponse>"#
-    ))
+    ))?
+    .envelope()
+    .to_string())
 }
 
 fn success_status() -> String {
@@ -198,7 +200,9 @@ fn idp_initiated_new_id_reaches_the_service_provider_and_completes() -> TestResu
 
     let request = started.request();
     assert_eq!(request.endpoint().as_str(), SP_NIM_URL);
-    assert_eq!(request.content_type(), "text/xml; charset=utf-8");
+    assert!(request.headers().iter().any(
+        |header| header.name() == "Content-Type" && header.value() == "text/xml; charset=utf-8"
+    ));
     let xml = body(request.envelope())?;
     assert!(xml.starts_with("<samlp:ManageNameIDRequest "));
     assert_eq!(attribute(&xml, "Version"), Some("2.0"));
@@ -463,11 +467,16 @@ fn sp_initiated_new_id_is_received_and_answered() -> TestResult {
     assert_eq!(message.change(), &NameIdChange::NewId("sp-alias".into()));
 
     let response = idp.respond_name_id_management(&sp, &request, &Status::success())?;
-    assert_eq!(
-        response.cache_control(),
+    let headers: Vec<(&str, &str)> = response
+        .headers()
+        .iter()
+        .map(|header| (header.name(), header.value()))
+        .collect();
+    assert!(headers.contains(&(
+        "Cache-Control",
         "no-cache, no-store, must-revalidate, private"
-    );
-    assert_eq!(response.pragma(), "no-cache");
+    )));
+    assert!(headers.contains(&("Pragma", "no-cache")));
     let xml = body(response.envelope())?;
     assert!(xml.starts_with("<samlp:ManageNameIDResponse "));
     assert_eq!(attribute(&xml, "InResponseTo"), Some(SP_REQUEST_ID));

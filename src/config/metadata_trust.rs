@@ -154,22 +154,18 @@ fn verify_pinned_metadata_signature(
         .iter()
         .map(|certificate| certificate.as_str().to_string())
         .collect();
-    let verification = crate::crypto::verify::verify_metadata_signature_coverage_with_limits(
-        metadata.metadata_xml(),
-        &trusted_certificates,
-        XmlLimits::default(),
-        algorithms,
-    )?;
-    if verification.verified() {
-        let signed_metadata_xml = verification
-            .into_signed_metadata_xml()
-            .ok_or(SamlError::SignedReferenceMismatch)?;
-        return Ok(AppliedMetadataTrust::SignedByPinnedCertificates {
-            signed_metadata_xml,
-        });
-    }
-    Err(SamlError::SignatureVerification {
-        reason: SignatureVerificationReason::XmlSignature,
+    let signed_metadata_xml =
+        crate::crypto::verify::verify_metadata_signature_coverage_with_limits(
+            metadata.metadata_xml(),
+            &trusted_certificates,
+            XmlLimits::default(),
+            algorithms,
+        )?
+        .ok_or(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature,
+        })?;
+    Ok(AppliedMetadataTrust::SignedByPinnedCertificates {
+        signed_metadata_xml,
     })
 }
 

@@ -9,7 +9,6 @@ use crate::xml::XmlLimits;
 pub(super) const PAOS_VERSION: &str = "urn:liberty:paos:2003-08";
 pub(super) const ECP_PROFILE: &str = "urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp";
 pub(super) const PAOS_MEDIA_TYPE: &str = "application/vnd.paos+xml";
-pub(super) const SOAP_MEDIA_TYPE: &str = "text/xml; charset=utf-8";
 const SOAP_ACTOR_NEXT: &str = "http://schemas.xmlsoap.org/soap/actor/next";
 const SOAP_ENVELOPE_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 const PAOS_NS: &str = "urn:liberty:paos:2003-08";

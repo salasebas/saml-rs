@@ -68,6 +68,11 @@ impl<'a> RememberIdentityProvider<'a> {
 }
 
 /// `_saml_idp` cookie for the caller to write.
+///
+/// [`Self::set_cookie_header`] is the whole `Set-Cookie` value. A caller that
+/// builds the cookie with its own framework writes [`Self::NAME`],
+/// [`Self::value`], [`Self::PATH`], [`Self::domain`], and
+/// [`Self::lifetime`], and marks the cookie `Secure`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use = "the caller writes this cookie on the common domain"]
 pub struct CommonDomainCookie {
@@ -82,11 +87,6 @@ impl CommonDomainCookie {
     /// Cookie path required by the discovery profile.
     pub const PATH: &'static str = "/";
 
-    /// `_saml_idp`.
-    pub fn name(&self) -> &'static str {
-        Self::NAME
-    }
-
     /// URL-encoded list of base64 identity-provider entity identifiers.
     ///
     /// This identity provider is last.
@@ -94,19 +94,9 @@ impl CommonDomainCookie {
         &self.value
     }
 
-    /// `/`.
-    pub fn path(&self) -> &'static str {
-        Self::PATH
-    }
-
     /// Common domain with the required leading period.
     pub fn domain(&self) -> &str {
         &self.domain
-    }
-
-    /// The cookie is marked secure.
-    pub fn secure(&self) -> bool {
-        true
     }
 
     /// Session or persistent lifetime the caller asked for.

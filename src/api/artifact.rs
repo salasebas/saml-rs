@@ -1,30 +1,36 @@
-use crate::artifact::{self, Artifact, ArtifactDereference, ArtifactResolution, ArtifactUses};
+use crate::artifact::{self, AnsweredArtifact, Artifact, ArtifactResolution, IssuedArtifacts};
 use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
-use crate::model::{AuthnRequest, NameId, Received, SsoResponse};
+use crate::model::{AuthnRequest, NameId, Received, SamlValidationContext, SsoResponse};
 use crate::soap::SoapChannel;
 use std::time::SystemTime;
 
 use super::idp::ResponseTransport;
 use super::raw_mapping::ensure_entity_id;
 use super::{Idp, RespondSso, Saml, SamlError, Sp};
-use crate::artifact::{AnsweredArtifact, IssuedArtifacts, IssuedMessage};
 
 impl Saml<Idp> {
-    /// Store `message` for `service_provider` and return the artifact that refers to it.
+    /// Store the SAML protocol element `protocol_xml` for `service_provider`
+    /// and return the artifact that refers to it.
     ///
     /// `endpoint_index` selects this identity provider's SOAP
     /// `ArtifactResolutionService`. The caller keeps `issued` and passes it to
-    /// [`Self::answer_artifact_resolve`].
+    /// [`Self::answer_artifact_resolve`], which releases a `<Response>` only
+    /// over a confidential channel and any other element over a mutually
+    /// authenticated, integrity-protected one. Answer an `AuthnRequest` with
+    /// [`Self::respond_sso_artifact`] instead, which builds the `<Response>`.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when metadata has no SOAP `ArtifactResolutionService`
-    /// at `endpoint_index`, or when the artifact value is already outstanding.
+    /// Returns [`SamlError::Xml`] when `protocol_xml` is not one well-formed
+    /// element, [`SamlError::ProtocolProfile`] when that element is outside the
+    /// SAML protocol namespace, and another [`SamlError`] when metadata has no
+    /// SOAP `ArtifactResolutionService` at `endpoint_index` or the artifact
+    /// value is already outstanding.
     pub fn issue_artifact(
         &self,
         service_provider: &SpDescriptor,
-        message: IssuedMessage,
+        protocol_xml: &str,
         endpoint_index: u16,
         issued: &mut IssuedArtifacts,
     ) -> Result<Artifact, SamlError> {
@@ -32,7 +38,7 @@ impl Saml<Idp> {
         artifact::issue(
             &self.raw_identity_provider().metadata,
             service_provider,
-            message,
+            protocol_xml,
             endpoint_index,
             issued,
         )
@@ -43,10 +49,9 @@ impl Saml<Idp> {
     /// The `<Response>` is stored in `issued` for `sp`, and the returned
     /// browser action carries its artifact and RelayState to the assertion
     /// consumer. Send that action with
-    /// [`ArtifactDelivery::CACHE_CONTROL`](crate::ArtifactDelivery::CACHE_CONTROL)
-    /// and [`ArtifactDelivery::PRAGMA`](crate::ArtifactDelivery::PRAGMA). Pass
-    /// `issued` to [`Self::answer_artifact_resolve`] when the service provider
-    /// resolves the artifact.
+    /// [`Outbound::headers`](crate::Outbound::headers). Pass `issued` to
+    /// [`Self::answer_artifact_resolve`] when the service provider resolves
+    /// the artifact.
     ///
     /// A [`RespondSso::status`] other than success is stored and delivered
     /// the same way.
@@ -142,13 +147,13 @@ impl Saml<Idp> {
     /// resolution does not read those presets.
     ///
     /// ```
-    /// use std::time::Duration;
+    /// use std::time::{Duration, SystemTime};
     ///
     /// use saml_rs::{
-    ///     ArtifactDereference, ArtifactResolutionService, ArtifactUses, EndpointUrl,
-    ///     EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, IssuedArtifacts,
-    ///     IssuedMessage, MetadataTrustPolicy, Saml, SoapChannel, SpConfig,
-    ///     SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    ///     ArtifactResolutionService, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
+    ///     IdpValidationPolicy, InMemoryReplayCache, IssuedArtifacts, MetadataTrustPolicy,
+    ///     ReplayPolicy, Saml, SamlValidationContext, SoapChannel, SpConfig, SpDescriptor,
+    ///     SpValidationPolicy, SsoEndpoint,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
@@ -177,17 +182,17 @@ impl Saml<Idp> {
     ///     idp.metadata_xml(),
     ///     MetadataTrustPolicy::AllowUnsigned,
     /// )?;
-    /// let message = IssuedMessage::web_browser_sso_response(
-    ///     r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">artifact-message</samlp:Response>"#,
-    /// )?;
+    /// let message = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">artifact-message</samlp:LogoutRequest>"#;
     /// let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
     /// let artifact = idp.issue_artifact(&sp_descriptor, message, 0, &mut issued)?;
     /// let channel = SoapChannel::mutually_authenticated_confidential();
+    /// let mut replay = InMemoryReplayCache::new();
     /// let resolution = sp.resolve_artifact(
     ///     &idp_descriptor,
     ///     &artifact,
-    ///     ArtifactDereference::web_browser_sso(channel)?,
-    ///     &mut ArtifactUses::enforce_single_use(Duration::from_secs(10 * 60)),
+    ///     channel,
+    ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut replay))
+    ///         .with_replay_retention(Duration::from_secs(10 * 60)),
     /// )?;
     /// let answer = idp.answer_artifact_resolve(
     ///     &sp_descriptor,
@@ -195,7 +200,7 @@ impl Saml<Idp> {
     ///     &mut issued,
     ///     channel,
     /// )?;
-    /// let resolved = resolution.finish(answer.envelope())?;
+    /// let resolved = resolution.finish(answer.response().envelope())?;
     /// assert!(resolved.xml().contains("artifact-message"));
     /// # Ok(()) }
     /// ```
@@ -226,22 +231,43 @@ impl Saml<Sp> {
     /// provider metadata. Post [`ArtifactResolution::request`] with the
     /// deployment's HTTP client, then [`ArtifactResolution::finish`] with the
     /// SOAP response. TLS and HTTP authentication stay with that client;
-    /// `dereference` records the protection it provided.
+    /// `channel` records the protection it provides, which must be mutual
+    /// authentication, integrity protection, and confidentiality.
+    ///
+    /// The artifact is single-use. With [`ReplayPolicy::RequireCache`](crate::ReplayPolicy::RequireCache),
+    /// a successful call stores [`ReplayKey::Artifact`](crate::ReplayKey::Artifact)
+    /// until `validation` time plus
+    /// [`SamlValidationContext::with_replay_retention`], which is then
+    /// required. Choose a retention longer than the identity provider keeps
+    /// the artifact. A later call with the same artifact fails, even when
+    /// this resolution did not complete. [`ReplayPolicy::Disabled`](crate::ReplayPolicy::Disabled)
+    /// skips the check; the identity provider still returns the message only
+    /// once.
+    ///
+    /// The artifact is stored before the identity provider confirms it, so a
+    /// forged `SAMLart` value also takes an entry. Give a cache with an entry
+    /// limit room for every artifact received during the retention, or pass a
+    /// separate cache here so a flood of artifacts cannot fill the cache that
+    /// [`Self::finish_sso`] uses.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the artifact was not issued by `identity_provider`,
-    /// metadata has no SOAP resolution service at the artifact's index, the
-    /// channel lacks the protection `dereference` requires, or `uses` rejects
-    /// a repeated artifact.
+    /// Returns [`SamlError::SoapChannelProtection`] when `channel` lacks one
+    /// of the three properties, [`SamlError::ReplayDetected`] for an artifact
+    /// already stored, [`SamlError::ReplayCacheUnavailable`] when the cache
+    /// cannot store it, for example because it is full,
+    /// [`SamlError::TimeWindowInvalid`] when a replay cache is passed without
+    /// a retention, and another [`SamlError`] when the artifact
+    /// was not issued by `identity_provider` or metadata has no SOAP
+    /// resolution service at the artifact's index.
     pub fn resolve_artifact(
         &self,
         identity_provider: &IdpDescriptor,
         artifact: &Artifact,
-        dereference: ArtifactDereference,
-        uses: &mut ArtifactUses,
+        channel: SoapChannel,
+        mut validation: SamlValidationContext<'_>,
     ) -> Result<ArtifactResolution, SamlError> {
-        identity_provider.ensure_valid_at(SystemTime::now())?;
+        identity_provider.ensure_valid_at(validation.now())?;
         let entity_id = self
             .raw_service_provider()
             .metadata
@@ -252,8 +278,8 @@ impl Saml<Sp> {
             entity_id,
             identity_provider,
             artifact,
-            dereference,
-            uses,
+            channel,
+            &mut validation,
             self.raw_service_provider().setting.xml_limits,
             self.raw_service_provider().setting.schema_validator,
         )

@@ -63,8 +63,7 @@ impl ClockSkew {
 /// Key of a single-use SAML value: a message ID, an assertion ID, or an
 /// artifact.
 ///
-/// [`ReplayCache`] receives message and assertion IDs. A service provider's
-/// [`crate::ArtifactUses`] records artifacts itself.
+/// [`ReplayCache`] receives each of them.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ReplayKey {

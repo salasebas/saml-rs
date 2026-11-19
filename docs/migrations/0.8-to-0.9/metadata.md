@@ -79,8 +79,10 @@ let xml = generate_sp_metadata(&SpMetadataInput {
 deprecated. Those functions return `Ok(false)`, or an unverified
 `MetadataSignatureVerification`, when the metadata is unsigned or its
 signature does not verify. They also accept MD5, RIPEMD-160, and RSA keys
-shorter than 2048 bits where the crypto provider verifies them. A call that only applies `?` to the result accepts
-unsigned metadata:
+shorter than 2048 bits where the crypto provider verifies them.
+`MetadataSignatureVerification` is deprecated with them. Its `verified()`
+returns `true` exactly when `signed_metadata_xml()` returns `Some`. A call
+that only applies `?` to the result accepts unsigned metadata:
 
 ```rust
 use saml_rs::crypto::verify_metadata_signature;

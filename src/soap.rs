@@ -7,6 +7,7 @@ use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
 
 use crate::error::{xml_err, SamlError};
+use crate::http_header::{HttpHeader, CACHE_CONTROL, PRAGMA};
 use crate::model::EndpointUrl;
 use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::fragment::standalone_element;
@@ -14,11 +15,21 @@ use crate::xml::write::XmlWriter;
 use crate::xml::XmlLimits;
 
 const SOAP_NAMESPACE: &str = "http://schemas.xmlsoap.org/soap/envelope/";
-const SOAP_ACTION: &str = "http://www.oasis-open.org/committees/security";
-const REQUEST_CACHE_CONTROL: &str = "no-cache, no-store";
-const RESPONSE_CACHE_CONTROL: &str = "no-cache, no-store, must-revalidate, private";
-const PRAGMA: &str = "no-cache";
-const CONTENT_TYPE: &str = "text/xml; charset=utf-8";
+const CONTENT_TYPE: HttpHeader = HttpHeader::new("Content-Type", "text/xml; charset=utf-8");
+pub(crate) const RESPONSE_CACHE_CONTROL: HttpHeader = HttpHeader::new(
+    "Cache-Control",
+    "no-cache, no-store, must-revalidate, private",
+);
+const REQUEST_HEADERS: &[HttpHeader] = &[
+    CONTENT_TYPE,
+    HttpHeader::new(
+        "SOAPAction",
+        "http://www.oasis-open.org/committees/security",
+    ),
+    CACHE_CONTROL,
+    PRAGMA,
+];
+pub(crate) const RESPONSE_HEADERS: &[HttpHeader] = &[CONTENT_TYPE, RESPONSE_CACHE_CONTROL, PRAGMA];
 
 /// Whether the deployment authenticated both SOAP parties.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +131,18 @@ pub struct SoapRequest {
 }
 
 impl SoapRequest {
+    /// Wrap one SAML protocol element in a SOAP 1.1 request to `endpoint`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] when `protocol_xml` is not a single element.
+    pub fn try_new(endpoint: EndpointUrl, protocol_xml: &str) -> Result<Self, SamlError> {
+        Ok(Self {
+            endpoint,
+            envelope: envelope(&single_element(protocol_xml)?),
+        })
+    }
+
     /// URL the deployment POSTs this envelope to.
     pub fn endpoint(&self) -> &EndpointUrl {
         &self.endpoint
@@ -130,40 +153,31 @@ impl SoapRequest {
         &self.envelope
     }
 
-    /// `SOAPAction` value a requester may send.
-    pub fn soap_action(&self) -> &'static str {
-        SOAP_ACTION
-    }
-
-    /// `Cache-Control` value a requester should send.
-    pub fn cache_control(&self) -> &'static str {
-        REQUEST_CACHE_CONTROL
-    }
-
-    /// `Pragma` value a requester should send.
-    pub fn pragma(&self) -> &'static str {
-        PRAGMA
-    }
-
-    /// `Content-Type` for SOAP 1.1.
-    pub fn content_type(&self) -> &'static str {
-        CONTENT_TYPE
+    /// HTTP headers to send with the POST: `Content-Type`, `SOAPAction`,
+    /// `Cache-Control`, and `Pragma`.
+    pub fn headers(&self) -> &[HttpHeader] {
+        REQUEST_HEADERS
     }
 }
 
 /// SOAP 1.1 response carrying one SAML protocol element.
 ///
 /// The deployment returns [`Self::envelope`] as the HTTP 200 body of the SOAP
-/// request it answers.
+/// request it answers, with [`Self::headers`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoapResponse {
     envelope: String,
 }
 
 impl SoapResponse {
-    pub(crate) fn new(protocol_xml: &str) -> Result<Self, SamlError> {
+    /// Wrap one SAML protocol element in a SOAP 1.1 response.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError`] when `protocol_xml` is not a single element.
+    pub fn try_new(protocol_xml: &str) -> Result<Self, SamlError> {
         Ok(Self {
-            envelope: SoapProtocolMessage::response_envelope(protocol_xml)?,
+            envelope: envelope(&single_element(protocol_xml)?),
         })
     }
 
@@ -172,23 +186,14 @@ impl SoapResponse {
         &self.envelope
     }
 
-    /// `Cache-Control` value a responder should send.
-    pub fn cache_control(&self) -> &'static str {
-        RESPONSE_CACHE_CONTROL
-    }
-
-    /// `Pragma` value a responder should send.
-    pub fn pragma(&self) -> &'static str {
-        PRAGMA
-    }
-
-    /// `Content-Type` for SOAP 1.1.
-    pub fn content_type(&self) -> &'static str {
-        CONTENT_TYPE
+    /// HTTP headers to send with the envelope: `Content-Type`,
+    /// `Cache-Control`, and `Pragma`.
+    pub fn headers(&self) -> &[HttpHeader] {
+        RESPONSE_HEADERS
     }
 }
 
-/// One SAML protocol element read from, or placed in, a SOAP 1.1 body.
+/// One SAML protocol element read from a SOAP 1.1 body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoapProtocolMessage {
     local_name: String,
@@ -197,28 +202,6 @@ pub struct SoapProtocolMessage {
 }
 
 impl SoapProtocolMessage {
-    /// Wrap one SAML protocol element in a SOAP 1.1 request.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when `protocol_xml` is not a single element.
-    pub fn request(endpoint: EndpointUrl, protocol_xml: &str) -> Result<SoapRequest, SamlError> {
-        let element = single_element(protocol_xml)?;
-        Ok(SoapRequest {
-            endpoint,
-            envelope: envelope(&element)?,
-        })
-    }
-
-    /// Wrap one SAML protocol element in a SOAP 1.1 response envelope.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when `protocol_xml` is not a single element.
-    pub fn response_envelope(protocol_xml: &str) -> Result<String, SamlError> {
-        envelope(&single_element(protocol_xml)?)
-    }
-
     /// Read the single element in a SOAP 1.1 body.
     ///
     /// # Errors
@@ -249,21 +232,6 @@ impl SoapProtocolMessage {
     pub fn xml(&self) -> &str {
         &self.xml
     }
-}
-
-/// `Cache-Control` value a SOAP responder should send.
-pub fn response_cache_control() -> &'static str {
-    RESPONSE_CACHE_CONTROL
-}
-
-/// `Pragma` value a SOAP responder should send.
-pub fn response_pragma() -> &'static str {
-    PRAGMA
-}
-
-/// `Content-Type` for a SOAP 1.1 response.
-pub fn response_content_type() -> &'static str {
-    CONTENT_TYPE
 }
 
 pub(crate) struct SoapBody {
@@ -351,14 +319,14 @@ pub(crate) fn envelope_parts(envelope: &Node) -> Result<EnvelopeParts<'_>, SamlE
     }
 }
 
-fn envelope(element_xml: &str) -> Result<String, SamlError> {
+fn envelope(element_xml: &str) -> String {
     let mut writer = XmlWriter::new();
     writer.start("soap:Envelope", &[("xmlns:soap", SOAP_NAMESPACE)]);
     writer.start("soap:Body", &[]);
     writer.raw(element_xml);
     writer.end("soap:Body");
     writer.end("soap:Envelope");
-    Ok(writer.finish())
+    writer.finish()
 }
 
 fn single_element(xml: &str) -> Result<String, SamlError> {
@@ -554,16 +522,12 @@ mod tests {
     fn soap_channel_round_trips_another_protocol_element() -> Result<(), SamlError> {
         let logout = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#;
         let endpoint = EndpointUrl::try_new("https://idp.example.com/artifact")?;
-        let request = SoapProtocolMessage::request(endpoint, logout)?;
+        let request = SoapRequest::try_new(endpoint, logout)?;
         let message = SoapProtocolMessage::from_envelope(request.envelope())?;
 
         assert_eq!(message.local_name(), "LogoutRequest");
         assert_eq!(message.namespace(), "urn:oasis:names:tc:SAML:2.0:protocol");
         assert!(message.xml().contains("ID=\"_logout\""));
-        assert_eq!(
-            request.soap_action(),
-            "http://www.oasis-open.org/committees/security"
-        );
         Ok(())
     }
 

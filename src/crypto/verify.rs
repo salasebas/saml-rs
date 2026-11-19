@@ -800,39 +800,26 @@ pub(crate) fn verify_signatures_detailed_with_profile(
 }
 
 /// Detailed metadata signature verification result.
+#[deprecated(
+    note = "only the deprecated `crypto::verify_metadata_signature_detailed` functions return it, and it is removed with them in the next minor release. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and read `signed_metadata_xml()`"
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataSignatureVerification {
-    verified: bool,
     signed_metadata_xml: Option<String>,
 }
 
+#[allow(deprecated)]
 impl MetadataSignatureVerification {
-    pub(crate) fn from_signed_metadata(signed_metadata_xml: String) -> Self {
-        Self {
-            verified: true,
-            signed_metadata_xml: Some(signed_metadata_xml),
-        }
-    }
-
-    pub(crate) fn unverified() -> Self {
-        Self {
-            verified: false,
-            signed_metadata_xml: None,
-        }
-    }
-
-    /// Whether a metadata signature verified against the pinned certificates.
+    /// Whether a metadata signature verified against the pinned
+    /// certificates, which is when [`Self::signed_metadata_xml`] returns
+    /// `Some`.
     pub fn verified(&self) -> bool {
-        self.verified
+        self.signed_metadata_xml.is_some()
     }
 
     /// Signed `<EntityDescriptor>` or `<EntitiesDescriptor>` when verification succeeds.
     pub fn signed_metadata_xml(&self) -> Option<&str> {
         self.signed_metadata_xml.as_deref()
-    }
-
-    pub(crate) fn into_signed_metadata_xml(self) -> Option<String> {
-        self.signed_metadata_xml
     }
 }
 
@@ -853,7 +840,7 @@ pub fn verify_metadata_signature(
 ) -> Result<bool, SamlError> {
     Ok(
         verify_metadata_document_signature(xml, trusted_certificates, XmlLimits::default())?
-            .verified(),
+            .is_some(),
     )
 }
 
@@ -871,7 +858,7 @@ pub fn verify_metadata_signature_with_limits(
     trusted_certificates: &[String],
     limits: XmlLimits,
 ) -> Result<bool, SamlError> {
-    Ok(verify_metadata_document_signature(xml, trusted_certificates, limits)?.verified())
+    Ok(verify_metadata_document_signature(xml, trusted_certificates, limits)?.is_some())
 }
 
 /// Verify a metadata XML-DSig signature and preserve signed descriptor coverage
@@ -882,6 +869,7 @@ pub fn verify_metadata_signature_with_limits(
 /// Returns [`SamlError`] when XML parsing, certificate loading, cryptographic
 /// verification, transform policy, or signed `<EntityDescriptor>` coverage
 /// checks fail.
+#[allow(deprecated)]
 #[deprecated(
     note = "`saml_rs::crypto` becomes crate-private in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
 )]
@@ -889,7 +877,13 @@ pub fn verify_metadata_signature_detailed(
     xml: &str,
     trusted_certificates: &[String],
 ) -> Result<MetadataSignatureVerification, SamlError> {
-    verify_metadata_document_signature(xml, trusted_certificates, XmlLimits::default())
+    Ok(MetadataSignatureVerification {
+        signed_metadata_xml: verify_metadata_document_signature(
+            xml,
+            trusted_certificates,
+            XmlLimits::default(),
+        )?,
+    })
 }
 
 /// Verify a metadata XML-DSig signature and preserve signed descriptor coverage.
@@ -899,6 +893,7 @@ pub fn verify_metadata_signature_detailed(
 /// Returns [`SamlError`] when XML parsing, certificate loading, cryptographic
 /// verification, transform policy, or signed `<EntityDescriptor>` coverage
 /// checks fail.
+#[allow(deprecated)]
 #[deprecated(
     note = "`saml_rs::crypto` becomes crate-private in the next minor release; it reports metadata that is unsigned or does not verify as `Ok`. Import metadata with `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`, which return an error instead"
 )]
@@ -907,19 +902,21 @@ pub fn verify_metadata_signature_detailed_with_limits(
     trusted_certificates: &[String],
     limits: XmlLimits,
 ) -> Result<MetadataSignatureVerification, SamlError> {
-    verify_metadata_document_signature(xml, trusted_certificates, limits)
+    Ok(MetadataSignatureVerification {
+        signed_metadata_xml: verify_metadata_document_signature(xml, trusted_certificates, limits)?,
+    })
 }
 
-/// Verify a metadata XML-DSig signature that keeps the signed descriptor,
-/// under the provider-supported algorithm set.
+/// The signed metadata of `xml`, under the provider-supported algorithm set,
+/// when a signature that keeps the signed descriptor verifies.
 ///
-/// An unsigned document, or a signature that does not verify, returns an
-/// unverified result rather than an error.
+/// An unsigned document, or a signature that does not verify, returns `None`
+/// rather than an error.
 pub(crate) fn verify_metadata_document_signature(
     xml: &str,
     trusted_certificates: &[String],
     limits: XmlLimits,
-) -> Result<MetadataSignatureVerification, SamlError> {
+) -> Result<Option<String>, SamlError> {
     let doc = dom::parse_document(xml, limits)?;
     ensure_metadata_signature_transforms_preserve_descriptor(&doc.root)?;
     verify_metadata_signature_coverage_with_limits(
@@ -930,8 +927,9 @@ pub(crate) fn verify_metadata_document_signature(
     )
 }
 
-/// Verify metadata signature cryptography and signed-root coverage under
-/// `profile`.
+/// The signed metadata of `xml` when its signature verifies under `profile`
+/// and covers the metadata root, or `None` when it is unsigned or the
+/// signature does not verify.
 ///
 /// The caller has already enforced the metadata signature shape.
 ///
@@ -945,11 +943,11 @@ pub(crate) fn verify_metadata_signature_coverage_with_limits(
     trusted_certificates: &[String],
     limits: XmlLimits,
     profile: XmlSignatureProfile,
-) -> Result<MetadataSignatureVerification, SamlError> {
+) -> Result<Option<String>, SamlError> {
     let (verified, signed_metadata_xml) =
         verify_first_signature_with_profile(xml, trusted_certificates, limits, profile)?;
     if !verified {
-        return Ok(MetadataSignatureVerification::unverified());
+        return Ok(None);
     }
     let signed_metadata_xml = signed_metadata_xml.ok_or_else(verified_content_not_covered)?;
     let descriptor = dom::parse_document(xml, limits)?;
@@ -959,9 +957,7 @@ pub(crate) fn verify_metadata_signature_coverage_with_limits(
     ) {
         return Err(verified_content_not_covered());
     }
-    Ok(MetadataSignatureVerification::from_signed_metadata(
-        signed_metadata_xml,
-    ))
+    Ok(Some(signed_metadata_xml))
 }
 
 #[cfg(test)]

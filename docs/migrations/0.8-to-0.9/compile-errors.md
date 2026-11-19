@@ -56,6 +56,14 @@
 | `NameIdPolicy` constructors or `allow_create()`, `AuthnSession::new`, `SubjectConfirmation::from_raw_xml`, or `SsoResponse` accessors | Removed; read them from the received message | [Received values](sso-results-and-identities.md#stop-building-values-that-only-a-received-message-carries) |
 | `RequestedAuthnContext::new` | Renamed to `try_new` | [RequestedAuthnContext](sso-results-and-identities.md#call-requestedauthncontexttry_new) |
 | `SignatureVerificationReason::DetachedMessageSignature` | Renamed to `BindingSignature` | [BindingSignature](errors.md#match-bindingsignature) |
+| `soap_action()`, `cache_control()`, `pragma()`, or `content_type()` on `SoapRequest` or `SoapResponse` | Removed; send every header from `headers()` | [SOAP headers](soap-artifact-discovery.md#send-the-soap-headers-from-headers) |
+| `ArtifactDelivery::CACHE_CONTROL` or `ArtifactDelivery::PRAGMA` | Removed; send `Outbound::headers()` | [Browser headers](soap-artifact-discovery.md#send-the-browser-headers-from-outboundheaders) |
+| `SoapProtocolMessage::request` or `SoapProtocolMessage::response_envelope` | Removed; use `SoapRequest::try_new` or `SoapResponse::try_new` | [SOAP envelopes](soap-artifact-discovery.md#build-soap-envelopes-with-soaprequesttry_new-and-soapresponsetry_new) |
+| `AnsweredArtifact::envelope()` or a header method on `AnsweredArtifact` | Removed; read `response()` | [Artifact response](soap-artifact-discovery.md#read-the-artifact-response-from-answeredartifactresponse) |
+| `IssuedMessage`, or `issue_artifact` with an `IssuedMessage` | Removed; pass the protocol XML | [Issue an artifact](soap-artifact-discovery.md#pass-the-protocol-xml-to-issue_artifact) |
+| `ArtifactDereference`, `ArtifactUses`, or `resolve_artifact(idp, artifact, dereference, uses)` | Removed; pass the `SoapChannel` and a `SamlValidationContext` | [Resolve an artifact](soap-artifact-discovery.md#resolve-an-artifact-with-a-channel-and-a-validation-context) |
+| `Artifact::try_from_encoded` | Renamed to `try_new` | [Artifact](soap-artifact-discovery.md#call-artifacttry_new) |
+| `CommonDomainCookie::name`, `path`, or `secure` | Removed; use `NAME` and `PATH`, and mark the cookie `Secure` | [Discovery cookie](soap-artifact-discovery.md#write-the-discovery-cookie-name-and-path-from-the-constants) |
 | `SamlError::StatusNotSuccess { top, second }`, `ReplayDetected { key }` as a string, `UndefinedBinding`, `UndefinedStatus`, `Xml(message)`, `Crypto(message)`, `Base64(error)`, `Deflate(error)`, or `?` from a `base64::DecodeError` or `std::io::Error` into `SamlError` | Typed payloads, new variants, and no third-party `From` | [Typed errors](errors.md) |
 
 ## 1.1 Pass the expected entity ID to `from_metadata_xml`
