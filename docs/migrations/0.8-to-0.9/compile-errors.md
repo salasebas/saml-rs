@@ -310,8 +310,9 @@ let relaxed = base.validation(SpValidationPolicy::compatibility()).build()?;
 
 **Affects:** callers that read a field of a built config.
 
-Former fields are borrowing getters. Names stay the same except that each
-list uses a plural name:
+Former fields are borrowing getters. A getter keeps the field's name, except
+that each list getter takes the plural of the builder setter that appends one
+item, such as `acs_endpoints()` for `acs_endpoint`:
 
 | Before | After |
 | --- | --- |
