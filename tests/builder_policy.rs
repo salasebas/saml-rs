@@ -4,133 +4,18 @@
 use std::{str::FromStr, time::Duration};
 
 use saml_rs::{
-    AcsEndpoint, AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,
-    AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
-    DigestAlgorithm, EndpointUrl, EntityId, IdpConfig, IdpMetadataElement, IdpValidationPolicy,
-    KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService,
-    MaskGenerationFunction, NameIdCreationPolicy, NameIdFormat, PrivateKeyPem,
-    ResponseSignaturePolicy, Saml, SamlError, SignatureAlgorithm, SignatureConfig, SloEndpoint,
-    SpConfig, SpMetadataElement, SpValidationPolicy, SsoEndpoint, TemplatePolicy,
-    TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
+    AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
+    AudienceValidationPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, IdpConfig,
+    IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy,
+    MaskGenerationFunction, NameIdCreationPolicy, PrivateKeyPem, ResponseSignaturePolicy,
+    SamlError, SignatureAlgorithm, SignatureConfig, SpConfig, SpValidationPolicy, SsoEndpoint,
+    TemplatePolicy, TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 
 use saml_rs::raw::EntitySetting;
 #[cfg(crypto)]
 use saml_rs::XmlEncryptionPolicy;
-
-#[test]
-fn builders_reject_a_repeated_metadata_element_group() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = SpConfig::builder(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        AcsEndpoint::post("https://sp.example.com/acs")?,
-    )
-    .validation(SpValidationPolicy::compatibility())
-    .elements_order([
-        SpMetadataElement::KeyDescriptor,
-        SpMetadataElement::KeyDescriptor,
-    ])
-    .build();
-    let idp = IdpConfig::builder(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        SsoEndpoint::post("https://idp.example.com/sso")?,
-    )
-    .validation(IdpValidationPolicy::compatibility())
-    .elements_order([
-        IdpMetadataElement::KeyDescriptor,
-        IdpMetadataElement::KeyDescriptor,
-    ])
-    .build();
-    assert!(matches!(sp, Err(SamlError::Invalid(_))), "{sp:?}");
-    assert!(matches!(idp, Err(SamlError::Invalid(_))), "{idp:?}");
-    Ok(())
-}
-
-#[test]
-fn builders_write_metadata_element_groups_in_the_order_set(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = SpConfig::builder(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        AcsEndpoint::post("https://sp.example.com/acs")?,
-    )
-    .slo_endpoint(SloEndpoint::redirect("https://sp.example.com/slo")?)
-    .manage_name_id_redirect_service(EndpointUrl::try_new("https://sp.example.com/nameid")?)
-    .name_id_format(NameIdFormat::Persistent)
-    .credentials(signing_credentials())
-    .validation(SpValidationPolicy::compatibility())
-    .elements_order([
-        SpMetadataElement::AssertionConsumerService,
-        SpMetadataElement::NameIdFormat,
-        SpMetadataElement::ManageNameIdService,
-        SpMetadataElement::SingleLogoutService,
-        SpMetadataElement::KeyDescriptor,
-    ])
-    .build()?;
-    let idp = IdpConfig::builder(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        SsoEndpoint::post("https://idp.example.com/sso")?,
-    )
-    .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
-    .artifact_resolution_service(ArtifactResolutionService::new(
-        0,
-        EndpointUrl::try_new("https://idp.example.com/artifact")?,
-    ))
-    .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
-        "https://idp.example.com/nameid",
-    )?))
-    .name_id_format(NameIdFormat::Persistent)
-    .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::compatibility())
-    .elements_order([
-        IdpMetadataElement::SingleSignOnService,
-        IdpMetadataElement::NameIdFormat,
-        IdpMetadataElement::ManageNameIdService,
-        IdpMetadataElement::SingleLogoutService,
-        IdpMetadataElement::ArtifactResolutionService,
-        IdpMetadataElement::KeyDescriptor,
-    ])
-    .build()?;
-
-    assert_eq!(
-        role_children(Saml::sp(sp).metadata_xml(), "SPSSODescriptor")?,
-        [
-            "AssertionConsumerService",
-            "NameIDFormat",
-            "ManageNameIDService",
-            "SingleLogoutService",
-            "KeyDescriptor",
-        ]
-    );
-    assert_eq!(
-        role_children(Saml::idp(idp).metadata_xml(), "IDPSSODescriptor")?,
-        [
-            "SingleSignOnService",
-            "NameIDFormat",
-            "ManageNameIDService",
-            "SingleLogoutService",
-            "ArtifactResolutionService",
-            "KeyDescriptor",
-        ]
-    );
-    Ok(())
-}
-
-/// Element names of the role descriptor children, with repeats collapsed.
-fn role_children(metadata: &str, role: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let document = roxmltree::Document::parse(metadata)?;
-    let role = document
-        .descendants()
-        .find(|node| node.has_tag_name(role))
-        .ok_or("missing role descriptor")?;
-    let mut names: Vec<String> = Vec::new();
-    for child in role.children().filter(roxmltree::Node::is_element) {
-        let name = child.tag_name().name();
-        if names.last().map(String::as_str) != Some(name) {
-            names.push(name.to_string());
-        }
-    }
-    Ok(names)
-}
 
 #[test]
 fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
@@ -405,7 +290,6 @@ fn custom_algorithm_variants_keep_simple_names() {
 #[cfg(crypto)]
 #[test]
 fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
-    let elements_order = vec![SpMetadataElement::AssertionConsumerService];
     let algorithms = AlgorithmPolicy {
         signature: SignatureAlgorithm::RsaSha512,
         data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
@@ -427,16 +311,11 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
     .credentials(signing_credentials())
-    .elements_order(elements_order.clone())
     .algorithms(algorithms.clone())
     .xml(xml)
     .templates(templates.clone())
     .build()?;
 
-    assert_eq!(
-        config.metadata().elements_order(),
-        Some(elements_order.as_slice())
-    );
     assert_eq!(config.algorithms(), &algorithms);
     assert_eq!(config.xml(), &xml);
     assert_eq!(
@@ -449,7 +328,6 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(crypto)]
 #[test]
 fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
-    let elements_order = vec![IdpMetadataElement::SingleSignOnService];
     let algorithms = AlgorithmPolicy {
         signature: SignatureAlgorithm::RsaSha384,
         data_encryption: DataEncryptionAlgorithm::Aes256Cbc,
@@ -470,16 +348,11 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
-    .elements_order(elements_order.clone())
     .algorithms(algorithms.clone())
     .xml(xml)
     .templates(templates.clone())
     .build()?;
 
-    assert_eq!(
-        config.metadata().elements_order(),
-        Some(elements_order.as_slice())
-    );
     assert_eq!(config.algorithms(), &algorithms);
     assert_eq!(config.xml(), &xml);
     assert_eq!(

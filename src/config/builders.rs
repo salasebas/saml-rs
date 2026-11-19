@@ -15,7 +15,6 @@ use super::credentials::Credentials;
 use super::descriptors::{
     ArtifactResolutionService, EntityId, IdpMetadataConfig, ManageNameIdService, SpMetadataConfig,
 };
-use super::metadata_element::{IdpMetadataElement, SpMetadataElement};
 use super::policies::{
     AlgorithmPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy, SpValidationPolicy,
     TemplatePolicy, XmlPolicy,
@@ -192,17 +191,6 @@ impl SpConfigBuilder {
         self
     }
 
-    /// Set the order of the `<SPSSODescriptor>` element groups in generated
-    /// metadata.
-    ///
-    /// A group left out goes before the first listed group that follows it in
-    /// the schema sequence, or last. Listed groups keep their relative order.
-    /// [`Self::build`] rejects a repeated group with [`SamlError::Invalid`].
-    pub fn elements_order(mut self, order: impl IntoIterator<Item = SpMetadataElement>) -> Self {
-        self.metadata.elements_order = Some(order.into_iter().collect());
-        self
-    }
-
     /// Set the entity-level organization.
     pub fn organization(mut self, organization: crate::metadata::Organization) -> Self {
         self.metadata.organization = Some(organization);
@@ -283,8 +271,8 @@ impl SpConfigBuilder {
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
     /// - generating SP metadata fails: a NameID format that is not an absolute
     ///   URI reference, two ACS endpoints with the same index, more ACS
-    ///   endpoints than `unsignedShort` indexes, a repeated element ordering
-    ///   group, or a `validUntil` outside the years 0001 through 9999.
+    ///   endpoints than `unsignedShort` indexes, or a `validUntil` outside the
+    ///   years 0001 through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
         let service_provider = self.service_provider()?;
         validate_sp_policy(&self)?;
@@ -492,17 +480,6 @@ impl IdpConfigBuilder {
         self
     }
 
-    /// Set the order of the `<IDPSSODescriptor>` element groups in generated
-    /// metadata.
-    ///
-    /// A group left out goes before the first listed group that follows it in
-    /// the schema sequence, or last. Listed groups keep their relative order.
-    /// [`Self::build`] rejects a repeated group with [`SamlError::Invalid`].
-    pub fn elements_order(mut self, order: impl IntoIterator<Item = IdpMetadataElement>) -> Self {
-        self.metadata.elements_order = Some(order.into_iter().collect());
-        self
-    }
-
     /// Set the entity-level organization.
     pub fn organization(mut self, organization: crate::metadata::Organization) -> Self {
         self.metadata.organization = Some(organization);
@@ -594,8 +571,8 @@ impl IdpConfigBuilder {
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
     /// - generating IdP metadata fails: a NameID format that is not an
-    ///   absolute URI reference, a repeated element ordering group, or a
-    ///   `validUntil` outside the years 0001 through 9999.
+    ///   absolute URI reference, or a `validUntil` outside the years 0001
+    ///   through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         self.metadata.ensure_unique_artifact_resolution_indexes()?;
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;

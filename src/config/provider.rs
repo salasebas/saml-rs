@@ -55,12 +55,7 @@ fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
             .iter()
             .map(ManageNameIdService::to_raw)
             .collect(),
-        elements_order: metadata.elements_order().map(|order| {
-            order
-                .iter()
-                .map(|element| element.element_name().to_string())
-                .collect()
-        }),
+        elements_order: None,
         lifetime: metadata.lifetime(),
         organization: metadata.organization().cloned(),
         contacts: metadata.contacts().to_vec(),
@@ -95,12 +90,7 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
             .iter()
             .map(ManageNameIdService::to_raw)
             .collect(),
-        elements_order: metadata.elements_order().map(|order| {
-            order
-                .iter()
-                .map(|element| element.element_name().to_string())
-                .collect()
-        }),
+        elements_order: None,
         lifetime: metadata.lifetime(),
         organization: metadata.organization().cloned(),
         contacts: metadata.contacts().to_vec(),

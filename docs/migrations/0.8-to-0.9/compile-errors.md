@@ -30,7 +30,7 @@
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | Returns the facade, not a `Result` | [Typed config](config.md#remove-the--after-samlsp-and-samlidp) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
-| `elements_order(Vec<String>)` on a typed builder | Takes `SpMetadataElement` or `IdpMetadataElement` values | [Typed config](config.md#name-metadata-element-groups-with-spmetadataelement-and-idpmetadataelement) |
+| `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
 | `TemplatePolicy::relay_state` or `tag_prefix_encrypted_assertion` | Removed | [Typed config](config.md#send-relaystate-per-request) |
@@ -286,8 +286,10 @@ first SSO endpoint. Each other metadata field has a builder setter:
 `acs_endpoint`, `sso_endpoint`, `slo_endpoint`, `artifact_resolution_service`,
 `manage_name_id_service` (`manage_name_id_redirect_service` on the SP),
 `name_id_format`, and `contact` append one entry each, in call order. `acs_endpoints`, `sso_endpoints`, `slo_endpoints`,
-`name_id_formats`, and `contacts` append several. `elements_order`,
-`organization`, `error_url`, and `metadata_lifetime` set the rest.
+`name_id_formats`, and `contacts` append several. `organization`,
+`error_url`, and `metadata_lifetime` set the rest. `elements_order` is
+removed, as [Typed config](config.md#remove-elements_order-from-typed-builders)
+describes.
 Policy fields have the setters `credentials`, `validation`, `algorithms`,
 `xml`, `templates`, and, on the identity provider, `issuance_lifetime`.
 
@@ -321,7 +323,7 @@ list uses a plural name:
 | `config.metadata.manage_name_id_service` | `config.metadata().manage_name_id_services()` |
 | `config.metadata.artifact_resolution_service` | `config.metadata().artifact_resolution_services()` |
 | `config.metadata.name_id_format` | `config.metadata().name_id_formats()` |
-| `config.metadata.elements_order` | `config.metadata().elements_order()`, an `Option<&[SpMetadataElement]>` or `Option<&[IdpMetadataElement]>` |
+| `config.metadata.elements_order` | Removed. See [Typed config](config.md#remove-elements_order-from-typed-builders) |
 | `config.issuance_lifetime` | `config.issuance_lifetime()` |
 
 The same borrowing pattern applies to `credentials`, `algorithms`, `xml`, and

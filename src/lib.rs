@@ -442,14 +442,14 @@ pub use config::{
     AssertionSignaturePolicy, AttributeEncryptionPolicy, AudienceValidationPolicy,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, Credentials,
     DataEncryptionAlgorithm, DigestAlgorithm, EntityId, HmacSecret, IdentifierEncryptionPolicy,
-    IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig, IdpMetadataElement,
-    IdpValidationPolicy, KeyEncryptionAlgorithm, LoginResponseAttribute, LoginResponseTemplate,
-    LogoutPolicy, LogoutSignaturePolicy, ManageNameIdService, MaskGenerationFunction,
-    MetadataTrustPolicy, NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
-    ResponseSignaturePolicy, Rsa15KeyTransportPolicy, SignatureAction, SignatureAlgorithm,
-    SignatureConfig, SpConfig, SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpMetadataElement,
-    SpValidationPolicy, TemplatePolicy, TransformAlgorithm, X509Credential, XmlEncryptionPolicy,
-    XmlLimits, XmlPolicy, XmlSignatureProfile,
+    IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpMetadataConfig, IdpValidationPolicy,
+    KeyEncryptionAlgorithm, LoginResponseAttribute, LoginResponseTemplate, LogoutPolicy,
+    LogoutSignaturePolicy, ManageNameIdService, MaskGenerationFunction, MetadataTrustPolicy,
+    NameIdCreationPolicy, NameIdFormat, Passphrase, PrivateKeyPem, ResponseSignaturePolicy,
+    Rsa15KeyTransportPolicy, SignatureAction, SignatureAlgorithm, SignatureConfig, SpConfig,
+    SpConfigBuilder, SpDescriptor, SpMetadataConfig, SpValidationPolicy, TemplatePolicy,
+    TransformAlgorithm, X509Credential, XmlEncryptionPolicy, XmlLimits, XmlPolicy,
+    XmlSignatureProfile,
 };
 #[cfg(crypto)]
 pub use crypto::{

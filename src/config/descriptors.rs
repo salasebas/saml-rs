@@ -90,7 +90,6 @@ impl ManageNameIdService {
 
 use super::algorithms::NameIdFormat;
 use super::credentials::HmacSecret;
-use super::metadata_element::{IdpMetadataElement, SpMetadataElement};
 use super::metadata_trust::{
     ensure_expected_entity_id, ensure_metadata_trust, metadata_entity_id, AppliedMetadataTrust,
     MetadataTrustPolicy,
@@ -173,7 +172,6 @@ pub struct SpMetadataConfig {
     pub(super) slo_endpoints: Vec<SloEndpoint>,
     pub(super) acs_endpoints: Vec<AcsEndpoint>,
     pub(super) manage_name_id_services: Vec<ManageNameIdService>,
-    pub(super) elements_order: Option<Vec<SpMetadataElement>>,
     pub(super) lifetime: Option<MetadataLifetime>,
     pub(super) organization: Option<crate::metadata::Organization>,
     pub(super) contacts: Vec<crate::metadata::ContactPerson>,
@@ -187,7 +185,6 @@ impl SpMetadataConfig {
             slo_endpoints: Vec::new(),
             acs_endpoints: vec![acs],
             manage_name_id_services: Vec::new(),
-            elements_order: None,
             lifetime: None,
             organization: None,
             contacts: Vec::new(),
@@ -213,12 +210,6 @@ impl SpMetadataConfig {
     /// HTTP-Redirect `ManageNameIDService` endpoints.
     pub fn manage_name_id_services(&self) -> &[ManageNameIdService] {
         &self.manage_name_id_services
-    }
-
-    /// Element group order of generated metadata. `None` writes the schema
-    /// sequence.
-    pub fn elements_order(&self) -> Option<&[SpMetadataElement]> {
-        self.elements_order.as_deref()
     }
 
     /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
@@ -254,7 +245,6 @@ pub struct IdpMetadataConfig {
     pub(super) slo_endpoints: Vec<SloEndpoint>,
     pub(super) artifact_resolution_services: Vec<ArtifactResolutionService>,
     pub(super) manage_name_id_services: Vec<ManageNameIdService>,
-    pub(super) elements_order: Option<Vec<IdpMetadataElement>>,
     pub(super) lifetime: Option<MetadataLifetime>,
     pub(super) organization: Option<crate::metadata::Organization>,
     pub(super) contacts: Vec<crate::metadata::ContactPerson>,
@@ -269,7 +259,6 @@ impl IdpMetadataConfig {
             slo_endpoints: Vec::new(),
             artifact_resolution_services: Vec::new(),
             manage_name_id_services: Vec::new(),
-            elements_order: None,
             lifetime: None,
             organization: None,
             contacts: Vec::new(),
@@ -313,12 +302,6 @@ impl IdpMetadataConfig {
     /// SOAP and HTTP-Redirect `ManageNameIDService` endpoints.
     pub fn manage_name_id_services(&self) -> &[ManageNameIdService] {
         &self.manage_name_id_services
-    }
-
-    /// Element group order of generated metadata. `None` writes the schema
-    /// sequence.
-    pub fn elements_order(&self) -> Option<&[IdpMetadataElement]> {
-        self.elements_order.as_deref()
     }
 
     /// `validUntil` and `cacheDuration` on generated metadata. `None` writes

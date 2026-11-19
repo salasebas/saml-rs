@@ -102,35 +102,31 @@ let builder = builder.manage_name_id_redirect_service(EndpointUrl::try_new(
 )?);
 ```
 
-## Name metadata element groups with `SpMetadataElement` and `IdpMetadataElement`
+## Remove `elements_order` from typed builders
 
-**Affects:** callers that pass `elements_order` to `SpConfigBuilder` or
-`IdpConfigBuilder`, or read it back.
+**Affects:** callers of `SpConfigBuilder::elements_order` or
+`IdpConfigBuilder::elements_order`, or readers of
+`config.metadata.elements_order`.
 
-**Before:** `elements_order` took a `Vec<String>`. Generation ignored an
+**Before:** `elements_order` took a `Vec<String>` of element group names and
+wrote the children of the role descriptor in that order. Generation ignored an
 unknown name and wrote a repeated group again, as
 [section 8](metadata.md#8-update-metadata-element-orders) describes.
 
-**Now:** `SpConfigBuilder::elements_order` takes an iterator of
-`SpMetadataElement`, and `IdpConfigBuilder::elements_order` takes an iterator
-of `IdpMetadataElement`. An unknown group no longer compiles. `build()` now
-returns `SamlError::Invalid` for a repeated group. The getters return
-`Option<&[SpMetadataElement]>` and `Option<&[IdpMetadataElement]>`. The raw
-generator input keeps its `Vec<String>`.
+**Now:** the typed builders have no `elements_order`, and the typed metadata
+config has no getter for it. Typed metadata always lists `KeyDescriptor`,
+`ArtifactResolutionService`, `SingleLogoutService`, `ManageNameIDService`,
+`NameIDFormat`, then `SingleSignOnService` or `AssertionConsumerService`. The
+metadata schema declares these children as an `xs:sequence` (Metadata
+§§2.4.1 to 2.4.4). Any other order of the groups a config fills produces
+metadata the schema rejects, and an order that keeps the sequence changes
+nothing. The raw `SpMetadataInput` and `IdpMetadataInput` keep their
+`elements_order`.
 
-| Group name | Variant |
-| --- | --- |
-| `KeyDescriptor` | `KeyDescriptor` |
-| `ArtifactResolutionService` | `IdpMetadataElement::ArtifactResolutionService` |
-| `SingleLogoutService` | `SingleLogoutService` |
-| `ManageNameIDService` | `ManageNameIdService` |
-| `NameIDFormat` | `NameIdFormat` |
-| `SingleSignOnService` | `IdpMetadataElement::SingleSignOnService` |
-| `AssertionConsumerService` | `SpMetadataElement::AssertionConsumerService` |
-| `AttributeConsumingService` | None. The group wrote nothing. Delete it |
-
-**Upgrade:** replace each name with its variant. For example, the OneLogin
-SP order becomes:
+**Upgrade:** delete the call. A peer that validates metadata against the
+schema accepts the new order. With the OneLogin order, which put
+`NameIDFormat` before `SingleLogoutService`, the metadata now lists
+`SingleLogoutService` first:
 
 ```rust
 // Before
@@ -138,13 +134,7 @@ let builder = builder.elements_order(
     elements_order::ONELOGIN.iter().map(|name| name.to_string()).collect(),
 );
 
-// Now
-let builder = builder.elements_order([
-    SpMetadataElement::KeyDescriptor,
-    SpMetadataElement::NameIdFormat,
-    SpMetadataElement::SingleLogoutService,
-    SpMetadataElement::AssertionConsumerService,
-]);
+// Now: no call. Generation writes the schema sequence.
 ```
 
 ## Read config fields and fill credentials

@@ -127,8 +127,10 @@ The import checks more than the deprecated `crypto` functions:
 
 ## 8. Update metadata element orders
 
-**Affects:** callers that set `elements_order` on either typed builder or raw
-metadata generation config, including through the compatibility crates.
+**Affects:** callers that set `elements_order` on raw metadata generation
+config, including through the compatibility crates. The typed builders no
+longer take an order; see
+[Remove `elements_order` from typed builders](config.md#remove-elements_order-from-typed-builders).
 
 ### 8.1 Remove unknown and duplicate group names
 
@@ -136,17 +138,14 @@ metadata generation config, including through the compatibility crates.
 groups again.
 
 **Now:** raw generation returns `SamlError::Invalid` when an order contains an
-unknown name or repeats a group. The typed builders take
-`SpMetadataElement` and `IdpMetadataElement` values, so an unknown name does
-not compile, and `build()` returns `SamlError::Invalid` for a repeated group.
-See [Name metadata element groups](config.md#name-metadata-element-groups-with-spmetadataelement-and-idpmetadataelement).
+unknown name or repeats a group.
 
 **Upgrade:** correct spelling and use each group name once. Raw SP orders
 accept `KeyDescriptor`, `SingleLogoutService`, `ManageNameIDService`,
 `NameIDFormat`, and `AssertionConsumerService`. The raw
 `AttributeConsumingService` slot remains accepted for the existing Shibboleth
 profile, but writes nothing because the generator has no configuration for
-it. `SpMetadataElement` has no variant for it.
+it.
 
 Raw IdP orders accept `KeyDescriptor`, `ArtifactResolutionService`,
 `SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`, and
