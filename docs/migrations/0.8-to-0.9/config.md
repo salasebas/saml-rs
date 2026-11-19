@@ -268,22 +268,27 @@ as the old field did. The raw `EntitySetting` keeps its field.
 The namespace is the same, so a peer that reads namespaces reads the same
 element.
 
-## Fix a signature prefix that `build()` now rejects
+## Use one rule for generated XML prefixes
 
-**Affects:** callers that set `TemplatePolicy::signature_config`.
+**Affects:** callers that set `TemplatePolicy::tag_prefix_protocol`,
+`tag_prefix_assertion`, or `signature_config`, or the same fields of a raw
+`EntitySetting`.
 
-**Before:** `build()` accepted any `SignatureConfig::prefix`. A prefix that is
-not an XML NCName, such as `ds:sig`, failed when the first embedded XML
-signature was written. A detached HTTP-Redirect signature does not use the
-prefix. Signing and encryption accepted only ASCII prefixes, while templates
-accepted every NCName other than `xml` and `xmlns`.
+**Before:** three checks disagreed. Templates rejected a tag prefix that was
+not an XML NCName or was exactly `xml` or `xmlns`. Signing and encryption
+accepted only ASCII letters, digits, `_`, `-`, and `.`, and rejected `xml` and
+`xmlns` in any case. `build()` did not check `SignatureConfig::prefix`, so a
+prefix such as `ds:sig` failed when the first embedded XML signature was
+written. A detached HTTP-Redirect signature does not use the prefix.
 
-**Now:** `build()` returns `SamlError::Invalid` with
-`SignatureConfig.prefix XML prefix must be an XML NCName` for such a prefix.
-Every generated prefix follows one rule: an NCName other than `xml` and
-`xmlns`. Signing and encryption now accept a non-ASCII NCName, and their
-messages say `must be an XML NCName` in place of `contains an invalid
-character`.
+**Now:** every generated prefix must be an XML NCName that does not begin with
+`xml` in any case. Namespaces in XML 1.0 §3 reserves those prefixes and says
+documents should not use them. `build()` applies the rule to both tag prefixes
+and to `SignatureConfig::prefix`, and returns `SamlError::Invalid`, for
+example `SignatureConfig.prefix XML prefix must be an XML NCName`. Signing and
+encryption now accept a non-ASCII NCName, and their messages say `must be an
+XML NCName` in place of `contains an invalid character`. A prefix such as
+`xmlsig`, `xml2`, or `XML` is now rejected everywhere.
 
-**Upgrade:** use an NCName, such as `ds`, and update a check that compares
-the old message.
+**Upgrade:** choose an NCName that does not begin with `xml`, such as `ds` or
+`saml2`, and update a check that compares the old message.

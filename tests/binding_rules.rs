@@ -221,7 +221,10 @@ fn typed_sso_request_without_relay_state_sends_and_records_none(
 
     let post = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let form = post.outbound.post_form()?;
-    assert!(form.fields().iter().all(|field| field.name() != "RelayState"));
+    assert!(form
+        .fields()
+        .iter()
+        .all(|field| field.name() != "RelayState"));
     assert_eq!(post.pending.relay_state(), None);
     Ok(())
 }

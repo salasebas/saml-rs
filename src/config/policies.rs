@@ -708,15 +708,17 @@ impl Default for AlgorithmPolicy {
 /// Template and XML tag-prefix customization.
 #[derive(Debug, Clone)]
 pub struct TemplatePolicy {
-    /// IdP protocol tag prefix for generated messages.
+    /// Protocol tag prefix of the messages this entity generates.
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
-    /// IdP assertion tag prefix for generated messages, including a generated
-    /// `<EncryptedAssertion>`.
+    /// Assertion tag prefix of the messages this entity generates, including
+    /// a generated `<EncryptedAssertion>`.
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
     /// IdP login response template and attributes.
@@ -758,6 +760,9 @@ pub struct TemplatePolicy {
     /// `{InResponseTo}` placeholder is omitted.
     pub logout_response_template: Option<String>,
     /// Embedded-signature placement and prefix.
+    ///
+    /// The prefix must be an XML NCName that does not begin with `xml` in
+    /// any case.
     pub signature_config: Option<SignatureConfig>,
 }
 

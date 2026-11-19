@@ -116,12 +116,14 @@ pub struct EntitySetting {
     pub schema_validator: Option<crate::SchemaValidator>,
     /// IdP: protocol tag prefix for generated IdP messages (default `samlp`).
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
     /// IdP: assertion tag prefix for generated IdP messages (default `saml`).
     ///
-    /// Must be an XML NCName other than `xml` and `xmlns`, and must differ
+    /// Must be an XML NCName that does not begin with `xml` in any case, and
+    /// must differ
     /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
     /// IdP: tag prefix for the `<EncryptedAssertion>` element (default `saml`).
@@ -284,6 +286,8 @@ pub enum SignatureAction {
 #[derive(Debug, Clone)]
 pub struct SignatureConfig {
     /// Element prefix for the signature (default `ds`).
+    ///
+    /// Must be an XML NCName that does not begin with `xml` in any case.
     pub prefix: String,
     /// `local-name()` XPath of the reference element; `None` keeps the default
     /// (after the signed target's `<Issuer>`).

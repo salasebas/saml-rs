@@ -276,10 +276,11 @@ impl SpConfigBuilder {
     /// error URI are invalid, an additional decryption credential has no
     /// primary one, the selected policy needs a credential that is not set,
     /// the algorithm policy is not supported, the selected policy requires
-    /// crypto in a build without a crypto provider, or the protocol and
-    /// assertion tag prefixes are not two different XML NCNames other than
-    /// `xml` and `xmlns`. Also returns the errors of generating SP metadata
-    /// from the config: a NameID format that is not an absolute URI
+    /// crypto in a build without a crypto provider, the protocol and
+    /// assertion tag prefixes are not two different XML NCNames, or a tag
+    /// prefix or the `SignatureConfig` prefix is not an XML NCName or begins
+    /// with `xml` in any case. Also returns the errors of generating SP
+    /// metadata from the config: a NameID format that is not an absolute URI
     /// reference, two ACS endpoints with the same index, more ACS endpoints
     /// than `unsignedShort` indexes, a repeated element ordering group, or a
     /// `validUntil` outside the years 0001 through 9999.
@@ -585,9 +586,10 @@ impl IdpConfigBuilder {
     /// contacts, or error URI are invalid, an additional decryption credential
     /// has no primary one, the issuance lifetime is zero or outside the internal
     /// supported range, the algorithm policy is not supported, the selected
-    /// policy requires crypto in a build without a crypto provider, or the
-    /// protocol and assertion tag prefixes are not two different XML NCNames
-    /// other than `xml` and `xmlns`. Also returns the errors of generating
+    /// policy requires crypto in a build without a crypto provider, the
+    /// protocol and assertion tag prefixes are not two different XML NCNames,
+    /// or a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
+    /// begins with `xml` in any case. Also returns the errors of generating
     /// IdP metadata from the config: a NameID format that is not an absolute
     /// URI reference, a repeated element ordering group, or a `validUntil`
     /// outside the years 0001 through 9999.

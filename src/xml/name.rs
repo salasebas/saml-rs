@@ -44,13 +44,18 @@ pub(crate) fn is_ncname(value: &str) -> bool {
 }
 
 /// Check that `prefix` can be declared for a generated element: an NCName
-/// other than `xml` and `xmlns`, which Namespaces in XML 1.0 §3 reserves.
-/// `label` names the prefix in the error.
+/// that does not begin with `xml` in any case. Namespaces in XML 1.0 §3
+/// reserves those prefixes, and documents should not declare them. `label`
+/// names the prefix in the error.
 pub(crate) fn validate_namespace_prefix(label: &str, prefix: &str) -> Result<(), SamlError> {
     if prefix.is_empty() {
         return Err(SamlError::Invalid(format!("{label} cannot be empty")));
     }
-    if matches!(prefix, "xml" | "xmlns") {
+    if prefix
+        .as_bytes()
+        .get(..3)
+        .is_some_and(|start| start.eq_ignore_ascii_case(b"xml"))
+    {
         return Err(SamlError::Invalid(format!(
             "{label} `{prefix}` is reserved"
         )));
@@ -73,7 +78,23 @@ pub(crate) fn is_name(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_name, is_ncname};
+    use super::{is_name, is_ncname, validate_namespace_prefix};
+
+    #[test]
+    fn namespace_prefix_rejects_every_prefix_that_begins_with_xml_in_any_case() {
+        for prefix in ["xml", "xmlns", "XML", "Xmlns", "xMl2", "xmlsig"] {
+            assert!(
+                validate_namespace_prefix("prefix", prefix).is_err(),
+                "{prefix}"
+            );
+        }
+        for prefix in ["x", "xm", "xm1", "axml", "ds", "\u{e9}"] {
+            assert!(
+                validate_namespace_prefix("prefix", prefix).is_ok(),
+                "{prefix}"
+            );
+        }
+    }
 
     #[test]
     fn name_allows_a_colon_and_ncname_does_not() {
