@@ -2097,7 +2097,7 @@ fn typed_session_authority_slo_signatures_cover_expiration_for_every_binding(
         let expected_reason = match binding {
             LogoutBinding::Post | LogoutBinding::Soap => SignatureVerificationReason::XmlSignature,
             LogoutBinding::Redirect | LogoutBinding::SimpleSign => {
-                SignatureVerificationReason::DetachedMessageSignature
+                SignatureVerificationReason::BindingSignature
             }
         };
 

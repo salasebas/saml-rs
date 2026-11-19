@@ -273,7 +273,7 @@ fn assert_failed_message_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match result {
         Err(SamlError::SignatureVerification {
-            reason: SignatureVerificationReason::DetachedMessageSignature,
+            reason: SignatureVerificationReason::BindingSignature,
             ..
         }) => Ok(()),
         other => {

@@ -1088,7 +1088,7 @@ mod tests {
                         "<samlp:AuthnRequest/>",
                     ),
                     Err(SamlError::SignatureVerification {
-                        reason: SignatureVerificationReason::DetachedMessageSignature,
+                        reason: SignatureVerificationReason::BindingSignature,
                     })
                 ),
                 "unloadable leftover must not replace detached-invalid with Crypto"

@@ -244,7 +244,7 @@ fn shibboleth_idp5_redirect_logout_request_is_authenticated_and_parsed_by_sp(
     assert!(matches!(
         result,
         Err(SamlError::SignatureVerification {
-            reason: SignatureVerificationReason::DetachedMessageSignature,
+            reason: SignatureVerificationReason::BindingSignature,
             ..
         })
     ));
@@ -318,7 +318,7 @@ fn simplesamlphp_sp_redirect_logout_request_is_consumed_by_idp(
     assert!(matches!(
         result,
         Err(SamlError::SignatureVerification {
-            reason: SignatureVerificationReason::DetachedMessageSignature,
+            reason: SignatureVerificationReason::BindingSignature,
             ..
         })
     ));

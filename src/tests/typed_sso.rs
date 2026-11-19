@@ -2293,10 +2293,7 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
 
     match finish(tampered) {
         Err(SamlError::SignatureVerification { reason }) => {
-            assert_eq!(
-                reason,
-                SignatureVerificationReason::DetachedMessageSignature
-            );
+            assert_eq!(reason, SignatureVerificationReason::BindingSignature);
         }
         other => return Err(format!("expected SignatureVerification, got {other:?}").into()),
     }

@@ -69,7 +69,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
                     matches!(
                         result,
                         Err(SamlError::SignatureVerification {
-                            reason: SignatureVerificationReason::DetachedMessageSignature,
+                            reason: SignatureVerificationReason::BindingSignature,
                         })
                     ),
                     "{sender:?}: {result:?}"
@@ -101,7 +101,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
                     matches!(
                         result,
                         Err(SamlError::SignatureVerification {
-                            reason: SignatureVerificationReason::DetachedMessageSignature,
+                            reason: SignatureVerificationReason::BindingSignature,
                         })
                     ),
                     "{sender:?}: {result:?}"

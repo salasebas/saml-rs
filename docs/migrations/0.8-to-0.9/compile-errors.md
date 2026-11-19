@@ -201,7 +201,7 @@ never ran:
 | `FailedStatus` | `StatusNotSuccess` |
 | `ExpiredSession` | `TimeWindowInvalid` |
 | `SubjectUnconfirmed` | `SubjectConfirmationInvalid` |
-| `FailedMessageSignatureVerification` | `SignatureVerification` with `SignatureVerificationReason::DetachedMessageSignature` |
+| `FailedMessageSignatureVerification` | `SignatureVerification` with `SignatureVerificationReason::BindingSignature` |
 | `UnmatchCertificate` | `SignatureVerification` with `SignatureVerificationReason::XmlSignature` |
 | `CertificateMismatch` | `SignatureVerification` with `SignatureVerificationReason::XmlSignature` |
 

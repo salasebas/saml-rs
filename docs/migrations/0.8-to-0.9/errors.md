@@ -19,6 +19,7 @@ gone.
 | `Base64(error)`, `Deflate(error)`, or `?` on a `base64::DecodeError` or `std::io::Error` | Opaque sources, no `From` | [Convert the errors yourself](#convert-base64-and-io-errors-yourself) |
 | A pattern that lists every field of a `SamlError` variant, or code that builds a variant such as `SamlError::IssuerMismatch { .. }` | Variants with fields are non-exhaustive | [End field patterns with `..`](#end-field-patterns-with-) |
 | `saml_rs::error::SignatureVerificationReason` and the other reason enums | Also exported at the crate root | [Import the reason enums](#import-the-reason-enums-from-the-crate-root) |
+| `SignatureVerificationReason::DetachedMessageSignature` | Renamed `BindingSignature` | [Match `BindingSignature`](#match-bindingsignature) |
 
 ## Read the status from `StatusNotSuccess`
 
@@ -231,6 +232,29 @@ fn redirect_location(outbound: &Outbound<AuthnRequest>) -> Result<&str, String> 
 		}) => Err("this request is an HTTP-POST form; render post_form() instead".into()),
 		Err(error) => Err(error.to_string()),
 	}
+}
+```
+
+## Match `BindingSignature`
+
+`SignatureVerificationReason::DetachedMessageSignature` is renamed
+`BindingSignature`. It still means that the `Signature` parameter of an
+HTTP-Redirect or HTTP-POST-SimpleSign message failed verification. The new
+name matches `SsoSession::binding_signature_algorithm_uri()`. XML-DSig uses
+"detached" for a kind of XML signature, which this one is not. The `Display`
+text is `binding signature`.
+
+```rust
+use saml_rs::{SamlError, SignatureVerificationReason};
+
+fn binding_signature_failed(error: &SamlError) -> bool {
+	matches!(
+		error,
+		SamlError::SignatureVerification {
+			reason: SignatureVerificationReason::BindingSignature,
+			..
+		}
+	)
 }
 ```
 
