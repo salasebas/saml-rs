@@ -49,8 +49,9 @@ impl Saml<Idp> {
     /// The `<Response>` is stored in `issued` for `sp`, and the returned
     /// browser action carries its artifact and RelayState to the assertion
     /// consumer. Send that action with
-    /// [`Outbound::headers`](crate::Outbound::headers). Pass `issued` to [`Self::answer_artifact_resolve`] when the service provider
-    /// resolves the artifact.
+    /// [`Outbound::headers`](crate::Outbound::headers). Pass `issued` to
+    /// [`Self::answer_artifact_resolve`] when the service provider resolves
+    /// the artifact.
     ///
     /// A [`RespondSso::status`] other than success is stored and delivered
     /// the same way.

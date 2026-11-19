@@ -4,7 +4,8 @@
 
 This guide covers callers of `saml-rs`, `opensaml`, `samlify`, and `samlet`
 that send SAML messages over SOAP or through the browser, resolve or answer
-artifacts, or write the `_saml_idp` cookie. Apply the sections that match your integration.
+artifacts, or write the `_saml_idp` cookie. Apply the sections that match your
+integration.
 
 ## Send the SOAP headers from `headers()`
 
