@@ -15,7 +15,7 @@ use saml_rs::{
     AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
     MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
     SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoSession, StartSso, Subject,
+    SsoSession, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -45,8 +45,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn subject() -> Subject {
-    Subject::new(NameId::new("alice@example.com", None), Vec::new())
+fn principal() -> NameId {
+    NameId::new("alice@example.com")
 }
 
 fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, SamlError> {
@@ -85,7 +85,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
     let (pending, response) = match delivery {
         Delivery::Unsolicited => (
             None,
-            idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?,
+            idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?,
         ),
         Delivery::Solicited => {
             let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
@@ -95,7 +95,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
                 validation(),
             )?;
             let response =
-                idp.respond_sso(&sp_descriptor, &received, subject(), RespondSso::post())?;
+                idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
             (Some(started.pending), response)
         }
     };

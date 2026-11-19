@@ -124,7 +124,7 @@
 //! ```no_run
 //! use saml_rs::{
 //!     FormField, Inbound, NameId, ReplayPolicy, RespondSso, Saml, SamlValidationContext,
-//!     SpDescriptor, Subject,
+//!     SpDescriptor,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -145,7 +145,7 @@
 //! let response = idp.respond_sso(
 //!     sp,
 //!     &request,
-//!     Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+//!     &NameId::new("alice@example.com"),
 //!     RespondSso::post(),
 //! )?;
 //! let form = response.post_form()?;
@@ -465,16 +465,15 @@ pub use error::{
 pub use metadata::MetadataSignatureVerification;
 pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};
 pub use model::{
-    Assertion, AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes,
-    AuthnContext, AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind,
-    AuthnRequest, AuthnSession, ClockSkew, InMemoryReplayCache, LogoutCompleted, LogoutRequest,
-    LogoutResponse, LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy,
-    OutstandingLogout, Received, RelayState, ReplayCache, ReplayKey, ReplayPolicy,
-    RequestAgePolicy, RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier,
-    SamlInstant, SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, Subject,
-    SubjectConfirmation, SubjectLocality, SubordinateStatusCode, TopLevelStatusCode,
-    VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES,
-    MAX_RELAY_STATE_BYTES,
+    AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContext,
+    AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, AuthnRequest,
+    AuthnStatement, ClockSkew, InMemoryReplayCache, LogoutCompleted, LogoutRequest, LogoutResponse,
+    LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy, OutstandingLogout,
+    Received, RelayState, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy,
+    RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,
+    SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, SubjectConfirmation,
+    SubjectLocality, SubordinateStatusCode, TopLevelStatusCode, VerifiedXmlSignature,
+    VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
     ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementRefusal,

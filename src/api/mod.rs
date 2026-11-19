@@ -10,14 +10,14 @@
 //! ```
 //!
 //! ```compile_fail
-//! use saml_rs::{AuthnRequest, Received, RespondSso, Saml, Sp, SpDescriptor, Subject};
+//! use saml_rs::{AuthnRequest, NameId, Received, RespondSso, Saml, Sp, SpDescriptor};
 //!
 //! let sp: Saml<Sp> = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
-//! let subject: Subject = unreachable!();
+//! let name_id: NameId = unreachable!();
 //!
-//! let _ = sp.respond_sso(&peer, &request, subject, RespondSso::post());
+//! let _ = sp.respond_sso(&peer, &request, &name_id, RespondSso::post());
 //! ```
 //!
 //! ```compile_fail
@@ -35,30 +35,30 @@
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     ArtifactDelivery, AuthnRequest, Idp, Received, RespondSso, Saml, SpDescriptor, Subject,
+//!     ArtifactDelivery, AuthnRequest, Idp, NameId, Received, RespondSso, Saml, SpDescriptor,
 //! };
 //!
 //! let idp: Saml<Idp> = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
-//! let subject: Subject = unreachable!();
+//! let name_id: NameId = unreachable!();
 //!
 //! let options = RespondSso::artifact(ArtifactDelivery::redirect(0));
-//! let _ = idp.respond_sso(&peer, &request, subject, options);
+//! let _ = idp.respond_sso(&peer, &request, &name_id, options);
 //! ```
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     AuthnRequest, Idp, IssuedArtifacts, Received, RespondSso, Saml, SpDescriptor, Subject,
+//!     AuthnRequest, Idp, IssuedArtifacts, NameId, Received, RespondSso, Saml, SpDescriptor,
 //! };
 //!
 //! let idp: Saml<Idp> = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
-//! let subject: Subject = unreachable!();
+//! let name_id: NameId = unreachable!();
 //! let mut issued = IssuedArtifacts::expire_after(std::time::Duration::from_secs(60));
 //!
-//! let _ = idp.respond_sso_artifact(&peer, &request, subject, RespondSso::post(), &mut issued);
+//! let _ = idp.respond_sso_artifact(&peer, &request, &name_id, RespondSso::post(), &mut issued);
 //! ```
 //!
 //! ```compile_fail

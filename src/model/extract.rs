@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use super::attributes::{Attribute, AttributeValue, Attributes};
+use super::authn_statement::AuthnStatement;
 use super::endpoint::EndpointUrl;
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
-use super::session::AuthnSession;
 use super::subject::{NameIdPolicy, SubjectConfirmation};
 use crate::config::{EntityId, NameIdFormat};
 use crate::constants::{attribute_name_format, name_id_format};
@@ -150,14 +150,10 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
             }
         }
     }
-    Ok(Attributes::new(
-        attributes
-            .into_iter()
-            .map(|(name, name_format, values)| {
-                Attribute::new(name, name_format.map(str::to_string), values)
-            })
-            .collect(),
-    ))
+    Ok(attributes
+        .into_iter()
+        .map(|(name, name_format, values)| Attribute::received(name, name_format, values))
+        .collect())
 }
 
 pub(super) fn subject_confirmations_from_extract(extract: &Value) -> Vec<SubjectConfirmation> {
@@ -218,11 +214,11 @@ pub(crate) fn authn_statement_not_on_or_after_values(
         .collect()
 }
 
-pub(super) fn authn_sessions_from_extract(
+pub(super) fn authn_statements_from_extract(
     extract: &Value,
     saml_content: &str,
-) -> Result<Vec<AuthnSession>, SamlError> {
-    let sessions: Vec<AuthnSession> = authn_statement_values(extract)?
+) -> Result<Vec<AuthnStatement>, SamlError> {
+    let sessions: Vec<AuthnStatement> = authn_statement_values(extract)?
         .into_iter()
         .map(|statement| {
             let session_index = optional_authn_statement_str(statement, "sessionIndex")?
@@ -234,7 +230,7 @@ pub(super) fn authn_sessions_from_extract(
             let not_on_or_after = optional_authn_statement_str(statement, "sessionNotOnOrAfter")?
                 .map(SamlInstant::try_new)
                 .transpose()?;
-            Ok(AuthnSession::new(
+            Ok(AuthnStatement::new(
                 session_index,
                 authn_instant,
                 not_on_or_after,

@@ -14,7 +14,7 @@ use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId,
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts,
     MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Subject,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -28,8 +28,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn subject() -> Subject {
-    Subject::new(NameId::new("alice@example.com", None), Vec::new())
+fn principal() -> NameId {
+    NameId::new("alice@example.com")
 }
 
 fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -108,7 +108,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         Some(DEFAULT_ACS)
     );
 
-    let unsolicited = idp.initiate_sso(&sp_descriptor, subject(), RespondSso::post())?;
+    let unsolicited = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
     assert_eq!(unsolicited.post_form()?.action().as_str(), DEFAULT_ACS);
 
     let unspecified = idp.receive_sso(
@@ -118,7 +118,12 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     )?;
     assert_eq!(unspecified.message().acs_url(), None);
     assert_eq!(unspecified.message().acs_index(), None);
-    let response = idp.respond_sso(&sp_descriptor, &unspecified, subject(), RespondSso::post())?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &unspecified,
+        &principal(),
+        RespondSso::post(),
+    )?;
     assert_eq!(response.post_form()?.action().as_str(), DEFAULT_ACS);
 
     let cross_binding_sp = Saml::sp(
@@ -146,7 +151,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         idp.respond_sso(
             &cross_binding_descriptor,
             &unspecified,
-            subject(),
+            &principal(),
             RespondSso::post(),
         ),
         Err(SamlError::Invalid(_))
@@ -154,17 +159,17 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     let response = idp.respond_sso(
         &cross_binding_descriptor,
         &unspecified,
-        subject(),
+        &principal(),
         RespondSso::simple_sign(),
     )?;
     assert_eq!(response.post_form()?.action().as_str(), DEFAULT_ACS);
     assert!(matches!(
-        idp.initiate_sso(&cross_binding_descriptor, subject(), RespondSso::post()),
+        idp.initiate_sso(&cross_binding_descriptor, &principal(), RespondSso::post()),
         Err(SamlError::Invalid(_))
     ));
     let unsolicited = idp.initiate_sso(
         &cross_binding_descriptor,
-        subject(),
+        &principal(),
         RespondSso::simple_sign(),
     )?;
     assert_eq!(unsolicited.post_form()?.action().as_str(), DEFAULT_ACS);
@@ -187,13 +192,13 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         idp.respond_sso(
             &unsupported_descriptor,
             &unspecified,
-            subject(),
+            &principal(),
             RespondSso::post(),
         ),
         Err(SamlError::Invalid(_))
     ));
     assert!(matches!(
-        idp.initiate_sso(&unsupported_descriptor, subject(), RespondSso::post()),
+        idp.initiate_sso(&unsupported_descriptor, &principal(), RespondSso::post()),
         Err(SamlError::Invalid(_))
     ));
 
@@ -225,9 +230,10 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         )?;
         assert_eq!(unspecified.message().acs_url(), None);
         assert_eq!(unspecified.message().acs_index(), None);
-        let response = idp.respond_sso(&descriptor, &unspecified, subject(), RespondSso::post())?;
+        let response =
+            idp.respond_sso(&descriptor, &unspecified, &principal(), RespondSso::post())?;
         assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
-        let unsolicited = idp.initiate_sso(&descriptor, subject(), RespondSso::post())?;
+        let unsolicited = idp.initiate_sso(&descriptor, &principal(), RespondSso::post())?;
         assert_eq!(unsolicited.post_form()?.action().as_str(), FIRST_ACS);
     }
     Ok(())
@@ -293,7 +299,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                 } else {
                     RespondSso::simple_sign()
                 };
-                let response = idp.respond_sso(&sp_descriptor, &request, subject(), options)?;
+                let response = idp.respond_sso(&sp_descriptor, &request, &principal(), options)?;
                 assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
                 let raw_response = idp.raw_identity_provider().create_login_response(
                     sp.raw_service_provider(),
@@ -308,7 +314,7 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                 let response = idp.respond_sso_artifact(
                     &sp_descriptor,
                     &request,
-                    subject(),
+                    &principal(),
                     RespondSso::artifact(ArtifactDelivery::redirect(0)),
                     &mut issued,
                 )?;
@@ -345,7 +351,7 @@ fn conflicting_request_acs_selectors_are_not_answered() -> Result<(), Box<dyn st
         let xml =
             authn_request(IDP_SSO_FIRST).replace(" Version=", &format!("{selector} Version="));
         let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
-        match idp.respond_sso(&sp_descriptor, &request, subject(), options) {
+        match idp.respond_sso(&sp_descriptor, &request, &principal(), options) {
             Err(SamlError::Invalid(message)) => assert_eq!(message, expected),
             other => return Err(format!("expected Invalid({expected}), got {other:?}").into()),
         }
@@ -365,7 +371,7 @@ fn a_response_is_not_sent_to_an_unpublished_request_acs() -> Result<(), Box<dyn 
         &format!(" AssertionConsumerServiceURL=\"{unpublished}\" Version="),
     );
     let request = idp.receive_sso(&sp_descriptor, post_authn_request(&xml), validation())?;
-    match idp.respond_sso(&sp_descriptor, &request, subject(), RespondSso::post()) {
+    match idp.respond_sso(&sp_descriptor, &request, &principal(), RespondSso::post()) {
         Err(SamlError::DestinationMismatch {
             expected, actual, ..
         }) => {

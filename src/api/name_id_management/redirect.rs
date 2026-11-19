@@ -257,7 +257,7 @@ impl Saml<Idp> {
     /// with [`Self::respond_name_id_management_redirect`]. After a
     /// [`NameIdChange::NewId`], send that value as the identifier's
     /// `SPProvidedID`: [`Self::respond_sso`] writes it from
-    /// [`NameId::with_qualifiers`]. An `EncryptedID` or `NewEncryptedID` is
+    /// [`NameId::with_sp_provided_id`]. An `EncryptedID` or `NewEncryptedID` is
     /// decrypted with this identity provider's decryption key. A
     /// [`ReceivedNameIdManagement::Refused`] already carries the browser
     /// action that answers the request.

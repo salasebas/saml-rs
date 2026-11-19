@@ -38,7 +38,7 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
     let answered = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondPaosSso::default(),
     )?;
     let envelope = enhanced_client_takes_response(&client, answered.envelope())?;

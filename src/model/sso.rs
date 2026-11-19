@@ -1,12 +1,12 @@
 use super::attributes::Attributes;
+use super::authn_statement::AuthnStatement;
 use super::extract::{
-    attributes_from_extract, authn_sessions_from_extract, conditions_instants,
+    attributes_from_extract, authn_statements_from_extract, conditions_instants,
     entity_ids_from_value, name_id_format_from_uri, optional_request_id, required_str,
     subject_confirmations_from_extract,
 };
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
-use super::session::{AuthnSession, EMPTY_AUTHN_SESSION};
-use super::subject::{NameId, Subject};
+use super::subject::{NameId, SubjectConfirmation};
 use super::validation::system_time_from_offset_datetime;
 use super::{
     earliest_authn_session_expiration, LogoutSubject, RelayState, ReplayKey, ReplayPolicy,
@@ -21,95 +21,13 @@ use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
 
-/// Parsed SSO response envelope.
-#[derive(Debug, Clone)]
-pub struct SsoResponse {
-    response_id: MessageId,
-    issue_instant: SamlInstant,
-    issuer: EntityId,
-    in_response_to: Option<MessageId>,
-    raw_flow: FlowResult,
-}
-
-impl SsoResponse {
-    /// Response ID.
-    pub fn response_id(&self) -> &MessageId {
-        &self.response_id
-    }
-
-    /// Response `IssueInstant`, normalized according to XML Schema whitespace rules.
-    pub fn issue_instant(&self) -> &SamlInstant {
-        &self.issue_instant
-    }
-
-    /// Assertion issuer used by the current validated flow result.
-    pub fn issuer(&self) -> &EntityId {
-        &self.issuer
-    }
-
-    /// InResponseTo, when present.
-    pub fn in_response_to(&self) -> Option<&MessageId> {
-        self.in_response_to.as_ref()
-    }
-
-    /// Raw validated flow result.
-    pub fn raw_flow(&self) -> &FlowResult {
-        &self.raw_flow
-    }
-}
-
-impl TryFrom<FlowResult> for SsoResponse {
-    type Error = SamlError;
-
-    fn try_from(raw_flow: FlowResult) -> Result<Self, Self::Error> {
-        let response_id = MessageId::try_new(required_str(&raw_flow.extract, "response.id")?)?;
-        let issue_instant =
-            issue_instant_from_extract(&raw_flow.extract, "response.issueInstant", "Response")?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
-        let in_response_to = optional_request_id(&raw_flow.extract, "response.inResponseTo")?;
-        Ok(Self {
-            response_id,
-            issue_instant,
-            issuer,
-            in_response_to,
-            raw_flow,
-        })
-    }
-}
-
-/// Assertion view extracted from an SSO session.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Assertion {
-    id: Option<AssertionId>,
-    issuer: EntityId,
-    subject: Subject,
-}
-
-impl Assertion {
-    /// Create an assertion view.
-    pub fn new(id: Option<AssertionId>, issuer: EntityId, subject: Subject) -> Self {
-        Self {
-            id,
-            issuer,
-            subject,
-        }
-    }
-
-    /// Assertion ID, when extracted.
-    pub fn id(&self) -> Option<&AssertionId> {
-        self.id.as_ref()
-    }
-
-    /// Assertion issuer.
-    pub fn issuer(&self) -> &EntityId {
-        &self.issuer
-    }
-
-    /// Assertion subject.
-    pub fn subject(&self) -> &Subject {
-        &self.subject
-    }
-}
+/// The SAML `<Response>` of a Web Browser SSO or ECP login, as a message type.
+///
+/// It names the message in [`crate::Inbound`], [`crate::Outbound`], and
+/// [`crate::PaosHttpResponse`]. It has no values: a service provider receives
+/// the accepted response as an [`SsoSession`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SsoResponse {}
 
 /// Authenticated SAML objects covered by one verified embedded XML signature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -177,9 +95,10 @@ pub struct SsoSession {
     issuer: EntityId,
     in_response_to: Option<MessageId>,
     relay_state: Option<RelayState>,
-    subject: Subject,
+    name_id: NameId,
+    subject_confirmations: Vec<SubjectConfirmation>,
     attributes: Attributes,
-    authn_sessions: Vec<AuthnSession>,
+    authn_statements: Vec<AuthnStatement>,
     audience: Vec<EntityId>,
     not_before: Option<SamlInstant>,
     not_on_or_after: Option<SamlInstant>,
@@ -229,14 +148,15 @@ impl SsoSession {
         self.relay_state.as_ref()
     }
 
-    /// Subject.
-    pub fn subject(&self) -> &Subject {
-        &self.subject
+    /// The `NameID` of the assertion `Subject`.
+    pub fn name_id(&self) -> &NameId {
+        &self.name_id
     }
 
-    /// Subject NameID.
-    pub fn name_id(&self) -> &NameId {
-        self.subject.name_id()
+    /// The `SubjectConfirmation` elements of the assertion `Subject`, in
+    /// document order.
+    pub fn subject_confirmations(&self) -> &[SubjectConfirmation] {
+        &self.subject_confirmations
     }
 
     /// Attributes, one for each `Name` and `NameFormat` pair in document
@@ -249,19 +169,11 @@ impl SsoSession {
         &self.attributes
     }
 
-    /// Legacy singular view of `AuthnStatement` session data.
+    /// The `<AuthnStatement>` elements of the assertion, in document order.
     ///
-    /// This compatibility accessor returns the first statement in document
-    /// order. For assertions containing multiple statements, use
-    /// [`Self::authn_sessions`]. When no statement is present, it returns an
-    /// immutable empty [`AuthnSession`].
-    pub fn authn_session(&self) -> &AuthnSession {
-        self.authn_sessions.first().unwrap_or(&EMPTY_AUTHN_SESSION)
-    }
-
-    /// Every `AuthnStatement` session tuple in XML document order.
-    pub fn authn_sessions(&self) -> &[AuthnSession] {
-        &self.authn_sessions
+    /// The slice is empty when the assertion has no `AuthnStatement`.
+    pub fn authn_statements(&self) -> &[AuthnStatement] {
+        &self.authn_statements
     }
 
     /// Audience restrictions.
@@ -275,6 +187,9 @@ impl SsoSession {
     }
 
     /// Conditions NotOnOrAfter.
+    ///
+    /// The `SessionNotOnOrAfter` of a statement is
+    /// [`AuthnStatement::session_not_on_or_after`].
     pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
         self.not_on_or_after.as_ref()
     }
@@ -298,15 +213,6 @@ impl SsoSession {
     /// the reported algorithm URIs to enforce their own allowlist.
     pub fn verified_xml_signatures(&self) -> &[VerifiedXmlSignature] {
         &self.verified_xml_signatures
-    }
-
-    /// Assertion view.
-    pub fn assertion(&self) -> Assertion {
-        Assertion::new(
-            Some(self.assertion_id.clone()),
-            self.issuer.clone(),
-            self.subject.clone(),
-        )
     }
 
     /// Subject data suitable for issuing Single Logout.
@@ -338,34 +244,17 @@ impl SsoSession {
             return None;
         }
         let session_indexes = self
-            .authn_sessions
+            .authn_statements
             .iter()
-            .filter_map(AuthnSession::session_index)
+            .filter_map(AuthnStatement::session_index)
             .cloned();
         Some(LogoutSubject::new(self.name_id().clone()).with_session_indexes(session_indexes))
     }
 
-    /// Replay keys available from this validated SSO session.
-    pub fn replay_keys(&self) -> Vec<ReplayKey> {
-        let mut keys = vec![ReplayKey::SsoResponse(self.response_id.clone())];
-        let mut ids = crate::assertion_acceptance::assertion_ids(&self.raw_flow.saml_content)
-            .unwrap_or_default();
-        if !ids.iter().any(|id| id == self.assertion_id.as_str()) {
-            ids.insert(0, self.assertion_id.as_str().to_string());
-        }
-        for id in ids {
-            if let Ok(id) = AssertionId::try_new(id) {
-                keys.push(ReplayKey::Assertion(id));
-            }
-        }
-        keys
-    }
-
     /// Check and store this session's replay keys using the caller cache.
     ///
-    /// This method is intended for typed inbound SSO facades. It should be
-    /// called only after signature, issuer, audience, destination, recipient,
-    /// `InResponseTo`, and time validation have already passed.
+    /// Call it only after signature, issuer, audience, destination, recipient,
+    /// `InResponseTo`, and time validation have passed.
     ///
     /// The bearer assertion identifier is kept until the latest bearer
     /// `SubjectConfirmationData@NotOnOrAfter` plus skew. A value that does not
@@ -384,7 +273,7 @@ impl SsoSession {
     /// when any session replay key has already been seen. Cache
     /// implementations may also return storage-specific failures mapped to
     /// [`SamlError`].
-    pub fn check_and_store_replay(
+    pub(crate) fn check_and_store_replay(
         &self,
         validation: &mut SamlValidationContext<'_>,
     ) -> Result<(), SamlError> {
@@ -458,9 +347,9 @@ impl SsoSession {
             candidates.push(parse_replay_expiration(instant.as_str())?);
         }
         if let Some(instant) = earliest_authn_session_expiration(
-            self.authn_sessions
+            self.authn_statements
                 .iter()
-                .filter_map(AuthnSession::not_on_or_after)
+                .filter_map(AuthnStatement::session_not_on_or_after)
                 .map(SamlInstant::as_str),
             REPLAY_EXPIRATION_FIELD,
         )? {
@@ -486,8 +375,7 @@ impl SsoSession {
 
     fn bearer_subject_confirmation_expires_at(&self) -> Result<Option<OffsetDateTime>, SamlError> {
         let confirmations = self
-            .subject
-            .confirmations()
+            .subject_confirmations
             .iter()
             .map(|confirmation| {
                 dom::parse_fragment_with_limits(confirmation.raw_xml(), XmlLimits::default())
@@ -551,20 +439,17 @@ impl SsoSession {
             .get_str("nameIDFormat")
             .map(name_id_format_from_uri);
         let name_id_qualifier = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
-        let name_id = NameId::with_qualifiers(
+        let name_id = NameId::received(
             required_str(&raw_flow.extract, "nameID")?,
             name_id_format,
             name_id_qualifier("nameIDQualifiers.nameQualifier"),
             name_id_qualifier("nameIDQualifiers.spNameQualifier"),
             name_id_qualifier("nameIDQualifiers.spProvidedId"),
         );
-        let subject = Subject::new(
-            name_id,
-            subject_confirmations_from_extract(&raw_flow.extract),
-        );
+        let subject_confirmations = subject_confirmations_from_extract(&raw_flow.extract);
         let attributes = attributes_from_extract(&raw_flow.extract)?;
-        let authn_sessions =
-            authn_sessions_from_extract(&raw_flow.extract, &raw_flow.saml_content)?;
+        let authn_statements =
+            authn_statements_from_extract(&raw_flow.extract, &raw_flow.saml_content)?;
         let audience = entity_ids_from_value(raw_flow.extract.get("audience"))?;
         let (not_before, not_on_or_after) = conditions_instants(&raw_flow.extract)?;
         let sig_alg = raw_flow.sig_alg.clone();
@@ -576,9 +461,10 @@ impl SsoSession {
             issuer,
             in_response_to,
             relay_state,
-            subject,
+            name_id,
+            subject_confirmations,
             attributes,
-            authn_sessions,
+            authn_statements,
             audience,
             not_before,
             not_on_or_after,

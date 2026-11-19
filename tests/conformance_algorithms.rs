@@ -15,8 +15,7 @@ use saml_rs::{
     IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
     PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
     SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession,
-    StartSlo, StartSso, Subject, TransformAlgorithm, X509Credential, XmlPolicy,
-    XmlSignatureProfile,
+    StartSlo, StartSso, TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
     AssertionEncryptionPolicy, Attribute, AttributeEncryptionPolicy, AttributeValue, Attributes,
@@ -193,10 +192,10 @@ fn signed_redirect_request_then_post_response(
         Inbound::redirect(url.query().unwrap_or_default()),
         validation(),
     )?;
-    let subject = Subject::new(NameId::new("alice@example.com", None), Vec::new());
+    let subject = NameId::new("alice@example.com");
     let response = peers
         .idp
-        .respond_sso(&peers.sp_descriptor, &received, subject, options)?;
+        .respond_sso(&peers.sp_descriptor, &received, &subject, options)?;
     let fields = post_fields(&response)?;
     let encoded = fields
         .iter()
@@ -287,7 +286,6 @@ fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn
             )?;
             let attributes = Attributes::new(vec![Attribute::new(
                 "mail",
-                None,
                 vec![AttributeValue::new("alice@example.com")],
             )]);
             let exchange = signed_redirect_request_then_post_response(
@@ -517,7 +515,7 @@ fn strict_rsa_sha2_at_the_service_provider_rejects_an_rsa_sha1_sig_alg(
         let peers = rsa_sha1_peers(sp_xml_signatures, XmlSignatureProfile::AllowWeakAlgorithms)?;
         let started = peers.idp.start_slo(
             &peers.sp_descriptor,
-            LogoutSubject::new(NameId::new("alice@example.com", None))
+            LogoutSubject::new(NameId::new("alice@example.com"))
                 .with_session_index(SessionIndex::try_new("_session")?),
             StartSlo::redirect(),
         )?;
@@ -729,7 +727,7 @@ fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn s
 
     let started = peers.idp.start_slo(
         &peers.sp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com", None))
+        LogoutSubject::new(NameId::new("alice@example.com"))
             .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::soap(),
     )?;
@@ -909,7 +907,7 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
 
     let started = peers.sp.start_slo(
         &peers.idp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com", None))
+        LogoutSubject::new(NameId::new("alice@example.com"))
             .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::redirect(),
     )?;
@@ -926,7 +924,7 @@ fn selected_hmac_sha1_signs_with_the_shared_secrets() -> Result<(), Box<dyn std:
 
     let started = peers.sp.start_slo(
         &peers.idp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com", None))
+        LogoutSubject::new(NameId::new("alice@example.com"))
             .with_session_index(SessionIndex::try_new("_session")?),
         StartSlo::soap(),
     )?;

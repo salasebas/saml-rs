@@ -40,12 +40,12 @@ let request = idp.receive_sso(
 let response = idp.respond_sso(
     &sp,
     &request,
-    Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+    &NameId::new("alice@example.com"),
     RespondSso::post().apply_web_browser_sso_generation_rules(),
 )?;
 ```
 
-Send `response` back through the browser to the service provider's assertion consumer service.
+Send `response` back through the browser to the service provider's assertion consumer service. The identity provider writes the assertion `Subject` itself: the `NameId` you pass and one bearer `SubjectConfirmation`.
 
 The response carries the exact `RelayState` that arrived with the request. `RespondSso::relay_state` sets one only for an unsolicited response or for a request that carried none.
 
@@ -59,7 +59,7 @@ A typed identity provider signs the Response when it generates an `EncryptedAsse
 let response = idp.respond_sso(
     &sp,
     &request,
-    subject,
+    &name_id,
     RespondSso::post().allow_unsigned_encrypted_cbc(),
 )?;
 ```
@@ -70,33 +70,33 @@ Assertion encryption stays off until you set `XmlEncryptionPolicy::assertions` t
 
 ## Attributes and name identifiers
 
-Pass the attributes of the assertion on the response options. Each attribute names its format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI.
+Pass the attributes of the assertion on the response options. `with_name_format` sets an attribute's format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI. An attribute without it has no `NameFormat`, which SAML reads as `Unspecified`.
 
 ```rust
-let attributes = Attributes::new(vec![
-    Attribute::with_name_format(
+let attributes = Attributes::new([
+    Attribute::new(
         "urn:oid:0.9.2342.19200300.100.1.3",
-        AttributeNameFormat::Uri,
-        vec![AttributeValue::new("alice@example.com")],
-    ),
-    Attribute::with_name_format(
+        [AttributeValue::new("alice@example.com")],
+    )
+    .with_name_format(AttributeNameFormat::Uri),
+    Attribute::new(
         "eduPersonAffiliation",
-        AttributeNameFormat::Basic,
-        vec![AttributeValue::new("member"), AttributeValue::new("staff")],
-    ),
+        [AttributeValue::new("member"), AttributeValue::new("staff")],
+    )
+    .with_name_format(AttributeNameFormat::Basic),
 ]);
 
 let response = idp.respond_sso(
     &sp,
     &request,
-    Subject::new(NameId::generate_transient(), Vec::new()),
+    &NameId::generate_transient(),
     RespondSso::post().attributes(attributes),
 )?;
 ```
 
 A `Basic` name that is not an XML name is rejected. `attributes()` cannot be combined with a login response template.
 
-`NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` still takes any value in any format, but a persistent or transient value longer than 256 characters is rejected when the response is generated. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
+`NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` takes any value and `with_format` takes any format, but a persistent or transient value longer than 256 characters is rejected when the response is generated. `with_name_qualifier`, `with_sp_name_qualifier`, and `with_sp_provided_id` set the qualifier attributes. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
 ## Discovery cookie
 

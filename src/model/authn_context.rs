@@ -146,12 +146,13 @@ impl RequestedAuthnContext {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when the list is empty or mixes class
-    /// and declaration references.
-    pub fn new(
+    /// Returns [`SamlError::Invalid`] when there is no reference or the
+    /// references mix classes and declarations.
+    pub fn try_new(
         comparison: AuthnContextComparison,
-        references: Vec<AuthnContextReference>,
+        references: impl IntoIterator<Item = AuthnContextReference>,
     ) -> Result<Self, SamlError> {
+        let references: Vec<AuthnContextReference> = references.into_iter().collect();
         let first = references.first().ok_or_else(|| {
             SamlError::Invalid(
                 "RequestedAuthnContext must contain AuthnContextClassRef or AuthnContextDeclRef"
@@ -227,7 +228,7 @@ pub(super) fn requested_authn_context_from_extract(
         AuthnContextReferenceKind::Declaration,
         &declarations,
     ));
-    RequestedAuthnContext::new(comparison, references).map(Some)
+    RequestedAuthnContext::try_new(comparison, references).map(Some)
 }
 
 fn reference_texts<'a>(extract: &'a Value, path: &str) -> Vec<&'a str> {

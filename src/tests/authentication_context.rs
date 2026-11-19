@@ -17,7 +17,7 @@ use saml_rs::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig,
     IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId, Outbound,
     ReplayPolicy, RequestedAuthnContext, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso, Subject,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso,
 };
 
 const SP: &str = "https://sp.example.com";
@@ -86,8 +86,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn subject() -> Subject {
-    Subject::new(NameId::new("alice", None), Vec::new())
+fn principal() -> NameId {
+    NameId::new("alice")
 }
 
 fn request_xml(outbound: &Outbound<AuthnRequest>) -> Result<String, Box<dyn std::error::Error>> {
@@ -133,11 +133,11 @@ fn response_input(outbound: &Outbound<SsoResponse>) -> Result<Inbound<SsoRespons
 fn requested_context_rejects_empty_and_mixed_references() -> Result<(), Box<dyn std::error::Error>>
 {
     assert!(matches!(
-        RequestedAuthnContext::new(AuthnContextComparison::Exact, Vec::new()),
+        RequestedAuthnContext::try_new(AuthnContextComparison::Exact, Vec::new()),
         Err(SamlError::Invalid(_))
     ));
     assert!(matches!(
-        RequestedAuthnContext::new(
+        RequestedAuthnContext::try_new(
             AuthnContextComparison::Exact,
             vec![
                 AuthnContextReference::class(MFA)?,
@@ -175,7 +175,7 @@ fn signed_requests_round_trip_context_passive_and_provider_for_all_bindings(
                 ],
             ] {
                 for passive in [IsPassive::Required, IsPassive::NotRequired] {
-                    let requested = RequestedAuthnContext::new(comparison, references.clone())?;
+                    let requested = RequestedAuthnContext::try_new(comparison, references.clone())?;
                     let started = sp.start_sso(
                         &idp_descriptor,
                         start
@@ -230,7 +230,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
     ] {
         let started = sp.start_sso(
             &idp_descriptor,
-            StartSso::post().requested_authn_context(RequestedAuthnContext::new(
+            StartSso::post().requested_authn_context(RequestedAuthnContext::try_new(
                 AuthnContextComparison::Exact,
                 vec![reference.clone()],
             )?),
@@ -243,7 +243,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            subject(),
+            &principal(),
             RespondSso::post()
                 .apply_web_browser_sso_generation_rules()
                 .authn_context(reference.clone()),
@@ -254,10 +254,11 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
             response_input(&response)?,
             validation(),
         )?;
-        let context = session
-            .authn_session()
-            .authn_context()
-            .ok_or("missing context")?;
+        let statement = session
+            .authn_statements()
+            .first()
+            .ok_or("missing AuthnStatement")?;
+        let context = statement.authn_context().ok_or("missing context")?;
         assert_eq!(
             context
                 .class_reference()
@@ -266,7 +267,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
         );
         assert!(!context.has_declaration());
         assert!(context.authenticating_authorities().is_empty());
-        assert!(session.authn_session().subject_locality().is_none());
+        assert!(statement.subject_locality().is_none());
     }
     Ok(())
 }
@@ -276,7 +277,7 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        subject(),
+        &principal(),
         RespondSso::post()
             .apply_web_browser_sso_generation_rules()
             .authn_context(AuthnContextReference::class(MFA)?),
@@ -285,8 +286,9 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
         sp.accept_unsolicited_sso(&idp_descriptor, response_input(&response)?, validation())?;
     assert_eq!(
         session
-            .authn_session()
-            .authn_context()
+            .authn_statements()
+            .first()
+            .and_then(|statement| statement.authn_context())
             .and_then(|context| context.class_reference())
             .map(AuthnContextReference::uri),
         Some(MFA)
@@ -307,7 +309,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post()
             .apply_web_browser_sso_generation_rules()
             .sign_response(),
@@ -414,7 +416,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         )]),
         validation(),
     )?;
-    let sessions = session.authn_sessions();
+    let sessions = session.authn_statements();
     assert_eq!(session.assertion_id().as_str(), selected_id);
     assert_eq!(sessions.len(), 3);
     assert_eq!(
@@ -495,7 +497,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondSso::post()
             .apply_web_browser_sso_generation_rules()
             .authn_context(AuthnContextReference::class(MFA)?),
@@ -511,8 +513,9 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
     )?;
     assert_eq!(
         session
-            .authn_session()
-            .authn_context()
+            .authn_statements()
+            .first()
+            .and_then(|statement| statement.authn_context())
             .and_then(|context| context.class_reference())
             .map(AuthnContextReference::uri),
         Some(MFA)
@@ -544,7 +547,7 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
     for start in [
         StartSso::post().is_passive(IsPassive::Required),
         StartSso::post().provider_name(PROVIDER),
-        StartSso::post().requested_authn_context(RequestedAuthnContext::new(
+        StartSso::post().requested_authn_context(RequestedAuthnContext::try_new(
             AuthnContextComparison::Exact,
             vec![AuthnContextReference::class(MFA)?],
         )?),
@@ -588,7 +591,7 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
     ] {
         let started = sp.start_sso(
             &idp_descriptor,
-            start.requested_authn_context(RequestedAuthnContext::new(
+            start.requested_authn_context(RequestedAuthnContext::try_new(
                 AuthnContextComparison::Exact,
                 vec![AuthnContextReference::class(MFA)?],
             )?),
@@ -648,7 +651,7 @@ fn a_received_relative_reference_is_exposed_but_cannot_be_sent_again(
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let started = sp.start_sso(
         &idp_descriptor,
-        StartSso::post().requested_authn_context(RequestedAuthnContext::new(
+        StartSso::post().requested_authn_context(RequestedAuthnContext::try_new(
             AuthnContextComparison::Exact,
             vec![AuthnContextReference::class(MFA)?],
         )?),

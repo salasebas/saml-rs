@@ -12,7 +12,7 @@ use saml_rs::{
     NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest, PaosSsoResponse, PrivateKeyPem,
     ReplayPolicy, RespondPaosSso, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
     SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartPaosSso, StartSlo, StartSso, Subject, X509Credential, XmlSignatureProfile,
+    SsoEndpoint, StartPaosSso, StartSlo, StartSso, X509Credential, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -87,15 +87,12 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn subject() -> Subject {
-    Subject::new(
-        NameId::new("alice@example.com", Some(NameIdFormat::EmailAddress)),
-        Vec::new(),
-    )
+fn principal() -> NameId {
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 fn logout_subject() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::new(NameId::new("alice@example.com", None))
+    Ok(LogoutSubject::new(NameId::new("alice@example.com"))
         .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
@@ -196,7 +193,7 @@ fn post_response_with_object_is_rejected() -> Result<(), Box<dyn std::error::Err
         let response =
             parties
                 .idp
-                .respond_sso(&parties.sp_descriptor, &received, subject(), respond)?;
+                .respond_sso(&parties.sp_descriptor, &received, &principal(), respond)?;
         let form = form_with_object(response.post_form()?.fields(), "SAMLResponse")?;
         assert_object_rejected(parties.sp.finish_sso(
             &parties.idp_descriptor,
@@ -232,7 +229,7 @@ fn paos_authn_request_and_response_with_object_are_rejected(
     let answered = parties.idp.respond_paos_sso(
         &parties.sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondPaosSso::default(),
     )?;
     let response = soap_body_element(answered.envelope(), "Response")?;

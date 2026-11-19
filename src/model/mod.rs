@@ -6,6 +6,7 @@ mod attributes;
 mod authn;
 mod authn_context;
 mod authn_details;
+mod authn_statement;
 mod endpoint;
 mod extract;
 mod identifiers;
@@ -14,14 +15,13 @@ mod outstanding_logout;
 mod received;
 mod relay;
 mod replay_cache;
-mod session;
 mod sso;
 mod status;
 mod subject;
 mod validation;
 
+pub(crate) use authn_statement::earliest_authn_session_expiration;
 pub(crate) use extract::{authn_statement_not_on_or_after_values, name_id_format_from_uri};
-pub(crate) use session::earliest_authn_session_expiration;
 pub(crate) use subject::{
     is_name_id_format, validate_issued_name_id_length, validate_name_id_format,
 };
@@ -32,6 +32,7 @@ pub use authn_context::{
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, RequestedAuthnContext,
 };
 pub use authn_details::{AuthnContext, SubjectLocality};
+pub use authn_statement::AuthnStatement;
 pub use endpoint::EndpointUrl;
 pub use identifiers::{AssertionId, MessageId, SamlInstant, SessionIndex};
 pub use logout::{LogoutCompleted, LogoutRequest, LogoutResponse, LogoutSubject};
@@ -39,14 +40,11 @@ pub use outstanding_logout::OutstandingLogout;
 pub use received::Received;
 pub use relay::{RelayState, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES};
 pub use replay_cache::InMemoryReplayCache;
-pub use session::AuthnSession;
-pub use sso::{
-    Assertion, SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage,
-};
+pub use sso::{SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage};
 pub use status::{Status, SubordinateStatusCode, TopLevelStatusCode};
 pub use subject::{
     NameId, NameIdCreationRequest, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier,
-    Subject, SubjectConfirmation,
+    SubjectConfirmation,
 };
 pub use validation::{
     ClockSkew, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy, SamlValidationContext,

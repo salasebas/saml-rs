@@ -1,9 +1,6 @@
 //! `ReplayPolicy::Disabled` preserves the raw API, which has no replay cache.
 
-#[path = "common/replay_cache.rs"]
-mod replay_cache;
-
-use replay_cache::RecordingReplayCache;
+use super::replay_cache::RecordingReplayCache;
 
 use std::time::{Duration, SystemTime};
 
@@ -15,11 +12,11 @@ use saml_rs::error::{SubjectConfirmationReason, TimeWindowField};
 use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest};
 use saml_rs::raw::Value;
 use saml_rs::{
-    AuthnRequest, ClockSkew, ReplayPolicy, SamlError, SamlValidationContext, SsoSession,
+    AuthnRequest, ClockSkew, ReplayKey, ReplayPolicy, SamlError, SamlValidationContext, SsoSession,
 };
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-const RESPONSE: &str = include_str!("fixtures/misc/response.xml");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
 fn instant(value: &str) -> Result<SystemTime, time::error::Parse> {
     OffsetDateTime::parse(value, &Rfc3339).map(SystemTime::from)
@@ -37,14 +34,16 @@ fn parse_response_at(
     xml: &str,
     validation: &SamlValidationContext<'_>,
 ) -> Result<FlowResult, SamlError> {
-    let mut options = FlowOptions::default();
-    options.binding = Some(Binding::Post);
-    options.parser_type = Some(ParserType::SamlResponse);
-    options.now = Some(validation.now());
-    options.clock_drifts = (
-        validation.clock_skew().not_before_millis(),
-        validation.clock_skew().not_on_or_after_millis(),
-    );
+    let options = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlResponse),
+        now: Some(validation.now()),
+        clock_drifts: (
+            validation.clock_skew().not_before_millis(),
+            validation.clock_skew().not_on_or_after_millis(),
+        ),
+        ..FlowOptions::default()
+    };
     flow(&options, &response_request(xml))
 }
 
@@ -541,24 +540,6 @@ fn explicit_clock_skew_replaces_five_minute_default() -> Result<(), Box<dyn std:
 }
 
 #[test]
-fn typed_validation_context_extracts_sso_replay_keys_without_session_index(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let session = sso_session()?;
-    let keys = session
-        .replay_keys()
-        .into_iter()
-        .map(|key| key.cache_key())
-        .collect::<Vec<_>>();
-
-    assert!(session.authn_session().session_index().is_some());
-    assert_eq!(
-        keys,
-        vec!["response_id:_response123", "assertion_id:_assertion123"]
-    );
-    Ok(())
-}
-
-#[test]
 fn typed_validation_context_replay_cache_stores_new_keys() -> Result<(), Box<dyn std::error::Error>>
 {
     let session = sso_session()?;
@@ -677,7 +658,7 @@ fn typed_validation_context_zero_replay_retention_fails_closed(
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache))
             .with_replay_retention(Duration::ZERO);
 
-    match request.check_and_store_replay(&mut validation) {
+    match validation.check_and_store_message_replay(ReplayKey::AuthnRequest(request.id().clone())) {
         Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
@@ -695,7 +676,7 @@ fn typed_validation_context_replay_retention_overflow_fails_closed(
         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(&mut cache))
             .with_replay_retention(Duration::MAX);
 
-    match request.check_and_store_replay(&mut validation) {
+    match validation.check_and_store_message_replay(ReplayKey::AuthnRequest(request.id().clone())) {
         Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())

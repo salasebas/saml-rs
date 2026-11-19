@@ -108,10 +108,12 @@ fn typed_api_contract_reexports_browser_and_model_types() {
     let _: for<'a> fn(&'a saml_rs::NameId) -> Option<&'a str> = saml_rs::NameId::name_qualifier;
     let _: for<'a> fn(&'a saml_rs::NameId) -> Option<&'a str> = saml_rs::NameId::sp_name_qualifier;
     let _: for<'a> fn(&'a saml_rs::NameId) -> Option<&'a str> = saml_rs::NameId::sp_provided_id;
-    let _: for<'a> fn(&'a saml_rs::SsoResponse) -> &'a SamlInstant =
-        saml_rs::SsoResponse::issue_instant;
     let _: for<'a> fn(&'a saml_rs::SsoSession) -> &'a SamlInstant =
         saml_rs::SsoSession::response_issue_instant;
+    let _: for<'a> fn(&'a saml_rs::SsoSession) -> &'a [saml_rs::SubjectConfirmation] =
+        saml_rs::SsoSession::subject_confirmations;
+    let _: for<'a> fn(&'a saml_rs::AuthnStatement) -> Option<&'a SamlInstant> =
+        saml_rs::AuthnStatement::session_not_on_or_after;
     let _: for<'a> fn(&'a saml_rs::SsoSession) -> &'a SamlInstant =
         saml_rs::SsoSession::assertion_issue_instant;
     let _: for<'a> fn(&'a saml_rs::SsoSession) -> &'a [VerifiedXmlSignature] =
@@ -125,12 +127,11 @@ fn typed_api_contract_reexports_browser_and_model_types() {
     let _ = std::any::type_name::<saml_rs::Pending<saml_rs::AuthnRequest>>();
     let _ = std::any::type_name::<saml_rs::PostForm>();
     let _ = std::any::type_name::<saml_rs::Started<saml_rs::AuthnRequest>>();
-    let _ = std::any::type_name::<saml_rs::Assertion>();
     let _ = std::any::type_name::<saml_rs::AssertionId>();
     let _ = std::any::type_name::<saml_rs::Attribute>();
     let _ = std::any::type_name::<saml_rs::AttributeValue>();
     let _ = std::any::type_name::<saml_rs::Attributes>();
-    let _ = std::any::type_name::<saml_rs::AuthnSession>();
+    let _ = std::any::type_name::<saml_rs::AuthnStatement>();
     let _ = std::any::type_name::<saml_rs::LogoutCompleted>();
     let _ = std::any::type_name::<saml_rs::LogoutRequest>();
     let _ = std::any::type_name::<saml_rs::LogoutResponse>();
@@ -147,7 +148,6 @@ fn typed_api_contract_reexports_browser_and_model_types() {
     let _ = std::any::type_name::<VerifiedXmlSignatureCoverage>();
     let _ = std::any::type_name::<saml_rs::RequestedSubject>();
     let _ = std::any::type_name::<saml_rs::RequestedSubjectIdentifier>();
-    let _ = std::any::type_name::<saml_rs::Subject>();
     let _ = std::any::type_name::<saml_rs::SubjectConfirmation>();
     let _ = std::any::type_name::<saml_rs::IsPassive>();
     let _ = std::any::type_name::<saml_rs::Status>();

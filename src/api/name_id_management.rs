@@ -140,7 +140,7 @@ impl Saml<Idp> {
     /// Pass [`Status::success`] after applying the change. After a
     /// [`NameIdChange::NewId`], send that value as the identifier's
     /// `SPProvidedID` from then on: [`Self::respond_sso`] writes it from
-    /// [`NameId::with_qualifiers`]. When the identifier is unknown, pass
+    /// [`NameId::with_sp_provided_id`]. When the identifier is unknown, pass
     /// [`Status::requester`] or [`Status::responder`], optionally with
     /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
     ///

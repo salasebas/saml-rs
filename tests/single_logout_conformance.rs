@@ -86,12 +86,12 @@ fn descriptors(
 }
 
 fn subject_with_session() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::new(NameId::new("alice@example.com", None))
+    Ok(LogoutSubject::new(NameId::new("alice@example.com"))
         .with_session_index(SessionIndex::try_new("_session")?))
 }
 
 fn subject_without_session() -> LogoutSubject {
-    LogoutSubject::new(NameId::new("alice@example.com", None))
+    LogoutSubject::new(NameId::new("alice@example.com"))
 }
 
 fn post_xml<Message>(outbound: &Outbound<Message>) -> Result<String, Box<dyn std::error::Error>> {

@@ -44,7 +44,7 @@ use saml_rs::{
     PartyAuthentication, PendingLogoutRequest, PendingLogoutRequestSnapshot, Received, RelayState,
     ReplayCache, ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
     SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoSession, StartSlo, Status, Subject, SubordinateStatusCode,
+    SpValidationPolicy, SsoEndpoint, SsoSession, StartSlo, Status, SubordinateStatusCode,
     TemplatePolicy, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 use time::format_description::well_known::Rfc3339;
@@ -334,7 +334,7 @@ fn descriptors(
 }
 
 fn subject() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::new(NameId::new("alice@example.com", None))
+    Ok(LogoutSubject::new(NameId::new("alice@example.com"))
         .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
@@ -1029,7 +1029,7 @@ fn typed_slo_logout_request_session_index_follows_subject() -> Result<(), Box<dy
 
     let without_session = sp.start_slo(
         &idp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com", None)),
+        LogoutSubject::new(NameId::new("alice@example.com")),
         StartSlo::post(),
     )?;
     let without_session_xml = outbound_xml(&without_session.outbound, "SAMLRequest")?;
@@ -2133,7 +2133,7 @@ fn one_typed_idp_issuance_lifetime_drives_sso_and_slo_expiration(
 
     let sso = idp.initiate_sso(
         &sp_descriptor,
-        Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+        &NameId::new("alice@example.com"),
         RespondSso::post(),
     )?;
     let sso_xml = outbound_xml(&sso, "SAMLResponse")?;
@@ -2388,7 +2388,7 @@ fn typed_session_authority_custom_logout_template_escapes_subject_values(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let name_id = "alice<&\"'@example.com";
     let session_index = "session<&\"'index";
-    let subject = LogoutSubject::new(NameId::new(name_id, None))
+    let subject = LogoutSubject::new(NameId::new(name_id))
         .with_session_index(SessionIndex::try_new(session_index)?);
     let sp = Saml::sp(sp_config()?);
     let idp = Saml::idp(idp_config_with_issuance(
@@ -3542,13 +3542,11 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let name_id = NameId::with_qualifiers(
-        "alice@example.com",
-        Some(NameIdFormat::EmailAddress),
-        Some(IDP_ENTITY_ID.to_string()),
-        Some(SP_ENTITY_ID.to_string()),
-        Some("alice-at-sp".to_string()),
-    );
+    let name_id = NameId::new("alice@example.com")
+        .with_format(NameIdFormat::EmailAddress)
+        .with_name_qualifier(IDP_ENTITY_ID)
+        .with_sp_name_qualifier(SP_ENTITY_ID)
+        .with_sp_provided_id("alice-at-sp");
     let subject = LogoutSubject::new(name_id.clone())
         .with_session_index(SessionIndex::try_new("_session-one")?)
         .with_session_indexes(vec![
@@ -3651,13 +3649,13 @@ const QUALIFIED_LOGOUT_REQUEST_TEMPLATE: &str = r#"
 "#;
 
 fn qualified_subject() -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::new(NameId::with_qualifiers(
-        QUALIFIED_NAME_ID,
-        Some(NameIdFormat::Persistent),
-        Some(QUALIFIED_NAME_QUALIFIER.to_string()),
-        Some(QUALIFIED_SP_NAME_QUALIFIER.to_string()),
-        Some(QUALIFIED_SP_PROVIDED_ID.to_string()),
-    ))
+    Ok(LogoutSubject::new(
+        NameId::new(QUALIFIED_NAME_ID)
+            .with_format(NameIdFormat::Persistent)
+            .with_name_qualifier(QUALIFIED_NAME_QUALIFIER)
+            .with_sp_name_qualifier(QUALIFIED_SP_NAME_QUALIFIER)
+            .with_sp_provided_id(QUALIFIED_SP_PROVIDED_ID),
+    )
     .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
@@ -3775,10 +3773,9 @@ fn typed_session_authority_logout_request_without_subject_format_sends_configure
 }
 
 fn custom_format_subject(format: &str) -> Result<LogoutSubject, SamlError> {
-    Ok(LogoutSubject::new(NameId::new(
-        "alice@example.com",
-        Some(NameIdFormat::Custom(format.to_string())),
-    ))
+    Ok(LogoutSubject::new(
+        NameId::new("alice@example.com").with_format(NameIdFormat::Custom(format.to_string())),
+    )
     .with_session_index(SessionIndex::try_new("_session123")?))
 }
 
@@ -3908,7 +3905,7 @@ fn typed_session_authority_logout_request_without_any_format_omits_format_like_t
 
     let sso = idp.initiate_sso(
         &sp_descriptor,
-        Subject::new(NameId::new("alice@example.com", None), Vec::new()),
+        &NameId::new("alice@example.com"),
         RespondSso::post(),
     )?;
     assert_eq!(
@@ -3958,11 +3955,8 @@ fn typed_slo_logout_request_template_renders_name_id_qualifiers(
 
     let started = idp.start_slo(
         &sp_descriptor,
-        LogoutSubject::new(NameId::new(
-            QUALIFIED_NAME_ID,
-            Some(NameIdFormat::Persistent),
-        ))
-        .with_session_index(SessionIndex::try_new("_session123")?),
+        LogoutSubject::new(NameId::new(QUALIFIED_NAME_ID).with_format(NameIdFormat::Persistent))
+            .with_session_index(SessionIndex::try_new("_session123")?),
         StartSlo::post(),
     )?;
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
@@ -4318,7 +4312,7 @@ fn soap_start_slo_always_applies_the_generation_rules() -> Result<(), Box<dyn st
     let (sp, idp) = facades()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let relay_state = RelayState::try_new("state")?;
-    let without_session_index = LogoutSubject::new(NameId::new("alice@example.com", None));
+    let without_session_index = LogoutSubject::new(NameId::new("alice@example.com"));
     let cases = [
         (subject()?, StartSlo::soap().relay_state(relay_state)),
         (

@@ -187,7 +187,7 @@ fn identity_provider_metadata_publishes_the_soap_manage_name_id_service() -> Tes
 fn idp_initiated_new_id_reaches_the_service_provider_and_completes() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
-    let current = NameId::new("current-value", None);
+    let current = NameId::new("current-value");
     let started = idp.start_name_id_management(
         &sp,
         &current,
@@ -244,7 +244,7 @@ fn idp_initiated_request_qualifies_a_persistent_format_written_with_whitespace()
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     let format = format!(" {PERSISTENT}\n");
-    let current = NameId::new("current-value", Some(NameIdFormat::Custom(format.clone())));
+    let current = NameId::new("current-value").with_format(NameIdFormat::Custom(format.clone()));
     let started = idp.start_name_id_management(
         &sp,
         &current,
@@ -263,13 +263,11 @@ fn idp_initiated_request_qualifies_a_persistent_format_written_with_whitespace()
 fn idp_initiated_request_keeps_the_established_qualifiers() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
-    let current = NameId::with_qualifiers(
-        "current-value",
-        Some(NameIdFormat::Persistent),
-        Some("https://origin-idp.example.com".into()),
-        Some("https://affiliation.example.com".into()),
-        Some("sp-alias".into()),
-    );
+    let current = NameId::new("current-value")
+        .with_format(NameIdFormat::Persistent)
+        .with_name_qualifier("https://origin-idp.example.com")
+        .with_sp_name_qualifier("https://affiliation.example.com")
+        .with_sp_provided_id("sp-alias");
     let started = idp.start_name_id_management(
         &sp,
         &current,
@@ -364,13 +362,11 @@ fn a_transient_identifier_is_not_managed() -> TestResult {
             identity_provider(Some(IDP_NIM_URL))?,
             NameId::generate_transient(),
         ),
-        (transient_default, NameId::new("current-value", None)),
+        (transient_default, NameId::new("current-value")),
         (
             identity_provider(Some(IDP_NIM_URL))?,
-            NameId::new(
-                "current-value",
-                Some(NameIdFormat::Custom(format!("\n {TRANSIENT}\t"))),
-            ),
+            NameId::new("current-value")
+                .with_format(NameIdFormat::Custom(format!("\n {TRANSIENT}\t"))),
         ),
     ] {
         let started = idp.start_name_id_management(
@@ -397,14 +393,11 @@ fn a_persistent_value_longer_than_256_characters_is_not_sent() -> TestResult {
             NameIdChange::NewId(long.clone()),
         ),
         (
-            NameId::new(long.clone(), Some(NameIdFormat::Persistent)),
+            NameId::new(long.clone()).with_format(NameIdFormat::Persistent),
             NameIdChange::Terminate,
         ),
         (
-            NameId::new(
-                long.clone(),
-                Some(NameIdFormat::Custom(format!(" {PERSISTENT} "))),
-            ),
+            NameId::new(long.clone()).with_format(NameIdFormat::Custom(format!(" {PERSISTENT} "))),
             NameIdChange::Terminate,
         ),
     ] {
@@ -425,7 +418,7 @@ fn a_name_id_format_that_is_not_an_absolute_uri_is_not_sent() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
     for format in ["", "local-format", "urn:"] {
-        let current = NameId::new("current-value", Some(NameIdFormat::Custom(format.into())));
+        let current = NameId::new("current-value").with_format(NameIdFormat::Custom(format.into()));
         let result = idp.start_name_id_management(
             &sp,
             &current,
@@ -462,13 +455,10 @@ fn sp_initiated_new_id_is_received_and_answered() -> TestResult {
     assert_eq!(message.issuer().as_str(), SP_ENTITY_ID);
     assert_eq!(
         message.name_id(),
-        &NameId::with_qualifiers(
-            "current-value",
-            Some(NameIdFormat::Persistent),
-            Some(IDP_ENTITY_ID.into()),
-            Some(SP_ENTITY_ID.into()),
-            None,
-        )
+        &NameId::new("current-value")
+            .with_format(NameIdFormat::Persistent)
+            .with_name_qualifier(IDP_ENTITY_ID)
+            .with_sp_name_qualifier(SP_ENTITY_ID)
     );
     assert_eq!(message.change(), &NameIdChange::NewId("sp-alias".into()));
 
@@ -931,7 +921,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
 
     let started = idp.start_name_id_management(
         &sp,
-        &NameId::new("current-value", None),
+        &NameId::new("current-value"),
         &NameIdChange::Terminate,
         IdentifierEncryptionPolicy::PlaintextIdentifiers,
         authenticated(),

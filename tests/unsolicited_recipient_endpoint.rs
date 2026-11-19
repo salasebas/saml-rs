@@ -18,7 +18,7 @@ use saml_rs::{
     DeliveredArtifact, EndpointUrl, EntityId, Idp, IdpConfig, IdpDescriptor, Inbound,
     IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint,
-    SsoResponseBinding, SsoSession, Subject,
+    SsoResponseBinding, SsoSession,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -89,8 +89,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn subject() -> Subject {
-    Subject::new(NameId::new(USER, None), Vec::new())
+fn principal() -> NameId {
+    NameId::new(USER)
 }
 
 /// The receiving service provider, whose default is `/acs/a`, accepts an
@@ -119,7 +119,7 @@ fn accept(
             } else {
                 RespondSso::post()
             };
-            let response = idp.initiate_sso(&sender_view, subject(), options)?;
+            let response = idp.initiate_sso(&sender_view, &principal(), options)?;
             let fields = response.post_form()?.fields().to_vec();
             if binding == SsoResponseBinding::SimpleSign {
                 Inbound::simple_sign(fields)
@@ -131,7 +131,7 @@ fn accept(
             let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
             let response = idp.initiate_sso_artifact(
                 &sender_view,
-                subject(),
+                &principal(),
                 RespondSso::artifact(ArtifactDelivery::post_form(0)),
                 &mut issued,
             )?;

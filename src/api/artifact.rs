@@ -1,7 +1,7 @@
 use crate::artifact::{self, Artifact, ArtifactDereference, ArtifactResolution, ArtifactUses};
 use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
-use crate::model::{AuthnRequest, Received, SsoResponse, Subject};
+use crate::model::{AuthnRequest, NameId, Received, SsoResponse};
 use crate::soap::SoapChannel;
 use std::time::SystemTime;
 
@@ -62,21 +62,21 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     ArtifactDelivery, AuthnRequest, IssuedArtifacts, Received, RespondSso, Saml,
-    ///     SpDescriptor, Subject,
+    ///     ArtifactDelivery, AuthnRequest, IssuedArtifacts, NameId, Received, RespondSso, Saml,
+    ///     SpDescriptor,
     /// };
     ///
     /// # fn respond(
     /// #     idp: &Saml<saml_rs::Idp>,
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<AuthnRequest>,
-    /// #     subject: Subject,
+    /// #     name_id: &NameId,
     /// #     issued: &mut IssuedArtifacts,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let response = idp.respond_sso_artifact(
     ///     sp,
     ///     request,
-    ///     subject,
+    ///     name_id,
     ///     RespondSso::artifact(ArtifactDelivery::redirect(0)),
     ///     issued,
     /// )?;
@@ -89,13 +89,13 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: &Received<AuthnRequest>,
-        subject: Subject,
+        name_id: &NameId,
         options: RespondSso<ArtifactDelivery>,
         issued: &mut IssuedArtifacts,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let transport = ResponseTransport::Artifact(options.delivery, issued);
-        self.issue_sso(sp, Some(request), subject, options.delivered(transport))
+        self.issue_sso(sp, Some(request), name_id, options.delivered(transport))
     }
 
     /// Initiate IdP-initiated SSO with an HTTP-Artifact.
@@ -110,12 +110,12 @@ impl Saml<Idp> {
     pub fn initiate_sso_artifact(
         &self,
         sp: &SpDescriptor,
-        subject: Subject,
+        name_id: &NameId,
         options: RespondSso<ArtifactDelivery>,
         issued: &mut IssuedArtifacts,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
         let transport = ResponseTransport::Artifact(options.delivery, issued);
-        self.issue_sso(sp, None, subject, options.delivered(transport))
+        self.issue_sso(sp, None, name_id, options.delivered(transport))
     }
 
     /// Answer `ArtifactResolve` with `ArtifactResponse`.

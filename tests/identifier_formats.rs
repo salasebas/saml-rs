@@ -30,7 +30,7 @@ use saml_rs::{
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
     ReplayPolicy, RequestedSubjectIdentifier, RespondSso, Saml, SamlError, SamlValidationContext,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
-    Status, Subject, TemplatePolicy,
+    Status, TemplatePolicy,
 };
 use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
@@ -100,12 +100,8 @@ fn descriptors(
     ))
 }
 
-fn subject(name_id: NameId) -> Subject {
-    Subject::new(name_id, Vec::new())
-}
-
-fn alice() -> Subject {
-    subject(NameId::new("alice@example.com", None))
+fn alice() -> NameId {
+    NameId::new("alice@example.com")
 }
 
 fn response_xml(outbound: &Outbound<SsoResponse>) -> Result<String, Box<dyn std::error::Error>> {
@@ -143,8 +139,8 @@ struct Exchange {
 }
 
 /// SP-initiated SSO over HTTP-POST: the identity provider answers with
-/// `subject` and `options`, and the service provider accepts the response.
-fn exchange(subject: Subject, options: RespondSso) -> Result<Exchange, Box<dyn std::error::Error>> {
+/// `name_id` and `options`, and the service provider accepts the response.
+fn exchange(name_id: &NameId, options: RespondSso) -> Result<Exchange, Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -154,7 +150,7 @@ fn exchange(subject: Subject, options: RespondSso) -> Result<Exchange, Box<dyn s
         Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
-    let response = idp.respond_sso(&sp_descriptor, &received, subject, options)?;
+    let response = idp.respond_sso(&sp_descriptor, &received, name_id, options)?;
     let xml = response_xml(&response)?;
     let session = sp.finish_sso(
         &idp_descriptor,
@@ -165,11 +161,11 @@ fn exchange(subject: Subject, options: RespondSso) -> Result<Exchange, Box<dyn s
     Ok(Exchange { xml, session })
 }
 
-fn respond(subject: Subject, options: RespondSso) -> Result<Outbound<SsoResponse>, SamlError> {
+fn respond(name_id: &NameId, options: RespondSso) -> Result<Outbound<SsoResponse>, SamlError> {
     let sp = sp()?;
     let idp = idp()?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    idp.initiate_sso(&sp_descriptor, subject, options)
+    idp.initiate_sso(&sp_descriptor, name_id, options)
 }
 
 fn values(values: &[&str]) -> Vec<AttributeValue> {
@@ -201,31 +197,19 @@ fn attribute_name_format_identifiers_are_the_core_uris() {
 fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let attributes = Attributes::new(vec![
-        Attribute::with_name_format(
-            "displayName",
-            AttributeNameFormat::Unspecified,
-            values(&["Alice Example"]),
-        ),
-        Attribute::with_name_format(
-            MAIL_OID,
-            AttributeNameFormat::Uri,
-            values(&["a@example.com"]),
-        ),
-        Attribute::with_name_format(
-            "eduPersonAffiliation",
-            AttributeNameFormat::Basic,
-            values(&["member", "staff"]),
-        ),
-        Attribute::with_name_format(
-            "role",
-            AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string()),
-            values(&["admin"]),
-        ),
-        Attribute::new("locale", None, values(&["en"])),
-        Attribute::new("groups", None, Vec::new()),
+        Attribute::new("displayName", values(&["Alice Example"]))
+            .with_name_format(AttributeNameFormat::Unspecified),
+        Attribute::new(MAIL_OID, values(&["a@example.com"]))
+            .with_name_format(AttributeNameFormat::Uri),
+        Attribute::new("eduPersonAffiliation", values(&["member", "staff"]))
+            .with_name_format(AttributeNameFormat::Basic),
+        Attribute::new("role", values(&["admin"]))
+            .with_name_format(AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string())),
+        Attribute::new("locale", values(&["en"])),
+        Attribute::new("groups", Vec::new()),
     ]);
 
-    let exchange = exchange(alice(), RespondSso::post().attributes(attributes))?;
+    let exchange = exchange(&alice(), RespondSso::post().attributes(attributes))?;
 
     for (name, format) in [
         ("displayName", UNSPECIFIED),
@@ -262,8 +246,7 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
         ),
     ] {
         let consumed = attribute(&exchange.session, name)?;
-        assert_eq!(consumed.format(), Some(&format), "{name}");
-        assert_eq!(consumed.name_format(), Some(format.as_uri()), "{name}");
+        assert_eq!(consumed.name_format(), Some(&format), "{name}");
         assert_eq!(
             consumed
                 .values()
@@ -275,7 +258,6 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
         );
     }
     let locale = attribute(&exchange.session, "locale")?;
-    assert_eq!(locale.format(), None);
     assert_eq!(locale.name_format(), None);
     assert_eq!(locale.values(), values(&["en"]).as_slice());
     Ok(())
@@ -288,15 +270,12 @@ fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifie
     let idp = idp()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let name_id = NameId::generate_transient();
-    let mail = Attribute::with_name_format(
-        MAIL_OID,
-        AttributeNameFormat::Uri,
-        values(&["a@example.com"]),
-    );
+    let mail = Attribute::new(MAIL_OID, values(&["a@example.com"]))
+        .with_name_format(AttributeNameFormat::Uri);
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        subject(name_id.clone()),
+        &name_id,
         RespondSso::post().attributes(Attributes::new(vec![mail.clone()])),
     )?;
     let session = sp.accept_unsolicited_sso(
@@ -317,7 +296,7 @@ fn response_without_typed_attributes_has_no_attribute_statement(
         RespondSso::post(),
         RespondSso::post().attributes(Attributes::default()),
     ] {
-        let exchange = exchange(alice(), options)?;
+        let exchange = exchange(&alice(), options)?;
         assert!(!exchange.xml.contains("AttributeStatement"));
         assert!(exchange.session.attributes().as_slice().is_empty());
     }
@@ -328,12 +307,10 @@ fn response_without_typed_attributes_has_no_attribute_statement(
 fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xml_name(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for name in ["", "given name", "1stName", "a<b", "-mail"] {
-        let attributes = Attributes::new(vec![Attribute::with_name_format(
-            name,
-            AttributeNameFormat::Basic,
-            values(&["x"]),
-        )]);
-        match respond(alice(), RespondSso::post().attributes(attributes)) {
+        let attributes = Attributes::new(vec![
+            Attribute::new(name, values(&["x"])).with_name_format(AttributeNameFormat::Basic)
+        ]);
+        match respond(&alice(), RespondSso::post().attributes(attributes)) {
             Err(SamlError::Invalid(message)) if message.contains("basic") => {}
             other => {
                 return Err(format!("expected basic name error for {name:?}, got {other:?}").into())
@@ -341,30 +318,21 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
         }
     }
     // The basic URI is the basic format however the caller spells it.
-    for attribute in [
-        Attribute::with_name_format(
-            "given name",
-            AttributeNameFormat::Custom(BASIC.to_string()),
-            values(&["x"]),
-        ),
-        Attribute::new("given name", Some(BASIC.to_string()), values(&["x"])),
-    ] {
-        assert_eq!(attribute.format(), Some(&AttributeNameFormat::Basic));
-        match respond(
-            alice(),
-            RespondSso::post().attributes(Attributes::new(vec![attribute])),
-        ) {
-            Err(SamlError::Invalid(message)) if message.contains("basic") => {}
-            other => return Err(format!("expected basic name error, got {other:?}").into()),
-        }
+    let spelled_out = Attribute::new("given name", values(&["x"]))
+        .with_name_format(AttributeNameFormat::Custom(BASIC.to_string()));
+    assert_eq!(spelled_out.name_format(), Some(&AttributeNameFormat::Basic));
+    match respond(
+        &alice(),
+        RespondSso::post().attributes(Attributes::new([spelled_out])),
+    ) {
+        Err(SamlError::Invalid(message)) if message.contains("basic") => {}
+        other => return Err(format!("expected basic name error, got {other:?}").into()),
     }
     for name in ["mail", "_mail", "ns:mail", "given-name.1", "é"] {
-        let attributes = Attributes::new(vec![Attribute::with_name_format(
-            name,
-            AttributeNameFormat::Basic,
-            values(&["x"]),
-        )]);
-        respond(alice(), RespondSso::post().attributes(attributes))?;
+        let attributes = Attributes::new(vec![
+            Attribute::new(name, values(&["x"])).with_name_format(AttributeNameFormat::Basic)
+        ]);
+        respond(&alice(), RespondSso::post().attributes(attributes))?;
     }
     // The xs:Name rule is the basic format's. Other formats carry any name.
     for format in [
@@ -372,12 +340,10 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
         AttributeNameFormat::Uri,
         AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string()),
     ] {
-        let attributes = Attributes::new(vec![Attribute::with_name_format(
-            "given name",
-            format,
-            values(&["x"]),
-        )]);
-        respond(alice(), RespondSso::post().attributes(attributes))?;
+        let attributes = Attributes::new(vec![
+            Attribute::new("given name", values(&["x"])).with_name_format(format)
+        ]);
+        respond(&alice(), RespondSso::post().attributes(attributes))?;
     }
     Ok(())
 }
@@ -409,14 +375,11 @@ fn typed_attributes_require_the_built_in_login_response_renderer(
             ..TemplatePolicy::default()
         })?;
         let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-        let attributes = Attributes::new(vec![Attribute::with_name_format(
-            "mail",
-            AttributeNameFormat::Basic,
-            values(&["a@example.com"]),
-        )]);
+        let attributes = Attributes::new(vec![Attribute::new("mail", values(&["a@example.com"]))
+            .with_name_format(AttributeNameFormat::Basic)]);
         match idp.initiate_sso(
             &sp_descriptor,
-            alice(),
+            &alice(),
             RespondSso::post().attributes(attributes),
         ) {
             Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
@@ -428,13 +391,10 @@ fn typed_attributes_require_the_built_in_login_response_renderer(
 
 #[test]
 fn error_response_omits_typed_attributes() -> Result<(), Box<dyn std::error::Error>> {
-    let attributes = Attributes::new(vec![Attribute::with_name_format(
-        "mail",
-        AttributeNameFormat::Basic,
-        values(&["a@example.com"]),
-    )]);
+    let attributes = Attributes::new(vec![Attribute::new("mail", values(&["a@example.com"]))
+        .with_name_format(AttributeNameFormat::Basic)]);
     let response = respond(
-        alice(),
+        &alice(),
         RespondSso::post()
             .attributes(attributes)
             .status(Status::responder()),
@@ -553,7 +513,7 @@ fn service_provider_accepts_an_attribute_whose_name_is_empty(
 
     assert_eq!(
         session.attributes().as_slice(),
-        [Attribute::new("", None, values(&["admin"]))]
+        [Attribute::new("", values(&["admin"]))]
     );
     Ok(())
 }
@@ -563,7 +523,7 @@ fn service_provider_accepts_a_basic_attribute_whose_name_is_not_an_xml_name(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = accept_peer_attributes(&[("given name", BASIC, "Alice")])?;
     let given_name = attribute(&session, "given name")?;
-    assert_eq!(given_name.format(), Some(&AttributeNameFormat::Basic));
+    assert_eq!(given_name.name_format(), Some(&AttributeNameFormat::Basic));
     assert_eq!(given_name.values(), values(&["Alice"]).as_slice());
     Ok(())
 }
@@ -582,26 +542,14 @@ fn service_provider_reports_the_name_format_of_each_peer_attribute(
     assert_eq!(
         session.attributes().as_slice(),
         [
-            Attribute::with_name_format(
-                "uid",
-                AttributeNameFormat::Unspecified,
-                values(&["alice"])
-            ),
-            Attribute::with_name_format(
-                MAIL_OID,
-                AttributeNameFormat::Uri,
-                values(&["a@example.com"])
-            ),
-            Attribute::with_name_format(
-                "eduPersonAffiliation",
-                AttributeNameFormat::Basic,
-                values(&["member", "staff"])
-            ),
-            Attribute::with_name_format(
-                "role",
-                AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string()),
-                values(&["admin"])
-            ),
+            Attribute::new("uid", values(&["alice"]))
+                .with_name_format(AttributeNameFormat::Unspecified),
+            Attribute::new(MAIL_OID, values(&["a@example.com"]))
+                .with_name_format(AttributeNameFormat::Uri),
+            Attribute::new("eduPersonAffiliation", values(&["member", "staff"]))
+                .with_name_format(AttributeNameFormat::Basic),
+            Attribute::new("role", values(&["admin"]))
+                .with_name_format(AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string())),
         ]
     );
     Ok(())
@@ -615,8 +563,9 @@ fn service_provider_keeps_one_attribute_for_each_name_and_name_format(
     assert_eq!(
         session.attributes().as_slice(),
         [
-            Attribute::with_name_format("role", AttributeNameFormat::Uri, values(&["admin"])),
-            Attribute::with_name_format("role", AttributeNameFormat::Basic, values(&["auditor"])),
+            Attribute::new("role", values(&["admin"])).with_name_format(AttributeNameFormat::Uri),
+            Attribute::new("role", values(&["auditor"]))
+                .with_name_format(AttributeNameFormat::Basic),
         ]
     );
     Ok(())
@@ -626,40 +575,28 @@ fn service_provider_keeps_one_attribute_for_each_name_and_name_format(
 fn service_provider_keeps_every_value_of_repeated_attribute_elements(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let attributes = Attributes::new(vec![
-        Attribute::with_name_format("role", AttributeNameFormat::Basic, values(&["a1"])),
-        Attribute::with_name_format("role", AttributeNameFormat::Basic, values(&["b1", "b2"])),
-        Attribute::with_name_format("group", AttributeNameFormat::Basic, values(&["g1", "g2"])),
-        Attribute::with_name_format("group", AttributeNameFormat::Basic, values(&["g3"])),
-        Attribute::new("uid", None, values(&["alice"])),
-        Attribute::with_name_format("uid", AttributeNameFormat::Unspecified, values(&["al"])),
-        Attribute::new(
-            "uid",
-            Some(DEPLOYMENT_FORMAT.to_string()),
-            values(&["0001"]),
-        ),
+        Attribute::new("role", values(&["a1"])).with_name_format(AttributeNameFormat::Basic),
+        Attribute::new("role", values(&["b1", "b2"])).with_name_format(AttributeNameFormat::Basic),
+        Attribute::new("group", values(&["g1", "g2"])).with_name_format(AttributeNameFormat::Basic),
+        Attribute::new("group", values(&["g3"])).with_name_format(AttributeNameFormat::Basic),
+        Attribute::new("uid", values(&["alice"])),
+        Attribute::new("uid", values(&["al"])).with_name_format(AttributeNameFormat::Unspecified),
+        Attribute::new("uid", values(&["0001"]))
+            .with_name_format(AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string())),
     ]);
 
-    let exchange = exchange(alice(), RespondSso::post().attributes(attributes))?;
+    let exchange = exchange(&alice(), RespondSso::post().attributes(attributes))?;
 
     assert_eq!(
         exchange.session.attributes().as_slice(),
         [
-            Attribute::with_name_format(
-                "role",
-                AttributeNameFormat::Basic,
-                values(&["a1", "b1", "b2"])
-            ),
-            Attribute::with_name_format(
-                "group",
-                AttributeNameFormat::Basic,
-                values(&["g1", "g2", "g3"])
-            ),
-            Attribute::new("uid", None, values(&["alice", "al"])),
-            Attribute::new(
-                "uid",
-                Some(DEPLOYMENT_FORMAT.to_string()),
-                values(&["0001"])
-            ),
+            Attribute::new("role", values(&["a1", "b1", "b2"]))
+                .with_name_format(AttributeNameFormat::Basic),
+            Attribute::new("group", values(&["g1", "g2", "g3"]))
+                .with_name_format(AttributeNameFormat::Basic),
+            Attribute::new("uid", values(&["alice", "al"])),
+            Attribute::new("uid", values(&["0001"]))
+                .with_name_format(AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string())),
         ]
     );
     Ok(())
@@ -675,22 +612,15 @@ fn identity_provider_does_not_generate_a_name_format_that_is_not_an_absolute_uri
         "attribute-name-format",
         "/relative/path",
     ] {
-        for attribute in [
-            Attribute::new("role", Some(name_format.to_string()), values(&["admin"])),
-            Attribute::with_name_format(
-                "role",
-                AttributeNameFormat::Custom(name_format.to_string()),
-                values(&["admin"]),
-            ),
-        ] {
-            match respond(
-                alice(),
-                RespondSso::post().attributes(Attributes::new(vec![attribute])),
-            ) {
-                Err(SamlError::Invalid(message)) if message.contains("NameFormat") => {}
-                Err(other) => return Err(other.into()),
-                Ok(_) => return Err(format!("NameFormat {name_format:?} was written").into()),
-            }
+        let attribute = Attribute::new("role", values(&["admin"]))
+            .with_name_format(AttributeNameFormat::Custom(name_format.to_string()));
+        match respond(
+            &alice(),
+            RespondSso::post().attributes(Attributes::new([attribute])),
+        ) {
+            Err(SamlError::Invalid(message)) if message.contains("NameFormat") => {}
+            Err(other) => return Err(other.into()),
+            Ok(_) => return Err(format!("NameFormat {name_format:?} was written").into()),
         }
     }
     Ok(())
@@ -711,7 +641,7 @@ fn assert_opaque_identifier(value: &str) {
 #[test]
 fn generated_request_response_and_assertion_ids_have_160_random_bits(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange(alice(), RespondSso::post())?;
+    let exchange = exchange(&alice(), RespondSso::post())?;
     let request_id = exchange
         .session
         .in_response_to()
@@ -742,7 +672,7 @@ fn generated_transient_and_persistent_identifiers_follow_the_producer_rules(
         assert_eq!(name_id.sp_provided_id(), None);
         assert_ne!(name_id.value(), generate().value());
 
-        let exchange = exchange(subject(name_id.clone()), RespondSso::post())?;
+        let exchange = exchange(&name_id, RespondSso::post())?;
         assert_eq!(
             name_id_element(&exchange.xml)?,
             format!(
@@ -760,14 +690,8 @@ fn generated_transient_and_persistent_identifiers_follow_the_producer_rules(
 fn stored_persistent_identifier_is_reissued_unchanged() -> Result<(), Box<dyn std::error::Error>> {
     let stored = NameId::generate_persistent().value().to_string();
 
-    let first = exchange(
-        subject(NameId::persistent(stored.clone())?),
-        RespondSso::post(),
-    )?;
-    let second = exchange(
-        subject(NameId::persistent(stored.clone())?),
-        RespondSso::post(),
-    )?;
+    let first = exchange(&NameId::persistent(stored.clone())?, RespondSso::post())?;
+    let second = exchange(&NameId::persistent(stored.clone())?, RespondSso::post())?;
 
     for exchange in [first, second] {
         assert_eq!(exchange.session.name_id().value(), stored);
@@ -782,15 +706,13 @@ fn stored_persistent_identifier_is_reissued_unchanged() -> Result<(), Box<dyn st
 #[test]
 fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_issued_identifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let name_id = NameId::with_qualifiers(
-        NameId::generate_persistent().value(),
-        Some(NameIdFormat::Persistent),
-        Some("https://origin-idp.example.com/?a=1&b=2".into()),
-        Some("\"affiliation\" <group>".into()),
-        Some("sp-alias".into()),
-    );
+    let name_id = NameId::new(NameId::generate_persistent().value())
+        .with_format(NameIdFormat::Persistent)
+        .with_name_qualifier("https://origin-idp.example.com/?a=1&b=2")
+        .with_sp_name_qualifier("\"affiliation\" <group>")
+        .with_sp_provided_id("sp-alias");
 
-    let exchange = exchange(subject(name_id.clone()), RespondSso::post())?;
+    let exchange = exchange(&name_id, RespondSso::post())?;
 
     assert_eq!(
         name_id_element(&exchange.xml)?,
@@ -816,24 +738,14 @@ fn a_login_response_template_does_not_drop_a_name_id_qualifier(
         ..TemplatePolicy::default()
     })?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let qualified = |name_qualifier: Option<&str>,
-                     sp_name_qualifier: Option<&str>,
-                     sp_provided_id: Option<&str>| {
-        NameId::with_qualifiers(
-            "pseudonym",
-            Some(NameIdFormat::Persistent),
-            name_qualifier.map(str::to_string),
-            sp_name_qualifier.map(str::to_string),
-            sp_provided_id.map(str::to_string),
-        )
-    };
+    let pseudonym = NameId::new("pseudonym").with_format(NameIdFormat::Persistent);
 
     for name_id in [
-        qualified(Some(IDP_ENTITY_ID), None, None),
-        qualified(None, Some(SP_ENTITY_ID), None),
-        qualified(None, None, Some("sp-alias")),
+        pseudonym.clone().with_name_qualifier(IDP_ENTITY_ID),
+        pseudonym.clone().with_sp_name_qualifier(SP_ENTITY_ID),
+        pseudonym.with_sp_provided_id("sp-alias"),
     ] {
-        match idp.initiate_sso(&sp_descriptor, subject(name_id), RespondSso::post()) {
+        match idp.initiate_sso(&sp_descriptor, &name_id, RespondSso::post()) {
             Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
             other => return Err(format!("expected a template error, got {other:?}").into()),
         }
@@ -866,18 +778,18 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
 ) -> Result<(), Box<dyn std::error::Error>> {
     // The limit counts characters, not bytes.
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
-        let longest = NameId::new("é".repeat(256), Some(format.clone()));
-        let exchange = exchange(subject(longest.clone()), RespondSso::post())?;
+        let longest = NameId::new("é".repeat(256)).with_format(format.clone());
+        let exchange = exchange(&longest, RespondSso::post())?;
         assert_eq!(exchange.session.name_id(), &longest);
 
-        let too_long = NameId::new("é".repeat(257), Some(format));
-        expect_name_id_length_error(respond(subject(too_long), RespondSso::post()))?;
+        let too_long = NameId::new("é".repeat(257)).with_format(format);
+        expect_name_id_length_error(respond(&too_long, RespondSso::post()))?;
     }
 
     for format in [PERSISTENT, TRANSIENT] {
         let padded = NameIdFormat::Custom(format!("\n {format}\t"));
-        let too_long = NameId::new("é".repeat(257), Some(padded));
-        expect_name_id_length_error(respond(subject(too_long), RespondSso::post()))?;
+        let too_long = NameId::new("é".repeat(257)).with_format(padded);
+        expect_name_id_length_error(respond(&too_long, RespondSso::post()))?;
     }
 
     // A NameID without a format is issued in the first configured format.
@@ -893,10 +805,10 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         .build()?,
     );
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let unformatted = NameId::new("x".repeat(257), None);
+    let unformatted = NameId::new("x".repeat(257));
     expect_name_id_length_error(idp.initiate_sso(
         &sp_descriptor,
-        subject(unformatted),
+        &unformatted,
         RespondSso::post(),
     ))?;
 
@@ -926,11 +838,9 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
     ))?;
 
     // The rule applies to these two formats only.
-    let email = NameId::new(
-        format!("{}@example.com", "x".repeat(300)),
-        Some(NameIdFormat::EmailAddress),
-    );
-    let exchange = exchange(subject(email.clone()), RespondSso::post())?;
+    let email = NameId::new(format!("{}@example.com", "x".repeat(300)))
+        .with_format(NameIdFormat::EmailAddress);
+    let exchange = exchange(&email, RespondSso::post())?;
     assert_eq!(exchange.session.name_id(), &email);
     Ok(())
 }
@@ -1002,7 +912,7 @@ fn service_provider_accepts_persistent_and_transient_identifiers_that_miss_the_p
     // Longer than 256 characters, and a discernible username.
     let value = format!("alice@example.com/{}", "x".repeat(300));
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
-        let name_id = NameId::new(value.clone(), Some(format));
+        let name_id = NameId::new(value.clone()).with_format(format);
         let session = accept_peer_name_id(&name_id)?;
         assert_eq!(session.name_id(), &name_id);
     }
@@ -1042,7 +952,7 @@ fn identity_provider_accepts_a_requested_identifier_that_misses_the_producer_rul
             .ok_or("missing requested subject")?;
         assert_eq!(
             requested.identifier(),
-            &RequestedSubjectIdentifier::NameId(NameId::new(value.clone(), Some(format)))
+            &RequestedSubjectIdentifier::NameId(NameId::new(value.clone()).with_format(format))
         );
     }
     Ok(())
@@ -1093,8 +1003,8 @@ fn existing_name_id_format_uris_resolve_as_before() -> Result<(), Box<dyn std::e
         ),
     ] {
         assert_eq!(format.as_uri(), uri);
-        let name_id = NameId::new("subject-1", Some(format));
-        let exchange = exchange(subject(name_id.clone()), RespondSso::post())?;
+        let name_id = NameId::new("subject-1").with_format(format);
+        let exchange = exchange(&name_id, RespondSso::post())?;
         assert!(
             name_id_element(&exchange.xml)?.contains(&format!("Format=\"{uri}\"")),
             "{uri}"
@@ -1138,17 +1048,17 @@ fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri
     let templated = templated_idp()?;
     let (sp_descriptor, _) = descriptors(&sp, &templated)?;
     for format in INVALID_FORMATS {
-        let name_id = NameId::new("subject-1", Some(NameIdFormat::Custom(format.into())));
+        let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
         for options in [
             RespondSso::post(),
             RespondSso::post().apply_web_browser_sso_generation_rules(),
         ] {
-            expect_name_id_format_error(respond(subject(name_id.clone()), options))?;
+            expect_name_id_format_error(respond(&name_id, options))?;
         }
         // A login response template receives the value in {NameIDFormat}.
         expect_name_id_format_error(templated.initiate_sso(
             &sp_descriptor,
-            subject(name_id),
+            &name_id,
             RespondSso::post(),
         ))?;
 
@@ -1170,11 +1080,9 @@ fn identity_provider_writes_xml_markup_in_a_name_id_format_as_character_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // XLink escaping maps `<`, `"`, and `>` to %3C, %22, and %3E, so the value
     // is an absolute URI reference. The XML writer escapes the markup.
-    let name_id = NameId::new(
-        "subject-1",
-        Some(NameIdFormat::Custom("urn:example:a<b\"c>&d".into())),
-    );
-    let exchange = exchange(subject(name_id.clone()), RespondSso::post())?;
+    let name_id =
+        NameId::new("subject-1").with_format(NameIdFormat::Custom("urn:example:a<b\"c>&d".into()));
+    let exchange = exchange(&name_id, RespondSso::post())?;
     assert!(
         name_id_element(&exchange.xml)?.contains("Format=\"urn:example:a&lt;b&quot;c&gt;&amp;d\"")
     );
@@ -1308,7 +1216,7 @@ fn service_provider_accepts_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // SAML Core §1.3.2 binds the writer of the value. No receiver rule rejects it.
     for format in ["local-format", "urn:%zz"] {
-        let name_id = NameId::new("subject-1", Some(NameIdFormat::Custom(format.into())));
+        let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
         let session = accept_peer_name_id(&name_id)?;
         assert_eq!(session.name_id(), &name_id);
     }

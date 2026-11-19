@@ -24,7 +24,7 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
     let unspecified = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondPaosSso::default(),
     );
     assert!(matches!(unspecified, Err(SamlError::Invalid(_))));
@@ -32,7 +32,7 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
     let answered = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        subject(),
+        &principal(),
         RespondPaosSso::default().authn_context(AuthnContextReference::class(SMARTCARD)?),
     )?;
     assert!(answered.envelope().contains(&format!(
@@ -47,8 +47,9 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
     )?;
     assert_eq!(
         session
-            .authn_session()
-            .authn_context()
+            .authn_statements()
+            .first()
+            .and_then(|statement| statement.authn_context())
             .and_then(|context| context.class_reference())
             .map(AuthnContextReference::uri),
         Some(SMARTCARD),

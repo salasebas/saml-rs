@@ -247,7 +247,7 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
             "start_name_id_management",
             idp.start_name_id_management(
                 &expired_sp,
-                &NameId::new("current-value", None),
+                &NameId::new("current-value"),
                 &NameIdChange::Terminate,
                 IdentifierEncryptionPolicy::PlaintextIdentifiers,
                 channel,
@@ -400,7 +400,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
     let expired_sp = sp_descriptor(&expired_sp)?;
     let expired_idp = idp_descriptor(&expired_idp)?;
     let now = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
-    let name_id = NameId::new("alice", Some(NameIdFormat::EmailAddress));
+    let name_id = NameId::new("alice").with_format(NameIdFormat::EmailAddress);
     let subject =
         LogoutSubject::new(name_id.clone()).with_session_index(SessionIndex::try_new("_session")?);
     let started = sp.start_slo(&current_idp, subject.clone(), StartSlo::redirect())?;
@@ -449,7 +449,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
             "SP start_name_id_management_redirect",
             sp.start_name_id_management_redirect(
                 &expired_idp,
-                &NameId::new("transient", Some(NameIdFormat::Transient)),
+                &NameId::new("transient").with_format(NameIdFormat::Transient),
                 &NameIdChange::Terminate,
                 StartNameIdManagement::redirect(),
             )
@@ -459,7 +459,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
             "IdP start_name_id_management_redirect",
             idp.start_name_id_management_redirect(
                 &expired_sp,
-                &NameId::new("transient", Some(NameIdFormat::Transient)),
+                &NameId::new("transient").with_format(NameIdFormat::Transient),
                 &NameIdChange::Terminate,
                 StartNameIdManagement::redirect(),
             )

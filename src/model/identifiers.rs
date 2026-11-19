@@ -1,100 +1,71 @@
+use std::fmt;
+
 use crate::error::SamlError;
 
-/// SAML protocol message `ID`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MessageId(String);
+macro_rules! non_empty_text {
+    ($(#[$type_doc:meta])* $name:ident, $label:literal) => {
+        $(#[$type_doc])*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct $name(String);
 
-impl MessageId {
-    /// Validate and wrap a SAML protocol message ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when the message ID is empty.
-    pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(SamlError::Invalid(
-                "SAML message ID must not be empty".into(),
-            ));
+        impl $name {
+            #[doc = concat!("Create the ", $label, " from its text.")]
+            ///
+            /// # Errors
+            ///
+            #[doc = concat!(
+                "Returns [`SamlError::Invalid`] when the ",
+                $label,
+                " has no non-whitespace character."
+            )]
+            pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
+                let value = value.into();
+                if value.trim().is_empty() {
+                    return Err(SamlError::Invalid(
+                        concat!($label, " must not be empty").into(),
+                    ));
+                }
+                Ok(Self(value))
+            }
+
+            #[doc = concat!("Borrow the ", $label, " text.")]
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
         }
-        Ok(Self(value))
-    }
 
-    /// Borrow the message ID string.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+        impl fmt::Display for $name {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str(&self.0)
+            }
+        }
+    };
 }
 
-/// Assertion ID extracted from a SAML assertion.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AssertionId(String);
+non_empty_text!(
+    /// SAML protocol message `ID`.
+    MessageId,
+    "SAML message ID"
+);
 
-impl AssertionId {
-    /// Validate and wrap an assertion ID.
+non_empty_text!(
+    /// `ID` of a SAML assertion.
+    AssertionId,
+    "assertion ID"
+);
+
+non_empty_text!(
+    /// SAML `xs:dateTime` instant text carried in pending snapshots and parsed
+    /// results.
     ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when the assertion ID is empty.
-    pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(SamlError::Invalid("assertion ID must not be empty".into()));
-        }
-        Ok(Self(value))
-    }
+    /// `try_new` stores the text unchanged and does not parse it. The
+    /// validation that consumes the instant parses and enforces it.
+    SamlInstant,
+    "SAML instant"
+);
 
-    /// Borrow the assertion ID string.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// SAML instant text carried in pending snapshots and parsed results.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SamlInstant(String);
-
-impl SamlInstant {
-    /// Validate and wrap a SAML instant string.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when the instant is empty. Full temporal
-    /// enforcement is left to the validation policy that consumes the value.
-    pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(SamlError::Invalid("SAML instant must not be empty".into()));
-        }
-        Ok(Self(value))
-    }
-
-    /// Borrow the instant string.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// SessionIndex from an AuthnStatement or LogoutRequest.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SessionIndex(String);
-
-impl SessionIndex {
-    /// Validate and wrap a SessionIndex.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when the SessionIndex is empty.
-    pub fn try_new(value: impl Into<String>) -> Result<Self, SamlError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(SamlError::Invalid("SessionIndex must not be empty".into()));
-        }
-        Ok(Self(value))
-    }
-
-    /// Borrow the SessionIndex string.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
+non_empty_text!(
+    /// `SessionIndex` from an `AuthnStatement` or `LogoutRequest`.
+    SessionIndex,
+    "SessionIndex"
+);

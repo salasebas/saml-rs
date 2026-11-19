@@ -49,12 +49,12 @@ let session = sp.finish_sso(
     validation,
 )?;
 
-let name_id = session.subject().name_id().value();
+let name_id = session.name_id().value();
 ```
 
 `credentials`, `idp_metadata_xml`, `metadata_signing_cert`, `now`, `replay_cache`, and `form_fields` come from your application. The block omits `use` and `fn main`. It is the shape of the calls, not a file that compiles alone. `session` is an `SsoSession`.
 
-`session.attributes()` holds the attributes of the assertion. `Attribute::format()` is the attribute's `AttributeNameFormat`, and is `None` when the identity provider sent no `NameFormat`. A persistent or transient name identifier is reported as it was sent. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
+`session.attributes()` holds the attributes of the assertion. `first_value("mail")` returns the first value of the first attribute named `mail`. `Attribute::name_format()` is the attribute's `AttributeNameFormat`, and is `None` when the identity provider sent no `NameFormat`. A persistent or transient name identifier is reported as it was sent. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
 `start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. Those constructors leave the generation rules off. Call `apply_web_browser_sso_generation_rules()` when you want the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 

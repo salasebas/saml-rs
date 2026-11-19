@@ -1,7 +1,6 @@
 #[cfg(crypto)]
 #[path = "../../tests/common/mod.rs"]
 mod common;
-#[cfg(crypto)]
 #[path = "../../tests/common/replay_cache.rs"]
 mod replay_cache;
 
@@ -39,6 +38,7 @@ mod simplesign_xml_limits;
 mod sso_response_issuer;
 mod typed_slo;
 mod typed_sso;
+mod typed_validation_context;
 mod xml_injection;
 mod xml_line_endings;
 #[cfg_attr(
