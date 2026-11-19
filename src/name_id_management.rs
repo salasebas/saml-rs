@@ -545,7 +545,7 @@ fn simple_content(element: &SamlElement) -> Result<&SamlElement, SamlError> {
 
 fn name_id(element: &SamlElement) -> NameId {
     let attr = |name| element.attr(name).map(str::to_string);
-    NameId::from_parts(
+    NameId::received(
         element.text.clone(),
         element.attr("Format").map(name_id_format_from_uri),
         attr("NameQualifier"),

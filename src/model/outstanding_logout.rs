@@ -133,7 +133,7 @@ impl OutstandingLogout {
         if self.session_indexes.is_empty() {
             return true;
         }
-        session.authn_sessions().iter().any(|authn| {
+        session.authn_statements().iter().any(|authn| {
             authn
                 .session_index()
                 .is_some_and(|index| self.session_indexes.contains(index))

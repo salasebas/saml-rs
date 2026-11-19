@@ -123,17 +123,22 @@ let attributes = Attributes::new([
 **Affects:** service providers that read an `SsoSession` or an
 `AuthnSession`.
 
+`AuthnSession` is renamed `AuthnStatement`, because each value is one
+`<AuthnStatement>` of the assertion.
+
 | Before | After |
 | --- | --- |
 | `session.subject().name_id()` | `session.name_id()` |
 | `session.subject().confirmations()` | `session.subject_confirmations()` |
-| `session.authn_session()` | `session.authn_sessions().first()` |
+| `AuthnSession` | `AuthnStatement` |
+| `session.authn_sessions()` | `session.authn_statements()` |
+| `session.authn_session()` | `session.authn_statements().first()` |
 | `session.assertion()` | `session.assertion_id()`, `session.issuer()`, and `session.name_id()` |
-| `authn_session.not_on_or_after()` | `authn_session.session_not_on_or_after()` |
+| `authn_session.not_on_or_after()` | `statement.session_not_on_or_after()` |
 | `session.replay_keys()` | Removed |
 
 `authn_session()` returned an empty `AuthnSession` when the assertion had no
-`AuthnStatement`. `authn_sessions().first()` returns `None` instead. The
+`AuthnStatement`. `authn_statements().first()` returns `None` instead. The
 renamed `session_not_on_or_after()` is the statement's `SessionNotOnOrAfter`.
 `SsoSession::not_on_or_after()` is still the assertion's
 `Conditions@NotOnOrAfter`.
@@ -149,7 +154,7 @@ After the upgrade:
 ```rust
 # fn read(session: &saml_rs::SsoSession) {
 let expires = session
-	.authn_sessions()
+	.authn_statements()
 	.first()
 	.and_then(|statement| statement.session_not_on_or_after());
 # let _ = expires;
@@ -165,15 +170,19 @@ the keys in the `ReplayCache` of the validation context.
 **Affects:** callers of `SsoSession::check_and_store_replay` or
 `AuthnRequest::check_and_store_replay`.
 
-Both methods are removed from the public API. `finish_sso`,
-`accept_unsolicited_sso`, `finish_paos_sso`, `receive_sso`, and
-`receive_paos_sso` store the replay keys under
-`ReplayPolicy::RequireCache`. Calling a removed method on their result
-returned `SamlError::ReplayDetected`, because the keys were already stored.
+Both methods are removed from the public API. What to do depends on where
+the value came from:
 
-Delete the call. If you convert a raw `FlowResult` with `TryFrom` and then
-check replay, receive the message through the typed method instead. See
-[Move off the deprecated raw API](raw-api.md).
+- **A typed receiving method.** `finish_sso`, `accept_unsolicited_sso`,
+  `finish_paos_sso`, `receive_sso`, and `receive_paos_sso` store the replay
+  keys under `ReplayPolicy::RequireCache`. A removed method called on their
+  result returned `SamlError::ReplayDetected`, because the keys were already
+  stored. Delete the call.
+- **`TryFrom<FlowResult>`.** For an `SsoSession` or `AuthnRequest` converted
+  from a raw flow, that call was the only replay check. Deleting it alone
+  accepts a replayed message. In this upgrade, receive the message with
+  `finish_sso`, `accept_unsolicited_sso`, or `receive_sso` instead, as
+  [Move off the deprecated raw API](raw-api.md) shows.
 
 ## Stop building values that only a received message carries
 
@@ -183,7 +192,7 @@ check replay, receive the message through the typed method instead. See
 | --- | --- |
 | `NameIdPolicy::new`, `unspecified`, `allow_creation`, `disallow_creation`, `with_sp_name_qualifier` | Removed. Read `AuthnRequest::name_id_policy()` |
 | `policy.allow_create()` | `policy.creation_request()` |
-| `AuthnSession::new` | Removed. Read `SsoSession::authn_sessions()` |
+| `AuthnSession::new` | Removed. Read `SsoSession::authn_statements()` |
 | `SubjectConfirmation::from_raw_xml` | Removed. Read `SsoSession::subject_confirmations()` |
 | `Assertion` | Removed. Read the `SsoSession` accessors |
 | `SsoResponse` accessors and `SsoResponse::try_from(flow)` | Removed. Use `SsoSession` |

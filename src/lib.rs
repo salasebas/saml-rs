@@ -467,7 +467,7 @@ pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime,
 pub use model::{
     AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AuthnContext,
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, AuthnRequest,
-    AuthnSession, ClockSkew, InMemoryReplayCache, LogoutCompleted, LogoutRequest, LogoutResponse,
+    AuthnStatement, ClockSkew, InMemoryReplayCache, LogoutCompleted, LogoutRequest, LogoutResponse,
     LogoutSubject, MessageId, NameId, NameIdCreationRequest, NameIdPolicy, OutstandingLogout,
     Received, RelayState, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy,
     RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,

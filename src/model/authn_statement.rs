@@ -3,15 +3,14 @@ use super::identifiers::{SamlInstant, SessionIndex};
 use crate::error::{SamlError, TimeWindowField};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-/// Session data from one `AuthnStatement`.
+/// One `<AuthnStatement>` of an accepted assertion.
 ///
-/// Each value preserves the statement's `SessionIndex`, `AuthnInstant`,
+/// Each value keeps that statement's `SessionIndex`, `AuthnInstant`,
 /// `SessionNotOnOrAfter`, `AuthnContext`, and `SubjectLocality` together.
-/// Assertions with repeated statements are
-/// represented by multiple values in document order through
-/// [`crate::SsoSession::authn_sessions`].
+/// [`crate::SsoSession::authn_statements`] lists one value for each statement,
+/// in document order.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthnSession {
+pub struct AuthnStatement {
     session_index: Option<SessionIndex>,
     authn_instant: Option<SamlInstant>,
     session_not_on_or_after: Option<SamlInstant>,
@@ -34,7 +33,7 @@ pub(crate) fn earliest_authn_session_expiration<'a>(
     Ok(earliest)
 }
 
-impl AuthnSession {
+impl AuthnStatement {
     pub(super) fn new(
         session_index: Option<SessionIndex>,
         authn_instant: Option<SamlInstant>,

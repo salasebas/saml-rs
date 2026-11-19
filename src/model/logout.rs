@@ -141,7 +141,7 @@ impl TryFrom<FlowResult> for LogoutRequest {
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
         let name_id_attribute = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
         let name_id = raw_flow.extract.get_str("nameID").map(|value| {
-            NameId::from_parts(
+            NameId::received(
                 value,
                 raw_flow
                     .extract

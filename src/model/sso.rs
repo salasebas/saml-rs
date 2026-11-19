@@ -1,11 +1,11 @@
 use super::attributes::Attributes;
+use super::authn_statement::AuthnStatement;
 use super::extract::{
-    attributes_from_extract, authn_sessions_from_extract, conditions_instants,
+    attributes_from_extract, authn_statements_from_extract, conditions_instants,
     entity_ids_from_value, name_id_format_from_uri, optional_request_id, required_str,
     subject_confirmations_from_extract,
 };
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
-use super::session::AuthnSession;
 use super::subject::{NameId, SubjectConfirmation};
 use super::validation::system_time_from_offset_datetime;
 use super::{
@@ -21,7 +21,7 @@ use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 const REPLAY_EXPIRATION_FIELD: TimeWindowField = TimeWindowField::ReplayExpiration;
 
-/// The SAML `<Response>` of Web Browser SSO, as a message type.
+/// The SAML `<Response>` of a Web Browser SSO or ECP login, as a message type.
 ///
 /// It names the message in [`crate::Inbound`], [`crate::Outbound`], and
 /// [`crate::PaosHttpResponse`]. It has no values: a service provider receives
@@ -98,7 +98,7 @@ pub struct SsoSession {
     name_id: NameId,
     subject_confirmations: Vec<SubjectConfirmation>,
     attributes: Attributes,
-    authn_sessions: Vec<AuthnSession>,
+    authn_statements: Vec<AuthnStatement>,
     audience: Vec<EntityId>,
     not_before: Option<SamlInstant>,
     not_on_or_after: Option<SamlInstant>,
@@ -169,12 +169,11 @@ impl SsoSession {
         &self.attributes
     }
 
-    /// One [`AuthnSession`] for each `AuthnStatement` of the assertion, in
-    /// document order.
+    /// The `<AuthnStatement>` elements of the assertion, in document order.
     ///
     /// The slice is empty when the assertion has no `AuthnStatement`.
-    pub fn authn_sessions(&self) -> &[AuthnSession] {
-        &self.authn_sessions
+    pub fn authn_statements(&self) -> &[AuthnStatement] {
+        &self.authn_statements
     }
 
     /// Audience restrictions.
@@ -190,7 +189,7 @@ impl SsoSession {
     /// Conditions NotOnOrAfter.
     ///
     /// The `SessionNotOnOrAfter` of a statement is
-    /// [`AuthnSession::session_not_on_or_after`].
+    /// [`AuthnStatement::session_not_on_or_after`].
     pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
         self.not_on_or_after.as_ref()
     }
@@ -245,9 +244,9 @@ impl SsoSession {
             return None;
         }
         let session_indexes = self
-            .authn_sessions
+            .authn_statements
             .iter()
-            .filter_map(AuthnSession::session_index)
+            .filter_map(AuthnStatement::session_index)
             .cloned();
         Some(LogoutSubject::new(self.name_id().clone()).with_session_indexes(session_indexes))
     }
@@ -348,9 +347,9 @@ impl SsoSession {
             candidates.push(parse_replay_expiration(instant.as_str())?);
         }
         if let Some(instant) = earliest_authn_session_expiration(
-            self.authn_sessions
+            self.authn_statements
                 .iter()
-                .filter_map(AuthnSession::session_not_on_or_after)
+                .filter_map(AuthnStatement::session_not_on_or_after)
                 .map(SamlInstant::as_str),
             REPLAY_EXPIRATION_FIELD,
         )? {
@@ -440,7 +439,7 @@ impl SsoSession {
             .get_str("nameIDFormat")
             .map(name_id_format_from_uri);
         let name_id_qualifier = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
-        let name_id = NameId::from_parts(
+        let name_id = NameId::received(
             required_str(&raw_flow.extract, "nameID")?,
             name_id_format,
             name_id_qualifier("nameIDQualifiers.nameQualifier"),
@@ -449,8 +448,8 @@ impl SsoSession {
         );
         let subject_confirmations = subject_confirmations_from_extract(&raw_flow.extract);
         let attributes = attributes_from_extract(&raw_flow.extract)?;
-        let authn_sessions =
-            authn_sessions_from_extract(&raw_flow.extract, &raw_flow.saml_content)?;
+        let authn_statements =
+            authn_statements_from_extract(&raw_flow.extract, &raw_flow.saml_content)?;
         let audience = entity_ids_from_value(raw_flow.extract.get("audience"))?;
         let (not_before, not_on_or_after) = conditions_instants(&raw_flow.extract)?;
         let sig_alg = raw_flow.sig_alg.clone();
@@ -465,7 +464,7 @@ impl SsoSession {
             name_id,
             subject_confirmations,
             attributes,
-            authn_sessions,
+            authn_statements,
             audience,
             not_before,
             not_on_or_after,

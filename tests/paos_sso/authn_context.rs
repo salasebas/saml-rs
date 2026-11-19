@@ -47,7 +47,7 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
     )?;
     assert_eq!(
         session
-            .authn_sessions()
+            .authn_statements()
             .first()
             .and_then(|statement| statement.authn_context())
             .and_then(|context| context.class_reference())

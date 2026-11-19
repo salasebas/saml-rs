@@ -2,14 +2,14 @@ use std::fmt;
 
 use crate::error::SamlError;
 
-macro_rules! text_identifier {
+macro_rules! non_empty_text {
     ($(#[$type_doc:meta])* $name:ident, $label:literal) => {
         $(#[$type_doc])*
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         pub struct $name(String);
 
         impl $name {
-            #[doc = concat!("Validate and wrap a ", $label, ".")]
+            #[doc = concat!("Create the ", $label, " from its text.")]
             ///
             /// # Errors
             ///
@@ -42,29 +42,29 @@ macro_rules! text_identifier {
     };
 }
 
-text_identifier!(
+non_empty_text!(
     /// SAML protocol message `ID`.
     MessageId,
     "SAML message ID"
 );
 
-text_identifier!(
+non_empty_text!(
     /// `ID` of a SAML assertion.
     AssertionId,
     "assertion ID"
 );
 
-text_identifier!(
+non_empty_text!(
     /// SAML `xs:dateTime` instant text carried in pending snapshots and parsed
     /// results.
     ///
-    /// The value is kept as received. The validation that consumes it parses
-    /// and enforces the instant.
+    /// `try_new` stores the text unchanged and does not parse it. The
+    /// validation that consumes the instant parses and enforces it.
     SamlInstant,
     "SAML instant"
 );
 
-text_identifier!(
+non_empty_text!(
     /// `SessionIndex` from an `AuthnStatement` or `LogoutRequest`.
     SessionIndex,
     "SessionIndex"

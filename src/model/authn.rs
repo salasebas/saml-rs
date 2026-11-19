@@ -298,7 +298,7 @@ fn name_id_from_extract(extract: &crate::util::Value, value: &str) -> Result<Nam
         "AuthnRequest NameID Format",
     )?
     .map(name_id_format_from_uri);
-    Ok(NameId::from_parts(
+    Ok(NameId::received(
         value.to_string(),
         format,
         optional_attribute(extract, "requestedNameQualifier", "NameQualifier")?,

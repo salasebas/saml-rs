@@ -89,9 +89,19 @@ pub struct NameId {
 impl NameId {
     /// Create a NameID with no `Format` and no qualifiers.
     ///
-    /// A `<NameID>` without `Format` is in the `unspecified` format.
+    /// An identity provider writes a `NameId` without a format with its first
+    /// configured NameID format, in a response and in a `LogoutRequest`, and
+    /// omits `Format` when none is configured. A service provider's
+    /// `LogoutRequest` omits it. Where `Format` is omitted, `unspecified` is in
+    /// effect.
     pub fn new(value: impl Into<String>) -> Self {
-        Self::from_parts(value, None, None, None, None)
+        Self {
+            value: value.into(),
+            format: None,
+            name_qualifier: None,
+            sp_name_qualifier: None,
+            sp_provided_id: None,
+        }
     }
 
     /// Create a new transient identifier.
@@ -170,7 +180,7 @@ impl NameId {
     }
 
     /// A received `<NameID>`. `None` is an omitted attribute.
-    pub(crate) fn from_parts(
+    pub(crate) fn received(
         value: impl Into<String>,
         format: Option<NameIdFormat>,
         name_qualifier: Option<String>,

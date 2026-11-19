@@ -255,7 +255,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
             validation(),
         )?;
         let statement = session
-            .authn_sessions()
+            .authn_statements()
             .first()
             .ok_or("missing AuthnStatement")?;
         let context = statement.authn_context().ok_or("missing context")?;
@@ -286,7 +286,7 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
         sp.accept_unsolicited_sso(&idp_descriptor, response_input(&response)?, validation())?;
     assert_eq!(
         session
-            .authn_sessions()
+            .authn_statements()
             .first()
             .and_then(|statement| statement.authn_context())
             .and_then(|context| context.class_reference())
@@ -416,7 +416,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         )]),
         validation(),
     )?;
-    let sessions = session.authn_sessions();
+    let sessions = session.authn_statements();
     assert_eq!(session.assertion_id().as_str(), selected_id);
     assert_eq!(sessions.len(), 3);
     assert_eq!(
@@ -513,7 +513,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
     )?;
     assert_eq!(
         session
-            .authn_sessions()
+            .authn_statements()
             .first()
             .and_then(|statement| statement.authn_context())
             .and_then(|context| context.class_reference())

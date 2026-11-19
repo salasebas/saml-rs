@@ -130,7 +130,9 @@ impl Saml<Idp> {
     ///
     /// The assertion `Subject` has `name_id` as its `NameID`, with its value,
     /// `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`, and
-    /// the bearer `SubjectConfirmation` this identity provider writes. After
+    /// the bearer `SubjectConfirmation` this identity provider writes. A
+    /// `name_id` without a format is written with the first configured NameID
+    /// format; with none configured, `Format` is omitted. After
     /// a service provider sets its alternative identifier through
     /// [`Self::receive_name_id_management`], pass that value with
     /// [`NameId::with_sp_provided_id`](crate::NameId::with_sp_provided_id).

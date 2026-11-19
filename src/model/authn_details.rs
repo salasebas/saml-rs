@@ -94,8 +94,8 @@ impl SubjectLocality {
 pub(super) fn attach_statement_details(
     extract: &crate::util::Value,
     xml: &str,
-    sessions: Vec<super::AuthnSession>,
-) -> Result<Vec<super::AuthnSession>, crate::error::SamlError> {
+    sessions: Vec<super::AuthnStatement>,
+) -> Result<Vec<super::AuthnStatement>, crate::error::SamlError> {
     use crate::error::SamlError;
     use crate::xml::dom::XmlLimits;
     use crate::xml::protocol_element::parse_saml_with_limits;

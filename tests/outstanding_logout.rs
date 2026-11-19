@@ -11,7 +11,7 @@ use common::signing_credentials;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use saml_rs::{
-    AcsEndpoint, AuthnSession, ClockSkew, EntityId, FormField, IdpConfig, IdpDescriptor,
+    AcsEndpoint, AuthnStatement, ClockSkew, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, InMemoryReplayCache, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
     OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
@@ -150,9 +150,9 @@ fn logout(
 
 fn session_index(session: &SsoSession) -> Result<SessionIndex, Box<dyn std::error::Error>> {
     session
-        .authn_sessions()
+        .authn_statements()
         .iter()
-        .find_map(AuthnSession::session_index)
+        .find_map(AuthnStatement::session_index)
         .cloned()
         .ok_or_else(|| "expected the assertion to carry a SessionIndex".into())
 }

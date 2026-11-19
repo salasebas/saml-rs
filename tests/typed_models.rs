@@ -1231,7 +1231,7 @@ fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
     );
     assert_eq!(
         session
-            .authn_sessions()
+            .authn_statements()
             .iter()
             .map(|statement| statement.session_index().map(|id| id.as_str()))
             .collect::<Vec<_>>(),
@@ -1259,7 +1259,7 @@ fn typed_models_sso_session_preserves_repeated_authn_statements_in_order(
 
     let session = SsoSession::try_from(flow)?;
     let tuples = session
-        .authn_sessions()
+        .authn_statements()
         .iter()
         .map(|authn| {
             (
@@ -1289,13 +1289,13 @@ fn typed_models_sso_session_preserves_repeated_authn_statements_in_order(
 }
 
 #[test]
-fn typed_models_sso_session_without_authn_statements_has_no_authn_sessions(
+fn typed_models_sso_session_without_authn_statements_lists_none(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let missing = SsoSession::try_from(minimal_sso_flow(None))?;
     let empty_array = SsoSession::try_from(minimal_sso_flow(Some(Value::Array(Vec::new()))))?;
 
-    assert!(missing.authn_sessions().is_empty());
-    assert!(empty_array.authn_sessions().is_empty());
+    assert!(missing.authn_statements().is_empty());
+    assert!(empty_array.authn_statements().is_empty());
     Ok(())
 }
 

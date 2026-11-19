@@ -267,7 +267,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
     )?;
     assert_eq!(
         session
-            .authn_sessions()
+            .authn_statements()
             .first()
             .and_then(|statement| statement.authn_instant()),
         Some(&SamlInstant::try_new(AUTHENTICATED)?)

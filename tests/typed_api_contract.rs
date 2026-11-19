@@ -112,8 +112,8 @@ fn typed_api_contract_reexports_browser_and_model_types() {
         saml_rs::SsoSession::response_issue_instant;
     let _: for<'a> fn(&'a saml_rs::SsoSession) -> &'a [saml_rs::SubjectConfirmation] =
         saml_rs::SsoSession::subject_confirmations;
-    let _: for<'a> fn(&'a saml_rs::AuthnSession) -> Option<&'a SamlInstant> =
-        saml_rs::AuthnSession::session_not_on_or_after;
+    let _: for<'a> fn(&'a saml_rs::AuthnStatement) -> Option<&'a SamlInstant> =
+        saml_rs::AuthnStatement::session_not_on_or_after;
     let _: for<'a> fn(&'a saml_rs::SsoSession) -> &'a SamlInstant =
         saml_rs::SsoSession::assertion_issue_instant;
     let _: for<'a> fn(&'a saml_rs::SsoSession) -> &'a [VerifiedXmlSignature] =
@@ -131,7 +131,7 @@ fn typed_api_contract_reexports_browser_and_model_types() {
     let _ = std::any::type_name::<saml_rs::Attribute>();
     let _ = std::any::type_name::<saml_rs::AttributeValue>();
     let _ = std::any::type_name::<saml_rs::Attributes>();
-    let _ = std::any::type_name::<saml_rs::AuthnSession>();
+    let _ = std::any::type_name::<saml_rs::AuthnStatement>();
     let _ = std::any::type_name::<saml_rs::LogoutCompleted>();
     let _ = std::any::type_name::<saml_rs::LogoutRequest>();
     let _ = std::any::type_name::<saml_rs::LogoutResponse>();
