@@ -516,6 +516,20 @@ fn one_time_use_is_accepted_and_a_later_exchange_succeeds() -> Result<(), Box<dy
     Ok(())
 }
 
+fn audience_groups(session: &SsoSession) -> Vec<Vec<&str>> {
+    session
+        .audience_restrictions()
+        .iter()
+        .map(|restriction| {
+            restriction
+                .audiences()
+                .iter()
+                .map(EntityId::as_str)
+                .collect()
+        })
+        .collect()
+}
+
 #[test]
 fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -529,8 +543,8 @@ fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
         ),
     )?)?;
     assert_eq!(
-        accept(&exchange, &both)?.name_id().value(),
-        "alice@example.com"
+        audience_groups(&accept(&exchange, &both)?),
+        [[SP_ENTITY_ID], [SP_ENTITY_ID]]
     );
 
     let alternatives = resigned(&original.replacen(
@@ -541,8 +555,8 @@ fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
         1,
     ))?;
     assert_eq!(
-        accept(&exchange, &alternatives)?.name_id().value(),
-        "alice@example.com"
+        audience_groups(&accept(&exchange, &alternatives)?),
+        [[SP_ENTITY_ID, OTHER_AUDIENCE]]
     );
 
     let missing = resigned(&insert_after_audience_restriction(

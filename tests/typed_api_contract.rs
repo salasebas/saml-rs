@@ -102,7 +102,7 @@ fn typed_api_contract_compares_inbound_messages_by_binding_and_content() {
 fn typed_api_contract_reexports_browser_and_model_types() {
     let _: for<'a> fn(&'a AuthnRequest) -> &'a SamlInstant = AuthnRequest::issue_instant;
     let _: fn(&AuthnRequest) -> Option<saml_rs::ForceAuthn> = AuthnRequest::force_authn;
-    let _: fn(&AuthnRequest) -> Option<saml_rs::IsPassive> = AuthnRequest::is_passive;
+    let _: fn(&AuthnRequest) -> Option<saml_rs::IsPassive> = AuthnRequest::passive;
     let _: for<'a> fn(&'a AuthnRequest) -> Option<&'a saml_rs::RequestedSubject> =
         AuthnRequest::requested_subject;
     let _: for<'a> fn(&'a saml_rs::NameId) -> Option<&'a str> = saml_rs::NameId::name_qualifier;
@@ -131,6 +131,7 @@ fn typed_api_contract_reexports_browser_and_model_types() {
     let _ = std::any::type_name::<saml_rs::Attribute>();
     let _ = std::any::type_name::<saml_rs::AttributeValue>();
     let _ = std::any::type_name::<saml_rs::Attributes>();
+    let _ = std::any::type_name::<saml_rs::AudienceRestriction>();
     let _ = std::any::type_name::<saml_rs::AuthnStatement>();
     let _ = std::any::type_name::<saml_rs::LogoutCompleted>();
     let _ = std::any::type_name::<saml_rs::LogoutRequest>();

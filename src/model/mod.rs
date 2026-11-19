@@ -3,6 +3,7 @@
 //! References: SAML Core 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf> and SAML Profiles 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf>.
 
 mod attributes;
+mod audience_restriction;
 mod authn;
 mod authn_context;
 mod authn_details;
@@ -27,6 +28,7 @@ pub(crate) use subject::{
 };
 
 pub use attributes::{Attribute, AttributeNameFormat, AttributeValue, Attributes};
+pub use audience_restriction::AudienceRestriction;
 pub use authn::{AuthnRequest, ForceAuthn, IsPassive};
 pub use authn_context::{
     AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind, RequestedAuthnContext,

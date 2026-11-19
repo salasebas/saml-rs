@@ -199,6 +199,10 @@ pub enum AudienceValidationPolicy {
     /// A bearer assertion that omits the element is not rejected.
     EvaluatePresentRestrictions,
     /// Skip audience evaluation, preserving the samlify port.
+    ///
+    /// A caller that evaluates the audience itself reads
+    /// [`crate::SsoSession::audience_restrictions`] and requires its entity ID
+    /// in every restriction.
     Skip,
 }
 
