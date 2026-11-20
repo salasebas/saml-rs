@@ -2,7 +2,7 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::deflate_raw_decode;
+use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::{EntitySetting, User};
 #[allow(deprecated)]
@@ -399,7 +399,10 @@ fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn 
         .query_pairs()
         .find(|(key, _)| key == "SAMLRequest")
         .ok_or("missing SAMLRequest")?;
-    let xml = String::from_utf8(deflate_raw_decode(&STANDARD.decode(encoded.as_ref())?)?)?;
+    let xml = String::from_utf8(deflate_raw_decode(
+        &STANDARD.decode(encoded.as_ref())?,
+        MAX_DEFLATE_RAW_DECODE_BYTES,
+    )?)?;
     assert!(xml.contains("AssertionConsumerServiceURL=\"https://sp.example.com/acs\""));
     Ok(())
 }

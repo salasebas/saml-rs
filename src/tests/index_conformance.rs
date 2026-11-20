@@ -9,7 +9,7 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{elements_order, signature_algorithm::RSA_SHA256, Binding, CertUse};
 use saml_rs::entity::{iso8601_offset, EntitySetting};
 use saml_rs::metadata::{
@@ -41,7 +41,10 @@ fn deflate_plus_base64_encoded() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn base64_decoded_plus_inflate() -> Result<(), Box<dyn std::error::Error>> {
-    let inflated = deflate_raw_decode(&STANDARD.decode("80jNyclXCM8vykkBAA==")?)?;
+    let inflated = deflate_raw_decode(
+        &STANDARD.decode("80jNyclXCM8vykkBAA==")?,
+        MAX_DEFLATE_RAW_DECODE_BYTES,
+    )?;
     assert_eq!(String::from_utf8(inflated)?, "Hello World");
     Ok(())
 }

@@ -51,7 +51,7 @@ fn unsigned_idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
 #[test]
 fn deflate_raw_decode_rejects_oversized_output() -> Result<(), Box<dyn std::error::Error>> {
     let compressed = oversized_deflate_payload()?;
-    let err = deflate_raw_decode(&compressed)
+    let err = deflate_raw_decode(&compressed, MAX_DEFLATE_RAW_DECODE_BYTES)
         .err()
         .ok_or("inflate unexpectedly succeeded")?;
 

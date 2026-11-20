@@ -1,4 +1,6 @@
-use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, saml_post_binding_form};
+use saml_rs::binding::{
+    deflate_raw_decode, deflate_raw_encode, saml_post_binding_form, MAX_DEFLATE_RAW_DECODE_BYTES,
+};
 use saml_rs::constants::Binding;
 use saml_rs::entity::BindingContext;
 use saml_rs::SamlError;
@@ -42,7 +44,7 @@ fn hidden_field_value<'a>(
 fn deflate_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     let original = b"<samlp:AuthnRequest ID=\"_abc\" Version=\"2.0\"/>";
     let compressed = deflate_raw_encode(original)?;
-    let restored = deflate_raw_decode(&compressed)?;
+    let restored = deflate_raw_decode(&compressed, MAX_DEFLATE_RAW_DECODE_BYTES)?;
     assert_eq!(restored, original);
     Ok(())
 }

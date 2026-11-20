@@ -2,7 +2,7 @@
 //! panic on hostile input, and DEFLATE must round-trip. Dependency-free
 //! (deterministic LCG instead of a property-testing crate).
 
-use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::context::is_valid_xml_with_limits;
 use saml_rs::xml::{extract, ExtractorField};
 
@@ -85,7 +85,8 @@ fn deflate_roundtrips_for_arbitrary_bytes() -> Result<(), Box<dyn std::error::Er
     let mut seed = 0xdead_beef_u64;
     for len in [0usize, 1, 7, 64, 1000, 4096] {
         let data: Vec<u8> = (0..len).map(|_| lcg(&mut seed)).collect();
-        let restored = deflate_raw_decode(&deflate_raw_encode(&data)?)?;
+        let restored =
+            deflate_raw_decode(&deflate_raw_encode(&data)?, MAX_DEFLATE_RAW_DECODE_BYTES)?;
         assert_eq!(restored, data);
     }
     Ok(())

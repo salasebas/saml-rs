@@ -157,17 +157,13 @@ pub(crate) fn conditions_time_bounds(
     }
 }
 
-/// Check the two-tier `<StatusCode>` of a response.
+/// Check the two-tier `<StatusCode>` of a response, parsing `content` under
+/// `limits`.
 ///
 /// Only `SAMLResponse`, `LogoutResponse`, and `ManageNameIDResponse` are
 /// checked; request parser types are skipped. Success resolves to `Ok(())`;
 /// anything else is an error.
-pub fn check_status(content: &str, parser_type: ParserType) -> Result<(), SamlError> {
-    check_status_with_limits(content, parser_type, XmlLimits::default())
-}
-
-/// Check response status with explicit XML parser resource limits.
-pub fn check_status_with_limits(
+pub fn check_status(
     content: &str,
     parser_type: ParserType,
     limits: XmlLimits,
@@ -265,11 +261,11 @@ mod tests {
 
     #[test]
     fn status_success_and_two_tier_failure() -> Result<(), Box<dyn std::error::Error>> {
-        check_status(RESPONSE, ParserType::SamlResponse)?;
+        check_status(RESPONSE, ParserType::SamlResponse, XmlLimits::default())?;
         // request types are skipped
-        check_status(RESPONSE, ParserType::SamlRequest)?;
+        check_status(RESPONSE, ParserType::SamlRequest, XmlLimits::default())?;
 
-        match check_status(FAILED, ParserType::SamlResponse) {
+        match check_status(FAILED, ParserType::SamlResponse, XmlLimits::default()) {
             Err(SamlError::StatusNotSuccess { status }) => {
                 assert_eq!(status.top_level(), TopLevelStatusCode::Requester);
                 assert_eq!(

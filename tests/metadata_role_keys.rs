@@ -543,27 +543,30 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
         Some(SP_ACS)
     );
 
-    let unbounded = saml_rs::XmlLimits::unbounded();
-    let idp = saml_rs::metadata::IdpMetadata::from_xml_with_limits(
+    let unbounded = saml_rs::XmlPolicy {
+        limits: saml_rs::XmlLimits::unbounded(),
+        ..saml_rs::XmlPolicy::default()
+    };
+    let idp = saml_rs::metadata::IdpMetadata::from_xml_with_policy(
         &idp_metadata.replacen(
             "<EntityDescriptor",
             &format!("<EntityDescriptor{many_namespaces}"),
             1,
         ),
-        unbounded,
+        &unbounded,
     )?;
     assert_eq!(
         idp.single_sign_on_location(saml_rs::constants::Binding::Post)
             .as_deref(),
         Some(IDP_SSO)
     );
-    let sp = saml_rs::metadata::SpMetadata::from_xml_with_limits(
+    let sp = saml_rs::metadata::SpMetadata::from_xml_with_policy(
         &sp_metadata.replacen(
             "<EntityDescriptor",
             &format!("<EntityDescriptor{many_namespaces}"),
             1,
         ),
-        unbounded,
+        &unbounded,
     )?;
     assert_eq!(
         sp.assertion_consumer_location(saml_rs::constants::Binding::Post)

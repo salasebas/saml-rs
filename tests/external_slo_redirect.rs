@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
@@ -150,7 +150,10 @@ fn tamper_redirect_message(
             .next()
             .ok_or("missing SAMLRequest value")?
             .1;
-        let xml = String::from_utf8(deflate_raw_decode(&STANDARD.decode(decoded.as_ref())?)?)?;
+        let xml = String::from_utf8(deflate_raw_decode(
+            &STANDARD.decode(decoded.as_ref())?,
+            MAX_DEFLATE_RAW_DECODE_BYTES,
+        )?)?;
         let tampered = xml.replacen(original, replacement, 1);
         if tampered == xml {
             return Err(format!("signed value {original:?} was not present").into());
@@ -178,6 +181,7 @@ fn redirect_message_xml(raw_query: &str) -> Result<String, Box<dyn std::error::E
         .1;
     Ok(String::from_utf8(deflate_raw_decode(
         &STANDARD.decode(decoded.as_ref())?,
+        MAX_DEFLATE_RAW_DECODE_BYTES,
     )?)?)
 }
 

@@ -154,6 +154,7 @@ fn redirect_message_xml<Message>(
     let deflated = STANDARD.decode(&encoded)?;
     Ok(String::from_utf8(saml_rs::binding::deflate_raw_decode(
         &deflated,
+        saml_rs::binding::MAX_DEFLATE_RAW_DECODE_BYTES,
     )?)?)
 }
 
@@ -1007,6 +1008,7 @@ fn generated_request_names_the_identifier_and_one_change() -> TestResult {
         .ok_or("undecodable SAMLRequest")?;
     let xml = String::from_utf8(saml_rs::binding::deflate_raw_decode(
         &STANDARD.decode(&decoded)?,
+        saml_rs::binding::MAX_DEFLATE_RAW_DECODE_BYTES,
     )?)?;
     assert!(xml.contains(&format!(
         r#"<saml:NameID Format="{}">alice@example.com</saml:NameID><samlp:NewID>alice-2</samlp:NewID>"#,

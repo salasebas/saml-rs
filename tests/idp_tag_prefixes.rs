@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::deflate_raw_decode;
+use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
@@ -86,6 +86,7 @@ fn decode_logout_context(ctx: &BindingContext) -> Result<String, Box<dyn std::er
                 .ok_or("missing SAML logout message")?;
             Ok(String::from_utf8(deflate_raw_decode(
                 &STANDARD.decode(value.as_bytes())?,
+                MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
         Binding::Soap => Ok(ctx.context.clone()),
