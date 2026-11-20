@@ -147,6 +147,17 @@ available with the default features off. Without a provider
 verification, and encryption return `SamlError::Unsupported`. Details are in
 [crypto providers](https://samlrs.vercel.app/guides/crypto-provider/).
 
+The `serde` feature is off by default. It implements `Serialize` and
+`Deserialize` for the pending snapshot types, so you can keep pending state in
+a session store:
+
+```rust,ignore
+store.set(key, serde_json::to_string(&started.pending.snapshot())?)?;
+```
+
+The stored format is in
+[Cargo features](https://samlrs.vercel.app/reference/features/#serialize-pending-snapshots-with-serde).
+
 ## Documentation
 
 | Need | Read |

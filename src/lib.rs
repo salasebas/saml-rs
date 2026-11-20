@@ -347,6 +347,12 @@
 //! [`XmlEncryptionPolicy`].
 //! Disable default features to build the crypto-free protocol layer; crypto
 //! operations then fail closed with [`SamlError::Unsupported`].
+//!
+//! The `serde` feature, off by default, implements `Serialize` and
+//! `Deserialize` for [`PendingAuthnRequestSnapshot`],
+//! [`PendingLogoutRequestSnapshot`], [`PendingManageNameIdRequestSnapshot`],
+//! and [`PendingPaosSsoSnapshot`], so you can keep pending state in a session
+//! store as JSON.
 
 #![forbid(unsafe_code)]
 

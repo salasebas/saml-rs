@@ -216,6 +216,17 @@ impl RespondPaosSso {
 }
 
 /// Correlation state for a PAOS login the service provider has started.
+///
+/// Store its snapshot until the enhanced client returns the response, and
+/// rebuild it with [`Self::from_snapshot`] for the finish operation.
+///
+/// The finish operation checks the response against the pending state you
+/// pass it: the request ID, the identity-provider entity ID, the RelayState,
+/// and the assertion consumer URL. It trusts that state, so the stored
+/// snapshot must come back unchanged and stay tied to the session that started
+/// the request. Keep it in server-side session storage. If the client carries
+/// it, for example in a cookie, authenticate the value so that a changed
+/// snapshot is refused. A snapshot holds no key material.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPaosSso {
     request_id: MessageId,
@@ -246,6 +257,9 @@ impl PendingPaosSso {
     }
 
     /// Correlation fields for the caller to store.
+    ///
+    /// With the `serde` feature, the snapshot serializes to JSON for your session
+    /// store.
     pub fn snapshot(&self) -> PendingPaosSsoSnapshot {
         PendingPaosSsoSnapshot {
             request_id: self.request_id.as_str().to_string(),
@@ -259,6 +273,9 @@ impl PendingPaosSso {
     }
 
     /// Rebuild pending state from stored correlation fields.
+    ///
+    /// A deserialized snapshot gets the same checks as one built with
+    /// [`PendingPaosSsoSnapshot::new`].
     ///
     /// # Errors
     ///
@@ -280,13 +297,30 @@ impl PendingPaosSso {
 /// The optional fields are public: assign them directly. The struct is
 /// non-exhaustive, so a later release can add an optional field without
 /// breaking your code.
+///
+/// With the `serde` feature, the snapshot implements `Serialize` and
+/// `Deserialize`. In JSON it reads:
+///
+/// ```json
+/// {
+///   "request_id": "_paos123",
+///   "relay_state": null,
+///   "idp_entity_id": "https://idp.example.com/metadata",
+///   "acs_url": "https://sp.example.com/acs/paos"
+/// }
+/// ```
+///
+/// Reading JSON requires `request_id`, `idp_entity_id`, and `acs_url`. A
+/// missing `relay_state` reads as `None`. Unknown fields are ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct PendingPaosSsoSnapshot {
     /// AuthnRequest ID.
     pub request_id: String,
     /// `ecp:RelayState` the service provider sent. `None` when it sent none,
     /// and an empty string when it sent an empty one.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub relay_state: Option<String>,
     /// Identity provider entity ID.
     pub idp_entity_id: String,
