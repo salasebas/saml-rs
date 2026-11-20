@@ -44,7 +44,8 @@ impl SpMetadata {
         &self.inner
     }
 
-    /// Parse SP metadata XML.
+    /// Parse SP metadata XML with the default XML limits and no schema
+    /// validator.
     ///
     /// Keys, flags, and endpoints are read from the entity's `SPSSODescriptor`
     /// elements in the SAML metadata namespace whose
@@ -56,36 +57,17 @@ impl SpMetadata {
     /// `SPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
     /// limits, or SP-specific metadata extraction fails.
     pub fn from_xml(xml: &str) -> Result<Self, SamlError> {
-        Self::from_xml_with_limits(xml, XmlLimits::default())
+        Self::from_xml_with_policy(xml, &crate::XmlPolicy::default())
     }
 
-    /// Parse SP metadata XML with explicit XML parser resource limits.
-    ///
-    /// Keys, flags, and endpoints are read from the entity's `SPSSODescriptor`
-    /// elements in the SAML metadata namespace whose
-    /// `protocolSupportEnumeration` lists `urn:oasis:names:tc:SAML:2.0:protocol`.
+    /// Parse SP metadata XML as [`Self::from_xml`] does, with the XML limits
+    /// and optional schema validator of `policy`.
     ///
     /// # Errors
     ///
     /// Returns [`SamlError::MissingMetadata`] when the entity has no such
     /// `SPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
-    /// limits, or SP-specific metadata extraction fails.
-    pub fn from_xml_with_limits(xml: &str, limits: XmlLimits) -> Result<Self, SamlError> {
-        Self::from_xml_with_policy(
-            xml,
-            &crate::XmlPolicy {
-                limits,
-                ..crate::XmlPolicy::default()
-            },
-        )
-    }
-
-    /// Parse metadata with explicit XML limits and an optional schema validator.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when XML is malformed, rejected by the schema
-    /// validator, or lacks a supported role descriptor.
+    /// limits, schema validation, or SP-specific metadata extraction fails.
     pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
         let limits = policy.limits;
         let extra = vec![

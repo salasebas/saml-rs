@@ -13,10 +13,7 @@ mod signing;
 #[cfg(crypto)]
 pub(crate) use signing::sign_detached_message;
 
-pub use deflate::{
-    deflate_raw_decode, deflate_raw_decode_with_limit, deflate_raw_encode,
-    MAX_DEFLATE_RAW_DECODE_BYTES,
-};
+pub use deflate::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 pub(crate) use encoding::{decode_base64, decode_base64_with_limit, encode_base64};
 pub(crate) use escape::xml_escape;
 pub(crate) use parameters::single_parameter;

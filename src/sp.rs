@@ -652,7 +652,7 @@ impl ServiceProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::binding::{decode_base64, deflate_raw_decode};
+    use crate::binding::{decode_base64, deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
     use crate::metadata::{Endpoint, IdpMetadataInput};
     use url::Url;
 
@@ -698,7 +698,10 @@ mod tests {
             .query_pairs()
             .find(|(k, _)| k == "SAMLRequest")
             .ok_or("missing SAMLRequest")?;
-        let xml = String::from_utf8(deflate_raw_decode(&decode_base64(&value)?)?)?;
+        let xml = String::from_utf8(deflate_raw_decode(
+            &decode_base64(&value)?,
+            MAX_DEFLATE_RAW_DECODE_BYTES,
+        )?)?;
         assert!(xml.contains("AssertionConsumerServiceURL=\"https://sp.example.com/acs\""));
         assert!(url.query_pairs().all(|(k, _)| k != "Signature"));
         Ok(())

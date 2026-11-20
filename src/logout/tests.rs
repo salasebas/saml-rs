@@ -1,6 +1,8 @@
 #![allow(deprecated)]
 use super::*;
-use crate::binding::{decode_base64, deflate_raw_decode, encode_base64};
+use crate::binding::{
+    decode_base64, deflate_raw_decode, encode_base64, MAX_DEFLATE_RAW_DECODE_BYTES,
+};
 use crate::browser::Inbound;
 use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting, User};
@@ -116,9 +118,10 @@ fn decode_logout_response_context(
                 .query_pairs()
                 .find_map(|(key, value)| (key == "SAMLResponse").then_some(value.into_owned()))
                 .ok_or("missing SAMLResponse")?;
-            Ok(String::from_utf8(deflate_raw_decode(&decode_base64(
-                &encoded,
-            )?)?)?)
+            Ok(String::from_utf8(deflate_raw_decode(
+                &decode_base64(&encoded)?,
+                MAX_DEFLATE_RAW_DECODE_BYTES,
+            )?)?)
         }
         Binding::Artifact => Err("Artifact binding is unsupported".into()),
     }
@@ -300,7 +303,10 @@ fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error
         .query_pairs()
         .find(|(k, _)| k == "SAMLRequest")
         .ok_or("missing SAMLRequest")?;
-    let xml = String::from_utf8(deflate_raw_decode(&decode_base64(&value)?)?)?;
+    let xml = String::from_utf8(deflate_raw_decode(
+        &decode_base64(&value)?,
+        MAX_DEFLATE_RAW_DECODE_BYTES,
+    )?)?;
     assert!(xml.contains("<samlp:LogoutRequest"));
     assert!(xml.contains("user@example.com"));
 

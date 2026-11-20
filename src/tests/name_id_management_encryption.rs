@@ -170,6 +170,7 @@ fn redirect_message_xml<Message>(
     let deflated = STANDARD.decode(&encoded)?;
     Ok(String::from_utf8(saml_rs::binding::deflate_raw_decode(
         &deflated,
+        saml_rs::binding::MAX_DEFLATE_RAW_DECODE_BYTES,
     )?)?)
 }
 

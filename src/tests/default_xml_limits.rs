@@ -1,6 +1,6 @@
 use saml_rs::constants::ParserType;
 use saml_rs::context::is_valid_xml_with_limits;
-use saml_rs::validator::{check_status, check_status_with_limits};
+use saml_rs::validator::check_status;
 use saml_rs::xml::{extract, extract_with_limits};
 use saml_rs::SamlError;
 use saml_rs::XmlLimits;
@@ -21,7 +21,7 @@ fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::erro
     };
     let defaults = [
         is_valid_xml_with_limits(&xml, saml_rs::XmlLimits::default()),
-        check_status(&xml, ParserType::SamlResponse),
+        check_status(&xml, ParserType::SamlResponse, XmlLimits::default()),
         extract(&xml, &[]).map(drop),
         saml_rs::xml::extract::extract(&xml, &[]).map(drop),
     ];
@@ -29,7 +29,7 @@ fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::erro
         assert!(matches!(result, Err(SamlError::LimitExceeded { .. })));
     }
     is_valid_xml_with_limits(&xml, raised)?;
-    check_status_with_limits(&xml, ParserType::SamlResponse, raised)?;
+    check_status(&xml, ParserType::SamlResponse, raised)?;
     extract_with_limits(&xml, &[], raised)?;
 
     #[cfg(crypto)]

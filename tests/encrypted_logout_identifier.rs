@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::deflate_raw_decode;
+use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::status_code;
 use saml_rs::raw::Binding;
 use saml_rs::{
@@ -271,6 +271,7 @@ fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std
                 .ok_or("missing SAMLRequest")?;
             Ok(String::from_utf8(deflate_raw_decode(
                 &STANDARD.decode(encoded.as_ref())?,
+                MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
         Binding::Post | Binding::SimpleSign => {
