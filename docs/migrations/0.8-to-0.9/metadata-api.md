@@ -5,34 +5,42 @@
 These changes apply to callers of `saml_rs::metadata` and peer descriptors.
 The compatibility crates re-export the same API.
 
-## Parse without extractor fields
+## Parse without extractor fields, and pass limits in `XmlPolicy`
 
-Remove the extractor list from `Metadata::parse`, `parse_with_limits`, and
-`parse_with_policy`. Custom extraction remains an implementation detail.
+Remove the extractor list from `Metadata::parse`. Custom extraction remains an
+implementation detail.
+
+`Metadata::parse_with_limits`, `IdpMetadata::from_xml_with_limits`, and
+`SpMetadata::from_xml_with_limits` are removed. Each type has two constructors:
+`parse` or `from_xml` with the default XML limits, and `parse_with_policy` or
+`from_xml_with_policy` with the limits and schema validator of an `XmlPolicy`.
+To pass only limits, set them with `XmlPolicy { limits, ..XmlPolicy::default() }`.
 
 Before:
 
 ```rust,ignore
 let metadata = Metadata::parse(xml, Vec::new())?;
 let limited = Metadata::parse_with_limits(xml, Vec::new(), limits)?;
-let checked = Metadata::parse_with_policy(xml, Vec::new(), &policy)?;
+let idp = IdpMetadata::from_xml_with_limits(xml, limits)?;
+let sp = SpMetadata::from_xml_with_limits(xml, limits)?;
 ```
 
 After:
 
 ```rust
-# fn run(xml: &str) -> Result<(), saml_rs::SamlError> {
-use saml_rs::metadata::Metadata;
-use saml_rs::{XmlLimits, XmlPolicy};
-let limits = XmlLimits::default();
+# fn run(xml: &str, limits: saml_rs::XmlLimits) -> Result<(), saml_rs::SamlError> {
+use saml_rs::metadata::{IdpMetadata, Metadata, SpMetadata};
+use saml_rs::XmlPolicy;
 let policy = XmlPolicy { limits, ..XmlPolicy::default() };
 let metadata = Metadata::parse(xml)?;
-let limited = Metadata::parse_with_limits(xml, limits)?;
-let checked = Metadata::parse_with_policy(xml, &policy)?;
+let limited = Metadata::parse_with_policy(xml, &policy)?;
+let idp = IdpMetadata::from_xml_with_policy(xml, &policy)?;
+let sp = SpMetadata::from_xml_with_policy(xml, &policy)?;
 # Ok(()) }
 ```
 
-The default, explicit-limit, and explicit-policy constructors remain available.
+`XmlPolicy::default()` has no schema validator. See
+[Move schema validation into XML policy](xml-policy.md).
 `IdpDescriptor::from_metadata_xml` and `SpDescriptor::from_metadata_xml` still
 require an explicit `MetadataTrustPolicy`. Use their `_with_policy` variants
 when you need custom XML limits or a schema validator.

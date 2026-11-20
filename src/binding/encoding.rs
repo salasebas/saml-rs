@@ -9,7 +9,11 @@ pub(crate) fn encode_base64(input: &[u8]) -> String {
     STANDARD.encode(input)
 }
 
-/// Decode standard base64.
+/// Decode standard base64 with no size limit.
+///
+/// For base64 that the crate or its crypto provider produced, and for a
+/// detached signature value. A received protocol message is decoded with
+/// [`decode_base64_with_limit`].
 ///
 /// ASCII whitespace is ignored: space, tab, line feed, form feed, and carriage
 /// return. Any other byte outside the base64 alphabet is rejected.
@@ -24,7 +28,10 @@ pub(crate) fn decode_base64(input: &str) -> Result<Vec<u8>, SamlError> {
 /// ASCII whitespace is ignored: space, tab, line feed, form feed, and carriage
 /// return. Ignored whitespace does not count toward the limit. Any other byte
 /// outside the base64 alphabet is rejected.
-pub fn base64_decode_with_limit(input: &str, max_output_len: usize) -> Result<Vec<u8>, SamlError> {
+pub(crate) fn decode_base64_with_limit(
+    input: &str,
+    max_output_len: usize,
+) -> Result<Vec<u8>, SamlError> {
     let normalized_len = non_whitespace_bytes(input).count();
     let max_encoded_len = max_output_len
         .saturating_add(2)
@@ -64,15 +71,15 @@ mod tests {
     #[test]
     fn ascii_whitespace_is_ignored_and_does_not_count_toward_the_limit(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        assert_eq!(base64_decode_with_limit("QQ==", 1)?, b"A");
-        assert_eq!(base64_decode_with_limit("Q Q\n=\t=\r\u{000c}", 1)?, b"A");
-        assert_eq!(base64_decode_with_limit("", 0)?, b"");
-        assert_eq!(base64_decode_with_limit(" \n\t\r\u{000c}", 0)?, b"");
-        assert_eq!(base64_decode_with_limit("QUFBQQ==", 4)?, b"AAAA");
-        assert_eq!(base64_decode_with_limit("QU FB\nQQ==", 4)?, b"AAAA");
+        assert_eq!(decode_base64_with_limit("QQ==", 1)?, b"A");
+        assert_eq!(decode_base64_with_limit("Q Q\n=\t=\r\u{000c}", 1)?, b"A");
+        assert_eq!(decode_base64_with_limit("", 0)?, b"");
+        assert_eq!(decode_base64_with_limit(" \n\t\r\u{000c}", 0)?, b"");
+        assert_eq!(decode_base64_with_limit("QUFBQQ==", 4)?, b"AAAA");
+        assert_eq!(decode_base64_with_limit("QU FB\nQQ==", 4)?, b"AAAA");
         assert_eq!(decode_base64("Q Q\n=\t=\r\u{000c}")?, b"A");
         assert_eq!(decode_base64(" \n\t\r\u{000c}")?, b"");
-        match base64_decode_with_limit("QUFBQQ==", 1) {
+        match decode_base64_with_limit("QUFBQQ==", 1) {
             Err(SamlError::LimitExceeded {
                 limit: ResourceLimit::Base64DecodedBytes,
                 maximum: 1,
@@ -92,8 +99,8 @@ mod tests {
         ] {
             for (decoder, result) in [
                 (
-                    "base64_decode_with_limit",
-                    base64_decode_with_limit(input, 64),
+                    "decode_base64_with_limit",
+                    decode_base64_with_limit(input, 64),
                 ),
                 ("decode_base64", decode_base64(input)),
             ] {

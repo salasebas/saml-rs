@@ -248,7 +248,7 @@ fn write_artifact_resolution_service(
             "ArtifactResolutionService",
             &[
                 ("index", index.as_str()),
-                ("Binding", crate::constants::SOAP_BINDING_URN),
+                ("Binding", Binding::Soap.urn()),
                 ("Location", endpoint.location().as_str()),
             ],
         );

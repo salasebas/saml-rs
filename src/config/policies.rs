@@ -1,5 +1,4 @@
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
-use crate::constants::MessageSignatureOrder;
 use crate::entity::SignatureConfig;
 use crate::template::LoginResponseTemplate;
 use crate::xml::XmlLimits;
@@ -638,6 +637,8 @@ pub struct XmlPolicy {
     pub schema_validator: Option<crate::SchemaValidator>,
     /// Maximum decoded compressed and inflated raw-DEFLATE bytes accepted for
     /// HTTP-Redirect input.
+    ///
+    /// Defaults to 1 MiB (1,048,576 bytes).
     pub redirect_inflate_max_bytes: usize,
     /// XML parser resource limits.
     pub limits: XmlLimits,
@@ -682,8 +683,6 @@ pub struct AlgorithmPolicy {
     pub data_encryption: DataEncryptionAlgorithm,
     /// Key encryption algorithm URI.
     pub key_encryption: KeyEncryptionAlgorithm,
-    /// Sign/encrypt operation order for messages that do both.
-    pub message_signing_order: MessageSignatureOrder,
     /// XML-DSig reference transforms.
     ///
     /// They apply to responses from `respond_sso` and `initiate_sso`, to an
@@ -702,7 +701,6 @@ impl Default for AlgorithmPolicy {
             signature: SignatureAlgorithm::default(),
             data_encryption: DataEncryptionAlgorithm::default(),
             key_encryption: KeyEncryptionAlgorithm::default(),
-            message_signing_order: MessageSignatureOrder::SignThenEncrypt,
             signed_reference_transforms: vec![
                 TransformAlgorithm::EnvelopedSignature,
                 TransformAlgorithm::ExclusiveCanonicalization,

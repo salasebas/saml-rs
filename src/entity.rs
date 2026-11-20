@@ -8,9 +8,9 @@ use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSi
 use crate::config::{DigestAlgorithm, HmacSecret, MaskGenerationFunction, X509Credential};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
-    MessageSignatureOrder,
 };
 use crate::error::{SamlError, TimeWindowField};
+use crate::model::ClockSkew;
 use crate::xml::XmlLimits;
 
 /// Runtime configuration for an entity (keys, algorithms, flags).
@@ -28,8 +28,6 @@ pub struct EntitySetting {
     /// Key encryption algorithm URI.
     pub key_encryption_algorithm: String,
     pub(crate) rsa_oaep_parameters: Option<(DigestAlgorithm, MaskGenerationFunction)>,
-    /// Sign-then-encrypt vs encrypt-then-sign.
-    pub message_signing_order: MessageSignatureOrder,
     /// `AllowCreate` for the NameIDPolicy.
     pub allow_create: bool,
     /// Whether assertions are encrypted.
@@ -180,7 +178,6 @@ impl fmt::Debug for EntitySetting {
             .field("data_encryption_algorithm", &self.data_encryption_algorithm)
             .field("key_encryption_algorithm", &self.key_encryption_algorithm)
             .field("rsa_oaep_parameters", &self.rsa_oaep_parameters)
-            .field("message_signing_order", &self.message_signing_order)
             .field("allow_create", &self.allow_create)
             .field("is_assertion_encrypted", &self.is_assertion_encrypted)
             .field(
@@ -312,6 +309,11 @@ impl EntitySetting {
     pub(crate) fn default_name_id_format(&self) -> Option<&str> {
         self.name_id_format.first().map(String::as_str)
     }
+
+    pub(crate) fn clock_skew(&self) -> ClockSkew {
+        let (not_before_ms, not_on_or_after_ms) = self.clock_drifts;
+        ClockSkew::from_millis(not_before_ms, not_on_or_after_ms)
+    }
 }
 
 impl Default for EntitySetting {
@@ -322,7 +324,6 @@ impl Default for EntitySetting {
             data_encryption_algorithm: data_encryption_algorithm::AES_256.to_string(),
             key_encryption_algorithm: key_encryption_algorithm::RSA_OAEP_MGF1P.to_string(),
             rsa_oaep_parameters: None,
-            message_signing_order: MessageSignatureOrder::SignThenEncrypt,
             allow_create: false,
             is_assertion_encrypted: false,
             assertion_element_encryption: AssertionElementEncryption::default(),
@@ -375,7 +376,7 @@ impl Default for EntitySetting {
 ///
 /// The result is an `xs:ID` of 41 characters. Each call returns a different
 /// value.
-pub fn generate_id() -> String {
+pub(crate) fn generate_id() -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
 
     let mut identifier = String::from("_");
@@ -422,7 +423,7 @@ impl User {
 }
 
 /// Current UTC time as an ISO-8601 `IssueInstant` (`YYYY-MM-DDTHH:MM:SSZ`).
-pub fn now_iso8601() -> String {
+pub(crate) fn now_iso8601() -> String {
     iso8601_offset(0)
 }
 

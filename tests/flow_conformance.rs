@@ -10,7 +10,7 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
@@ -1014,7 +1014,7 @@ fn required_response_signature_accepts_detached_without_embedded_signature(
         .ok_or("missing bound SAMLResponse")?;
     let decoded = STANDARD.decode(encoded)?;
     let xml = match binding {
-        Binding::Redirect => deflate_raw_decode(&decoded)?,
+        Binding::Redirect => deflate_raw_decode(&decoded, MAX_DEFLATE_RAW_DECODE_BYTES)?,
         Binding::SimpleSign => decoded,
         _ => return Err("expected detached binding".into()),
     };

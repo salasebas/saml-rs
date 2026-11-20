@@ -9,20 +9,20 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode};
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{elements_order, signature_algorithm::RSA_SHA256, Binding, CertUse};
 use saml_rs::entity::{iso8601_offset, EntitySetting};
 use saml_rs::metadata::{
     generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, SpMetadata, SpMetadataInput,
 };
 use saml_rs::raw::IdentityProvider;
-use saml_rs::util::{normalize_cert_string, normalize_pem_string};
-use saml_rs::validator::verify_time;
+use saml_rs::util::normalize_cert_string;
+use saml_rs::validator::TimeWindow;
+use saml_rs::ClockSkew;
+use time::OffsetDateTime;
 
 const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
-const SP_ENCKEY: &str = include_str!("../../tests/fixtures/key/sp/encryptKey.pem");
 const SP_KNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/knownGoodCert.cer");
-const SP_KNOWN_ENCKEY: &str = include_str!("../../tests/fixtures/key/sp/knownGoodEncryptKey.pem");
 const IDPMETA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
 const IDPMETA_ROLLING: &str = include_str!("../../tests/fixtures/misc/idpmeta_rollingcert.xml");
 const IDPMETA_SHARE: &str = include_str!("../../tests/fixtures/misc/idpmeta_share_cert.xml");
@@ -43,7 +43,10 @@ fn deflate_plus_base64_encoded() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn base64_decoded_plus_inflate() -> Result<(), Box<dyn std::error::Error>> {
-    let inflated = deflate_raw_decode(&STANDARD.decode("80jNyclXCM8vykkBAA==")?)?;
+    let inflated = deflate_raw_decode(
+        &STANDARD.decode("80jNyclXCM8vykkBAA==")?,
+        MAX_DEFLATE_RAW_DECODE_BYTES,
+    )?;
     assert_eq!(String::from_utf8(inflated)?, "Hello World");
     Ok(())
 }
@@ -51,11 +54,6 @@ fn base64_decoded_plus_inflate() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn parse_cer_format_resulting_clean_certificate() {
     assert_eq!(normalize_cert_string(SP_CERT), SP_KNOWN_CERT.trim());
-}
-
-#[test]
-fn normalize_pem_key_returns_clean_string() {
-    assert_eq!(normalize_pem_string(SP_ENCKEY), SP_KNOWN_ENCKEY.trim());
 }
 
 #[test]
@@ -209,33 +207,42 @@ fn idp_with_multiple_signing_and_encryption_certificates() -> Result<(), Box<dyn
     Ok(())
 }
 
+fn window<'a>(not_before: Option<&'a str>, not_on_or_after: Option<&'a str>) -> TimeWindow<'a> {
+    TimeWindow {
+        not_before,
+        not_on_or_after,
+    }
+}
+
 #[test]
-fn verify_time_with_and_without_drift_tolerance() {
+fn time_window_with_and_without_drift_tolerance() {
     let before10 = iso8601_offset(-600);
     let before5 = iso8601_offset(-300);
     let after5 = iso8601_offset(300);
     let after10 = iso8601_offset(600);
+    let now = OffsetDateTime::now_utc();
 
     // without drift
-    assert!(verify_time(Some(&before5), Some(&after5), (0, 0)));
-    assert!(verify_time(Some(&before5), None, (0, 0)));
-    assert!(verify_time(None, Some(&after5), (0, 0)));
-    assert!(!verify_time(None, Some(&before5), (0, 0)));
-    assert!(!verify_time(Some(&after5), None, (0, 0)));
-    assert!(!verify_time(Some(&before10), Some(&before5), (0, 0)));
-    assert!(!verify_time(Some(&after5), Some(&after10), (0, 0)));
-    assert!(verify_time(None, None, (0, 0)));
+    let strict = ClockSkew::strict();
+    assert!(window(Some(&before5), Some(&after5)).contains(now, strict));
+    assert!(window(Some(&before5), None).contains(now, strict));
+    assert!(window(None, Some(&after5)).contains(now, strict));
+    assert!(!window(None, Some(&before5)).contains(now, strict));
+    assert!(!window(Some(&after5), None).contains(now, strict));
+    assert!(!window(Some(&before10), Some(&before5)).contains(now, strict));
+    assert!(!window(Some(&after5), Some(&after10)).contains(now, strict));
+    assert!(window(None, None).contains(now, strict));
 
     // with drift tolerance 5 min + 1 sec
-    let d = (-301_000, 301_000);
-    assert!(verify_time(Some(&before5), Some(&after5), d));
-    assert!(verify_time(Some(&before5), None, d));
-    assert!(verify_time(None, Some(&after5), d));
-    assert!(verify_time(None, Some(&before5), d));
-    assert!(verify_time(Some(&after5), None, d));
-    assert!(verify_time(Some(&before10), Some(&before5), d));
-    assert!(verify_time(Some(&after5), Some(&after10), d));
-    assert!(verify_time(None, None, d));
+    let d = ClockSkew::from_millis(-301_000, 301_000);
+    assert!(window(Some(&before5), Some(&after5)).contains(now, d));
+    assert!(window(Some(&before5), None).contains(now, d));
+    assert!(window(None, Some(&after5)).contains(now, d));
+    assert!(window(None, Some(&before5)).contains(now, d));
+    assert!(window(Some(&after5), None).contains(now, d));
+    assert!(window(Some(&before10), Some(&before5)).contains(now, d));
+    assert!(window(Some(&after5), Some(&after10)).contains(now, d));
+    assert!(window(None, None).contains(now, d));
 }
 
 #[test]

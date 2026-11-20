@@ -451,7 +451,7 @@ fn receive(
             expected_recipient: &expected_recipient,
             peer_hmac_secret: peer.hmac_secret,
             now: validation.now(),
-            clock_drifts: validation.clock_skew().as_millis(),
+            clock_skew: validation.clock_skew(),
         },
     )?;
     let request = request_from_flow(&flow, local.setting)?;
@@ -572,7 +572,7 @@ fn finish(
             expected_recipient: &expected_recipient,
             peer_hmac_secret: peer.hmac_secret,
             now: validation.now(),
-            clock_drifts: validation.clock_skew().as_millis(),
+            clock_skew: validation.clock_skew(),
         },
     )?;
     validation.check_and_store_message_replay(ReplayKey::ManageNameIdResponse(

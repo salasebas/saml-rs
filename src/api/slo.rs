@@ -582,7 +582,7 @@ fn receive_slo_impl(
         LogoutFlowValidation::typed(
             Some(&expected_recipient),
             validation.now(),
-            validation.clock_skew().as_millis(),
+            validation.clock_skew(),
             peer.hmac_secret,
         ),
     )?;
@@ -673,7 +673,7 @@ fn finish_slo_impl(
         LogoutFlowValidation::typed(
             expected_recipient.as_deref(),
             validation.now(),
-            validation.clock_skew().as_millis(),
+            validation.clock_skew(),
             peer.hmac_secret,
         ),
     )?;

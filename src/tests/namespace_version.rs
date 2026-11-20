@@ -3,7 +3,7 @@ use base64::Engine;
 use saml_rs::binding::deflate_raw_encode;
 use saml_rs::constants::{Binding, ParserType};
 #[allow(deprecated)]
-use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest};
+use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest, SignatureCheck};
 use saml_rs::{SamlError, SsoSession};
 
 #[cfg(all(
@@ -58,7 +58,7 @@ fn parse_flow_with_binding(
     xml: &str,
     parser_type: ParserType,
     binding: Binding,
-    check_signature: bool,
+    signature_check: SignatureCheck,
 ) -> Result<FlowResult, SamlError> {
     let encoded = match binding {
         Binding::Redirect => STANDARD.encode(&deflate_raw_encode(xml.as_bytes())?),
@@ -74,7 +74,7 @@ fn parse_flow_with_binding(
     let options = FlowOptions {
         binding: Some(binding),
         parser_type: Some(parser_type),
-        check_signature,
+        signature_check,
         ..FlowOptions::default()
     };
     flow(&options, &request)
@@ -84,13 +84,13 @@ fn run_flow_with_binding(
     xml: &str,
     parser_type: ParserType,
     binding: Binding,
-    check_signature: bool,
+    signature_check: SignatureCheck,
 ) -> Result<(), SamlError> {
-    parse_flow_with_binding(xml, parser_type, binding, check_signature).map(|_| ())
+    parse_flow_with_binding(xml, parser_type, binding, signature_check).map(|_| ())
 }
 
 fn run_flow(xml: &str, parser_type: ParserType) -> Result<(), SamlError> {
-    run_flow_with_binding(xml, parser_type, Binding::Post, false)
+    run_flow_with_binding(xml, parser_type, Binding::Post, SignatureCheck::Skip)
 }
 
 fn expect_profile_rejection(
@@ -125,7 +125,7 @@ fn expect_profile_rejection_with_binding_and_context(
     binding: Binding,
     context: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match run_flow_with_binding(xml, parser_type, binding, true) {
+    match run_flow_with_binding(xml, parser_type, binding, SignatureCheck::Require) {
         Err(SamlError::ProtocolProfile(message)) if message.contains(context) => Ok(()),
         Err(SamlError::ProtocolProfile(message)) => {
             Err(format!("expected {context} context, got {message:?}").into())
@@ -215,7 +215,7 @@ fn expect_decrypted_assertion_profile_rejection_with_context(
     let options = FlowOptions {
         binding: Some(Binding::Post),
         parser_type: Some(ParserType::SamlResponse),
-        check_signature: true,
+        signature_check: SignatureCheck::Require,
         decrypt_key: Some(PRIVATE_KEY),
         ..FlowOptions::default()
     };
@@ -677,7 +677,12 @@ fn sso_issue_instant_normalizes_real_flow_values_in_typed_session(
         "<a:Subject>",
         "<a:Issuer>https://idp.example.test</a:Issuer>\n<a:Subject><a:NameID>alice@example.test</a:NameID>",
     );
-    let raw_flow = parse_flow_with_binding(&xml, ParserType::SamlResponse, Binding::Post, false)?;
+    let raw_flow = parse_flow_with_binding(
+        &xml,
+        ParserType::SamlResponse,
+        Binding::Post,
+        SignatureCheck::Skip,
+    )?;
     let session = SsoSession::try_from(raw_flow)?;
 
     assert_eq!(
@@ -978,7 +983,7 @@ fn decrypted_assertion_honors_xml_depth_limit_before_profile(
     let mut options = FlowOptions {
         binding: Some(Binding::Post),
         parser_type: Some(ParserType::SamlResponse),
-        check_signature: true,
+        signature_check: SignatureCheck::Require,
         ..FlowOptions::default()
     };
     options.xml_limits.max_depth = 12;
