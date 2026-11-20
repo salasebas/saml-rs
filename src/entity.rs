@@ -283,7 +283,10 @@ pub enum SignatureAction {
 }
 
 /// Customizes the embedded XML-DSig signature.
+///
+/// Start from [`Default`](Default::default) and assign the fields you change.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct SignatureConfig {
     /// Element prefix for the signature (default `ds`).
     ///

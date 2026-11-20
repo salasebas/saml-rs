@@ -410,10 +410,9 @@ fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
     let mut protocol_prefix = TemplatePolicy::default();
     protocol_prefix.tag_prefix_protocol = "saml:p".into();
     let mut signature_prefix = TemplatePolicy::default();
-    signature_prefix.signature_config = Some(SignatureConfig {
-        prefix: "ds:p".into(),
-        ..SignatureConfig::default()
-    });
+    let mut signature_config = SignatureConfig::default();
+    signature_config.prefix = "ds:p".into();
+    signature_prefix.signature_config = Some(signature_config);
     for (templates, expected) in [
         (protocol_prefix, "protocol tag prefix must be an XML NCName"),
         (

@@ -30,8 +30,10 @@ impl LocalizedValue {
 
 /// Organization responsible for an entity.
 ///
-/// Generation requires at least one entry in each list.
+/// Generation requires at least one entry in each list. Start from
+/// [`Default`](Default::default) and assign each list.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Organization {
     /// `OrganizationName` values, in order.
     pub names: Vec<LocalizedValue>,
@@ -74,7 +76,10 @@ impl ContactType {
 }
 
 /// Contact responsible for an entity.
+///
+/// Start from [`Self::new`] and assign the details you set.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ContactPerson {
     /// Contact responsibility, including the REFEDS security extension.
     pub contact_type: ContactType,

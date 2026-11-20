@@ -3,9 +3,10 @@
 [How to upgrade from 0.8 to 0.9](README.md)
 
 This guide covers callers that build an `SpConfig` or `IdpConfig`, fill
-`Credentials`, build a policy or limit struct with a struct literal, set an
-`XmlEncryptionPolicy`, `AudienceValidationPolicy`, or `TemplatePolicy`, or
-configure an SSO template. Apply the sections that match your integration.
+`Credentials`, build a policy, limit, or input struct with a struct literal,
+destructure a started flow, set an `XmlEncryptionPolicy`,
+`AudienceValidationPolicy`, or `TemplatePolicy`, or configure an SSO template.
+Apply the sections that match your integration.
 
 ## Pass the first endpoint to `builder`
 
@@ -147,7 +148,7 @@ endpoint lists such as `acs_endpoints()`. Section
 to fill `Credentials` with `X509Credential`, which replaces
 `DecryptionCredential`.
 
-## Assign policy fields on a preset or `Default`
+## Assign fields instead of writing a struct literal
 
 **Affects:** code that builds one of these structs with a struct literal,
 including a literal that ends in `..SpValidationPolicy::recommended()` or
@@ -158,6 +159,9 @@ another base:
 | `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `recommended()`, `compatibility()`, or `default()` |
 | `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy` | `default()` |
 | `XmlLimits` | `default()` or `unbounded()` |
+| `SignatureConfig`, `Organization` | `default()` |
+| `ContactPerson` | `ContactPerson::new(contact_type)` |
+| `Endpoint` | `Endpoint::new(binding, location)` |
 
 **Before:** every field of these structs was public, so a struct literal
 compiled.
@@ -166,10 +170,14 @@ compiled.
 Outside saml-rs, a struct literal fails with `E0639`, also with a `..` base.
 Reading a field does not change. `XmlEncryptionPolicy` follows the same rule,
 as [Set `XmlEncryptionPolicy` fields directly](#set-xmlencryptionpolicy-fields-directly)
+shows. So do `SpMetadataInput` and `IdpMetadataInput`, the renamed 0.8
+`SpMetadataConfig` and `IdpMetadataConfig`. Start them from `default()`, as
+[Distinguish raw generation inputs from typed configs](metadata-api.md#distinguish-raw-generation-inputs-from-typed-configs)
 shows.
 
-**Upgrade:** take a value from the start the table names, and assign each
-field you set. Assign a nested field through its parent:
+**Upgrade:** take a value from the preset, `Default`, or constructor that the
+table names, and assign each field you set. Assign a nested field through its
+parent:
 
 ```rust
 // Before
@@ -184,16 +192,44 @@ let xml = XmlPolicy {
     },
     ..XmlPolicy::default()
 };
+let contact = ContactPerson {
+    email_addresses: vec!["mailto:ops@example.com".into()],
+    ..ContactPerson::new(ContactType::Technical)
+};
 
 // Now
 let mut validation = SpValidationPolicy::recommended();
 validation.assertions = AssertionSignaturePolicy::RequireSigned;
 let mut xml = XmlPolicy::default();
 xml.limits.max_depth = 64;
+let mut contact = ContactPerson::new(ContactType::Technical);
+contact.email_addresses = vec!["mailto:ops@example.com".into()];
 ```
 
-A literal that listed every field has no base. Start it from `default()` and
-assign each field it listed.
+A literal that listed every field has no base. Start it from `default()`, or
+from the constructor the table names, and assign each field it listed.
+
+## Destructure `Started` and `StartedPaosSso` with a rest pattern
+
+**Affects:** code that destructures a `Started` or a `StartedPaosSso` with a
+struct pattern.
+
+**Before:** a pattern could list every field, such as
+`Started { pending, outbound }`.
+
+**Now:** both structs are `#[non_exhaustive]`. Outside saml-rs, a struct
+pattern without `..` fails with `E0638`. Reading a field, such as
+`started.pending`, does not change.
+
+**Upgrade:** end the pattern with `..`:
+
+```rust
+// Before
+let Started { pending, outbound } = sp.start_sso(&idp, StartSso::redirect())?;
+
+// Now
+let Started { pending, outbound, .. } = sp.start_sso(&idp, StartSso::redirect())?;
+```
 
 ## Set `XmlEncryptionPolicy` fields directly
 

@@ -24,29 +24,26 @@ use saml_rs::{
 use std::time::SystemTime;
 
 fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataInput {
-    IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        want_authn_requests_signed,
-        single_sign_on_service: vec![
-            Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
-            Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
-        ],
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")],
-        ..Default::default()
-    }
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.want_authn_requests_signed = want_authn_requests_signed;
+    config.single_sign_on_service = vec![
+        Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
+        Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
+    ];
+    config.single_logout_service =
+        vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")];
+    config
 }
 
 fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
-    SpMetadataInput {
-        entity_id: "https://sp.example.com/metadata".into(),
-        authn_requests_signed,
-        assertion_consumer_service: vec![Endpoint::new(
-            Binding::Post,
-            "https://sp.example.com/acs",
-        )],
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
-        ..Default::default()
-    }
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.authn_requests_signed = authn_requests_signed;
+    config.assertion_consumer_service =
+        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")];
+    config
 }
 
 fn idp(want_authn_requests_signed: bool) -> Result<IdentityProvider, SamlError> {

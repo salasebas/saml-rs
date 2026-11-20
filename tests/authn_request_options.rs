@@ -12,29 +12,27 @@ use saml_rs::SamlError;
 use url::Url;
 
 fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataInput {
-    IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        want_authn_requests_signed,
-        single_sign_on_service: vec![
-            Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
-            Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
-            Endpoint::new(Binding::SimpleSign, "https://idp.example.com/sso"),
-        ],
-        ..Default::default()
-    }
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.want_authn_requests_signed = want_authn_requests_signed;
+    config.single_sign_on_service = vec![
+        Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
+        Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
+        Endpoint::new(Binding::SimpleSign, "https://idp.example.com/sso"),
+    ];
+    config
 }
 
 fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
-    SpMetadataInput {
-        entity_id: "https://sp.example.com/metadata".into(),
-        authn_requests_signed,
-        assertion_consumer_service: vec![
-            Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
-            Endpoint::new(Binding::Redirect, "https://sp.example.com/redirect-acs"),
-            Endpoint::new(Binding::SimpleSign, "https://sp.example.com/simplesign-acs"),
-        ],
-        ..Default::default()
-    }
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.authn_requests_signed = authn_requests_signed;
+    config.assertion_consumer_service = vec![
+        Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
+        Endpoint::new(Binding::Redirect, "https://sp.example.com/redirect-acs"),
+        Endpoint::new(Binding::SimpleSign, "https://sp.example.com/simplesign-acs"),
+    ];
+    config
 }
 
 fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
@@ -97,30 +95,22 @@ const HOSTILE_NAME_ID_FORMAT: &str = concat!(
 );
 
 fn hostile_unsigned_idp() -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![
-                Endpoint::new(Binding::Redirect, HOSTILE_IDP_SSO_DESTINATION),
-                Endpoint::new(Binding::Post, HOSTILE_IDP_SSO_DESTINATION),
-                Endpoint::new(Binding::SimpleSign, HOSTILE_IDP_SSO_DESTINATION),
-            ],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.single_sign_on_service = vec![
+        Endpoint::new(Binding::Redirect, HOSTILE_IDP_SSO_DESTINATION),
+        Endpoint::new(Binding::Post, HOSTILE_IDP_SSO_DESTINATION),
+        Endpoint::new(Binding::SimpleSign, HOSTILE_IDP_SSO_DESTINATION),
+    ];
+    IdentityProvider::from_config(&config, EntitySetting::default())
 }
 
 fn hostile_unsigned_sp() -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: HOSTILE_SP_ENTITY_ID.into(),
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, HOSTILE_ACS_URL)],
-            name_id_format: vec![HOSTILE_NAME_ID_FORMAT.into()],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )
+    let mut config = SpMetadataInput::default();
+    config.entity_id = HOSTILE_SP_ENTITY_ID.into();
+    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, HOSTILE_ACS_URL)];
+    config.name_id_format = vec![HOSTILE_NAME_ID_FORMAT.into()];
+    ServiceProvider::from_config(&config, EntitySetting::default())
 }
 
 fn login_request_http_request(
@@ -439,17 +429,11 @@ fn no_options_rendering_keeps_acs_url_and_protocol_binding(
 #[test]
 fn requested_response_binding_without_acs_returns_missing_metadata(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            assertion_consumer_service: vec![Endpoint::new(
-                Binding::Post,
-                "https://sp.example.com/acs",
-            )],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )?;
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.assertion_consumer_service =
+        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+    let sp = ServiceProvider::from_config(&config, EntitySetting::default())?;
 
     match sp.create_login_request(
         &unsigned_idp()?,
@@ -484,23 +468,15 @@ mod signed {
     }
 
     fn signed_idp() -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(
-            &IdpMetadataInput {
-                signing_certs: vec![CERT.into()],
-                ..idp_config(true)
-            },
-            signing_setting(),
-        )
+        let mut config = idp_config(true);
+        config.signing_certs = vec![CERT.into()];
+        IdentityProvider::from_config(&config, signing_setting())
     }
 
     fn signed_sp() -> Result<ServiceProvider, SamlError> {
-        ServiceProvider::from_config(
-            &SpMetadataInput {
-                signing_certs: vec![CERT.into()],
-                ..sp_config(true)
-            },
-            signing_setting(),
-        )
+        let mut config = sp_config(true);
+        config.signing_certs = vec![CERT.into()];
+        ServiceProvider::from_config(&config, signing_setting())
     }
 
     fn redirect_request(url: &str) -> Result<HttpRequest, Box<dyn std::error::Error>> {

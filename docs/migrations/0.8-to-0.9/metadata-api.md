@@ -176,13 +176,11 @@ Replace `metadata::ArtifactResolutionEndpoint` with the existing crate-root
 # fn run() -> Result<(), saml_rs::SamlError> {
 use saml_rs::{ArtifactResolutionService, EndpointUrl};
 use saml_rs::metadata::IdpMetadataInput;
-let config = IdpMetadataInput {
-	artifact_resolution_service: vec![ArtifactResolutionService::new(
-		0,
-		EndpointUrl::try_new("https://idp.example.com/artifact")?,
-	)],
-	..Default::default()
-};
+let mut config = IdpMetadataInput::default();
+config.artifact_resolution_service = vec![ArtifactResolutionService::new(
+	0,
+	EndpointUrl::try_new("https://idp.example.com/artifact")?,
+)];
 # Ok(()) }
 ```
 
@@ -246,7 +244,8 @@ The raw `metadata::SpMetadataConfig` and `metadata::IdpMetadataConfig` types
 are renamed to `metadata::SpMetadataInput` and `metadata::IdpMetadataInput`.
 They are the records passed to `generate_sp_metadata`, `generate_idp_metadata`,
 and the raw providers' `from_config` constructors. Their fields keep their
-names and meanings. The crate-root typed `SpMetadataConfig` and
+names and meanings. Both are now non-exhaustive, so start from `default()` and
+assign the fields you set. The crate-root typed `SpMetadataConfig` and
 `IdpMetadataConfig` readers keep their names.
 
 Before:
@@ -267,14 +266,12 @@ After:
 ```rust,no_run
 # fn run() -> Result<(), saml_rs::SamlError> {
 use saml_rs::metadata::{generate_sp_metadata, SpMetadataInput};
-let input = SpMetadataInput {
-	entity_id: "https://sp.example.com/metadata".into(),
-	assertion_consumer_service: vec![saml_rs::metadata::Endpoint::new(
-		saml_rs::constants::Binding::Post,
-		"https://sp.example.com/acs",
-	)],
-	..Default::default()
-};
+let mut input = SpMetadataInput::default();
+input.entity_id = "https://sp.example.com/metadata".into();
+input.assertion_consumer_service = vec![saml_rs::metadata::Endpoint::new(
+	saml_rs::constants::Binding::Post,
+	"https://sp.example.com/acs",
+)];
 let xml = generate_sp_metadata(&input)?;
 # Ok(()) }
 ```
