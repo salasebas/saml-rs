@@ -34,6 +34,8 @@ let completed = sp.finish_slo(
 let status = completed.response().status();
 ```
 
+With the `serde` feature, the snapshot serializes to JSON for your session store. `finish_slo` trusts the snapshot to name the request the response answers, so keep it on the server, or authenticate it when the browser carries it. The stored format is in [Cargo features](../reference/features.md#serialize-pending-snapshots-with-serde).
+
 `redirect()`, `post()`, and `simple_sign()` leave the logout generation rules off until you call `apply_producer_rules()`. With those rules selected, a session participant signs the request and sends the browser to an `https` logout URL. `StartSlo::allow_http()` relaxes the `https` recommendation only.
 
 ## Identity provider

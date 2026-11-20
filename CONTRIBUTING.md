@@ -35,6 +35,7 @@ cargo test -p saml-rs --doc --no-default-features
 RUSTDOCFLAGS="-D warnings -D missing_docs" cargo doc -p saml-rs --lib --no-deps --no-default-features
 cargo check -p saml-rs --no-default-features
 cargo nextest run -p saml-rs --no-default-features --features crypto-rustcrypto
+cargo nextest run -p saml-rs --features serde
 ```
 
 `--all-features` does not apply. Document-crypto providers are mutually

@@ -58,6 +58,14 @@ impl PendingMessage for ManageNameIdRequest {
 /// The start operation returns it in [`Started`]. Store its snapshot with the
 /// user's session and rebuild it with `from_snapshot` for the finish
 /// operation, which checks that the response answers this request.
+///
+/// The finish operation checks the response against the pending state you
+/// pass it: the request ID, the peer entity ID, the RelayState, and for SSO
+/// the assertion consumer service. It trusts that state, so the stored
+/// snapshot must come back unchanged and stay tied to the browser session that
+/// started the request. Keep it in server-side session storage. If the browser
+/// carries it, for example in a cookie, authenticate the value so that a
+/// changed snapshot is refused. A snapshot holds no key material.
 #[derive(Debug, Clone)]
 pub struct Pending<Message: PendingMessage> {
     request_id: MessageId,
@@ -155,6 +163,9 @@ impl Pending<AuthnRequest> {
     }
 
     /// Fields to store until the response arrives.
+    ///
+    /// With the `serde` feature, the snapshot serializes to JSON for your session
+    /// store.
     pub fn snapshot(&self) -> PendingAuthnRequestSnapshot {
         let acs = &self.details.acs;
         PendingAuthnRequestSnapshot {
@@ -169,6 +180,9 @@ impl Pending<AuthnRequest> {
     }
 
     /// Rebuild pending AuthnRequest state from stored fields.
+    ///
+    /// A deserialized snapshot gets the same checks as one built with
+    /// [`PendingAuthnRequestSnapshot::new`].
     ///
     /// # Errors
     ///
@@ -258,6 +272,9 @@ impl Pending<LogoutRequest> {
     }
 
     /// Fields to store until the response arrives.
+    ///
+    /// With the `serde` feature, the snapshot serializes to JSON for your session
+    /// store.
     pub fn snapshot(&self) -> PendingLogoutRequestSnapshot {
         PendingLogoutRequestSnapshot {
             request_id: self.request_id.as_str().to_string(),
@@ -275,6 +292,9 @@ impl Pending<LogoutRequest> {
     }
 
     /// Rebuild pending LogoutRequest state from stored fields.
+    ///
+    /// A deserialized snapshot gets the same checks as one built with
+    /// [`PendingLogoutRequestSnapshot::new`].
     ///
     /// # Errors
     ///
@@ -336,6 +356,9 @@ impl Pending<ManageNameIdRequest> {
     }
 
     /// Fields to store until the response arrives.
+    ///
+    /// With the `serde` feature, the snapshot serializes to JSON for your session
+    /// store.
     pub fn snapshot(&self) -> PendingManageNameIdRequestSnapshot {
         PendingManageNameIdRequestSnapshot {
             request_id: self.request_id.as_str().to_string(),
@@ -346,6 +369,9 @@ impl Pending<ManageNameIdRequest> {
 
     /// Rebuild pending HTTP-Redirect ManageNameIDRequest state from stored
     /// fields.
+    ///
+    /// A deserialized snapshot gets the same checks as one built with
+    /// [`PendingManageNameIdRequestSnapshot::new`].
     ///
     /// # Errors
     ///
@@ -370,13 +396,34 @@ impl Pending<ManageNameIdRequest> {
 ///
 /// [`PendingAuthnRequest::snapshot`] writes the binding as its short name.
 /// [`PendingAuthnRequest::from_snapshot`] reads a short name or a binding URN.
+///
+/// With the `serde` feature, the snapshot implements `Serialize` and
+/// `Deserialize`. In JSON it reads:
+///
+/// ```json
+/// {
+///   "request_id": "_request123",
+///   "relay_state": "return-to-cart",
+///   "idp_entity_id": "https://idp.example.com/metadata",
+///   "acs_binding": "post",
+///   "acs_url": "https://sp.example.com/acs",
+///   "acs_index": null,
+///   "acs_is_default": false
+/// }
+/// ```
+///
+/// Reading JSON requires `request_id`, `idp_entity_id`, `acs_binding`, and
+/// `acs_url`. A missing `relay_state` or `acs_index` reads as `None`, and a
+/// missing `acs_is_default` reads as `false`. Unknown fields are ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct PendingAuthnRequestSnapshot {
     /// `ID` of the AuthnRequest.
     pub request_id: String,
     /// RelayState the request carried. `None` when it carried none, and an
     /// empty string when it carried an empty one.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub relay_state: Option<String>,
     /// Entity ID of the identity provider the request went to.
     pub idp_entity_id: String,
@@ -385,8 +432,10 @@ pub struct PendingAuthnRequestSnapshot {
     /// Location of the requested assertion consumer service.
     pub acs_url: String,
     /// Index of the requested assertion consumer service, if it has one.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub acs_index: Option<u16>,
     /// Whether the requested assertion consumer service is the default one.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub acs_is_default: bool,
 }
 
@@ -425,19 +474,39 @@ impl PendingAuthnRequestSnapshot {
 /// [`PendingLogoutRequest::snapshot`] writes the binding as its short name.
 /// [`PendingLogoutRequest::from_snapshot`] reads a short name or a binding
 /// URN.
+///
+/// With the `serde` feature, the snapshot implements `Serialize` and
+/// `Deserialize`. In JSON it reads:
+///
+/// ```json
+/// {
+///   "request_id": "_logout123",
+///   "relay_state": null,
+///   "peer_entity_id": "https://idp.example.com/metadata",
+///   "request_binding": "redirect",
+///   "not_on_or_after": "2026-01-01T00:05:00Z"
+/// }
+/// ```
+///
+/// Reading JSON requires `request_id`, `peer_entity_id`, and
+/// `request_binding`. A missing `relay_state` or `not_on_or_after` reads as
+/// `None`. Unknown fields are ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct PendingLogoutRequestSnapshot {
     /// `ID` of the LogoutRequest.
     pub request_id: String,
     /// RelayState the request carried. `None` when it carried none, and an
     /// empty string when it carried an empty one.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub relay_state: Option<String>,
     /// Entity ID of the peer the request went to.
     pub peer_entity_id: String,
     /// Binding the request was sent with.
     pub request_binding: String,
     /// `NotOnOrAfter` saml-rs wrote on a session authority's request.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub not_on_or_after: Option<String>,
 }
 
@@ -469,13 +538,29 @@ impl PendingLogoutRequestSnapshot {
 /// [`PendingManageNameIdRequest::snapshot`]. The optional fields are public:
 /// assign them directly. The struct is non-exhaustive, so a later release can
 /// add an optional field without breaking your code.
+///
+/// With the `serde` feature, the snapshot implements `Serialize` and
+/// `Deserialize`. In JSON it reads:
+///
+/// ```json
+/// {
+///   "request_id": "_manage123",
+///   "relay_state": null,
+///   "peer_entity_id": "https://idp.example.com/metadata"
+/// }
+/// ```
+///
+/// Reading JSON requires `request_id` and `peer_entity_id`. A missing
+/// `relay_state` reads as `None`. Unknown fields are ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct PendingManageNameIdRequestSnapshot {
     /// `ID` of the ManageNameIDRequest.
     pub request_id: String,
     /// RelayState the request carried. `None` when it carried none, and an
     /// empty string when it carried an empty one.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub relay_state: Option<String>,
     /// Entity ID of the peer the request went to.
     pub peer_entity_id: String,
