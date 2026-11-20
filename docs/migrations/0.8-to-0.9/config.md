@@ -4,9 +4,9 @@
 
 This guide covers callers that build an `SpConfig` or `IdpConfig`, fill
 `Credentials`, build a policy, limit, or input struct with a struct literal,
-destructure a started flow, set an `XmlEncryptionPolicy`,
-`AudienceValidationPolicy`, or `TemplatePolicy`, or configure an SSO template.
-Apply the sections that match your integration.
+destructure one or a started flow, match on a policy enum, set an
+`XmlEncryptionPolicy`, `AudienceValidationPolicy`, or `TemplatePolicy`, or
+configure an SSO template. Apply the sections that match your integration.
 
 ## Pass the first endpoint to `builder`
 
@@ -209,27 +209,77 @@ contact.email_addresses = vec!["mailto:ops@example.com".into()];
 A literal that listed every field has no base. Start it from `default()`, or
 from the constructor the table names, and assign each field it listed.
 
-## Destructure `Started` and `StartedPaosSso` with a rest pattern
+The presets and `default()` are not `const fn`, so a `const` or `static` that
+held one of these literals fails with `E0015` when it starts from one. Build
+the value in a function or a `std::sync::LazyLock`. `XmlLimits::unbounded()`
+is a `const fn`.
 
-**Affects:** code that destructures a `Started` or a `StartedPaosSso` with a
-struct pattern.
+## Destructure with a rest pattern
+
+**Affects:** code that destructures one of the structs above, a `Started`, or
+a `StartedPaosSso` with a struct pattern that lists every field, and code that
+builds a `Started` or a `StartedPaosSso` with a struct literal.
 
 **Before:** a pattern could list every field, such as
-`Started { pending, outbound }`.
+`Started { pending, outbound }`, and a struct literal could build a started
+flow from its parts.
 
-**Now:** both structs are `#[non_exhaustive]`. Outside saml-rs, a struct
-pattern without `..` fails with `E0638`. Reading a field, such as
-`started.pending`, does not change.
+**Now:** `Started` and `StartedPaosSso` are `#[non_exhaustive]` too. Outside
+saml-rs, a struct pattern without `..` fails with `E0638`, and a struct
+literal of a started flow fails with `E0639`: only saml-rs builds one. Reading
+a field, such as `started.pending`, does not change.
 
-**Upgrade:** end the pattern with `..`:
+**Upgrade:** end the pattern with `..`. Keep the started flow an operation
+returned, and move its fields out where you need them:
 
 ```rust
 // Before
 let Started { pending, outbound } = sp.start_sso(&idp, StartSso::redirect())?;
+let LogoutPolicy { requests, responses } = validation.logout;
 
 // Now
 let Started { pending, outbound, .. } = sp.start_sso(&idp, StartSso::redirect())?;
+let LogoutPolicy { requests, responses, .. } = validation.logout;
 ```
+
+## Add a wildcard arm to a `match` on a policy enum
+
+**Affects:** code that matches on `AssertionSignaturePolicy`,
+`ResponseSignaturePolicy`, `AuthnRequestSigningPolicy`,
+`AuthnRequestValidationPolicy`, `LogoutSignaturePolicy`,
+`AudienceValidationPolicy`, `AssertionEncryptionPolicy`,
+`IdentifierEncryptionPolicy`, or `AttributeEncryptionPolicy` without a
+wildcard arm.
+
+**Before:** these enums were exhaustive, so a `match` that listed every
+variant compiled. `XmlSignatureProfile` was already non-exhaustive.
+
+**Now:** they are `#[non_exhaustive]`, so a later release can add a variant
+without a breaking change. Outside saml-rs, a `match` without a wildcard arm
+fails with `E0004`. `Rsa15KeyTransportPolicy`, new in 0.9, is non-exhaustive
+too. `NameIdCreationPolicy` stays exhaustive. A `matches!` or `==` comparison
+does not change.
+
+**Upgrade:** add a `_` arm after the variants you handle, and decide what your
+code does with a variant it does not know:
+
+```rust
+// Before
+let label = match validation.logout.requests {
+    LogoutSignaturePolicy::RequireSigned => "signed",
+    LogoutSignaturePolicy::AllowUnsignedForCompatibility => "unsigned allowed",
+};
+
+// Now
+let label = match validation.logout.requests {
+    LogoutSignaturePolicy::RequireSigned => "signed",
+    LogoutSignaturePolicy::AllowUnsigned => "unsigned allowed",
+    _ => "other",
+};
+```
+
+[Rename the relaxed policy and algorithm variants](compile-errors.md#116-rename-the-relaxed-policy-and-algorithm-variants)
+lists the renamed variants.
 
 ## Set `XmlEncryptionPolicy` fields directly
 

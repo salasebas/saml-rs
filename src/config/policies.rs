@@ -15,6 +15,7 @@ use super::algorithms::{
 /// until then. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssertionSignaturePolicy {
     /// Reject an assertion that is not directly signed.
     ///
@@ -45,6 +46,7 @@ pub enum AssertionSignaturePolicy {
 /// let policy = saml_rs::ResponseSignaturePolicy::default();
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ResponseSignaturePolicy {
     /// Accept a CBC `EncryptedAssertion` without a Response signature.
     AllowUnsignedEncryptedCbc,
@@ -127,6 +129,7 @@ pub enum XmlSignatureProfile {
 
 /// Whether an SP signs outgoing AuthnRequests.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthnRequestSigningPolicy {
     /// Sign outgoing AuthnRequests.
     Sign,
@@ -152,6 +155,7 @@ pub enum AuthnRequestSigningPolicy {
 /// let policy = saml_rs::AuthnRequestValidationPolicy::default();
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthnRequestValidationPolicy {
     /// Reject unsigned AuthnRequests.
     RequireSigned,
@@ -165,6 +169,7 @@ pub enum AuthnRequestValidationPolicy {
 
 /// Whether logout messages require signatures.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LogoutSignaturePolicy {
     /// Reject unsigned logout messages.
     #[default]
@@ -187,6 +192,7 @@ pub enum LogoutSignaturePolicy {
 /// let policy = saml_rs::AudienceValidationPolicy::default();
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AudienceValidationPolicy {
     /// Evaluate audience restrictions and reject a bearer assertion that omits one.
     ///
@@ -435,6 +441,7 @@ impl Default for LogoutPolicy {
 /// `<EncryptedAssertion>` it receives under either value.
 /// [`Self::EncryptAssertions`] also makes it reject a plaintext `<Assertion>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssertionEncryptionPolicy {
     /// Do not encrypt assertions.
     #[default]
@@ -458,6 +465,7 @@ pub enum AssertionEncryptionPolicy {
 /// the `<NameID>` and `<NewID>`, for one `ManageNameIDRequest` over SOAP or
 /// HTTP-Redirect.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum IdentifierEncryptionPolicy {
     /// Do not encrypt identifiers.
     #[default]
@@ -475,6 +483,7 @@ pub enum IdentifierEncryptionPolicy {
 /// response whose assertion `<AttributeStatement>` carries a plaintext
 /// `<Attribute>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AttributeEncryptionPolicy {
     /// Do not encrypt attributes.
     #[default]
@@ -489,6 +498,7 @@ pub enum AttributeEncryptionPolicy {
 /// It applies to every encrypted element the entity receives, such as an
 /// `<EncryptedAssertion>`, `<EncryptedID>`, or `<EncryptedAttribute>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Rsa15KeyTransportPolicy {
     /// Reject an encrypted element whose `<EncryptedKey>` names RSA-v1.5 with
     /// [`SamlError::Unsupported`](crate::SamlError::Unsupported) before any
@@ -569,9 +579,15 @@ impl XmlEncryptionPolicy {
         }
     }
 
+    pub(super) fn encrypts_assertions(self) -> bool {
+        match self.assertions {
+            AssertionEncryptionPolicy::EncryptAssertions => true,
+            AssertionEncryptionPolicy::PlaintextAssertions => false,
+        }
+    }
+
     pub(super) fn selects_any_element(self) -> bool {
-        self.assertions == AssertionEncryptionPolicy::EncryptAssertions
-            || self.assertion_elements().is_selected()
+        self.encrypts_assertions() || self.assertion_elements().is_selected()
     }
 
     pub(super) fn assertion_elements(self) -> AssertionElementEncryption {
@@ -594,8 +610,15 @@ pub(crate) struct AssertionElementEncryption {
 
 impl AssertionElementEncryption {
     pub(crate) fn is_selected(self) -> bool {
-        self.identifiers == IdentifierEncryptionPolicy::EncryptIdentifiers
-            || self.attributes == AttributeEncryptionPolicy::EncryptAttributes
+        let identifiers = match self.identifiers {
+            IdentifierEncryptionPolicy::EncryptIdentifiers => true,
+            IdentifierEncryptionPolicy::PlaintextIdentifiers => false,
+        };
+        let attributes = match self.attributes {
+            AttributeEncryptionPolicy::EncryptAttributes => true,
+            AttributeEncryptionPolicy::PlaintextAttributes => false,
+        };
+        identifiers || attributes
     }
 }
 
@@ -809,30 +832,49 @@ impl Default for TemplatePolicy {
     }
 }
 pub(super) fn authn_request_signing_enabled(policy: AuthnRequestSigningPolicy) -> bool {
-    matches!(policy, AuthnRequestSigningPolicy::Sign)
+    match policy {
+        AuthnRequestSigningPolicy::Sign => true,
+        AuthnRequestSigningPolicy::DoNotSign => false,
+    }
 }
 
 pub(super) fn authn_request_signature_required(policy: AuthnRequestValidationPolicy) -> bool {
-    matches!(policy, AuthnRequestValidationPolicy::RequireSigned)
+    match policy {
+        AuthnRequestValidationPolicy::RequireSigned => true,
+        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
+        | AuthnRequestValidationPolicy::AllowUnsigned => false,
+    }
 }
 
 pub(super) fn verify_present_authn_request_signature(policy: AuthnRequestValidationPolicy) -> bool {
-    matches!(
-        policy,
-        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
-    )
+    match policy {
+        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent => true,
+        AuthnRequestValidationPolicy::RequireSigned
+        | AuthnRequestValidationPolicy::AllowUnsigned => false,
+    }
 }
 
 pub(super) fn assertion_signature_required(policy: AssertionSignaturePolicy) -> bool {
-    matches!(policy, AssertionSignaturePolicy::RequireSigned)
+    match policy {
+        AssertionSignaturePolicy::RequireSigned => true,
+        AssertionSignaturePolicy::AllowUnsigned => false,
+    }
 }
 
 pub(super) fn response_signature_required(policy: ResponseSignaturePolicy) -> bool {
-    matches!(policy, ResponseSignaturePolicy::RequireSigned)
+    match policy {
+        ResponseSignaturePolicy::RequireSigned => true,
+        ResponseSignaturePolicy::RequireForEncryptedCbc
+        | ResponseSignaturePolicy::AllowUnsignedEncryptedCbc => false,
+    }
 }
 
 pub(super) fn encrypted_cbc_response_signature_required(policy: ResponseSignaturePolicy) -> bool {
-    matches!(policy, ResponseSignaturePolicy::RequireForEncryptedCbc)
+    match policy {
+        ResponseSignaturePolicy::RequireForEncryptedCbc => true,
+        ResponseSignaturePolicy::RequireSigned
+        | ResponseSignaturePolicy::AllowUnsignedEncryptedCbc => false,
+    }
 }
 
 pub(super) fn logout_signature_required(policy: LogoutSignaturePolicy) -> bool {
@@ -846,13 +888,18 @@ pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {
 }
 
 pub(super) fn audience_validation_enabled(policy: AudienceValidationPolicy) -> bool {
-    matches!(
-        policy,
+    match policy {
         AudienceValidationPolicy::RequireRestriction
-            | AudienceValidationPolicy::EvaluatePresentRestrictions
-    )
+        | AudienceValidationPolicy::EvaluatePresentRestrictions => true,
+        AudienceValidationPolicy::Skip => false,
+    }
 }
 
 pub(super) fn audience_restriction_required(policy: AudienceValidationPolicy) -> bool {
-    matches!(policy, AudienceValidationPolicy::RequireRestriction)
+    match policy {
+        AudienceValidationPolicy::RequireRestriction => true,
+        AudienceValidationPolicy::EvaluatePresentRestrictions | AudienceValidationPolicy::Skip => {
+            false
+        }
+    }
 }
