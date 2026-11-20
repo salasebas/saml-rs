@@ -36,10 +36,9 @@ let user = User {
 };
 ```
 
-With the typed API, pass the attributes with `RespondSso::attributes`, as
-[2.2](public-imports.md#22-pass-attributes-to-the-response) shows, or with
-`RespondPaosSso::attributes` for `respond_paos_sso`. A response with
-attributes needs the built-in renderer, so leave
+With the typed API, pass the attributes with `SsoAssertion::with_attributes`,
+as [2.2](public-imports.md#22-pass-attributes-to-the-response) shows. A
+response with attributes needs the built-in renderer, so leave
 `IdpConfigBuilder::sso_response_template` unset.
 
 ## 5. Send a `Name` on every attribute

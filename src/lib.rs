@@ -120,12 +120,14 @@
 //! # Identity Provider flows
 //!
 //! [`Saml<Idp>::receive_sso`] parses an SP `AuthnRequest`; [`Saml<Idp>::respond_sso`]
-//! returns the typed browser response.
+//! returns the typed browser response. An [`SsoAssertion`] answers with a
+//! successful response, and [`SsoOutcome::Failure`] with an error status and no
+//! assertion. [`RespondSso`] says how the response is delivered and signed.
 //!
 //! ```no_run
 //! use saml_rs::{
 //!     FormField, Inbound, NameId, ReplayPolicy, RespondSso, Saml, SamlValidationContext,
-//!     SpDescriptor,
+//!     SpDescriptor, SsoAssertion,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -146,7 +148,7 @@
 //! let response = idp.respond_sso(
 //!     sp,
 //!     &request,
-//!     &NameId::new("alice@example.com"),
+//!     SsoAssertion::new(NameId::new("alice@example.com")),
 //!     RespondSso::post(),
 //! )?;
 //! let form = response.post_form()?;
@@ -426,9 +428,9 @@ mod tests;
 pub use api::{
     check_paos_client_headers, ForceAuthn, Idp, IsPassive, LogoutSigning, MessageDelivery,
     NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
-    ReceiveNameIdManagement, RespondNameIdManagement, RespondPaosSso, RespondSlo, RespondSso, Saml,
-    SoapFault, Sp, StartNameIdManagement, StartPaosSso, StartSlo, StartSso, StartedPaosSso,
-    Unknown,
+    ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo, RespondSso, Saml, SoapFault, Sp,
+    SsoAssertion, SsoOutcome, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
+    StartedPaosSso, Unknown,
 };
 pub use artifact::{
     AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,

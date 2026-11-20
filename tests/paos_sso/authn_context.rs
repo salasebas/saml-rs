@@ -21,18 +21,14 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let unspecified = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    );
+    let unspecified =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()));
     assert!(matches!(unspecified, Err(SamlError::Invalid(_))));
 
     let answered = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::success(principal())
-            .authn_context(AuthnContextReference::class(SMARTCARD)?),
+        SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(SMARTCARD)?),
     )?;
     assert!(answered.envelope().contains(&format!(
         "<saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef>"

@@ -19,9 +19,10 @@ use saml_rs::{
     check_paos_client_headers, AcsEndpoint, AlgorithmPolicy, Attribute, AttributeNameFormat,
     AttributeValue, Attributes, AuthnContextReference, EndpointUrl, EntityId, IdpConfig,
     IdpConfigBuilder, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
-    NameIdFormat, PaosHttpResponse, RelayState, ReplayPolicy, RespondPaosSso, Saml, SamlError,
-    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartPaosSso, Status, SubordinateStatusCode, TransformAlgorithm, X509Credential,
+    NameIdFormat, PaosHttpResponse, RelayState, ReplayPolicy, Saml, SamlError,
+    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, SsoOutcome, StartPaosSso, Status, SubordinateStatusCode, TransformAlgorithm,
+    X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -219,11 +220,8 @@ fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Erro
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     assert_eq!(answered.http_status(), 200);
     assert!(answered.headers().iter().any(
         |header| header.name() == "Content-Type" && header.value() == "text/xml; charset=utf-8"
@@ -282,11 +280,8 @@ fn paos_response_returns_the_session_index_the_service_provider_accepts(
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
 
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     let pending = saml_rs::PendingPaosSso::from_snapshot(started.pending.snapshot())?;
@@ -321,7 +316,7 @@ fn failed_authentication_does_not_establish_a_session() -> Result<(), Box<dyn st
     let rejected = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::failure(authn_failed.clone()),
+        SsoOutcome::Failure(authn_failed.clone()),
     )?;
     assert_eq!(rejected.http_status(), 200);
     assert!(!rejected.envelope().contains("Assertion>"));
@@ -380,7 +375,7 @@ fn failure_response_with_a_success_status_is_not_written() -> Result<(), Box<dyn
     match idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::failure(Status::success()),
+        SsoOutcome::Failure(Status::success()),
     ) {
         Err(SamlError::Invalid(_)) => Ok(()),
         Err(error) => Err(format!("expected Invalid, got {error:?}").into()),
@@ -405,11 +400,8 @@ fn returned_relay_state_must_match_the_value_the_service_provider_sent(
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let mut sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     sp_request = sp_request.replace(&relay_state_header("state"), "");
     let error =
@@ -502,14 +494,11 @@ fn unpublished_assertion_consumer_on_the_request_is_rejected(
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let error = match idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    ) {
-        Err(error) => error,
-        Ok(_) => return Err("an unpublished assertion consumer is rejected".into()),
-    };
+    let error =
+        match idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal())) {
+            Err(error) => error,
+            Ok(_) => return Err("an unpublished assertion consumer is rejected".into()),
+        };
     assert!(matches!(error, SamlError::Invalid(_)));
     Ok(())
 }
@@ -534,7 +523,7 @@ fn caller_authentication_instant_is_checked_and_written() -> Result<(), Box<dyn 
     let answered = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::success(principal()).authn_instant(authenticated),
+        SsoAssertion::new(principal()).with_authn_instant(authenticated),
     )?;
     assert!(answered
         .envelope()
@@ -543,8 +532,8 @@ fn caller_authentication_instant_is_checked_and_written() -> Result<(), Box<dyn 
     let later = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::success(principal())
-            .authn_instant(SystemTime::now() + Duration::from_secs(3600)),
+        SsoAssertion::new(principal())
+            .with_authn_instant(SystemTime::now() + Duration::from_secs(3600)),
     );
     assert!(
         matches!(&later, Err(SamlError::Invalid(message)) if message.contains("later than the response IssueInstant")),
@@ -572,11 +561,8 @@ fn requested_sp_name_qualifier_is_checked_and_written() -> Result<(), Box<dyn st
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let unqualified = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    );
+    let unqualified =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()));
     assert!(
         matches!(&unqualified, Err(SamlError::Invalid(message)) if message.contains(AFFILIATION)),
         "{unqualified:?}"
@@ -586,11 +572,7 @@ fn requested_sp_name_qualifier_is_checked_and_written() -> Result<(), Box<dyn st
         .with_format(NameIdFormat::EmailAddress)
         .with_name_qualifier(IDP_ENTITY_ID)
         .with_sp_name_qualifier(AFFILIATION);
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(qualified),
-    )?;
+    let answered = idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(qualified))?;
     assert!(answered.envelope().contains(&format!(
         "<saml:NameID NameQualifier=\"{IDP_ENTITY_ID}\" SPNameQualifier=\"{AFFILIATION}\" Format=\"{}\">alice@example.com</saml:NameID>",
         NameIdFormat::EmailAddress.as_uri()
@@ -622,20 +604,15 @@ fn requested_subject_is_the_only_subject_issued() -> Result<(), Box<dyn std::err
     let other = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::success(
-            NameId::new("bob@example.com").with_format(NameIdFormat::EmailAddress),
-        ),
+        SsoAssertion::new(NameId::new("bob@example.com").with_format(NameIdFormat::EmailAddress)),
     );
     assert!(
         matches!(&other, Err(SamlError::Invalid(message)) if message.contains("requested Subject")),
         "{other:?}"
     );
 
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     assert!(answered.envelope().contains(&format!(
         "<saml:NameID Format=\"{}\">alice@example.com</saml:NameID>",
         NameIdFormat::EmailAddress.as_uri()
@@ -660,7 +637,7 @@ fn response_name_id_format_that_is_not_an_absolute_uri_is_not_sent(
     )?;
     let subject =
         NameId::new("alice@example.com").with_format(NameIdFormat::Custom("local-format".into()));
-    match idp.respond_paos_sso(&sp_descriptor, &received, RespondPaosSso::success(subject)) {
+    match idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(subject)) {
         Err(SamlError::Invalid(message)) if message.contains("absolute URI reference") => Ok(()),
         Err(error) => Err(format!("unexpected {error:?}").into()),
         Ok(_) => Err("a relative NameID format is not sent".into()),
@@ -728,11 +705,8 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     assert!(answered.envelope().contains("EncryptedAssertion"));
     assert!(answered.envelope().contains("<ds:Signature"));
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
@@ -758,11 +732,8 @@ fn relay_state_is_checked_after_the_response_signature() -> Result<(), Box<dyn s
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     // Break the response signature without touching the SOAP relay state header.
     let tampered = sp_request.replace("alice@example.com", "mallory@example.com");
@@ -806,11 +777,8 @@ fn overlong_relay_state_in_response_is_rejected() -> Result<(), Box<dyn std::err
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let document = Document::parse(answered.envelope())?;
     let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let long = "r".repeat(81);
@@ -867,11 +835,8 @@ fn signed_response_with_namespaces_declared_on_the_envelope_is_finished(
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     let declaration = " xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\"";
     let hoisted = sp_request.replacen(declaration, "", 1).replacen(
@@ -953,11 +918,8 @@ fn protocol_binding_naming_paos_is_received() -> Result<(), Box<dyn std::error::
             .get_str("request.protocolBinding"),
         Some("urn:oasis:names:tc:SAML:2.0:bindings:PAOS")
     );
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     assert_eq!(answered.http_status(), 200);
     Ok(())
 }
@@ -1029,14 +991,11 @@ fn assertion_consumer_of_a_binding_that_cannot_carry_the_response_is_rejected(
             &EndpointUrl::try_new(IDP_SOAP)?,
             validation(),
         )?;
-        let error = match idp.respond_paos_sso(
-            &sp_descriptor,
-            &received,
-            RespondPaosSso::success(principal()),
-        ) {
-            Err(error) => error,
-            Ok(_) => return Err("an HTTP-Artifact assertion consumer is rejected".into()),
-        };
+        let error =
+            match idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal())) {
+                Err(error) => error,
+                Ok(_) => return Err("an HTTP-Artifact assertion consumer is rejected".into()),
+            };
         assert!(matches!(error, SamlError::Invalid(_)));
     }
     Ok(())
@@ -1065,7 +1024,7 @@ fn attributes_reach_the_service_provider_session() -> Result<(), Box<dyn std::er
     let answered = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::success(principal()).attributes(Attributes::new(vec![mail.clone()])),
+        SsoAssertion::new(principal()).with_attributes(Attributes::new(vec![mail.clone()])),
     )?;
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     let session =
@@ -1107,11 +1066,8 @@ fn request_without_an_assertion_consumer_is_answered_at_the_metadata_default(
     assert_eq!(received.message().acs_url(), None);
     assert_eq!(received.message().acs_index(), None);
 
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     let session =
         sp.finish_paos_sso(&idp_descriptor, &started.pending, &sp_request, validation())?;
@@ -1120,7 +1076,7 @@ fn request_without_an_assertion_consumer_is_answered_at_the_metadata_default(
     let rejected = idp.respond_paos_sso(
         &sp_descriptor,
         &received,
-        RespondPaosSso::failure(
+        SsoOutcome::Failure(
             Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTH_FAILED)?),
         ),
     )?;
@@ -1147,11 +1103,7 @@ fn request_without_an_assertion_consumer_is_answered_at_the_metadata_default(
         validation(),
     )?;
     assert!(matches!(
-        idp.respond_paos_sso(
-            &artifact_sp,
-            &received,
-            RespondPaosSso::success(principal())
-        ),
+        idp.respond_paos_sso(&artifact_sp, &received, SsoAssertion::new(principal())),
         Err(SamlError::Invalid(_))
     ));
     Ok(())
@@ -1173,11 +1125,8 @@ fn assertion_matching_an_outstanding_logout_is_rejected() -> Result<(), Box<dyn 
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let sp_request = enhanced_client_takes_response(&client, answered.envelope())?;
     let outstanding = saml_rs::OutstandingLogout::try_new(
         NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
@@ -1243,11 +1192,8 @@ fn service_provider_refuses_a_header_it_must_understand_and_does_not_process(
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let document = Document::parse(answered.envelope())?;
     let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let sp_request = soap_envelope(WSSE_SECURITY_HEADER, &response);
@@ -1276,11 +1222,8 @@ fn service_provider_processes_relay_state_and_paos_response_headers(
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let document = Document::parse(answered.envelope())?;
     let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let paos_response = "<paos:Response xmlns:paos=\"urn:liberty:paos:2003-08\" SOAP-ENV:mustUnderstand=\"1\" SOAP-ENV:actor=\"http://schemas.xmlsoap.org/soap/actor/next\"/>";

@@ -20,8 +20,8 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeValue, Attributes,
     AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
     Inbound, MetadataTrustPolicy, NameId, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoSession, StartSso,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, SsoSession, StartSso,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -93,8 +93,8 @@ impl SignedExchange {
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            &NameId::new(NAME_ID),
-            RespondSso::post().attributes(Attributes::new(vec![role])),
+            SsoAssertion::new(NameId::new(NAME_ID)).with_attributes(Attributes::new(vec![role])),
+            RespondSso::post(),
         )?;
         let fields = response.post_form()?.fields().to_vec();
         let encoded = fields

@@ -10,14 +10,16 @@
 //! ```
 //!
 //! ```compile_fail
-//! use saml_rs::{AuthnRequest, NameId, Received, RespondSso, Saml, Sp, SpDescriptor};
+//! use saml_rs::{
+//!     AuthnRequest, NameId, Received, RespondSso, Saml, Sp, SpDescriptor, SsoAssertion,
+//! };
 //!
 //! let sp: Saml<Sp> = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let name_id: NameId = unreachable!();
 //!
-//! let _ = sp.respond_sso(&peer, &request, &name_id, RespondSso::post());
+//! let _ = sp.respond_sso(&peer, &request, SsoAssertion::new(name_id), RespondSso::post());
 //! ```
 //!
 //! ```compile_fail
@@ -36,6 +38,7 @@
 //! ```compile_fail
 //! use saml_rs::{
 //!     ArtifactDelivery, AuthnRequest, Idp, NameId, Received, RespondSso, Saml, SpDescriptor,
+//!     SsoAssertion,
 //! };
 //!
 //! let idp: Saml<Idp> = unreachable!();
@@ -44,12 +47,13 @@
 //! let name_id: NameId = unreachable!();
 //!
 //! let options = RespondSso::artifact(ArtifactDelivery::redirect(0));
-//! let _ = idp.respond_sso(&peer, &request, &name_id, options);
+//! let _ = idp.respond_sso(&peer, &request, SsoAssertion::new(name_id), options);
 //! ```
 //!
 //! ```compile_fail
 //! use saml_rs::{
 //!     AuthnRequest, Idp, IssuedArtifacts, NameId, Received, RespondSso, Saml, SpDescriptor,
+//!     SsoAssertion,
 //! };
 //!
 //! let idp: Saml<Idp> = unreachable!();
@@ -57,8 +61,9 @@
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let name_id: NameId = unreachable!();
 //! let mut issued = IssuedArtifacts::expire_after(std::time::Duration::from_secs(60));
+//! let assertion = SsoAssertion::new(name_id);
 //!
-//! let _ = idp.respond_sso_artifact(&peer, &request, &name_id, RespondSso::post(), &mut issued);
+//! let _ = idp.respond_sso_artifact(&peer, &request, assertion, RespondSso::post(), &mut issued);
 //! ```
 //!
 //! ```compile_fail
@@ -114,6 +119,7 @@ mod requested_subject;
 mod response_acs;
 mod slo;
 mod sp;
+mod sso_outcome;
 
 use crate::config::{IdpConfig, SpConfig};
 use crate::error::SamlError;
@@ -126,9 +132,10 @@ pub use options::{
     RespondNameIdManagement, RespondSlo, RespondSso, StartNameIdManagement, StartSlo, StartSso,
 };
 pub use paos::{
-    check_paos_client_headers, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
-    RespondPaosSso, SoapFault, StartPaosSso, StartedPaosSso,
+    check_paos_client_headers, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot, SoapFault,
+    StartPaosSso, StartedPaosSso,
 };
+pub use sso_outcome::{SsoAssertion, SsoOutcome};
 
 /// Typed SAML facade for high-level browser SSO/SLO flows.
 pub struct Saml<Role = Unknown>(Role);

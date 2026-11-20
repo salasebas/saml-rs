@@ -24,8 +24,8 @@ use saml_rs::{
     IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
     MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso,
     ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
-    X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession,
+    StartSso, X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -194,8 +194,8 @@ fn exchange_between(
     let response = idp.respond_sso(
         sp_descriptor,
         &received,
-        &alice(),
-        RespondSso::post().attributes(attributes()),
+        SsoAssertion::new(alice()).with_attributes(attributes()),
+        RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
     let session = sp.finish_sso(
@@ -586,8 +586,8 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            &alice(),
-            RespondSso::simple_sign().attributes(attributes()),
+            SsoAssertion::new(alice()).with_attributes(attributes()),
+            RespondSso::simple_sign(),
         )?;
         let session = sp.finish_sso(
             &idp_descriptor,
@@ -716,7 +716,7 @@ fn encrypted_id_outside_the_signed_assertion_is_not_decrypted(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        &alice(),
+        SsoAssertion::new(alice()),
         RespondSso::post().allow_unsigned_encrypted_cbc(),
     )?;
     let xml = response_xml(&response)?;
@@ -786,8 +786,8 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        &alice(),
-        RespondSso::post().attributes(attributes()),
+        SsoAssertion::new(alice()).with_attributes(attributes()),
+        RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
 

@@ -7,18 +7,45 @@ This guide covers typed API callers of `saml-rs`, `opensaml`, `samlify`, and
 `Attribute`, or `RequestedAuthnContext` values. Apply the sections that match
 your integration.
 
-## Pass a `NameId` to the response methods
+## Answer with an `SsoAssertion` or an `SsoOutcome`
 
 **Affects:** identity providers that call `respond_sso`, `initiate_sso`,
-`respond_sso_artifact`, `initiate_sso_artifact`, or `respond_paos_sso`.
+`respond_sso_artifact`, `initiate_sso_artifact`, or `respond_paos_sso`, or
+that set `RespondSso::attributes`, `RespondSso::authn_context`,
+`RespondSso::authn_instant`, or `RespondSso::status`.
 
-The `Subject` type is removed. These methods take the principal's `NameId`
-and write the assertion `Subject` themselves, with one bearer
-`SubjectConfirmation`. The browser methods borrow it. `respond_paos_sso` takes
-it in `RespondPaosSso::success`, as
-[Answer PAOS login with `RespondPaosSso::success` or `RespondPaosSso::failure`](typed-operations.md#answer-paos-login-with-respondpaosssosuccess-or-respondpaosssofailure)
-shows. Before the upgrade, a `Subject` with confirmations returned
-`SamlError::Unsupported`. A caller can no longer pass one.
+**Before:** these methods took a `Subject`. The `RespondSso` options carried
+both how the response was delivered and what it said: the assertion's
+attributes, authentication context, and authentication instant, and the
+response status. A browser or HTTP-Artifact error response still needed a
+`Subject`, which it did not write.
+
+**Now:** the `Subject` type is removed. The third argument (the second for
+`initiate_sso` and `initiate_sso_artifact`) is `impl Into<SsoOutcome>`, and
+it says what the response reports:
+
+- `SsoAssertion::new(name_id)` answers with a `Success` response. The method
+  writes the assertion `Subject` with that `NameId` and one bearer
+  `SubjectConfirmation`. `SsoAssertion::new` takes the `NameId` by value, so
+  clone one you only borrow. To re-issue the principal of an accepted session,
+  pass `SsoAssertion::new(session.name_id().clone())`. A `Subject`
+  with confirmations returned `SamlError::Unsupported`. A caller can no longer
+  pass one.
+- `RespondSso::attributes`, `authn_context`, and `authn_instant` become
+  `SsoAssertion::with_attributes`, `with_authn_context`, and
+  `with_authn_instant`. They take the same values and are checked as before.
+- `RespondSso::status` is removed. Pass `SsoOutcome::Failure(status)` for an
+  error response. It needs no `NameId`, and it cannot carry the assertion
+  options. An error response is therefore no longer rejected for an
+  authentication context or instant set without producer rules, or for
+  attributes or `NameId` qualifiers combined with an SSO response template.
+- `RespondSso` keeps `post`, `simple_sign`, `artifact`, `relay_state`,
+  `sign_response`, `allow_unsigned_encrypted_cbc`, and
+  `apply_producer_rules`.
+
+`respond_paos_sso` takes the same outcome, as
+[Answer PAOS login with an `SsoOutcome`](typed-operations.md#answer-paos-login-with-an-ssooutcome)
+shows.
 
 Before the upgrade:
 
@@ -27,26 +54,46 @@ let response = idp.respond_sso(
 	&sp,
 	&request,
 	Subject::new(NameId::new("alice@example.com", None), Vec::new()),
-	RespondSso::post(),
+	RespondSso::post().attributes(attributes),
+)?;
+let denied = idp.respond_sso(
+	&sp,
+	&request,
+	Subject::new(NameId::new("unknown", None), Vec::new()),
+	RespondSso::post().status(Status::responder()),
 )?;
 ```
 
 After the upgrade:
 
 ```rust
-# use saml_rs::{AuthnRequest, NameId, Received, RespondSso, Saml, SamlError, SpDescriptor};
-# fn respond(idp: &Saml<saml_rs::Idp>, sp: &SpDescriptor, request: &Received<AuthnRequest>) -> Result<(), SamlError> {
+# use saml_rs::{AuthnRequest, Attributes, NameId, Received, RespondSso, Saml, SamlError, SpDescriptor, SsoAssertion, SsoOutcome, Status};
+# fn respond(idp: &Saml<saml_rs::Idp>, sp: &SpDescriptor, request: &Received<AuthnRequest>, attributes: Attributes) -> Result<(), SamlError> {
 let response = idp.respond_sso(
 	sp,
 	request,
-	&NameId::new("alice@example.com"),
+	SsoAssertion::new(NameId::new("alice@example.com")).with_attributes(attributes),
 	RespondSso::post(),
 )?;
-# let _ = response;
+let denied = idp.respond_sso(
+	sp,
+	request,
+	SsoOutcome::Failure(Status::responder()),
+	RespondSso::post(),
+)?;
+# let _ = (response, denied);
 # Ok(()) }
 ```
 
-To re-issue the principal of an accepted session, pass `session.name_id()`.
+Two status choices behave differently:
+
+- `SsoOutcome::Failure` with a top-level `Success` status returns
+  `SamlError::Invalid` from every one of these methods. Before the upgrade,
+  `RespondSso::status(Status::success())` wrote a `Success` response with its
+  assertion. Pass an `SsoAssertion` instead.
+- A `Success` response always has the bare top-level `Success` status.
+  Before the upgrade, `RespondSso::status` could put a subordinate code under
+  `Success` next to the assertion. That response cannot be expressed now.
 
 ## Build a `NameId` with its `with_` methods
 

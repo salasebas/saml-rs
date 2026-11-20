@@ -95,7 +95,7 @@ impl Attribute {
     /// Replace the `NameFormat`.
     ///
     /// [`AttributeNameFormat::Custom`] with the URI of another variant is
-    /// stored as that variant. [`crate::RespondSso::attributes`] rejects an
+    /// stored as that variant. [`crate::SsoAssertion::with_attributes`] rejects an
     /// [`AttributeNameFormat::Basic`] attribute whose name is not an XML name,
     /// and a `NameFormat` that is not an absolute URI reference.
     pub fn with_name_format(mut self, name_format: AttributeNameFormat) -> Self {

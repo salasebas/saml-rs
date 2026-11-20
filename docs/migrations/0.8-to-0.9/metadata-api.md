@@ -7,15 +7,14 @@ The compatibility crates re-export the same API.
 
 ## Parse without extractor fields
 
-Remove the extractor list from `Metadata::parse`, `parse_with_limits`, and
-`parse_with_policy`. Custom extraction remains an implementation detail.
+Remove the extractor list from `Metadata::parse` and `parse_with_limits`.
+Custom extraction remains an implementation detail.
 
 Before:
 
 ```rust,ignore
 let metadata = Metadata::parse(xml, Vec::new())?;
 let limited = Metadata::parse_with_limits(xml, Vec::new(), limits)?;
-let checked = Metadata::parse_with_policy(xml, Vec::new(), &policy)?;
 ```
 
 After:
@@ -32,7 +31,9 @@ let checked = Metadata::parse_with_policy(xml, &policy)?;
 # Ok(()) }
 ```
 
-The default, explicit-limit, and explicit-policy constructors remain available.
+The default and explicit-limit constructors remain available.
+`Metadata::parse_with_policy` is new: it takes an `XmlPolicy`, for its XML
+limits and schema validator.
 `IdpDescriptor::from_metadata_xml` and `SpDescriptor::from_metadata_xml` still
 require an explicit `MetadataTrustPolicy`. Use their `_with_policy` variants
 when you need custom XML limits or a schema validator.

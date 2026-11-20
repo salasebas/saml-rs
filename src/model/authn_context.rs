@@ -14,7 +14,7 @@ pub enum AuthnContextReferenceKind {
 
 /// An authentication context class or declaration reference.
 ///
-/// [`crate::RespondSso::authn_context`] writes it in the assertion's
+/// [`crate::SsoAssertion::with_authn_context`] writes it in the assertion's
 /// `AuthnContext`. [`RequestedAuthnContext::references`] lists the ones a
 /// service provider asked for. [`Self::class`] and [`Self::declaration`]
 /// require an absolute URI; a received reference is kept as sent and may not

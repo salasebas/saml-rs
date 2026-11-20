@@ -19,7 +19,7 @@ use saml_rs::{
     AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
     ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpConfigBuilder,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, X509Credential,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
     MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 use url::Url;
@@ -181,7 +181,7 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
         .ok_or("missing RelayState")?;
     match idp.initiate_sso(
         &sp_descriptor,
-        &principal(),
+        SsoAssertion::new(principal()),
         RespondSso::post().relay_state(reused.clone()),
     ) {
         Err(SamlError::Invalid(message)) if message.contains("80") => {}
@@ -253,7 +253,12 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
         Some(long.as_str())
     );
 
-    let response = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
     assert_eq!(
         response.relay_state().map(RelayState::as_str),
         Some(long.as_str())
@@ -275,7 +280,11 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
         Some(long.as_str())
     );
 
-    let unsolicited = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
+    let unsolicited = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
     let mut fields = unsolicited.post_form()?.fields().to_vec();
     fields.push(FormField::new("RelayState", long.as_str()));
     let session =
@@ -316,7 +325,11 @@ fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
         }
     }
 
-    let response = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
+    let response = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
     let mut fields = response.post_form()?.fields().to_vec();
     fields.push(FormField::new("RelayState", too_long));
     match sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation()) {
@@ -364,7 +377,12 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
         idp.receive_sso(&sp_descriptor, Inbound::post(request_fields), validation()),
     )?;
 
-    let response = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
     let mut response_fields = response.post_form()?.fields().to_vec();
     response_fields.push(FormField::new("RelayState", "https://evil.example/"));
     expect_ambiguous_relay_state(
@@ -377,7 +395,11 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
         ),
     )?;
 
-    let unsolicited = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
+    let unsolicited = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
     let mut unsolicited_fields = unsolicited.post_form()?.fields().to_vec();
     unsolicited_fields.push(FormField::new("RelayState", "a"));
     unsolicited_fields.push(FormField::new("RelayState", "b"));

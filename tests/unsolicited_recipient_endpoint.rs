@@ -17,7 +17,7 @@ use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, DeliveredArtifact, EndpointUrl,
     EntityId, Idp, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MetadataTrustPolicy, NameId,
     ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig,
-    SpDescriptor, SsoEndpoint, SsoResponseBinding, SsoSession,
+    SpDescriptor, SsoAssertion, SsoEndpoint, SsoResponseBinding, SsoSession,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -118,7 +118,8 @@ fn accept(
             } else {
                 RespondSso::post()
             };
-            let response = idp.initiate_sso(&sender_view, &principal(), options)?;
+            let response =
+                idp.initiate_sso(&sender_view, SsoAssertion::new(principal()), options)?;
             let fields = response.post_form()?.fields().to_vec();
             if binding == SsoResponseBinding::SimpleSign {
                 Inbound::simple_sign(fields)
@@ -130,7 +131,7 @@ fn accept(
             let mut issued = IssuedArtifacts::expire_after(Duration::from_secs(60));
             let response = idp.initiate_sso_artifact(
                 &sender_view,
-                &principal(),
+                SsoAssertion::new(principal()),
                 RespondSso::artifact(ArtifactDelivery::post_form(0)),
                 &mut issued,
             )?;

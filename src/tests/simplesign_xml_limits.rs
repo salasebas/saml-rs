@@ -17,8 +17,8 @@ use saml_rs::{
     AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
     RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSlo, StartSso,
-    XmlPolicy,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponseBinding, StartSlo,
+    StartSso, XmlPolicy,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -176,7 +176,7 @@ fn finish_padded_sso_response(padding: usize) -> TestResult<Result<(), SamlError
     let response = parties.idp.respond_sso(
         &parties.sp_descriptor,
         &received,
-        &NameId::new("alice@example.com"),
+        SsoAssertion::new(NameId::new("alice@example.com")),
         RespondSso::simple_sign(),
     )?;
     let fields = padded(response.post_form()?.fields(), "SAMLResponse", padding)?;

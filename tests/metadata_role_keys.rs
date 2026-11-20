@@ -10,7 +10,7 @@ use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
     RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSso, X509Credential,
+    SsoAssertion, SsoEndpoint, StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -61,7 +61,7 @@ fn sso_response_from(
     let response = responder.respond_sso(
         sp_descriptor,
         &received,
-        &NameId::new("alice@example.com"),
+        SsoAssertion::new(NameId::new("alice@example.com")),
         RespondSso::post(),
     )?;
     Ok(sp.finish_sso(

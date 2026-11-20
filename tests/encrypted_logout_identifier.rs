@@ -22,8 +22,8 @@ use saml_rs::{
     LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
     NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy,
     RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint,
-    SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso,
-    Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo,
+    StartSso, Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -627,7 +627,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     let sso_response = parties.idp.respond_sso(
         &parties.sp_descriptor,
         &authn_request,
-        &principal(),
+        SsoAssertion::new(principal()),
         RespondSso::post(),
     )?;
 

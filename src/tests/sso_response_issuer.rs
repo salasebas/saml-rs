@@ -14,8 +14,8 @@ use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
     AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
     MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    SsoSession, StartSso,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, SsoSession, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -85,7 +85,11 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
     let (pending, response) = match delivery {
         Delivery::Unsolicited => (
             None,
-            idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?,
+            idp.initiate_sso(
+                &sp_descriptor,
+                SsoAssertion::new(principal()),
+                RespondSso::post(),
+            )?,
         ),
         Delivery::Solicited => {
             let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
@@ -94,8 +98,12 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
                 Inbound::post(post_fields(&started.outbound)?),
                 validation(),
             )?;
-            let response =
-                idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
+            let response = idp.respond_sso(
+                &sp_descriptor,
+                &received,
+                SsoAssertion::new(principal()),
+                RespondSso::post(),
+            )?;
             (Some(started.pending), response)
         }
     };

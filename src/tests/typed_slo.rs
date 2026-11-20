@@ -45,7 +45,7 @@ use saml_rs::{
     PendingLogoutRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RespondSlo,
     RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel,
     SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, SsoSession, StartSlo, Status, SubordinateStatusCode, TemplatePolicy,
+    SsoAssertion, SsoEndpoint, SsoSession, StartSlo, Status, SubordinateStatusCode, TemplatePolicy,
     MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 use time::format_description::well_known::Rfc3339;
@@ -2134,7 +2134,7 @@ fn one_typed_idp_issuance_lifetime_drives_sso_and_slo_expiration(
 
     let sso = idp.initiate_sso(
         &sp_descriptor,
-        &NameId::new("alice@example.com"),
+        SsoAssertion::new(NameId::new("alice@example.com")),
         RespondSso::post(),
     )?;
     let sso_xml = outbound_xml(&sso, "SAMLResponse")?;
@@ -3906,7 +3906,7 @@ fn typed_session_authority_logout_request_without_any_format_omits_format_like_t
 
     let sso = idp.initiate_sso(
         &sp_descriptor,
-        &NameId::new("alice@example.com"),
+        SsoAssertion::new(NameId::new("alice@example.com")),
         RespondSso::post(),
     )?;
     assert_eq!(

@@ -342,10 +342,9 @@ role's template no longer compiles. The default templates to start from are
 4. Delete `LoginResponseTemplate::attributes` from a typed identity provider.
    The typed response methods never gave those attributes values, as
    [4](sso-attributes.md#4-give-each-login-response-template-attribute-a-value)
-   describes. Pass the attributes with `RespondSso::attributes`, or with
-   `RespondPaosSso::attributes` for `respond_paos_sso`. A response with
-   attributes needs the built-in renderer, so leave `sso_response_template`
-   unset.
+   describes. Pass the attributes with `SsoAssertion::with_attributes`. A
+   response with attributes needs the built-in renderer, so leave
+   `sso_response_template` unset.
 5. Import the default templates from `saml_rs::config`:
    `template::LOGIN_REQUEST_TEMPLATE` is `AUTHN_REQUEST_TEMPLATE`, and
    `template::LOGIN_RESPONSE_TEMPLATE` is `SSO_RESPONSE_TEMPLATE`.

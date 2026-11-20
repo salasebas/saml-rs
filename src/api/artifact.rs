@@ -1,13 +1,12 @@
 use crate::artifact::{self, AnsweredArtifact, Artifact, ArtifactResolution, IssuedArtifacts};
 use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
-use crate::model::{AuthnRequest, NameId, Received, SamlValidationContext, SsoResponse};
+use crate::model::{AuthnRequest, Received, SamlValidationContext, SsoResponse};
 use crate::soap::SoapChannel;
 use std::time::SystemTime;
 
 use super::idp::ResponseTransport;
-use super::raw_mapping::ensure_entity_id;
-use super::{Idp, RespondSso, Saml, SamlError, Sp};
+use super::{Idp, RespondSso, Saml, SamlError, Sp, SsoOutcome};
 
 impl Saml<Idp> {
     /// Store the SAML protocol element `protocol_xml` for `service_provider`
@@ -53,35 +52,38 @@ impl Saml<Idp> {
     /// [`Self::answer_artifact_resolve`] when the service provider resolves
     /// the artifact.
     ///
-    /// A [`RespondSso::status`] other than success is stored and delivered
-    /// the same way.
+    /// `outcome` says what the response reports, as for
+    /// [`Self::respond_sso`]. An [`SsoOutcome::Failure`] is stored and
+    /// delivered the same way.
     ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the service provider publishes no
     /// HTTP-Artifact assertion consumer the request allows, this identity
     /// provider's metadata has no SOAP `ArtifactResolutionService` at the
-    /// delivery's index, or [`Self::respond_sso`] would fail.
+    /// delivery's index, or [`Self::respond_sso`] would fail, including
+    /// [`SamlError::Invalid`] for an [`SsoOutcome::Failure`] with a top-level
+    /// `Success` status.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use saml_rs::{
     ///     ArtifactDelivery, AuthnRequest, IssuedArtifacts, NameId, Received, RespondSso, Saml,
-    ///     SpDescriptor,
+    ///     SpDescriptor, SsoAssertion,
     /// };
     ///
     /// # fn respond(
     /// #     idp: &Saml<saml_rs::Idp>,
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<AuthnRequest>,
-    /// #     name_id: &NameId,
+    /// #     name_id: NameId,
     /// #     issued: &mut IssuedArtifacts,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let response = idp.respond_sso_artifact(
     ///     sp,
     ///     request,
-    ///     name_id,
+    ///     SsoAssertion::new(name_id),
     ///     RespondSso::artifact(ArtifactDelivery::redirect(0)),
     ///     issued,
     /// )?;
@@ -94,19 +96,24 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: &Received<AuthnRequest>,
-        name_id: &NameId,
+        outcome: impl Into<SsoOutcome>,
         options: RespondSso<ArtifactDelivery>,
         issued: &mut IssuedArtifacts,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
-        ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let transport = ResponseTransport::Artifact(options.delivery, issued);
-        self.issue_sso(sp, Some(request), name_id, options.delivered(transport))
+        self.issue_sso(
+            sp,
+            Some(request),
+            &outcome.into(),
+            options.delivered(transport),
+        )
     }
 
     /// Initiate IdP-initiated SSO with an HTTP-Artifact.
     ///
     /// The artifact goes to the service provider's default assertion
-    /// consumer, which must use HTTP-Artifact.
+    /// consumer, which must use HTTP-Artifact. `outcome` says what the
+    /// unsolicited response reports, as for [`Self::initiate_sso`].
     ///
     /// # Errors
     ///
@@ -115,12 +122,12 @@ impl Saml<Idp> {
     pub fn initiate_sso_artifact(
         &self,
         sp: &SpDescriptor,
-        name_id: &NameId,
+        outcome: impl Into<SsoOutcome>,
         options: RespondSso<ArtifactDelivery>,
         issued: &mut IssuedArtifacts,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
         let transport = ResponseTransport::Artifact(options.delivery, issued);
-        self.issue_sso(sp, None, name_id, options.delivered(transport))
+        self.issue_sso(sp, None, &outcome.into(), options.delivered(transport))
     }
 
     /// Answer `ArtifactResolve` with `ArtifactResponse`.

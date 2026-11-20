@@ -1,8 +1,7 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
-use crate::model::{Attributes, AuthnContextReference, RelayState, RequestedAuthnContext, Status};
+use crate::model::{RelayState, RequestedAuthnContext, Status};
 use crate::sp::WebBrowserSsoProducer;
-use std::time::SystemTime;
 
 pub use crate::model::{ForceAuthn, IsPassive};
 
@@ -131,6 +130,9 @@ pub struct MessageDelivery;
 
 /// Options for issuing SAML Responses from an IdP.
 ///
+/// These options say how the response is delivered and signed, and whether
+/// the Web Browser SSO generation rules apply. The
+/// [`SsoOutcome`](crate::SsoOutcome) passed with them says what it reports.
 /// `Delivery` is [`MessageDelivery`] when the browser carries the response,
 /// and [`ArtifactDelivery`] when it carries an artifact for a stored one.
 #[derive(Debug, Clone)]
@@ -140,10 +142,6 @@ pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) relay_state: Option<RelayState>,
     response_signing: ResponseSigning,
     pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
-    pub(super) status: Option<Status>,
-    pub(super) attributes: Attributes,
-    pub(super) authn_context: Option<AuthnContextReference>,
-    pub(super) authn_instant: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -171,10 +169,6 @@ impl RespondSso {
             relay_state: None,
             response_signing: ResponseSigning::FollowEncryptedCbcRecommendation,
             web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
-            status: None,
-            attributes: Attributes::default(),
-            authn_context: None,
-            authn_instant: None,
         }
     }
 }
@@ -202,72 +196,7 @@ impl<Delivery> RespondSso<Delivery> {
             relay_state: self.relay_state,
             response_signing: self.response_signing,
             web_browser_sso_producer: self.web_browser_sso_producer,
-            status: self.status,
-            attributes: self.attributes,
-            authn_context: self.authn_context,
-            authn_instant: self.authn_instant,
         }
-    }
-
-    /// Set the attributes of the assertion's `AttributeStatement`.
-    ///
-    /// Each attribute is written with its `Name`, its `NameFormat` when it has
-    /// one, and one `xs:string` `AttributeValue` for each value. An attribute
-    /// without values is written without `AttributeValue`. An empty collection
-    /// writes no `AttributeStatement`, and so does an error response.
-    ///
-    /// The response is rejected when a `NameFormat` is not an absolute URI
-    /// reference, when an [`crate::AttributeNameFormat::Basic`] name is not an
-    /// XML name, or when a login response template is configured.
-    pub fn attributes(mut self, attributes: Attributes) -> Self {
-        self.attributes = attributes;
-        self
-    }
-
-    /// Set the authentication context of the assertion's `AuthnStatement`.
-    ///
-    /// Pass the context in which the subject was actually authenticated.
-    /// Omitting it writes the unspecified class. An error response writes no
-    /// assertion. The response is rejected when
-    /// [`Self::apply_producer_rules`] is not selected, since
-    /// no `AuthnStatement` is written then.
-    ///
-    /// When the request's [`crate::RequestedAuthnContext`] uses
-    /// [`crate::AuthnContextComparison::Exact`], a successful response is
-    /// rejected unless this context, or the unspecified class when it is
-    /// omitted, is one of the requested references. The other comparisons are
-    /// judged by the caller. When no requested context can be met, answer with
-    /// [`Self::status`] set to [`Status::responder`] and, optionally,
-    /// [`crate::SubordinateStatusCode::no_authn_context`].
-    pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
-        self.authn_context = Some(authn_context);
-        self
-    }
-
-    /// Set the `AuthnInstant` of the assertion's `AuthnStatement`.
-    ///
-    /// Pass the time at which the subject actually authenticated, such as the
-    /// start of a reused identity provider session. It is written in UTC,
-    /// rounded down to the second. Omitting it writes the assertion
-    /// `IssueInstant`. An error response writes no assertion.
-    ///
-    /// The response is rejected when the written instant is later than the
-    /// response `IssueInstant` or before year 1, and when
-    /// [`Self::apply_producer_rules`] is not selected, since
-    /// no `AuthnStatement` is written then.
-    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
-        self.authn_instant = Some(authn_instant);
-        self
-    }
-
-    /// Set the `Response` status. Omitting it emits top-level `Success` and
-    /// its assertions.
-    ///
-    /// Any other top-level code omits assertions. A login response template
-    /// cannot carry that response or a subordinate code.
-    pub fn status(mut self, status: Status) -> Self {
-        self.status = Some(status);
-        self
     }
 
     /// Always authenticate the top-level SAML Response.
@@ -297,10 +226,12 @@ impl<Delivery> RespondSso<Delivery> {
     /// [`RespondSso::post`], [`RespondSso::simple_sign`], and
     /// [`RespondSso::artifact`] leave this off. When enabled, a
     /// successful response carries an authentication statement whose
-    /// `AuthnInstant` is [`Self::authn_instant`], or the assertion
-    /// `IssueInstant` when it is omitted, and whose `AuthnContext` is
-    /// [`Self::authn_context`]. Without it, the
-    /// `AuthnContextClassRef` is
+    /// `AuthnInstant` is
+    /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant), or
+    /// the assertion `IssueInstant` when it is omitted, and whose
+    /// `AuthnContext` is
+    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context).
+    /// Without it, the `AuthnContextClassRef` is
     /// `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified`. That class means
     /// the authentication mechanism was not recorded. It is not evidence of a
     /// particular authentication strength. When the identity provider metadata

@@ -1,20 +1,19 @@
 use crate::artifact::{self, IssuedArtifacts};
 use crate::browser::{ArtifactDelivery, Inbound, Outbound, SsoRequestBinding};
-use crate::config::{NameIdFormat, SpDescriptor};
+use crate::config::SpDescriptor;
 use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
-use crate::entity::User;
 use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
-    AuthnRequest, NameId, Received, RelayState, ReplayKey, SamlValidationContext, SsoResponse,
+    AuthnRequest, Received, RelayState, ReplayKey, SamlValidationContext, SsoResponse,
 };
-use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
 use super::raw_mapping::{ensure_entity_id, raw_sp_descriptor, relay_state_from_input};
 use super::requested_subject::decrypt_requested_subject;
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
-use super::{Idp, RespondSso, Saml, SamlError};
+use super::sso_outcome::OutcomeParts;
+use super::{Idp, RespondSso, Saml, SamlError, SsoOutcome};
 
 /// Where an issued response goes.
 pub(super) enum ResponseTransport<'a> {
@@ -57,7 +56,7 @@ impl Saml<Idp> {
     /// ```no_run
     /// use saml_rs::{
     ///     FormField, Inbound, NameId, ReplayPolicy, RespondSso, Saml, SamlValidationContext,
-    ///     SpDescriptor,
+    ///     SpDescriptor, SsoAssertion,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -65,7 +64,7 @@ impl Saml<Idp> {
     /// #     idp: &Saml<saml_rs::Idp>,
     /// #     sp: &SpDescriptor,
     /// #     fields: Vec<FormField>,
-    /// #     name_id: &NameId,
+    /// #     name_id: NameId,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
@@ -73,7 +72,7 @@ impl Saml<Idp> {
     /// );
     /// let input = Inbound::post(fields);
     /// let request = idp.receive_sso(sp, input, validation)?;
-    /// let response = idp.respond_sso(sp, &request, name_id, RespondSso::post())?;
+    /// let response = idp.respond_sso(sp, &request, SsoAssertion::new(name_id), RespondSso::post())?;
     ///
     /// let form = response.post_form()?;
     /// # let _ = form;
@@ -124,88 +123,133 @@ impl Saml<Idp> {
 
     /// Respond to a received SP AuthnRequest.
     ///
+    /// `outcome` says what the response reports: an
+    /// [`SsoAssertion`](crate::SsoAssertion) or [`SsoOutcome::Success`] writes
+    /// a `Success` response with that assertion, and [`SsoOutcome::Failure`]
+    /// writes a response with that error status and no assertion. `options`
+    /// says how the response is delivered and signed, and whether the Web
+    /// Browser SSO generation rules apply.
+    ///
     /// This does not write the Identity Provider Discovery cookie. Call
     /// [`Self::common_domain_cookie`] after authentication when the
     /// caller wants this identity provider remembered.
     ///
-    /// The assertion `Subject` has `name_id` as its `NameID`, with its value,
-    /// `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`, and
-    /// the bearer `SubjectConfirmation` this identity provider writes. A
-    /// `name_id` without a format is written with the first configured NameID
-    /// format; with none configured, `Format` is omitted. After
-    /// a service provider sets its alternative identifier through
+    /// The assertion `Subject` has the assertion's `NameId` as its `NameID`,
+    /// with its value, `Format`, `NameQualifier`, `SPNameQualifier`, and
+    /// `SPProvidedID`, and the bearer `SubjectConfirmation` this identity
+    /// provider writes. A `NameId` without a format is written with the first
+    /// configured NameID format; with none configured, `Format` is omitted.
+    /// After a service provider sets its alternative identifier through
     /// [`Self::receive_name_id_management`], pass that value with
     /// [`NameId::with_sp_provided_id`](crate::NameId::with_sp_provided_id).
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the request issuer does not match the SP
+    /// Returns [`SamlError::Invalid`] when `outcome` is
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status. Returns
+    /// [`SamlError`] when the request issuer does not match the SP
     /// descriptor, relay state is invalid, the request ACS selection conflicts
     /// with the response binding or SP metadata, required metadata or signing
     /// keys are missing, a request without ACS or binding selection has an
     /// unsupported metadata default or a default incompatible with the chosen
     /// response binding, the configured issuance expiration overflows the
     /// supported timestamp range, producer rules are combined with a custom
-    /// login response template, an error status is combined with a login
-    /// response template, [`RespondSso::attributes`] is combined with a login
-    /// response template, names a basic attribute that is not an XML name, or
-    /// has a `NameFormat` that is not an absolute URI reference,
-    /// a `name_id` with `NameQualifier`, `SPNameQualifier`, or
+    /// login response template, a failure is combined with a login response
+    /// template, or response creation fails.
+    ///
+    /// For an assertion, it also returns [`SamlError`] when
+    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
+    /// combined with a login response template, names a basic attribute that
+    /// is not an XML name, or has a `NameFormat` that is not an absolute URI
+    /// reference, a `NameId` with `NameQualifier`, `SPNameQualifier`, or
     /// `SPProvidedID` is combined with a login response template, the
-    /// persistent or transient `name_id` is longer than 256
-    /// characters, the NameID format is not an absolute URI reference,
-    /// [`RespondSso::authn_context`] is set without producer rules or does not
-    /// meet an exact `RequestedAuthnContext`, [`RespondSso::authn_instant`] is
+    /// persistent or transient `NameId` is longer than 256 characters, the
+    /// NameID format is not an absolute URI reference,
+    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) is
+    /// set without producer rules or does not meet an exact
+    /// `RequestedAuthnContext`,
+    /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
     /// set without producer rules, is later than the response `IssueInstant`,
-    /// or is before year 1, producer rules are selected and
-    /// the `name_id` `SPNameQualifier` is not the one the request's
-    /// `NameIDPolicy` asks for with a SAML-defined format other than
-    /// `unspecified` or `encrypted`, producer rules are selected and a success
-    /// response's `name_id` does not strongly match the request's
-    /// `Subject` (see [`RequestedSubject`](crate::RequestedSubject)), or
-    /// response creation fails.
+    /// or is before year 1, producer rules are selected and the `NameId`
+    /// `SPNameQualifier` is not the one the request's `NameIDPolicy` asks for
+    /// with a SAML-defined format other than `unspecified` or `encrypted`, or
+    /// producer rules are selected and the `NameId` does not strongly match the
+    /// request's `Subject` (see [`RequestedSubject`](crate::RequestedSubject)).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use saml_rs::{
+    ///     AuthnRequest, NameId, Received, RespondSso, Saml, SpDescriptor, SsoAssertion,
+    ///     SsoOutcome, Status,
+    /// };
+    ///
+    /// # fn respond(
+    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     sp: &SpDescriptor,
+    /// #     request: &Received<AuthnRequest>,
+    /// #     authenticated: Option<NameId>,
+    /// # ) -> Result<(), saml_rs::SamlError> {
+    /// let outcome = match authenticated {
+    ///     Some(name_id) => SsoOutcome::Success(SsoAssertion::new(name_id)),
+    ///     None => SsoOutcome::Failure(Status::responder()),
+    /// };
+    /// let response = idp.respond_sso(sp, request, outcome, RespondSso::post())?;
+    /// let form = response.post_form()?;
+    /// # let _ = form;
+    /// # Ok(()) }
+    /// ```
     pub fn respond_sso(
         &self,
         sp: &SpDescriptor,
         request: &Received<AuthnRequest>,
-        name_id: &NameId,
+        outcome: impl Into<SsoOutcome>,
         options: RespondSso,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
-        ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         self.issue_sso(
             sp,
             Some(request),
-            name_id,
+            &outcome.into(),
             options.delivered(ResponseTransport::Browser),
         )
     }
 
     /// Initiate IdP-initiated SSO.
     ///
+    /// `outcome` says what the unsolicited response reports, as for
+    /// [`Self::respond_sso`]. An [`SsoOutcome::Failure`] writes an error
+    /// response with no `InResponseTo` and no assertion.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when relay state is invalid, SP metadata cannot be
+    /// Returns [`SamlError::Invalid`] when `outcome` is
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status. Returns
+    /// [`SamlError`] when relay state is invalid, SP metadata cannot be
     /// parsed, the metadata default ACS is unsupported or incompatible with
     /// the selected response binding, a signing key is missing, the
     /// selected binding is unsupported, the configured issuance expiration
     /// overflows the supported timestamp range, producer rules are combined
-    /// with a custom login response template, an error status is combined with
-    /// a login response template, [`RespondSso::attributes`] is combined with a
-    /// login response template or names a basic attribute that is not an XML
-    /// name, a `name_id` with `NameQualifier`, `SPNameQualifier`, or
-    /// `SPProvidedID` is combined with a login response template,
-    /// [`RespondSso::authn_context`] is set without producer rules,
-    /// [`RespondSso::authn_instant`] is set without producer rules, is later
-    /// than the response `IssueInstant`, or is before year 1, the
-    /// persistent or transient `name_id` is longer than 256
-    /// characters, or response creation fails.
+    /// with a custom login response template, a failure is combined with a
+    /// login response template, or response creation fails.
+    ///
+    /// For an assertion, it also returns [`SamlError`] when
+    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
+    /// combined with a login response template or names a basic attribute that
+    /// is not an XML name, a `NameId` with `NameQualifier`, `SPNameQualifier`,
+    /// or `SPProvidedID` is combined with a login response template,
+    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) is
+    /// set without producer rules,
+    /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
+    /// set without producer rules, is later than the response `IssueInstant`,
+    /// or is before year 1, or the persistent or transient `NameId` is longer
+    /// than 256 characters.
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use saml_rs::{
     ///     FormField, IdpDescriptor, Inbound, NameId, ReplayPolicy, RespondSso, Saml,
-    ///     SamlValidationContext, SpDescriptor,
+    ///     SamlValidationContext, SpDescriptor, SsoAssertion,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -214,10 +258,14 @@ impl Saml<Idp> {
     /// #     sp: &Saml<saml_rs::Sp>,
     /// #     sp_descriptor: &SpDescriptor,
     /// #     idp_descriptor: &IdpDescriptor,
-    /// #     name_id: &NameId,
+    /// #     name_id: NameId,
     /// #     form_fields: Vec<FormField>,
     /// # ) -> Result<(), saml_rs::SamlError> {
-    /// let response = idp.initiate_sso(sp_descriptor, name_id, RespondSso::post())?;
+    /// let response = idp.initiate_sso(
+    ///     sp_descriptor,
+    ///     SsoAssertion::new(name_id),
+    ///     RespondSso::post(),
+    /// )?;
     /// let form = response.post_form()?;
     /// # let _ = form;
     ///
@@ -237,13 +285,13 @@ impl Saml<Idp> {
     pub fn initiate_sso(
         &self,
         sp: &SpDescriptor,
-        name_id: &NameId,
+        outcome: impl Into<SsoOutcome>,
         options: RespondSso,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
         self.issue_sso(
             sp,
             None,
-            name_id,
+            &outcome.into(),
             options.delivered(ResponseTransport::Browser),
         )
     }
@@ -252,9 +300,21 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: Option<&Received<AuthnRequest>>,
-        name_id: &NameId,
+        outcome: &SsoOutcome,
         options: RespondSso<ResponseTransport<'_>>,
     ) -> Result<Outbound<SsoResponse>, SamlError> {
+        let OutcomeParts {
+            user,
+            name_id_format,
+            name_id_qualifiers,
+            status,
+            typed_attributes,
+            authn_context,
+            authn_instant,
+        } = outcome.parts()?;
+        if let Some(request) = request {
+            ensure_entity_id(request.message().issuer(), sp.entity_id())?;
+        }
         let idp_setting = &self.raw_identity_provider().setting;
         let sign_response = options.should_sign_response(
             idp_setting.is_assertion_encrypted,
@@ -284,19 +344,17 @@ impl Saml<Idp> {
             request.map(Received::message),
             ResponseAcsBindings::Browser(binding),
         )?;
-        let name_id_format = name_id.format().map(NameIdFormat::as_uri);
-        let user = User::new(name_id.value());
         let in_response_to = request.map(|request| request.message().id().as_str());
         let overrides = LoginResponseOverrides {
             acs: Some(&acs),
             name_id_format,
-            name_id_qualifiers: OutboundNameIdQualifiers::from(name_id),
+            name_id_qualifiers,
             issuance_lifetime: Some(self.0.issuance_lifetime),
             web_browser_sso_producer: options.web_browser_sso_producer,
-            status: options.status.as_ref(),
-            typed_attributes: options.attributes.as_slice(),
-            authn_context: options.authn_context.as_ref(),
-            authn_instant: options.authn_instant,
+            status,
+            typed_attributes,
+            authn_context,
+            authn_instant,
             requested_authn_context: request
                 .and_then(|request| request.message().requested_authn_context()),
             requested_name_id_policy: request

@@ -17,7 +17,7 @@ use saml_rs::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig,
     IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId, Outbound,
     ReplayPolicy, RequestedAuthnContext, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, StartSso,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse, StartSso,
 };
 
 const SP: &str = "https://sp.example.com";
@@ -243,10 +243,8 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
         let response = idp.respond_sso(
             &sp_descriptor,
             &received,
-            &principal(),
-            RespondSso::post()
-                .apply_producer_rules()
-                .authn_context(reference.clone()),
+            SsoAssertion::new(principal()).with_authn_context(reference.clone()),
+            RespondSso::post().apply_producer_rules(),
         )?;
         let session = sp.finish_sso(
             &idp_descriptor,
@@ -277,10 +275,8 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let response = idp.initiate_sso(
         &sp_descriptor,
-        &principal(),
-        RespondSso::post()
-            .apply_producer_rules()
-            .authn_context(AuthnContextReference::class(MFA)?),
+        SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
+        RespondSso::post().apply_producer_rules(),
     )?;
     let session =
         sp.accept_unsolicited_sso(&idp_descriptor, response_input(&response)?, validation())?;
@@ -309,7 +305,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        &principal(),
+        SsoAssertion::new(principal()),
         RespondSso::post().apply_producer_rules().sign_response(),
     )?;
     let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
@@ -495,10 +491,8 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        &principal(),
-        RespondSso::post()
-            .apply_producer_rules()
-            .authn_context(AuthnContextReference::class(MFA)?),
+        SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
+        RespondSso::post().apply_producer_rules(),
     )?;
     let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
     assert!(xml.contains("EncryptedAssertion"));
