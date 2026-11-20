@@ -16,26 +16,17 @@ const CERTIFICATE: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.c
 fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Soap, Binding::Artifact] {
-        let idp = IdentityProvider::from_config(
-            &IdpMetadataInput {
-                entity_id: "https://idp.example.com/metadata".into(),
-                single_sign_on_service: vec![Endpoint::new(binding, "https://idp.example.com/sso")],
-                ..Default::default()
-            },
-            EntitySetting::default(),
-        )?;
-        let mut sp = ServiceProvider::from_config(
-            &SpMetadataInput {
-                entity_id: "https://sp.example.com/metadata".into(),
-                authn_requests_signed: true,
-                assertion_consumer_service: vec![Endpoint::new(
-                    Binding::Post,
-                    "https://sp.example.com/acs",
-                )],
-                ..Default::default()
-            },
-            EntitySetting::default(),
-        )?;
+        let mut idp_config = IdpMetadataInput::default();
+        idp_config.entity_id = "https://idp.example.com/metadata".into();
+        idp_config.single_sign_on_service =
+            vec![Endpoint::new(binding, "https://idp.example.com/sso")];
+        let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
+        let mut sp_config = SpMetadataInput::default();
+        sp_config.entity_id = "https://sp.example.com/metadata".into();
+        sp_config.authn_requests_signed = true;
+        sp_config.assertion_consumer_service =
+            vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+        let mut sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
 
         assert!(matches!(
             sp.create_login_request(&idp, binding, &LoginRequestOptions::default()),
@@ -59,32 +50,20 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 #[allow(deprecated)]
 fn signed_logout_artifact_rejects_binding_before_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![Endpoint::new(
-                Binding::Post,
-                "https://idp.example.com/sso",
-            )],
-            single_logout_service: vec![Endpoint::new(
-                Binding::Artifact,
-                "https://idp.example.com/slo",
-            )],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )?;
-    let sp = ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            assertion_consumer_service: vec![Endpoint::new(
-                Binding::Post,
-                "https://sp.example.com/acs",
-            )],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )?;
+    let mut idp_config = IdpMetadataInput::default();
+    idp_config.entity_id = "https://idp.example.com/metadata".into();
+    idp_config.single_sign_on_service =
+        vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")];
+    idp_config.single_logout_service = vec![Endpoint::new(
+        Binding::Artifact,
+        "https://idp.example.com/slo",
+    )];
+    let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
+    let mut sp_config = SpMetadataInput::default();
+    sp_config.entity_id = "https://sp.example.com/metadata".into();
+    sp_config.assertion_consumer_service =
+        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+    let sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
     for private_key in [None, Some("invalid private key".into())] {
         let mut setting = EntitySetting::default();
         setting.private_key = private_key;

@@ -42,43 +42,41 @@ fn signing() -> EntitySetting {
 }
 
 fn idp_config(want_authn_signed: bool) -> IdpMetadataInput {
-    IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        signing_certs: vec![CERT.into()],
-        want_authn_requests_signed: want_authn_signed,
-        single_sign_on_service: vec![
-            Endpoint::new(Binding::Post, "https://idp/sso"),
-            Endpoint::new(Binding::Redirect, "https://idp/sso"),
-            Endpoint::new(Binding::SimpleSign, "https://idp/sso"),
-        ],
-        single_logout_service: vec![
-            Endpoint::new(Binding::Post, "https://idp/slo"),
-            Endpoint::new(Binding::Redirect, "https://idp/slo"),
-            Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
-        ],
-        ..Default::default()
-    }
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.signing_certs = vec![CERT.into()];
+    config.want_authn_requests_signed = want_authn_signed;
+    config.single_sign_on_service = vec![
+        Endpoint::new(Binding::Post, "https://idp/sso"),
+        Endpoint::new(Binding::Redirect, "https://idp/sso"),
+        Endpoint::new(Binding::SimpleSign, "https://idp/sso"),
+    ];
+    config.single_logout_service = vec![
+        Endpoint::new(Binding::Post, "https://idp/slo"),
+        Endpoint::new(Binding::Redirect, "https://idp/slo"),
+        Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
+    ];
+    config
 }
 
 fn sp_config(authn_signed: bool, want_assertions_signed: bool, enc: bool) -> SpMetadataInput {
-    SpMetadataInput {
-        entity_id: "https://sp.example.com/metadata".into(),
-        authn_requests_signed: authn_signed,
-        want_assertions_signed,
-        signing_certs: vec![CERT.into()],
-        encrypt_certs: if enc { vec![CERT.into()] } else { Vec::new() },
-        single_logout_service: vec![
-            Endpoint::new(Binding::Post, "https://sp/slo"),
-            Endpoint::new(Binding::Redirect, "https://sp/slo"),
-            Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
-        ],
-        assertion_consumer_service: vec![
-            Endpoint::new(Binding::Post, "https://sp/acs"),
-            Endpoint::new(Binding::Redirect, "https://sp/acs"),
-            Endpoint::new(Binding::SimpleSign, "https://sp/acs"),
-        ],
-        ..Default::default()
-    }
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.authn_requests_signed = authn_signed;
+    config.want_assertions_signed = want_assertions_signed;
+    config.signing_certs = vec![CERT.into()];
+    config.encrypt_certs = if enc { vec![CERT.into()] } else { Vec::new() };
+    config.single_logout_service = vec![
+        Endpoint::new(Binding::Post, "https://sp/slo"),
+        Endpoint::new(Binding::Redirect, "https://sp/slo"),
+        Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
+    ];
+    config.assertion_consumer_service = vec![
+        Endpoint::new(Binding::Post, "https://sp/acs"),
+        Endpoint::new(Binding::Redirect, "https://sp/acs"),
+        Endpoint::new(Binding::SimpleSign, "https://sp/acs"),
+    ];
+    config
 }
 
 fn idp(want_authn_signed: bool) -> IdentityProvider {
@@ -621,15 +619,11 @@ fn flow_conformance_logout_request_post() -> Result<(), Box<dyn std::error::Erro
 fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::error::Error>> {
     // IdP target exposes a single SLO binding.
     let idp = idp(false);
-    let sp = ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )?;
+    let mut sp_config = SpMetadataInput::default();
+    sp_config.entity_id = "https://sp.example.com/metadata".into();
+    sp_config.single_logout_service = vec![Endpoint::new(Binding::Redirect, "https://sp/slo")];
+    sp_config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    let sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),

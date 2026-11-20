@@ -30,38 +30,30 @@ fn signing() -> EntitySetting {
 }
 
 fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            signing_certs: vec![CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            single_logout_service: vec![
-                Endpoint::new(Binding::Post, "https://idp/slo"),
-                Endpoint::new(Binding::Redirect, "https://idp/slo"),
-                Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
-            ],
-            ..Default::default()
-        },
-        setting,
-    )
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.signing_certs = vec![CERT.into()];
+    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
+    config.single_logout_service = vec![
+        Endpoint::new(Binding::Post, "https://idp/slo"),
+        Endpoint::new(Binding::Redirect, "https://idp/slo"),
+        Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
+    ];
+    IdentityProvider::from_config(&config, setting)
 }
 
 fn sp(want_assertions_signed: bool) -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            want_assertions_signed,
-            signing_certs: vec![CERT.into()],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            single_logout_service: vec![
-                Endpoint::new(Binding::Post, "https://sp/slo"),
-                Endpoint::new(Binding::Redirect, "https://sp/slo"),
-                Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
-            ],
-            ..Default::default()
-        },
-        signing(),
-    )
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.want_assertions_signed = want_assertions_signed;
+    config.signing_certs = vec![CERT.into()];
+    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    config.single_logout_service = vec![
+        Endpoint::new(Binding::Post, "https://sp/slo"),
+        Endpoint::new(Binding::Redirect, "https://sp/slo"),
+        Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
+    ];
+    ServiceProvider::from_config(&config, signing())
 }
 
 fn decode_post_or_simplesign(ctx: &BindingContext) -> Result<String, Box<dyn std::error::Error>> {

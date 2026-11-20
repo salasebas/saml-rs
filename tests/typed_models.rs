@@ -1547,42 +1547,32 @@ fn typed_models_logout_response_rejects_malformed_issue_instant_with_profile_con
 }
 
 fn sp(setting: EntitySetting) -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
-            assertion_consumer_service: vec![
-                Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
-                Endpoint::new(Binding::SimpleSign, "https://sp.example.com/acs-simple"),
-            ],
-            ..Default::default()
-        },
-        setting,
-    )
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")];
+    config.assertion_consumer_service = vec![
+        Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
+        Endpoint::new(Binding::SimpleSign, "https://sp.example.com/acs-simple"),
+    ];
+    ServiceProvider::from_config(&config, setting)
 }
 
 fn idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            signing_certs: setting
-                .signing_cert
-                .clone()
-                .map(|cert| vec![cert])
-                .unwrap_or_default(),
-            single_sign_on_service: vec![
-                Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
-                Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
-                Endpoint::new(Binding::SimpleSign, "https://idp.example.com/sso"),
-            ],
-            single_logout_service: vec![Endpoint::new(
-                Binding::Post,
-                "https://idp.example.com/slo",
-            )],
-            ..Default::default()
-        },
-        setting,
-    )
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.signing_certs = setting
+        .signing_cert
+        .clone()
+        .map(|cert| vec![cert])
+        .unwrap_or_default();
+    config.single_sign_on_service = vec![
+        Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
+        Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
+        Endpoint::new(Binding::SimpleSign, "https://idp.example.com/sso"),
+    ];
+    config.single_logout_service =
+        vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")];
+    IdentityProvider::from_config(&config, setting)
 }
 
 #[cfg(crypto)]

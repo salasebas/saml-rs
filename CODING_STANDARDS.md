@@ -34,6 +34,25 @@ later field is not a breaking change. A variant that a public trait asks
 callers to return, such as `SamlError::ReplayDetected` for `ReplayCache`,
 stays constructible.
 
+## Public structs that can grow
+
+Put `#[non_exhaustive]` on a public struct with public fields whose set can
+grow: policies, limits, options, generation inputs, and results that only this
+crate builds. A caller takes the value from a preset, `Default`, or a
+constructor and assigns the fields it changes, so a later field is not a
+breaking change. A result comes from the operation that returns it.
+
+Each such struct has a public way to get a value. A security policy gets it
+from a named preset.
+
+Fields stay public only while every combination of field values is valid for
+the struct on its own. A check across fields belongs to the operation that
+consumes the struct, such as `build()`. A struct that keeps an invariant has
+private fields and `with_` setters, as [Method names](#method-names) describes.
+
+Leave exhaustive a closed shape from the standard with no extension point,
+such as `LocalizedValue`. A new field there is a breaking change.
+
 ## Method names
 
 These rules apply when an API is added or redesigned.

@@ -61,31 +61,21 @@ fn signing() -> EntitySetting {
 }
 
 fn idp() -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            signing_certs: vec![CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            ..Default::default()
-        },
-        signing(),
-    )
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.signing_certs = vec![CERT.into()];
+    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
+    IdentityProvider::from_config(&config, signing())
 }
 
 fn sp() -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            want_assertions_signed: true,
-            signing_certs: vec![CERT.into()],
-            assertion_consumer_service: vec![Endpoint::new(
-                Binding::Post,
-                "https://sp.example.com/acs",
-            )],
-            ..Default::default()
-        },
-        signing(),
-    )
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.want_assertions_signed = true;
+    config.signing_certs = vec![CERT.into()];
+    config.assertion_consumer_service =
+        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+    ServiceProvider::from_config(&config, signing())
 }
 
 fn unsigned_response_template() -> String {

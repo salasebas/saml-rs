@@ -59,11 +59,10 @@ Add an endpoint to every `SpMetadataInput` and `IdpMetadataInput` you pass
 to the generators:
 
 ```rust
-let xml = generate_sp_metadata(&SpMetadataInput {
-    entity_id: "https://sp.example.com/metadata".into(),
-    assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")],
-    ..SpMetadataInput::default()
-})?;
+let mut input = SpMetadataInput::default();
+input.entity_id = "https://sp.example.com/metadata".into();
+input.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+let xml = generate_sp_metadata(&input)?;
 ```
 
 ## 7. Verify signed metadata on import

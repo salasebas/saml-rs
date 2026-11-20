@@ -434,6 +434,7 @@ where
 
 /// Started browser flow with pending state and outbound browser action.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Started<Message: PendingMessage> {
     /// Pending correlation state.
     pub pending: Pending<Message>,

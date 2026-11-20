@@ -33,7 +33,7 @@ Raw `EntitySetting` and `FlowOptions` expose their own `schema_validator` field.
 Both types were already non-exhaustive, so adding that field does not break
 external construction. `XmlPolicy` is non-exhaustive now too. Replace a full
 `XmlPolicy` literal as
-[Assign policy fields on a preset or `Default`](config.md#assign-policy-fields-on-a-preset-or-default)
+[Assign fields instead of writing a struct literal](config.md#assign-fields-instead-of-writing-a-struct-literal)
 describes.
 
 ## 9.2 Validate imported metadata explicitly
