@@ -514,19 +514,14 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
 fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let wrong_peer = EntityId::try_new("https://other.example.com/metadata")?;
-    let logout_pending = PendingLogoutRequest::from_snapshot(PendingLogoutRequestSnapshot {
-        request_id: "_logout".to_string(),
-        relay_state: None,
-        peer_entity_id: wrong_peer.as_str().to_string(),
-        request_binding: "redirect".to_string(),
-        not_on_or_after: None,
-    })?;
-    let manage_pending =
-        PendingManageNameIdRequest::from_snapshot(PendingManageNameIdRequestSnapshot {
-            request_id: "_manage".to_string(),
-            relay_state: None,
-            peer_entity_id: wrong_peer.as_str().to_string(),
-        })?;
+    let logout_pending = PendingLogoutRequest::from_snapshot(PendingLogoutRequestSnapshot::new(
+        "_logout",
+        wrong_peer.as_str(),
+        "redirect",
+    ))?;
+    let manage_pending = PendingManageNameIdRequest::from_snapshot(
+        PendingManageNameIdRequestSnapshot::new("_manage", wrong_peer.as_str()),
+    )?;
     for valid_until in [at(Y2001), whole_seconds_from_now(3600)?] {
         let (sp, idp) = browser_facades(valid_until)?;
         let sp_peer = sp_descriptor(&sp)?;

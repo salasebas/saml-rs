@@ -257,36 +257,29 @@ fn typed_bindings_relay_state_enforces_saml_bindings_byte_limit(
 }
 
 fn valid_authn_snapshot() -> PendingAuthnRequestSnapshot {
-    PendingAuthnRequestSnapshot {
-        request_id: "_request123".to_string(),
-        relay_state: None,
-        idp_entity_id: "https://idp.example.com/metadata".to_string(),
-        acs_binding: Binding::Post.short_name().to_string(),
-        acs_url: "https://sp.example.com/acs".to_string(),
-        acs_index: None,
-        acs_is_default: false,
-    }
+    PendingAuthnRequestSnapshot::new(
+        "_request123",
+        "https://idp.example.com/metadata",
+        Binding::Post.short_name(),
+        "https://sp.example.com/acs",
+    )
 }
 
 fn valid_logout_snapshot() -> PendingLogoutRequestSnapshot {
-    PendingLogoutRequestSnapshot {
-        request_id: "_logout123".to_string(),
-        relay_state: None,
-        peer_entity_id: "https://idp.example.com/metadata".to_string(),
-        request_binding: Binding::Post.short_name().to_string(),
-        not_on_or_after: None,
-    }
+    PendingLogoutRequestSnapshot::new(
+        "_logout123",
+        "https://idp.example.com/metadata",
+        Binding::Post.short_name(),
+    )
 }
 
 #[test]
 fn typed_bindings_pending_authn_request_snapshot_round_trips(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let snapshot = PendingAuthnRequestSnapshot {
-        relay_state: Some("relay".to_string()),
-        acs_index: Some(2),
-        acs_is_default: true,
-        ..valid_authn_snapshot()
-    };
+    let mut snapshot = valid_authn_snapshot();
+    snapshot.relay_state = Some("relay".to_string());
+    snapshot.acs_index = Some(2);
+    snapshot.acs_is_default = true;
 
     let restored = PendingAuthnRequest::from_snapshot(snapshot.clone())?;
 
@@ -303,22 +296,19 @@ fn typed_bindings_pending_authn_request_snapshot_round_trips(
         "https://idp.example.com/metadata"
     );
     assert_eq!(restored.snapshot(), snapshot);
+    let mut snapshot_with_other_index = snapshot;
+    snapshot_with_other_index.acs_index = Some(3);
     assert_ne!(
         restored,
-        PendingAuthnRequest::from_snapshot(PendingAuthnRequestSnapshot {
-            acs_index: Some(3),
-            ..snapshot
-        })?
+        PendingAuthnRequest::from_snapshot(snapshot_with_other_index)?
     );
     Ok(())
 }
 
 #[test]
 fn typed_bindings_pending_snapshot_reads_a_binding_urn() -> Result<(), Box<dyn std::error::Error>> {
-    let snapshot = PendingAuthnRequestSnapshot {
-        acs_binding: Binding::SimpleSign.urn().to_string(),
-        ..valid_authn_snapshot()
-    };
+    let mut snapshot = valid_authn_snapshot();
+    snapshot.acs_binding = Binding::SimpleSign.urn().to_string();
 
     let restored = PendingAuthnRequest::from_snapshot(snapshot)?;
 
@@ -336,12 +326,10 @@ fn typed_bindings_pending_logout_request_snapshot_round_trips_supported_bindings
         (LogoutBinding::SimpleSign, Some("")),
         (LogoutBinding::Soap, None),
     ] {
-        let snapshot = PendingLogoutRequestSnapshot {
-            relay_state: relay_state.map(str::to_string),
-            request_binding: Binding::from(binding).short_name().to_string(),
-            not_on_or_after: Some("2026-07-04T12:05:00Z".to_string()),
-            ..valid_logout_snapshot()
-        };
+        let mut snapshot = valid_logout_snapshot();
+        snapshot.relay_state = relay_state.map(str::to_string);
+        snapshot.request_binding = Binding::from(binding).short_name().to_string();
+        snapshot.not_on_or_after = Some("2026-07-04T12:05:00Z".to_string());
 
         let restored = PendingLogoutRequest::from_snapshot(snapshot.clone())?;
 
@@ -454,11 +442,9 @@ fn typed_bindings_pending_logout_snapshot_validates_binding() {
 
 #[test]
 fn typed_bindings_pending_logout_snapshot_rejects_relay_state_on_soap() {
-    let snapshot = PendingLogoutRequestSnapshot {
-        relay_state: Some(String::new()),
-        request_binding: Binding::Soap.short_name().to_string(),
-        ..valid_logout_snapshot()
-    };
+    let mut snapshot = valid_logout_snapshot();
+    snapshot.relay_state = Some(String::new());
+    snapshot.request_binding = Binding::Soap.short_name().to_string();
 
     assert!(matches!(
         PendingLogoutRequest::from_snapshot(snapshot),
