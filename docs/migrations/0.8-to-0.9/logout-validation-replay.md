@@ -70,9 +70,10 @@ let not_before = skew.not_before_millis();
 let not_on_or_after = skew.not_on_or_after_millis();
 ```
 
-`as_millis()` is now crate-private. For an API that still takes a tuple, pass
-`(not_before, not_on_or_after)` in that order. A negative `NotBefore` value
-permits early acceptance. A positive `NotOnOrAfter` value permits late acceptance.
+`as_millis()` is removed. For an API that still takes a tuple, such as
+`EntitySetting::clock_drifts`, pass `(not_before, not_on_or_after)` in that
+order. A negative `NotBefore` value permits early acceptance. A positive
+`NotOnOrAfter` value permits late acceptance.
 
 ## Build a logout subject with session indexes
 

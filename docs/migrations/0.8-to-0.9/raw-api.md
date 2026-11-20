@@ -52,3 +52,42 @@ operations check what the raw functions left to the caller, such as
 `InResponseTo` correlation, RelayState, and the receiving endpoint. The typed
 `SpValidationPolicy::compatibility` preset keeps the raw service-provider
 acceptance behaviour while you migrate.
+
+## 3.1 Set the signature check and clock skew on `FlowOptions`
+
+**Affects:** code that sets `check_signature`, `verify_signature_if_present`,
+or `clock_drifts` on `saml_rs::raw::FlowOptions`.
+
+**Now:** one `signature_check: SignatureCheck` field replaces the two `bool`
+fields, and `clock_skew: ClockSkew` replaces `clock_drifts: (i64, i64)`. The
+defaults are unchanged: `SignatureCheck::Skip` and `ClockSkew::strict()`.
+
+Map the two `bool` fields to one variant:
+
+| `check_signature` | `verify_signature_if_present` | `signature_check` |
+| --- | --- | --- |
+| `true` | `true` or `false` | `SignatureCheck::Require` |
+| `false` | `true` | `SignatureCheck::VerifyIfPresent` |
+| `false` | `false` | `SignatureCheck::Skip` |
+
+Pass the drift tuple to `ClockSkew::from_millis` in the same order,
+`(not_before_ms, not_on_or_after_ms)`:
+
+```rust
+// Before
+let mut options = FlowOptions::default();
+options.check_signature = true;
+options.clock_drifts = (-120_000, 180_000);
+
+// Now
+use saml_rs::raw::{FlowOptions, SignatureCheck};
+use saml_rs::ClockSkew;
+
+let mut options = FlowOptions::default();
+options.signature_check = SignatureCheck::Require;
+options.clock_skew = ClockSkew::from_millis(-120_000, 180_000);
+```
+
+`EntitySetting::clock_drifts` stays a tuple. These fields keep a raw call
+compiling until you move it to the typed API, which takes its clock skew from
+`SamlValidationContext`.

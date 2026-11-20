@@ -6,10 +6,12 @@
 `binding`, `context`, `crypto`, `entity`, `flow`, `idp`, `logout`, `sp`,
 `template`, `util`, `validator`, or `xml`.
 
-**Now:** the items below have a documented path. The old paths still compile,
-and the deprecated functions warn. The modules become crate-private in the next
-minor release, so move every import in this table now. A moved type does not
-warn, because Rust ignores `#[deprecated]` on a re-export.
+**Now:** the items in the table below have a documented path. Their old paths
+still compile, and the deprecated functions warn. The helpers in
+[2.5](#25-replace-the-helpers-that-are-no-longer-public) do not compile at
+their old paths. The modules become crate-private in the next minor release, so
+move every import in this table now. A moved type does not warn, because Rust
+ignores `#[deprecated]` on a re-export.
 
 | Old path | Documented path |
 | --- | --- |
@@ -131,3 +133,28 @@ receives. To read other XML, use an XML library such as
 let document = roxmltree::Document::parse(xml)?;
 let id = document.root_element().attribute("ID");
 ```
+
+## 2.5 Replace the helpers that are no longer public
+
+**Affects:** code that calls one of these helpers from a hidden module.
+
+**Now:** each helper is crate-private, removed, or merged into a function that
+takes its limit as an argument. A call to it no longer compiles.
+
+| Item | Use instead |
+| --- | --- |
+| `binding::redirect_binding_query` | `Outbound::redirect_url` from the typed operation. To build a query yourself, use `url::form_urlencoded::Serializer` |
+| `binding::xml_escape` | An XML writer, or your own escaping of `&`, `<`, `>`, `"`, and `'` |
+| `binding::html_escape` | An HTML template engine that escapes attribute values. `Outbound` builds the POST form |
+| `binding::base64_decode_with_limit` | The `base64` crate. Check the input length against your limit first. See [2.1](#21-use-the-base64-crate) |
+| `binding::deflate_raw_decode_with_limit` | `binding::deflate_raw_decode(input, max_output_len)`. The one-argument `deflate_raw_decode` is removed. Pass `MAX_DEFLATE_RAW_DECODE_BYTES` to keep its limit |
+| `util::normalize_cert_string` | Your own code that removes the `-----BEGIN CERTIFICATE-----` and `-----END CERTIFICATE-----` lines and all whitespace |
+| `util::normalize_pem_string` | Your own code that removes the `-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` lines and all whitespace |
+| `util::uniq`, `util::camel_case`, `util::zip_object` | Your own code. They served the internal field extractor |
+| `entity::generate_id` | The typed operations, which write the `ID` of every message and assertion they generate |
+| `entity::now_iso8601` | `time::OffsetDateTime::now_utc()`, written as `YYYY-MM-DDTHH:MM:SSZ` |
+| `template::attr_tag` | The placeholder `{attr<Tag>}`: `attr` and the `value_tag` in camel case with a capital first letter, such as `{attrEmail}` for `email` |
+| `xml::fields` | The typed results, such as `SsoSession` and `LogoutRequest` |
+| `xml::dom::DEFAULT_XML_MAX_*` | The fields of `XmlLimits::default()`, such as `XmlLimits::default().max_bytes`. Each field's documentation states its default |
+| `validator::verify_time` | The typed receive operations, which check time windows with the `ClockSkew` of `SamlValidationContext` |
+| `validator::check_status_with_limits` | `validator::check_status(content, parser_type, limits)`. The two-argument `check_status` is removed. Pass `XmlLimits::default()` to keep its limits |
