@@ -726,9 +726,10 @@ pub struct TemplatePolicy {
     /// `<LogoutResponse>`, and the `<ManageNameIDRequest>` and
     /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `samlp` prefix
     /// of an SSO response template or a logout template is rewritten to it.
-    /// The `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`, name
-    /// identifier management messages over SOAP, and the ECP `<Request>`
-    /// header of PAOS SSO keep `samlp`.
+    /// The built-in `<AuthnRequest>`, `<ArtifactResolve>`,
+    /// `<ArtifactResponse>`, name identifier management messages over SOAP,
+    /// and the ECP `<Request>` header of PAOS SSO keep `samlp`. An
+    /// `<AuthnRequest>` template keeps the prefixes it writes.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_assertion`.
@@ -741,9 +742,10 @@ pub struct TemplatePolicy {
     /// `<LogoutResponse>`, and to the `<ManageNameIDRequest>` and
     /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `saml` prefix of
     /// an SSO response template or a logout template is rewritten to it. The
-    /// `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`, name
-    /// identifier management messages over SOAP, and the ECP `<Request>`
-    /// header of PAOS SSO keep `saml`.
+    /// built-in `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`,
+    /// name identifier management messages over SOAP, and the ECP `<Request>`
+    /// header of PAOS SSO keep `saml`. An `<AuthnRequest>` template keeps the
+    /// prefixes it writes.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_protocol`.

@@ -22,7 +22,9 @@ alone, as
 describes.
 
 **Upgrade:** with the raw `IdentityProvider::create_login_response`, put a
-value for each attribute's `value_tag` in `User::attributes`:
+value for each attribute's `value_tag` in `User::attributes`. A
+`LoginResponseOptions::custom` callback fills the template itself and is not
+checked:
 
 ```rust
 use saml_rs::entity::User;
@@ -35,8 +37,9 @@ let user = User {
 ```
 
 With the typed API, pass the attributes with `RespondSso::attributes`, as
-[2.2](public-imports.md#22-pass-attributes-to-the-response) shows.
-`RespondSso::attributes` needs the built-in renderer, so leave
+[2.2](public-imports.md#22-pass-attributes-to-the-response) shows, or with
+`RespondPaosSso::attributes` for `respond_paos_sso`. A response with
+attributes needs the built-in renderer, so leave
 `IdpConfigBuilder::sso_response_template` unset.
 
 ## 5. Send a `Name` on every attribute

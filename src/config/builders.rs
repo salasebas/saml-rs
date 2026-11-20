@@ -300,6 +300,8 @@ impl SpConfigBuilder {
 
     /// Set the template [`Saml<Sp>::start_sso`](crate::Saml::start_sso)
     /// renders the `<AuthnRequest>` from, in place of the built-in renderer.
+    /// [`Saml<Sp>::start_paos_sso`](crate::Saml::start_paos_sso) always uses
+    /// the built-in renderer.
     ///
     /// [`AUTHN_REQUEST_TEMPLATE`](crate::config::AUTHN_REQUEST_TEMPLATE) is
     /// the default template to start from. `{NameIDFormat}` receives the first
@@ -640,13 +642,23 @@ impl IdpConfigBuilder {
     /// that has been checked to be an absolute URI reference. A `Format` the
     /// template writes itself is not checked.
     ///
-    /// The `samlp` and `saml` prefixes in the template are rewritten to
+    /// Tags written as `<samlp:` and `<saml:` and declarations written as
+    /// `xmlns:samlp=` and `xmlns:saml=` are rewritten to
     /// [`TemplatePolicy::tag_prefix_protocol`] and
-    /// [`TemplatePolicy::tag_prefix_assertion`].
+    /// [`TemplatePolicy::tag_prefix_assertion`]. A template that writes other
+    /// prefixes, or whitespace before the `=`, is not rewritten.
     ///
-    /// The response methods, such as
-    /// [`Saml::respond_sso`](crate::Saml::respond_sso), list under `# Errors`
-    /// the options they reject together with a template.
+    /// With a template set, the response methods return
+    /// [`SamlError::Invalid`] for:
+    ///
+    /// - [`Saml::respond_paos_sso`](crate::Saml::respond_paos_sso), which
+    ///   always applies the producer rules, and a response with
+    ///   [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules);
+    /// - a status other than `Success`, or a subordinate status code;
+    /// - attributes from
+    ///   [`RespondSso::attributes`](crate::RespondSso::attributes);
+    /// - a [`NameId`](crate::NameId) with a `NameQualifier`,
+    ///   `SPNameQualifier`, or `SPProvidedID`.
     pub fn sso_response_template(mut self, template: impl Into<String>) -> Self {
         self.sso_response_template = Some(template.into());
         self
