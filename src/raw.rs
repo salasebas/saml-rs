@@ -32,7 +32,7 @@ pub use crate::constants::Binding;
 pub use crate::entity::{BindingContext, EntitySetting, User};
 #[allow(deprecated)]
 pub use crate::flow::flow;
-pub use crate::flow::{FlowOptions, FlowResult, HttpRequest};
+pub use crate::flow::{FlowOptions, FlowResult, HttpRequest, SignatureCheck};
 pub use crate::idp::{IdentityProvider, LoginResponseOptions};
 pub use crate::logout;
 pub use crate::sp::{LoginRequestOptions, ServiceProvider};

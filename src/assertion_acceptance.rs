@@ -9,7 +9,7 @@ use crate::error::{SamlError, SubjectConfirmationReason, TimeWindowField};
 use crate::flow::FlowOptions;
 use crate::model::{authn_statement_not_on_or_after_values, earliest_authn_session_expiration};
 use crate::util::Value;
-use crate::validator::{conditions_time_bounds, verify_time_at};
+use crate::validator::{conditions_time_window, TimeWindow};
 use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::{extract_with_limits, fields, XmlLimits};
 use quick_xml::events::Event;
@@ -496,12 +496,11 @@ fn check_bearer_subject_confirmation(
             SubjectConfirmationReason::MissingNotOnOrAfter,
         ));
     };
-    if !verify_time_at(
-        data.and_then(|data| data.attr("NotBefore")),
-        Some(not_on_or_after),
-        opts.clock_drifts,
-        opts.validation_now()?,
-    ) {
+    let window = TimeWindow {
+        not_before: data.and_then(|data| data.attr("NotBefore")),
+        not_on_or_after: Some(not_on_or_after),
+    };
+    if !window.contains(opts.validation_now()?, opts.clock_skew) {
         return Ok(SubjectConfirmationCheck::Invalid(
             SubjectConfirmationReason::TimeWindowInvalid,
         ));
@@ -550,7 +549,9 @@ fn validate_assertion_time(extracted: &Value, opts: &FlowOptions<'_>) -> Result<
         earliest_authn_session_expiration(session_bounds, TimeWindowField::SessionNotOnOrAfter)?
     {
         let expiration = raw_expiration
-            .checked_add(Duration::milliseconds(opts.clock_drifts.1))
+            .checked_add(Duration::milliseconds(
+                opts.clock_skew.not_on_or_after_millis(),
+            ))
             .ok_or(SamlError::TimeWindowInvalid {
                 field: TimeWindowField::SessionNotOnOrAfter,
             })?;
@@ -560,8 +561,7 @@ fn validate_assertion_time(extracted: &Value, opts: &FlowOptions<'_>) -> Result<
             });
         }
     }
-    let (not_before, not_on_or_after) = conditions_time_bounds(extracted)?;
-    if !verify_time_at(not_before, not_on_or_after, opts.clock_drifts, now) {
+    if !conditions_time_window(extracted)?.contains(now, opts.clock_skew) {
         return Err(SamlError::TimeWindowInvalid {
             field: TimeWindowField::Conditions,
         });

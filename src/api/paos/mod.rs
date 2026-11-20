@@ -472,11 +472,8 @@ impl Saml<Sp> {
                 crate::constants::Binding::Post,
                 &request,
                 pending.request_id().as_str(),
-                LoginResponseParseOptions::at(
-                    validation.now(),
-                    validation.clock_skew().as_millis(),
-                )
-                .with_expected_recipient(pending.acs_url().as_str()),
+                LoginResponseParseOptions::at(validation.now(), validation.clock_skew())
+                    .with_expected_recipient(pending.acs_url().as_str()),
             )?;
         // The expected value is compared after the response signature verifies.
         super::raw_mapping::ensure_relay_state(pending.relay_state(), body.relay_state.as_ref())?;
@@ -528,7 +525,7 @@ impl Saml<Idp> {
             crate::constants::Binding::Post,
             &http,
             validation.now(),
-            validation.clock_skew().as_millis(),
+            validation.clock_skew(),
         )?;
         let flow = super::requested_subject::decrypt_requested_subject(
             flow,

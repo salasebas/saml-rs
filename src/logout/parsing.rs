@@ -7,9 +7,10 @@ use crate::error::SamlError;
 use crate::flow::{
     flow_with_authentication, flow_with_expected_recipient_and_signature_evidence,
     AssertionSignatureRequirement, FlowOptions, FlowResult, HttpRequest,
-    ResponseSignatureRequirement, SignedMessageDestination,
+    ResponseSignatureRequirement, SignatureCheck, SignedMessageDestination,
 };
 use crate::metadata::Metadata;
+use crate::model::ClockSkew;
 use std::time::SystemTime;
 
 use super::encrypted_id::LogoutRequestAuthentication;
@@ -18,7 +19,7 @@ use super::encrypted_id::LogoutRequestAuthentication;
 pub(crate) struct LogoutFlowValidation<'a> {
     expected_recipient: Option<&'a str>,
     now: Option<SystemTime>,
-    clock_drifts: (i64, i64),
+    clock_skew: ClockSkew,
     peer_hmac_secret: Option<&'a HmacSecret>,
 }
 
@@ -28,22 +29,22 @@ impl<'a> LogoutFlowValidation<'a> {
     pub(crate) fn typed(
         expected_recipient: Option<&'a str>,
         now: SystemTime,
-        clock_drifts: (i64, i64),
+        clock_skew: ClockSkew,
         peer_hmac_secret: Option<&'a HmacSecret>,
     ) -> Self {
         Self {
             expected_recipient,
             now: Some(now),
-            clock_drifts,
+            clock_skew,
             peer_hmac_secret,
         }
     }
 
-    fn raw(clock_drifts: (i64, i64)) -> Self {
+    fn raw(clock_skew: ClockSkew) -> Self {
         Self {
             expected_recipient: None,
             now: None,
-            clock_drifts,
+            clock_skew,
             peer_hmac_secret: None,
         }
     }
@@ -96,18 +97,17 @@ impl LogoutReceipt {
         }
     }
 
-    fn check_signature(self, local_policy: bool) -> bool {
+    fn signature_check(self, local_policy_requires_signature: bool) -> SignatureCheck {
         match self.signature {
-            LogoutReceiptSignature::FollowLocalPolicy => local_policy,
-            LogoutReceiptSignature::Required => true,
-            LogoutReceiptSignature::VerifyIfPresent => false,
-        }
-    }
-
-    fn verify_signature_if_present(self) -> bool {
-        match self.signature {
-            LogoutReceiptSignature::FollowLocalPolicy | LogoutReceiptSignature::Required => false,
-            LogoutReceiptSignature::VerifyIfPresent => true,
+            LogoutReceiptSignature::FollowLocalPolicy => {
+                if local_policy_requires_signature {
+                    SignatureCheck::Require
+                } else {
+                    SignatureCheck::Skip
+                }
+            }
+            LogoutReceiptSignature::Required => SignatureCheck::Require,
+            LogoutReceiptSignature::VerifyIfPresent => SignatureCheck::VerifyIfPresent,
         }
     }
 
@@ -170,7 +170,7 @@ pub fn parse_logout_request(
         from_meta,
         LogoutReceipt::raw(binding),
         request,
-        LogoutFlowValidation::raw(self_setting.clock_drifts),
+        LogoutFlowValidation::raw(self_setting.clock_skew()),
     )?
     .0)
 }
@@ -202,8 +202,7 @@ fn parse_logout_request_inner(
         &FlowOptions {
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutRequest),
-            check_signature: receipt.check_signature(self_setting.want_logout_request_signed),
-            verify_signature_if_present: receipt.verify_signature_if_present(),
+            signature_check: receipt.signature_check(self_setting.want_logout_request_signed),
             require_audience_restriction: true,
             xml_signatures: self_setting.xml_signatures,
             from_issuer: from_meta.entity_id(),
@@ -217,7 +216,7 @@ fn parse_logout_request_inner(
             received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: self_setting.max_decryption_work,
-            clock_drifts: validation.clock_drifts,
+            clock_skew: validation.clock_skew,
             now: validation.now,
             redirect_inflate_max_bytes: self_setting.redirect_inflate_max_bytes,
             xml_limits: self_setting.xml_limits,
@@ -244,8 +243,7 @@ fn parse_logout_response_inner(
         &FlowOptions {
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutResponse),
-            check_signature: receipt.check_signature(self_setting.want_logout_response_signed),
-            verify_signature_if_present: receipt.verify_signature_if_present(),
+            signature_check: receipt.signature_check(self_setting.want_logout_response_signed),
             require_audience_restriction: true,
             xml_signatures: self_setting.xml_signatures,
             from_issuer: from_meta.entity_id(),
@@ -259,7 +257,7 @@ fn parse_logout_response_inner(
             received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: self_setting.max_decryption_work,
-            clock_drifts: validation.clock_drifts,
+            clock_skew: validation.clock_skew,
             now: validation.now,
             redirect_inflate_max_bytes: self_setting.redirect_inflate_max_bytes,
             xml_limits: self_setting.xml_limits,
@@ -323,7 +321,7 @@ pub fn parse_logout_response(
         LogoutReceipt::raw(binding),
         request,
         Some(request_id),
-        LogoutFlowValidation::raw(self_setting.clock_drifts),
+        LogoutFlowValidation::raw(self_setting.clock_skew()),
     )
 }
 
@@ -384,7 +382,7 @@ pub fn parse_logout_response_without_request_id(
         LogoutReceipt::raw(binding),
         request,
         None,
-        LogoutFlowValidation::raw(self_setting.clock_drifts),
+        LogoutFlowValidation::raw(self_setting.clock_skew()),
     )
 }
 

@@ -53,11 +53,6 @@ impl ClockSkew {
     pub fn not_on_or_after_millis(self) -> i64 {
         self.not_on_or_after_ms
     }
-
-    /// Return the raw `(NotBefore, NotOnOrAfter)` drift tuple.
-    pub(crate) fn as_millis(self) -> (i64, i64) {
-        (self.not_before_ms, self.not_on_or_after_ms)
-    }
 }
 
 /// Key of a single-use SAML value: a message ID, an assertion ID, or an
