@@ -299,7 +299,7 @@ fn tagging(prefix: &str, content: &str) -> String {
 
 /// Placeholder key (without braces) for an attribute value tag:
 /// `attr<CamelCase>`. The runtime value fills `{<key>}`.
-pub fn attr_tag(value_tag: &str) -> String {
+pub(crate) fn attr_tag(value_tag: &str) -> String {
     tagging("attr", value_tag)
 }
 

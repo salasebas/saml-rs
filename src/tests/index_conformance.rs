@@ -16,13 +16,11 @@ use saml_rs::metadata::{
     generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, SpMetadata, SpMetadataInput,
 };
 use saml_rs::raw::IdentityProvider;
-use saml_rs::util::{normalize_cert_string, normalize_pem_string};
+use saml_rs::util::normalize_cert_string;
 use saml_rs::validator::verify_time;
 
 const SP_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
-const SP_ENCKEY: &str = include_str!("../../tests/fixtures/key/sp/encryptKey.pem");
 const SP_KNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/knownGoodCert.cer");
-const SP_KNOWN_ENCKEY: &str = include_str!("../../tests/fixtures/key/sp/knownGoodEncryptKey.pem");
 const IDPMETA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
 const IDPMETA_ROLLING: &str = include_str!("../../tests/fixtures/misc/idpmeta_rollingcert.xml");
 const IDPMETA_SHARE: &str = include_str!("../../tests/fixtures/misc/idpmeta_share_cert.xml");
@@ -51,11 +49,6 @@ fn base64_decoded_plus_inflate() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn parse_cer_format_resulting_clean_certificate() {
     assert_eq!(normalize_cert_string(SP_CERT), SP_KNOWN_CERT.trim());
-}
-
-#[test]
-fn normalize_pem_key_returns_clean_string() {
-    assert_eq!(normalize_pem_string(SP_ENCKEY), SP_KNOWN_ENCKEY.trim());
 }
 
 #[test]

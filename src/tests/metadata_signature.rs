@@ -124,11 +124,7 @@ fn metadata_signature_bool_wrapper_uses_detailed_coverage() -> Result<(), Box<dy
         assert!(matches!(result, Err(SamlError::LimitExceeded { .. })));
     }
 
-    let oversized = format!(
-        "{}{}",
-        " ".repeat(saml_rs::xml::dom::DEFAULT_XML_MAX_BYTES),
-        signed
-    );
+    let oversized = format!("{}{}", " ".repeat(XmlLimits::default().max_bytes), signed);
     for result in [
         verify_metadata_signature(&oversized, &[CERT.to_string()]),
         verify_metadata_signature_detailed(&oversized, &[CERT.to_string()])

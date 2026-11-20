@@ -1,7 +1,7 @@
 //! Identity Provider metadata.
 
 use super::{as_object_list, Metadata};
-use crate::constants::{Binding, SOAP_BINDING_URN};
+use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::{ExtractorField, XmlLimits};
@@ -32,7 +32,7 @@ impl ArtifactResolutionServiceEndpoint {
 
     /// Whether this endpoint's binding is the SAML SOAP binding.
     pub fn is_soap(&self) -> bool {
-        self.binding == SOAP_BINDING_URN
+        self.binding == Binding::Soap.urn()
     }
 }
 

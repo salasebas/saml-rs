@@ -1,5 +1,5 @@
-//! SAML HTTP binding helpers: POST form, Redirect query, DEFLATE, base64,
-//! and XML/HTML escaping.
+//! SAML HTTP binding helpers: the HTTP-POST form, the HTTP-Redirect URL and
+//! the octets it signs, raw DEFLATE, and the deprecated base64 functions.
 
 mod deflate;
 mod encoding;
@@ -17,16 +17,13 @@ pub use deflate::{
     deflate_raw_decode, deflate_raw_decode_with_limit, deflate_raw_encode,
     MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-pub use encoding::base64_decode_with_limit;
-pub(crate) use encoding::{decode_base64, encode_base64};
-pub use escape::{html_escape, xml_escape};
+pub(crate) use encoding::{decode_base64, decode_base64_with_limit, encode_base64};
+pub(crate) use escape::xml_escape;
 pub(crate) use parameters::single_parameter;
 pub use post_form::saml_post_binding_form;
 pub(crate) use post_form::{build_simplesign_octet, saml_post_binding_form_with_signature};
-pub(crate) use redirect::append_redirect_query;
-pub use redirect::{
-    append_signature, build_redirect_octet, build_redirect_url, redirect_binding_query,
-};
+pub(crate) use redirect::{append_redirect_query, redirect_binding_query};
+pub use redirect::{append_signature, build_redirect_octet, build_redirect_url};
 
 /// Standard base64 encoding (no line wrapping).
 #[deprecated(

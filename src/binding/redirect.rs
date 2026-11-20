@@ -23,7 +23,7 @@ fn url_encode(value: &str) -> String {
 /// `saml_param` is `SAMLRequest` or `SAMLResponse`; `b64_value` is the
 /// base64-encoded, raw-DEFLATEd message. For a signed redirect, append
 /// `&SigAlg=<uri>&Signature=<b64>` computed over this encoded query (M2).
-pub fn redirect_binding_query(
+pub(crate) fn redirect_binding_query(
     saml_param: &str,
     b64_value: &str,
     relay_state: Option<&str>,

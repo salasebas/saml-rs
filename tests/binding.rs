@@ -1,6 +1,4 @@
-use saml_rs::binding::{
-    deflate_raw_decode, deflate_raw_encode, saml_post_binding_form, xml_escape,
-};
+use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, saml_post_binding_form};
 use saml_rs::constants::Binding;
 use saml_rs::entity::BindingContext;
 use saml_rs::SamlError;
@@ -47,14 +45,6 @@ fn deflate_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
     let restored = deflate_raw_decode(&compressed)?;
     assert_eq!(restored, original);
     Ok(())
-}
-
-#[test]
-fn xml_escape_golden() {
-    assert_eq!(
-        xml_escape("a & b <c> \"d\" 'e'"),
-        "a &amp; b &lt;c&gt; &quot;d&quot; &apos;e&apos;"
-    );
 }
 
 #[test]

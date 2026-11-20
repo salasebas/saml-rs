@@ -4,7 +4,7 @@ pub(crate) mod any_uri;
 mod date_time;
 pub mod dom;
 pub mod extract;
-pub mod fields;
+pub(crate) mod fields;
 pub(crate) mod fragment;
 pub(crate) mod name;
 mod profile;
