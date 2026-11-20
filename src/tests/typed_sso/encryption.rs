@@ -1,5 +1,5 @@
 use super::*;
-use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, X509Credential};
+use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, SsoAssertion, X509Credential};
 
 fn encrypted_exchange(
     algorithm: DataEncryptionAlgorithm,
@@ -29,7 +29,7 @@ fn encrypted_exchange(
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        &principal(),
+        SsoAssertion::new(principal()),
         RespondSso::post().allow_unsigned_encrypted_cbc(),
     )?;
     Ok(SsoExchange {
@@ -53,7 +53,7 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
         let response = exchange.idp.respond_sso(
             &exchange.sp_descriptor,
             &exchange.received,
-            &principal(),
+            SsoAssertion::new(principal()),
             RespondSso::post(),
         )?;
         let fields = post_fields(&response)?;
@@ -275,7 +275,12 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
         Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
-    let response = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
     let fields = post_fields(&response)?;
     assert!(response_xml_from_fields(&fields)?.contains("EncryptedAssertion"));
     let session = sp.finish_sso(

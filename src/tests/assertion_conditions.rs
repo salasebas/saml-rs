@@ -24,7 +24,7 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest,
     ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoSession, StartSso,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
     VerifiedXmlSignatureCoverage,
 };
 
@@ -97,7 +97,11 @@ fn exchange_for(
     );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     if unsolicited {
-        let response = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::post())?;
+        let response = idp.initiate_sso(
+            &sp_descriptor,
+            SsoAssertion::new(principal()),
+            RespondSso::post(),
+        )?;
         return Ok(Exchange {
             sp,
             idp_descriptor,
@@ -111,7 +115,12 @@ fn exchange_for(
         Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
-    let response = idp.respond_sso(&sp_descriptor, &received, &principal(), RespondSso::post())?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(principal()),
+        RespondSso::post(),
+    )?;
     Ok(Exchange {
         sp,
         idp_descriptor,
@@ -374,7 +383,11 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
         .build()?,
     );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let response = idp.initiate_sso(&sp_descriptor, &principal(), RespondSso::simple_sign())?;
+    let response = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(principal()),
+        RespondSso::simple_sign(),
+    )?;
     Ok(Exchange {
         sp,
         idp_descriptor,

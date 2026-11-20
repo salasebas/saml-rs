@@ -23,7 +23,7 @@ gone.
 
 ## Read the status from `StatusNotSuccess`
 
-`StatusNotSuccess` carries the same `Status` that `RespondSso::status` and
+`StatusNotSuccess` carries the same `Status` that `SsoOutcome::Failure` and
 `RespondSlo::status` take. Before the upgrade, it held two strings:
 
 ```rust,ignore

@@ -654,9 +654,9 @@ impl IdpConfigBuilder {
     /// - [`Saml::respond_paos_sso`](crate::Saml::respond_paos_sso), which
     ///   always applies the producer rules, and a response with
     ///   [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules);
-    /// - a status other than `Success`, or a subordinate status code;
+    /// - an [`SsoOutcome::Failure`](crate::SsoOutcome::Failure);
     /// - attributes from
-    ///   [`RespondSso::attributes`](crate::RespondSso::attributes);
+    ///   [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes);
     /// - a [`NameId`](crate::NameId) with a `NameQualifier`,
     ///   `SPNameQualifier`, or `SPProvidedID`.
     pub fn sso_response_template(mut self, template: impl Into<String>) -> Self {

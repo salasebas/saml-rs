@@ -7,23 +7,22 @@ mod protocol;
 use std::marker::PhantomData;
 use std::time::SystemTime;
 
-use crate::config::{EntityId, IdpDescriptor, NameIdFormat, SpDescriptor};
-use crate::entity::User;
+use crate::config::{EntityId, IdpDescriptor, SpDescriptor};
 use crate::flow::HttpRequest;
 use crate::idp::LoginResponseOverrides;
 use crate::model::{
-    Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
-    NameId, OutstandingLogout, Received, RelayState, SamlValidationContext, SessionIndex,
-    SsoResponse, SsoSession, Status, TopLevelStatusCode,
+    AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId, OutstandingLogout, Received,
+    RelayState, SamlValidationContext, SessionIndex, SsoResponse, SsoSession,
 };
 use crate::sp::{
     validate_provider_name, LoginResponseParseOptions, PaosAuthnRequestInput, WebBrowserSsoProducer,
 };
-use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
+use crate::xml::is_xml_char;
 
 use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
-use super::{Idp, Saml, SamlError, Sp};
+use super::sso_outcome::OutcomeParts;
+use super::{Idp, Saml, SamlError, Sp, SsoOutcome};
 use crate::http_header::{HttpHeader, PRAGMA};
 use crate::soap::{RESPONSE_CACHE_CONTROL, RESPONSE_HEADERS as SOAP_RESPONSE_HEADERS};
 use protocol::{
@@ -118,99 +117,6 @@ impl StartPaosSso {
     /// one will reject the request.
     pub fn allow_unsigned_authn_request(mut self) -> Self {
         self.sign_authn_request = false;
-        self
-    }
-}
-
-/// Options for an identity provider answering PAOS login.
-///
-/// [`Self::success`] answers with an assertion for a `NameId`.
-/// [`Self::failure`] answers with a SAML error status and no assertion.
-#[derive(Debug, Clone)]
-pub struct RespondPaosSso {
-    answer: PaosSsoAnswer,
-}
-
-#[derive(Debug, Clone)]
-enum PaosSsoAnswer {
-    Success(PaosAssertion),
-    Failure(Status),
-}
-
-#[derive(Debug, Clone)]
-struct PaosAssertion {
-    name_id: NameId,
-    attributes: Attributes,
-    authn_context: Option<AuthnContextReference>,
-    authn_instant: Option<SystemTime>,
-}
-
-impl RespondPaosSso {
-    /// Answer with a success response whose assertion `Subject` is `name_id`.
-    ///
-    /// The assertion has no `AttributeStatement` until [`Self::attributes`]
-    /// sets one.
-    pub fn success(name_id: NameId) -> Self {
-        Self {
-            answer: PaosSsoAnswer::Success(PaosAssertion {
-                name_id,
-                attributes: Attributes::default(),
-                authn_context: None,
-                authn_instant: None,
-            }),
-        }
-    }
-
-    /// End the login with `status` and no assertion.
-    ///
-    /// The service provider establishes no session from that response.
-    /// `status` must not be top-level `Success`:
-    /// [`Saml<Idp>::respond_paos_sso`] returns [`SamlError::Invalid`] for it.
-    pub fn failure(status: Status) -> Self {
-        Self {
-            answer: PaosSsoAnswer::Failure(status),
-        }
-    }
-
-    /// Set the attributes of the assertion's `AttributeStatement`.
-    ///
-    /// They are written as [`crate::RespondSso::attributes`] writes them. An
-    /// empty collection writes no `AttributeStatement`. A failure response
-    /// writes no assertion, so this has no effect on [`Self::failure`].
-    pub fn attributes(mut self, attributes: Attributes) -> Self {
-        match &mut self.answer {
-            PaosSsoAnswer::Success(assertion) => assertion.attributes = attributes,
-            PaosSsoAnswer::Failure(_) => {}
-        }
-        self
-    }
-
-    /// Set the authentication context of the assertion's `AuthnStatement`.
-    ///
-    /// It is written, and checked against the request's
-    /// [`crate::RequestedAuthnContext`], as [`crate::RespondSso::authn_context`]
-    /// does. Omitting it writes the unspecified class. When no requested
-    /// context can be met, answer with [`Self::failure`]. A failure response
-    /// writes no assertion, so this has no effect on it.
-    pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
-        match &mut self.answer {
-            PaosSsoAnswer::Success(assertion) => assertion.authn_context = Some(authn_context),
-            PaosSsoAnswer::Failure(_) => {}
-        }
-        self
-    }
-
-    /// Set the `AuthnInstant` of the assertion's `AuthnStatement`.
-    ///
-    /// It is written, and checked against the response `IssueInstant`, as
-    /// [`crate::RespondSso::authn_instant`] does. Omitting it writes the
-    /// assertion `IssueInstant`. A failure response writes no assertion, so
-    /// this has no effect on [`Self::failure`].
-    pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
-        match &mut self.answer {
-            PaosSsoAnswer::Success(assertion) => assertion.authn_instant = Some(authn_instant),
-            PaosSsoAnswer::Failure(_) => {}
-        }
         self
     }
 }
@@ -345,8 +251,9 @@ impl PaosHttpResponse<SoapFault> {
     /// HTTP 500 SOAP fault for an envelope that is not a SAML request.
     ///
     /// Send this when [`Saml<Idp>::receive_paos_sso`] fails before it returns
-    /// a request. A failed login is answered with [`RespondPaosSso::failure`]
-    /// instead, and that response stays HTTP 200.
+    /// a request. A failed login is answered by [`Saml<Idp>::respond_paos_sso`]
+    /// with an [`SsoOutcome::Failure`] instead, and that response stays HTTP
+    /// 200.
     pub fn soap_fault() -> Self {
         let mut response = Self::from_parts(SOAP_RESPONSE_HEADERS, soap_fault_envelope());
         response.status = 500;
@@ -647,10 +554,12 @@ impl Saml<Idp> {
 
     /// Answer a PAOS login with a SOAP response.
     ///
-    /// [`RespondPaosSso::success`] answers with an assertion for its
-    /// `NameId`. [`RespondPaosSso::failure`] ends the login with its SAML
-    /// error status and no assertion, and the service provider establishes no
-    /// session from it. Both are HTTP 200.
+    /// `outcome` says what the response reports. An
+    /// [`SsoAssertion`](crate::SsoAssertion) or [`SsoOutcome::Success`] answers
+    /// with that assertion. [`SsoOutcome::Failure`] ends the login with its
+    /// SAML error status and no assertion, and the service provider
+    /// establishes no session from it. Both are HTTP 200. The response always
+    /// follows the Web Browser SSO producer rules.
     ///
     /// A request that names no assertion consumer URL or index is answered at
     /// the service provider role's default assertion consumer. A default that
@@ -658,37 +567,48 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when the [`RespondPaosSso::failure`]
-    /// status is top-level `Success`. Returns [`SamlError`] when the request
-    /// has no usable assertion consumer, the issuer does not match, or the
-    /// response cannot be signed. For [`RespondPaosSso::success`], also
-    /// returns [`SamlError`] when a persistent or transient `NameId` is longer
-    /// than 256 characters, the NameID format is not an absolute URI
-    /// reference, [`RespondPaosSso::attributes`] is combined with a login
-    /// response template, names a basic attribute that is not an XML name, or
-    /// has a `NameFormat` that is not an absolute URI reference, the
-    /// authentication context does not meet an exact `RequestedAuthnContext`,
-    /// [`RespondPaosSso::authn_instant`] is later than the response
-    /// `IssueInstant` or before year 1, the `NameId` `SPNameQualifier` is not
-    /// the one the request's `NameIDPolicy` asks for with a SAML-defined
-    /// format other than `unspecified` or `encrypted`, or the `NameId` does not
-    /// strongly match the request's `Subject` (see
+    /// Returns [`SamlError::Invalid`] when `outcome` is
+    /// [`SsoOutcome::Failure`] with a top-level `Success` status. Returns
+    /// [`SamlError`] when the request has no usable assertion consumer, the
+    /// issuer does not match, or the response cannot be signed. For an
+    /// assertion, also returns [`SamlError`] when a persistent or transient
+    /// `NameId` is longer than 256 characters, the NameID format is not an
+    /// absolute URI reference,
+    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
+    /// combined with a login response template, names a basic attribute that
+    /// is not an XML name, or has a `NameFormat` that is not an absolute URI
+    /// reference, the authentication context does not meet an exact
+    /// `RequestedAuthnContext`,
+    /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
+    /// later than the response `IssueInstant` or before year 1, the `NameId`
+    /// `SPNameQualifier` is not the one the request's `NameIDPolicy` asks for
+    /// with a SAML-defined format other than `unspecified` or `encrypted`, or
+    /// the `NameId` does not strongly match the request's `Subject` (see
     /// [`RequestedSubject`](crate::RequestedSubject)).
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,
         request: &Received<AuthnRequest>,
-        options: RespondPaosSso,
+        outcome: impl Into<SsoOutcome>,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
-        let (assertion, status) = match &options.answer {
-            PaosSsoAnswer::Success(assertion) => (Some(assertion), None),
-            PaosSsoAnswer::Failure(status) if status.top_level() == TopLevelStatusCode::Success => {
-                return Err(SamlError::Invalid(
-                    "a PAOS failure response requires an error status".into(),
-                ));
-            }
-            PaosSsoAnswer::Failure(status) => (None, Some(status)),
-        };
+        self.issue_paos_sso(sp, request, &outcome.into())
+    }
+
+    fn issue_paos_sso(
+        &self,
+        sp: &SpDescriptor,
+        request: &Received<AuthnRequest>,
+        outcome: &SsoOutcome,
+    ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
+        let OutcomeParts {
+            user,
+            name_id_format,
+            name_id_qualifiers,
+            status,
+            typed_attributes,
+            authn_context,
+            authn_instant,
+        } = outcome.parts()?;
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = EndpointUrl::try_new(resolve_response_acs(
             sp.metadata(),
@@ -703,23 +623,16 @@ impl Saml<Idp> {
                 &setting.data_encryption_algorithm,
             )
         };
-        let name_id = assertion.map(|assertion| &assertion.name_id);
-        let name_id_format = name_id.and_then(NameId::format).map(NameIdFormat::as_uri);
-        let user = User::new(name_id.map_or("", NameId::value));
         let overrides = LoginResponseOverrides {
             acs: Some(acs.as_str()),
             name_id_format,
-            name_id_qualifiers: name_id.map_or_else(
-                OutboundNameIdQualifiers::default,
-                OutboundNameIdQualifiers::from,
-            ),
+            name_id_qualifiers,
             issuance_lifetime: Some(self.0.issuance_lifetime),
             web_browser_sso_producer: WebBrowserSsoProducer::Follow,
             status,
-            typed_attributes: assertion
-                .map_or(&[][..], |assertion| assertion.attributes.as_slice()),
-            authn_context: assertion.and_then(|assertion| assertion.authn_context.as_ref()),
-            authn_instant: assertion.and_then(|assertion| assertion.authn_instant),
+            typed_attributes,
+            authn_context,
+            authn_instant,
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
             requested_subject: request.message().requested_subject(),

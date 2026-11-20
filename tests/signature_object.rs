@@ -9,10 +9,10 @@ use base64::Engine;
 use saml_rs::{
     AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EndpointUrl, EntityId,
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject,
-    MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RespondPaosSso,
-    RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint,
-    SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSlo,
-    StartSso, X509Credential, XmlSignatureProfile,
+    MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RespondSlo, RespondSso,
+    Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartPaosSso, StartSlo, StartSso,
+    X509Credential, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -190,10 +190,12 @@ fn post_response_with_object_is_rejected() -> Result<(), Box<dyn std::error::Err
         validation(),
     )?;
     for respond in [RespondSso::post(), RespondSso::post().sign_response()] {
-        let response =
-            parties
-                .idp
-                .respond_sso(&parties.sp_descriptor, &received, &principal(), respond)?;
+        let response = parties.idp.respond_sso(
+            &parties.sp_descriptor,
+            &received,
+            SsoAssertion::new(principal()),
+            respond,
+        )?;
         let form = form_with_object(response.post_form()?.fields(), "SAMLResponse")?;
         assert_object_rejected(parties.sp.finish_sso(
             &parties.idp_descriptor,
@@ -230,7 +232,7 @@ fn paos_authn_request_and_response_with_object_are_rejected(
     let answered = parties.idp.respond_paos_sso(
         &parties.sp_descriptor,
         &received,
-        RespondPaosSso::success(principal()),
+        SsoAssertion::new(principal()),
     )?;
     let response = soap_body_element(answered.envelope(), "Response")?;
     assert_object_rejected(parties.sp.finish_paos_sso(

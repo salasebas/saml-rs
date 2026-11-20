@@ -15,7 +15,7 @@ use saml_rs::{
     IdpValidationPolicy, InMemoryReplayCache, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
     OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, SsoSession, StartSso,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
 };
 use time::OffsetDateTime;
 
@@ -78,12 +78,12 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     let response = idp.respond_sso(
         &sp_descriptor,
         &received,
-        &name_id,
+        SsoAssertion::new(name_id.clone()),
         RespondSso::post().apply_producer_rules(),
     )?;
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
-        &name_id,
+        SsoAssertion::new(name_id),
         RespondSso::post().apply_producer_rules(),
     )?;
     Ok(IssuedSso {

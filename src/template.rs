@@ -323,7 +323,7 @@ pub struct LoginResponseTemplate {
 /// XML-escaped, and each `{` in them is written as the character reference
 /// `&#123;`, so no placeholder pass substitutes inside them.
 #[deprecated(
-    note = "`saml_rs::template` becomes crate-private in the next minor release; pass attributes with `RespondSso::attributes`, or set `LoginResponseTemplate::attributes` for a custom login response template"
+    note = "`saml_rs::template` becomes crate-private in the next minor release; pass attributes with `SsoAssertion::with_attributes`, or set `LoginResponseTemplate::attributes` for a custom login response template"
 )]
 pub fn attribute_statement_builder(
     attributes: &[LoginResponseAttribute],

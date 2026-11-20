@@ -35,11 +35,8 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered = idp.respond_paos_sso(
-        &sp_descriptor,
-        &received,
-        RespondPaosSso::success(principal()),
-    )?;
+    let answered =
+        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     let response = enhanced_client_takes_response(&client, answered.envelope())?;
     let result =
         rejecting.finish_paos_sso(&idp_descriptor, &started.pending, &response, validation());

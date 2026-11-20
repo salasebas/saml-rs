@@ -10,7 +10,7 @@ Issue a browser SSO response. You already have a service-provider peer, an SSO U
 1. Build `IdpConfig` and call `Saml::idp`.
 2. Import the service provider metadata.
 3. Call `receive_sso` with the browser fields from the `AuthnRequest`.
-4. Call `respond_sso` with the subject you authenticated.
+4. Call `respond_sso` with an `SsoAssertion` for the subject you authenticated.
 
 ```rust
 let idp = Saml::idp(
@@ -40,12 +40,25 @@ let request = idp.receive_sso(
 let response = idp.respond_sso(
     &sp,
     &request,
-    &NameId::new("alice@example.com"),
+    SsoAssertion::new(NameId::new("alice@example.com")),
     RespondSso::post().apply_producer_rules(),
 )?;
 ```
 
-Send `response` back through the browser to the service provider's assertion consumer service. The identity provider writes the assertion `Subject` itself: the `NameId` you pass and one bearer `SubjectConfirmation`.
+Send `response` back through the browser to the service provider's assertion consumer service. The identity provider writes the assertion `Subject` itself: the `NameId` of the `SsoAssertion` and one bearer `SubjectConfirmation`.
+
+The third argument says what the response reports. `RespondSso` says how it is delivered and signed, and whether the generation rules apply. When the user cannot be authenticated, answer with an error status and no assertion:
+
+```rust
+let response = idp.respond_sso(
+    &sp,
+    &request,
+    SsoOutcome::Failure(Status::responder()),
+    RespondSso::post().apply_producer_rules(),
+)?;
+```
+
+A failure with the top-level `Success` status is rejected with `SamlError::Invalid`, because a successful response carries an assertion.
 
 The response carries the exact `RelayState` that arrived with the request. `RespondSso::relay_state` sets one only for an unsolicited response or for a request that carried none.
 
@@ -59,7 +72,7 @@ A typed identity provider signs the Response when it generates an `EncryptedAsse
 let response = idp.respond_sso(
     &sp,
     &request,
-    &name_id,
+    SsoAssertion::new(name_id),
     RespondSso::post().allow_unsigned_encrypted_cbc(),
 )?;
 ```
@@ -70,7 +83,7 @@ Assertion encryption stays off until you set `XmlEncryptionPolicy::assertions` t
 
 ## Attributes and name identifiers
 
-Pass the attributes of the assertion on the response options. `with_name_format` sets an attribute's format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI. An attribute without it has no `NameFormat`, which SAML reads as `Unspecified`.
+Pass the attributes with `SsoAssertion::with_attributes`. `with_name_format` sets an attribute's format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI. An attribute without it has no `NameFormat`, which SAML reads as `Unspecified`.
 
 ```rust
 let attributes = Attributes::new([
@@ -89,12 +102,12 @@ let attributes = Attributes::new([
 let response = idp.respond_sso(
     &sp,
     &request,
-    &NameId::generate_transient(),
-    RespondSso::post().attributes(attributes),
+    SsoAssertion::new(NameId::generate_transient()).with_attributes(attributes),
+    RespondSso::post(),
 )?;
 ```
 
-A `Basic` name that is not an XML name is rejected. `attributes()` cannot be combined with an SSO response template set with `IdpConfigBuilder::sso_response_template`.
+A `Basic` name that is not an XML name is rejected. `with_attributes` cannot be combined with an SSO response template set with `IdpConfigBuilder::sso_response_template`.
 
 `NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` takes any value and `with_format` takes any format, but a persistent or transient value longer than 256 characters is rejected when the response is generated. `with_name_qualifier`, `with_sp_name_qualifier`, and `with_sp_provided_id` set the qualifier attributes. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 

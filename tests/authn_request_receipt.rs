@@ -20,8 +20,8 @@ use saml_rs::{
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
     MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
     Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, RespondSso, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartSso, Status, SubordinateStatusCode,
+    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, SsoOutcome, StartSso, Status, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -427,7 +427,7 @@ fn received_authn_request_accepts_these_fields_under_recommended_and_compatibili
         let response = receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            &NameId::new("alice@example.com"),
+            SsoAssertion::new(NameId::new("alice@example.com")),
             RespondSso::post(),
         )?;
         assert_eq!(response.raw_context().request_type, "SAMLResponse");
@@ -845,42 +845,48 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
         StartSso::post(),
         |xml| insert_after_name_id_policy(xml, &requested_authn_context("", &class_ref(SMARTCARD))),
     )?;
-    let subject = || NameId::new("alice@example.com");
-    let respond = |options: RespondSso| {
+    let assertion = || SsoAssertion::new(NameId::new("alice@example.com"));
+    let respond = |outcome: SsoOutcome| {
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            &subject(),
-            options.apply_producer_rules(),
+            outcome,
+            RespondSso::post().apply_producer_rules(),
         )
     };
 
-    let unspecified = respond(RespondSso::post());
+    let unspecified = respond(assertion().into());
     assert!(
         matches!(unspecified, Err(SamlError::Invalid(message)) if message.contains(UNSPECIFIED))
     );
     let other_class = respond(
-        RespondSso::post()
-            .authn_context(AuthnContextReference::class(PASSWORD_PROTECTED_TRANSPORT)?),
+        assertion()
+            .with_authn_context(AuthnContextReference::class(PASSWORD_PROTECTED_TRANSPORT)?)
+            .into(),
     );
     assert!(
         matches!(other_class, Err(SamlError::Invalid(message)) if message.contains(PASSWORD_PROTECTED_TRANSPORT))
     );
-    let declaration_with_the_class_uri =
-        respond(RespondSso::post().authn_context(AuthnContextReference::declaration(SMARTCARD)?));
+    let declaration_with_the_class_uri = respond(
+        assertion()
+            .with_authn_context(AuthnContextReference::declaration(SMARTCARD)?)
+            .into(),
+    );
     assert!(matches!(
         declaration_with_the_class_uri,
         Err(SamlError::Invalid(_))
     ));
 
     let met = response_xml(&respond(
-        RespondSso::post().authn_context(AuthnContextReference::class(SMARTCARD)?),
+        assertion()
+            .with_authn_context(AuthnContextReference::class(SMARTCARD)?)
+            .into(),
     )?)?;
     assert!(met.contains(&format!(
         "<saml:AuthnContext><saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef></saml:AuthnContext>"
     )));
 
-    let refused = response_xml(&respond(RespondSso::post().status(
+    let refused = response_xml(&respond(SsoOutcome::Failure(
         Status::responder().with_subordinate(SubordinateStatusCode::no_authn_context()),
     ))?)?;
     assert!(refused.contains(
@@ -891,7 +897,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     let compatibility = response_xml(&receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
-        &subject(),
+        assertion(),
         RespondSso::post(),
     )?)?;
     assert!(!compatibility.contains("AuthnStatement"));
@@ -918,10 +924,9 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
         &receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            &NameId::new("alice@example.com"),
-            RespondSso::post()
-                .apply_producer_rules()
-                .authn_context(AuthnContextReference::declaration(DECLARATION)?),
+            SsoAssertion::new(NameId::new("alice@example.com"))
+                .with_authn_context(AuthnContextReference::declaration(DECLARATION)?),
+            RespondSso::post().apply_producer_rules(),
         )?,
     )?;
     assert!(response.contains(&format!(
@@ -937,8 +942,9 @@ fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules
     let response = receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
-        &NameId::new("alice@example.com"),
-        RespondSso::post().authn_context(AuthnContextReference::class(SMARTCARD)?),
+        SsoAssertion::new(NameId::new("alice@example.com"))
+            .with_authn_context(AuthnContextReference::class(SMARTCARD)?),
+        RespondSso::post(),
     );
     assert!(
         matches!(response, Err(SamlError::Invalid(message)) if message.contains("Web Browser SSO generation rules"))
@@ -970,7 +976,7 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
-            &pseudonym,
+            SsoAssertion::new(pseudonym),
             options,
         )
     };
@@ -995,13 +1001,14 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         let answered = response_xml(&respond(&receipt, Some(AFFILIATION), rules())?)?;
         assert!(answered.contains(&format!("SPNameQualifier=\"{AFFILIATION}\"")));
 
-        let error = respond(
-            &receipt,
-            None,
-            rules().status(
+        let error = receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            SsoOutcome::Failure(
                 Status::responder()
                     .with_subordinate(SubordinateStatusCode::try_new(INVALID_NAME_ID_POLICY)?),
             ),
+            rules(),
         );
         assert!(error.is_ok(), "{error:?}");
         let compatibility = respond(&receipt, None, RespondSso::post());
@@ -1036,9 +1043,20 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         )
     };
     let respond = |receipt: &Receipt, name_id: NameId, options: RespondSso| {
-        receipt
-            .idp
-            .respond_sso(&receipt.sp_descriptor, &receipt.received, &name_id, options)
+        receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            SsoAssertion::new(name_id),
+            options,
+        )
+    };
+    let respond_failure = |receipt: &Receipt, status: Status| {
+        receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            SsoOutcome::Failure(status),
+            RespondSso::post().apply_producer_rules(),
+        )
     };
     let rules = || RespondSso::post().apply_producer_rules();
     let persistent = |value: &str| NameId::new(value).with_format(NameIdFormat::Persistent);
@@ -1066,14 +1084,11 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         rules(),
     );
     assert!(policy_format.is_ok(), "{policy_format:?}");
-    let error = respond(
+    let error = respond_failure(
         &receipt,
-        persistent("bob"),
-        rules().status(
-            Status::responder().with_subordinate(SubordinateStatusCode::try_new(
-                saml_rs::constants::status_code::UNKNOWN_PRINCIPAL,
-            )?),
-        ),
+        Status::responder().with_subordinate(SubordinateStatusCode::try_new(
+            saml_rs::constants::status_code::UNKNOWN_PRINCIPAL,
+        )?),
     );
     assert!(error.is_ok(), "{error:?}");
     let compatibility = respond(&receipt, persistent("bob"), RespondSso::post());
@@ -1108,7 +1123,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         let receipt = receive_subject(subject, "")?;
         let refused = respond(&receipt, persistent("alice"), rules());
         assert!(is_refused(&refused), "{subject}: {refused:?}");
-        let error = respond(&receipt, persistent("alice"), rules().status(Status::responder()));
+        let error = respond_failure(&receipt, Status::responder());
         assert!(error.is_ok(), "{subject}: {error:?}");
     }
     Ok(())

@@ -258,28 +258,31 @@ let session = sp.finish_paos_sso(&idp, &pending, &body, validation)?;
 If you matched `SamlError::Invalid` for an empty envelope, match
 `SamlError::Xml`.
 
-## Answer PAOS login with `RespondPaosSso::success` or `RespondPaosSso::failure`
+## Answer PAOS login with an `SsoOutcome`
 
 **Affects:** identity providers that call `respond_paos_sso`,
-`reject_paos_sso`, or `RespondPaosSso::default`.
+`reject_paos_sso`, or `RespondPaosSso`.
 
-**Before:** `respond_paos_sso(sp, request, subject, RespondPaosSso::default())`
-took a `Subject` and answered with an assertion, and
+**Before:** `respond_paos_sso(sp, request, subject, options)` took a `Subject`
+and `RespondPaosSso` options with the assertion's `attributes`,
+`authn_context`, and `authn_instant`, and answered with an assertion.
 `reject_paos_sso(sp, request, status)` answered with an error status and no
 assertion.
 
-**Now:** `RespondPaosSso` holds the answer, and `respond_paos_sso(sp, request,
-options)` writes either one:
+**Now:** `respond_paos_sso(sp, request, outcome)` takes the
+`impl Into<SsoOutcome>` that `respond_sso` takes, as
+[Answer with an `SsoAssertion` or an `SsoOutcome`](sso-results-and-identities.md#answer-with-an-ssoassertion-or-an-ssooutcome)
+describes:
 
-- `RespondPaosSso::success(name_id)` takes the `NameId` by value and answers
-  as `respond_paos_sso` did. Clone a `NameId` you only borrow.
-- `RespondPaosSso::failure(status)` answers as `reject_paos_sso` did: HTTP
-  200 and no assertion. A top-level `Success` status returns
-  `SamlError::Invalid`, as `reject_paos_sso` did, because a success response
-  needs an assertion.
-- `attributes`, `authn_context`, and `authn_instant` describe the assertion.
-  They have no effect on a failure response, which writes none.
-- `RespondPaosSso::default` and `reject_paos_sso` are removed.
+- `SsoAssertion::new(name_id)` answers as `respond_paos_sso` did. It takes the
+  `NameId` by value. Clone a `NameId` you only borrow.
+- `RespondPaosSso::attributes`, `authn_context`, and `authn_instant` become
+  `SsoAssertion::with_attributes`, `with_authn_context`, and
+  `with_authn_instant`.
+- `SsoOutcome::Failure(status)` answers as `reject_paos_sso` did: HTTP 200 and
+  no assertion. A top-level `Success` status returns `SamlError::Invalid`, as
+  `reject_paos_sso` did, because a success response needs an assertion.
+- `RespondPaosSso` and `reject_paos_sso` are removed.
 
 **Upgrade:**
 
@@ -289,13 +292,13 @@ let ok = idp.respond_paos_sso(
 	&sp,
 	&request,
 	Subject::new(name_id, Vec::new()),
-	RespondPaosSso::default(),
+	RespondPaosSso::default().attributes(attributes),
 )?;
 let denied = idp.reject_paos_sso(&sp, &request, Status::responder())?;
 
 // After
-let ok = idp.respond_paos_sso(&sp, &request, RespondPaosSso::success(name_id))?;
-let denied = idp.respond_paos_sso(&sp, &request, RespondPaosSso::failure(Status::responder()))?;
+let ok = idp.respond_paos_sso(&sp, &request, SsoAssertion::new(name_id).with_attributes(attributes))?;
+let denied = idp.respond_paos_sso(&sp, &request, SsoOutcome::Failure(Status::responder()))?;
 ```
 
 ## Build the SOAP fault with `PaosHttpResponse::soap_fault`

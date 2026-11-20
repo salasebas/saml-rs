@@ -208,12 +208,6 @@ impl IdentityProvider {
                     .into(),
             ));
         }
-        if status.subordinate().is_some() && uses_template {
-            return Err(SamlError::Invalid(
-                "login response template StatusCode placeholder cannot carry a subordinate status code"
-                    .into(),
-            ));
-        }
         let qualifiers = rendering.name_id_qualifiers;
         if uses_template
             && (qualifiers.name_qualifier.is_some()
