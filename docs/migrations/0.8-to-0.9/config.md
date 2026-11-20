@@ -3,9 +3,10 @@
 [How to upgrade from 0.8 to 0.9](README.md)
 
 This guide covers callers that build an `SpConfig` or `IdpConfig`, fill
-`Credentials`, set an `XmlEncryptionPolicy`, `AudienceValidationPolicy`, or
-`TemplatePolicy`, or configure an SSO template. Apply the sections that match
-your integration.
+`Credentials`, build a policy, limit, or input struct with a struct literal,
+destructure one or a started flow, match on a policy enum, set an
+`XmlEncryptionPolicy`, `AudienceValidationPolicy`, or `TemplatePolicy`, or
+configure an SSO template. Apply the sections that match your integration.
 
 ## Pass the first endpoint to `builder`
 
@@ -147,6 +148,139 @@ endpoint lists such as `acs_endpoints()`. Section
 to fill `Credentials` with `X509Credential`, which replaces
 `DecryptionCredential`.
 
+## Assign fields instead of writing a struct literal
+
+**Affects:** code that builds one of these structs with a struct literal,
+including a literal that ends in `..SpValidationPolicy::recommended()` or
+another base:
+
+| Struct | Start from |
+| --- | --- |
+| `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `recommended()`, `compatibility()`, or `default()` |
+| `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy` | `default()` |
+| `XmlLimits` | `default()` or `unbounded()` |
+| `SignatureConfig`, `Organization` | `default()` |
+| `ContactPerson` | `ContactPerson::new(contact_type)` |
+| `Endpoint` | `Endpoint::new(binding, location)` |
+
+**Before:** every field of these structs was public, so a struct literal
+compiled.
+
+**Now:** the structs are `#[non_exhaustive]`, and their fields stay public.
+Outside saml-rs, a struct literal fails with `E0639`, also with a `..` base.
+Reading a field does not change. `XmlEncryptionPolicy` follows the same rule,
+as [Set `XmlEncryptionPolicy` fields directly](#set-xmlencryptionpolicy-fields-directly)
+shows. So do `SpMetadataInput` and `IdpMetadataInput`, the renamed 0.8
+`SpMetadataConfig` and `IdpMetadataConfig`. Start them from `default()`, as
+[Distinguish raw generation inputs from typed configs](metadata-api.md#distinguish-raw-generation-inputs-from-typed-configs)
+shows.
+
+**Upgrade:** take a value from the preset, `Default`, or constructor that the
+table names, and assign each field you set. Assign a nested field through its
+parent:
+
+```rust
+// Before
+let validation = SpValidationPolicy {
+    assertions: AssertionSignaturePolicy::RequireSigned,
+    ..SpValidationPolicy::recommended()
+};
+let xml = XmlPolicy {
+    limits: XmlLimits {
+        max_depth: 64,
+        ..XmlLimits::default()
+    },
+    ..XmlPolicy::default()
+};
+let contact = ContactPerson {
+    email_addresses: vec!["mailto:ops@example.com".into()],
+    ..ContactPerson::new(ContactType::Technical)
+};
+
+// Now
+let mut validation = SpValidationPolicy::recommended();
+validation.assertions = AssertionSignaturePolicy::RequireSigned;
+let mut xml = XmlPolicy::default();
+xml.limits.max_depth = 64;
+let mut contact = ContactPerson::new(ContactType::Technical);
+contact.email_addresses = vec!["mailto:ops@example.com".into()];
+```
+
+A literal that listed every field has no base. Start it from `default()`, or
+from the constructor the table names, and assign each field it listed.
+
+The presets and `default()` are not `const fn`, so a `const` or `static` that
+held one of these literals fails with `E0015` when it starts from one. Build
+the value in a function or a `std::sync::LazyLock`. `XmlLimits::unbounded()`
+is a `const fn`.
+
+## Destructure with a rest pattern
+
+**Affects:** code that destructures one of the structs above, a `Started`, or
+a `StartedPaosSso` with a struct pattern that lists every field, and code that
+builds a `Started` or a `StartedPaosSso` with a struct literal.
+
+**Before:** a pattern could list every field, such as
+`Started { pending, outbound }`, and a struct literal could build a started
+flow from its parts.
+
+**Now:** `Started` and `StartedPaosSso` are `#[non_exhaustive]` too. Outside
+saml-rs, a struct pattern without `..` fails with `E0638`, and a struct
+literal of a started flow fails with `E0639`: only saml-rs builds one. Reading
+a field, such as `started.pending`, does not change.
+
+**Upgrade:** end the pattern with `..`. Keep the started flow an operation
+returned, and move its fields out where you need them:
+
+```rust
+// Before
+let Started { pending, outbound } = sp.start_sso(&idp, StartSso::redirect())?;
+let LogoutPolicy { requests, responses } = validation.logout;
+
+// Now
+let Started { pending, outbound, .. } = sp.start_sso(&idp, StartSso::redirect())?;
+let LogoutPolicy { requests, responses, .. } = validation.logout;
+```
+
+## Add a wildcard arm to a `match` on a policy enum
+
+**Affects:** code that matches on `AssertionSignaturePolicy`,
+`ResponseSignaturePolicy`, `AuthnRequestSigningPolicy`,
+`AuthnRequestValidationPolicy`, `LogoutSignaturePolicy`,
+`AudienceValidationPolicy`, `AssertionEncryptionPolicy`,
+`IdentifierEncryptionPolicy`, or `AttributeEncryptionPolicy` without a
+wildcard arm.
+
+**Before:** these enums were exhaustive, so a `match` that listed every
+variant compiled. `XmlSignatureProfile` was already non-exhaustive.
+
+**Now:** they are `#[non_exhaustive]`, so a later release can add a variant
+without a breaking change. Outside saml-rs, a `match` without a wildcard arm
+fails with `E0004`. `Rsa15KeyTransportPolicy`, new in 0.9, is non-exhaustive
+too. `NameIdCreationPolicy` stays exhaustive. A `matches!` or `==` comparison
+does not change.
+
+**Upgrade:** add a `_` arm after the variants you handle, and decide what your
+code does with a variant it does not know:
+
+```rust
+// Before
+let label = match validation.logout.requests {
+    LogoutSignaturePolicy::RequireSigned => "signed",
+    LogoutSignaturePolicy::AllowUnsignedForCompatibility => "unsigned allowed",
+};
+
+// Now
+let label = match validation.logout.requests {
+    LogoutSignaturePolicy::RequireSigned => "signed",
+    LogoutSignaturePolicy::AllowUnsigned => "unsigned allowed",
+    _ => "other",
+};
+```
+
+[Rename the relaxed policy and algorithm variants](compile-errors.md#116-rename-the-relaxed-policy-and-algorithm-variants)
+lists the renamed variants.
+
 ## Set `XmlEncryptionPolicy` fields directly
 
 **Affects:** callers of `XmlEncryptionPolicy::encrypt_assertions`,
@@ -156,20 +290,21 @@ to fill `Credentials` with `X509Credential`, which replaces
 **Before:** three presets each set one field, two settings were private
 fields behind `with_` methods, and the other three were public fields.
 
-**Now:** every setting is a public field, and you write a struct literal over
-`XmlEncryptionPolicy::default()`. The RSA-v1.5 opt-in is the
-`rsa15_key_transport` field, a `Rsa15KeyTransportPolicy`. Defaults do not
-change.
+**Now:** every setting is a public field. Start from
+`XmlEncryptionPolicy::default()` and assign the fields you select. The struct
+is `#[non_exhaustive]`, so a struct literal does not compile outside saml-rs.
+The RSA-v1.5 opt-in is the `rsa15_key_transport` field, a
+`Rsa15KeyTransportPolicy`. Defaults do not change.
 
 | 0.8 | 0.9 |
 | --- | --- |
-| `XmlEncryptionPolicy::encrypt_assertions()` | `assertions: AssertionEncryptionPolicy::EncryptAssertions` |
-| `XmlEncryptionPolicy::encrypt_ids()` | `identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers` |
-| `XmlEncryptionPolicy::encrypt_attributes()` | `attributes: AttributeEncryptionPolicy::EncryptAttributes` |
-| `.with_max_decryption_work(n)`, `.max_decryption_work()` | `max_decryption_work: n`, `.max_decryption_work` |
-| `.with_rsa15_key_transport_decryption_allowed()` | `rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption` |
+| `XmlEncryptionPolicy::encrypt_assertions()` | `.assertions = AssertionEncryptionPolicy::EncryptAssertions` |
+| `XmlEncryptionPolicy::encrypt_ids()` | `.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers` |
+| `XmlEncryptionPolicy::encrypt_attributes()` | `.attributes = AttributeEncryptionPolicy::EncryptAttributes` |
+| `.with_max_decryption_work(n)`, `.max_decryption_work()` | `.max_decryption_work = n`, `.max_decryption_work` |
+| `.with_rsa15_key_transport_decryption_allowed()` | `.rsa15_key_transport = Rsa15KeyTransportPolicy::AllowDecryption` |
 
-**Upgrade:** write the fields you select:
+**Upgrade:** assign the fields you select:
 
 ```rust
 // Before
@@ -178,12 +313,10 @@ let encryption = XmlEncryptionPolicy::encrypt_assertions()
     .with_rsa15_key_transport_decryption_allowed();
 
 // Now
-let encryption = XmlEncryptionPolicy {
-    assertions: AssertionEncryptionPolicy::EncryptAssertions,
-    rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
-    max_decryption_work: 64,
-    ..XmlEncryptionPolicy::default()
-};
+let mut encryption = XmlEncryptionPolicy::default();
+encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
+encryption.rsa15_key_transport = Rsa15KeyTransportPolicy::AllowDecryption;
+encryption.max_decryption_work = 64;
 ```
 
 ## Rename `AudienceValidationPolicy::Validate` to `RequireRestriction`
@@ -199,11 +332,9 @@ assertion without `<AudienceRestriction>`, which the recommended
 **Upgrade:** rename each use:
 
 ```rust
-let validation = SpValidationPolicy {
-    // Before: AudienceValidationPolicy::Validate
-    audience: AudienceValidationPolicy::RequireRestriction,
-    ..SpValidationPolicy::recommended()
-};
+let mut validation = SpValidationPolicy::recommended();
+// Before: AudienceValidationPolicy::Validate
+validation.audience = AudienceValidationPolicy::RequireRestriction;
 ```
 
 ## Send RelayState per request

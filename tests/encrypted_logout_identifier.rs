@@ -68,10 +68,9 @@ fn credentials() -> Credentials {
 }
 
 fn xml(encryption: XmlEncryptionPolicy) -> XmlPolicy {
-    XmlPolicy {
-        encryption,
-        ..XmlPolicy::default()
-    }
+    let mut xml = XmlPolicy::default();
+    xml.encryption = encryption;
+    xml
 }
 
 fn slo_endpoints(host: &str) -> Result<Vec<SloEndpoint>, SamlError> {
@@ -87,6 +86,8 @@ fn sp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
 ) -> Result<Saml<saml_rs::Sp>, SamlError> {
+    let mut validation = SpValidationPolicy::recommended();
+    validation.logout = logout;
     Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -94,10 +95,7 @@ fn sp_with(
         )
         .slo_endpoints(slo_endpoints("sp.example.com")?)
         .credentials(credentials())
-        .validation(SpValidationPolicy {
-            logout,
-            ..SpValidationPolicy::recommended()
-        })
+        .validation(validation)
         .xml(xml(encryption))
         .build()?,
     ))
@@ -115,6 +113,8 @@ fn idp_with_credentials(
     encryption: XmlEncryptionPolicy,
     credentials: Credentials,
 ) -> Result<Saml<saml_rs::Idp>, SamlError> {
+    let mut validation = IdpValidationPolicy::recommended();
+    validation.logout = logout;
     Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -122,10 +122,7 @@ fn idp_with_credentials(
         )
         .slo_endpoints(slo_endpoints("idp.example.com")?)
         .credentials(credentials)
-        .validation(IdpValidationPolicy {
-            logout,
-            ..IdpValidationPolicy::recommended()
-        })
+        .validation(validation)
         .xml(xml(encryption))
         .build()?,
     ))
@@ -600,21 +597,11 @@ fn unsigned_encrypted_id_stays_unread() -> Result<(), Box<dyn std::error::Error>
 #[test]
 fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut encrypted_id = XmlEncryptionPolicy::default();
+    encrypted_id.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers;
     let parties = parties_with(
-        sp_with(
-            LogoutPolicy::recommended(),
-            XmlEncryptionPolicy {
-                identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
-                ..XmlEncryptionPolicy::default()
-            },
-        )?,
-        idp_with(
-            LogoutPolicy::recommended(),
-            XmlEncryptionPolicy {
-                identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
-                ..XmlEncryptionPolicy::default()
-            },
-        )?,
+        sp_with(LogoutPolicy::recommended(), encrypted_id)?,
+        idp_with(LogoutPolicy::recommended(), encrypted_id)?,
     )?;
     let started_sso = parties
         .sp

@@ -48,11 +48,10 @@ let config = IdpConfig::builder(entity_id)
     .build()?;
 
 // Now: build() returns SamlError::Invalid. Use an NCName.
+let mut templates = TemplatePolicy::default();
+templates.tag_prefix_protocol = "samlp2".into();
 let config = IdpConfig::builder(entity_id, sso)
-    .templates(TemplatePolicy {
-        tag_prefix_protocol: "samlp2".into(),
-        ..TemplatePolicy::default()
-    })
+    .templates(templates)
     .build()?;
 ```
 
@@ -60,11 +59,10 @@ Add an endpoint to every `SpMetadataInput` and `IdpMetadataInput` you pass
 to the generators:
 
 ```rust
-let xml = generate_sp_metadata(&SpMetadataInput {
-    entity_id: "https://sp.example.com/metadata".into(),
-    assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")],
-    ..SpMetadataInput::default()
-})?;
+let mut input = SpMetadataInput::default();
+input.entity_id = "https://sp.example.com/metadata".into();
+input.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+let xml = generate_sp_metadata(&input)?;
 ```
 
 ## 7. Verify signed metadata on import

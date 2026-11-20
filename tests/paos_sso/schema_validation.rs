@@ -10,6 +10,8 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
         Ok(())
     }
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let mut xml = saml_rs::XmlPolicy::default();
+    xml.schema_validator = Some(reject_envelope);
     let rejecting = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -17,10 +19,7 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
         )
         .credentials(credentials())
         .validation(SpValidationPolicy::recommended())
-        .xml(saml_rs::XmlPolicy {
-            schema_validator: Some(reject_envelope),
-            ..saml_rs::XmlPolicy::default()
-        })
+        .xml(xml)
         .build()?,
     );
     let started = sp.start_paos_sso(

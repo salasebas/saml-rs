@@ -26,13 +26,33 @@ the looser rule cannot be applied.
 ## Public enums that can grow
 
 Put `#[non_exhaustive]` on a public enum whose set can grow: errors, reasons,
-bindings, algorithms, and other capability lists. Leave a closed set from the
-standard, such as `TopLevelStatusCode`, exhaustive.
+bindings, algorithms, validation and encryption policies, and other capability
+lists. Leave a closed set from the standard, such as `TopLevelStatusCode`,
+exhaustive.
 
 Also mark each variant with named fields that only this crate builds, so a
 later field is not a breaking change. A variant that a public trait asks
 callers to return, such as `SamlError::ReplayDetected` for `ReplayCache`,
 stays constructible.
+
+## Public structs that can grow
+
+Put `#[non_exhaustive]` on a public struct with public fields whose set can
+grow: policies, limits, options, generation inputs, and results that only this
+crate builds. A caller takes the value from a preset, `Default`, or a
+constructor and assigns the fields it changes, so a later field is not a
+breaking change. A result comes from the operation that returns it.
+
+Each such struct has a public way to get a value: the named presets for a
+validation policy, and `Default` or a constructor for the others.
+
+Fields stay public while the struct guarantees nothing about their values. The
+operation that consumes the struct, such as `build()`, checks them. A struct
+that keeps an invariant itself has private fields and `with_` setters, as
+[Method names](#method-names) describes.
+
+Leave exhaustive a closed shape from the standard with no extension point,
+such as `LocalizedValue`. A new field there is a breaking change.
 
 ## Method names
 

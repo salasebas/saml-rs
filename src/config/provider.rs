@@ -10,7 +10,7 @@ use super::builders::{IdpConfigBuilder, SpConfigBuilder};
 use super::credentials::{Credentials, X509Credential};
 use super::descriptors::ManageNameIdService;
 use super::policies::{
-    AssertionSignaturePolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    assertion_signature_required, authn_request_signature_required, authn_request_signing_enabled,
 };
 
 impl SpConfigBuilder {
@@ -31,14 +31,8 @@ fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
         entity_id: config.entity_id.as_str().to_string(),
         signing_certs: signing_certificates(&config.credentials),
         encrypt_certs: encryption_certificates(&config.credentials),
-        authn_requests_signed: matches!(
-            config.validation.authn_requests,
-            AuthnRequestSigningPolicy::Sign
-        ),
-        want_assertions_signed: matches!(
-            config.validation.assertions,
-            AssertionSignaturePolicy::RequireSigned
-        ),
+        authn_requests_signed: authn_request_signing_enabled(config.validation.authn_requests),
+        want_assertions_signed: assertion_signature_required(config.validation.assertions),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_logout_service: metadata
             .slo_endpoints()
@@ -69,9 +63,8 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
         entity_id: config.entity_id.as_str().to_string(),
         signing_certs: signing_certificates(&config.credentials),
         encrypt_certs: encryption_certificates(&config.credentials),
-        want_authn_requests_signed: matches!(
+        want_authn_requests_signed: authn_request_signature_required(
             config.validation.authn_requests,
-            AuthnRequestValidationPolicy::RequireSigned
         ),
         name_id_format: name_id_format_uris(metadata.name_id_formats()),
         single_sign_on_service: metadata

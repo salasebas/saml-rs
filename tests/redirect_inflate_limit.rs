@@ -7,7 +7,6 @@ use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
-use saml_rs::XmlLimits;
 use saml_rs::{ResourceLimit, SamlError};
 use url::Url;
 
@@ -27,25 +26,17 @@ fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
 }
 
 fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    ServiceProvider::from_config(&config, EntitySetting::default())
 }
 
 fn unsigned_idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-            ..Default::default()
-        },
-        setting,
-    )
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.single_sign_on_service = vec![Endpoint::new(Binding::Redirect, "https://idp/sso")];
+    IdentityProvider::from_config(&config, setting)
 }
 
 #[test]
@@ -178,10 +169,7 @@ fn post_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Post);
     opts.parser_type = Some(ParserType::SamlRequest);
-    opts.xml_limits = XmlLimits {
-        max_bytes: 8,
-        ..Default::default()
-    };
+    opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
         .err()
@@ -206,10 +194,7 @@ fn simplesign_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::e
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::SimpleSign);
     opts.parser_type = Some(ParserType::SamlRequest);
-    opts.xml_limits = XmlLimits {
-        max_bytes: 8,
-        ..Default::default()
-    };
+    opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
         .err()
@@ -236,10 +221,7 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Post);
     opts.parser_type = Some(ParserType::SamlRequest);
-    opts.xml_limits = XmlLimits {
-        max_nodes: 3,
-        ..Default::default()
-    };
+    opts.xml_limits.max_nodes = 3;
 
     let err = flow(&opts, &request)
         .err()

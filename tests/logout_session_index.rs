@@ -13,31 +13,23 @@ use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::SamlError;
 
 fn idp() -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            single_logout_service: vec![
-                Endpoint::new(Binding::Post, "https://idp/slo"),
-                Endpoint::new(Binding::Redirect, "https://idp/slo"),
-                Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
-            ],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
+    config.single_logout_service = vec![
+        Endpoint::new(Binding::Post, "https://idp/slo"),
+        Endpoint::new(Binding::Redirect, "https://idp/slo"),
+        Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
+    ];
+    IdentityProvider::from_config(&config, EntitySetting::default())
 }
 
 fn sp() -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp/slo")];
+    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    ServiceProvider::from_config(&config, EntitySetting::default())
 }
 
 fn user(session_index: Option<&str>) -> User {

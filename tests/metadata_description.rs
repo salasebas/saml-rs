@@ -18,20 +18,20 @@ const IDP_XML: &str = include_str!("fixtures/metadata/description-idp.xml");
 const ERROR_URL: &str = "https://example.com/error?one=1&two=2";
 
 fn organization() -> Organization {
-    Organization {
-        names: vec![
-            LocalizedValue::new("en", "Example & Co"),
-            LocalizedValue::new("es-MX", "Ejemplo"),
-        ],
-        display_names: vec![
-            LocalizedValue::new("en", "Example <SSO>"),
-            LocalizedValue::new("es", "Ejemplo SSO"),
-        ],
-        urls: vec![
-            LocalizedValue::new("en", "https://example.com/?one=1&two=2"),
-            LocalizedValue::new("es", "https://example.com/es"),
-        ],
-    }
+    let mut organization = Organization::default();
+    organization.names = vec![
+        LocalizedValue::new("en", "Example & Co"),
+        LocalizedValue::new("es-MX", "Ejemplo"),
+    ];
+    organization.display_names = vec![
+        LocalizedValue::new("en", "Example <SSO>"),
+        LocalizedValue::new("es", "Ejemplo SSO"),
+    ];
+    organization.urls = vec![
+        LocalizedValue::new("en", "https://example.com/?one=1&two=2"),
+        LocalizedValue::new("es", "https://example.com/es"),
+    ];
+    organization
 }
 
 fn contacts() -> Vec<ContactPerson> {
@@ -58,31 +58,28 @@ fn contacts() -> Vec<ContactPerson> {
 }
 
 fn raw_sp() -> SpMetadataInput {
-    SpMetadataInput {
-        entity_id: "https://sp.example.com/metadata".into(),
-        assertion_consumer_service: vec![Endpoint::new(
-            Binding::Post,
-            "https://sp.example.com/acs",
-        )],
-        organization: Some(organization()),
-        contacts: contacts(),
-        error_url: Some(ERROR_URL.into()),
-        lifetime: Some(MetadataLifetime::CacheDuration(Duration::from_secs(3600))),
-        ..Default::default()
-    }
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.assertion_consumer_service =
+        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+    config.organization = Some(organization());
+    config.contacts = contacts();
+    config.error_url = Some(ERROR_URL.into());
+    config.lifetime = Some(MetadataLifetime::CacheDuration(Duration::from_secs(3600)));
+    config
 }
 
 fn raw_idp() -> IdpMetadataInput {
-    IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")],
-        name_id_format: vec![name_id_format::EMAIL_ADDRESS.into()],
-        organization: Some(organization()),
-        contacts: contacts(),
-        error_url: Some(ERROR_URL.into()),
-        lifetime: Some(MetadataLifetime::CacheDuration(Duration::from_secs(3600))),
-        ..Default::default()
-    }
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.single_sign_on_service =
+        vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")];
+    config.name_id_format = vec![name_id_format::EMAIL_ADDRESS.into()];
+    config.organization = Some(organization());
+    config.contacts = contacts();
+    config.error_url = Some(ERROR_URL.into());
+    config.lifetime = Some(MetadataLifetime::CacheDuration(Duration::from_secs(3600)));
+    config
 }
 
 #[test]
@@ -276,15 +273,14 @@ fn generation_validates_localized_values_contacts_and_error_uris() -> TestResult
         generate_idp_metadata(&cfg),
         Err(SamlError::Invalid(_))
     ));
+    let mut invalid_email = ContactPerson::new(ContactType::Technical);
+    invalid_email.email_addresses = vec!["invalid".into()];
     let config = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
     .validation(SpValidationPolicy::compatibility())
-    .contact(ContactPerson {
-        email_addresses: vec!["invalid".into()],
-        ..ContactPerson::new(ContactType::Technical)
-    })
+    .contact(invalid_email)
     .build();
     assert!(matches!(config, Err(SamlError::Invalid(_))));
     Ok(())
@@ -318,15 +314,11 @@ fn imported_descriptions_use_entity_scope_and_resolved_namespaces() -> TestResul
         metadata.as_metadata().organization()?.map(|org| org.names),
         Some(vec![LocalizedValue::new("en", "Example")])
     );
+    let mut security = ContactPerson::new(ContactType::Security);
+    security.email_addresses = vec!["mailto:security@example.com".into()];
     assert_eq!(
         metadata.as_metadata().contacts()?,
-        vec![
-            ContactPerson {
-                email_addresses: vec!["mailto:security@example.com".into()],
-                ..ContactPerson::new(ContactType::Security)
-            },
-            ContactPerson::new(ContactType::Other)
-        ]
+        vec![security, ContactPerson::new(ContactType::Other)]
     );
     assert_eq!(metadata.as_metadata().metadata_xml(), xml);
     assert_eq!(

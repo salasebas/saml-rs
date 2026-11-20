@@ -15,6 +15,7 @@ use super::algorithms::{
 /// until then. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssertionSignaturePolicy {
     /// Reject an assertion that is not directly signed.
     ///
@@ -45,6 +46,7 @@ pub enum AssertionSignaturePolicy {
 /// let policy = saml_rs::ResponseSignaturePolicy::default();
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ResponseSignaturePolicy {
     /// Accept a CBC `EncryptedAssertion` without a Response signature.
     AllowUnsignedEncryptedCbc,
@@ -127,6 +129,7 @@ pub enum XmlSignatureProfile {
 
 /// Whether an SP signs outgoing AuthnRequests.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthnRequestSigningPolicy {
     /// Sign outgoing AuthnRequests.
     Sign,
@@ -152,6 +155,7 @@ pub enum AuthnRequestSigningPolicy {
 /// let policy = saml_rs::AuthnRequestValidationPolicy::default();
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthnRequestValidationPolicy {
     /// Reject unsigned AuthnRequests.
     RequireSigned,
@@ -165,6 +169,7 @@ pub enum AuthnRequestValidationPolicy {
 
 /// Whether logout messages require signatures.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LogoutSignaturePolicy {
     /// Reject unsigned logout messages.
     #[default]
@@ -187,6 +192,7 @@ pub enum LogoutSignaturePolicy {
 /// let policy = saml_rs::AudienceValidationPolicy::default();
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AudienceValidationPolicy {
     /// Evaluate audience restrictions and reject a bearer assertion that omits one.
     ///
@@ -224,7 +230,20 @@ pub enum NameIdCreationPolicy {
 /// Logout features. [`Self::compatibility`] is the legacy permissive preset.
 /// [`Default`](Default::default) is [`Self::recommended`]. Field classification
 /// is in `docs/conformance/`.
+///
+/// Start from a preset and assign the fields you change. A struct literal
+/// does not compile outside the crate:
+///
+/// ```compile_fail,E0639
+/// use saml_rs::{AudienceValidationPolicy, SpValidationPolicy};
+///
+/// let policy = SpValidationPolicy {
+///     audience: AudienceValidationPolicy::RequireRestriction,
+///     ..SpValidationPolicy::recommended()
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SpValidationPolicy {
     /// Assertion signature requirement.
     pub assertions: AssertionSignaturePolicy,
@@ -255,10 +274,8 @@ impl SpValidationPolicy {
     /// ```
     /// use saml_rs::{AssertionSignaturePolicy, SpValidationPolicy, XmlSignatureProfile};
     ///
-    /// let with_assertion_signature = SpValidationPolicy {
-    ///     assertions: AssertionSignaturePolicy::RequireSigned,
-    ///     ..SpValidationPolicy::recommended()
-    /// };
+    /// let mut with_assertion_signature = SpValidationPolicy::recommended();
+    /// with_assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
     /// assert_eq!(
     ///     with_assertion_signature.xml_signatures,
     ///     XmlSignatureProfile::ExcludeWeakAlgorithms
@@ -303,7 +320,20 @@ impl Default for SpValidationPolicy {
 /// Logout features. [`Self::compatibility`] is the legacy permissive preset.
 /// [`Default`](Default::default) is [`Self::recommended`]. Field classification
 /// is in `docs/conformance/`.
+///
+/// Start from a preset and assign the fields you change. A struct literal
+/// does not compile outside the crate:
+///
+/// ```compile_fail,E0639
+/// use saml_rs::{AuthnRequestValidationPolicy, IdpValidationPolicy};
+///
+/// let policy = IdpValidationPolicy {
+///     authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+///     ..IdpValidationPolicy::recommended()
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct IdpValidationPolicy {
     /// Inbound AuthnRequest signature requirement.
     pub authn_requests: AuthnRequestValidationPolicy,
@@ -357,7 +387,20 @@ impl Default for IdpValidationPolicy {
 /// [`crate::LogoutSigning::FollowLocalPolicy`], `requests` also decides
 /// whether an outbound `LogoutRequest` is signed. See
 /// `docs/conformance/single-logout.md`.
+///
+/// Start from a preset and assign the fields you change. A struct literal
+/// does not compile outside the crate:
+///
+/// ```compile_fail,E0639
+/// use saml_rs::{LogoutPolicy, LogoutSignaturePolicy};
+///
+/// let policy = LogoutPolicy {
+///     responses: LogoutSignaturePolicy::AllowUnsigned,
+///     ..LogoutPolicy::recommended()
+/// };
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LogoutPolicy {
     /// LogoutRequest signature behavior.
     pub requests: LogoutSignaturePolicy,
@@ -398,6 +441,7 @@ impl Default for LogoutPolicy {
 /// `<EncryptedAssertion>` it receives under either value.
 /// [`Self::EncryptAssertions`] also makes it reject a plaintext `<Assertion>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssertionEncryptionPolicy {
     /// Do not encrypt assertions.
     #[default]
@@ -421,6 +465,7 @@ pub enum AssertionEncryptionPolicy {
 /// the `<NameID>` and `<NewID>`, for one `ManageNameIDRequest` over SOAP or
 /// HTTP-Redirect.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum IdentifierEncryptionPolicy {
     /// Do not encrypt identifiers.
     #[default]
@@ -438,6 +483,7 @@ pub enum IdentifierEncryptionPolicy {
 /// response whose assertion `<AttributeStatement>` carries a plaintext
 /// `<Attribute>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AttributeEncryptionPolicy {
     /// Do not encrypt attributes.
     #[default]
@@ -452,6 +498,7 @@ pub enum AttributeEncryptionPolicy {
 /// It applies to every encrypted element the entity receives, such as an
 /// `<EncryptedAssertion>`, `<EncryptedID>`, or `<EncryptedAttribute>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Rsa15KeyTransportPolicy {
     /// Reject an encrypted element whose `<EncryptedKey>` names RSA-v1.5 with
     /// [`SamlError::Unsupported`](crate::SamlError::Unsupported) before any
@@ -470,50 +517,24 @@ pub enum Rsa15KeyTransportPolicy {
 ///
 /// [`Default`](Default::default) encrypts nothing, rejects RSA-v1.5 key
 /// transport, and allows [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK)
-/// units of decryption work.
+/// units of decryption work. Start from it and assign the fields you change.
 ///
 /// # Examples
 ///
-/// Use typed configuration to request encrypted assertions in generated
-/// responses. This only configures policy; actual encryption uses the crate's
-/// XML-Enc backend and deployment credentials.
-///
-/// ```
-/// use saml_rs::{
-///     AssertionEncryptionPolicy, EntityId, IdpConfig, SsoEndpoint, XmlEncryptionPolicy,
-///     XmlPolicy,
-/// };
-///
-/// let xml = XmlPolicy {
-///     encryption: XmlEncryptionPolicy {
-///         assertions: AssertionEncryptionPolicy::EncryptAssertions,
-///         ..XmlEncryptionPolicy::default()
-///     },
-///     ..XmlPolicy::default()
-/// };
-/// let idp_builder = IdpConfig::builder(
-///     EntityId::try_new("https://idp.example.com/metadata")?,
-///     SsoEndpoint::post("https://idp.example.com/sso")?,
-/// )
-/// .xml(xml);
-/// # let _ = idp_builder;
-/// # Ok::<(), saml_rs::SamlError>(())
-/// ```
-///
-/// Each element is selected on its own. Selecting identifier encryption does
-/// not select attribute or assertion encryption:
+/// [`XmlPolicy`] shows how to encrypt assertions. Each element is selected on
+/// its own. Selecting identifier encryption does not select attribute or
+/// assertion encryption:
 ///
 /// ```
 /// use saml_rs::{AttributeEncryptionPolicy, IdentifierEncryptionPolicy, XmlEncryptionPolicy};
 ///
-/// let encryption = XmlEncryptionPolicy {
-///     identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
-///     attributes: AttributeEncryptionPolicy::EncryptAttributes,
-///     ..XmlEncryptionPolicy::default()
-/// };
+/// let mut encryption = XmlEncryptionPolicy::default();
+/// encryption.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers;
+/// encryption.attributes = AttributeEncryptionPolicy::EncryptAttributes;
 /// # let _ = encryption;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct XmlEncryptionPolicy {
     /// Assertion encryption behavior.
     pub assertions: AssertionEncryptionPolicy,
@@ -558,9 +579,15 @@ impl XmlEncryptionPolicy {
         }
     }
 
+    pub(super) fn encrypts_assertions(self) -> bool {
+        match self.assertions {
+            AssertionEncryptionPolicy::EncryptAssertions => true,
+            AssertionEncryptionPolicy::PlaintextAssertions => false,
+        }
+    }
+
     pub(super) fn selects_any_element(self) -> bool {
-        self.assertions == AssertionEncryptionPolicy::EncryptAssertions
-            || self.assertion_elements().is_selected()
+        self.encrypts_assertions() || self.assertion_elements().is_selected()
     }
 
     pub(super) fn assertion_elements(self) -> AssertionElementEncryption {
@@ -583,8 +610,15 @@ pub(crate) struct AssertionElementEncryption {
 
 impl AssertionElementEncryption {
     pub(crate) fn is_selected(self) -> bool {
-        self.identifiers == IdentifierEncryptionPolicy::EncryptIdentifiers
-            || self.attributes == AttributeEncryptionPolicy::EncryptAttributes
+        let identifiers = match self.identifiers {
+            IdentifierEncryptionPolicy::EncryptIdentifiers => true,
+            IdentifierEncryptionPolicy::PlaintextIdentifiers => false,
+        };
+        let attributes = match self.attributes {
+            AttributeEncryptionPolicy::EncryptAttributes => true,
+            AttributeEncryptionPolicy::PlaintextAttributes => false,
+        };
+        identifiers || attributes
     }
 }
 
@@ -603,6 +637,9 @@ pub(crate) enum ReceivedEncryptedElements {
 
 /// XML parser, redirect decompression, and XML encryption policy.
 ///
+/// Start from [`Default`](Default::default) and assign the fields you change,
+/// including nested ones such as `encryption.assertions`.
+///
 /// Clock skew tolerance is not part of the config. Set it per call with
 /// [`SamlValidationContext::with_clock_skew`](crate::SamlValidationContext::with_clock_skew).
 ///
@@ -615,23 +652,17 @@ pub(crate) enum ReceivedEncryptedElements {
 /// Encrypt assertions and keep the other defaults:
 ///
 /// ```
-/// use saml_rs::{
-///     AcsEndpoint, AssertionEncryptionPolicy, EntityId, SpConfig, XmlEncryptionPolicy, XmlPolicy,
-/// };
+/// use saml_rs::{AcsEndpoint, AssertionEncryptionPolicy, EntityId, SpConfig, XmlPolicy};
 ///
-/// let xml = XmlPolicy {
-///     encryption: XmlEncryptionPolicy {
-///         assertions: AssertionEncryptionPolicy::EncryptAssertions,
-///         ..XmlEncryptionPolicy::default()
-///     },
-///     ..XmlPolicy::default()
-/// };
+/// let mut xml = XmlPolicy::default();
+/// xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 /// let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
 ///     .xml(xml);
 /// # let _ = sp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct XmlPolicy {
     /// Optional schema validation for received XML, including decrypted messages.
     pub schema_validator: Option<crate::SchemaValidator>,
@@ -673,7 +704,10 @@ impl Default for XmlPolicy {
 }
 
 /// Algorithm choices used by outgoing SAML messages.
+///
+/// Start from [`Default`](Default::default) and assign the fields you change.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AlgorithmPolicy {
     /// Signature algorithm URI.
     pub signature: SignatureAlgorithm,
@@ -713,11 +747,14 @@ impl Default for AlgorithmPolicy {
 /// Logout templates, XML tag prefixes, and embedded-signature placement that
 /// both roles use.
 ///
+/// Start from [`Default`](Default::default) and assign the fields you change.
+///
 /// The SSO templates belong to one role each: set them with
 /// [`SpConfigBuilder::authn_request_template`](crate::SpConfigBuilder::authn_request_template)
 /// and
 /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct TemplatePolicy {
     /// Prefix of the generated protocol-namespace elements, `samlp` by
     /// default.
@@ -795,30 +832,49 @@ impl Default for TemplatePolicy {
     }
 }
 pub(super) fn authn_request_signing_enabled(policy: AuthnRequestSigningPolicy) -> bool {
-    matches!(policy, AuthnRequestSigningPolicy::Sign)
+    match policy {
+        AuthnRequestSigningPolicy::Sign => true,
+        AuthnRequestSigningPolicy::DoNotSign => false,
+    }
 }
 
 pub(super) fn authn_request_signature_required(policy: AuthnRequestValidationPolicy) -> bool {
-    matches!(policy, AuthnRequestValidationPolicy::RequireSigned)
+    match policy {
+        AuthnRequestValidationPolicy::RequireSigned => true,
+        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
+        | AuthnRequestValidationPolicy::AllowUnsigned => false,
+    }
 }
 
 pub(super) fn verify_present_authn_request_signature(policy: AuthnRequestValidationPolicy) -> bool {
-    matches!(
-        policy,
-        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
-    )
+    match policy {
+        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent => true,
+        AuthnRequestValidationPolicy::RequireSigned
+        | AuthnRequestValidationPolicy::AllowUnsigned => false,
+    }
 }
 
 pub(super) fn assertion_signature_required(policy: AssertionSignaturePolicy) -> bool {
-    matches!(policy, AssertionSignaturePolicy::RequireSigned)
+    match policy {
+        AssertionSignaturePolicy::RequireSigned => true,
+        AssertionSignaturePolicy::AllowUnsigned => false,
+    }
 }
 
 pub(super) fn response_signature_required(policy: ResponseSignaturePolicy) -> bool {
-    matches!(policy, ResponseSignaturePolicy::RequireSigned)
+    match policy {
+        ResponseSignaturePolicy::RequireSigned => true,
+        ResponseSignaturePolicy::RequireForEncryptedCbc
+        | ResponseSignaturePolicy::AllowUnsignedEncryptedCbc => false,
+    }
 }
 
 pub(super) fn encrypted_cbc_response_signature_required(policy: ResponseSignaturePolicy) -> bool {
-    matches!(policy, ResponseSignaturePolicy::RequireForEncryptedCbc)
+    match policy {
+        ResponseSignaturePolicy::RequireForEncryptedCbc => true,
+        ResponseSignaturePolicy::RequireSigned
+        | ResponseSignaturePolicy::AllowUnsignedEncryptedCbc => false,
+    }
 }
 
 pub(super) fn logout_signature_required(policy: LogoutSignaturePolicy) -> bool {
@@ -832,13 +888,18 @@ pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {
 }
 
 pub(super) fn audience_validation_enabled(policy: AudienceValidationPolicy) -> bool {
-    matches!(
-        policy,
+    match policy {
         AudienceValidationPolicy::RequireRestriction
-            | AudienceValidationPolicy::EvaluatePresentRestrictions
-    )
+        | AudienceValidationPolicy::EvaluatePresentRestrictions => true,
+        AudienceValidationPolicy::Skip => false,
+    }
 }
 
 pub(super) fn audience_restriction_required(policy: AudienceValidationPolicy) -> bool {
-    matches!(policy, AudienceValidationPolicy::RequireRestriction)
+    match policy {
+        AudienceValidationPolicy::RequireRestriction => true,
+        AudienceValidationPolicy::EvaluatePresentRestrictions | AudienceValidationPolicy::Skip => {
+            false
+        }
+    }
 }

@@ -893,6 +893,9 @@ fn a_request_without_one_identifier_and_one_change_is_rejected() -> TestResult {
 
 #[test]
 fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
+    let mut xml = saml_rs::XmlPolicy::default();
+    xml.limits.max_depth = 6;
+    xml.limits.max_attribute_value_bytes = 64 * 1024;
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -902,14 +905,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
         .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
             IDP_NIM_URL,
         )?))
-        .xml(saml_rs::XmlPolicy {
-            limits: saml_rs::XmlLimits {
-                max_depth: 6,
-                max_attribute_value_bytes: 64 * 1024,
-                ..saml_rs::XmlLimits::default()
-            },
-            ..saml_rs::XmlPolicy::default()
-        })
+        .xml(xml)
         .validation(saml_rs::IdpValidationPolicy::compatibility())
         .build()?,
     );

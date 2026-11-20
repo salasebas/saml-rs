@@ -52,17 +52,16 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
+    let mut validation = SpValidationPolicy::recommended();
+    validation.assertions = AssertionSignaturePolicy::RequireSigned;
+    validation.audience = AudienceValidationPolicy::RequireRestriction;
     Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
-            audience: AudienceValidationPolicy::RequireRestriction,
-            ..SpValidationPolicy::recommended()
-        })
+        .validation(validation)
         .build()?,
     ))
 }
@@ -1077,14 +1076,12 @@ fn metadata_does_not_advertise_a_name_id_format_that_is_not_an_absolute_uri(
             NameIdFormat::EmailAddress.as_uri().to_string(),
             format.to_string(),
         ];
-        expect_name_id_format_error(generate_sp_metadata(&SpMetadataInput {
-            name_id_format: formats.clone(),
-            ..raw_sp_metadata_config(SP_ENTITY_ID)
-        }))?;
-        expect_name_id_format_error(generate_idp_metadata(&IdpMetadataInput {
-            name_id_format: formats,
-            ..raw_idp_metadata_config(IDP_ENTITY_ID)
-        }))?;
+        let mut sp_config = raw_sp_metadata_config(SP_ENTITY_ID);
+        sp_config.name_id_format = formats.clone();
+        expect_name_id_format_error(generate_sp_metadata(&sp_config))?;
+        let mut idp_config = raw_idp_metadata_config(IDP_ENTITY_ID);
+        idp_config.name_id_format = formats;
+        expect_name_id_format_error(generate_idp_metadata(&idp_config))?;
     }
     Ok(())
 }
@@ -1110,19 +1107,17 @@ fn metadata_is_not_generated_for_an_entity_id_that_is_not_a_uri_of_at_most_1024_
 }
 
 fn raw_sp_metadata_config(entity_id: &str) -> SpMetadataInput {
-    SpMetadataInput {
-        entity_id: entity_id.into(),
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, SP_ACS)],
-        ..SpMetadataInput::default()
-    }
+    let mut config = SpMetadataInput::default();
+    config.entity_id = entity_id.into();
+    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, SP_ACS)];
+    config
 }
 
 fn raw_idp_metadata_config(entity_id: &str) -> IdpMetadataInput {
-    IdpMetadataInput {
-        entity_id: entity_id.into(),
-        single_sign_on_service: vec![Endpoint::new(Binding::Post, IDP_SSO_POST)],
-        ..IdpMetadataInput::default()
-    }
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = entity_id.into();
+    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, IDP_SSO_POST)];
+    config
 }
 
 #[test]

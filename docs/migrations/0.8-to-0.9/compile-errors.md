@@ -35,8 +35,11 @@
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
 | `TemplatePolicy::relay_state` or `tag_prefix_encrypted_assertion` | Removed | [Typed config](config.md#send-relaystate-per-request) |
 | `TemplatePolicy::login_request_template` or `login_response_template` | Moved to `SpConfigBuilder::authn_request_template` and `IdpConfigBuilder::sso_response_template` | [Typed config](config.md#set-sso-templates-on-the-roles-builder) |
+| `E0639` on a struct literal of `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy`, `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy`, `XmlLimits`, `SignatureConfig`, `Organization`, `ContactPerson`, `Endpoint`, `SpMetadataInput`, or `IdpMetadataInput` | Non-exhaustive; assign the fields on a preset, `Default`, or constructor | [Typed config](config.md#assign-fields-instead-of-writing-a-struct-literal) |
+| `E0638` on a struct pattern of one of those structs, `Started`, or `StartedPaosSso`, or `E0639` on a struct literal of a started flow | Non-exhaustive; end the pattern with `..`, and keep the started flow the operation returned | [Typed config](config.md#destructure-with-a-rest-pattern) |
+| `E0004` on a `match` over a signature, audience, or encryption policy enum | Non-exhaustive; add a `_` arm | [Typed config](config.md#add-a-wildcard-arm-to-a-match-on-a-policy-enum) |
 | `context::set_schema_validator` | Configure `XmlPolicy::schema_validator` | [9.1](xml-policy.md#91-configure-each-local-role) |
-| A full struct literal of `XmlPolicy` | Has a new `schema_validator` field | [9.1](xml-policy.md#91-configure-each-local-role) |
+| A full struct literal of `XmlPolicy` | Has a new `schema_validator` field; assign it on `XmlPolicy::default()` | [9.1](xml-policy.md#91-configure-each-local-role) |
 | `Metadata::parse` and its variants, raw metadata `Deref`, generation config names, signature evidence names, raw `get_*` and signing flag getters, `x509_certificates()`, `export_metadata()`, descriptor `metadata()`, `metadata::{sp,idp,generate}` paths, `ArtifactResolutionEndpoint`, or `Metadata::verify_signature*` | Parser arguments, getter names and types, endpoint publishing, and public paths changed; obsolete methods removed | [Metadata API](metadata-api.md) |
 | `AuthnRequestAgePolicy` or `ManageNameIdRequestAgePolicy` | Both become `RequestAgePolicy` | [Request age policy](logout-validation-replay.md#use-one-request-age-policy-type) |
 | `ClockSkew::default()`, the component setters, or `as_millis()` | Select skew explicitly and use named getters | [Clock skew](logout-validation-replay.md#select-and-read-clock-skew-explicitly) |
@@ -192,10 +195,8 @@ Code that builds `SpValidationPolicy` or `IdpValidationPolicy` from
 **Upgrade:** take the field from the preset you start from:
 
 ```rust
-let policy = SpValidationPolicy {
-    xml_signatures: SpValidationPolicy::recommended().xml_signatures,
-    ..current_policy
-};
+let mut policy = current_policy;
+policy.xml_signatures = SpValidationPolicy::recommended().xml_signatures;
 ```
 
 To keep the 0.8 behavior, name the variant from the `Default` in 0.8 column
@@ -295,15 +296,14 @@ let sp = Saml::sp(config)?;
 After:
 
 ```rust
+let mut xml = XmlPolicy::default();
+xml.redirect_inflate_max_bytes = 256 * 1024;
 let config = SpConfig::builder(
     EntityId::try_new("https://sp.example.com/metadata")?,
     AcsEndpoint::post("https://sp.example.com/acs")?,
 )
 .name_id_format(NameIdFormat::EmailAddress)
-.xml(XmlPolicy {
-    redirect_inflate_max_bytes: 256 * 1024,
-    ..XmlPolicy::default()
-})
+.xml(xml)
 .build()?;
 let sp = Saml::sp(config);
 ```
@@ -647,8 +647,8 @@ the deprecated raw functions, reached through `raw_service_provider` or
 sets clock skew for a typed operation. The raw `ServiceProvider` and
 `IdentityProvider` that a typed facade wraps check time windows with no drift.
 
-**Upgrade:** delete the field from the `XmlPolicy` literal. To keep the
-tolerance it named, pass the same values to every validation context.
+**Upgrade:** stop setting `clock_drifts`. To keep the tolerance it named, pass
+the same values to every validation context.
 `SamlValidationContext::new` starts at five minutes on each side:
 
 ```rust

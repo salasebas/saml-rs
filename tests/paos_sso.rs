@@ -183,14 +183,13 @@ fn child<'a, 'input>(node: Node<'a, 'input>, name: &str) -> Option<Node<'a, 'inp
 
 #[test]
 fn enhanced_client_completes_paos_login() -> Result<(), Box<dyn std::error::Error>> {
+    let mut algorithms = AlgorithmPolicy::default();
+    algorithms.signed_reference_transforms = vec![
+        TransformAlgorithm::EnvelopedSignature,
+        TransformAlgorithm::CanonicalXml,
+    ];
     let (sp, idp, sp_descriptor, idp_descriptor) =
-        parties_with(idp_builder()?.algorithms(AlgorithmPolicy {
-            signed_reference_transforms: vec![
-                TransformAlgorithm::EnvelopedSignature,
-                TransformAlgorithm::CanonicalXml,
-            ],
-            ..AlgorithmPolicy::default()
-        }))?;
+        parties_with(idp_builder()?.algorithms(algorithms))?;
     check_paos_client_headers(PAOS_MEDIA_TYPE, PAOS_HEADER)?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
@@ -670,22 +669,15 @@ fn response_name_id_format_that_is_not_an_absolute_uri_is_not_sent(
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> {
-    let encryption = saml_rs::XmlPolicy {
-        encryption: saml_rs::XmlEncryptionPolicy {
-            assertions: saml_rs::AssertionEncryptionPolicy::EncryptAssertions,
-            ..saml_rs::XmlEncryptionPolicy::default()
-        },
-        ..saml_rs::XmlPolicy::default()
-    };
+    let mut encryption = saml_rs::XmlPolicy::default();
+    encryption.encryption.assertions = saml_rs::AssertionEncryptionPolicy::EncryptAssertions;
     let encrypted_credentials =
         credentials().with_decryption_credential(saml_rs::X509Credential::new(
             saml_rs::CertificatePem::new(CERT),
             saml_rs::PrivateKeyPem::new(PRIVKEY),
         ));
-    let sp_validation = SpValidationPolicy {
-        assertions: saml_rs::AssertionSignaturePolicy::RequireSigned,
-        ..SpValidationPolicy::recommended()
-    };
+    let mut sp_validation = SpValidationPolicy::recommended();
+    sp_validation.assertions = saml_rs::AssertionSignaturePolicy::RequireSigned;
     let sp = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
