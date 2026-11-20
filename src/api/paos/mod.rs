@@ -181,7 +181,13 @@ impl PendingPaosSso {
 }
 
 /// Stored correlation fields for [`PendingPaosSso`].
+///
+/// Build one with [`Self::new`], or take one from [`PendingPaosSso::snapshot`].
+/// The optional fields are public: assign them directly. The struct is
+/// non-exhaustive, so a later release can add an optional field without
+/// breaking your code.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PendingPaosSsoSnapshot {
     /// AuthnRequest ID.
     pub request_id: String,
@@ -192,6 +198,27 @@ pub struct PendingPaosSsoSnapshot {
     pub idp_entity_id: String,
     /// Assertion consumer URL placed on the AuthnRequest.
     pub acs_url: String,
+}
+
+impl PendingPaosSsoSnapshot {
+    /// Build a snapshot from the AuthnRequest ID, the identity-provider entity
+    /// ID, and the assertion consumer URL.
+    ///
+    /// `relay_state` starts as `None`. Assign it to match the request. `new`
+    /// does not check the values. [`PendingPaosSso::from_snapshot`] checks
+    /// them.
+    pub fn new(
+        request_id: impl Into<String>,
+        idp_entity_id: impl Into<String>,
+        acs_url: impl Into<String>,
+    ) -> Self {
+        Self {
+            request_id: request_id.into(),
+            relay_state: None,
+            idp_entity_id: idp_entity_id.into(),
+            acs_url: acs_url.into(),
+        }
+    }
 }
 
 /// PAOS login the service provider has handed to the enhanced client.

@@ -89,17 +89,30 @@ let options = match request.relay_state() {
 
 ## Store pending state with the snapshot for its message
 
+**Affects:** callers that store pending state between the start and the finish
+of a request, and callers that build a `PendingPaosSsoSnapshot`.
+
 `PendingSnapshot<Message>` and its constructors `authn_request`,
 `logout_request`, and `manage_name_id_request` are removed. Each pending type
-has its own snapshot, a plain struct with public fields:
+has its own snapshot:
 
 - `PendingAuthnRequest::snapshot` returns `PendingAuthnRequestSnapshot`.
 - `PendingLogoutRequest::snapshot` returns `PendingLogoutRequestSnapshot`.
 - `PendingManageNameIdRequest::snapshot` returns
   `PendingManageNameIdRequestSnapshot`.
 
-Build a snapshot from stored values with a struct literal, then call
-`from_snapshot`.
+The snapshot structs, `PendingPaosSsoSnapshot` included, are non-exhaustive,
+so a struct literal of one does not compile. Build a snapshot from stored
+values with `new`, which takes the required fields. Assign the optional
+fields, then call `from_snapshot`. A pattern that destructures a snapshot
+ends with `..`.
+
+| Snapshot | `new` takes | You assign |
+| --- | --- | --- |
+| `PendingAuthnRequestSnapshot` | `request_id`, `idp_entity_id`, `acs_binding`, `acs_url` | `relay_state`, `acs_index`, `acs_is_default` |
+| `PendingLogoutRequestSnapshot` | `request_id`, `peer_entity_id`, `request_binding` | `relay_state`, `not_on_or_after` |
+| `PendingManageNameIdRequestSnapshot` | `request_id`, `peer_entity_id` | `relay_state` |
+| `PendingPaosSsoSnapshot` | `request_id`, `idp_entity_id`, `acs_url` | `relay_state` |
 
 Before the upgrade, a constructor filled part of the snapshot and you assigned
 the rest.
@@ -118,22 +131,24 @@ snapshot.acs_is_default = row.acs_is_default;
 let pending = Pending::<AuthnRequest>::from_snapshot(snapshot)?;
 ```
 
-After the upgrade, write the snapshot as one literal.
+After the upgrade, build the snapshot with `new` and assign the optional
+fields.
 
 ```rust
 # use saml_rs::{PendingAuthnRequest, PendingAuthnRequestSnapshot, SamlError};
 # struct Row { request_id: String, relay_state: Option<String>, idp_entity_id: String,
 #     acs_binding: String, acs_url: String, acs_index: Option<u16>, acs_is_default: bool }
 # fn restore(row: Row) -> Result<PendingAuthnRequest, SamlError> {
-let pending = PendingAuthnRequest::from_snapshot(PendingAuthnRequestSnapshot {
-    request_id: row.request_id,
-    relay_state: row.relay_state,
-    idp_entity_id: row.idp_entity_id,
-    acs_binding: row.acs_binding,
-    acs_url: row.acs_url,
-    acs_index: row.acs_index,
-    acs_is_default: row.acs_is_default,
-})?;
+let mut snapshot = PendingAuthnRequestSnapshot::new(
+    row.request_id,
+    row.idp_entity_id,
+    row.acs_binding,
+    row.acs_url,
+);
+snapshot.relay_state = row.relay_state;
+snapshot.acs_index = row.acs_index;
+snapshot.acs_is_default = row.acs_is_default;
+let pending = PendingAuthnRequest::from_snapshot(snapshot)?;
 # Ok(pending)
 # }
 ```
@@ -166,7 +181,10 @@ binding URN. A SOAP logout snapshot with RelayState returns
 `SamlError::ProtocolProfile`, because a SOAP request carries none.
 
 `PendingPaosSsoSnapshot` keeps its field names. Its `relay_state` is an
-`Option<String>`.
+`Option<String>`. Replace a 0.8 struct literal of it with
+`PendingPaosSsoSnapshot::new(request_id, idp_entity_id, acs_url)`, then
+assign `relay_state`. Add `..` to a pattern that destructures it, such as
+`let PendingPaosSsoSnapshot { request_id, relay_state, .. } = snapshot;`.
 
 ## Read pending state through one accessor each
 
