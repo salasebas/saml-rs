@@ -20,7 +20,7 @@ include = [
 
 [package.metadata.docs.rs]
 no-default-features = true
-features = ["crypto-bergshamra"]
+features = ["crypto-bergshamra", "serde"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
@@ -36,6 +36,7 @@ crypto-fips = ["saml-rs/crypto-fips"]
 crypto-legacy-algorithms = ["saml-rs/crypto-legacy-algorithms"]
 crypto-post-quantum = ["saml-rs/crypto-post-quantum"]
 crypto-pkcs11 = ["saml-rs/crypto-pkcs11"]
+serde = ["saml-rs/serde"]
 
 [dependencies]
 saml-rs = { path = "../..", version = "0.8.0", default-features = false }
