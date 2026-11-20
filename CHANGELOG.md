@@ -9,6 +9,55 @@ Entries before the rebrand use the package names that were current at the time.
 
 ## Unreleased
 
+## [0.9.0](https://github.com/salasebas/saml-rs/compare/v0.8.0...v0.9.0) - 2026-11-20
+
+### Added
+
+- *(crypto)* deprecate the signature verifiers that accept unsigned input as Ok ([#638](https://github.com/salasebas/saml-rs/pull/638))
+- *(raw)* deprecate the raw message functions for removal in the next minor ([#619](https://github.com/salasebas/saml-rs/pull/619))
+- *(crypto)* deprecate the hidden crypto and DOM helpers and move their tests into the crate ([#630](https://github.com/salasebas/saml-rs/pull/630))
+
+### Fixed
+
+- *(idp)* write an SSO error Response when a response template is set ([#690](https://github.com/salasebas/saml-rs/pull/690))
+- *(metadata)* [**breaking**] normalize formats and make metadata access explicit ([#644](https://github.com/salasebas/saml-rs/pull/644))
+- *(xml)* [**breaking**] isolate schema validation and cover inbound XML ([#642](https://github.com/salasebas/saml-rs/pull/642))
+- *(metadata)* [**breaking**] preserve configured groups in custom element orders ([#641](https://github.com/salasebas/saml-rs/pull/641))
+- *(ci)* verify the declared MSRV with its actual toolchain ([#640](https://github.com/salasebas/saml-rs/pull/640))
+- *(idp)* accept a signed PAOS AuthnRequest without Destination under every policy ([#639](https://github.com/salasebas/saml-rs/pull/639))
+- *(config)* [**breaking**] make build() catch every metadata error and require SSO/ACS endpoints ([#637](https://github.com/salasebas/saml-rs/pull/637))
+- *(sp)* [**breaking**] reject an SSO response with an Attribute that has no Name ([#636](https://github.com/salasebas/saml-rs/pull/636))
+- *(logout)* check the outbound LogoutResponse status in the profile validator ([#633](https://github.com/salasebas/saml-rs/pull/633))
+- *(xml)* keep source offsets when input starts with a UTF-8 BOM ([#635](https://github.com/salasebas/saml-rs/pull/635))
+- *(idp)* [**breaking**] reject a template login response attribute with no value ([#634](https://github.com/salasebas/saml-rs/pull/634))
+- *(config)* [**breaking**] remove XmlPolicy::clock_drifts, which typed flows silently ignored ([#632](https://github.com/salasebas/saml-rs/pull/632))
+- *(config)* [**breaking**] remove Default from security policy enums ([#614](https://github.com/salasebas/saml-rs/pull/614))
+
+### Other
+
+- *(api)* [**breaking**] stop answering Success by default in logout and name identifier management ([#686](https://github.com/salasebas/saml-rs/pull/686))
+- *(api)* [**breaking**] report an SSO failure without a NameId and share one outcome type with PAOS ([#685](https://github.com/salasebas/saml-rs/pull/685))
+- *(api)* [**breaking**] set each SSO template on the builder of the role that renders it ([#683](https://github.com/salasebas/saml-rs/pull/683))
+- *(api)* [**breaking**] give each typed operation option one name and drop PAOS arguments that carried no data
+- *(api)* [**breaking**] send SOAP headers as one list and keep resolved artifacts in the shared replay cache ([#678](https://github.com/salasebas/saml-rs/pull/678))
+- *(api)* [**breaking**] keep SSO audiences grouped by restriction and name accessors for what they return ([#677](https://github.com/salasebas/saml-rs/pull/677))
+- *(api)* [**breaking**] issue SSO responses from a NameId and remove misleading SSO result APIs ([#669](https://github.com/salasebas/saml-rs/pull/669))
+- *(config)* [**breaking**] catch config mistakes at compile time and stop sending an unrecorded RelayState ([#674](https://github.com/salasebas/saml-rs/pull/674))
+- *(browser)* [**breaking**] drop the turbofish from received messages and rename BrowserInput to Inbound ([#673](https://github.com/salasebas/saml-rs/pull/673))
+- *(browser)* [**breaking**] name pending accessors for the value they return ([#671](https://github.com/salasebas/saml-rs/pull/671))
+- *(browser)* [**breaking**] simplify RelayState and pending state, and make respond_sso echo RelayState ([#670](https://github.com/salasebas/saml-rs/pull/670))
+- replace stale design records with rules that state their reason ([#667](https://github.com/salasebas/saml-rs/pull/667))
+- *(error)* [**breaking**] make SamlError matchable and keep error sources ([#646](https://github.com/salasebas/saml-rs/pull/646))
+- organize upgrade guides by version and topic ([#645](https://github.com/salasebas/saml-rs/pull/645))
+- *(api)* [**breaking**] simplify logout completion, validation and replay ([#643](https://github.com/salasebas/saml-rs/pull/643))
+- *(api)* [**breaking**] name relaxed options for what they allow ([#617](https://github.com/salasebas/saml-rs/pull/617))
+- *(raw)* [**breaking**] keep one public path per raw item ([#618](https://github.com/salasebas/saml-rs/pull/618))
+- *(config)* [**breaking**] make a built config valid by construction ([#620](https://github.com/salasebas/saml-rs/pull/620))
+- *(error)* [**breaking**] delete compatibility SamlError variants ([#615](https://github.com/salasebas/saml-rs/pull/615))
+- *(deps)* bump uuid ([#627](https://github.com/salasebas/saml-rs/pull/627))
+- *(api)* [**breaking**] give hidden public items a documented path ([#621](https://github.com/salasebas/saml-rs/pull/621))
+- *(config)* [**breaking**] bind every peer descriptor to an expected entity ID and hide secret accessors ([#616](https://github.com/salasebas/saml-rs/pull/616))
+
 ## [0.8.0](https://github.com/salasebas/saml-rs/compare/v0.7.0...v0.8.0) - 2026-11-14
 
 ### Added
