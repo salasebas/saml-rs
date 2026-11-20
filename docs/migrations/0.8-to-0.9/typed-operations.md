@@ -45,8 +45,11 @@ The `SamlError::ProtocolProfile` that an `http` peer endpoint returns now names
 that took these options.
 
 **Now:** each type has `new()` and a `Default` that agrees with it, with the
-defaults `redirect()` had. The operation chooses the binding:
-`start_name_id_management` sends over SOAP, and
+defaults `redirect()` had. The one exception is the response status:
+`RespondNameIdManagement` no longer sets it, as
+[Pass the response status to `respond_slo` and `respond_name_id_management_redirect`](#pass-the-response-status-to-respond_slo-and-respond_name_id_management_redirect)
+shows. `StartNameIdManagement` works on both bindings, and the operation
+chooses the binding: `start_name_id_management` sends over SOAP, and
 `start_name_id_management_redirect` sends over HTTP-Redirect.
 
 **Upgrade:** replace `::redirect()` with `::new()`.
@@ -69,29 +72,27 @@ let started = sp.start_name_id_management_redirect(
 )?;
 ```
 
-## Pass options to the SOAP name identifier management operations
+## Pass `StartNameIdManagement` to `start_name_id_management`
 
-**Affects:** identity providers that call `Saml<Idp>::start_name_id_management`
-or `Saml<Idp>::respond_name_id_management`.
+**Affects:** identity providers that call `Saml<Idp>::start_name_id_management`.
 
-**Before:** `start_name_id_management` took an `IdentifierEncryptionPolicy`,
-and `respond_name_id_management` took a `&Status`.
+**Before:** `start_name_id_management` took an `IdentifierEncryptionPolicy`.
 
-**Now:** they take `StartNameIdManagement` and `RespondNameIdManagement`, the
-options of the HTTP-Redirect operations:
+**Now:** it takes `StartNameIdManagement`, the options of
+`start_name_id_management_redirect`:
 
 - `StartNameIdManagement::new()` sends `NameID` and `NewID` in plaintext, as
   `IdentifierEncryptionPolicy::PlaintextIdentifiers` did. To encrypt them,
   call `identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers)`.
-- `RespondNameIdManagement::new()` answers with top-level `Success`, as
-  `&Status::success()` did. To answer with another status, call `status`.
 - A SOAP request carries no RelayState. `start_name_id_management` returns
   `SamlError::ProtocolProfile` when `StartNameIdManagement::relay_state` is
   set, as `start_slo` does for `StartSlo::soap()`.
-- `allow_http()` has no effect over SOAP. The deployment sends the request and
-  returns the response itself.
+- `StartNameIdManagement::allow_http()` has no effect over SOAP. The
+  deployment sends the request itself.
 
-`receive_name_id_management` is unchanged.
+`receive_name_id_management` and `respond_name_id_management` take the same
+arguments as before. [Match `NameIdManagementReceipt`](#match-nameidmanagementreceipt)
+covers the renamed return type of `receive_name_id_management`.
 
 **Upgrade:**
 
@@ -104,7 +105,6 @@ let started = idp.start_name_id_management(
 	IdentifierEncryptionPolicy::EncryptIdentifiers,
 	SoapChannel::mutually_authenticated_confidential(),
 )?;
-let response = idp.respond_name_id_management(&sp, &request, &Status::success())?;
 
 // After
 let started = idp.start_name_id_management(
@@ -115,11 +115,95 @@ let started = idp.start_name_id_management(
 		.identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers),
 	SoapChannel::mutually_authenticated_confidential(),
 )?;
-let response = idp.respond_name_id_management(&sp, &request, RespondNameIdManagement::new())?;
 ```
 
-For an error status, pass
-`RespondNameIdManagement::new().status(Status::requester())`.
+## Pass the response status to `respond_slo` and `respond_name_id_management_redirect`
+
+**Affects:** callers of `respond_slo` or `respond_name_id_management_redirect`
+on `Saml<Sp>` or `Saml<Idp>`.
+
+**Before:** `RespondSlo::status` and `RespondNameIdManagement::status` set the
+response status. A response built without the setter reported top-level
+`Success`, whether or not the logout or the change had happened.
+
+**Now:** both setters are removed. `respond_slo` and
+`respond_name_id_management_redirect` take a `&Status` argument after the
+request, and the options keep only delivery choices. There is no default
+status, so a call that set none must now pass the outcome. `Status::success()`
+is the outcome only when it is true:
+
+- A service provider answering `respond_slo` passes `Status::success()` after
+  it invalidates the sessions the request names that the identity provider's
+  assertions established.
+- An identity provider answering `respond_slo` passes `Status::success()`
+  after it ends its own session with the principal. If another session
+  participant did not confirm its logout, add
+  `SubordinateStatusCode::partial_logout()` with `Status::with_subordinate`.
+- A provider answering `respond_name_id_management_redirect` passes
+  `Status::success()` after it applies the change. For an identifier it does
+  not recognize, it passes `Status::requester()` or `Status::responder()`,
+  optionally with `SubordinateStatusCode::unknown_principal()`.
+
+In every other case, pass an error status. A logout-response template still
+substitutes only the top-level code: `respond_slo` rejects a subordinate code
+in `status` when a template is set.
+
+**Upgrade:** move the status from the options to the argument. Where the call
+set no status, pass the status that reports what happened.
+
+A logout answered without a status:
+
+```rust,ignore
+// Before
+let response = idp.respond_slo(&sp, &request, RespondSlo::post())?;
+
+// After
+let response = idp.respond_slo(&sp, &request, &Status::success(), RespondSlo::post())?;
+```
+
+A logout answered with an error status:
+
+```rust,ignore
+// Before
+let response = sp.respond_slo(
+	&idp,
+	&request,
+	RespondSlo::redirect().status(Status::responder()),
+)?;
+
+// After
+let response = sp.respond_slo(&idp, &request, &Status::responder(), RespondSlo::redirect())?;
+```
+
+Name identifier management over HTTP-Redirect. The 0.8 options were built
+with `RespondNameIdManagement::redirect()`, which is now
+`RespondNameIdManagement::new()`, as
+[Build name identifier management options with `new`](#build-name-identifier-management-options-with-new)
+shows:
+
+```rust,ignore
+// Before
+let response = sp.respond_name_id_management_redirect(
+	&idp,
+	&request,
+	RespondNameIdManagement::redirect(),
+)?;
+
+// After
+let status = if !recognizes(request.message().name_id()) {
+	Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal())
+} else if apply(request.message().change()).is_ok() {
+	Status::success()
+} else {
+	Status::responder()
+};
+let response = sp.respond_name_id_management_redirect(
+	&idp,
+	&request,
+	&status,
+	RespondNameIdManagement::new(),
+)?;
+```
 
 ## Match `NameIdManagementReceipt`
 

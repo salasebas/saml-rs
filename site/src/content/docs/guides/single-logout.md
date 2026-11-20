@@ -39,7 +39,10 @@ let status = completed.response().status();
 ## Identity provider
 
 1. Call `receive_slo` with the browser fields from the `LogoutRequest`.
-2. Call `respond_slo`. Typed `respond_slo` always signs the response.
+2. End the principal's session at the identity provider.
+3. Call `respond_slo` with the outcome as its `status` argument. Typed `respond_slo` always signs the response.
+
+Pass `Status::success()` after the identity provider ends its own session with the principal. If another session participant did not confirm its logout, add `SubordinateStatusCode::partial_logout()` with `Status::with_subordinate`. If the session could not be ended, pass an error status such as `Status::responder()`. saml-rs tracks no sessions, so `respond_slo` has no default status.
 
 The response carries the exact `RelayState` that arrived with the request. It may use another front-channel binding than the request; the service provider's `finish_slo` accepts any front-channel binding its metadata publishes.
 
@@ -49,7 +52,11 @@ let logout_request = idp.receive_slo(
     Inbound::post(request_fields),
     validation,
 )?;
-let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::post())?;
+let status = match end_session(&logout_request) {
+    Ok(()) => Status::success(),
+    Err(_) => Status::responder(),
+};
+let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::post())?;
 ```
 
 When the identity provider starts logout itself, `Saml<Idp>::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
@@ -76,7 +83,7 @@ The receiving side reads the posted body and returns the response envelope as th
 
 ```rust
 let logout_request = idp.receive_slo(&sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;
-let logout_response = idp.respond_slo(&sp, &logout_request, RespondSlo::soap())?;
+let logout_response = idp.respond_slo(&sp, &logout_request, &Status::success(), RespondSlo::soap())?;
 let reply_body = logout_response.soap_response()?.envelope();
 ```
 

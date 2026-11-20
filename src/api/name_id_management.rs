@@ -12,7 +12,7 @@ mod redirect;
 
 pub use redirect::NameIdManagementRedirectReceipt;
 
-use super::{Idp, RespondNameIdManagement, Saml, SamlError, StartNameIdManagement};
+use super::{Idp, Saml, SamlError, StartNameIdManagement};
 
 impl Saml<Idp> {
     /// Send `ManageNameIDRequest` to the service provider's SOAP
@@ -148,16 +148,13 @@ impl Saml<Idp> {
 
     /// Answer a received `ManageNameIDRequest` with `ManageNameIDResponse`.
     ///
-    /// The response carries [`RespondNameIdManagement::status`], or top-level
-    /// `Success` when it is unset. Answer with `Success` after applying the
-    /// change. After a [`NameIdChange::NewId`], send that value as the
-    /// identifier's `SPProvidedID` from then on: [`Self::respond_sso`] writes
-    /// it from [`NameId::with_sp_provided_id`]. When the identifier is
-    /// unknown, set [`Status::requester`] or [`Status::responder`], optionally
-    /// with
+    /// `status` is what the response reports. Pass [`Status::success`] after
+    /// applying the change. After a [`NameIdChange::NewId`], send that value
+    /// as the identifier's `SPProvidedID` from then on: [`Self::respond_sso`]
+    /// writes it from [`NameId::with_sp_provided_id`]. For an identifier this
+    /// identity provider does not recognize, pass an error status:
+    /// [`Status::requester`] or [`Status::responder`], optionally with
     /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
-    /// [`RespondNameIdManagement::allow_http`] has no effect here: the
-    /// response is the body of the HTTP response to the SOAP request.
     ///
     /// # Errors
     ///
@@ -168,8 +165,8 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     NameIdManagementReceipt, ReplayPolicy, RespondNameIdManagement, Saml,
-    ///     SamlValidationContext, SoapChannel, SpDescriptor,
+    ///     NameIdManagementReceipt, ReplayPolicy, Saml, SamlValidationContext, SoapChannel,
+    ///     SpDescriptor, Status, SubordinateStatusCode,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -177,6 +174,8 @@ impl Saml<Idp> {
     /// #     idp: &Saml<saml_rs::Idp>,
     /// #     sp: &SpDescriptor,
     /// #     request_envelope: &str,
+    /// #     recognized: bool,
+    /// #     apply: impl Fn(&saml_rs::NameIdChange) -> std::io::Result<()>,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation =
     ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
@@ -188,9 +187,14 @@ impl Saml<Idp> {
     /// )?;
     /// let response = match received {
     ///     NameIdManagementReceipt::Request(request) => {
-    ///         let change = request.message().change();
-    ///         # let _ = change;
-    ///         idp.respond_name_id_management(sp, &request, RespondNameIdManagement::new())?
+    ///         let status = if !recognized {
+    ///             Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal())
+    ///         } else if apply(request.message().change()).is_ok() {
+    ///             Status::success()
+    ///         } else {
+    ///             Status::responder()
+    ///         };
+    ///         idp.respond_name_id_management(sp, &request, &status)?
     ///     }
     ///     NameIdManagementReceipt::Refused(refused) => refused.response().clone(),
     /// };
@@ -202,11 +206,10 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: &Received<ManageNameIdRequest>,
-        options: RespondNameIdManagement,
+        status: &Status,
     ) -> Result<SoapResponse, SamlError> {
         sp.ensure_valid_at(SystemTime::now())?;
-        let status = options.status.unwrap_or_else(Status::success);
-        name_id_management::respond(&self.local_identity_provider()?, sp, request, &status)
+        name_id_management::respond(&self.local_identity_provider()?, sp, request, status)
     }
 
     fn local_identity_provider(&self) -> Result<LocalIdentityProvider<'_>, SamlError> {

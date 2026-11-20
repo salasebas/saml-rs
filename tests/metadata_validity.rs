@@ -19,6 +19,7 @@ use saml_rs::{
     ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError, SamlValidationContext,
     SessionIndex, SloEndpoint, SoapChannel, SoapRequest, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
+    Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -278,12 +279,8 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
         ),
         (
             "respond_name_id_management",
-            idp.respond_name_id_management(
-                &expired_sp,
-                &name_id_request,
-                RespondNameIdManagement::new(),
-            )
-            .map(drop),
+            idp.respond_name_id_management(&expired_sp, &name_id_request, &Status::success())
+                .map(drop),
         ),
         (
             "start_paos_sso",
@@ -457,12 +454,17 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
         ),
         (
             "SP respond_slo",
-            sp.respond_slo(&expired_idp, &logout, RespondSlo::soap())
-                .map(drop),
+            sp.respond_slo(
+                &expired_idp,
+                &logout,
+                &Status::success(),
+                RespondSlo::soap(),
+            )
+            .map(drop),
         ),
         (
             "IdP respond_slo",
-            idp.respond_slo(&expired_sp, &logout, RespondSlo::soap())
+            idp.respond_slo(&expired_sp, &logout, &Status::success(), RespondSlo::soap())
                 .map(drop),
         ),
         (
@@ -490,6 +492,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
             sp.respond_name_id_management_redirect(
                 &expired_idp,
                 &manage,
+                &Status::success(),
                 RespondNameIdManagement::new(),
             )
             .map(drop),
@@ -499,6 +502,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
             idp.respond_name_id_management_redirect(
                 &expired_sp,
                 &manage,
+                &Status::success(),
                 RespondNameIdManagement::new(),
             )
             .map(drop),

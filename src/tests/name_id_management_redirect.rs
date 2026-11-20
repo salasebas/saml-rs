@@ -265,6 +265,7 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
         let response = sp.respond_name_id_management_redirect(
             &idp_peer,
             &request,
+            &Status::success(),
             RespondNameIdManagement::new(),
         )?;
         assert!(response.redirect_url()?.starts_with(IDP_MANAGE));
@@ -316,6 +317,7 @@ fn service_provider_changes_and_terminates_an_identifier_with_the_identity_provi
         let response = idp.respond_name_id_management_redirect(
             &sp_peer,
             &request,
+            &Status::success(),
             RespondNameIdManagement::new(),
         )?;
         assert!(response.redirect_url()?.starts_with(SP_MANAGE));
@@ -355,6 +357,7 @@ fn requester_accepts_relay_state_the_responder_adds_to_a_request_without_one() -
         let response = idp.respond_name_id_management_redirect(
             &sp_peer,
             &request,
+            &Status::success(),
             RespondNameIdManagement::new(),
         )?;
         let octet = build_redirect_octet(
@@ -420,6 +423,7 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
     let response = idp.respond_name_id_management_redirect(
         &sp_peer,
         &request,
+        &Status::success(),
         RespondNameIdManagement::new(),
     )?;
     assert_eq!(
@@ -440,37 +444,8 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
     Ok(())
 }
 
-#[test]
-fn requester_receives_an_error_status_for_an_unknown_principal() -> TestResult {
-    let sp = sp()?;
-    let idp = idp()?;
-    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
-    let started = idp.start_name_id_management_redirect(
-        &sp_peer,
-        &alice(),
-        &NameIdChange::Terminate,
-        StartNameIdManagement::new(),
-    )?;
-    let request = request(sp.receive_name_id_management_redirect(
-        &idp_peer,
-        request_input(&started.outbound)?,
-        ReceiveNameIdManagement::new(),
-        validation(),
-    )?)?;
-    let response = sp.respond_name_id_management_redirect(
-        &idp_peer,
-        &request,
-        RespondNameIdManagement::new().status(
-            Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal()),
-        ),
-    )?;
-
-    match idp.finish_name_id_management_redirect(
-        &sp_peer,
-        &started.pending,
-        response_input(&response)?,
-        validation(),
-    ) {
+fn assert_unknown_principal(finished: Result<Option<RelayState>, SamlError>) -> TestResult {
+    match finished {
         Err(SamlError::StatusNotSuccess { status }) => {
             assert_eq!(status.top_level().as_uri(), status_code::REQUESTER);
             assert_eq!(
@@ -479,10 +454,69 @@ fn requester_receives_an_error_status_for_an_unknown_principal() -> TestResult {
                     .map(saml_rs::SubordinateStatusCode::as_uri),
                 Some(status_code::UNKNOWN_PRINCIPAL)
             );
+            Ok(())
         }
-        other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+        other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
-    Ok(())
+}
+
+#[test]
+fn requester_receives_an_error_status_for_an_unknown_principal() -> TestResult {
+    let sp = sp()?;
+    let idp = idp()?;
+    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let unknown_principal =
+        Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal());
+
+    let started = idp.start_name_id_management_redirect(
+        &sp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    )?;
+    let received = request(sp.receive_name_id_management_redirect(
+        &idp_peer,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+    let response = sp.respond_name_id_management_redirect(
+        &idp_peer,
+        &received,
+        &unknown_principal,
+        RespondNameIdManagement::new(),
+    )?;
+    assert_unknown_principal(idp.finish_name_id_management_redirect(
+        &sp_peer,
+        &started.pending,
+        response_input(&response)?,
+        validation(),
+    ))?;
+
+    let started = sp.start_name_id_management_redirect(
+        &idp_peer,
+        &alice(),
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new(),
+    )?;
+    let received = request(idp.receive_name_id_management_redirect(
+        &sp_peer,
+        request_input(&started.outbound)?,
+        ReceiveNameIdManagement::new(),
+        validation(),
+    )?)?;
+    let response = idp.respond_name_id_management_redirect(
+        &sp_peer,
+        &received,
+        &unknown_principal,
+        RespondNameIdManagement::new(),
+    )?;
+    assert_unknown_principal(sp.finish_name_id_management_redirect(
+        &idp_peer,
+        &started.pending,
+        response_input(&response)?,
+        validation(),
+    ))
 }
 
 #[test]
@@ -1153,6 +1187,7 @@ fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
     let response = sp.respond_name_id_management_redirect(
         &idp_descriptor(&both)?,
         &request,
+        &Status::success(),
         RespondNameIdManagement::new(),
     )?;
     assert!(response.redirect_url()?.starts_with(IDP_MANAGE));
@@ -1216,6 +1251,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
     let response = sp.respond_name_id_management_redirect(
         &idp_peer,
         &request,
+        &Status::success(),
         RespondNameIdManagement::new(),
     )?;
     idp.finish_name_id_management_redirect(

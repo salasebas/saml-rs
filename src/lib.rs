@@ -240,14 +240,14 @@
 //! arbitrary request ID strings:
 //!
 //! ```compile_fail
-//! use saml_rs::{RespondSlo, Saml, SpDescriptor};
+//! use saml_rs::{RespondSlo, Saml, SpDescriptor, Status};
 //!
 //! fn wrong(
 //!     idp: &Saml<saml_rs::Idp>,
 //!     sp: &SpDescriptor,
 //!     request_id: &str,
 //! ) -> Result<(), saml_rs::SamlError> {
-//!     let _ = idp.respond_slo(sp, request_id, RespondSlo::post())?;
+//!     let _ = idp.respond_slo(sp, request_id, &Status::success(), RespondSlo::post())?;
 //!     Ok(())
 //! }
 //! ```

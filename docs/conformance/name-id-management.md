@@ -8,10 +8,10 @@ identity provider and the service provider: `start_name_id_management_redirect`,
 `receive_name_id_management_redirect`, `respond_name_id_management_redirect`,
 and `finish_name_id_management_redirect` on `Saml<Idp>` and `Saml<Sp>`. Both
 bindings carry one change, `NameIdChange::NewId` or `NameIdChange::Terminate`,
-and return a received request as `ManageNameIdRequest`. Both bindings take the
-same options: `StartNameIdManagement` to send a request and
-`RespondNameIdManagement` to answer one. `ReceiveNameIdManagement` applies to
-HTTP-Redirect only.
+and return a received request as `ManageNameIdRequest`. Both bindings take
+`StartNameIdManagement` to send a request. On both bindings, the responder
+passes the response `Status` as an argument. `ReceiveNameIdManagement` and
+`RespondNameIdManagement` apply to HTTP-Redirect only.
 
 SAML V2.0 Conformance Requirements Table 2, with the labels from Approved
 Errata 05 E11, has four rows for this protocol. Name Identifier Management,
@@ -107,15 +107,13 @@ and 3.6.3, Profiles §4.5.3.2 and §4.5.4.1.
 
 ## SOAP: ManageNameIDResponse from the identity provider
 
-`Saml<Idp>::respond_name_id_management` is this actor, with
-`RespondNameIdManagement`. Core §3.6.2 and §3.6.3, Profiles §4.5.3.2 and
-§4.5.4.2. `RespondNameIdManagement::allow_http` has no effect on this binding:
-the response is the body of the HTTP response to the request.
+`Saml<Idp>::respond_name_id_management` is this actor. Core §3.6.2 and
+§3.6.3, Profiles §4.5.3.2 and §4.5.4.2.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
 | Answer every processed request with `ManageNameIDResponse` | Responder | Generate ManageNameIDResponse | Mandatory. Core §3.6.2 and Profiles §4.5.3.2. `respond_name_id_management` answers a `NameIdManagementReceipt::Request`. A refused request already carries its response |
-| An unrecognized identifier is an error status | Responder | Generate ManageNameIDResponse | Mandatory. Core §3.6.3. The caller recognizes the identifier and sets `RespondNameIdManagement::status` to `Status::requester` or `Status::responder`, optionally with `SubordinateStatusCode::unknown_principal`. Omitting it emits `Success`, as over HTTP-Redirect. That default is library policy: the standard defines no answer without a status, and a caller answers a processed request after applying the change |
+| An unrecognized identifier is an error status | Responder | Generate ManageNameIDResponse | Mandatory. Core §3.6.3. The caller recognizes the identifier and passes the status to `respond_name_id_management`: `Status::requester` or `Status::responder`, optionally with `SubordinateStatusCode::unknown_principal`. There is no default status |
 | `ID`, `Version` `2.0`, UTC `IssueInstant`, and `InResponseTo` the request `ID` | Responder | Generate ManageNameIDResponse | Mandatory. Protocol schema `StatusResponseType`; Core §3.2.2. `InResponseTo` comes from the received request |
 | `Issuer` is present and omits `Format` | Responder | Generate ManageNameIDResponse | Mandatory. Profiles §4.5.4.2 allows an omitted `Format` or `entity`. Generation omits it |
 | The request came from the service provider being answered | Responder | Generate ManageNameIDResponse | Library policy. A request received from another `SpDescriptor` is `SamlError::IssuerMismatch` |
@@ -169,7 +167,7 @@ Profiles §4.5.3.2 and §4.5.4.2, Bindings §3.4.
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
 | Answer every processed request | Responder | Generate ManageNameIDResponse | Mandatory. Core §3.6.2 and Profiles §4.5.3.2 |
-| An unrecognized identifier gets an error status, which may carry `UnknownPrincipal` | Responder | Generate ManageNameIDResponse | Mandatory error status, optional subordinate code. Core §3.6.3. The caller passes `RespondNameIdManagement::status`. Omitting it emits `Success`; that default is library policy |
+| An unrecognized identifier gets an error status, which may carry `UnknownPrincipal` | Responder | Generate ManageNameIDResponse | Mandatory error status, optional subordinate code. Core §3.6.3. The caller recognizes the identifier and passes the status to `respond_name_id_management_redirect`. There is no default status |
 | `ID`, `Version` `2.0`, UTC `IssueInstant`, and `InResponseTo` the request ID | Responder | Generate ManageNameIDResponse | Mandatory. Protocol schema `StatusResponseType`; Core §3.2.2 |
 | `Issuer` is the responder's entity ID and omits `Format` | Responder | Generate ManageNameIDResponse | Mandatory. Profiles §4.5.4.2 |
 | The request came from the peer being answered | Responder | Generate ManageNameIDResponse | Library policy. A request received from another descriptor is `SamlError::IssuerMismatch`, so no response is built for another party's endpoint |

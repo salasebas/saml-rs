@@ -1,6 +1,6 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
-use crate::model::{RelayState, RequestedAuthnContext, Status};
+use crate::model::{RelayState, RequestedAuthnContext};
 use crate::sp::WebBrowserSsoProducer;
 
 pub use crate::model::{ForceAuthn, IsPassive};
@@ -479,7 +479,6 @@ impl StartSlo {
 #[derive(Debug, Clone)]
 pub struct RespondSlo {
     pub(super) binding: LogoutBinding,
-    pub(super) status: Option<Status>,
     rules: SingleLogoutRules,
 }
 
@@ -513,18 +512,8 @@ impl RespondSlo {
     fn new(binding: LogoutBinding) -> Self {
         Self {
             binding,
-            status: None,
             rules: SingleLogoutRules::default(),
         }
-    }
-
-    /// Set the `LogoutResponse` status. Omitting it emits top-level `Success`.
-    ///
-    /// A logout-response template carries only the top-level code. A
-    /// subordinate code is rejected when a template is set.
-    pub fn status(mut self, status: Status) -> Self {
-        self.status = Some(status);
-        self
     }
 
     /// Apply Single Logout generation rules to this LogoutResponse.
@@ -654,40 +643,26 @@ impl ReceiveNameIdManagement {
     }
 }
 
-/// Options for answering a `<ManageNameIDRequest>`.
+/// Options for answering a `<ManageNameIDRequest>` over HTTP-Redirect.
 ///
-/// [`Saml<Idp>::respond_name_id_management`](crate::Saml::respond_name_id_management)
-/// answers over SOAP, and `respond_name_id_management_redirect` answers over
-/// HTTP-Redirect. Over HTTP-Redirect the response is always signed, carries
-/// the exact RelayState received with the request, and goes to an `https`
-/// peer `ManageNameIDService` unless [`Self::allow_http`] is selected.
+/// The response is always signed, carries the exact RelayState received with
+/// the request, and goes to an `https` peer `ManageNameIDService` unless
+/// [`Self::allow_http`] is selected.
 #[derive(Debug, Clone, Default)]
 pub struct RespondNameIdManagement {
-    pub(super) status: Option<Status>,
     transport: PeerEndpointTransport,
 }
 
 impl RespondNameIdManagement {
-    /// Start with a `Success` status and an `https` peer endpoint.
+    /// Answer at an `https` peer endpoint only.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the response status. Omitting it emits top-level `Success`.
-    ///
-    /// For a `<NameID>` this provider does not recognize, pass an error
-    /// status, optionally with
-    /// [`crate::SubordinateStatusCode::unknown_principal`].
-    pub fn status(mut self, status: Status) -> Self {
-        self.status = Some(status);
-        self
-    }
-
-    /// Allow delivery over HTTP-Redirect to an `http` `ManageNameIDService`.
+    /// Allow delivery to an `http` `ManageNameIDService`.
     ///
     /// This relaxes the recommendation to protect the HTTP exchange with TLS.
-    /// The response stays signed. It has no effect over SOAP, where the
-    /// response is the body of the HTTP response to the request.
+    /// The response stays signed.
     pub fn allow_http(mut self) -> Self {
         self.transport = PeerEndpointTransport::AllowHttp;
         self

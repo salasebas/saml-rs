@@ -20,7 +20,7 @@ before that upgrade:
 | `IdentityProvider::create_login_response` | `Saml::<Idp>::respond_sso`, or `Saml::<Idp>::initiate_sso` for an unsolicited response |
 | `logout::create_logout_request`, `create_logout_request_with_id` | `start_slo` on `Saml<Sp>` or `Saml<Idp>` |
 | `logout::parse_logout_request` | `receive_slo` |
-| `logout::create_logout_response`, `create_logout_response_with_id` | `respond_slo` |
+| `logout::create_logout_response`, `create_logout_response_with_id` | `respond_slo`, with `&Status::success()` for the `Success` they write |
 | `logout::parse_logout_response`, `parse_logout_response_without_request_id` | `finish_slo` |
 | `flow::flow` | The typed receive operation for the message |
 | `HttpRequest::redirect` | `Inbound::redirect` with the raw query string |

@@ -14,7 +14,7 @@ use saml_rs::{
     LogoutPolicy, LogoutResponse, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
     MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy, RespondSlo, Saml,
     SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSlo,
+    SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -312,6 +312,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
     let response = idp.respond_slo(
         &sp_descriptor,
         &received_by_authority,
+        &Status::success(),
         RespondSlo::post().apply_producer_rules(),
     )?;
     let response_xml = post_xml(&response)?;
@@ -348,6 +349,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     match sp.respond_slo(
         &idp_descriptor,
         &received,
+        &Status::success(),
         RespondSlo::post().apply_producer_rules(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("https") => {}
@@ -359,6 +361,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     let response = sp.respond_slo(
         &idp_descriptor,
         &received,
+        &Status::success(),
         RespondSlo::post().apply_producer_rules().allow_http(),
     )?;
     let xml = post_xml(&response)?;
@@ -473,7 +476,12 @@ fn signed_logout_response(
                 Inbound::post(post_input(&started.outbound)?),
                 validation(),
             )?;
-            let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+            let response = idp.respond_slo(
+                &sp_descriptor,
+                &received,
+                &Status::success(),
+                RespondSlo::post(),
+            )?;
             (response, started.pending)
         }
         LocalRole::Idp => {
@@ -487,7 +495,12 @@ fn signed_logout_response(
                 Inbound::post(post_input(&started.outbound)?),
                 validation(),
             )?;
-            let response = sp.respond_slo(&idp_descriptor, &received, RespondSlo::post())?;
+            let response = sp.respond_slo(
+                &idp_descriptor,
+                &received,
+                &Status::success(),
+                RespondSlo::post(),
+            )?;
             (response, started.pending)
         }
     };

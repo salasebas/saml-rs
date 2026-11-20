@@ -12,7 +12,7 @@ use saml_rs::{
     MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RespondSlo, RespondSso,
     Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SpConfig,
     SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartPaosSso, StartSlo, StartSso,
-    X509Credential, XmlSignatureProfile,
+    Status, X509Credential, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -263,10 +263,12 @@ fn post_logout_request_and_response_with_object_are_rejected(
         parties
             .idp
             .receive_slo(&parties.sp_descriptor, Inbound::post(request), validation())?;
-    let response =
-        parties
-            .idp
-            .respond_slo(&parties.sp_descriptor, &received, RespondSlo::post())?;
+    let response = parties.idp.respond_slo(
+        &parties.sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     assert_object_rejected(parties.sp.finish_slo(
         &parties.idp_descriptor,
         &started.pending,
@@ -299,10 +301,12 @@ fn soap_logout_request_and_response_with_object_are_rejected(
         Inbound::soap(request, SoapChannel::unattested()),
         validation(),
     )?;
-    let response =
-        parties
-            .idp
-            .respond_slo(&parties.sp_descriptor, &received, RespondSlo::soap())?;
+    let response = parties.idp.respond_slo(
+        &parties.sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::soap(),
+    )?;
     assert_object_rejected(parties.sp.finish_slo(
         &parties.idp_descriptor,
         &started.pending,

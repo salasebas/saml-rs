@@ -931,10 +931,10 @@ struct SloExchange {
 }
 
 fn sp_started_exchange() -> Result<SloExchange, SamlError> {
-    sp_started_exchange_answered_with(RespondSlo::post())
+    sp_started_exchange_answered_with(&Status::success())
 }
 
-fn sp_started_exchange_answered_with(answer: RespondSlo) -> Result<SloExchange, SamlError> {
+fn sp_started_exchange_answered_with(status: &Status) -> Result<SloExchange, SamlError> {
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let relay_state = RelayState::try_new("logout-state")?;
@@ -955,7 +955,7 @@ fn sp_started_exchange_answered_with(answer: RespondSlo) -> Result<SloExchange, 
     assert_eq!(received.message().session_indexes().len(), 1);
     assert!(!received.message().raw_flow().saml_content.is_empty());
 
-    let response = idp.respond_slo(&sp_descriptor, &received, answer)?;
+    let response = idp.respond_slo(&sp_descriptor, &received, status, RespondSlo::post())?;
     assert_eq!(response.raw_context().request_type, "SAMLResponse");
     let response_fields = post_fields(&response)?;
 
@@ -1066,23 +1066,28 @@ fn typed_slo_start_and_response_bindings_use_peer_endpoints(
     );
 
     let exchange = sp_started_exchange()?;
-    let redirect_response =
-        exchange
-            .idp
-            .respond_slo(&sp_descriptor, &exchange.received, RespondSlo::redirect())?;
+    let redirect_response = exchange.idp.respond_slo(
+        &sp_descriptor,
+        &exchange.received,
+        &Status::success(),
+        RespondSlo::redirect(),
+    )?;
     assert!(redirect_response
         .redirect_url()?
         .starts_with(SP_SLO_REDIRECT));
 
-    let post_response =
-        exchange
-            .idp
-            .respond_slo(&sp_descriptor, &exchange.received, RespondSlo::post())?;
+    let post_response = exchange.idp.respond_slo(
+        &sp_descriptor,
+        &exchange.received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     assert_eq!(post_response.post_form()?.action().as_str(), SP_SLO_POST);
 
     let simple_sign_response = exchange.idp.respond_slo(
         &sp_descriptor,
         &exchange.received,
+        &Status::success(),
         RespondSlo::simple_sign(),
     )?;
     let simple_sign_response_form = simple_sign_response.post_form()?;
@@ -1107,10 +1112,20 @@ fn typed_slo_signs_front_channel_responses_despite_compatibility_policy(
     let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
 
-    let post = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let post = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     assert!(outbound_xml(&post, "SAMLResponse")?.contains("<ds:Signature"));
 
-    let redirect = idp.respond_slo(&sp_descriptor, &received, RespondSlo::redirect())?;
+    let redirect = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::redirect(),
+    )?;
     let redirect_url = Url::parse(redirect.redirect_url()?)?;
     assert!(redirect_url
         .query_pairs()
@@ -1770,7 +1785,12 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
         }
     }
 
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let response_fields = post_fields(&response)?;
     sp.finish_slo(
         &idp_descriptor,
@@ -2011,7 +2031,12 @@ fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error
     let received = sp.receive_slo(&idp_descriptor, request_input, validation())?;
     assert_eq!(received.message().issuer().as_str(), IDP_ENTITY_ID);
 
-    let response = sp.respond_slo(&idp_descriptor, &received, RespondSlo::post())?;
+    let response = sp.respond_slo(
+        &idp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let completed = idp.finish_slo(
         &sp_descriptor,
         &started.pending,
@@ -2024,6 +2049,7 @@ fn typed_facade_runs_idp_initiated_slo() -> Result<(), Box<dyn std::error::Error
         completed.response().in_response_to(),
         Some(started.pending.request_id())
     );
+    assert_eq!(completed.response().status(), &Status::success());
     Ok(())
 }
 
@@ -2279,7 +2305,12 @@ fn typed_session_authority_pending_snapshot_round_trips_issuance_window(
         logout_request_input(&started.outbound, LogoutBinding::Post)?,
         validation(),
     )?;
-    let response = sp.respond_slo(&idp_descriptor, &received, RespondSlo::post())?;
+    let response = sp.respond_slo(
+        &idp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let completed = idp.finish_slo(
         &sp_descriptor,
         &restored,
@@ -2711,6 +2742,7 @@ fn typed_facade_finish_slo_accepts_another_front_channel_response_binding(
             let response = idp.respond_slo(
                 &sp_descriptor,
                 &received,
+                &Status::success(),
                 respond_slo_for_binding(response_binding)?,
             )?;
             let completed = sp
@@ -2893,8 +2925,7 @@ fn typed_facade_finish_slo_returns_partial_logout_under_success(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let partial_logout =
         Status::success().with_subordinate(SubordinateStatusCode::partial_logout());
-    let exchange =
-        sp_started_exchange_answered_with(RespondSlo::post().status(partial_logout.clone()))?;
+    let exchange = sp_started_exchange_answered_with(&partial_logout)?;
 
     let completed = exchange.sp.finish_slo(
         &exchange.idp_descriptor,
@@ -2914,8 +2945,7 @@ fn typed_facade_finish_slo_returns_partial_logout_under_success(
 #[test]
 fn typed_facade_finish_slo_reports_signed_correlated_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange =
-        sp_started_exchange_answered_with(RespondSlo::post().status(refused_logout_status()))?;
+    let exchange = sp_started_exchange_answered_with(&refused_logout_status())?;
 
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
@@ -2943,8 +2973,7 @@ fn typed_facade_finish_slo_reports_signed_correlated_error_status(
 #[test]
 fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange =
-        sp_started_exchange_answered_with(RespondSlo::post().status(refused_logout_status()))?;
+    let exchange = sp_started_exchange_answered_with(&refused_logout_status())?;
     let mut snapshot: PendingLogoutRequestSnapshot = exchange.pending.snapshot();
     snapshot.request_id = "_different_logout".to_string();
     let wrong_pending = PendingLogoutRequest::from_snapshot(snapshot)?;
@@ -3038,7 +3067,12 @@ fn typed_facade_accepts_slo_relay_state_the_responder_adds_to_a_request_without_
         let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
         let request_input = Inbound::post(post_fields(&started.outbound)?);
         let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-        let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+        let response = idp.respond_slo(
+            &sp_descriptor,
+            &received,
+            &Status::success(),
+            RespondSlo::post(),
+        )?;
         let mut response_fields = post_fields(&response)?;
         response_fields.push(FormField::new("RelayState", added));
 
@@ -3071,7 +3105,12 @@ fn typed_facade_respond_slo_echoes_the_received_relay_state_exactly(
         let started = sp.start_slo(&idp_descriptor, subject()?, options)?;
         let request_input = Inbound::post(post_fields(&started.outbound)?);
         let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-        let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+        let response = idp.respond_slo(
+            &sp_descriptor,
+            &received,
+            &Status::success(),
+            RespondSlo::post(),
+        )?;
         let echoed = response.post_form()?.value("RelayState");
         assert_eq!(echoed, relay_state.as_ref().map(RelayState::as_str));
     }
@@ -3094,7 +3133,12 @@ fn typed_facade_slo_accepts_and_echoes_received_relay_state_up_to_the_receive_li
         Some(long.as_str())
     );
 
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     assert_eq!(
         response.post_form()?.value("RelayState"),
         Some(long.as_str())
@@ -3137,7 +3181,12 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
         Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let mut response_fields = post_fields(&response)?;
     response_fields.push(FormField::new("RelayState", too_long));
     match sp.finish_slo(
@@ -3222,7 +3271,12 @@ fn typed_facade_rejects_custom_logout_response_in_response_to_mismatch(
     let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
 
-    match idp.respond_slo(&sp_descriptor, &received, RespondSlo::post()) {
+    match idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
             assert_eq!(expected.as_deref(), Some(received.message().id().as_str()));
             assert_eq!(actual.as_deref(), Some("_wrong"));
@@ -3242,7 +3296,7 @@ fn typed_facade_rejects_custom_logout_response_profile_before_correlation(
     let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
 
-    match idp.respond_slo(&sp_descriptor, &received, RespondSlo::post()) {
+    match idp.respond_slo(&sp_descriptor, &received, &Status::success(), RespondSlo::post()) {
         Err(SamlError::ProtocolProfile(message))
             if message.contains(
                 "LogoutResponse IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z",
@@ -3290,9 +3344,10 @@ fn typed_session_participant_logout_response_carries_caller_status(
     let response = sp.respond_slo(
         &idp_descriptor,
         &received,
-        RespondSlo::post().status(Status::responder().with_subordinate(
-            SubordinateStatusCode::try_new(saml_rs::constants::status_code::REQUEST_DENIED)?,
-        )),
+        &Status::responder().with_subordinate(SubordinateStatusCode::try_new(
+            saml_rs::constants::status_code::REQUEST_DENIED,
+        )?),
+        RespondSlo::post(),
     )?;
 
     let response_xml = outbound_xml(&response, "SAMLResponse")?;
@@ -3306,48 +3361,6 @@ fn typed_session_participant_logout_response_carries_caller_status(
             "</samlp:StatusCode>",
             "</samlp:Status>"
         )
-    );
-    Ok(())
-}
-
-fn success_status_element() -> &'static str {
-    concat!(
-        "<samlp:Status>",
-        "<samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/>",
-        "</samlp:Status>"
-    )
-}
-
-#[test]
-fn typed_logout_response_omits_status_as_success_for_both_roles(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp) = facades()?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-
-    let participant_request = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
-    let participant_received = sp.receive_slo(
-        &idp_descriptor,
-        logout_request_input(&participant_request.outbound, LogoutBinding::Post)?,
-        validation(),
-    )?;
-    let participant_response =
-        sp.respond_slo(&idp_descriptor, &participant_received, RespondSlo::post())?;
-    assert_eq!(
-        status_element(&outbound_xml(&participant_response, "SAMLResponse")?)?,
-        success_status_element()
-    );
-
-    let authority_request = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let authority_received = idp.receive_slo(
-        &sp_descriptor,
-        logout_request_input(&authority_request.outbound, LogoutBinding::Post)?,
-        validation(),
-    )?;
-    let authority_response =
-        idp.respond_slo(&sp_descriptor, &authority_received, RespondSlo::post())?;
-    assert_eq!(
-        status_element(&outbound_xml(&authority_response, "SAMLResponse")?)?,
-        success_status_element()
     );
     Ok(())
 }
@@ -3367,7 +3380,8 @@ fn typed_session_authority_logout_response_carries_caller_status(
     let own_session_failed = idp.respond_slo(
         &sp_descriptor,
         &received,
-        RespondSlo::post().status(Status::responder()),
+        &Status::responder(),
+        RespondSlo::post(),
     )?;
     assert_eq!(
         status_element(&outbound_xml(&own_session_failed, "SAMLResponse")?)?,
@@ -3381,8 +3395,8 @@ fn typed_session_authority_logout_response_carries_caller_status(
     let partial = idp.respond_slo(
         &sp_descriptor,
         &received,
-        RespondSlo::post()
-            .status(Status::success().with_subordinate(SubordinateStatusCode::partial_logout())),
+        &Status::success().with_subordinate(SubordinateStatusCode::partial_logout()),
+        RespondSlo::post(),
     )?;
     assert_eq!(
         status_element(&outbound_xml(&partial, "SAMLResponse")?)?,
@@ -3424,7 +3438,12 @@ fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
             logout_request_input(&started.outbound, LogoutBinding::Post)?,
             validation(),
         )?;
-        let response = sp.respond_slo(&idp_descriptor, &received, RespondSlo::post())?;
+        let response = sp.respond_slo(
+            &idp_descriptor,
+            &received,
+            &Status::success(),
+            RespondSlo::post(),
+        )?;
 
         assert_eq!(response.raw_context().entity_endpoint, location);
     }
@@ -3449,9 +3468,8 @@ fn typed_logout_response_carries_caller_defined_subordinate_status(
         let response = sp.respond_slo(
             &idp_descriptor,
             &received,
-            RespondSlo::post().status(
-                Status::requester().with_subordinate(SubordinateStatusCode::try_new(subordinate)?),
-            ),
+            &Status::requester().with_subordinate(SubordinateStatusCode::try_new(subordinate)?),
+            RespondSlo::post(),
         )?;
 
         assert_eq!(
@@ -3516,7 +3534,8 @@ fn typed_logout_response_template_carries_only_the_top_level_status(
     let response = idp.respond_slo(
         &sp_descriptor,
         &received,
-        RespondSlo::post().status(Status::version_mismatch()),
+        &Status::version_mismatch(),
+        RespondSlo::post(),
     )?;
     let response_xml = outbound_xml(&response, "SAMLResponse")?;
     let status = status_element(&response_xml)?;
@@ -3526,8 +3545,8 @@ fn typed_logout_response_template_carries_only_the_top_level_status(
     match idp.respond_slo(
         &sp_descriptor,
         &received,
-        RespondSlo::post()
-            .status(Status::success().with_subordinate(SubordinateStatusCode::partial_logout())),
+        &Status::success().with_subordinate(SubordinateStatusCode::partial_logout()),
+        RespondSlo::post(),
     ) {
         Err(SamlError::Invalid(message))
             if message.contains("cannot carry a subordinate status code") =>
@@ -3620,11 +3639,7 @@ fn typed_logout_response_template_must_carry_the_supplied_top_level_status(
             validation(),
         )?;
 
-        match idp.respond_slo(
-            &sp_descriptor,
-            &received,
-            options.status(Status::responder()),
-        ) {
+        match idp.respond_slo(&sp_descriptor, &received, &Status::responder(), options) {
             Err(SamlError::Invalid(message))
                 if message.contains("did not carry the supplied top-level status code") => {}
             other => return Err(format!("expected template status mismatch, got {other:?}").into()),
@@ -4100,7 +4115,12 @@ fn soap_slo_round_trips_when_the_service_provider_starts_it(
         validation(),
     )?;
     assert_eq!(received.relay_state(), None);
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
+    let response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::soap(),
+    )?;
     assert_eq!(response.headers(), response.soap_response()?.headers());
     let response_envelope = response.soap_response()?.envelope();
     let response_xml = soap_body_xml(response_envelope)?;
@@ -4152,6 +4172,7 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
     let response = sp.respond_slo(
         &idp_descriptor,
         &received,
+        &Status::success(),
         RespondSlo::soap().apply_producer_rules(),
     )?;
     let response_xml = soap_body_xml(response.soap_response()?.envelope())?;
@@ -4347,7 +4368,12 @@ fn soap_respond_slo_rejects_a_request_with_relay_state() -> Result<(), Box<dyn s
         Inbound::post(post_fields(&started.outbound)?),
         validation(),
     )?;
-    match idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap()) {
+    match idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::soap(),
+    ) {
         Err(SamlError::ProtocolProfile(_)) => Ok(()),
         other => Err(format!("expected ProtocolProfile, got {other:?}").into()),
     }
@@ -4493,7 +4519,12 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
         Inbound::soap(request, SoapChannel::unattested()),
         validation(),
     )?;
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
+    let response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::soap(),
+    )?;
     let response_envelope = response.soap_response()?.envelope();
     let refused = sp.finish_slo(
         &idp_descriptor,

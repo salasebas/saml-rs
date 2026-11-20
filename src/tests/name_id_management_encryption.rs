@@ -25,7 +25,7 @@ use saml_rs::{
     NameIdManagementReceipt, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
     ReceiveNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml,
     SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SoapRequest, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, X509Credential,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status, X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -255,6 +255,7 @@ fn identity_provider_encrypts_the_identifier_and_new_value_for_the_service_provi
     let response = sp.respond_name_id_management_redirect(
         &idp_peer,
         &request,
+        &Status::success(),
         RespondNameIdManagement::new(),
     )?;
     idp.finish_name_id_management_redirect(
@@ -299,6 +300,7 @@ fn service_provider_encrypts_the_identifier_and_new_value_for_the_identity_provi
     let response = idp.respond_name_id_management_redirect(
         &sp_peer,
         &request,
+        &Status::success(),
         RespondNameIdManagement::new(),
     )?;
     sp.finish_name_id_management_redirect(
