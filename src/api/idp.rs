@@ -153,11 +153,10 @@ impl Saml<Idp> {
     /// keys are missing, a request without ACS or binding selection has an
     /// unsupported metadata default or a default incompatible with the chosen
     /// response binding, the configured issuance expiration overflows the
-    /// supported timestamp range, producer rules are combined with a custom
-    /// login response template, a failure is combined with a login response
-    /// template, or response creation fails.
+    /// supported timestamp range, or response creation fails.
     ///
-    /// For an assertion, it also returns [`SamlError`] when
+    /// For an assertion, it also returns [`SamlError`] when producer rules
+    /// are combined with a login response template,
     /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
     /// combined with a login response template, names a basic attribute that
     /// is not an XML name, or has a `NameFormat` that is not an absolute URI
@@ -228,11 +227,10 @@ impl Saml<Idp> {
     /// parsed, the metadata default ACS is unsupported or incompatible with
     /// the selected response binding, a signing key is missing, the
     /// selected binding is unsupported, the configured issuance expiration
-    /// overflows the supported timestamp range, producer rules are combined
-    /// with a custom login response template, a failure is combined with a
-    /// login response template, or response creation fails.
+    /// overflows the supported timestamp range, or response creation fails.
     ///
-    /// For an assertion, it also returns [`SamlError`] when
+    /// For an assertion, it also returns [`SamlError`] when producer rules
+    /// are combined with a login response template,
     /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
     /// combined with a login response template or names a basic attribute that
     /// is not an XML name, a `NameId` with `NameQualifier`, `SPNameQualifier`,
