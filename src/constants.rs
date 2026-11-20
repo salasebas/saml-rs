@@ -33,7 +33,7 @@ pub enum Binding {
 
 impl Binding {
     /// Full binding URN.
-    pub fn urn(self) -> &'static str {
+    pub const fn urn(self) -> &'static str {
         match self {
             Binding::Redirect => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
             Binding::Post => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",

@@ -47,3 +47,22 @@ fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::erro
     }
     Ok(())
 }
+
+#[test]
+fn default_limits_are_the_documented_values() {
+    assert_eq!(
+        XmlLimits::default(),
+        XmlLimits {
+            max_bytes: 1_048_576,
+            max_depth: 1_024,
+            max_nodes: 50_000,
+            max_attributes_per_element: 64,
+            max_attribute_value_bytes: 16_384,
+            max_text_bytes: 1_048_576,
+        }
+    );
+    assert_eq!(
+        saml_rs::XmlPolicy::default().redirect_inflate_max_bytes,
+        1_048_576
+    );
+}
