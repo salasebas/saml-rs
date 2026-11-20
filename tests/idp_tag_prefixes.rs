@@ -13,9 +13,8 @@ use saml_rs::flow::HttpRequest;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, ServiceProvider};
+use saml_rs::raw::{IdentityProvider, LoginResponseTemplate, ServiceProvider};
 use saml_rs::template::replace_tags_by_value;
-use saml_rs::LoginResponseTemplate;
 use saml_rs::SamlError;
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -216,7 +215,7 @@ fn caller_login_response_template_is_rewritten_before_custom_callback(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = prefixed_setting("samlp2", "saml2");
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = idp_with_setting(setting)?;
@@ -265,7 +264,7 @@ fn caller_login_response_template_rewrites_each_prefix_once(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = prefixed_setting("saml", "a");
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = idp_with_setting(setting)?;

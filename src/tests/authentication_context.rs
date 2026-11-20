@@ -535,10 +535,7 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
             authn_requests: AuthnRequestSigningPolicy::Sign,
             ..SpValidationPolicy::recommended()
         })
-        .templates(saml_rs::TemplatePolicy {
-            login_request_template: Some(saml_rs::config::LOGIN_REQUEST_TEMPLATE.into()),
-            ..Default::default()
-        })
+        .authn_request_template(saml_rs::config::AUTHN_REQUEST_TEMPLATE)
         .build()?,
     );
     sp.start_sso(&idp_descriptor, StartSso::post())?;

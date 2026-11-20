@@ -1,7 +1,6 @@
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
 use crate::constants::MessageSignatureOrder;
 use crate::entity::SignatureConfig;
-use crate::template::LoginResponseTemplate;
 use crate::xml::XmlLimits;
 
 use super::algorithms::{
@@ -711,34 +710,44 @@ impl Default for AlgorithmPolicy {
     }
 }
 
-/// Template and XML tag-prefix customization.
+/// Logout templates, XML tag prefixes, and embedded-signature placement that
+/// both roles use.
+///
+/// The SSO templates belong to one role each: set them with
+/// [`SpConfigBuilder::authn_request_template`](crate::SpConfigBuilder::authn_request_template)
+/// and
+/// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template).
 #[derive(Debug, Clone)]
 pub struct TemplatePolicy {
-    /// Protocol tag prefix of the messages this entity generates.
+    /// Prefix of the generated protocol-namespace elements, `samlp` by
+    /// default.
+    ///
+    /// It applies to the SSO `<Response>`, `<LogoutRequest>`,
+    /// `<LogoutResponse>`, and the `<ManageNameIDRequest>` and
+    /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `samlp` prefix
+    /// of an SSO response template or a logout template is rewritten to it.
+    /// The `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`, name
+    /// identifier management messages over SOAP, and the ECP `<Request>`
+    /// header of PAOS SSO keep `samlp`.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
-    /// must differ
-    /// from `tag_prefix_assertion`.
+    /// must differ from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
-    /// Assertion tag prefix of the messages this entity generates, including
-    /// a generated `<EncryptedAssertion>`.
+    /// Prefix of the generated assertion-namespace elements, `saml` by
+    /// default.
+    ///
+    /// It applies to the SSO `<Response>`, including its assertion and a
+    /// generated `<EncryptedAssertion>`, to `<LogoutRequest>` and
+    /// `<LogoutResponse>`, and to the `<ManageNameIDRequest>` and
+    /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `saml` prefix of
+    /// an SSO response template or a logout template is rewritten to it. The
+    /// `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`, name
+    /// identifier management messages over SOAP, and the ECP `<Request>`
+    /// header of PAOS SSO keep `saml`.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
-    /// must differ
-    /// from `tag_prefix_protocol`.
+    /// must differ from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// IdP login response template and attributes.
-    ///
-    /// `{NameIDFormat}` receives a format that has been checked to be an
-    /// absolute URI reference. A `Format` the template writes itself is not
-    /// checked.
-    pub login_response_template: Option<LoginResponseTemplate>,
-    /// SP login request template.
-    ///
-    /// `{NameIDFormat}` receives the first configured NameID format, checked
-    /// to be an absolute URI reference. With no configured format, an
-    /// attribute whose complete value is `{NameIDFormat}` is omitted.
-    pub login_request_template: Option<String>,
     /// Logout request template.
     ///
     /// Typed Session Authority generation requires a complete unqualified
@@ -777,8 +786,6 @@ impl Default for TemplatePolicy {
         Self {
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            login_response_template: None,
-            login_request_template: None,
             logout_request_template: None,
             logout_response_template: None,
             signature_config: None,

@@ -16,23 +16,25 @@ use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
+use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
 use saml_rs::entity::iso8601_offset;
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
-use saml_rs::raw::{Binding, LoginRequestOptions, LoginResponseOptions, User};
+use saml_rs::raw::{
+    Binding, LoginRequestOptions, LoginResponseAttribute, LoginResponseOptions,
+    LoginResponseTemplate, User,
+};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
-    Attributes, AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
-    ReplayPolicy, RequestedSubjectIdentifier, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse, SsoSession, StartSso,
-    Status, TemplatePolicy,
+    Attributes, AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpConfigBuilder,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
+    Outbound, ReplayPolicy, RequestedSubjectIdentifier, RespondSso, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponse,
+    SsoSession, StartSso, Status,
 };
-use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -65,21 +67,17 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     ))
 }
 
-fn idp_with(templates: TemplatePolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
-        IdpConfig::builder(
-            EntityId::try_new(IDP_ENTITY_ID)?,
-            SsoEndpoint::post(IDP_SSO_POST)?,
-        )
-        .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
-        .templates(templates)
-        .build()?,
-    ))
+fn idp_config() -> Result<IdpConfigBuilder, SamlError> {
+    Ok(IdpConfig::builder(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        SsoEndpoint::post(IDP_SSO_POST)?,
+    )
+    .credentials(signing_credentials())
+    .validation(IdpValidationPolicy::recommended()))
 }
 
 fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
-    idp_with(TemplatePolicy::default())
+    Ok(Saml::idp(idp_config()?.build()?))
 }
 
 fn descriptors(
@@ -351,40 +349,18 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
 #[test]
 fn typed_attributes_require_the_built_in_login_response_renderer(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template_attribute = LoginResponseAttribute {
-        name: "mail".to_string(),
-        name_format: BASIC.to_string(),
-        value_xsi_type: "xs:string".to_string(),
-        value_tag: "mail".to_string(),
-        value_xmlns_xs: None,
-        value_xmlns_xsi: None,
-    };
-    for template in [
-        LoginResponseTemplate {
-            context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.to_string()),
-            attributes: Vec::new(),
-        },
-        LoginResponseTemplate {
-            context: None,
-            attributes: vec![template_attribute],
-        },
-    ] {
-        let sp = sp()?;
-        let idp = idp_with(TemplatePolicy {
-            login_response_template: Some(template),
-            ..TemplatePolicy::default()
-        })?;
-        let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-        let attributes = Attributes::new(vec![Attribute::new("mail", values(&["a@example.com"]))
-            .with_name_format(AttributeNameFormat::Basic)]);
-        match idp.initiate_sso(
-            &sp_descriptor,
-            &alice(),
-            RespondSso::post().attributes(attributes),
-        ) {
-            Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
-            other => return Err(format!("expected template error, got {other:?}").into()),
-        }
+    let sp = sp()?;
+    let idp = templated_idp()?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let attributes = Attributes::new(vec![Attribute::new("mail", values(&["a@example.com"]))
+        .with_name_format(AttributeNameFormat::Basic)]);
+    match idp.initiate_sso(
+        &sp_descriptor,
+        &alice(),
+        RespondSso::post().attributes(attributes),
+    ) {
+        Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
+        other => return Err(format!("expected template error, got {other:?}").into()),
     }
     Ok(())
 }
@@ -439,7 +415,7 @@ fn accept_peer_attribute_statement(
     statement: &str,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let template = LoginResponseTemplate {
-        context: Some(LOGIN_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", statement, 1)),
+        context: Some(SSO_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", statement, 1)),
         attributes: Vec::new(),
     };
     accept_peer_response(template, Vec::new())
@@ -451,10 +427,7 @@ fn accept_peer_response(
     user_attributes: Vec<(String, String)>,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let sp = sp()?;
-    let idp = idp_with(TemplatePolicy {
-        login_response_template: Some(template),
-        ..TemplatePolicy::default()
-    })?;
+    let idp = idp()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let user = User {
@@ -462,7 +435,9 @@ fn accept_peer_response(
         attributes: user_attributes,
         session_index: None,
     };
-    let context = idp.raw_identity_provider().create_login_response(
+    let mut raw_idp = idp.raw_identity_provider().clone();
+    raw_idp.setting.login_response_template = Some(template);
+    let context = raw_idp.create_login_response(
         sp.raw_service_provider(),
         Binding::Post,
         &user,
@@ -730,13 +705,7 @@ fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_iss
 fn a_login_response_template_does_not_drop_a_name_id_qualifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
-    let idp = idp_with(TemplatePolicy {
-        login_response_template: Some(LoginResponseTemplate {
-            context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-            attributes: Vec::new(),
-        }),
-        ..TemplatePolicy::default()
-    })?;
+    let idp = templated_idp()?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     let pseudonym = NameId::new("pseudonym").with_format(NameIdFormat::Persistent);
 
@@ -821,13 +790,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         .credentials(signing_credentials())
         .validation(IdpValidationPolicy::recommended())
         .name_id_format(NameIdFormat::Persistent)
-        .templates(TemplatePolicy {
-            login_response_template: Some(LoginResponseTemplate {
-                context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-                attributes: Vec::new(),
-            }),
-            ..TemplatePolicy::default()
-        })
+        .sso_response_template(SSO_RESPONSE_TEMPLATE)
         .build()?,
     );
     expect_name_id_length_error(templated.raw_identity_provider().create_login_response(
@@ -1031,13 +994,11 @@ fn expect_name_id_format_error<T>(
 }
 
 fn templated_idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
-    idp_with(TemplatePolicy {
-        login_response_template: Some(LoginResponseTemplate {
-            context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-            attributes: Vec::new(),
-        }),
-        ..TemplatePolicy::default()
-    })
+    Ok(Saml::idp(
+        idp_config()?
+            .sso_response_template(SSO_RESPONSE_TEMPLATE)
+            .build()?,
+    ))
 }
 
 #[test]
@@ -1192,7 +1153,7 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
     raw_sp.setting.name_id_format = Vec::new();
     for template in [
         None,
-        Some(saml_rs::config::LOGIN_REQUEST_TEMPLATE.to_string()),
+        Some(saml_rs::config::AUTHN_REQUEST_TEMPLATE.to_string()),
     ] {
         raw_sp.setting.login_request_template = template;
         let context = raw_sp.create_login_request(

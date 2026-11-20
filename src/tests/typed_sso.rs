@@ -19,7 +19,7 @@ use std::time::{Duration, SystemTime};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{append_signature, build_redirect_octet, deflate_raw_decode};
-use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
+use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
 use saml_rs::constants::{status_code, ParserType};
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
@@ -31,7 +31,6 @@ use saml_rs::logout::create_logout_request;
 use saml_rs::raw::Binding;
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 use saml_rs::xml::dom::parse_document;
-use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew, EntityId,
@@ -40,7 +39,7 @@ use saml_rs::{
     PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
     RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, SsoResponseBinding, StartSso, Status,
-    SubordinateStatusCode, TemplatePolicy, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
+    SubordinateStatusCode, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -2491,30 +2490,22 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
     let lifetime = Duration::from_secs(11 * 60);
     for (template, binding) in [
         (None, SsoResponseBinding::Post),
-        (
-            Some(LoginResponseTemplate {
-                context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-                attributes: Vec::new(),
-            }),
-            SsoResponseBinding::SimpleSign,
-        ),
+        (Some(SSO_RESPONSE_TEMPLATE), SsoResponseBinding::SimpleSign),
     ] {
         let sp = Saml::sp(sp_config_with_default_response_binding(binding)?);
-        let idp = Saml::idp(
-            IdpConfig::builder(
-                EntityId::try_new(IDP_ENTITY_ID)?,
-                SsoEndpoint::post(IDP_SSO_POST)?,
-            )
-            .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
-            .credentials(signing_credentials())
-            .issuance_lifetime(lifetime)
-            .validation(signed_authn_request_idp_validation())
-            .templates(TemplatePolicy {
-                login_response_template: template,
-                ..TemplatePolicy::default()
-            })
-            .build()?,
-        );
+        let idp_config = IdpConfig::builder(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            SsoEndpoint::post(IDP_SSO_POST)?,
+        )
+        .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
+        .credentials(signing_credentials())
+        .issuance_lifetime(lifetime)
+        .validation(signed_authn_request_idp_validation());
+        let idp_config = match template {
+            Some(template) => idp_config.sso_response_template(template),
+            None => idp_config,
+        };
+        let idp = Saml::idp(idp_config.build()?);
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let options = match binding {
             SsoResponseBinding::Post => RespondSso::post(),

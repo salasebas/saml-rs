@@ -1,4 +1,5 @@
 use crate::entity::EntitySetting;
+use crate::template::LoginResponseTemplate;
 
 use super::algorithms::{name_id_format_uris, transform_algorithm_uris, NameIdFormat};
 use super::builders::{IdpConfigBuilder, SpConfigBuilder};
@@ -22,6 +23,7 @@ impl SpConfigBuilder {
             &self.xml,
             &self.templates,
         );
+        setting.login_request_template = self.authn_request_template.clone();
         let validation = &self.validation;
         setting.allow_create = name_id_creation_allowed(validation.name_id_creation);
         setting.authn_requests_signed = authn_request_signing_enabled(validation.authn_requests);
@@ -49,6 +51,11 @@ impl IdpConfigBuilder {
             &self.xml,
             &self.templates,
         );
+        let template = self.sso_response_template.clone();
+        setting.login_response_template = template.map(|context| LoginResponseTemplate {
+            context: Some(context),
+            attributes: Vec::new(),
+        });
         let validation = &self.validation;
         setting.want_authn_requests_signed =
             authn_request_signature_required(validation.authn_requests);
@@ -117,8 +124,6 @@ fn common_setting(
         tag_prefix_protocol: templates.tag_prefix_protocol.clone(),
         tag_prefix_assertion: templates.tag_prefix_assertion.clone(),
         tag_prefix_encrypted_assertion: templates.tag_prefix_assertion.clone(),
-        login_response_template: templates.login_response_template.clone(),
-        login_request_template: templates.login_request_template.clone(),
         logout_request_template: templates.logout_request_template.clone(),
         logout_response_template: templates.logout_response_template.clone(),
         signature_config: templates.signature_config.clone(),

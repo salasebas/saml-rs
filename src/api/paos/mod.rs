@@ -361,7 +361,7 @@ impl PaosHttpResponse<SsoResponse> {
     /// Record it with the user's session to match the `SessionIndex` of a
     /// later `LogoutRequest`. `None` when this library wrote no
     /// `SessionIndex`. A `SessionIndex` written by
-    /// [`TemplatePolicy::login_response_template`](crate::TemplatePolicy::login_response_template)
+    /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template)
     /// is not reported.
     pub fn session_index(&self) -> Option<&SessionIndex> {
         self.session_index.as_ref()

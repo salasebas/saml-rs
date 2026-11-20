@@ -216,7 +216,7 @@ impl Outbound<SsoResponse> {
     /// or delivered by artifact. `None` when this library wrote no
     /// `SessionIndex`, and for an outbound built from a [`BindingContext`]. A
     /// `SessionIndex` written by
-    /// [`TemplatePolicy::login_response_template`](crate::TemplatePolicy::login_response_template)
+    /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template)
     /// is not reported.
     pub fn session_index(&self) -> Option<&SessionIndex> {
         self.session_index.as_ref()
