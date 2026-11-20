@@ -14,19 +14,15 @@ let policy = SpValidationPolicy::recommended();
 To require a signature directly on the Assertion, and leave the XML-DSig profile unchanged:
 
 ```rust
-let require_assertion_signature = SpValidationPolicy {
-    assertions: AssertionSignaturePolicy::RequireSigned,
-    ..SpValidationPolicy::recommended()
-};
+let mut require_assertion_signature = SpValidationPolicy::recommended();
+require_assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
 ```
 
 To require the RSA-SHA2 XML-DSig profile, and leave Assertion signatures optional:
 
 ```rust
-let require_rsa_sha2 = SpValidationPolicy {
-    xml_signatures: XmlSignatureProfile::StrictRsaSha2,
-    ..SpValidationPolicy::recommended()
-};
+let mut require_rsa_sha2 = SpValidationPolicy::recommended();
+require_rsa_sha2.xml_signatures = XmlSignatureProfile::StrictRsaSha2;
 ```
 
 Set both fields when you want both. `IdpValidationPolicy::recommended()` and `LogoutPolicy::recommended()` are the matching presets. `LogoutPolicy::recommended()` requires a signature on logout requests and responses.

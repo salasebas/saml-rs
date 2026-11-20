@@ -224,7 +224,20 @@ pub enum NameIdCreationPolicy {
 /// Logout features. [`Self::compatibility`] is the legacy permissive preset.
 /// [`Default`](Default::default) is [`Self::recommended`]. Field classification
 /// is in `docs/conformance/`.
+///
+/// Start from a preset and assign the fields you change. A struct literal
+/// does not compile outside the crate:
+///
+/// ```compile_fail,E0639
+/// use saml_rs::{AudienceValidationPolicy, SpValidationPolicy};
+///
+/// let policy = SpValidationPolicy {
+///     audience: AudienceValidationPolicy::RequireRestriction,
+///     ..SpValidationPolicy::recommended()
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SpValidationPolicy {
     /// Assertion signature requirement.
     pub assertions: AssertionSignaturePolicy,
@@ -255,10 +268,8 @@ impl SpValidationPolicy {
     /// ```
     /// use saml_rs::{AssertionSignaturePolicy, SpValidationPolicy, XmlSignatureProfile};
     ///
-    /// let with_assertion_signature = SpValidationPolicy {
-    ///     assertions: AssertionSignaturePolicy::RequireSigned,
-    ///     ..SpValidationPolicy::recommended()
-    /// };
+    /// let mut with_assertion_signature = SpValidationPolicy::recommended();
+    /// with_assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
     /// assert_eq!(
     ///     with_assertion_signature.xml_signatures,
     ///     XmlSignatureProfile::ExcludeWeakAlgorithms
@@ -303,7 +314,20 @@ impl Default for SpValidationPolicy {
 /// Logout features. [`Self::compatibility`] is the legacy permissive preset.
 /// [`Default`](Default::default) is [`Self::recommended`]. Field classification
 /// is in `docs/conformance/`.
+///
+/// Start from a preset and assign the fields you change. A struct literal
+/// does not compile outside the crate:
+///
+/// ```compile_fail,E0639
+/// use saml_rs::{AuthnRequestValidationPolicy, IdpValidationPolicy};
+///
+/// let policy = IdpValidationPolicy {
+///     authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+///     ..IdpValidationPolicy::recommended()
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct IdpValidationPolicy {
     /// Inbound AuthnRequest signature requirement.
     pub authn_requests: AuthnRequestValidationPolicy,
@@ -357,7 +381,20 @@ impl Default for IdpValidationPolicy {
 /// [`crate::LogoutSigning::FollowLocalPolicy`], `requests` also decides
 /// whether an outbound `LogoutRequest` is signed. See
 /// `docs/conformance/single-logout.md`.
+///
+/// Start from a preset and assign the fields you change. A struct literal
+/// does not compile outside the crate:
+///
+/// ```compile_fail,E0639
+/// use saml_rs::{LogoutPolicy, LogoutSignaturePolicy};
+///
+/// let policy = LogoutPolicy {
+///     responses: LogoutSignaturePolicy::AllowUnsigned,
+///     ..LogoutPolicy::recommended()
+/// };
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LogoutPolicy {
     /// LogoutRequest signature behavior.
     pub requests: LogoutSignaturePolicy,
@@ -470,50 +507,24 @@ pub enum Rsa15KeyTransportPolicy {
 ///
 /// [`Default`](Default::default) encrypts nothing, rejects RSA-v1.5 key
 /// transport, and allows [`DEFAULT_MAX_DECRYPTION_WORK`](crate::constants::DEFAULT_MAX_DECRYPTION_WORK)
-/// units of decryption work.
+/// units of decryption work. Start from it and assign the fields you change.
 ///
 /// # Examples
 ///
-/// Use typed configuration to request encrypted assertions in generated
-/// responses. This only configures policy; actual encryption uses the crate's
-/// XML-Enc backend and deployment credentials.
-///
-/// ```
-/// use saml_rs::{
-///     AssertionEncryptionPolicy, EntityId, IdpConfig, SsoEndpoint, XmlEncryptionPolicy,
-///     XmlPolicy,
-/// };
-///
-/// let xml = XmlPolicy {
-///     encryption: XmlEncryptionPolicy {
-///         assertions: AssertionEncryptionPolicy::EncryptAssertions,
-///         ..XmlEncryptionPolicy::default()
-///     },
-///     ..XmlPolicy::default()
-/// };
-/// let idp_builder = IdpConfig::builder(
-///     EntityId::try_new("https://idp.example.com/metadata")?,
-///     SsoEndpoint::post("https://idp.example.com/sso")?,
-/// )
-/// .xml(xml);
-/// # let _ = idp_builder;
-/// # Ok::<(), saml_rs::SamlError>(())
-/// ```
-///
-/// Each element is selected on its own. Selecting identifier encryption does
-/// not select attribute or assertion encryption:
+/// [`XmlPolicy`] shows how to encrypt assertions. Each element is selected on
+/// its own. Selecting identifier encryption does not select attribute or
+/// assertion encryption:
 ///
 /// ```
 /// use saml_rs::{AttributeEncryptionPolicy, IdentifierEncryptionPolicy, XmlEncryptionPolicy};
 ///
-/// let encryption = XmlEncryptionPolicy {
-///     identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
-///     attributes: AttributeEncryptionPolicy::EncryptAttributes,
-///     ..XmlEncryptionPolicy::default()
-/// };
+/// let mut encryption = XmlEncryptionPolicy::default();
+/// encryption.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers;
+/// encryption.attributes = AttributeEncryptionPolicy::EncryptAttributes;
 /// # let _ = encryption;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct XmlEncryptionPolicy {
     /// Assertion encryption behavior.
     pub assertions: AssertionEncryptionPolicy,
@@ -603,6 +614,9 @@ pub(crate) enum ReceivedEncryptedElements {
 
 /// XML parser, redirect decompression, and XML encryption policy.
 ///
+/// Start from [`Default`](Default::default) and assign the fields you change,
+/// including nested ones such as `encryption.assertions`.
+///
 /// Clock skew tolerance is not part of the config. Set it per call with
 /// [`SamlValidationContext::with_clock_skew`](crate::SamlValidationContext::with_clock_skew).
 ///
@@ -615,23 +629,17 @@ pub(crate) enum ReceivedEncryptedElements {
 /// Encrypt assertions and keep the other defaults:
 ///
 /// ```
-/// use saml_rs::{
-///     AcsEndpoint, AssertionEncryptionPolicy, EntityId, SpConfig, XmlEncryptionPolicy, XmlPolicy,
-/// };
+/// use saml_rs::{AcsEndpoint, AssertionEncryptionPolicy, EntityId, SpConfig, XmlPolicy};
 ///
-/// let xml = XmlPolicy {
-///     encryption: XmlEncryptionPolicy {
-///         assertions: AssertionEncryptionPolicy::EncryptAssertions,
-///         ..XmlEncryptionPolicy::default()
-///     },
-///     ..XmlPolicy::default()
-/// };
+/// let mut xml = XmlPolicy::default();
+/// xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 /// let sp_builder = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
 ///     .xml(xml);
 /// # let _ = sp_builder;
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub struct XmlPolicy {
     /// Optional schema validation for received XML, including decrypted messages.
     pub schema_validator: Option<crate::SchemaValidator>,
@@ -673,7 +681,10 @@ impl Default for XmlPolicy {
 }
 
 /// Algorithm choices used by outgoing SAML messages.
+///
+/// Start from [`Default`](Default::default) and assign the fields you change.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AlgorithmPolicy {
     /// Signature algorithm URI.
     pub signature: SignatureAlgorithm,
@@ -713,11 +724,14 @@ impl Default for AlgorithmPolicy {
 /// Logout templates, XML tag prefixes, and embedded-signature placement that
 /// both roles use.
 ///
+/// Start from [`Default`](Default::default) and assign the fields you change.
+///
 /// The SSO templates belong to one role each: set them with
 /// [`SpConfigBuilder::authn_request_template`](crate::SpConfigBuilder::authn_request_template)
 /// and
 /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template).
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct TemplatePolicy {
     /// Prefix of the generated protocol-namespace elements, `samlp` by
     /// default.

@@ -11,10 +11,8 @@
 role's `XmlPolicy` before building its configuration:
 
 ```rust
-let xml = XmlPolicy {
-    schema_validator: Some(validate_schema),
-    ..XmlPolicy::default()
-};
+let mut xml = XmlPolicy::default();
+xml.schema_validator = Some(validate_schema);
 let config = sp_builder.xml(xml).build()?;
 ```
 
@@ -33,8 +31,10 @@ network resolution in your validator.
 `context::is_valid_xml_with_limits` now performs baseline parsing checks only.
 Raw `EntitySetting` and `FlowOptions` expose their own `schema_validator` field.
 Both types were already non-exhaustive, so adding that field does not break
-external construction. Add the field to a full `XmlPolicy` literal, or use
-`..Default::default()`.
+external construction. `XmlPolicy` is non-exhaustive now too. Replace a full
+`XmlPolicy` literal as
+[Assign policy fields on a preset or `Default`](config.md#assign-policy-fields-on-a-preset-or-default)
+describes.
 
 ## 9.2 Validate imported metadata explicitly
 

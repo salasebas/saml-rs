@@ -7,7 +7,6 @@ use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
-use saml_rs::XmlLimits;
 use saml_rs::{ResourceLimit, SamlError};
 use url::Url;
 
@@ -178,10 +177,7 @@ fn post_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Post);
     opts.parser_type = Some(ParserType::SamlRequest);
-    opts.xml_limits = XmlLimits {
-        max_bytes: 8,
-        ..Default::default()
-    };
+    opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
         .err()
@@ -206,10 +202,7 @@ fn simplesign_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::e
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::SimpleSign);
     opts.parser_type = Some(ParserType::SamlRequest);
-    opts.xml_limits = XmlLimits {
-        max_bytes: 8,
-        ..Default::default()
-    };
+    opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
         .err()
@@ -236,10 +229,7 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
     let mut opts = FlowOptions::default();
     opts.binding = Some(Binding::Post);
     opts.parser_type = Some(ParserType::SamlRequest);
-    opts.xml_limits = XmlLimits {
-        max_nodes: 3,
-        ..Default::default()
-    };
+    opts.xml_limits.max_nodes = 3;
 
     let err = flow(&opts, &request)
         .err()

@@ -31,16 +31,15 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
+    let mut validation = SpValidationPolicy::recommended();
+    validation.authn_requests = authn_requests;
     Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy {
-            authn_requests,
-            ..SpValidationPolicy::recommended()
-        })
+        .validation(validation)
         .build()?,
     ))
 }

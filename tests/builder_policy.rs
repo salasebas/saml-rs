@@ -14,36 +14,31 @@ use saml_rs::{
 };
 
 use saml_rs::raw::EntitySetting;
-#[cfg(crypto)]
-use saml_rs::XmlEncryptionPolicy;
 
 #[test]
 fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
-    let mut algorithms = vec![AlgorithmPolicy {
-        key_encryption: KeyEncryptionAlgorithm::RsaOaep {
-            digest: DigestAlgorithm::Custom("urn:test:unsupported-oaep-digest".into()),
-            mgf: MaskGenerationFunction::Mgf1Sha256,
-        },
-        ..AlgorithmPolicy::default()
-    }];
+    let mut unsupported_digest = AlgorithmPolicy::default();
+    unsupported_digest.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+        digest: DigestAlgorithm::Custom("urn:test:unsupported-oaep-digest".into()),
+        mgf: MaskGenerationFunction::Mgf1Sha256,
+    };
+    let mut algorithms = vec![unsupported_digest];
     if cfg!(any(
         feature = "crypto-aws-lc",
         feature = "crypto-fips",
         not(crypto)
     )) {
-        algorithms.push(AlgorithmPolicy {
-            key_encryption: KeyEncryptionAlgorithm::RsaOaep {
-                digest: DigestAlgorithm::Sha256,
-                mgf: MaskGenerationFunction::Mgf1Sha384,
-            },
-            ..AlgorithmPolicy::default()
-        });
+        let mut mismatched_mgf = AlgorithmPolicy::default();
+        mismatched_mgf.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+            digest: DigestAlgorithm::Sha256,
+            mgf: MaskGenerationFunction::Mgf1Sha384,
+        };
+        algorithms.push(mismatched_mgf);
     }
     if cfg!(not(crypto)) {
-        algorithms.push(AlgorithmPolicy {
-            data_encryption: DataEncryptionAlgorithm::Aes256Gcm,
-            ..AlgorithmPolicy::default()
-        });
+        let mut gcm = AlgorithmPolicy::default();
+        gcm.data_encryption = DataEncryptionAlgorithm::Aes256Gcm;
+        algorithms.push(gcm);
     }
     for algorithms in algorithms {
         let sp = SpConfig::builder(
@@ -211,45 +206,15 @@ fn compatibility_policy_names_unsigned_choices_explicitly() {
 }
 
 #[test]
-fn recommended_preset_matches_classified_validation_and_hardenings_stay_independent() {
-    let recommended_logout = LogoutPolicy {
-        requests: LogoutSignaturePolicy::RequireSigned,
-        responses: LogoutSignaturePolicy::RequireSigned,
-    };
-    assert_eq!(LogoutPolicy::recommended(), recommended_logout);
-    assert_eq!(
-        SpValidationPolicy::recommended(),
-        SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::AllowUnsigned,
-            responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
-            xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
-            authn_requests: AuthnRequestSigningPolicy::DoNotSign,
-            audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
-            name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
-            logout: recommended_logout,
-        }
-    );
-    assert_eq!(
-        IdpValidationPolicy::recommended(),
-        IdpValidationPolicy {
-            authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
-            xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
-            logout: recommended_logout,
-        }
-    );
-
-    let assertion_signature = SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        ..SpValidationPolicy::recommended()
-    };
+fn recommended_hardenings_stay_independent() {
+    let mut assertion_signature = SpValidationPolicy::recommended();
+    assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
     assert_eq!(
         assertion_signature.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms
     );
-    let rsa_sha2 = SpValidationPolicy {
-        xml_signatures: XmlSignatureProfile::StrictRsaSha2,
-        ..SpValidationPolicy::recommended()
-    };
+    let mut rsa_sha2 = SpValidationPolicy::recommended();
+    rsa_sha2.xml_signatures = XmlSignatureProfile::StrictRsaSha2;
     assert_eq!(rsa_sha2.assertions, AssertionSignaturePolicy::AllowUnsigned);
 }
 
@@ -290,21 +255,15 @@ fn custom_algorithm_variants_keep_simple_names() {
 #[cfg(crypto)]
 #[test]
 fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
-    let algorithms = AlgorithmPolicy {
-        signature: SignatureAlgorithm::RsaSha512,
-        data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
-        key_encryption: KeyEncryptionAlgorithm::RsaOaepMgf1p,
-        signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
-        ..AlgorithmPolicy::default()
-    };
-    let xml = XmlPolicy {
-        redirect_inflate_max_bytes: 64 * 1024,
-        ..XmlPolicy::default()
-    };
-    let templates = TemplatePolicy {
-        tag_prefix_protocol: "p".to_string(),
-        ..TemplatePolicy::default()
-    };
+    let mut algorithms = AlgorithmPolicy::default();
+    algorithms.signature = SignatureAlgorithm::RsaSha512;
+    algorithms.data_encryption = DataEncryptionAlgorithm::Aes128Cbc;
+    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+    algorithms.signed_reference_transforms = vec![TransformAlgorithm::ExclusiveCanonicalization];
+    let mut xml = XmlPolicy::default();
+    xml.redirect_inflate_max_bytes = 64 * 1024;
+    let mut templates = TemplatePolicy::default();
+    templates.tag_prefix_protocol = "p".to_string();
 
     let config = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
@@ -328,21 +287,15 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(crypto)]
 #[test]
 fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
-    let algorithms = AlgorithmPolicy {
-        signature: SignatureAlgorithm::RsaSha384,
-        data_encryption: DataEncryptionAlgorithm::Aes256Cbc,
-        key_encryption: KeyEncryptionAlgorithm::RsaOaepMgf1p,
-        signed_reference_transforms: vec![TransformAlgorithm::EnvelopedSignature],
-        ..AlgorithmPolicy::default()
-    };
-    let xml = XmlPolicy {
-        redirect_inflate_max_bytes: 128 * 1024,
-        ..XmlPolicy::default()
-    };
-    let templates = TemplatePolicy {
-        tag_prefix_assertion: "a".to_string(),
-        ..TemplatePolicy::default()
-    };
+    let mut algorithms = AlgorithmPolicy::default();
+    algorithms.signature = SignatureAlgorithm::RsaSha384;
+    algorithms.data_encryption = DataEncryptionAlgorithm::Aes256Cbc;
+    algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaepMgf1p;
+    algorithms.signed_reference_transforms = vec![TransformAlgorithm::EnvelopedSignature];
+    let mut xml = XmlPolicy::default();
+    xml.redirect_inflate_max_bytes = 128 * 1024;
+    let mut templates = TemplatePolicy::default();
+    templates.tag_prefix_assertion = "a".to_string();
 
     let config = IdpConfig::builder(
         EntityId::try_new("https://idp.example.com/metadata")?,
@@ -454,22 +407,17 @@ fn sp_builder_rejects_two_acs_endpoints_with_the_same_index(
 #[test]
 fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut protocol_prefix = TemplatePolicy::default();
+    protocol_prefix.tag_prefix_protocol = "saml:p".into();
+    let mut signature_prefix = TemplatePolicy::default();
+    signature_prefix.signature_config = Some(SignatureConfig {
+        prefix: "ds:p".into(),
+        ..SignatureConfig::default()
+    });
     for (templates, expected) in [
+        (protocol_prefix, "protocol tag prefix must be an XML NCName"),
         (
-            TemplatePolicy {
-                tag_prefix_protocol: "saml:p".into(),
-                ..TemplatePolicy::default()
-            },
-            "protocol tag prefix must be an XML NCName",
-        ),
-        (
-            TemplatePolicy {
-                signature_config: Some(SignatureConfig {
-                    prefix: "ds:p".into(),
-                    ..SignatureConfig::default()
-                }),
-                ..TemplatePolicy::default()
-            },
+            signature_prefix,
             "SignatureConfig.prefix XML prefix must be an XML NCName",
         ),
     ] {
@@ -504,14 +452,13 @@ fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
 #[test]
 fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut validation = SpValidationPolicy::recommended();
+    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     let result = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy {
-        authn_requests: AuthnRequestSigningPolicy::Sign,
-        ..SpValidationPolicy::recommended()
-    })
+    .validation(validation)
     .build();
 
     assert_missing_key(result, "signing_credential");
@@ -537,13 +484,8 @@ fn sp_builder_allows_protocol_only_compatibility_without_credentials(
 #[test]
 fn sp_builder_requires_decryption_key_when_encrypted_assertions_are_selected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let mut xml = XmlPolicy::default();
+    xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
     let result = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,

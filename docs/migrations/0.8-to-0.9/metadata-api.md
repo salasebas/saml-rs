@@ -25,7 +25,8 @@ After:
 use saml_rs::metadata::Metadata;
 use saml_rs::{XmlLimits, XmlPolicy};
 let limits = XmlLimits::default();
-let policy = XmlPolicy { limits, ..XmlPolicy::default() };
+let mut policy = XmlPolicy::default();
+policy.limits = limits;
 let metadata = Metadata::parse(xml)?;
 let limited = Metadata::parse_with_limits(xml, limits)?;
 let checked = Metadata::parse_with_policy(xml, &policy)?;

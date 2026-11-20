@@ -28,6 +28,7 @@ mod name_id_management_encryption;
 mod name_id_management_redirect;
 mod namespace_version;
 mod paos_destination;
+mod policy_presets;
 #[cfg_attr(
     crypto,
     expect(deprecated, reason = "pins the deprecated signature verifiers")

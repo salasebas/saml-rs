@@ -52,17 +52,16 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
+    let mut validation = SpValidationPolicy::recommended();
+    validation.assertions = AssertionSignaturePolicy::RequireSigned;
+    validation.audience = AudienceValidationPolicy::RequireRestriction;
     Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy {
-            assertions: AssertionSignaturePolicy::RequireSigned,
-            audience: AudienceValidationPolicy::RequireRestriction,
-            ..SpValidationPolicy::recommended()
-        })
+        .validation(validation)
         .build()?,
     ))
 }
