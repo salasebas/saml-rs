@@ -3,7 +3,7 @@
 
 use crate::assertion_acceptance::first_login_assertion_xml;
 use crate::binding::{
-    base64_decode_with_limit, deflate_raw_decode_with_limit, single_parameter,
+    decode_base64_with_limit, deflate_raw_decode_with_limit, single_parameter,
     MAX_DEFLATE_RAW_DECODE_BYTES,
 };
 use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
@@ -338,14 +338,14 @@ fn decode_message(
                 .query_get(direction)?
                 .ok_or_else(|| missing_binding_parameter(direction))?;
             let redirect_max_bytes = redirect_inflate_max_bytes.min(xml_limits.max_bytes);
-            let compressed = base64_decode_with_limit(content, redirect_max_bytes)?;
+            let compressed = decode_base64_with_limit(content, redirect_max_bytes)?;
             deflate_raw_decode_with_limit(&compressed, redirect_max_bytes)?
         }
         Binding::Post | Binding::SimpleSign => {
             let content = request
                 .body_get(direction)?
                 .ok_or_else(|| missing_binding_parameter(direction))?;
-            base64_decode_with_limit(content, xml_limits.max_bytes)?
+            decode_base64_with_limit(content, xml_limits.max_bytes)?
         }
         Binding::Artifact | Binding::Soap => return Err(unsupported_binding(binding)),
     };

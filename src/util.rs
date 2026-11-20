@@ -1,8 +1,4 @@
-//! Small helper types and normalization functions.
-//!
-//! Base64 and DEFLATE live in [`crate::binding`]; this module covers the
-//! certificate/key string normalisation and collection helpers used by the
-//! extractor and metadata layers.
+//! The [`Value`] field tree that the XML extractor returns.
 
 use std::collections::{HashMap, HashSet};
 
@@ -86,25 +82,15 @@ impl Value {
     }
 }
 
-fn strip_pem(input: &str, label: &str) -> String {
-    input
-        .replace(&format!("-----BEGIN {label}-----"), "")
-        .replace(&format!("-----END {label}-----"), "")
+/// Strip a certificate PEM down to its bare base64 body.
+pub(crate) fn normalize_cert_string(cert: &str) -> String {
+    cert.replace("-----BEGIN CERTIFICATE-----", "")
+        .replace("-----END CERTIFICATE-----", "")
         .replace(['\n', '\r', ' ', '\t'], "")
 }
 
-/// Strip a certificate PEM down to its bare base64 body.
-pub fn normalize_cert_string(cert: &str) -> String {
-    strip_pem(cert, "CERTIFICATE")
-}
-
-/// Strip an RSA private-key PEM down to its bare base64 body.
-pub fn normalize_pem_string(pem: &str) -> String {
-    strip_pem(pem, "RSA PRIVATE KEY")
-}
-
 /// De-duplicate strings, preserving first-seen order.
-pub fn uniq<I, S>(items: I) -> Vec<String>
+pub(crate) fn uniq<I, S>(items: I) -> Vec<String>
 where
     I: IntoIterator<Item = S>,
     S: Into<String>,
@@ -122,7 +108,7 @@ where
 
 /// camelCase an identifier, matching the npm `camelcase` defaults for the
 /// PascalCase SAML attribute names used across the field-sets and templates.
-pub fn camel_case(input: &str) -> String {
+pub(crate) fn camel_case(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
     let mut words: Vec<String> = Vec::new();
     let mut cur = String::new();
@@ -171,7 +157,7 @@ pub fn camel_case(input: &str) -> String {
 ///
 /// When `skip_duplicated` is true the last value for a key wins; otherwise
 /// duplicate keys are aggregated into a [`Value::Array`].
-pub fn zip_object(keys: &[String], values: Vec<Value>, skip_duplicated: bool) -> Value {
+pub(crate) fn zip_object(keys: &[String], values: Vec<Value>, skip_duplicated: bool) -> Value {
     let mut out: Vec<(String, Value)> = Vec::new();
     let mut positions: HashMap<&str, usize> = HashMap::new();
     for (key, value) in keys.iter().zip(values) {
@@ -204,12 +190,6 @@ mod tests {
     fn normalize_cert_strips_header_and_whitespace() {
         let pem = "-----BEGIN CERTIFICATE-----\nMIIB AgID\r\n\t-----END CERTIFICATE-----\n";
         assert_eq!(normalize_cert_string(pem), "MIIBAgID");
-    }
-
-    #[test]
-    fn normalize_pem_strips_rsa_label() {
-        let pem = "-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----";
-        assert_eq!(normalize_pem_string(pem), "AAAA");
     }
 
     #[test]

@@ -87,7 +87,6 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
         key_encryption: KeyEncryptionAlgorithm::Rsa15,
         signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
-        ..AlgorithmPolicy::default()
     })
     .build()?
     .service_provider

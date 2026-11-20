@@ -87,7 +87,6 @@ fn common_setting(
         } else {
             None
         },
-        message_signing_order: algorithms.message_signing_order,
         is_assertion_encrypted: matches!(
             xml.encryption.assertions,
             AssertionEncryptionPolicy::EncryptAssertions

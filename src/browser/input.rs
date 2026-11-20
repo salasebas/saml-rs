@@ -9,7 +9,7 @@ use super::forms::FormField;
 use super::MessageField;
 use crate::artifact::ResolvedProtocolMessage;
 use crate::binding::{
-    base64_decode_with_limit, build_simplesign_octet, encode_base64, single_parameter,
+    build_simplesign_octet, decode_base64_with_limit, encode_base64, single_parameter,
 };
 use crate::constants::{url_params, Binding};
 use crate::error::{utf8_err, SamlError};
@@ -562,7 +562,7 @@ fn simplesign_octet_from_fields(
 ) -> Result<String, SamlError> {
     let message_name = expected_message.param_name();
     let encoded = validate_form_message_kind(fields, expected_message)?;
-    let raw_xml = String::from_utf8(base64_decode_with_limit(encoded, limits.max_bytes)?)
+    let raw_xml = String::from_utf8(decode_base64_with_limit(encoded, limits.max_bytes)?)
         .map_err(utf8_err)?;
     let sig_alg =
         field_value(fields, url_params::SIG_ALG)?.ok_or(SamlError::MissingBindingParameter {

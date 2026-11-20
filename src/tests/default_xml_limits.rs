@@ -1,7 +1,7 @@
 use saml_rs::constants::ParserType;
 use saml_rs::context::is_valid_xml_with_limits;
 use saml_rs::validator::{check_status, check_status_with_limits};
-use saml_rs::xml::{dom::DEFAULT_XML_MAX_BYTES, extract, extract_with_limits};
+use saml_rs::xml::{extract, extract_with_limits};
 use saml_rs::SamlError;
 use saml_rs::XmlLimits;
 
@@ -13,7 +13,7 @@ use saml_rs::XmlLimits;
 fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!(
         "<Response><Status><StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/></Status>{}</Response>",
-        " ".repeat(DEFAULT_XML_MAX_BYTES)
+        " ".repeat(XmlLimits::default().max_bytes)
     );
     let raised = XmlLimits {
         max_bytes: xml.len(),

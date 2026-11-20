@@ -5,7 +5,6 @@
 use std::time::SystemTime;
 
 use saml_rs::error::SignatureVerificationReason;
-use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
@@ -22,6 +21,13 @@ const SP_ROLE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs
 const SP_ROLE_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const IDP_ROLE_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
 const IDP_ROLE_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+
+fn certificate_base64(pem: &str) -> String {
+    pem.lines()
+        .filter(|line| !line.trim_start().starts_with("-----"))
+        .flat_map(str::split_whitespace)
+        .collect()
+}
 
 fn credentials(key: &str, cert: &str) -> Credentials {
     Credentials::default().with_signing_credential(X509Credential::new(
@@ -89,7 +95,7 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
     let identity_provider = idp_signing_with(IDP_ROLE_KEY, IDP_ROLE_CERT)?;
     let sp_role_of_idp = format!(
         r#"<SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/as-sp/acs" index="0"/></SPSSODescriptor></EntityDescriptor>"#,
-        normalize_cert_string(SP_ROLE_CERT)
+        certificate_base64(SP_ROLE_CERT)
     );
     let dual_role_idp = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -132,7 +138,7 @@ const EXPIRED: &str = "2001-01-01T00:00:00Z";
 fn signing_key_descriptor(certificate: &str) -> String {
     format!(
         r#"<KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>{}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>"#,
-        normalize_cert_string(certificate)
+        certificate_base64(certificate)
     )
 }
 
@@ -228,7 +234,7 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
                     .filter(|node| node.has_tag_name("X509Certificate"))
                     .map(|node| node.text().unwrap_or_default())
                     .collect();
-                assert_eq!(certificates, [normalize_cert_string(expected)]);
+                assert_eq!(certificates, [certificate_base64(expected)]);
             }
         }
 
@@ -294,7 +300,7 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
                 idp_metadata.as_metadata().name_id_formats(),
             ),
             (
-                [normalize_cert_string(IDP_ROLE_CERT)].as_slice(),
+                [certificate_base64(IDP_ROLE_CERT)].as_slice(),
                 false,
                 Some(IDP_SSO),
                 0,
@@ -376,7 +382,7 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
                 sp_metadata.as_metadata().name_id_formats(),
             ),
             (
-                [normalize_cert_string(SP_ROLE_CERT)].as_slice(),
+                [certificate_base64(SP_ROLE_CERT)].as_slice(),
                 true,
                 false,
                 Some(SP_ACS),
