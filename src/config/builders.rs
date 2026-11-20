@@ -648,16 +648,21 @@ impl IdpConfigBuilder {
     /// [`TemplatePolicy::tag_prefix_assertion`]. A template that writes other
     /// prefixes, or whitespace before the `=`, is not rewritten.
     ///
-    /// With a template set, the response methods return
-    /// [`SamlError::Invalid`] for:
+    /// The template renders only a response that carries an assertion. An
+    /// [`SsoOutcome::Failure`](crate::SsoOutcome::Failure) is written by the
+    /// built-in renderer, as it is without a template: an `Issuer`, the
+    /// `Status`, `Destination`, and, in answer to a request, `InResponseTo`,
+    /// with the [`TemplatePolicy`] prefixes and no assertion.
     ///
-    /// - [`Saml::respond_paos_sso`](crate::Saml::respond_paos_sso), which
-    ///   always applies the producer rules, and a response with
+    /// With a template set, the response methods return
+    /// [`SamlError::Invalid`] for an assertion:
+    ///
+    /// - from [`Saml::respond_paos_sso`](crate::Saml::respond_paos_sso),
+    ///   which always applies the producer rules, or with
     ///   [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules);
-    /// - an [`SsoOutcome::Failure`](crate::SsoOutcome::Failure);
-    /// - attributes from
+    /// - with attributes from
     ///   [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes);
-    /// - a [`NameId`](crate::NameId) with a `NameQualifier`,
+    /// - whose [`NameId`](crate::NameId) has a `NameQualifier`,
     ///   `SPNameQualifier`, or `SPProvidedID`.
     pub fn sso_response_template(mut self, template: impl Into<String>) -> Self {
         self.sso_response_template = Some(template.into());

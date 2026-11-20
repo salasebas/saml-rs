@@ -21,6 +21,7 @@ use saml_rs::{
     NameIdCreationPolicy, NameIdFormat, Outbound, ReplayPolicy, RespondSso, Saml, SamlError,
     SamlInstant, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
     SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse, StartSso, Status, SubordinateStatusCode,
+    TemplatePolicy,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -1171,8 +1172,8 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
 }
 
 #[test]
-fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dyn std::error::Error>>
-{
+fn typed_error_response_is_written_next_to_a_login_response_template(
+) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
     let idp_config = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -1180,23 +1181,54 @@ fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dy
     )
     .credentials(signing_credentials())
     .validation(signed_authn_request_idp_validation())
+    .templates(TemplatePolicy {
+        tag_prefix_protocol: "saml2p".into(),
+        tag_prefix_assertion: "saml2".into(),
+        ..TemplatePolicy::default()
+    })
     .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
     let idp = Saml::idp(idp_config);
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let no_passive = Status::responder()
+        .with_subordinate(SubordinateStatusCode::try_new(status_code::NO_PASSIVE)?);
 
-    match idp.initiate_sso(
-        &sp_descriptor,
-        SsoOutcome::Failure(Status::responder()),
+    for options in [
         RespondSso::post(),
-    ) {
-        Err(SamlError::Invalid(message))
-            if message.contains("cannot use a login response template") =>
-        {
-            Ok(())
+        RespondSso::post().apply_producer_rules(),
+    ] {
+        let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+        let received = idp.receive_sso(
+            &sp_descriptor,
+            Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+            validation(),
+        )?;
+        let request_id = received.message().id().as_str().to_string();
+        let response = idp.respond_sso(
+            &sp_descriptor,
+            &received,
+            SsoOutcome::Failure(no_passive.clone()),
+            options,
+        )?;
+        let xml = response_xml(&response)?;
+        assert!(xml.starts_with("<saml2p:Response "), "{xml}");
+        assert!(xml.contains("<saml2:Issuer>"), "{xml}");
+        assert!(!xml.contains("Assertion"), "{xml}");
+        assert!(
+            xml.contains(&format!("InResponseTo=\"{request_id}\"")),
+            "{xml}"
+        );
+        match sp.finish_sso(
+            &idp_descriptor,
+            &started.pending,
+            Inbound::post(response.post_form()?.fields().to_vec()),
+            validation(),
+        ) {
+            Err(SamlError::StatusNotSuccess { status, .. }) => assert_eq!(status, no_passive),
+            other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
         }
-        other => Err(format!("expected template rejection, got {other:?}").into()),
     }
+    Ok(())
 }
 
 #[test]

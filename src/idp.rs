@@ -189,22 +189,35 @@ impl IdentityProvider {
             &self.setting.tag_prefix_assertion,
         )?;
         let in_response_to = in_response_to.filter(|id| !id.is_empty());
+        let fallback_status = Status::success();
+        let status = rendering.status.unwrap_or(&fallback_status);
+        if status.top_level() != TopLevelStatusCode::Success {
+            let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
+            let id = generate_id();
+            let issuer = self.entity_id();
+            let xml = render_error_login_response(&ErrorLoginResponseXml {
+                protocol_prefix: &self.setting.tag_prefix_protocol,
+                assertion_prefix: &self.setting.tag_prefix_assertion,
+                response_id: &id,
+                issue_instant: &window.issue_instant,
+                destination: acs,
+                issuer: &issuer,
+                status,
+                in_response_to,
+            })?;
+            return Ok(RenderedLoginResponse {
+                id,
+                xml,
+                session_index: None,
+            });
+        }
         let tmpl = self.setting.login_response_template.as_ref();
         let attributes = tmpl.map(|t| t.attributes.as_slice()).unwrap_or(&[]);
         let has_custom_context = tmpl.and_then(|t| t.context.as_ref()).is_some();
-        let fallback_status = Status::success();
-        let status = rendering.status.unwrap_or(&fallback_status);
-        let error_response = status.top_level() != TopLevelStatusCode::Success;
         let uses_template = rendering.custom.is_some() || has_custom_context;
         if rendering.web_browser_sso_producer.follows() && uses_template {
             return Err(SamlError::Invalid(
                 "Web Browser SSO generation rules require the built-in login response renderer"
-                    .into(),
-            ));
-        }
-        if error_response && uses_template {
-            return Err(SamlError::Invalid(
-                "an error Response omits assertions and cannot use a login response template"
                     .into(),
             ));
         }
@@ -231,26 +244,6 @@ impl IdentityProvider {
                 "an authentication context or instant is written only under Web Browser SSO generation rules"
                     .into(),
             ));
-        }
-        if error_response {
-            let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-            let id = generate_id();
-            let issuer = self.entity_id();
-            let xml = render_error_login_response(&ErrorLoginResponseXml {
-                protocol_prefix: &self.setting.tag_prefix_protocol,
-                assertion_prefix: &self.setting.tag_prefix_assertion,
-                response_id: &id,
-                issue_instant: &window.issue_instant,
-                destination: acs,
-                issuer: &issuer,
-                status,
-                in_response_to,
-            })?;
-            return Ok(RenderedLoginResponse {
-                id,
-                xml,
-                session_index: None,
-            });
         }
         let name_id_format = rendering
             .name_id_format
