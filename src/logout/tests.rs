@@ -9,6 +9,7 @@ use crate::entity::{BindingContext, EntitySetting, User};
 use crate::error::SamlError;
 use crate::flow::HttpRequest;
 use crate::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use crate::model::ClockSkew;
 use crate::raw::{IdentityProvider, ServiceProvider};
 use std::time::{Duration, SystemTime};
 use url::Url;
@@ -179,7 +180,7 @@ fn parse_unsigned_logout_request_at(
     issue_instant: &str,
     not_on_or_after: Option<&str>,
     now: SystemTime,
-    clock_drifts: (i64, i64),
+    clock_skew: ClockSkew,
 ) -> Result<crate::flow::FlowResult, SamlError> {
     let mut receiver = idp()?;
     let sender = sp()?;
@@ -189,7 +190,7 @@ fn parse_unsigned_logout_request_at(
         sender.metadata.as_metadata(),
         LogoutReceipt::of_input(&Inbound::<crate::LogoutRequest>::post(Vec::new()))?,
         &logout_request_request(issue_instant, not_on_or_after),
-        LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_drifts, None),
+        LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_skew, None),
     )
     .map(|(flow, _)| flow)
 }
@@ -207,7 +208,7 @@ fn logout_request_accepts_old_issue_instant_without_not_on_or_after(
         "2000-01-01T00:00:00Z",
         None,
         unix_time(1_735_689_600)?,
-        (0, 0),
+        ClockSkew::strict(),
     )?;
 
     assert_eq!(
@@ -223,7 +224,7 @@ fn logout_request_extracts_future_not_on_or_after() -> Result<(), Box<dyn std::e
         "2000-01-01T00:00:00Z",
         Some("2025-01-01T00:01:00Z"),
         unix_time(1_735_689_600)?,
-        (0, 0),
+        ClockSkew::strict(),
     )?;
 
     assert_eq!(
@@ -240,7 +241,7 @@ fn logout_request_rejects_not_on_or_after_at_exact_boundary(
         "2000-01-01T00:00:00Z",
         Some("2025-01-01T00:00:00Z"),
         unix_time(1_735_689_600)?,
-        (0, 0),
+        ClockSkew::strict(),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
             assert_eq!(
@@ -265,7 +266,7 @@ fn logout_request_runtime_unrepresentable_not_on_or_after_fails_as_time_window_p
             "2000-01-01T00:00:00Z",
             Some(not_on_or_after),
             unix_time(1_735_689_600)?,
-            (0, 0),
+            ClockSkew::strict(),
         ) {
             Err(SamlError::TimeWindowInvalid { field }) => {
                 assert_eq!(

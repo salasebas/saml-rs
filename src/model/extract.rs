@@ -10,7 +10,7 @@ use crate::config::{EntityId, NameIdFormat};
 use crate::constants::{attribute_name_format, name_id_format};
 use crate::error::SamlError;
 use crate::util::Value;
-use crate::validator::conditions_time_bounds;
+use crate::validator::conditions_time_window;
 use crate::xml::{dom, xs_boolean, xs_unsigned_short, XmlLimits};
 
 pub(super) fn required_str<'a>(extract: &'a Value, path: &str) -> Result<&'a str, SamlError> {
@@ -51,10 +51,13 @@ pub(super) fn optional_u16(extract: &Value, path: &str) -> Result<Option<u16>, S
 pub(super) fn conditions_instants(
     extract: &Value,
 ) -> Result<(Option<SamlInstant>, Option<SamlInstant>), SamlError> {
-    let (not_before, not_on_or_after) = conditions_time_bounds(extract)?;
+    let window = conditions_time_window(extract)?;
     Ok((
-        not_before.map(SamlInstant::try_new).transpose()?,
-        not_on_or_after.map(SamlInstant::try_new).transpose()?,
+        window.not_before.map(SamlInstant::try_new).transpose()?,
+        window
+            .not_on_or_after
+            .map(SamlInstant::try_new)
+            .transpose()?,
     ))
 }
 

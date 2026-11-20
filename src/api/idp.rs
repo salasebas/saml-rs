@@ -94,7 +94,7 @@ impl Saml<Idp> {
             Binding::from(binding),
             &request,
             validation.now(),
-            validation.clock_skew().as_millis(),
+            validation.clock_skew(),
         )?;
         let flow = decrypt_requested_subject(
             flow,

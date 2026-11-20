@@ -10,6 +10,7 @@ use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
 };
 use crate::error::{SamlError, TimeWindowField};
+use crate::model::ClockSkew;
 use crate::xml::XmlLimits;
 
 /// Runtime configuration for an entity (keys, algorithms, flags).
@@ -307,6 +308,11 @@ impl EntitySetting {
     /// configured.
     pub(crate) fn default_name_id_format(&self) -> Option<&str> {
         self.name_id_format.first().map(String::as_str)
+    }
+
+    pub(crate) fn clock_skew(&self) -> ClockSkew {
+        let (not_before_ms, not_on_or_after_ms) = self.clock_drifts;
+        ClockSkew::from_millis(not_before_ms, not_on_or_after_ms)
     }
 }
 

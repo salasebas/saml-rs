@@ -6,7 +6,7 @@ use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::{EntitySetting, User};
 #[allow(deprecated)]
-use saml_rs::flow::{flow, FlowOptions, HttpRequest};
+use saml_rs::flow::{flow, FlowOptions, HttpRequest, SignatureCheck};
 use saml_rs::idp::LoginResponseOptions;
 #[allow(deprecated)]
 use saml_rs::logout::{create_logout_request, create_logout_response};
@@ -442,7 +442,7 @@ fn encrypted_assertion_parse_path_returns_unsupported() {
     let mut options = FlowOptions::default();
     options.binding = Some(Binding::Post);
     options.parser_type = Some(ParserType::SamlResponse);
-    options.check_signature = true;
+    options.signature_check = SignatureCheck::Require;
     options.decrypt_key = Some("private key is unavailable without crypto feature");
 
     assert_unsupported(flow(&options, &request));

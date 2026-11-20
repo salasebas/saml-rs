@@ -11,7 +11,7 @@ use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
 use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{sign_saml_xml, verify_signature};
 #[allow(deprecated)]
-use saml_rs::flow::{flow, FlowOptions, HttpRequest};
+use saml_rs::flow::{flow, FlowOptions, HttpRequest, SignatureCheck};
 use saml_rs::util::normalize_cert_string;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{constants::Binding, constants::ParserType, SamlError};
@@ -116,7 +116,7 @@ fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn 
     let options = FlowOptions {
         binding: Some(Binding::Post),
         parser_type: Some(ParserType::SamlRequest),
-        check_signature: true,
+        signature_check: SignatureCheck::Require,
         from_issuer: Some("https://sp.example.com/metadata"),
         signing_certs: &certs,
         ..FlowOptions::default()

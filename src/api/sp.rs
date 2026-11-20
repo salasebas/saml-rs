@@ -102,7 +102,7 @@ impl ResponseParseInput {
         validation: &SamlValidationContext<'_>,
         expected_recipient: &'a str,
     ) -> LoginResponseParseOptions<'a> {
-        LoginResponseParseOptions::at(validation.now(), validation.clock_skew().as_millis())
+        LoginResponseParseOptions::at(validation.now(), validation.clock_skew())
             .with_signed_destination(self.signed_destination)
             .with_expected_recipient(expected_recipient)
     }

@@ -10,7 +10,7 @@ use saml_rs::crypto::{
 };
 use saml_rs::error::{ReferenceResolutionReason, SignatureVerificationReason};
 #[allow(deprecated)]
-use saml_rs::raw::{flow, Binding, FlowOptions, HttpRequest};
+use saml_rs::raw::{flow, Binding, FlowOptions, HttpRequest, SignatureCheck};
 use saml_rs::XmlLimits;
 use saml_rs::{SamlError, XmlSignatureProfile};
 
@@ -50,7 +50,7 @@ fn verify_flow(xml: &str, profile: XmlSignatureProfile) -> Result<(), SamlError>
     let options = FlowOptions {
         binding: Some(Binding::Post),
         parser_type: Some(ParserType::SamlResponse),
-        check_signature: true,
+        signature_check: SignatureCheck::Require,
         signing_certs: &certs,
         xml_signatures: profile,
         ..FlowOptions::default()

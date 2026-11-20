@@ -12,11 +12,11 @@ use crate::error::SamlError;
 use crate::flow::{
     flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
     FlowOptions, FlowResult, FlowResultWithSignatureEvidence, HttpRequest,
-    ResponseSignatureRequirement, SignedMessageDestination,
+    ResponseSignatureRequirement, SignatureCheck, SignedMessageDestination,
 };
 use crate::idp::IdentityProvider;
 use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataInput};
-use crate::model::validate_name_id_format;
+use crate::model::{validate_name_id_format, ClockSkew};
 use crate::template::{replace_tags_by_optional_value, LOGIN_REQUEST_TEMPLATE};
 use std::time::SystemTime;
 
@@ -82,25 +82,25 @@ enum LoginResponseCorrelation<'a> {
 pub(crate) struct LoginResponseParseOptions<'a> {
     expected_recipient: Option<&'a str>,
     now: Option<SystemTime>,
-    clock_drifts: (i64, i64),
+    clock_skew: ClockSkew,
     signed_destination: SignedMessageDestination,
 }
 
 impl<'a> LoginResponseParseOptions<'a> {
-    fn compatibility(clock_drifts: (i64, i64)) -> Self {
+    fn compatibility(clock_skew: ClockSkew) -> Self {
         Self {
             expected_recipient: None,
             now: None,
-            clock_drifts,
+            clock_skew,
             signed_destination: SignedMessageDestination::Required,
         }
     }
 
-    pub(crate) fn at(now: SystemTime, clock_drifts: (i64, i64)) -> Self {
+    pub(crate) fn at(now: SystemTime, clock_skew: ClockSkew) -> Self {
         Self {
             expected_recipient: None,
             now: Some(now),
-            clock_drifts,
+            clock_skew,
             signed_destination: SignedMessageDestination::Required,
         }
     }
@@ -464,7 +464,7 @@ impl ServiceProvider {
             binding,
             request,
             LoginResponseCorrelation::Unsolicited(UnsolicitedInResponseTo::RejectNonEmpty),
-            LoginResponseParseOptions::compatibility(self.setting.clock_drifts),
+            LoginResponseParseOptions::compatibility(self.setting.clock_skew()),
         )
     }
 
@@ -518,7 +518,7 @@ impl ServiceProvider {
             binding,
             request,
             LoginResponseCorrelation::MessageId(request_id),
-            LoginResponseParseOptions::compatibility(self.setting.clock_drifts),
+            LoginResponseParseOptions::compatibility(self.setting.clock_skew()),
         )
     }
 
@@ -593,8 +593,7 @@ impl ServiceProvider {
             &FlowOptions {
                 binding: Some(binding),
                 parser_type: Some(ParserType::SamlResponse),
-                check_signature: true,
-                verify_signature_if_present: false,
+                signature_check: SignatureCheck::Require,
                 require_audience_restriction: self.setting.require_audience_restriction,
                 xml_signatures: self.setting.xml_signatures,
                 from_issuer: idp.metadata.as_metadata().entity_id(),
@@ -610,7 +609,7 @@ impl ServiceProvider {
                     .setting
                     .allow_rsa15_key_transport_decryption,
                 max_decryption_work: self.setting.max_decryption_work,
-                clock_drifts: options.clock_drifts,
+                clock_skew: options.clock_skew,
                 now: options.now,
                 redirect_inflate_max_bytes: self.setting.redirect_inflate_max_bytes,
                 xml_limits: self.setting.xml_limits,

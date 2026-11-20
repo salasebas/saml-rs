@@ -11,6 +11,7 @@ use crate::constants::{Binding, ParserType};
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
 use crate::error::{utf8_err, SamlError};
+use crate::model::ClockSkew;
 use crate::util::Value;
 use crate::validator::{check_status, logout_request_not_on_or_after_deadline};
 use crate::xml::signature_placement::saml_signature_candidates;
@@ -88,6 +89,17 @@ fn unsupported_binding(binding: Binding) -> SamlError {
     SamlError::UnsupportedBinding { binding }
 }
 
+/// What a flow run does with a signature on the received message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignatureCheck {
+    /// Do not verify a signature, whether or not the message carries one.
+    Skip,
+    /// Verify a signature the message carries, and accept an unsigned message.
+    VerifyIfPresent,
+    /// Reject an unsigned message, and verify the signature it carries.
+    Require,
+}
+
 /// Inputs controlling a flow run.
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -103,12 +115,8 @@ pub struct FlowOptions<'a> {
     pub xml_limits: XmlLimits,
     /// Optional schema validator for received and decrypted XML.
     pub schema_validator: Option<crate::SchemaValidator>,
-    /// Whether to require and verify a signature.
-    pub check_signature: bool,
-    /// Verify a signature when one is present, without requiring one.
-    ///
-    /// Ignored when `check_signature` is set.
-    pub verify_signature_if_present: bool,
+    /// What the run does with a signature on the message.
+    pub signature_check: SignatureCheck,
     /// Reject a bearer assertion that omits `<AudienceRestriction>`.
     ///
     /// Applies only when `expected_audience` is set. When false, a present
@@ -145,8 +153,8 @@ pub struct FlowOptions<'a> {
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
     /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
     pub max_decryption_work: usize,
-    /// Clock drift tolerance `(not_before_ms, not_on_or_after_ms)`.
-    pub clock_drifts: (i64, i64),
+    /// Clock skew applied to the message's time windows.
+    pub clock_skew: ClockSkew,
     /// Validation instant. `None` keeps raw compatibility behavior by reading
     /// the process clock during validation.
     pub now: Option<SystemTime>,
@@ -164,8 +172,7 @@ impl<'a> Default for FlowOptions<'a> {
             redirect_inflate_max_bytes: MAX_DEFLATE_RAW_DECODE_BYTES,
             xml_limits: XmlLimits::default(),
             schema_validator: None,
-            check_signature: false,
-            verify_signature_if_present: false,
+            signature_check: SignatureCheck::Skip,
             require_audience_restriction: true,
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             from_issuer: None,
@@ -179,7 +186,7 @@ impl<'a> Default for FlowOptions<'a> {
             received_encrypted_elements: ReceivedEncryptedElements::default(),
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
-            clock_drifts: (0, 0),
+            clock_skew: ClockSkew::strict(),
             now: None,
             expected_audience: None,
             expected_in_response_to: None,
@@ -740,7 +747,7 @@ fn validate_context(
         logout_request_not_on_or_after_deadline(
             extracted,
             opts.validation_now()?,
-            opts.clock_drifts.1,
+            opts.clock_skew.not_on_or_after_millis(),
         )?;
     }
     match parser_type {
@@ -817,9 +824,11 @@ fn flow_inner(
         }
     }
 
-    let verify_signature = opts.check_signature
-        || (opts.verify_signature_if_present
-            && signature_is_present(binding, request, &document.root));
+    let verify_signature = match opts.signature_check {
+        SignatureCheck::Skip => false,
+        SignatureCheck::VerifyIfPresent => signature_is_present(binding, request, &document.root),
+        SignatureCheck::Require => true,
+    };
     let (saml_content, assertion, sig_alg, message_authenticated, verified_xml_signatures) =
         if verify_signature {
             match binding {
