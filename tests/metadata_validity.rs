@@ -12,14 +12,13 @@ use saml_rs::error::TimeWindowField;
 use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId, FormField,
-    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    IssuedArtifacts, LogoutSubject, ManageNameIdService, MetadataLifetime, MetadataTrustPolicy,
-    NameId, NameIdChange, NameIdFormat, Outbound, PaosClientRequest, PendingLogoutRequest,
-    PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
-    ReceiveNameIdManagement, ReceivedNameIdManagement, ReplayPolicy, RespondNameIdManagement,
-    RespondSlo, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel,
-    SoapRequest, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement,
-    StartPaosSso, StartSlo, StartSso, Status,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts, LogoutSubject,
+    ManageNameIdService, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
+    NameIdManagementReceipt, Outbound, PendingLogoutRequest, PendingLogoutRequestSnapshot,
+    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, ReceiveNameIdManagement,
+    ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError, SamlValidationContext,
+    SessionIndex, SloEndpoint, SoapChannel, SoapRequest, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -239,7 +238,7 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
         .request()
         .envelope()
         .to_string();
-    let ReceivedNameIdManagement::Request(name_id_request) =
+    let NameIdManagementReceipt::Request(name_id_request) =
         idp.receive_name_id_management(&current_sp, &sp_terminate_request()?, channel, now())?
     else {
         return Err("the name identifier management request was refused".into());
@@ -267,7 +266,7 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
                 &expired_sp,
                 &NameId::new("current-value"),
                 &NameIdChange::Terminate,
-                IdentifierEncryptionPolicy::PlaintextIdentifiers,
+                StartNameIdManagement::new(),
                 channel,
             )
             .map(drop),
@@ -279,15 +278,18 @@ fn soap_artifact_name_id_and_paos_flows_refuse_expired_metadata(
         ),
         (
             "respond_name_id_management",
-            idp.respond_name_id_management(&expired_sp, &name_id_request, &Status::success())
-                .map(drop),
+            idp.respond_name_id_management(
+                &expired_sp,
+                &name_id_request,
+                RespondNameIdManagement::new(),
+            )
+            .map(drop),
         ),
         (
             "start_paos_sso",
             sp.start_paos_sso(
                 &expired_idp,
-                PaosClientRequest::headers_checked_by_caller(),
-                StartPaosSso::to_soap_endpoint("https://idp.example.com/soap")?
+                StartPaosSso::new(EndpointUrl::try_new("https://idp.example.com/soap")?)
                     .allow_unsigned_authn_request(),
             )
             .map(drop),
@@ -431,12 +433,12 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
         &current_idp,
         &name_id,
         &NameIdChange::Terminate,
-        StartNameIdManagement::redirect(),
+        StartNameIdManagement::new(),
     )?;
-    let ReceivedNameIdManagement::Request(manage) = idp.receive_name_id_management_redirect(
+    let NameIdManagementReceipt::Request(manage) = idp.receive_name_id_management_redirect(
         &current_sp,
         Inbound::redirect(redirect_query(&started.outbound)?),
-        ReceiveNameIdManagement::redirect(),
+        ReceiveNameIdManagement::new(),
         now(),
     )?
     else {
@@ -469,7 +471,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
                 &expired_idp,
                 &NameId::new("transient").with_format(NameIdFormat::Transient),
                 &NameIdChange::Terminate,
-                StartNameIdManagement::redirect(),
+                StartNameIdManagement::new(),
             )
             .map(drop),
         ),
@@ -479,7 +481,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
                 &expired_sp,
                 &NameId::new("transient").with_format(NameIdFormat::Transient),
                 &NameIdChange::Terminate,
-                StartNameIdManagement::redirect(),
+                StartNameIdManagement::new(),
             )
             .map(drop),
         ),
@@ -488,7 +490,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
             sp.respond_name_id_management_redirect(
                 &expired_idp,
                 &manage,
-                RespondNameIdManagement::redirect(),
+                RespondNameIdManagement::new(),
             )
             .map(drop),
         ),
@@ -497,7 +499,7 @@ fn browser_peer_outbound_operations_check_expiry_before_flow_validation(
             idp.respond_name_id_management_redirect(
                 &expired_sp,
                 &manage,
-                RespondNameIdManagement::redirect(),
+                RespondNameIdManagement::new(),
             )
             .map(drop),
         ),
@@ -559,7 +561,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     sp.receive_name_id_management_redirect(
                         &idp_peer,
                         Inbound::redirect(""),
-                        ReceiveNameIdManagement::redirect(),
+                        ReceiveNameIdManagement::new(),
                         validation(),
                     )
                     .map(drop),
@@ -569,7 +571,7 @@ fn browser_peer_inbound_operations_use_context_clock_and_check_expiry_first(
                     idp.receive_name_id_management_redirect(
                         &sp_peer,
                         Inbound::redirect(""),
-                        ReceiveNameIdManagement::redirect(),
+                        ReceiveNameIdManagement::new(),
                         validation(),
                     )
                     .map(drop),

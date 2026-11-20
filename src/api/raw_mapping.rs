@@ -148,7 +148,6 @@ pub(super) fn ensure_https_endpoint(
     endpoint: &str,
     profile: &str,
     service: &str,
-    policy_option: &str,
 ) -> Result<(), SamlError> {
     let url = url::Url::parse(endpoint)
         .map_err(|error| SamlError::Invalid(format!("{service} location is not a URL: {error}")))?;
@@ -156,7 +155,7 @@ pub(super) fn ensure_https_endpoint(
         return Ok(());
     }
     Err(SamlError::ProtocolProfile(format!(
-        "{profile} sends the user agent to an https {service} unless {policy_option} is selected"
+        "{profile} sends the user agent to an https {service} unless allow_http is selected"
     )))
 }
 

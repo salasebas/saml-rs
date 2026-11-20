@@ -23,8 +23,8 @@ use std::time::SystemTime;
 mod authn_request;
 mod paos;
 
-pub(crate) use authn_request::AuthnRequestPreferences;
 use authn_request::{render_default_authn_request_xml, AllowCreateAttribute, AuthnRequestXml};
+pub(crate) use authn_request::{validate_provider_name, AuthnRequestPreferences};
 
 pub(crate) use paos::PaosAuthnRequestInput;
 

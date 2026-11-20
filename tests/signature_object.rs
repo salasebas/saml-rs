@@ -7,12 +7,12 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy,
-    NameId, NameIdFormat, PaosAuthnRequest, PaosClientRequest, PaosSsoResponse, PrivateKeyPem,
-    ReplayPolicy, RespondPaosSso, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext,
-    SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartPaosSso, StartSlo, StartSso, X509Credential, XmlSignatureProfile,
+    AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EndpointUrl, EntityId,
+    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject,
+    MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RespondPaosSso,
+    RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint,
+    SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSlo,
+    StartSso, X509Credential, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -211,32 +211,32 @@ fn paos_authn_request_and_response_with_object_are_rejected(
     let parties = parties(XmlSignatureProfile::ExcludeWeakAlgorithms)?;
     let started = parties.sp.start_paos_sso(
         &parties.idp_descriptor,
-        PaosClientRequest::headers_checked_by_caller(),
-        StartPaosSso::to_soap_endpoint(IDP_PAOS)?,
+        StartPaosSso::new(EndpointUrl::try_new(IDP_PAOS)?),
     )?;
     let request = soap_body_element(started.http_response.envelope(), "AuthnRequest")?;
     assert_object_rejected(parties.idp.receive_paos_sso(
         &parties.sp_descriptor,
-        &PaosAuthnRequest::from_envelope(with_object(&request)?, IDP_PAOS)?,
+        &with_object(&request)?,
+        &EndpointUrl::try_new(IDP_PAOS)?,
         validation(),
     ));
 
     let received = parties.idp.receive_paos_sso(
         &parties.sp_descriptor,
-        &PaosAuthnRequest::from_envelope(request, IDP_PAOS)?,
+        &request,
+        &EndpointUrl::try_new(IDP_PAOS)?,
         validation(),
     )?;
     let answered = parties.idp.respond_paos_sso(
         &parties.sp_descriptor,
         &received,
-        &principal(),
-        RespondPaosSso::default(),
+        RespondPaosSso::success(principal()),
     )?;
     let response = soap_body_element(answered.envelope(), "Response")?;
     assert_object_rejected(parties.sp.finish_paos_sso(
         &parties.idp_descriptor,
         &started.pending,
-        &PaosSsoResponse::from_envelope(with_object(&response)?)?,
+        &with_object(&response)?,
         validation(),
     ));
     Ok(())

@@ -11,13 +11,8 @@ pub(crate) struct AuthnRequestPreferences<'a> {
 
 impl AuthnRequestPreferences<'_> {
     pub(super) fn validate(&self) -> Result<(), crate::error::SamlError> {
-        if self
-            .provider_name
-            .is_some_and(|name| !name.chars().all(crate::xml::is_xml_char))
-        {
-            return Err(crate::error::SamlError::Invalid(
-                "ProviderName must contain only XML characters".into(),
-            ));
+        if let Some(provider_name) = self.provider_name {
+            validate_provider_name(provider_name)?;
         }
         if let Some(context) = self.requested_authn_context {
             for reference in context.references() {
@@ -26,6 +21,17 @@ impl AuthnRequestPreferences<'_> {
         }
         Ok(())
     }
+}
+
+/// The protocol and ECP schemas type `ProviderName` as `xs:string`, which
+/// allows an empty name.
+pub(crate) fn validate_provider_name(provider_name: &str) -> Result<(), crate::error::SamlError> {
+    if provider_name.chars().all(crate::xml::is_xml_char) {
+        return Ok(());
+    }
+    Err(crate::error::SamlError::Invalid(
+        "ProviderName must contain only XML characters".into(),
+    ))
 }
 
 pub(super) struct AuthnRequestXml<'a> {

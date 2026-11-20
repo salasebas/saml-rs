@@ -24,7 +24,7 @@ const pages = {
 	'identity-provider-discovery.md': {
 		title: 'Identity Provider Discovery',
 		description:
-			'The identity provider returns the common domain cookie for the caller to write. `remember_identity_provider` is that operation. `respond_sso` does not write the cookie.',
+			'The identity provider returns the common domain cookie for the caller to write. `common_domain_cookie` is that operation. `respond_sso` does not write the cookie.',
 	},
 	'idp-sp-operational-modes.md': {
 		title: 'IdP and SP operational modes',

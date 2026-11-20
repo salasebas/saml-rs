@@ -10,10 +10,9 @@ use roxmltree::Document;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
-    AcsEndpoint, AuthnRequestValidationPolicy, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, MetadataTrustPolicy, PaosAuthnRequest, PaosClientRequest, ReplayPolicy,
-    Saml, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartPaosSso,
+    AcsEndpoint, AuthnRequestValidationPolicy, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, MetadataTrustPolicy, ReplayPolicy, Saml, SamlValidationContext, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -69,14 +68,14 @@ fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing
         )?;
         let started = sp.start_paos_sso(
             &idp_descriptor,
-            PaosClientRequest::headers_checked_by_caller(),
-            StartPaosSso::to_soap_endpoint(IDP_SOAP)?,
+            StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?),
         )?;
         let envelope = resigned_without_destination(started.http_response.envelope())?;
         let received = idp
             .receive_paos_sso(
                 &sp_descriptor,
-                &PaosAuthnRequest::from_envelope(envelope, IDP_SOAP)?,
+                &envelope,
+                &EndpointUrl::try_new(IDP_SOAP)?,
                 SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled),
             )
             .map_err(|error| format!("{policy} rejected the request: {error:?}"))?;

@@ -29,9 +29,9 @@ impl Saml<Sp> {
     /// be parsed, a compatible logout endpoint or signing key is missing, the
     /// selected binding is unsupported, the subject's NameID format is not an
     /// absolute URI reference, or logout request creation fails.
-    /// [`StartSlo::apply_single_logout_generation_rules`] also rejects a
+    /// [`StartSlo::apply_producer_rules`] also rejects a
     /// missing `SessionIndex`, an `http` peer endpoint unless
-    /// [`StartSlo::allow_http_single_logout`] is selected, and rejects the
+    /// [`StartSlo::allow_http`] is selected, and rejects the
     /// samlify-port [`LogoutSigning::DoNotSign`].
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
@@ -117,9 +117,9 @@ impl Saml<Sp> {
     /// binding is unsupported, or logout response creation fails.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
-    /// [`RespondSlo::apply_single_logout_generation_rules`] also rejects an
+    /// [`RespondSlo::apply_producer_rules`] also rejects an
     /// `http` peer endpoint unless
-    /// [`RespondSlo::allow_http_single_logout`] is
+    /// [`RespondSlo::allow_http`] is
     /// selected.
     pub fn respond_slo(
         &self,
@@ -216,7 +216,7 @@ impl Saml<Idp> {
     /// The generated `LogoutRequest` always carries a UTC `NotOnOrAfter`
     /// derived from the configured [`crate::IdpConfig::issuance_lifetime`] and
     /// the same captured `IssueInstant`. That attribute cannot be omitted.
-    /// [`StartSlo::apply_single_logout_generation_rules`] signs the request
+    /// [`StartSlo::apply_producer_rules`] signs the request
     /// and still allows `SessionIndex` to be omitted. It does not require an
     /// `https` peer endpoint.
     ///
@@ -236,7 +236,7 @@ impl Saml<Idp> {
     /// selected binding is unsupported, the NameID format sent for the subject
     /// is not an absolute URI reference, logout request creation fails, or the
     /// configured issuance lifetime cannot be added to the current issue
-    /// instant. [`StartSlo::apply_single_logout_generation_rules`] also
+    /// instant. [`StartSlo::apply_producer_rules`] also
     /// rejects [`LogoutSigning::DoNotSign`].
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
@@ -345,7 +345,7 @@ impl Saml<Idp> {
     /// binding is unsupported, or logout response creation fails.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
-    /// [`RespondSlo::apply_single_logout_generation_rules`] does not add an
+    /// [`RespondSlo::apply_producer_rules`] does not add an
     /// `https` requirement for this role.
     ///
     /// # Examples
@@ -704,12 +704,7 @@ fn enforce_participant_https(
         return Ok(());
     }
     let destination = peer_logout_endpoint(peer_metadata, Binding::from(binding), direction)?;
-    ensure_https_endpoint(
-        &destination,
-        "Single Logout",
-        "SingleLogoutService",
-        "allow_http_single_logout",
-    )
+    ensure_https_endpoint(&destination, "Single Logout", "SingleLogoutService")
 }
 
 fn peer_logout_endpoint(

@@ -1051,7 +1051,7 @@ fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
         for options in [
             RespondSso::post(),
-            RespondSso::post().apply_web_browser_sso_generation_rules(),
+            RespondSso::post().apply_producer_rules(),
         ] {
             expect_name_id_format_error(respond(&name_id, options))?;
         }

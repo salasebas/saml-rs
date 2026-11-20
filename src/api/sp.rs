@@ -206,7 +206,7 @@ impl Saml<Sp> {
             &raw_options,
             options.web_browser_sso_producer,
             &AuthnRequestPreferences {
-                is_passive: options.is_passive.map(super::IsPassive::as_bool),
+                is_passive: options.passive.map(super::IsPassive::as_bool),
                 provider_name: options.provider_name.as_deref(),
                 requested_authn_context: options.requested_authn_context.as_ref(),
             },

@@ -154,7 +154,7 @@
 //! # Ok(()) }
 //! ```
 //!
-//! [`Saml<Idp>::remember_identity_provider`] returns the `_saml_idp` cookie
+//! [`Saml<Idp>::common_domain_cookie`] returns the `_saml_idp` cookie
 //! for the caller to write after authentication.
 //! [`Saml<Idp>::respond_sso`] does not write that cookie, and a service
 //! provider has no method for it.
@@ -424,11 +424,11 @@ pub mod xml;
 mod tests;
 
 pub use api::{
-    ForceAuthn, Idp, IsPassive, LogoutSigning, MessageDelivery, PaosAuthnRequest,
-    PaosClientRequest, PaosHttpResponse, PaosSsoResponse, PendingPaosSso, PendingPaosSsoSnapshot,
-    ReceiveNameIdManagement, ReceivedNameIdManagementRedirect, RespondNameIdManagement,
-    RespondPaosSso, RespondSlo, RespondSso, Saml, SoapFault, Sp, StartNameIdManagement,
-    StartPaosSso, StartSlo, StartSso, StartedPaosSso, Unknown,
+    check_paos_client_headers, ForceAuthn, Idp, IsPassive, LogoutSigning, MessageDelivery,
+    NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
+    ReceiveNameIdManagement, RespondNameIdManagement, RespondPaosSso, RespondSlo, RespondSso, Saml,
+    SoapFault, Sp, StartNameIdManagement, StartPaosSso, StartSlo, StartSso, StartedPaosSso,
+    Unknown,
 };
 pub use artifact::{
     AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,
@@ -484,8 +484,8 @@ pub use model::{
     MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
-    ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementRefusal,
-    ReceivedNameIdManagement, RefusedNameIdManagement, StartedNameIdManagement,
+    ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementReceipt,
+    NameIdManagementRefusal, RefusedNameIdManagement, StartedNameIdManagement,
 };
 pub use soap::{
     MessageConfidentiality, MessageIntegrity, PartyAuthentication, SoapChannel,

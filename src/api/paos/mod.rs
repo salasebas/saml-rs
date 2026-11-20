@@ -13,10 +13,12 @@ use crate::flow::HttpRequest;
 use crate::idp::LoginResponseOverrides;
 use crate::model::{
     Attributes, AuthnContextReference, AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId,
-    NameId, OutstandingLogout, RelayState, SamlValidationContext, SessionIndex, SsoResponse,
-    SsoSession, Status, TopLevelStatusCode,
+    NameId, OutstandingLogout, Received, RelayState, SamlValidationContext, SessionIndex,
+    SsoResponse, SsoSession, Status, TopLevelStatusCode,
 };
-use crate::sp::{LoginResponseParseOptions, PaosAuthnRequestInput, WebBrowserSsoProducer};
+use crate::sp::{
+    validate_provider_name, LoginResponseParseOptions, PaosAuthnRequestInput, WebBrowserSsoProducer,
+};
 use crate::xml::{is_xml_char, OutboundNameIdQualifiers};
 
 use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
@@ -25,46 +27,11 @@ use super::{Idp, Saml, SamlError, Sp};
 use crate::http_header::{HttpHeader, PRAGMA};
 use crate::soap::{RESPONSE_CACHE_CONTROL, RESPONSE_HEADERS as SOAP_RESPONSE_HEADERS};
 use protocol::{
-    idp_to_ecp_envelope, parse_client_headers, read_soap_body, soap_fault_envelope,
-    sp_to_ecp_envelope, IdpToEcp, SpToEcp, E54_PAOS_HEADER, PAOS_MEDIA_TYPE, SP_UNDERSTOOD_HEADERS,
+    idp_to_ecp_envelope, read_soap_body, soap_fault_envelope, sp_to_ecp_envelope, IdpToEcp,
+    SpToEcp, PAOS_MEDIA_TYPE, SP_UNDERSTOOD_HEADERS,
 };
 
-/// HTTP headers an enhanced client sends when it can carry this login.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PaosClientRequest {
-    _private: (),
-}
-
-impl PaosClientRequest {
-    /// `Accept` value that advertises `application/vnd.paos+xml`.
-    pub const ACCEPT: &'static str = PAOS_MEDIA_TYPE;
-
-    /// `PAOS` header value. The version and the ECP service use double quotes.
-    pub const PAOS_HEADER: &'static str = E54_PAOS_HEADER;
-
-    /// Enhanced client whose `Accept` and `PAOS` headers the caller already
-    /// checked.
-    ///
-    /// Nothing is checked here. [`Self::from_headers`] checks them.
-    pub fn headers_checked_by_caller() -> Self {
-        Self { _private: () }
-    }
-
-    /// Read the `Accept` and `PAOS` field values the enhanced client sent.
-    ///
-    /// A leading `Accept:` or `PAOS:` name is ignored. The PAOS version and
-    /// the ECP service value must use double quotes.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::ProtocolProfile`] when `Accept` omits
-    /// `application/vnd.paos+xml`, or when the PAOS header omits the
-    /// double-quoted version or the double-quoted ECP service value.
-    pub fn from_headers(accept: &str, paos: &str) -> Result<Self, SamlError> {
-        parse_client_headers(accept, paos)?;
-        Ok(Self { _private: () })
-    }
-}
+pub use protocol::check_paos_client_headers;
 
 /// Options for a service provider starting PAOS login.
 #[derive(Debug, Clone)]
@@ -72,28 +39,29 @@ pub struct StartPaosSso {
     soap_endpoint: EndpointUrl,
     relay_state: Option<RelayState>,
     force_authn: Option<ForceAuthn>,
-    is_passive: Option<IsPassive>,
+    passive: Option<IsPassive>,
     provider_name: Option<String>,
     acs_url: Option<EndpointUrl>,
     sign_authn_request: bool,
 }
 
 impl StartPaosSso {
-    /// Address the identity provider's SOAP single sign-on endpoint.
+    /// Start PAOS login at the identity provider's SOAP single sign-on
+    /// endpoint.
     ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when `soap_endpoint` is not an absolute HTTP(S) URL.
-    pub fn to_soap_endpoint(soap_endpoint: impl Into<String>) -> Result<Self, SamlError> {
-        Ok(Self {
-            soap_endpoint: EndpointUrl::try_new(soap_endpoint)?,
+    /// `soap_endpoint` is the AuthnRequest `Destination` and the `Loc` of the
+    /// identity provider entry on `ecp:Request`. The AuthnRequest is signed by
+    /// default.
+    pub fn new(soap_endpoint: EndpointUrl) -> Self {
+        Self {
+            soap_endpoint,
             relay_state: None,
             force_authn: None,
-            is_passive: None,
+            passive: None,
             provider_name: None,
             acs_url: None,
             sign_authn_request: true,
-        })
+        }
     }
 
     /// Set the `ecp:RelayState` value the enhanced client must bring back.
@@ -115,42 +83,33 @@ impl StartPaosSso {
     /// An omitted value means passive to the enhanced client, so a normal
     /// login states false. The AuthnRequest attribute is written only when
     /// this is set.
-    #[allow(
-        clippy::wrong_self_convention,
-        reason = "the builder name is the SAML IsPassive attribute, and it takes self by value like force_authn"
-    )]
-    pub fn is_passive(mut self, is_passive: IsPassive) -> Self {
-        self.is_passive = Some(is_passive);
+    pub fn passive(mut self, passive: IsPassive) -> Self {
+        self.passive = Some(passive);
         self
     }
 
-    /// Set the human-readable service-provider name on `ecp:Request`.
+    /// Set the human-readable service-provider `ProviderName` on
+    /// `ecp:Request`. Omitted by default.
     ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when `name` is empty or contains a
-    /// character XML 1.0 forbids.
-    pub fn provider_name(mut self, name: impl Into<String>) -> Result<Self, SamlError> {
-        let name = name.into();
-        if name.is_empty() || !name.chars().all(is_xml_char) {
-            return Err(SamlError::Invalid(
-                "provider name must not be empty or contain a character XML 1.0 forbids".into(),
-            ));
-        }
-        self.provider_name = Some(name);
-        Ok(self)
+    /// The name may be empty and may contain any character XML 1.0 allows.
+    /// [`Saml<Sp>::start_paos_sso`] returns [`SamlError::Invalid`] for a name
+    /// with a character XML 1.0 forbids, as
+    /// [`Saml<Sp>::start_sso`] does for
+    /// [`StartSso::provider_name`](crate::StartSso::provider_name).
+    pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
+        self.provider_name = Some(provider_name.into());
+        self
     }
 
-    /// Post the response to this assertion consumer instead of the default one.
+    /// Set the assertion consumer the response is posted to, in place of the
+    /// default one.
     ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when `url` is not an absolute HTTP(S) URL.
-    /// [`Saml<Sp>::start_paos_sso`] also rejects a URL the service provider
-    /// metadata does not publish for HTTP-POST or HTTP-POST-SimpleSign.
-    pub fn acs_url(mut self, url: impl Into<String>) -> Result<Self, SamlError> {
-        self.acs_url = Some(EndpointUrl::try_new(url)?);
-        Ok(self)
+    /// [`Saml<Sp>::start_paos_sso`] returns [`SamlError::Invalid`] for a URL
+    /// the service provider metadata does not publish for HTTP-POST or
+    /// HTTP-POST-SimpleSign.
+    pub fn acs_url(mut self, url: EndpointUrl) -> Self {
+        self.acs_url = Some(url);
+        self
     }
 
     /// Leave the AuthnRequest unsigned.
@@ -163,24 +122,66 @@ impl StartPaosSso {
     }
 }
 
-/// Options for an identity provider answering PAOS login with success.
+/// Options for an identity provider answering PAOS login.
 ///
-/// Start from [`RespondPaosSso::default`], which writes no
-/// `AttributeStatement`.
-#[derive(Debug, Clone, Default)]
+/// [`Self::success`] answers with an assertion for a `NameId`.
+/// [`Self::failure`] answers with a SAML error status and no assertion.
+#[derive(Debug, Clone)]
 pub struct RespondPaosSso {
+    answer: PaosSsoAnswer,
+}
+
+#[derive(Debug, Clone)]
+enum PaosSsoAnswer {
+    Success(PaosAssertion),
+    Failure(Status),
+}
+
+#[derive(Debug, Clone)]
+struct PaosAssertion {
+    name_id: NameId,
     attributes: Attributes,
     authn_context: Option<AuthnContextReference>,
     authn_instant: Option<SystemTime>,
 }
 
 impl RespondPaosSso {
+    /// Answer with a success response whose assertion `Subject` is `name_id`.
+    ///
+    /// The assertion has no `AttributeStatement` until [`Self::attributes`]
+    /// sets one.
+    pub fn success(name_id: NameId) -> Self {
+        Self {
+            answer: PaosSsoAnswer::Success(PaosAssertion {
+                name_id,
+                attributes: Attributes::default(),
+                authn_context: None,
+                authn_instant: None,
+            }),
+        }
+    }
+
+    /// End the login with `status` and no assertion.
+    ///
+    /// The service provider establishes no session from that response.
+    /// `status` must not be top-level `Success`:
+    /// [`Saml<Idp>::respond_paos_sso`] returns [`SamlError::Invalid`] for it.
+    pub fn failure(status: Status) -> Self {
+        Self {
+            answer: PaosSsoAnswer::Failure(status),
+        }
+    }
+
     /// Set the attributes of the assertion's `AttributeStatement`.
     ///
     /// They are written as [`crate::RespondSso::attributes`] writes them. An
-    /// empty collection writes no `AttributeStatement`.
+    /// empty collection writes no `AttributeStatement`. A failure response
+    /// writes no assertion, so this has no effect on [`Self::failure`].
     pub fn attributes(mut self, attributes: Attributes) -> Self {
-        self.attributes = attributes;
+        match &mut self.answer {
+            PaosSsoAnswer::Success(assertion) => assertion.attributes = attributes,
+            PaosSsoAnswer::Failure(_) => {}
+        }
         self
     }
 
@@ -189,9 +190,13 @@ impl RespondPaosSso {
     /// It is written, and checked against the request's
     /// [`crate::RequestedAuthnContext`], as [`crate::RespondSso::authn_context`]
     /// does. Omitting it writes the unspecified class. When no requested
-    /// context can be met, answer with [`Saml::reject_paos_sso`].
+    /// context can be met, answer with [`Self::failure`]. A failure response
+    /// writes no assertion, so this has no effect on it.
     pub fn authn_context(mut self, authn_context: AuthnContextReference) -> Self {
-        self.authn_context = Some(authn_context);
+        match &mut self.answer {
+            PaosSsoAnswer::Success(assertion) => assertion.authn_context = Some(authn_context),
+            PaosSsoAnswer::Failure(_) => {}
+        }
         self
     }
 
@@ -199,9 +204,13 @@ impl RespondPaosSso {
     ///
     /// It is written, and checked against the response `IssueInstant`, as
     /// [`crate::RespondSso::authn_instant`] does. Omitting it writes the
-    /// assertion `IssueInstant`.
+    /// assertion `IssueInstant`. A failure response writes no assertion, so
+    /// this has no effect on [`Self::failure`].
     pub fn authn_instant(mut self, authn_instant: SystemTime) -> Self {
-        self.authn_instant = Some(authn_instant);
+        match &mut self.answer {
+            PaosSsoAnswer::Success(assertion) => assertion.authn_instant = Some(authn_instant),
+            PaosSsoAnswer::Failure(_) => {}
+        }
         self
     }
 }
@@ -330,9 +339,16 @@ impl<Message> PaosHttpResponse<Message> {
             _message: PhantomData,
         }
     }
+}
 
-    fn fault(soap_envelope: String) -> Self {
-        let mut response = Self::from_parts(SOAP_RESPONSE_HEADERS, soap_envelope);
+impl PaosHttpResponse<SoapFault> {
+    /// HTTP 500 SOAP fault for an envelope that is not a SAML request.
+    ///
+    /// Send this when [`Saml<Idp>::receive_paos_sso`] fails before it returns
+    /// a request. A failed login is answered with [`RespondPaosSso::failure`]
+    /// instead, and that response stays HTTP 200.
+    pub fn soap_fault() -> Self {
+        let mut response = Self::from_parts(SOAP_RESPONSE_HEADERS, soap_fault_envelope());
         response.status = 500;
         response
     }
@@ -352,62 +368,9 @@ impl PaosHttpResponse<SsoResponse> {
     }
 }
 
-/// Marker for the SOAP fault [`Saml<Idp>::paos_soap_fault`] returns.
+/// Marker for the SOAP fault [`PaosHttpResponse::soap_fault`] returns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SoapFault;
-
-/// SOAP AuthnRequest delivered to an identity provider.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PaosAuthnRequest {
-    envelope: String,
-    soap_endpoint: EndpointUrl,
-}
-
-impl PaosAuthnRequest {
-    /// SOAP envelope posted to `soap_endpoint`.
-    ///
-    /// `soap_endpoint` is the URL that received this POST. A `Destination` on
-    /// the AuthnRequest, when that attribute is present, must match it.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when the envelope is empty or `soap_endpoint` is
-    /// not an absolute HTTP(S) URL.
-    pub fn from_envelope(
-        soap_envelope: impl Into<String>,
-        soap_endpoint: impl Into<String>,
-    ) -> Result<Self, SamlError> {
-        let envelope = soap_envelope.into();
-        if envelope.trim().is_empty() {
-            return Err(SamlError::Invalid("SOAP envelope must not be empty".into()));
-        }
-        Ok(Self {
-            envelope,
-            soap_endpoint: EndpointUrl::try_new(soap_endpoint)?,
-        })
-    }
-}
-
-/// SOAP response delivered to a service provider.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PaosSsoResponse {
-    envelope: String,
-}
-
-impl PaosSsoResponse {
-    /// SOAP envelope the enhanced client posted to the assertion consumer.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when the envelope is empty.
-    pub fn from_envelope(soap_envelope: impl Into<String>) -> Result<Self, SamlError> {
-        let envelope = soap_envelope.into();
-        if envelope.trim().is_empty() {
-            return Err(SamlError::Invalid("SOAP envelope must not be empty".into()));
-        }
-        Ok(Self { envelope })
-    }
-}
 
 impl Saml<Sp> {
     /// Start Enhanced Client/Proxy login for an enhanced client.
@@ -415,11 +378,19 @@ impl Saml<Sp> {
     /// Return [`StartedPaosSso::http_response`] as HTTP 200. Store
     /// [`StartedPaosSso::pending`] until that client posts the response.
     ///
+    /// This method does not read HTTP headers. To decide whether the HTTP
+    /// client that asked for a resource is an enhanced client, call
+    /// [`check_paos_client_headers`] with its `Accept` and `PAOS` headers
+    /// first.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the assertion consumer is missing or
-    /// unpublished, relay state is invalid or contains a character XML 1.0
-    /// forbids, or the AuthnRequest cannot be signed.
+    /// Returns [`SamlError::Invalid`] when [`StartPaosSso::provider_name`]
+    /// contains a character XML 1.0 forbids, or when the
+    /// [`StartPaosSso::acs_url`] is not published. Returns [`SamlError`] when
+    /// the default assertion consumer is missing, relay state is invalid or
+    /// contains a character XML 1.0 forbids, or the AuthnRequest cannot be
+    /// signed.
     ///
     /// # Examples
     ///
@@ -431,9 +402,9 @@ impl Saml<Sp> {
     ///
     /// ```
     /// use saml_rs::{
-    ///     AcsEndpoint, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    ///     MetadataTrustPolicy, PaosClientRequest, Saml, SpConfig, SpValidationPolicy,
-    ///     SsoEndpoint, StartPaosSso,
+    ///     check_paos_client_headers, AcsEndpoint, EndpointUrl, EntityId, IdpConfig,
+    ///     IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, Saml, SpConfig,
+    ///     SpValidationPolicy, SsoEndpoint, StartPaosSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
@@ -452,10 +423,14 @@ impl Saml<Sp> {
     ///     idp.metadata_xml(),
     ///     MetadataTrustPolicy::AllowUnsigned,
     /// )?;
+    /// // The headers of the HTTP request that asked for a resource.
+    /// let accept = "text/html, application/vnd.paos+xml";
+    /// let paos = r#"ver="urn:liberty:paos:2003-08";"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp""#;
+    /// check_paos_client_headers(accept, paos)?;
+    ///
     /// let started = sp.start_paos_sso(
     ///     &idp,
-    ///     PaosClientRequest::headers_checked_by_caller(),
-    ///     StartPaosSso::to_soap_endpoint("https://idp.example.com/soap")?
+    ///     StartPaosSso::new(EndpointUrl::try_new("https://idp.example.com/soap")?)
     ///         .allow_unsigned_authn_request(),
     /// )?;
     /// assert_eq!(started.http_response.http_status(), 200);
@@ -465,7 +440,6 @@ impl Saml<Sp> {
     pub fn start_paos_sso(
         &self,
         idp: &IdpDescriptor,
-        _client: PaosClientRequest,
         options: StartPaosSso,
     ) -> Result<StartedPaosSso, SamlError> {
         idp.ensure_valid_at(SystemTime::now())?;
@@ -476,6 +450,9 @@ impl Saml<Sp> {
                     "relay state must not contain a character XML 1.0 forbids".into(),
                 ));
             }
+        }
+        if let Some(provider_name) = &options.provider_name {
+            validate_provider_name(provider_name)?;
         }
         let assertion_consumer = assertion_consumer_url(self, options.acs_url)?;
         let issuer = self
@@ -491,13 +468,13 @@ impl Saml<Sp> {
                 destination: options.soap_endpoint.as_str(),
                 assertion_consumer_service_url: assertion_consumer.as_str(),
                 force_authn: options.force_authn.map(ForceAuthn::as_bool),
-                is_passive: options.is_passive.map(IsPassive::as_bool),
+                is_passive: options.passive.map(IsPassive::as_bool),
                 sign: options.sign_authn_request,
             })?;
         let envelope = sp_to_ecp_envelope(&SpToEcp {
             response_consumer_url: assertion_consumer.as_str(),
             provider_name: options.provider_name.as_deref(),
-            is_passive: options.is_passive.map(IsPassive::as_bool),
+            is_passive: options.passive.map(IsPassive::as_bool),
             issuer: &issuer,
             identity_provider_id: idp.entity_id().as_str(),
             identity_provider_loc: options.soap_endpoint.as_str(),
@@ -517,26 +494,29 @@ impl Saml<Sp> {
 
     /// Finish Enhanced Client/Proxy login from the SOAP response.
     ///
-    /// A SAML error status does not return a session. This accepts the
-    /// response without applying an outstanding logout. Use
+    /// `response_envelope` is the SOAP envelope the enhanced client posted to
+    /// the assertion consumer. A SAML error status does not return a session.
+    /// This accepts the response without applying an outstanding logout. Use
     /// [`Self::finish_paos_sso_with_outstanding_logout`] to reject a later
     /// assertion that matches one.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the response does not match the pending
-    /// login, including issuer, relay state, destination, recipient, or
-    /// `InResponseTo`, when signature, audience, condition, time, or status
-    /// checks fail, or when a SOAP header entry other than `ecp:RelayState` or
-    /// `paos:Response` sets `mustUnderstand`.
+    /// Returns [`SamlError::Xml`] when `response_envelope` is empty, blank, or
+    /// not a SOAP 1.1 envelope, and [`SamlError::LimitExceeded`] when it is
+    /// larger than the configured XML limits. Returns [`SamlError`] when the response does
+    /// not match the pending login, including issuer, relay state,
+    /// destination, recipient, or `InResponseTo`, when signature, audience,
+    /// condition, time, or status checks fail, or when a SOAP header entry
+    /// other than `ecp:RelayState` or `paos:Response` sets `mustUnderstand`.
     pub fn finish_paos_sso(
         &self,
         idp: &IdpDescriptor,
         pending: &PendingPaosSso,
-        response: &PaosSsoResponse,
+        response_envelope: &str,
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
-        let session = self.parsed_paos_session(idp, pending, response, &validation)?;
+        let session = self.parsed_paos_session(idp, pending, response_envelope, &validation)?;
         super::sp::finish_validated_session(session, &mut validation, None)
     }
 
@@ -553,11 +533,11 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         pending: &PendingPaosSso,
-        response: &PaosSsoResponse,
+        response_envelope: &str,
         mut validation: SamlValidationContext<'_>,
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
-        let session = self.parsed_paos_session(idp, pending, response, &validation)?;
+        let session = self.parsed_paos_session(idp, pending, response_envelope, &validation)?;
         super::sp::finish_validated_session(session, &mut validation, Some(outstanding_logout))
     }
 
@@ -565,19 +545,14 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         pending: &PendingPaosSso,
-        response: &PaosSsoResponse,
+        response_envelope: &str,
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         let limits = self.raw_service_provider().setting.xml_limits;
-        let body = read_soap_body(
-            &response.envelope,
-            "Response",
-            limits,
-            SP_UNDERSTOOD_HEADERS,
-        )?;
+        let body = read_soap_body(response_envelope, "Response", limits, SP_UNDERSTOOD_HEADERS)?;
         crate::schema::validate(
-            &response.envelope,
+            response_envelope,
             self.raw_service_provider().setting.schema_validator,
         )?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
@@ -605,40 +580,37 @@ impl Saml<Sp> {
 }
 
 impl Saml<Idp> {
-    /// HTTP 500 SOAP fault for an envelope that is not a SAML request.
-    ///
-    /// Send this when [`Self::receive_paos_sso`] fails before it returns a
-    /// request. A failed login still uses [`Self::reject_paos_sso`], and that
-    /// response stays HTTP 200.
-    pub fn paos_soap_fault(&self) -> PaosHttpResponse<SoapFault> {
-        let _ = self;
-        PaosHttpResponse::fault(soap_fault_envelope())
-    }
-
     /// Read the SOAP AuthnRequest an enhanced client forwarded.
     ///
-    /// A `ProtocolBinding` that names the PAOS binding is accepted, and
+    /// `request_envelope` is the SOAP envelope posted to `soap_endpoint`, the
+    /// URL that received this POST. A `Destination` on the AuthnRequest, when
+    /// that attribute is present, must match it. A `ProtocolBinding` that
+    /// names the PAOS binding is accepted, and
     /// [`AuthnRequest::protocol_binding`] then reports none. The raw flow
     /// keeps the attribute.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the envelope is not one AuthnRequest, a SOAP
-    /// header entry sets `mustUnderstand`, the issuer or destination does not
-    /// match, the request is unsigned while the SP metadata sets
-    /// `AuthnRequestsSigned` under
+    /// Returns [`SamlError::Xml`] when `request_envelope` is empty, blank, or
+    /// not a SOAP 1.1 envelope, and [`SamlError::LimitExceeded`] when it is
+    /// larger than the configured XML limits. Returns [`SamlError`] when the envelope is not
+    /// one AuthnRequest, a SOAP header entry sets `mustUnderstand`, the issuer
+    /// or destination does not match, the request is unsigned while the SP
+    /// metadata sets `AuthnRequestsSigned` under
     /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent),
-    /// or signature, time, or replay checks fail.
+    /// or signature, time, or replay checks fail. Answer those errors with
+    /// [`PaosHttpResponse::soap_fault`].
     pub fn receive_paos_sso(
         &self,
         sp: &SpDescriptor,
-        request: &PaosAuthnRequest,
+        request_envelope: &str,
+        soap_endpoint: &EndpointUrl,
         validation: SamlValidationContext<'_>,
-    ) -> Result<crate::model::Received<AuthnRequest>, SamlError> {
+    ) -> Result<Received<AuthnRequest>, SamlError> {
         let limits = self.raw_identity_provider().setting.xml_limits;
-        let body = read_soap_body(&request.envelope, "AuthnRequest", limits, &[])?;
+        let body = read_soap_body(request_envelope, "AuthnRequest", limits, &[])?;
         crate::schema::validate(
-            &request.envelope,
+            request_envelope,
             self.raw_identity_provider().setting.schema_validator,
         )?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
@@ -660,9 +632,9 @@ impl Saml<Idp> {
         )?;
         let authn = AuthnRequest::try_from_paos_flow(flow)?;
         if let Some(destination) = authn.destination() {
-            if destination.as_str() != request.soap_endpoint.as_str() {
+            if destination.as_str() != soap_endpoint.as_str() {
                 return Err(SamlError::destination_mismatch(
-                    request.soap_endpoint.as_str(),
+                    soap_endpoint.as_str(),
                     Some(destination.as_str()),
                 ));
             }
@@ -672,10 +644,15 @@ impl Saml<Idp> {
         validation.check_and_store_message_replay(crate::model::ReplayKey::AuthnRequest(
             authn.id().clone(),
         ))?;
-        Ok(crate::model::Received::new(authn, None))
+        Ok(Received::new(authn, None))
     }
 
-    /// Answer a PAOS login with a success response for `name_id`.
+    /// Answer a PAOS login with a SOAP response.
+    ///
+    /// [`RespondPaosSso::success`] answers with an assertion for its
+    /// `NameId`. [`RespondPaosSso::failure`] ends the login with its SAML
+    /// error status and no assertion, and the service provider establishes no
+    /// session from it. Both are HTTP 200.
     ///
     /// A request that names no assertion consumer URL or index is answered at
     /// the service provider role's default assertion consumer. A default that
@@ -683,61 +660,37 @@ impl Saml<Idp> {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when the request has no usable assertion consumer,
-    /// the issuer does not match, a persistent or transient `name_id` is
-    /// longer than 256 characters, the NameID format is not an absolute URI
+    /// Returns [`SamlError::Invalid`] when the [`RespondPaosSso::failure`]
+    /// status is top-level `Success`. Returns [`SamlError`] when the request
+    /// has no usable assertion consumer, the issuer does not match, or the
+    /// response cannot be signed. For [`RespondPaosSso::success`], also
+    /// returns [`SamlError`] when a persistent or transient `NameId` is longer
+    /// than 256 characters, the NameID format is not an absolute URI
     /// reference, [`RespondPaosSso::attributes`] is combined with a login
     /// response template, names a basic attribute that is not an XML name, or
     /// has a `NameFormat` that is not an absolute URI reference, the
     /// authentication context does not meet an exact `RequestedAuthnContext`,
     /// [`RespondPaosSso::authn_instant`] is later than the response
-    /// `IssueInstant` or before year 1, the `name_id` `SPNameQualifier` is not
+    /// `IssueInstant` or before year 1, the `NameId` `SPNameQualifier` is not
     /// the one the request's `NameIDPolicy` asks for with a SAML-defined
-    /// format other than `unspecified` or `encrypted`, the `name_id` does not
+    /// format other than `unspecified` or `encrypted`, or the `NameId` does not
     /// strongly match the request's `Subject` (see
-    /// [`RequestedSubject`](crate::RequestedSubject)), or the response cannot
-    /// be signed.
+    /// [`RequestedSubject`](crate::RequestedSubject)).
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,
-        request: &crate::model::Received<AuthnRequest>,
-        name_id: &NameId,
+        request: &Received<AuthnRequest>,
         options: RespondPaosSso,
     ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
-        self.issue_paos_sso(sp, request, Some(name_id), None, &options)
-    }
-
-    /// End a PAOS login with a SAML error status and no assertion.
-    ///
-    /// The HTTP status stays 200. The caller does not receive a session when
-    /// the service provider finishes this response.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError::Invalid`] when `status` is top-level success.
-    /// Also returns the response-creation errors of [`Self::respond_paos_sso`].
-    pub fn reject_paos_sso(
-        &self,
-        sp: &SpDescriptor,
-        request: &crate::model::Received<AuthnRequest>,
-        status: Status,
-    ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
-        if status.top_level() == TopLevelStatusCode::Success {
-            return Err(SamlError::Invalid(
-                "reject_paos_sso requires an error status".into(),
-            ));
-        }
-        self.issue_paos_sso(sp, request, None, Some(status), &RespondPaosSso::default())
-    }
-
-    fn issue_paos_sso(
-        &self,
-        sp: &SpDescriptor,
-        request: &crate::model::Received<AuthnRequest>,
-        name_id: Option<&NameId>,
-        status: Option<Status>,
-        options: &RespondPaosSso,
-    ) -> Result<PaosHttpResponse<SsoResponse>, SamlError> {
+        let (assertion, status) = match &options.answer {
+            PaosSsoAnswer::Success(assertion) => (Some(assertion), None),
+            PaosSsoAnswer::Failure(status) if status.top_level() == TopLevelStatusCode::Success => {
+                return Err(SamlError::Invalid(
+                    "a PAOS failure response requires an error status".into(),
+                ));
+            }
+            PaosSsoAnswer::Failure(status) => (None, Some(status)),
+        };
         ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         let acs = EndpointUrl::try_new(resolve_response_acs(
             sp.metadata(),
@@ -752,6 +705,7 @@ impl Saml<Idp> {
                 &setting.data_encryption_algorithm,
             )
         };
+        let name_id = assertion.map(|assertion| &assertion.name_id);
         let name_id_format = name_id.and_then(NameId::format).map(NameIdFormat::as_uri);
         let user = User::new(name_id.map_or("", NameId::value));
         let overrides = LoginResponseOverrides {
@@ -763,10 +717,11 @@ impl Saml<Idp> {
             ),
             issuance_lifetime: Some(self.0.issuance_lifetime),
             web_browser_sso_producer: WebBrowserSsoProducer::Follow,
-            status: status.as_ref(),
-            typed_attributes: options.attributes.as_slice(),
-            authn_context: options.authn_context.as_ref(),
-            authn_instant: options.authn_instant,
+            status,
+            typed_attributes: assertion
+                .map_or(&[][..], |assertion| assertion.attributes.as_slice()),
+            authn_context: assertion.and_then(|assertion| assertion.authn_context.as_ref()),
+            authn_instant: assertion.and_then(|assertion| assertion.authn_instant),
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
             requested_subject: request.message().requested_subject(),

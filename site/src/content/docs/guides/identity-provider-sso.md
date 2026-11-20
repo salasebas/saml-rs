@@ -41,7 +41,7 @@ let response = idp.respond_sso(
     &sp,
     &request,
     &NameId::new("alice@example.com"),
-    RespondSso::post().apply_web_browser_sso_generation_rules(),
+    RespondSso::post().apply_producer_rules(),
 )?;
 ```
 
@@ -49,7 +49,7 @@ Send `response` back through the browser to the service provider's assertion con
 
 The response carries the exact `RelayState` that arrived with the request. `RespondSso::relay_state` sets one only for an unsolicited response or for a request that carried none.
 
-`post()`, `redirect()`, and `simple_sign()` leave the generation rules off until you call `apply_web_browser_sso_generation_rules()`. Those rules are the producer rows in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
+`post()`, `redirect()`, and `simple_sign()` leave the generation rules off until you call `apply_producer_rules()`. Those rules are the producer rows in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
 ## Encrypted assertions
 
@@ -103,7 +103,7 @@ A `Basic` name that is not an XML name is rejected. `attributes()` cannot be com
 After authentication, ask the identity provider above for the `_saml_idp` cookie and write the header yourself. `respond_sso` does not write it. A service provider has no method that sets or reads it.
 
 ```rust
-let cookie = idp.remember_identity_provider(RememberIdentityProvider::new(
+let cookie = idp.common_domain_cookie(RememberIdentityProvider::new(
     "example.org",
     CommonDomainCookieLifetime::Session,
 ))?;

@@ -34,7 +34,7 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
         &sp,
         &NameId::new("current-value"),
         &NameIdChange::NewId("new-value".into()),
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
     let xml = body(started.request().envelope())?;

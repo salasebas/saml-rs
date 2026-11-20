@@ -26,5 +26,6 @@ Check the topics that affect your integration.
 - [Upgrade RelayState, pending state, and inbound message code](browser-transport.md)
 - [Upgrade typed config code](config.md)
 - [Upgrade SOAP, artifact resolution, and discovery cookie code](soap-artifact-discovery.md)
+- [Upgrade typed operation options, PAOS, and name identifier management code](typed-operations.md)
 
 [All migration guides](../README.md)

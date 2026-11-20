@@ -1150,8 +1150,7 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
         &parties.sp_metadata,
         &request,
         &principal(),
-        RespondSso::artifact(ArtifactDelivery::redirect(0))
-            .apply_web_browser_sso_generation_rules(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)).apply_producer_rules(),
         &mut issued,
     )?;
     let delivered = delivered_by(&response)?;

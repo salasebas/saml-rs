@@ -20,12 +20,13 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, EndpointUrl, EntityId, IdentifierEncryptionPolicy, Idp, IdpConfig,
-    ManageNameIdService, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
-    NameIdChange, NameIdFormat, NameIdManagementRefusal, PartyAuthentication,
-    ReceivedNameIdManagement, ReplayPolicy, RequestAgePolicy, Saml, SamlError,
+    AcsEndpoint, EndpointUrl, EntityId, Idp, IdpConfig, ManageNameIdService,
+    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
+    NameIdFormat, NameIdManagementReceipt, NameIdManagementRefusal, PartyAuthentication,
+    RelayState, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml, SamlError,
     SamlValidationContext, SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, Status, SubordinateStatusCode,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
+    SubordinateStatusCode,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -163,11 +164,11 @@ fn success_status() -> String {
 }
 
 fn received_request(
-    received: ReceivedNameIdManagement,
+    received: NameIdManagementReceipt,
 ) -> Result<saml_rs::Received<saml_rs::ManageNameIdRequest>, Box<dyn std::error::Error>> {
     match received {
-        ReceivedNameIdManagement::Request(request) => Ok(*request),
-        ReceivedNameIdManagement::Refused(refused) => {
+        NameIdManagementReceipt::Request(request) => Ok(*request),
+        NameIdManagementReceipt::Refused(refused) => {
             Err(format!("request was refused: {:?}", refused.reason()).into())
         }
     }
@@ -194,7 +195,7 @@ fn idp_initiated_new_id_reaches_the_service_provider_and_completes() -> TestResu
         &sp,
         &current,
         &NameIdChange::NewId("new-value".into()),
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
 
@@ -227,7 +228,7 @@ fn idp_initiated_termination_reaches_the_service_provider_and_completes() -> Tes
         &sp,
         &current,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
 
@@ -244,6 +245,24 @@ fn idp_initiated_termination_reaches_the_service_provider_and_completes() -> Tes
 }
 
 #[test]
+fn a_relay_state_is_not_sent_over_soap() -> TestResult {
+    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let sp = soap_service_provider()?;
+    let result = idp.start_name_id_management(
+        &sp,
+        &NameId::persistent("current-value")?,
+        &NameIdChange::Terminate,
+        StartNameIdManagement::new().relay_state(RelayState::try_new("state")?),
+        authenticated(),
+    );
+    assert!(
+        matches!(result, Err(SamlError::ProtocolProfile(_))),
+        "{result:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn idp_initiated_request_qualifies_a_persistent_format_written_with_whitespace() -> TestResult {
     let idp = identity_provider(Some(IDP_NIM_URL))?;
     let sp = soap_service_provider()?;
@@ -253,7 +272,7 @@ fn idp_initiated_request_qualifies_a_persistent_format_written_with_whitespace()
         &sp,
         &current,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
 
@@ -276,7 +295,7 @@ fn idp_initiated_request_keeps_the_established_qualifiers() -> TestResult {
         &sp,
         &current,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
 
@@ -295,7 +314,7 @@ fn a_service_provider_error_status_is_returned_to_the_caller() -> TestResult {
         &sp,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
     let request_id = attribute(&body(started.request().envelope())?, "ID")
@@ -323,7 +342,7 @@ fn a_response_for_another_request_or_from_another_issuer_is_rejected() -> TestRe
         &sp,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
     let request_id = attribute(&body(started.request().envelope())?, "ID")
@@ -377,7 +396,7 @@ fn a_transient_identifier_is_not_managed() -> TestResult {
             &sp,
             &current,
             &NameIdChange::Terminate,
-            IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            StartNameIdManagement::new(),
             authenticated(),
         );
         assert!(matches!(started, Err(SamlError::ProtocolProfile(_))));
@@ -409,7 +428,7 @@ fn a_persistent_value_longer_than_256_characters_is_not_sent() -> TestResult {
             &sp,
             &current,
             &change,
-            IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            StartNameIdManagement::new(),
             authenticated(),
         );
         assert!(matches!(result, Err(SamlError::Invalid(_))));
@@ -427,7 +446,7 @@ fn a_name_id_format_that_is_not_an_absolute_uri_is_not_sent() -> TestResult {
             &sp,
             &current,
             &NameIdChange::Terminate,
-            IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            StartNameIdManagement::new(),
             authenticated(),
         );
         assert!(
@@ -466,7 +485,7 @@ fn sp_initiated_new_id_is_received_and_answered() -> TestResult {
     );
     assert_eq!(message.change(), &NameIdChange::NewId("sp-alias".into()));
 
-    let response = idp.respond_name_id_management(&sp, &request, &Status::success())?;
+    let response = idp.respond_name_id_management(&sp, &request, RespondNameIdManagement::new())?;
     let headers: Vec<(&str, &str)> = response
         .headers()
         .iter()
@@ -504,8 +523,12 @@ fn sp_initiated_termination_is_received_and_answered() -> TestResult {
 
     let status = Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal());
     let xml = body(
-        idp.respond_name_id_management(&sp, &request, &status)?
-            .envelope(),
+        idp.respond_name_id_management(
+            &sp,
+            &request,
+            RespondNameIdManagement::new().status(status),
+        )?
+        .envelope(),
     )?;
     assert!(xml.contains(&format!(
         r#"<samlp:StatusCode Value="{REQUESTER}"><samlp:StatusCode Value="{UNKNOWN_PRINCIPAL}"/></samlp:StatusCode>"#
@@ -540,7 +563,7 @@ fn an_identifier_that_does_not_decrypt_is_answered_with_an_error_status() -> Tes
             authenticated(),
             validation(),
         )?;
-        let ReceivedNameIdManagement::Refused(refused) = received else {
+        let NameIdManagementReceipt::Refused(refused) = received else {
             return Err("an undecryptable identifier was not refused".into());
         };
         assert_eq!(refused.reason(), reason);
@@ -563,7 +586,7 @@ fn a_version_other_than_2_0_is_answered_with_version_mismatch() -> TestResult {
 
     let received = idp.receive_name_id_management(&sp, &envelope, authenticated(), validation())?;
 
-    let ReceivedNameIdManagement::Refused(refused) = received else {
+    let NameIdManagementReceipt::Refused(refused) = received else {
         return Err("a version mismatch was not refused".into());
     };
     assert_eq!(refused.reason(), NameIdManagementRefusal::VersionMismatch);
@@ -583,7 +606,7 @@ fn an_identity_provider_without_the_service_neither_sends_nor_accepts() -> TestR
         &sp,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     );
     assert!(
@@ -613,7 +636,7 @@ fn a_service_provider_without_a_soap_service_is_not_sent_a_request() -> TestResu
         &redirect_only,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     );
     assert!(
@@ -634,7 +657,7 @@ fn a_service_provider_without_a_soap_service_is_not_sent_a_request() -> TestResu
         &dual_role,
         &NameId::persistent("current-value")?,
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     );
     assert!(
@@ -666,7 +689,7 @@ fn an_unauthenticated_channel_is_refused_in_both_directions() -> TestResult {
             &sp,
             &NameId::persistent("current-value")?,
             &NameIdChange::Terminate,
-            IdentifierEncryptionPolicy::PlaintextIdentifiers,
+            StartNameIdManagement::new(),
             channel,
         );
         assert!(matches!(started, Err(SamlError::SoapChannelProtection)));
@@ -707,7 +730,8 @@ fn a_request_the_service_provider_did_not_issue_is_rejected() -> TestResult {
         authenticated(),
         validation(),
     )?)?;
-    let answered = idp.respond_name_id_management(&other_sp, &request, &Status::success());
+    let answered =
+        idp.respond_name_id_management(&other_sp, &request, RespondNameIdManagement::new());
     assert!(matches!(answered, Err(SamlError::IssuerMismatch { .. })));
     Ok(())
 }
@@ -932,7 +956,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
         &sp,
         &NameId::new("current-value"),
         &NameIdChange::Terminate,
-        IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        StartNameIdManagement::new(),
         authenticated(),
     )?;
     let xml = body(started.request().envelope())?;

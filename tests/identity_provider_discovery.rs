@@ -31,7 +31,7 @@ fn remember(
     if let Some(value) = existing_cookie {
         request = request.with_existing_cookie(value);
     }
-    identity_provider(entity_id)?.remember_identity_provider(request)
+    identity_provider(entity_id)?.common_domain_cookie(request)
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn common_domain_must_be_a_hostname_not_an_ip_address() -> Result<(), Box<dyn st
 fn remembered_cookie_value_stays_within_browser_cookie_limits(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let entity = format!("https://idp.example.net/{}", "a".repeat(400));
-    let single = identity_provider(&entity)?.remember_identity_provider(
+    let single = identity_provider(&entity)?.common_domain_cookie(
         RememberIdentityProvider::new("example.org", CommonDomainCookieLifetime::Session),
     )?;
     let copies = 4096 / (single.value().len() + 3) + 2;
@@ -205,7 +205,7 @@ fn cookie_name_counts_toward_the_4096_byte_limit() -> Result<(), Box<dyn std::er
     // Encoded `_saml_idp` value for one identity provider with `tail` path bytes.
     fn listed(tail: usize) -> Result<String, Box<dyn std::error::Error>> {
         let entity = format!("https://idp.example.net/{}", "a".repeat(tail));
-        let cookie = identity_provider(&entity)?.remember_identity_provider(
+        let cookie = identity_provider(&entity)?.common_domain_cookie(
             RememberIdentityProvider::new("example.org", CommonDomainCookieLifetime::Session),
         )?;
         Ok(cookie.value().to_string())

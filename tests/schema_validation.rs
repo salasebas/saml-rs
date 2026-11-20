@@ -1,8 +1,8 @@
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    MetadataTrustPolicy, PaosAuthnRequest, ReplayPolicy, Saml, SamlError, SamlValidationContext,
+    AcsEndpoint, EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, MetadataTrustPolicy, ReplayPolicy, Saml, SamlError, SamlValidationContext,
     SchemaValidator, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, XmlPolicy,
 };
 
@@ -140,9 +140,9 @@ fn schema_policy_covers_paos_envelope() -> Result<(), Box<dyn std::error::Error>
     let envelope = format!(
         r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>{xml}</soap:Body></soap:Envelope>"#
     );
-    let request = PaosAuthnRequest::from_envelope(envelope, SOAP)?;
-    assert_rejected(idp.receive_paos_sso(&peer, &request, validation()));
-    self::idp(None)?.receive_paos_sso(&peer, &request, validation())?;
+    let soap_endpoint = EndpointUrl::try_new(SOAP)?;
+    assert_rejected(idp.receive_paos_sso(&peer, &envelope, &soap_endpoint, validation()));
+    self::idp(None)?.receive_paos_sso(&peer, &envelope, &soap_endpoint, validation())?;
     Ok(())
 }
 

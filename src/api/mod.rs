@@ -65,7 +65,7 @@
 //! use saml_rs::{CommonDomainCookieLifetime, RememberIdentityProvider, Saml, Sp};
 //!
 //! let sp: Saml<Sp> = unreachable!();
-//! let _ = sp.remember_identity_provider(RememberIdentityProvider::new(
+//! let _ = sp.common_domain_cookie(RememberIdentityProvider::new(
 //!     "example.org",
 //!     CommonDomainCookieLifetime::Session,
 //! ));
@@ -75,21 +75,29 @@
 //! The service provider cannot send or answer it.
 //!
 //! ```compile_fail
-//! use saml_rs::{IdpDescriptor, NameId, NameIdChange, Saml, SoapChannel, Sp};
+//! use saml_rs::{
+//!     NameId, NameIdChange, Saml, SoapChannel, Sp, SpDescriptor, StartNameIdManagement,
+//! };
 //!
 //! let sp: Saml<Sp> = unreachable!();
-//! let peer: IdpDescriptor = unreachable!();
+//! let peer: SpDescriptor = unreachable!();
 //! let name_id: NameId = unreachable!();
 //! let channel: SoapChannel = unreachable!();
 //!
-//! let _ = sp.start_name_id_management(&peer, &name_id, &NameIdChange::Terminate, channel);
+//! let _ = sp.start_name_id_management(
+//!     &peer,
+//!     &name_id,
+//!     &NameIdChange::Terminate,
+//!     StartNameIdManagement::new(),
+//!     channel,
+//! );
 //! ```
 //!
 //! ```compile_fail
-//! use saml_rs::{IdpDescriptor, Saml, SamlValidationContext, SoapChannel, Sp};
+//! use saml_rs::{Saml, SamlValidationContext, SoapChannel, Sp, SpDescriptor};
 //!
 //! let sp: Saml<Sp> = unreachable!();
-//! let peer: IdpDescriptor = unreachable!();
+//! let peer: SpDescriptor = unreachable!();
 //! let channel: SoapChannel = unreachable!();
 //! let validation: SamlValidationContext<'static> = unreachable!();
 //!
@@ -112,14 +120,14 @@ use crate::error::SamlError;
 use crate::idp::IdentityProvider;
 use crate::sp::ServiceProvider;
 
-pub use name_id_management::ReceivedNameIdManagementRedirect;
+pub use name_id_management::NameIdManagementRedirectReceipt;
 pub use options::{
     ForceAuthn, IsPassive, LogoutSigning, MessageDelivery, ReceiveNameIdManagement,
     RespondNameIdManagement, RespondSlo, RespondSso, StartNameIdManagement, StartSlo, StartSso,
 };
 pub use paos::{
-    PaosAuthnRequest, PaosClientRequest, PaosHttpResponse, PaosSsoResponse, PendingPaosSso,
-    PendingPaosSsoSnapshot, RespondPaosSso, SoapFault, StartPaosSso, StartedPaosSso,
+    check_paos_client_headers, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
+    RespondPaosSso, SoapFault, StartPaosSso, StartedPaosSso,
 };
 
 /// Typed SAML facade for high-level browser SSO/SLO flows.

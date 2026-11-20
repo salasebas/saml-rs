@@ -125,7 +125,7 @@ impl Saml<Idp> {
     /// Respond to a received SP AuthnRequest.
     ///
     /// This does not write the Identity Provider Discovery cookie. Call
-    /// [`Self::remember_identity_provider`] after authentication when the
+    /// [`Self::common_domain_cookie`] after authentication when the
     /// caller wants this identity provider remembered.
     ///
     /// The assertion `Subject` has `name_id` as its `NameID`, with its value,
@@ -381,7 +381,7 @@ impl Saml<Idp> {
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
-    /// let cookie = idp.remember_identity_provider(RememberIdentityProvider::new(
+    /// let cookie = idp.common_domain_cookie(RememberIdentityProvider::new(
     ///     "example.org",
     ///     CommonDomainCookieLifetime::Session,
     /// ))?;
@@ -392,10 +392,10 @@ impl Saml<Idp> {
     ///     .ends_with("; Path=/; Domain=.example.org; Secure"));
     /// # Ok::<(), saml_rs::SamlError>(())
     /// ```
-    pub fn remember_identity_provider(
+    pub fn common_domain_cookie(
         &self,
         options: RememberIdentityProvider<'_>,
     ) -> Result<CommonDomainCookie, SamlError> {
-        discovery::remember_identity_provider(&self.raw_identity_provider().entity_id(), options)
+        discovery::common_domain_cookie(&self.raw_identity_provider().entity_id(), options)
     }
 }

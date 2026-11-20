@@ -12,10 +12,13 @@ your integration.
 **Affects:** identity providers that call `respond_sso`, `initiate_sso`,
 `respond_sso_artifact`, `initiate_sso_artifact`, or `respond_paos_sso`.
 
-The `Subject` type is removed. These methods borrow the principal's `NameId`
+The `Subject` type is removed. These methods take the principal's `NameId`
 and write the assertion `Subject` themselves, with one bearer
-`SubjectConfirmation`. Before the upgrade, a `Subject` with confirmations
-returned `SamlError::Unsupported`. A caller can no longer pass one.
+`SubjectConfirmation`. The browser methods borrow it. `respond_paos_sso` takes
+it in `RespondPaosSso::success`, as
+[Answer PAOS login with `RespondPaosSso::success` or `RespondPaosSso::failure`](typed-operations.md#answer-paos-login-with-respondpaosssosuccess-or-respondpaosssofailure)
+shows. Before the upgrade, a `Subject` with confirmations returned
+`SamlError::Unsupported`. A caller can no longer pass one.
 
 Before the upgrade:
 

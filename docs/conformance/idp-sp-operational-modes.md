@@ -51,7 +51,7 @@ and the attribute profiles are in
 | Single Logout (IdP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | Claimed feature for the IdP and the SP. [SOAP binding](single-logout.md#soap-binding). The same flow is available to IdP Lite and SP Lite, which do not need it |
 | Single Logout (SP-Initiated), HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature, as the IdP-initiated row |
 | Single Logout (SP-Initiated), SOAP | `MUST` | `OPTIONAL` | `MUST` | `OPTIONAL` | Claimed feature for the IdP and the SP, as the IdP-initiated row |
-| Identity Provider Discovery (cookie) | `MUST` | `MUST` | `OPTIONAL` | `OPTIONAL` | Claimed feature for the IdP and IdP Lite: `remember_identity_provider`. [Identity Provider Discovery](identity-provider-discovery.md). Not implemented, off, for the SP and SP Lite |
+| Identity Provider Discovery (cookie) | `MUST` | `MUST` | `OPTIONAL` | `OPTIONAL` | Claimed feature for the IdP and IdP Lite: `common_domain_cookie`. [Identity Provider Discovery](identity-provider-discovery.md). Not implemented, off, for the SP and SP Lite |
 | Metadata Structures | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. Errata 05 E25 and §3.6 below. The crate reads and writes metadata, as in [Metadata and replay](metadata-and-replay.md), and does not elect this option |
 | Metadata Interoperation | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | `OPTIONAL` | Not implemented, off. Errata 05 E25 and §3.7 below |
 | Request for Assertion by Identifier | `OPTIONAL` | N/A | N/A | N/A | Not implemented, off. Errata 05 E29. `AssertionIDRequest` is in [Extended, authority, and requester modes](#extended-authority-and-requester-modes) |

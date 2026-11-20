@@ -15,13 +15,35 @@ const PAOS_NS: &str = "urn:liberty:paos:2003-08";
 const ASSERTION_NS: &str = "urn:oasis:names:tc:SAML:2.0:assertion";
 const PROTOCOL_NS: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 
-/// PAOS header field value with a double-quoted version and service.
-pub(super) const E54_PAOS_HEADER: &str = concat!(
-    "ver=\"urn:liberty:paos:2003-08\";",
-    "\"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp\""
-);
-
-pub(super) fn parse_client_headers(accept: &str, paos: &str) -> Result<(), SamlError> {
+/// Check the `Accept` and `PAOS` headers that identify an enhanced client.
+///
+/// Call it to decide whether the HTTP client that asked for a resource is an
+/// enhanced client, before calling
+/// [`Saml<Sp>::start_paos_sso`](crate::Saml::start_paos_sso), which does not
+/// read HTTP headers. An enhanced client must send both headers. Checking
+/// them is the service provider's choice: a deployment may tell an enhanced
+/// client apart by other means.
+///
+/// Pass the two field values. A leading `Accept:` or `PAOS:` name is
+/// ignored. The PAOS version and the ECP service value must use double
+/// quotes.
+///
+/// # Errors
+///
+/// Returns [`SamlError::ProtocolProfile`] when `Accept` omits
+/// `application/vnd.paos+xml`, or when the PAOS header omits the
+/// double-quoted version or the double-quoted ECP service value.
+///
+/// # Examples
+///
+/// ```
+/// use saml_rs::check_paos_client_headers;
+///
+/// let paos = r#"ver="urn:liberty:paos:2003-08";"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp""#;
+/// assert!(check_paos_client_headers("text/html, application/vnd.paos+xml", paos).is_ok());
+/// assert!(check_paos_client_headers("text/html", paos).is_err());
+/// ```
+pub fn check_paos_client_headers(accept: &str, paos: &str) -> Result<(), SamlError> {
     let accept = header_value(accept, "Accept");
     if !lists_media_type(accept, PAOS_MEDIA_TYPE) {
         return Err(SamlError::ProtocolProfile(
@@ -246,16 +268,21 @@ fn has_ecp_service(header: &str) -> bool {
 mod tests {
     use super::*;
 
+    const E54_PAOS_HEADER: &str = concat!(
+        "ver=\"urn:liberty:paos:2003-08\";",
+        "\"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp\""
+    );
+
     #[test]
     fn e54_header_is_accepted() {
         let accept = "text/html; application/vnd.paos+xml";
-        assert!(parse_client_headers(accept, E54_PAOS_HEADER).is_ok());
+        assert!(check_paos_client_headers(accept, E54_PAOS_HEADER).is_ok());
     }
 
     #[test]
     fn single_quoted_paos_header_is_rejected() -> Result<(), String> {
         let paos = "ver='urn:liberty:paos:2003-08';'urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp'";
-        match parse_client_headers("application/vnd.paos+xml", paos) {
+        match check_paos_client_headers("application/vnd.paos+xml", paos) {
             Err(SamlError::ProtocolProfile(_)) => Ok(()),
             other => Err(format!("expected ProtocolProfile, got {other:?}")),
         }
@@ -265,7 +292,7 @@ mod tests {
     fn comma_separated_double_quotes_are_accepted() {
         let paos =
             "ver=\"urn:liberty:paos:2003-08\",\"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp\"";
-        assert!(parse_client_headers("application/vnd.paos+xml", paos).is_ok());
+        assert!(check_paos_client_headers("application/vnd.paos+xml", paos).is_ok());
     }
 
     #[test]
@@ -278,7 +305,7 @@ mod tests {
             format!("cover=\"urn:liberty:paos:2003-08\";{ecp}"),
         ] {
             assert!(
-                parse_client_headers("application/vnd.paos+xml", &paos).is_err(),
+                check_paos_client_headers("application/vnd.paos+xml", &paos).is_err(),
                 "accepted {paos}"
             );
         }
@@ -288,12 +315,12 @@ mod tests {
     fn ecp_service_must_be_its_own_token() {
         let paos =
             "ver=\"urn:liberty:paos:2003-08\";foo=\"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp\"";
-        assert!(parse_client_headers("application/vnd.paos+xml", paos).is_err());
+        assert!(check_paos_client_headers("application/vnd.paos+xml", paos).is_err());
     }
 
     #[test]
     fn accept_without_paos_is_rejected() {
-        assert!(parse_client_headers("text/html", E54_PAOS_HEADER).is_err());
+        assert!(check_paos_client_headers("text/html", E54_PAOS_HEADER).is_err());
     }
 
     #[test]
