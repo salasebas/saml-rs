@@ -2,7 +2,7 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
+use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{status_code, Binding, ParserType};
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
@@ -89,7 +89,7 @@ fn sp() -> Result<ServiceProvider, SamlError> {
 }
 
 fn unsigned_response_template() -> String {
-    LOGIN_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", "", 1)
+    SSO_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", "", 1)
 }
 
 fn response_xml(template: &str, shape: &ResponseShape) -> String {

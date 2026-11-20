@@ -11,10 +11,9 @@ use std::time::{Duration, SystemTime};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::deflate_raw_decode;
-use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
+use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::status_code;
 use saml_rs::raw::{Binding, HttpRequest};
-use saml_rs::LoginResponseTemplate;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField,
@@ -404,13 +403,7 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
     )
     .credentials(signing_credentials())
     .validation(signed_authn_request_idp_validation())
-    .templates(saml_rs::TemplatePolicy {
-        login_response_template: Some(LoginResponseTemplate {
-            context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-            attributes: Vec::new(),
-        }),
-        ..saml_rs::TemplatePolicy::default()
-    })
+    .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
     let idp = Saml::idp(idp_config);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -502,13 +495,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
     )
     .credentials(signing_credentials())
     .validation(signed_authn_request_idp_validation())
-    .templates(saml_rs::TemplatePolicy {
-        login_response_template: Some(LoginResponseTemplate {
-            context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-            attributes: Vec::new(),
-        }),
-        ..saml_rs::TemplatePolicy::default()
-    })
+    .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
     let template_idp = Saml::idp(template_config);
     let (sp_descriptor, _) = descriptors(&sp, &template_idp)?;
@@ -901,10 +888,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
     )
     .credentials(signing_credentials())
     .validation(SpValidationPolicy::compatibility())
-    .templates(saml_rs::TemplatePolicy {
-        login_request_template: Some("<samlp:AuthnRequest/>".to_string()),
-        ..saml_rs::TemplatePolicy::default()
-    })
+    .authn_request_template("<samlp:AuthnRequest/>")
     .build()?;
     let sp = Saml::sp(config);
     let idp = idp_with(IdpValidationPolicy::compatibility(), false)?;
@@ -921,13 +905,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
     )
     .credentials(signing_credentials())
     .validation(signed_authn_request_idp_validation())
-    .templates(saml_rs::TemplatePolicy {
-        login_response_template: Some(LoginResponseTemplate {
-            context: Some("<samlp:Response/>".to_string()),
-            attributes: Vec::new(),
-        }),
-        ..saml_rs::TemplatePolicy::default()
-    })
+    .sso_response_template("<samlp:Response/>")
     .build()?;
     let idp = Saml::idp(idp_config);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
@@ -1176,13 +1154,7 @@ fn typed_error_response_rejects_a_login_response_template() -> Result<(), Box<dy
     )
     .credentials(signing_credentials())
     .validation(signed_authn_request_idp_validation())
-    .templates(saml_rs::TemplatePolicy {
-        login_response_template: Some(LoginResponseTemplate {
-            context: Some(LOGIN_RESPONSE_TEMPLATE.to_string()),
-            attributes: Vec::new(),
-        }),
-        ..saml_rs::TemplatePolicy::default()
-    })
+    .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
     let idp = Saml::idp(idp_config);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;

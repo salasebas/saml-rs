@@ -34,6 +34,7 @@
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
 | `TemplatePolicy::relay_state` or `tag_prefix_encrypted_assertion` | Removed | [Typed config](config.md#send-relaystate-per-request) |
+| `TemplatePolicy::login_request_template` or `login_response_template` | Moved to `SpConfigBuilder::authn_request_template` and `IdpConfigBuilder::sso_response_template` | [Typed config](config.md#set-sso-templates-on-the-roles-builder) |
 | `context::set_schema_validator` | Configure `XmlPolicy::schema_validator` | [9.1](xml-policy.md#91-configure-each-local-role) |
 | A full struct literal of `XmlPolicy` | Has a new `schema_validator` field | [9.1](xml-policy.md#91-configure-each-local-role) |
 | `Metadata::parse` and its variants, raw metadata `Deref`, generation config names, signature evidence names, raw `get_*` and signing flag getters, `x509_certificates()`, `export_metadata()`, descriptor `metadata()`, `metadata::{sp,idp,generate}` paths, `ArtifactResolutionEndpoint`, or `Metadata::verify_signature*` | Parser arguments, getter names and types, endpoint publishing, and public paths changed; obsolete methods removed | [Metadata API](metadata-api.md) |

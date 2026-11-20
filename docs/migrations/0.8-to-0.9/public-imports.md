@@ -14,9 +14,10 @@ warn, because Rust ignores `#[deprecated]` on a re-export.
 | Old path | Documented path |
 | --- | --- |
 | `xml::XmlLimits`, `xml::dom::XmlLimits` | `saml_rs::XmlLimits` |
-| `template::LoginResponseTemplate`, `template::LoginResponseAttribute` | `saml_rs::LoginResponseTemplate`, `saml_rs::LoginResponseAttribute` |
+| `template::LoginResponseTemplate`, `template::LoginResponseAttribute` | `saml_rs::raw::LoginResponseTemplate`, `saml_rs::raw::LoginResponseAttribute` |
 | `entity::SignatureConfig`, `entity::SignatureAction` | `saml_rs::SignatureConfig`, `saml_rs::SignatureAction` |
-| `template::LOGIN_REQUEST_TEMPLATE`, `LOGIN_RESPONSE_TEMPLATE`, `LOGOUT_REQUEST_TEMPLATE`, `LOGOUT_RESPONSE_TEMPLATE` | The same names under `saml_rs::config` |
+| `template::LOGIN_REQUEST_TEMPLATE`, `template::LOGIN_RESPONSE_TEMPLATE` | `saml_rs::config::AUTHN_REQUEST_TEMPLATE`, `saml_rs::config::SSO_RESPONSE_TEMPLATE` |
+| `template::LOGOUT_REQUEST_TEMPLATE`, `template::LOGOUT_RESPONSE_TEMPLATE` | The same names under `saml_rs::config` |
 | `xml::ExtractorField`, `xml::LocalPath` | `saml_rs::raw::ExtractorField`, `saml_rs::raw::LocalPath` |
 | `util::Value` | `saml_rs::raw::Value` |
 | `binding::base64_encode`, `binding::base64_decode` (deprecated) | The `base64` crate. See [2.1](#21-use-the-base64-crate) |
@@ -26,14 +27,20 @@ warn, because Rust ignores `#[deprecated]` on a re-export.
 | `crypto::verify_metadata_signature`, `verify_metadata_signature_with_limits`, `verify_metadata_signature_detailed`, `verify_metadata_signature_detailed_with_limits` (deprecated) | `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml`. See [7](metadata.md#7-verify-signed-metadata-on-import) |
 | `xml::dom::parse`, `parse_with_limits`, `parse_roots`, `parse_roots_with_limits`, `context::is_valid_xml` (deprecated) | An XML library. See [2.4](#24-parse-xml-with-an-xml-library) |
 
-Update the imports. The types are the same, so the code that uses them does
-not change:
+Update the imports, and rename `LOGIN_REQUEST_TEMPLATE` and
+`LOGIN_RESPONSE_TEMPLATE` where you use them. The other items are the same, so
+the code that uses them does not change:
 
 ```rust
-use saml_rs::config::LOGIN_RESPONSE_TEMPLATE;
-use saml_rs::raw::Value;
-use saml_rs::{LoginResponseTemplate, TemplatePolicy, XmlLimits, XmlPolicy};
+use saml_rs::config::SSO_RESPONSE_TEMPLATE;
+use saml_rs::raw::{LoginResponseTemplate, Value};
+use saml_rs::{TemplatePolicy, XmlLimits, XmlPolicy};
 ```
+
+A typed config sets an SSO template on the role's builder, not through
+`TemplatePolicy`, as
+[Set SSO templates on the role's builder](config.md#set-sso-templates-on-the-roles-builder)
+shows.
 
 ## 2.1 Use the `base64` crate
 
@@ -80,9 +87,10 @@ let options = RespondSso::post().attributes(Attributes::new([Attribute::new(
 .with_name_format(AttributeNameFormat::Uri)]));
 ```
 
-`RespondSso::attributes` cannot be combined with a login response template,
-and the typed methods give no values to `LoginResponseTemplate::attributes`.
-See [4](sso-attributes.md#4-give-each-login-response-template-attribute-a-value).
+`RespondSso::attributes` cannot be combined with
+`IdpConfigBuilder::sso_response_template`, and a typed identity provider has
+no template attributes. See
+[4](sso-attributes.md#4-give-each-login-response-template-attribute-a-value).
 
 ## 2.3 Sign, verify, and decrypt through the typed API
 

@@ -12,15 +12,19 @@ such as `{attrEmail}`, and the identity provider signed the response with that
 text as the attribute value. Without a custom `context`, the built-in renderer
 already returned an error for the same configuration.
 
-**Now:** both renderers return
+**Now:** both renderers of the raw `IdentityProvider::create_login_response`
+return
 ``SamlError::Invalid("missing login response attribute value for `email`")``,
-naming the attribute's `value_tag`. The typed login response methods
-(`respond_sso`, `initiate_sso`, `respond_sso_artifact`,
-`initiate_sso_artifact`, and `respond_paos_sso`) give a template no attribute
-values, so every configured template attribute returns this error there.
+naming the attribute's `value_tag`. A typed identity provider has no template
+attributes. `IdpConfigBuilder::sso_response_template` takes the template text
+alone, as
+[Set SSO templates on the role's builder](config.md#set-sso-templates-on-the-roles-builder)
+describes.
 
 **Upgrade:** with the raw `IdentityProvider::create_login_response`, put a
-value for each attribute's `value_tag` in `User::attributes`:
+value for each attribute's `value_tag` in `User::attributes`. A
+`LoginResponseOptions::custom` callback fills the template itself and is not
+checked:
 
 ```rust
 use saml_rs::entity::User;
@@ -32,9 +36,11 @@ let user = User {
 };
 ```
 
-With the typed API, remove `TemplatePolicy::login_response_template` and pass
-the attributes with `RespondSso::attributes`, as
-[2.2](public-imports.md#22-pass-attributes-to-the-response) shows.
+With the typed API, pass the attributes with `RespondSso::attributes`, as
+[2.2](public-imports.md#22-pass-attributes-to-the-response) shows, or with
+`RespondPaosSso::attributes` for `respond_paos_sso`. A response with
+attributes needs the built-in renderer, so leave
+`IdpConfigBuilder::sso_response_template` unset.
 
 ## 5. Send a `Name` on every attribute
 

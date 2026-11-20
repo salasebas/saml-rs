@@ -306,7 +306,8 @@ pub fn attr_tag(value_tag: &str) -> String {
 /// IdP login `<Response>` template config.
 #[derive(Debug, Clone, Default)]
 pub struct LoginResponseTemplate {
-    /// Custom `<Response>` template; `None` uses [`LOGIN_RESPONSE_TEMPLATE`].
+    /// Custom `<Response>` template; `None` uses
+    /// [`SSO_RESPONSE_TEMPLATE`](crate::config::SSO_RESPONSE_TEMPLATE).
     pub context: Option<String>,
     /// Attributes rendered into the assertion's `<AttributeStatement>`.
     ///

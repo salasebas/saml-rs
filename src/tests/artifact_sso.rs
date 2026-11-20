@@ -20,12 +20,11 @@ use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactRelease, ArtifactResolutionService,
     ArtifactWithheld, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField, Idp,
-    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, LoginResponseTemplate,
-    MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, Outbound,
-    PartyAuthentication, PendingAuthnRequest, Received, RelayState, ReplayPolicy,
-    ResolvedProtocolMessage, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp,
-    SpConfig, SpDescriptor, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
-    Status, SubordinateStatusCode, TemplatePolicy, TransformAlgorithm,
+    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MessageConfidentiality, MessageIntegrity,
+    MetadataTrustPolicy, NameId, Outbound, PartyAuthentication, PendingAuthnRequest, Received,
+    RelayState, ReplayPolicy, ResolvedProtocolMessage, RespondSso, Saml, SamlError,
+    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoEndpoint, SsoResponse,
+    SsoResponseBinding, SsoSession, StartSso, Status, SubordinateStatusCode, TransformAlgorithm,
     MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
@@ -1206,13 +1205,7 @@ fn a_login_response_template_with_another_root_is_not_stored_as_a_response(
             EndpointUrl::try_new(RESOLUTION_URL)?,
         ))
         .credentials(signing_credentials())
-        .templates(TemplatePolicy {
-            login_response_template: Some(LoginResponseTemplate {
-                context: Some(template.to_string()),
-                attributes: Vec::new(),
-            }),
-            ..TemplatePolicy::default()
-        })
+        .sso_response_template(template)
         .build()?,
     );
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);

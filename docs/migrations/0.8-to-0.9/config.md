@@ -3,8 +3,9 @@
 [How to upgrade from 0.8 to 0.9](README.md)
 
 This guide covers callers that build an `SpConfig` or `IdpConfig`, fill
-`Credentials`, or set an `XmlEncryptionPolicy`, `AudienceValidationPolicy`, or
-`TemplatePolicy`. Apply the sections that match your integration.
+`Credentials`, set an `XmlEncryptionPolicy`, `AudienceValidationPolicy`, or
+`TemplatePolicy`, or configure an SSO template. Apply the sections that match
+your integration.
 
 ## Pass the first endpoint to `builder`
 
@@ -257,6 +258,97 @@ as the old field did. The raw `EntitySetting` keeps its field.
 `tag_prefix_assertion`, an encrypted response now uses the assertion prefix.
 The namespace is the same, so a peer that reads namespaces reads the same
 element.
+
+## Set SSO templates on the role's builder
+
+**Affects:** callers that set `TemplatePolicy::login_request_template` or
+`TemplatePolicy::login_response_template`.
+
+**Before:** `SpConfigBuilder::templates` and `IdpConfigBuilder::templates`
+took the same `TemplatePolicy`, and each role read one of its two SSO
+templates. A service provider rendered its `<AuthnRequest>` from
+`login_request_template`, an `Option<String>`. An identity provider rendered
+its `<Response>` from `login_response_template`, an
+`Option<LoginResponseTemplate>` with a `context` template and an `attributes`
+list. A config that set the other role's template built and ignored it.
+`LoginResponseTemplate` and the default templates were importable only from
+the hidden `saml_rs::template` module.
+
+**Now:** `TemplatePolicy` has no SSO template. Set the `<AuthnRequest>`
+template with `SpConfigBuilder::authn_request_template` and the SSO
+`<Response>` template with `IdpConfigBuilder::sso_response_template`. Each
+takes the template text, and `SpConfig::authn_request_template()` and
+`IdpConfig::sso_response_template()` return it. A config that sets the other
+role's template no longer compiles. The default templates to start from are
+`saml_rs::config::AUTHN_REQUEST_TEMPLATE` and
+`saml_rs::config::SSO_RESPONSE_TEMPLATE`. `LoginResponseTemplate` and
+`LoginResponseAttribute` remain for the raw
+`EntitySetting::login_response_template`, under `saml_rs::raw`.
+
+**Upgrade:**
+
+1. On a service provider, pass the template to `authn_request_template`:
+
+   ```rust
+   // Before
+   let sp = Saml::sp(
+       SpConfig::builder(entity_id)
+           .acs_endpoint(acs)
+           .templates(TemplatePolicy {
+               login_request_template: Some(template),
+               ..TemplatePolicy::default()
+           })
+           .build()?,
+   )?;
+
+   // Now
+   let sp = Saml::sp(
+       SpConfig::builder(entity_id, acs)
+           .authn_request_template(template)
+           .build()?,
+   );
+   ```
+
+2. On an identity provider, pass the `context` text to
+   `sso_response_template`:
+
+   ```rust
+   // Before
+   use saml_rs::template::LoginResponseTemplate;
+
+   let idp = Saml::idp(
+       IdpConfig::builder(entity_id)
+           .sso_endpoint(sso)
+           .templates(TemplatePolicy {
+               login_response_template: Some(LoginResponseTemplate {
+                   context: Some(template),
+                   attributes: vec![],
+               }),
+               ..TemplatePolicy::default()
+           })
+           .build()?,
+   )?;
+
+   // Now
+   let idp = Saml::idp(
+       IdpConfig::builder(entity_id, sso)
+           .sso_response_template(template)
+           .build()?,
+   );
+   ```
+
+3. Delete a template that you set on the other role's config. That role never
+   rendered it.
+4. Delete `LoginResponseTemplate::attributes` from a typed identity provider.
+   The typed response methods never gave those attributes values, as
+   [4](sso-attributes.md#4-give-each-login-response-template-attribute-a-value)
+   describes. Pass the attributes with `RespondSso::attributes`, or with
+   `RespondPaosSso::attributes` for `respond_paos_sso`. A response with
+   attributes needs the built-in renderer, so leave `sso_response_template`
+   unset.
+5. Import the default templates from `saml_rs::config`:
+   `template::LOGIN_REQUEST_TEMPLATE` is `AUTHN_REQUEST_TEMPLATE`, and
+   `template::LOGIN_RESPONSE_TEMPLATE` is `SSO_RESPONSE_TEMPLATE`.
 
 ## Use one rule for generated XML prefixes
 

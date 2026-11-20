@@ -21,12 +21,13 @@ use saml_rs::logout::{
     create_logout_request, create_logout_response, parse_logout_request, parse_logout_response,
 };
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, ServiceProvider};
+use saml_rs::raw::{
+    IdentityProvider, LoginResponseAttribute, LoginResponseTemplate, ServiceProvider,
+};
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::RelayState;
 use saml_rs::SamlError;
-use saml_rs::{LoginResponseAttribute, LoginResponseTemplate};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -240,7 +241,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
 fn custom_idp() -> Result<IdentityProvider, SamlError> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
     });
     IdentityProvider::from_config(&idp_config(false), setting)
@@ -899,7 +900,7 @@ fn signed_response_without_destination_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
@@ -955,7 +956,7 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
@@ -1156,7 +1157,7 @@ fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std:
     idp_setting.is_assertion_encrypted = true;
     if custom {
         idp_setting.login_response_template = Some(LoginResponseTemplate {
-            context: Some(saml_rs::config::LOGIN_RESPONSE_TEMPLATE.into()),
+            context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
             attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
         });
     }

@@ -36,5 +36,6 @@ pub use crate::flow::{FlowOptions, FlowResult, HttpRequest};
 pub use crate::idp::{IdentityProvider, LoginResponseOptions};
 pub use crate::logout;
 pub use crate::sp::{LoginRequestOptions, ServiceProvider};
+pub use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
 pub use crate::util::Value;
 pub use crate::xml::{ExtractorField, LocalPath};
