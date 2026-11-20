@@ -236,23 +236,25 @@ as `receive_name_id_management` and `answer_artifact_resolve` do:
 **Upgrade:**
 
 ```rust,ignore
-// Before
+// Before, at the identity provider
 let request = idp.receive_paos_sso(
-	&sp,
-	&PaosAuthnRequest::from_envelope(body, "https://idp.example.com/soap")?,
+	&sp_descriptor,
+	&PaosAuthnRequest::from_envelope(request_envelope, "https://idp.example.com/soap")?,
 	validation,
 )?;
+// Before, at the service provider
 let session = sp.finish_paos_sso(
-	&idp,
+	&idp_descriptor,
 	&pending,
-	&PaosSsoResponse::from_envelope(body)?,
+	&PaosSsoResponse::from_envelope(response_envelope)?,
 	validation,
 )?;
 
-// After
+// After, at the identity provider
 let soap_endpoint = EndpointUrl::try_new("https://idp.example.com/soap")?;
-let request = idp.receive_paos_sso(&sp, &body, &soap_endpoint, validation)?;
-let session = sp.finish_paos_sso(&idp, &pending, &body, validation)?;
+let request = idp.receive_paos_sso(&sp_descriptor, &request_envelope, &soap_endpoint, validation)?;
+// After, at the service provider
+let session = sp.finish_paos_sso(&idp_descriptor, &pending, &response_envelope, validation)?;
 ```
 
 If you matched `SamlError::Invalid` for an empty envelope, match
