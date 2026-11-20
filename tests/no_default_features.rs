@@ -19,7 +19,7 @@ use saml_rs::{
     IdpValidationPolicy, Inbound, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
     MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, Saml,
     SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
+    SsoEndpoint, StartSlo, StartSso, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -311,13 +311,8 @@ fn sp_signed_logout_policy_returns_unsupported_without_default_crypto(
 #[test]
 fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let mut xml = XmlPolicy::default();
+    xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 
     assert_unsupported(sp_config_builder()?.xml(xml).build());
     Ok(())
@@ -346,13 +341,8 @@ fn idp_signed_logout_policy_returns_unsupported_without_default_crypto(
 #[test]
 fn idp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let mut xml = XmlPolicy::default();
+    xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 
     assert_unsupported(idp_config_builder()?.xml(xml).build());
     Ok(())

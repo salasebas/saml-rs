@@ -5,6 +5,8 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
     fn reject(_: &str) -> Result<(), String> {
         Err("schema rejected management envelope".into())
     }
+    let mut xml = saml_rs::XmlPolicy::default();
+    xml.schema_validator = Some(reject);
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -14,10 +16,7 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
             IDP_NIM_URL,
         )?))
         .validation(saml_rs::IdpValidationPolicy::compatibility())
-        .xml(saml_rs::XmlPolicy {
-            schema_validator: Some(reject),
-            ..saml_rs::XmlPolicy::default()
-        })
+        .xml(xml)
         .build()?,
     );
     let sp = soap_service_provider()?;

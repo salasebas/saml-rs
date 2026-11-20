@@ -3,9 +3,9 @@
 [How to upgrade from 0.8 to 0.9](README.md)
 
 This guide covers callers that build an `SpConfig` or `IdpConfig`, fill
-`Credentials`, set an `XmlEncryptionPolicy`, `AudienceValidationPolicy`, or
-`TemplatePolicy`, or configure an SSO template. Apply the sections that match
-your integration.
+`Credentials`, build a policy or limit struct with a struct literal, set an
+`XmlEncryptionPolicy`, `AudienceValidationPolicy`, or `TemplatePolicy`, or
+configure an SSO template. Apply the sections that match your integration.
 
 ## Pass the first endpoint to `builder`
 
@@ -147,6 +147,54 @@ endpoint lists such as `acs_endpoints()`. Section
 to fill `Credentials` with `X509Credential`, which replaces
 `DecryptionCredential`.
 
+## Assign policy fields on a preset or `Default`
+
+**Affects:** code that builds one of these structs with a struct literal,
+including a literal that ends in `..SpValidationPolicy::recommended()` or
+another base:
+
+| Struct | Start from |
+| --- | --- |
+| `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `recommended()`, `compatibility()`, or `default()` |
+| `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy` | `default()` |
+| `XmlLimits` | `default()` or `unbounded()` |
+
+**Before:** every field of these structs was public, so a struct literal
+compiled.
+
+**Now:** the structs are `#[non_exhaustive]`, and their fields stay public.
+Outside saml-rs, a struct literal fails with `E0639`, also with a `..` base.
+Reading a field does not change. `XmlEncryptionPolicy` follows the same rule,
+as [Set `XmlEncryptionPolicy` fields directly](#set-xmlencryptionpolicy-fields-directly)
+shows.
+
+**Upgrade:** take a value from the start the table names, and assign each
+field you set. Assign a nested field through its parent:
+
+```rust
+// Before
+let validation = SpValidationPolicy {
+    assertions: AssertionSignaturePolicy::RequireSigned,
+    ..SpValidationPolicy::recommended()
+};
+let xml = XmlPolicy {
+    limits: XmlLimits {
+        max_depth: 64,
+        ..XmlLimits::default()
+    },
+    ..XmlPolicy::default()
+};
+
+// Now
+let mut validation = SpValidationPolicy::recommended();
+validation.assertions = AssertionSignaturePolicy::RequireSigned;
+let mut xml = XmlPolicy::default();
+xml.limits.max_depth = 64;
+```
+
+A literal that listed every field has no base. Start it from `default()` and
+assign each field it listed.
+
 ## Set `XmlEncryptionPolicy` fields directly
 
 **Affects:** callers of `XmlEncryptionPolicy::encrypt_assertions`,
@@ -156,20 +204,21 @@ to fill `Credentials` with `X509Credential`, which replaces
 **Before:** three presets each set one field, two settings were private
 fields behind `with_` methods, and the other three were public fields.
 
-**Now:** every setting is a public field, and you write a struct literal over
-`XmlEncryptionPolicy::default()`. The RSA-v1.5 opt-in is the
-`rsa15_key_transport` field, a `Rsa15KeyTransportPolicy`. Defaults do not
-change.
+**Now:** every setting is a public field. Start from
+`XmlEncryptionPolicy::default()` and assign the fields you select. The struct
+is `#[non_exhaustive]`, so a struct literal does not compile outside saml-rs.
+The RSA-v1.5 opt-in is the `rsa15_key_transport` field, a
+`Rsa15KeyTransportPolicy`. Defaults do not change.
 
 | 0.8 | 0.9 |
 | --- | --- |
-| `XmlEncryptionPolicy::encrypt_assertions()` | `assertions: AssertionEncryptionPolicy::EncryptAssertions` |
-| `XmlEncryptionPolicy::encrypt_ids()` | `identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers` |
-| `XmlEncryptionPolicy::encrypt_attributes()` | `attributes: AttributeEncryptionPolicy::EncryptAttributes` |
-| `.with_max_decryption_work(n)`, `.max_decryption_work()` | `max_decryption_work: n`, `.max_decryption_work` |
-| `.with_rsa15_key_transport_decryption_allowed()` | `rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption` |
+| `XmlEncryptionPolicy::encrypt_assertions()` | `.assertions = AssertionEncryptionPolicy::EncryptAssertions` |
+| `XmlEncryptionPolicy::encrypt_ids()` | `.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers` |
+| `XmlEncryptionPolicy::encrypt_attributes()` | `.attributes = AttributeEncryptionPolicy::EncryptAttributes` |
+| `.with_max_decryption_work(n)`, `.max_decryption_work()` | `.max_decryption_work = n`, `.max_decryption_work` |
+| `.with_rsa15_key_transport_decryption_allowed()` | `.rsa15_key_transport = Rsa15KeyTransportPolicy::AllowDecryption` |
 
-**Upgrade:** write the fields you select:
+**Upgrade:** assign the fields you select:
 
 ```rust
 // Before
@@ -178,12 +227,10 @@ let encryption = XmlEncryptionPolicy::encrypt_assertions()
     .with_rsa15_key_transport_decryption_allowed();
 
 // Now
-let encryption = XmlEncryptionPolicy {
-    assertions: AssertionEncryptionPolicy::EncryptAssertions,
-    rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
-    max_decryption_work: 64,
-    ..XmlEncryptionPolicy::default()
-};
+let mut encryption = XmlEncryptionPolicy::default();
+encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
+encryption.rsa15_key_transport = Rsa15KeyTransportPolicy::AllowDecryption;
+encryption.max_decryption_work = 64;
 ```
 
 ## Rename `AudienceValidationPolicy::Validate` to `RequireRestriction`
@@ -199,11 +246,9 @@ assertion without `<AudienceRestriction>`, which the recommended
 **Upgrade:** rename each use:
 
 ```rust
-let validation = SpValidationPolicy {
-    // Before: AudienceValidationPolicy::Validate
-    audience: AudienceValidationPolicy::RequireRestriction,
-    ..SpValidationPolicy::recommended()
-};
+let mut validation = SpValidationPolicy::recommended();
+// Before: AudienceValidationPolicy::Validate
+validation.audience = AudienceValidationPolicy::RequireRestriction;
 ```
 
 ## Send RelayState per request

@@ -2,7 +2,7 @@
 //! limits of the `XmlPolicy` they are given.
 
 use saml_rs::metadata::{IdpMetadata, Metadata, SpMetadata};
-use saml_rs::{ResourceLimit, SamlError, XmlLimits, XmlPolicy};
+use saml_rs::{ResourceLimit, SamlError, XmlPolicy};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -25,13 +25,9 @@ fn dual_role_metadata(padding: usize) -> String {
 }
 
 fn policy_with_max_bytes(max_bytes: usize) -> XmlPolicy {
-    XmlPolicy {
-        limits: XmlLimits {
-            max_bytes,
-            ..XmlLimits::default()
-        },
-        ..XmlPolicy::default()
-    }
+    let mut policy = XmlPolicy::default();
+    policy.limits.max_bytes = max_bytes;
+    policy
 }
 
 fn default_constructors(xml: &str) -> [(&'static str, Result<(), SamlError>); 3] {

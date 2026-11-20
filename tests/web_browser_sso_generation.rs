@@ -24,9 +24,7 @@ use saml_rs::{
     TemplatePolicy,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{
-    AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, XmlEncryptionPolicy, XmlPolicy,
-};
+use saml_rs::{AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, XmlPolicy};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -47,19 +45,24 @@ const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pe
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn signing_sp_validation() -> SpValidationPolicy {
-    SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        authn_requests: AuthnRequestSigningPolicy::Sign,
-        audience: AudienceValidationPolicy::RequireRestriction,
-        ..SpValidationPolicy::recommended()
-    }
+    let mut validation = SpValidationPolicy::recommended();
+    validation.assertions = AssertionSignaturePolicy::RequireSigned;
+    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    validation.audience = AudienceValidationPolicy::RequireRestriction;
+    validation
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
-    IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::recommended()
-    }
+    let mut validation = IdpValidationPolicy::recommended();
+    validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    validation
+}
+
+#[cfg(not(feature = "crypto-fips"))]
+fn encrypted_assertions() -> XmlPolicy {
+    let mut xml = XmlPolicy::default();
+    xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
+    xml
 }
 
 fn principal() -> NameId {
@@ -731,10 +734,9 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
 #[test]
 fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_requests(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with(SpValidationPolicy {
-        authn_requests: AuthnRequestSigningPolicy::Sign,
-        ..SpValidationPolicy::recommended()
-    })?;
+    let mut sp_validation = SpValidationPolicy::recommended();
+    sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    let sp = sp_with(sp_validation)?;
     let idp = idp_with(IdpValidationPolicy::recommended(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
@@ -753,13 +755,9 @@ fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_reque
 #[test]
 fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn std::error::Error>>
 {
-    let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let encryption = encrypted_assertions();
+    let mut templates = saml_rs::TemplatePolicy::default();
+    templates.tag_prefix_assertion = "é".into();
     let sp = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -779,10 +777,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
         .credentials(signing_credentials())
         .validation(signed_authn_request_idp_validation())
         .xml(encryption)
-        .templates(saml_rs::TemplatePolicy {
-            tag_prefix_assertion: "é".into(),
-            ..saml_rs::TemplatePolicy::default()
-        })
+        .templates(templates)
         .build()?,
     );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -809,13 +804,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
 #[test]
 fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let encryption = encrypted_assertions();
     let encrypted_credentials = signing_credentials().with_decryption_credential(
         saml_rs::X509Credential::new(CertificatePem::new(CERT), PrivateKeyPem::new(PRIVKEY)),
     );
@@ -1176,17 +1165,16 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
 fn typed_error_response_is_written_next_to_a_login_response_template(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
+    let mut templates = TemplatePolicy::default();
+    templates.tag_prefix_protocol = "saml2p".into();
+    templates.tag_prefix_assertion = "saml2".into();
     let idp_config = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::post(IDP_SSO_POST)?,
     )
     .credentials(signing_credentials())
     .validation(signed_authn_request_idp_validation())
-    .templates(TemplatePolicy {
-        tag_prefix_protocol: "saml2p".into(),
-        tag_prefix_assertion: "saml2".into(),
-        ..TemplatePolicy::default()
-    })
+    .templates(templates)
     .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
     let idp = Saml::idp(idp_config);
@@ -1267,13 +1255,7 @@ fn typed_simplesign_error_response_keeps_the_detached_signature(
 #[test]
 fn typed_error_response_stays_plaintext_when_assertion_encryption_is_on(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let encryption = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let encryption = encrypted_assertions();
     let sp = sp_with(signing_sp_validation())?;
     let idp = Saml::idp(
         IdpConfig::builder(

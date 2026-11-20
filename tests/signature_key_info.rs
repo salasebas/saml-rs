@@ -31,31 +31,29 @@ fn credentials(key: &str, cert: &str) -> Credentials {
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
+    let mut validation = SpValidationPolicy::recommended();
+    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     Ok(Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
         .credentials(credentials(key, cert))
-        .validation(SpValidationPolicy {
-            authn_requests: AuthnRequestSigningPolicy::Sign,
-            ..SpValidationPolicy::recommended()
-        })
+        .validation(validation)
         .build()?,
     ))
 }
 
 fn idp_requiring_signed_authn_requests() -> Result<Saml<saml_rs::Idp>, SamlError> {
+    let mut validation = IdpValidationPolicy::recommended();
+    validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
     Ok(Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
         .credentials(credentials(IDP_KEY, IDP_CERT))
-        .validation(IdpValidationPolicy {
-            authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-            ..IdpValidationPolicy::recommended()
-        })
+        .validation(validation)
         .build()?,
     ))
 }

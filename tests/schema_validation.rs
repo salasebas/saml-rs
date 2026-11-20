@@ -24,10 +24,9 @@ fn reject_envelope(xml: &str) -> Result<(), String> {
 }
 
 fn policy(validator: Option<SchemaValidator>) -> XmlPolicy {
-    XmlPolicy {
-        schema_validator: validator,
-        ..XmlPolicy::default()
-    }
+    let mut policy = XmlPolicy::default();
+    policy.schema_validator = validator;
+    policy
 }
 
 fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
@@ -156,12 +155,7 @@ fn schema_callback_participates_in_xml_policy_equality() {
     let copied = checked;
     assert_eq!(checked, copied);
 
-    let different_limits = XmlPolicy {
-        limits: saml_rs::XmlLimits {
-            max_bytes: 128,
-            ..checked.limits
-        },
-        ..checked
-    };
+    let mut different_limits = checked;
+    different_limits.limits.max_bytes = 128;
     assert_ne!(checked, different_limits);
 }

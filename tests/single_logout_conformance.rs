@@ -26,13 +26,6 @@ const IDP_SSO: &str = "https://idp.example.com/sso/post";
 const IDP_SLO_HTTPS: &str = "https://idp.example.com/slo/post";
 const IDP_SLO_HTTP: &str = "http://idp.example.com/slo/post";
 
-fn slo_accept_policy() -> LogoutPolicy {
-    LogoutPolicy {
-        requests: LogoutSignaturePolicy::RequireSigned,
-        responses: LogoutSignaturePolicy::RequireSigned,
-    }
-}
-
 fn sp_with_slo_accept() -> SpValidationPolicy {
     SpValidationPolicy::recommended()
 }
@@ -533,7 +526,14 @@ fn logout_policy_defaults_follow_recommended() {
         IdpValidationPolicy::recommended().logout,
         LogoutPolicy::recommended()
     );
-    assert_eq!(LogoutPolicy::recommended(), slo_accept_policy());
+    assert_eq!(
+        LogoutPolicy::recommended().requests,
+        LogoutSignaturePolicy::RequireSigned
+    );
+    assert_eq!(
+        LogoutPolicy::recommended().responses,
+        LogoutSignaturePolicy::RequireSigned
+    );
     assert_eq!(
         LogoutPolicy::compatibility().requests,
         LogoutSignaturePolicy::AllowUnsigned
