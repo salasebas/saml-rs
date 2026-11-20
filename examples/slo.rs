@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
         IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
         RespondSlo, RespondSso, Saml, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor,
-        SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo, StartSso, X509Credential,
+        SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo, StartSso, Status, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -90,7 +90,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Inbound::post(logout.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
-    let logout_response = idp.respond_slo(&sp_descriptor, &logout_request, RespondSlo::post())?;
+    let logout_response = idp.respond_slo(
+        &sp_descriptor,
+        &logout_request,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let completed = sp.finish_slo(
         &idp_descriptor,
         &logout.pending,

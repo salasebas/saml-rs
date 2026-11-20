@@ -6,7 +6,7 @@ use super::{
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AlgorithmPolicy, Credentials, HmacSecret, LogoutBinding, RespondSlo, Saml, SamlError,
-    SignatureAlgorithm, StartSlo,
+    SignatureAlgorithm, StartSlo, Status,
 };
 
 #[test]
@@ -82,10 +82,18 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
             };
             assert_eq!(received.message().name_id(), Some(subject()?.name_id()));
             let response = match sender {
-                LocalSloRole::Sp => idp.respond_slo(&sp_peer, &received, RespondSlo::redirect())?,
-                LocalSloRole::Idp => {
-                    sp.respond_slo(&idp_peer, &received, RespondSlo::redirect())?
-                }
+                LocalSloRole::Sp => idp.respond_slo(
+                    &sp_peer,
+                    &received,
+                    &Status::success(),
+                    RespondSlo::redirect(),
+                )?,
+                LocalSloRole::Idp => sp.respond_slo(
+                    &idp_peer,
+                    &received,
+                    &Status::success(),
+                    RespondSlo::redirect(),
+                )?,
             };
             for (sp_peer, idp_peer) in [(&sp_wrong, &idp_wrong), (&sp_missing, &idp_missing)] {
                 let input = logout_response_input(&response, LogoutBinding::Redirect)?;

@@ -13,7 +13,7 @@ use saml_rs::{
     EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSigning,
     LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo, Saml, SamlError,
     SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSlo,
+    SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -107,7 +107,7 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
         ),
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    match identity_provider.respond_slo(&other, &received, RespondSlo::post()) {
+    match identity_provider.respond_slo(&other, &received, &Status::success(), RespondSlo::post()) {
         Err(SamlError::IssuerMismatch {
             expected, actual, ..
         }) => {
@@ -165,8 +165,12 @@ fn logout_response_uses_response_location_and_request_uses_location(
         Inbound::post(request.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
-    let response =
-        identity_provider.respond_slo(&sp_for_responses, &received, RespondSlo::post())?;
+    let response = identity_provider.respond_slo(
+        &sp_for_responses,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     assert_eq!(response.post_form()?.action().as_str(), SP_SLO_RESPONSE);
 
     for padded_location in [
@@ -181,8 +185,12 @@ fn logout_response_uses_response_location_and_request_uses_location(
             &padded_metadata,
             MetadataTrustPolicy::AllowUnsigned,
         )?;
-        let response =
-            identity_provider.respond_slo(&padded_peer, &received, RespondSlo::post())?;
+        let response = identity_provider.respond_slo(
+            &padded_peer,
+            &received,
+            &Status::success(),
+            RespondSlo::post(),
+        )?;
         assert_eq!(response.post_form()?.action().as_str(), SP_SLO_RESPONSE);
     }
 
@@ -198,7 +206,12 @@ fn logout_response_uses_response_location_and_request_uses_location(
         &extension_metadata,
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    let response = identity_provider.respond_slo(&extension_peer, &received, RespondSlo::post())?;
+    let response = identity_provider.respond_slo(
+        &extension_peer,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     assert_eq!(response.post_form()?.action().as_str(), SP_SLO);
     Ok(())
 }
@@ -235,7 +248,12 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
         Inbound::post(started.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
-    let response = identity_provider.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let response = identity_provider.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let response_input =
         || -> Result<_, SamlError> { Ok(Inbound::post(response.post_form()?.fields().to_vec())) };
     let wrong_handler = service_provider.finish_slo(
@@ -384,7 +402,12 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
         Inbound::post(request.fields().to_vec()),
         validation(),
     )?;
-    let response = service_provider.respond_slo(&idp_peer, &received, RespondSlo::post())?;
+    let response = service_provider.respond_slo(
+        &idp_peer,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let response = response.post_form()?;
     assert_eq!(response.action().as_str(), IDP_SLO);
 

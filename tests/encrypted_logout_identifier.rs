@@ -351,6 +351,7 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
                     let response = parties.idp.respond_slo(
                         &parties.sp_descriptor,
                         &received,
+                        &Status::success(),
                         respond_options(binding)?,
                     )?;
                     parties.sp.finish_slo(
@@ -364,6 +365,7 @@ fn encrypted_id_round_trips_on_every_binding_in_both_directions(
                     let response = parties.sp.respond_slo(
                         &parties.idp_descriptor,
                         &received,
+                        &Status::success(),
                         respond_options(binding)?,
                     )?;
                     parties.idp.finish_slo(
@@ -471,7 +473,8 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
         let response = parties.idp.respond_slo(
             &parties.sp_descriptor,
             &received,
-            respond_options(binding)?.status(unknown_principal.clone()),
+            &unknown_principal,
+            respond_options(binding)?,
         )?;
         match parties.sp.finish_slo(
             &parties.idp_descriptor,

@@ -108,6 +108,10 @@ impl Saml<Sp> {
     /// Respond to a received IdP LogoutRequest.
     ///
     /// The response carries the exact RelayState received with the request.
+    /// `status` is what the response reports. Pass [`Status::success`] after
+    /// invalidating the sessions the request names that this identity
+    /// provider's assertions established. Otherwise, pass an error status,
+    /// such as [`Status::responder`].
     ///
     /// # Errors
     ///
@@ -115,6 +119,8 @@ impl Saml<Sp> {
     /// IdP descriptor, IdP metadata cannot be parsed, relay state is invalid,
     /// a compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
+    /// A logout-response template substitutes only the top-level code, so a
+    /// subordinate code in `status` is rejected when a template is set.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
     /// [`RespondSlo::apply_producer_rules`] also rejects an
@@ -125,6 +131,7 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         request: &Received<LogoutRequest>,
+        status: &Status,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
@@ -133,6 +140,7 @@ impl Saml<Sp> {
             self.raw_service_provider().metadata.as_metadata(),
             peer,
             request,
+            status,
             options,
             LogoutResponseTransport::SessionParticipant,
         )
@@ -297,6 +305,7 @@ impl Saml<Idp> {
     /// ```no_run
     /// use saml_rs::{
     ///     FormField, Inbound, ReplayPolicy, RespondSlo, Saml, SamlValidationContext, SpDescriptor,
+    ///     Status,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -311,7 +320,7 @@ impl Saml<Idp> {
     /// );
     /// let input = Inbound::post(fields);
     /// let request = idp.receive_slo(sp, input, validation)?;
-    /// let response = idp.respond_slo(sp, &request, RespondSlo::post())?;
+    /// let response = idp.respond_slo(sp, &request, &Status::success(), RespondSlo::post())?;
     ///
     /// let form = response.post_form()?;
     /// # let _ = form;
@@ -336,6 +345,12 @@ impl Saml<Idp> {
     /// Respond to a received SP LogoutRequest.
     ///
     /// The response carries the exact RelayState received with the request.
+    /// `status` is what the response reports. Pass [`Status::success`] after
+    /// ending this identity provider's own session with the principal. When
+    /// another session participant did not confirm its logout, add
+    /// [`SubordinateStatusCode::partial_logout`](crate::SubordinateStatusCode::partial_logout)
+    /// with [`Status::with_subordinate`]. Pass an error status, such as
+    /// [`Status::responder`], when the session could not be ended.
     ///
     /// # Errors
     ///
@@ -343,6 +358,8 @@ impl Saml<Idp> {
     /// SP descriptor, SP metadata cannot be parsed, relay state is invalid, a
     /// compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
+    /// A logout-response template substitutes only the top-level code, so a
+    /// subordinate code in `status` is rejected when a template is set.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
     /// [`RespondSlo::apply_producer_rules`] does not add an
@@ -351,14 +368,14 @@ impl Saml<Idp> {
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{LogoutRequest, Received, RespondSlo, Saml, SpDescriptor};
+    /// use saml_rs::{LogoutRequest, Received, RespondSlo, Saml, SpDescriptor, Status};
     ///
     /// # fn respond(
     /// #     idp: &Saml<saml_rs::Idp>,
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<LogoutRequest>,
     /// # ) -> Result<(), saml_rs::SamlError> {
-    /// let response = idp.respond_slo(sp, request, RespondSlo::post())?;
+    /// let response = idp.respond_slo(sp, request, &Status::success(), RespondSlo::post())?;
     /// let form = response.post_form()?;
     /// # let _ = form;
     /// # Ok(()) }
@@ -367,6 +384,7 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: &Received<LogoutRequest>,
+        status: &Status,
         options: RespondSlo,
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
@@ -375,6 +393,7 @@ impl Saml<Idp> {
             self.raw_identity_provider().metadata.as_metadata(),
             peer,
             request,
+            status,
             options,
             LogoutResponseTransport::SessionAuthority,
         )
@@ -605,6 +624,7 @@ fn respond_slo_impl(
     local_metadata: &Metadata,
     peer: RawPeer<'_>,
     request: &Received<LogoutRequest>,
+    status: &Status,
     options: RespondSlo,
     transport: LogoutResponseTransport,
 ) -> Result<Outbound<LogoutResponse>, SamlError> {
@@ -619,7 +639,6 @@ fn respond_slo_impl(
         )?;
     }
     let relay_state = request.relay_state().map(RelayState::as_str);
-    let status = options.status.clone().unwrap_or_else(Status::success);
     let context = create_logout_response_inner(LogoutResponseInput {
         init_setting: local_setting,
         init_meta: local_metadata,
@@ -631,7 +650,7 @@ fn respond_slo_impl(
         // LogoutResponses to authenticate the responder and protect integrity.
         want_signed: true,
         message_id: None,
-        status: &status,
+        status,
     })?;
     Outbound::<LogoutResponse>::echoing_received_relay_state(context)
 }

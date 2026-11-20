@@ -132,8 +132,11 @@ impl Saml<Sp> {
     /// Answer a received `ManageNameIDRequest` over HTTP-Redirect.
     ///
     /// The response is signed and carries the RelayState of the request.
-    /// Pass [`RespondNameIdManagement::status`] with an error status for an
-    /// identifier this service provider does not recognize.
+    /// `status` is what the response reports. Pass [`Status::success`] after
+    /// applying the change. For an identifier this service provider does not
+    /// recognize, pass an error status: [`Status::requester`] or
+    /// [`Status::responder`], optionally with
+    /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
     ///
     /// # Errors
     ///
@@ -147,10 +150,11 @@ impl Saml<Sp> {
         &self,
         idp: &IdpDescriptor,
         request: &Received<ManageNameIdRequest>,
+        status: &Status,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
-        respond(self.local(), peer, request, options)
+        respond(self.local(), peer, request, status, options)
     }
 
     /// Read the identity provider's `ManageNameIDResponse` to a request this
@@ -273,7 +277,8 @@ impl Saml<Idp> {
     /// ```no_run
     /// use saml_rs::{
     ///     Inbound, ReceiveNameIdManagement, NameIdManagementReceipt, ReplayPolicy,
-    ///     RespondNameIdManagement, Saml, SamlValidationContext, SpDescriptor,
+    ///     RespondNameIdManagement, Saml, SamlValidationContext, SpDescriptor, Status,
+    ///     SubordinateStatusCode,
     /// };
     /// use std::time::SystemTime;
     ///
@@ -281,6 +286,8 @@ impl Saml<Idp> {
     /// #     idp: &Saml<saml_rs::Idp>,
     /// #     sp: &SpDescriptor,
     /// #     raw_query: String,
+    /// #     recognized: bool,
+    /// #     apply: impl Fn(&saml_rs::NameIdChange) -> std::io::Result<()>,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation =
     ///     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
@@ -292,8 +299,21 @@ impl Saml<Idp> {
     ///     validation,
     /// )?;
     /// let response = match received {
-    ///     NameIdManagementReceipt::Request(request) => idp
-    ///         .respond_name_id_management_redirect(sp, &request, RespondNameIdManagement::new())?,
+    ///     NameIdManagementReceipt::Request(request) => {
+    ///         let status = if !recognized {
+    ///             Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal())
+    ///         } else if apply(request.message().change()).is_ok() {
+    ///             Status::success()
+    ///         } else {
+    ///             Status::responder()
+    ///         };
+    ///         idp.respond_name_id_management_redirect(
+    ///             sp,
+    ///             &request,
+    ///             &status,
+    ///             RespondNameIdManagement::new(),
+    ///         )?
+    ///     }
     ///     NameIdManagementReceipt::Refused(refused) => refused.response().clone(),
     /// };
     /// let location = response.redirect_url()?;
@@ -314,6 +334,11 @@ impl Saml<Idp> {
     /// Answer a received `ManageNameIDRequest` over HTTP-Redirect.
     ///
     /// The response is signed and carries the RelayState of the request.
+    /// `status` is what the response reports. Pass [`Status::success`] after
+    /// applying the change. For an identifier this identity provider does not
+    /// recognize, pass an error status:
+    /// [`Status::requester`] or [`Status::responder`], optionally with
+    /// [`SubordinateStatusCode::unknown_principal`](crate::SubordinateStatusCode::unknown_principal).
     ///
     /// # Errors
     ///
@@ -324,10 +349,11 @@ impl Saml<Idp> {
         &self,
         sp: &SpDescriptor,
         request: &Received<ManageNameIdRequest>,
+        status: &Status,
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
-        respond(self.local(), peer, request, options)
+        respond(self.local(), peer, request, status, options)
     }
 
     /// Read the service provider's `ManageNameIDResponse` to a request this
@@ -505,15 +531,15 @@ fn respond(
     local: Local<'_>,
     peer: RawPeer<'_>,
     request: &Received<ManageNameIdRequest>,
+    status: &Status,
     options: RespondNameIdManagement,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
     ensure_entity_id(request.message().issuer(), peer.entity_id)?;
-    let status = options.status.clone().unwrap_or_else(Status::success);
     response_outbound(
         local,
         &peer,
         request.message().id().as_str(),
-        &status,
+        status,
         request.relay_state().map(RelayState::as_str),
         options.allows_http(),
     )

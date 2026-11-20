@@ -41,7 +41,12 @@ fn schema_policy_covers_both_logout_soap_directions() -> Result<(), Box<dyn std:
         Inbound::soap(envelope, SoapChannel::unattested()),
         validation(),
     )?;
-    let response = accepting_idp.respond_slo(&sp_descriptor, &received, RespondSlo::soap())?;
+    let response = accepting_idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::soap(),
+    )?;
     let result = sp.finish_slo(
         &idp_descriptor,
         &started.pending,
@@ -95,7 +100,12 @@ fn schema_policy_covers_both_logout_post_directions() -> Result<(), Box<dyn std:
         "expected rejection of the request document, got {result:?}"
     );
     let received = idp.receive_slo(&sp_descriptor, Inbound::post(fields), validation())?;
-    let response = idp.respond_slo(&sp_descriptor, &received, RespondSlo::post())?;
+    let response = idp.respond_slo(
+        &sp_descriptor,
+        &received,
+        &Status::success(),
+        RespondSlo::post(),
+    )?;
     let fields = post_fields(&response)?;
     let result = rejecting_sp.finish_slo(
         &idp_descriptor,

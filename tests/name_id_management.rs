@@ -23,10 +23,9 @@ use saml_rs::{
     AcsEndpoint, EndpointUrl, EntityId, Idp, IdpConfig, ManageNameIdService,
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
     NameIdFormat, NameIdManagementReceipt, NameIdManagementRefusal, PartyAuthentication,
-    RelayState, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml, SamlError,
-    SamlValidationContext, SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
-    SubordinateStatusCode,
+    RelayState, ReplayPolicy, RequestAgePolicy, Saml, SamlError, SamlValidationContext,
+    SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -485,7 +484,7 @@ fn sp_initiated_new_id_is_received_and_answered() -> TestResult {
     );
     assert_eq!(message.change(), &NameIdChange::NewId("sp-alias".into()));
 
-    let response = idp.respond_name_id_management(&sp, &request, RespondNameIdManagement::new())?;
+    let response = idp.respond_name_id_management(&sp, &request, &Status::success())?;
     let headers: Vec<(&str, &str)> = response
         .headers()
         .iter()
@@ -523,12 +522,8 @@ fn sp_initiated_termination_is_received_and_answered() -> TestResult {
 
     let status = Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal());
     let xml = body(
-        idp.respond_name_id_management(
-            &sp,
-            &request,
-            RespondNameIdManagement::new().status(status),
-        )?
-        .envelope(),
+        idp.respond_name_id_management(&sp, &request, &status)?
+            .envelope(),
     )?;
     assert!(xml.contains(&format!(
         r#"<samlp:StatusCode Value="{REQUESTER}"><samlp:StatusCode Value="{UNKNOWN_PRINCIPAL}"/></samlp:StatusCode>"#
@@ -730,8 +725,7 @@ fn a_request_the_service_provider_did_not_issue_is_rejected() -> TestResult {
         authenticated(),
         validation(),
     )?)?;
-    let answered =
-        idp.respond_name_id_management(&other_sp, &request, RespondNameIdManagement::new());
+    let answered = idp.respond_name_id_management(&other_sp, &request, &Status::success());
     assert!(matches!(answered, Err(SamlError::IssuerMismatch { .. })));
     Ok(())
 }
