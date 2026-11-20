@@ -1,7 +1,7 @@
 #![allow(deprecated)]
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
+use saml_rs::binding::{deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{flow, FlowOptions, HttpRequest};
@@ -46,23 +46,6 @@ fn unsigned_idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
         },
         setting,
     )
-}
-
-#[test]
-fn deflate_raw_decode_rejects_oversized_output() -> Result<(), Box<dyn std::error::Error>> {
-    let compressed = oversized_deflate_payload()?;
-    let err = deflate_raw_decode(&compressed, MAX_DEFLATE_RAW_DECODE_BYTES)
-        .err()
-        .ok_or("inflate unexpectedly succeeded")?;
-
-    assert!(matches!(
-        err,
-        SamlError::LimitExceeded {
-            limit: ResourceLimit::InflatedBytes,
-            ..
-        }
-    ));
-    Ok(())
 }
 
 #[test]

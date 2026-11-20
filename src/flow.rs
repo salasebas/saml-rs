@@ -97,6 +97,10 @@ pub enum SignatureCheck {
     /// Verify a signature the message carries, and accept an unsigned message.
     VerifyIfPresent,
     /// Reject an unsigned message, and verify the signature it carries.
+    ///
+    /// A login `<Response>` whose status is not success is the exception: its
+    /// signature is verified when it carries one, and an unsigned one is
+    /// still reported as [`SamlError::StatusNotSuccess`].
     Require,
 }
 

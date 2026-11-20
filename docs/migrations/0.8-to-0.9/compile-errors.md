@@ -32,6 +32,8 @@
 | `constants::url_params` | No longer public; write the parameter name | [1.21](#121-write-the-binding-parameter-names) |
 | `constants::MessageSignatureOrder`, `AlgorithmPolicy::message_signing_order`, or `EntitySetting::message_signing_order` | Removed; saml-rs never used the value | [1.22](#122-remove-message_signing_order) |
 | `MessageSignatureOrder::as_str` or `ParserType::as_str` | Removed | [1.23](#123-replace-parsertypeas_str) |
+| `FlowOptions::check_signature`, `verify_signature_if_present`, or `clock_drifts` | Replaced by `signature_check` and `clock_skew` | [3.1](raw-api.md#31-set-the-signature-check-and-clock-skew-on-flowoptions) |
+| A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | Returns the facade, not a `Result` | [Typed config](config.md#remove-the--after-samlsp-and-samlidp) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
@@ -711,7 +713,8 @@ let xml = generate_idp_metadata(&config)?;
 
 **Now:** the constant is removed.
 
-**Upgrade:** call `urn()` on the binding:
+**Upgrade:** call `urn()` on the binding. It is a `const fn`, so it also
+initializes a constant:
 
 ```rust
 // Before

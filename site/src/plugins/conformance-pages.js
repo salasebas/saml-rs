@@ -19,7 +19,7 @@ const pages = {
 	'identifiers.md': {
 		title: 'SAML-defined identifiers',
 		description:
-			'Attribute name formats and name identifier formats in typed Web Browser SSO: `SsoAssertion::with_attributes`, `AttributeNameFormat`, the persistent and transient `NameId` constructors, and `entity::generate_id` for message and assertion IDs.',
+			'Attribute name formats on `SsoAssertion::with_attributes`, persistent and transient `NameId` constructors, and IDs for generated messages and assertions.',
 	},
 	'identity-provider-discovery.md': {
 		title: 'Identity Provider Discovery',
