@@ -70,8 +70,6 @@ pub(super) fn render_default_login_response(
     writer.start(
         &assertion_name,
         &[
-            ("xmlns:xsi", XMLNS_XSI),
-            ("xmlns:xs", XMLNS_XS),
             (assertion_xmlns.as_str(), namespace::ASSERTION),
             ("ID", input.assertion_id),
             ("Version", VERSION),
@@ -227,6 +225,21 @@ fn write_attribute_statement(
     let statement_name = qname(prefix, "AttributeStatement");
     let attribute_name = qname(prefix, "Attribute");
     let value_name = qname(prefix, "AttributeValue");
+    let (schema_declaration, string_type) = if prefix == "xs" {
+        ("xmlns:xsd", "xsd:string")
+    } else {
+        ("xmlns:xs", "xs:string")
+    };
+    let (instance_declaration, type_attribute) = if prefix == "xsi" {
+        ("xmlns:xsi1", "xsi1:type")
+    } else {
+        ("xmlns:xsi", "xsi:type")
+    };
+    let value_attrs = [
+        (schema_declaration, XMLNS_XS),
+        (instance_declaration, XMLNS_XSI),
+        (type_attribute, string_type),
+    ];
     writer.start(&statement_name, &[]);
     for attribute in attributes {
         let name_format = attribute.name_format().map(AttributeNameFormat::as_uri);
@@ -256,15 +269,7 @@ fn write_attribute_statement(
         }
         writer.start(&attribute_name, &attrs);
         for value in attribute.values() {
-            writer.text_element(
-                &value_name,
-                &[
-                    ("xmlns:xs", XMLNS_XS),
-                    ("xmlns:xsi", XMLNS_XSI),
-                    ("xsi:type", "xs:string"),
-                ],
-                value.as_str(),
-            );
+            writer.text_element(&value_name, &value_attrs, value.as_str());
         }
         writer.end(&attribute_name);
     }
