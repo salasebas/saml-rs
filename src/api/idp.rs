@@ -439,7 +439,7 @@ impl IdentityProvider {
     /// ```
     /// use saml_rs::{
     ///     CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig,
-    ///     RememberIdentityProvider, ServiceProvider, SsoEndpoint,
+    ///     RememberIdentityProvider, SsoEndpoint,
     /// };
     ///
     /// # if cfg!(not(crypto)) { return Ok::<(), saml_rs::SamlError>(()); }

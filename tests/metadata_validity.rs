@@ -11,14 +11,14 @@ use std::time::{Duration, SystemTime};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId, IdentityProvider,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts, LogoutSubject,
-    ManageNameIdService, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
+    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, LogoutSubject, ManageNameIdService,
+    MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementReceipt, Outbound, OutboundDelivery, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
     ReceiveNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, SamlError,
     SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel, SoapRequest,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso,
-    StartSlo, StartSso, Status,
+    SpConfig, SpDescriptor, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
+    Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -43,8 +43,7 @@ fn sp(lifetime: Option<MetadataLifetime>) -> Result<saml_rs::ServiceProvider, Sa
     let builder = SpConfig::builder(
         EntityId::try_new(SP_ENTITY_ID)?,
         AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
-    )
-    .validation(SpValidationPolicy::default());
+    );
     let builder = match lifetime {
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
@@ -64,8 +63,7 @@ fn idp(lifetime: Option<MetadataLifetime>) -> Result<saml_rs::IdentityProvider, 
     .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
         IDP_NIM_URL,
     )?))
-    .name_id_format(NameIdFormat::Persistent)
-    .validation(IdpValidationPolicy::default());
+    .name_id_format(NameIdFormat::Persistent);
     let builder = match lifetime {
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,

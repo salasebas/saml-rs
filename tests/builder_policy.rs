@@ -8,10 +8,9 @@ use std::{str::FromStr, time::Duration};
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
     AuthnRequestSigningPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
-    DigestAlgorithm, EntityId, IdpConfig, IdpValidationPolicy, KeyEncryptionAlgorithm,
-    LogoutPolicy, LogoutSignaturePolicy, MaskGenerationFunction, NameIdCreationPolicy,
-    PrivateKeyPem, SamlError, SignatureAlgorithm, SignatureConfig, SpConfig, SpValidationPolicy,
-    SsoEndpoint, TemplatePolicy, TransformAlgorithm, X509Credential, XmlPolicy,
+    DigestAlgorithm, EntityId, IdpConfig, KeyEncryptionAlgorithm, MaskGenerationFunction,
+    NameIdCreationPolicy, PrivateKeyPem, SamlError, SignatureAlgorithm, SignatureConfig, SpConfig,
+    SpValidationPolicy, SsoEndpoint, TemplatePolicy, TransformAlgorithm, X509Credential, XmlPolicy,
     XmlSignatureProfile,
 };
 
@@ -143,7 +142,8 @@ fn idp_config_rejects_unrepresentable_issuance_lifetime() -> Result<(), Box<dyn 
 #[test]
 fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
-        AudienceValidationPolicy, AuthnRequestValidationPolicy, ResponseSignaturePolicy,
+        AudienceValidationPolicy, AuthnRequestValidationPolicy, IdpValidationPolicy, LogoutPolicy,
+        ResponseSignaturePolicy,
     };
 
     let sp = SpConfig::builder(
@@ -203,12 +203,9 @@ fn recommended_hardenings_stay_independent() {
 #[test]
 fn field_defaults_match_the_role_policy() {
     let sp = SpValidationPolicy::default();
-    let logout = LogoutPolicy::default();
     assert_eq!(AssertionSignaturePolicy::default(), sp.assertions);
     assert_eq!(AuthnRequestSigningPolicy::default(), sp.authn_requests);
     assert_eq!(NameIdCreationPolicy::default(), sp.name_id_creation);
-    assert_eq!(LogoutSignaturePolicy::default(), logout.requests);
-    assert_eq!(LogoutSignaturePolicy::default(), logout.responses);
 }
 
 #[test]

@@ -9,9 +9,9 @@
 //! metadata through typed descriptors, and returns pending transaction values
 //! that callers can store with browser session state.
 //!
-//! [`SpValidationPolicy::default`] is the preset for claimed features.
-//! `Default` and the config builders start on it. To relax one rule, assign
-//! the field that names it.
+//! The SP and IdP config builders use [`SpValidationPolicy::default`] and
+//! [`IdpValidationPolicy::default`], respectively. To customize validation,
+//! start from the role default and assign the field you want to change.
 //!
 //! Where the compact flow examples below use
 //! [`ReplayPolicy::Disabled`] or unsigned metadata, treat those
@@ -40,7 +40,7 @@
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     AcsEndpoint, EntityId, FormField, IdentityProvider, IdpDescriptor, Inbound,
+//!     AcsEndpoint, EntityId, FormField, IdpDescriptor, Inbound,
 //!     MetadataTrustPolicy, ReplayPolicy, SamlValidationContext, ServiceProvider, SpConfig,
 //!     StartSso,
 //! };

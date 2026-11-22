@@ -37,8 +37,8 @@
 | A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml`, `Sp`, `Idp`, or `Unknown` | Removed; use `ServiceProvider` and `IdentityProvider` | [1.25](#125-replace-samlsp-and-samlidp-with-serviceprovider-and-identityprovider) |
-| `recommended()` on a validation or logout policy | Use `default()` for the same settings | [1.27](#127-replace-recommended-with-default) |
 | `SpValidationPolicy::compatibility`, `IdpValidationPolicy::compatibility`, or `LogoutPolicy::compatibility` | Removed; set the fields it relaxed | [1.26](#126-replace-compatibility-with-the-fields-it-relaxed) |
+| `recommended()` on a validation or logout policy | Use `default()` for the same settings | [1.27](#127-replace-recommended-with-default) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | `ServiceProvider::new(config)` and `IdentityProvider::new(config)` return the provider, not a `Result` | [Typed config](config.md#call-serviceprovidernew-and-identityprovidernew-without-) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
 | `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
@@ -960,8 +960,14 @@ Recommended, set these fields before you call `build()`:
 
 ## 1.27 Replace `recommended()` with `default()`
 
-The `recommended()` constructor was removed from all three policies. Replace
-each call with `default()` to keep the same values, including logout settings.
+**Affects:** callers of `recommended()` on `SpValidationPolicy`,
+`IdpValidationPolicy`, or `LogoutPolicy`.
+
+**Before:** both `recommended()` and `default()` returned the same policy.
+
+**Now:** `default()` is the sole preset on all three types.
+
+**Upgrade:** replace each call to keep the same validation settings.
 
 ```diff
 -let sp = SpValidationPolicy::recommended();
