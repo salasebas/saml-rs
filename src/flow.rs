@@ -132,8 +132,8 @@ pub struct FlowOptions<'a> {
     /// More decryption keys, tried in order after `decrypt_key`. Each one's
     /// passphrase is its own.
     pub additional_decrypt_keys: &'a [X509Credential],
-    /// Require an encrypted assertion when the SP receives a login response.
-    pub(crate) require_encrypted_assertion: bool,
+    /// Require encryption of every assertion in a login response.
+    pub(crate) require_encrypted_assertions: bool,
     /// Assertion children the SP requires in encrypted form.
     pub(crate) assertion_elements: AssertionElementEncryption,
     /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport. When
@@ -171,7 +171,7 @@ impl<'a> Default for FlowOptions<'a> {
             decrypt_key_pass: None,
             additional_decrypt_keys: &[],
             assertion_elements: AssertionElementEncryption::default(),
-            require_encrypted_assertion: false,
+            require_encrypted_assertions: false,
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
             clock_skew: ClockSkew::strict(),
@@ -908,6 +908,11 @@ fn flow_inner(
             };
             (xml, assertion, None, false, Vec::new())
         };
+    if opts.require_encrypted_assertions && document.root.child_named("Assertion").is_some() {
+        return Err(SamlError::EncryptionRequired {
+            element: "Assertion",
+        });
+    }
     drop(document);
     let decrypt_elements = parser_type == ParserType::SamlResponse
         && (opts.assertion_elements.is_selected()

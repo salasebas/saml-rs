@@ -160,7 +160,6 @@ impl Node {
     }
 
     /// First direct child matching a local name.
-    #[cfg(crypto)]
     pub(crate) fn child_named(&self, name: &str) -> Option<&Self> {
         self.children.iter().find(|child| child.local_name == name)
     }

@@ -141,7 +141,7 @@ pub(crate) fn encrypted_assertion_key<'a>(
     opts: &FlowOptions<'a>,
 ) -> Option<&'a str> {
     if parser_type == ParserType::SamlResponse
-        && (opts.require_encrypted_assertion || root.child_named("EncryptedAssertion").is_some())
+        && (opts.require_encrypted_assertions || root.child_named("EncryptedAssertion").is_some())
     {
         opts.decrypt_key
     } else {

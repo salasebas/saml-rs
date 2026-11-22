@@ -1077,6 +1077,7 @@ mod encrypted_assertions {
     use saml_rs::constants::data_encryption_algorithm::{AES_128_GCM, AES_256};
     use saml_rs::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
     use saml_rs::crypto::encrypt_assertion;
+    use saml_rs::{AssertionEncryptionPolicy, XmlPolicy};
 
     const OTHER_RECIPIENT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
     const ENCRYPTED_ID: &str = concat!(
@@ -1088,6 +1089,7 @@ mod encrypted_assertions {
     fn decrypting_sp(
         acs: AcsEndpoint,
         validation: SpValidationPolicy,
+        xml: XmlPolicy,
     ) -> Result<saml_rs::ServiceProvider, SamlError> {
         Ok(ServiceProvider::new(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs)
@@ -1099,6 +1101,7 @@ mod encrypted_assertions {
                     ),
                 ))
                 .validation(validation)
+                .xml(xml)
                 .build()?,
         ))
     }
@@ -1107,7 +1110,11 @@ mod encrypted_assertions {
         validation: SpValidationPolicy,
     ) -> Result<Exchange, Box<dyn std::error::Error>> {
         Ok(Exchange {
-            sp: decrypting_sp(AcsEndpoint::post(SP_ACS_POST)?.with_default(), validation)?,
+            sp: decrypting_sp(
+                AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+                validation,
+                XmlPolicy::default(),
+            )?,
             ..exchange_for(SpValidationPolicy::default(), false)?
         })
     }
@@ -1308,6 +1315,7 @@ mod encrypted_assertions {
             sp: decrypting_sp(
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 require_signed(),
+                XmlPolicy::default(),
             )?,
             ..exchange_simple_sign(SpValidationPolicy::default())?
         };
@@ -1436,6 +1444,34 @@ mod encrypted_assertions {
     }
 
     #[test]
+    fn required_encryption_rejects_either_order_of_a_signed_mixed_response(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut xml = XmlPolicy::default();
+        xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
+        let exchange = Exchange {
+            sp: decrypting_sp(
+                AcsEndpoint::post(SP_ACS_POST)?.with_default(),
+                SpValidationPolicy::default(),
+                xml,
+            )?,
+            ..exchange_for(SpValidationPolicy::default(), false)?
+        };
+        let mixed = encrypt_first(&two_assertions(&exchange)?, AES_256, CERT)?;
+        for unsigned in both_orders(&mixed)? {
+            expect_error(accept(&exchange, &resign_response(&unsigned)?), |error| {
+                matches!(
+                    error,
+                    SamlError::EncryptionRequired {
+                        element: "Assertion",
+                        ..
+                    }
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    #[test]
     fn each_assertion_of_a_signed_mixed_response_is_evaluated(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = post_exchange(SpValidationPolicy::default())?;
@@ -1504,6 +1540,7 @@ mod encrypted_assertions {
             sp: decrypting_sp(
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 SpValidationPolicy::default(),
+                XmlPolicy::default(),
             )?,
             ..exchange_simple_sign(SpValidationPolicy::default())?
         };
@@ -1540,6 +1577,7 @@ mod encrypted_assertions {
             sp: decrypting_sp(
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 SpValidationPolicy::default(),
+                XmlPolicy::default(),
             )?,
             ..exchange_simple_sign(SpValidationPolicy::default())?
         };
