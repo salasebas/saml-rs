@@ -145,13 +145,13 @@ pub(super) fn namespaced_entity(
         ) {
             bounds.extend(element.attr("validUntil").map(str::to_owned));
         }
-        if element.span == (entity.start..entity.end) {
+        if element.start == entity.start && element.end == entity.end {
             return Ok((element, bounds));
         }
         let child = element
             .children
             .into_iter()
-            .find(|child| child.span.start <= entity.start && entity.end <= child.span.end)
+            .find(|child| child.start <= entity.start && entity.end <= child.end)
             .ok_or_else(|| SamlError::xml("EntityDescriptor is not in the document"))?;
         element = child;
     }

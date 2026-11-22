@@ -312,7 +312,7 @@ impl ArtifactResolution {
         }
         Ok(ResolvedProtocolMessage {
             local_name: message.local_name.clone(),
-            xml: standalone_element(&body.xml, message.span.start, message.span.end)?,
+            xml: standalone_element(&body.xml, message.start, message.end)?,
             identity_provider: self.identity_provider.clone(),
             artifact: self.artifact.clone(),
         })
@@ -438,7 +438,10 @@ fn stored_message(xml: &str) -> Result<(String, String), SamlError> {
             "stored artifact message must be a SAML protocol element".into(),
         ));
     }
-    Ok((xml[element.span].to_string(), element.local_name))
+    Ok((
+        xml[element.start..element.end].to_string(),
+        element.local_name,
+    ))
 }
 
 pub(crate) fn resolve(
