@@ -5,6 +5,8 @@ use crate::model::{RelayState, RequestedAuthnContext};
 pub use crate::model::{ForceAuthn, IsPassive};
 
 /// Options for starting SP-initiated Web SSO.
+///
+/// A request for a transient identifier omits `AllowCreate`.
 #[derive(Debug, Clone)]
 pub struct StartSso {
     pub(super) binding: SsoRequestBinding,
@@ -117,6 +119,8 @@ pub struct MessageDelivery;
 ///
 /// These options select delivery and response signing. The
 /// [`SsoOutcome`](crate::SsoOutcome) passed with them says what it reports.
+/// A successful response carries an authentication statement. An IdP that
+/// advertises Single Logout includes the assertion ID as its session index.
 /// `Delivery` is [`MessageDelivery`] when the browser carries the response,
 /// and [`ArtifactDelivery`] when it carries an artifact for a stored one.
 #[derive(Debug, Clone)]

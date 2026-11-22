@@ -11,7 +11,7 @@ use crate::error::SamlError;
 use crate::flow::FlowResult;
 use crate::xml::parse_saml_utc_date_time;
 
-/// Subject data used to issue a front-channel Single Logout request.
+/// Subject data used to issue a Single Logout request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogoutSubject {
     name_id: NameId,
@@ -21,8 +21,9 @@ pub struct LogoutSubject {
 impl LogoutSubject {
     /// Create logout subject data with no SessionIndex values.
     ///
-    /// With no indexes, the request targets every session for the NameID.
-    /// Use [`Self::with_session_index`] to select individual sessions.
+    /// A session authority can omit all indexes to target every applicable
+    /// session for the NameID. A service provider must add at least one
+    /// index with [`Self::with_session_index`] or [`Self::with_session_indexes`].
     pub fn new(name_id: NameId) -> Self {
         Self {
             name_id,
