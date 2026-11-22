@@ -16,9 +16,6 @@ use crate::model::{validate_name_id_format, ClockSkew};
 use std::time::SystemTime;
 
 mod authn_request;
-#[cfg(test)]
-#[path = "tests/authn_request_fixture.rs"]
-mod authn_request_fixture;
 mod paos;
 
 use authn_request::{render_default_authn_request_xml, AuthnRequestXml};
@@ -197,12 +194,6 @@ impl Engine {
             name_id_format,
             allow_create: self.setting.allow_create,
         };
-        #[cfg(test)]
-        let xml = match self.setting.login_request_template.as_deref() {
-            Some(template) => authn_request_fixture::render(template, &request),
-            None => render_default_authn_request_xml(&request),
-        };
-        #[cfg(not(test))]
         let xml = render_default_authn_request_xml(&request);
         let relay_state = match options.relay_state {
             Some(value) => Some(value.to_string()),

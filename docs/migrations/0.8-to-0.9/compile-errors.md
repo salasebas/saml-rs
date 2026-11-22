@@ -44,6 +44,7 @@
 | `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
+| `StartSlo::signing` or `LogoutSigning` | Remove the option and configure signing credentials | [Typed operations](typed-operations.md#generate-sso-and-single-logout-messages) |
 | `TemplatePolicy::relay_state` | Removed; pass RelayState on each request | [Typed config](config.md#send-relaystate-per-request) |
 | `TemplatePolicy::tag_prefix_encrypted_assertion` | Removed; `tag_prefix_assertion` sets the prefix | [Typed config](config.md#set-the-encryptedassertion-prefix-with-the-assertion-prefix) |
 | `TemplatePolicy::login_request_template` or `login_response_template` | Removed along with the role-specific setters and getters. Use typed SSO inputs | [Typed config](config.md#replace-sso-templates-with-typed-options) |

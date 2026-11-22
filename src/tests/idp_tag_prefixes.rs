@@ -14,7 +14,6 @@ use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::sp;
-use saml_rs::template::LoginResponseTemplate;
 use saml_rs::tests::engine::{create_logout_request, create_logout_response};
 use saml_rs::SamlError;
 
@@ -167,52 +166,6 @@ fn login_response_both_prefixes_can_be_overridden_and_signed_post_parses(
 
     assert!(xml.contains("<samlp2:Response"));
     assert!(xml.contains("<saml2:Assertion"));
-    let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let parsed =
-        sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, REQUEST_ID)?;
-    assert_eq!(parsed.extract.get_str("nameID"), Some("prefix@example.com"));
-    Ok(())
-}
-
-#[test]
-fn caller_login_response_template_is_rewritten_with_configured_prefixes(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut setting = prefixed_setting("samlp2", "saml2");
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-        attributes: Vec::new(),
-    });
-    let (idp, sp, ctx, xml) = login_response_xml(setting)?;
-
-    assert!(xml.contains("<samlp2:Response"), "{xml}");
-    assert!(xml.contains("<saml2:Assertion"), "{xml}");
-    assert!(!xml.contains("<samlp:Response"), "{xml}");
-    assert!(!xml.contains("<saml:Assertion"), "{xml}");
-    let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let parsed =
-        sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, REQUEST_ID)?;
-    assert_eq!(parsed.extract.get_str("nameID"), Some("prefix@example.com"));
-    Ok(())
-}
-
-#[test]
-fn caller_login_response_template_rewrites_each_prefix_once(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut setting = prefixed_setting("saml", "a");
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-        attributes: Vec::new(),
-    });
-    let (idp, sp, ctx, xml) = login_response_xml(setting)?;
-
-    assert!(
-        xml.starts_with(concat!(
-            r#"<saml:Response xmlns:saml="urn:oasis:names:tc:SAML:2.0:protocol" "#,
-            r#"xmlns:a="urn:oasis:names:tc:SAML:2.0:assertion" ID=""#,
-        )),
-        "{xml}"
-    );
-    assert!(xml.contains("</a:Issuer><saml:Status>"), "{xml}");
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
     let parsed =
         sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, REQUEST_ID)?;

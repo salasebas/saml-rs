@@ -2306,7 +2306,9 @@ fn typed_session_participant_rejects_an_unexpanded_expiration(
     let idp = IdentityProvider::new(idp_config()?);
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let result = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post());
-    assert!(matches!(result, Err(SamlError::ProtocolProfile(_))));
+    assert!(
+        matches!(result, Err(SamlError::ProtocolProfile(message)) if message.contains("LogoutRequest NotOnOrAfter"))
+    );
     Ok(())
 }
 
@@ -3151,7 +3153,7 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
 }
 
 #[test]
-fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
+fn typed_facade_slo_rejects_a_repeated_relay_state_on_redirect(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(sp_config()?);
     let idp = IdentityProvider::new(idp_config_with_validation(unsigned_logout_idp_validation())?);
@@ -3728,16 +3730,21 @@ fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     for format in ["", "   ", "local-format", "urn:", "urn:%zz"] {
-        for options in [StartSlo::post as fn() -> StartSlo, || StartSlo::post()] {
-            for result in [
-                idp.start_slo(&sp_descriptor, custom_format_subject(format)?, options()),
-                sp.start_slo(&idp_descriptor, custom_format_subject(format)?, options()),
-            ] {
-                match result {
-                    Err(SamlError::Invalid(message))
-                        if message.contains("absolute URI reference") => {}
-                    other => return Err(format!("{format:?}: unexpected {other:?}").into()),
-                }
+        for result in [
+            idp.start_slo(
+                &sp_descriptor,
+                custom_format_subject(format)?,
+                StartSlo::post(),
+            ),
+            sp.start_slo(
+                &idp_descriptor,
+                custom_format_subject(format)?,
+                StartSlo::post(),
+            ),
+        ] {
+            match result {
+                Err(SamlError::Invalid(message)) if message.contains("absolute URI reference") => {}
+                other => return Err(format!("{format:?}: unexpected {other:?}").into()),
             }
         }
     }
@@ -3762,7 +3769,7 @@ fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_
 }
 
 #[test]
-fn typed_logout_request_keeps_whitespace_in_a_name_id_format_under_generation_rules(
+fn typed_logout_request_keeps_whitespace_in_a_name_id_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // `xs:anyURI` collapses XML whitespace, and XLink escaping maps an inner
     // space to %20, so these are absolute URI references.

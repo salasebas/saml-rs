@@ -125,12 +125,6 @@ pub struct EntitySetting {
     pub tag_prefix_assertion: String,
     /// IdP: tag prefix for the `<EncryptedAssertion>` element (default `saml`).
     pub tag_prefix_encrypted_assertion: String,
-    /// IdP: login `<Response>` template + attribute configuration.
-    #[cfg(test)]
-    pub login_response_template: Option<crate::template::LoginResponseTemplate>,
-    /// SP: custom `<AuthnRequest>` template (`None` uses the default).
-    #[cfg(test)]
-    pub login_request_template: Option<String>,
     /// Custom `<LogoutRequest>` template (`None` uses the default).
     ///
     /// Typed Session Authority generation requires a complete unqualified
@@ -348,10 +342,6 @@ impl Default for EntitySetting {
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
             tag_prefix_encrypted_assertion: "saml".to_string(),
-            #[cfg(test)]
-            login_response_template: None,
-            #[cfg(test)]
-            login_request_template: None,
             logout_request_template: None,
             logout_response_template: None,
             signature_config: None,
@@ -397,9 +387,6 @@ pub(crate) fn random_20_bytes() -> [u8; 20] {
 pub struct User {
     /// `<NameID>` value.
     pub name_id: String,
-    /// Attribute values keyed by their `LoginResponseAttribute.value_tag`;
-    /// each fills the `{attr<Tag>}` placeholder produced for that attribute.
-    pub attributes: Vec<(String, String)>,
 }
 
 impl User {
@@ -407,7 +394,6 @@ impl User {
     pub fn new(name_id: impl Into<String>) -> Self {
         Self {
             name_id: name_id.into(),
-            ..Default::default()
         }
     }
 }

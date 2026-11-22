@@ -924,8 +924,7 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
 }
 
 #[test]
-fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn respond_sso_issues_only_the_requested_subject() -> Result<(), Box<dyn std::error::Error>> {
     let receive_subject = |subject: &str, policy: &str| {
         receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
             replace_name_id_policy(

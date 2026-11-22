@@ -3,7 +3,6 @@ use crate::error::SamlError;
 use crate::model::{
     Attribute, AttributeNameFormat, AuthnContextReference, AuthnContextReferenceKind, Status,
 };
-use crate::template::{write_login_response_attribute_statement, LoginResponseAttribute};
 use crate::xml::any_uri::is_absolute_uri_reference;
 use crate::xml::name::is_name;
 use crate::xml::write::XmlWriter;
@@ -40,8 +39,6 @@ pub(super) struct LoginResponseXml<'a> {
     pub(super) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(super) in_response_to: Option<&'a str>,
     pub(super) authn_statement: AuthnStatementXml<'a>,
-    pub(super) attributes: &'a [LoginResponseAttribute],
-    pub(super) user_attributes: &'a [(String, String)],
     pub(super) typed_attributes: &'a [Attribute],
 }
 
@@ -133,12 +130,6 @@ pub(super) fn render_default_login_response(
     writer.end(&qname(input.assertion_prefix, "AudienceRestriction"));
     writer.end(&qname(input.assertion_prefix, "Conditions"));
     write_authn_statement(&mut writer, input.assertion_prefix, &input.authn_statement);
-    write_login_response_attribute_statement(
-        &mut writer,
-        input.attributes,
-        input.user_attributes,
-        input.assertion_prefix,
-    )?;
     write_attribute_statement(&mut writer, input.assertion_prefix, input.typed_attributes)?;
     writer.end(&assertion_name);
     writer.end(&response_name);

@@ -18,7 +18,7 @@ because Rust ignores `#[deprecated]` on a re-export.
 | Old path | Documented path |
 | --- | --- |
 | `xml::XmlLimits`, `xml::dom::XmlLimits` | `saml_rs::XmlLimits` |
-| `template::LoginResponseTemplate`, `template::LoginResponseAttribute` | None. Only the raw API read them. Pass attributes with `SsoAssertion::with_attributes` and the built-in renderer, or write them into your own template text for `IdpConfigBuilder::sso_response_template`. The two do not combine |
+| `template::LoginResponseTemplate`, `template::LoginResponseAttribute` | Pass typed attributes with `SsoAssertion::with_attributes` |
 | `entity::SignatureConfig`, `entity::SignatureAction` | `saml_rs::SignatureConfig`, `saml_rs::SignatureAction` |
 | `template::LOGIN_REQUEST_TEMPLATE`, `template::LOGIN_RESPONSE_TEMPLATE` | No configuration replacement. Use typed SSO inputs |
 | `template::LOGOUT_REQUEST_TEMPLATE`, `template::LOGOUT_RESPONSE_TEMPLATE` | The same names under `saml_rs::config` |

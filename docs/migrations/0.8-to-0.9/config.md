@@ -410,9 +410,8 @@ list. A config that set the other role's template built and ignored it.
 `LoginResponseTemplate` and the default templates were importable only from
 the hidden `saml_rs::template` module.
 
-**Now:** browser SSO and PAOS generate XML from typed inputs. Both role-specific
-template setters and their config getters from development builds are removed.
-There is no raw XML substitution in these flows.
+**Now:** browser SSO and PAOS generate XML from typed inputs. The role-specific
+builders and configs accept typed SSO settings only.
 
 **Upgrade:** delete the template from your configuration. Set the ACS, binding,
 and NameID formats on the role that advertises them. Use `StartSso` for request

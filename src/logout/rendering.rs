@@ -3,11 +3,11 @@ use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::Status;
-use crate::template::validate_tag_prefixes;
+use crate::template::{apply_tag_prefixes, replace_tags_by_optional_value, validate_tag_prefixes};
 use crate::xml::write::XmlWriter;
 use crate::xml::OutboundNameIdQualifiers;
 
-pub(super) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
+pub(crate) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
     setting
         .entity_id
         .clone()
@@ -21,9 +21,9 @@ pub(crate) struct LogoutRequestSubject<'a> {
     pub(crate) session_indexes: Vec<&'a str>,
 }
 
-pub(super) struct LogoutRequestTimeAttributes<'a> {
-    pub(super) issue_instant: &'a str,
-    pub(super) not_on_or_after: Option<&'a str>,
+pub(crate) struct LogoutRequestTimeAttributes<'a> {
+    pub(crate) issue_instant: &'a str,
+    pub(crate) not_on_or_after: Option<&'a str>,
 }
 
 pub(super) fn render_default_logout_response(
@@ -80,15 +80,59 @@ fn write_logout_status(writer: &mut XmlWriter, protocol_prefix: &str, status: &S
     writer.end(&status_name);
 }
 
-pub(super) fn render_default_logout_request(
+pub(crate) fn render_logout_request(
     setting: &EntitySetting,
-    meta: &Metadata,
+    issuer: &str,
     id: &str,
     timing: LogoutRequestTimeAttributes<'_>,
     destination: &str,
     subject: &LogoutRequestSubject<'_>,
     name_id_format: Option<&str>,
 ) -> Result<String, SamlError> {
+    if let Some(template) = setting.logout_request_template.as_deref() {
+        if subject.session_indexes.len() > 1 {
+            return Err(SamlError::Unsupported(
+                "custom LogoutRequest templates cannot render multiple SessionIndex values".into(),
+            ));
+        }
+        validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
+        let template = apply_tag_prefixes(
+            template,
+            &setting.tag_prefix_protocol,
+            &setting.tag_prefix_assertion,
+        );
+        let mut replacements = vec![
+            ("ID", Some(id.to_owned())),
+            ("IssueInstant", Some(timing.issue_instant.to_string())),
+            ("Destination", Some(destination.to_owned())),
+            ("Issuer", Some(issuer.to_owned())),
+            ("NameIDFormat", name_id_format.map(str::to_string)),
+            ("NameID", Some(subject.name_id.to_string())),
+            (
+                "NameQualifier",
+                subject.qualifiers.name_qualifier.map(str::to_string),
+            ),
+            (
+                "SPNameQualifier",
+                subject.qualifiers.sp_name_qualifier.map(str::to_string),
+            ),
+            (
+                "SPProvidedID",
+                subject.qualifiers.sp_provided_id.map(str::to_string),
+            ),
+            (
+                "SessionIndex",
+                subject
+                    .session_indexes
+                    .first()
+                    .map(|value| (*value).to_string()),
+            ),
+        ];
+        if let Some(expiration) = timing.not_on_or_after {
+            replacements.push(("NotOnOrAfter", Some(expiration.to_owned())));
+        }
+        return Ok(replace_tags_by_optional_value(&template, &replacements));
+    }
     validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
 
     let protocol_prefix = &setting.tag_prefix_protocol;
@@ -99,7 +143,6 @@ pub(super) fn render_default_logout_request(
     let session_index_name = format!("{protocol_prefix}:SessionIndex");
     let xmlns_protocol = format!("xmlns:{protocol_prefix}");
     let xmlns_assertion = format!("xmlns:{assertion_prefix}");
-    let issuer = issuer_of(setting, meta);
 
     let mut attrs = vec![
         (xmlns_protocol.as_str(), namespace::PROTOCOL),
@@ -118,7 +161,7 @@ pub(super) fn render_default_logout_request(
 
     let mut writer = XmlWriter::new();
     writer.start(&root_name, &attrs);
-    writer.text_element(&issuer_name, &[], &issuer);
+    writer.text_element(&issuer_name, &[], issuer);
     let qualifiers = subject.qualifiers;
     let mut name_id_attrs = Vec::with_capacity(4);
     if let Some(value) = qualifiers.name_qualifier {

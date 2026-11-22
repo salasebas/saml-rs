@@ -10,6 +10,8 @@ mod signing;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub(crate) use bindings::unsigned_context;
 pub(crate) use creation::{
     create_logout_request_for_subject_inner, create_logout_response_inner, reject_soap_relay_state,
     LogoutRequestInput, LogoutRequestValidation, LogoutResponseInput,
@@ -19,4 +21,6 @@ pub(crate) use parsing::{
     parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
 };
 pub(crate) use rendering::LogoutRequestSubject;
+#[cfg(test)]
+pub(crate) use rendering::{issuer_of, render_logout_request, LogoutRequestTimeAttributes};
 pub(crate) use signing::sign_browser_message;

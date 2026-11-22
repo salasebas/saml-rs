@@ -28,7 +28,6 @@ mod idp_tag_prefixes;
 )]
 mod index_conformance;
 mod issues_conformance;
-mod login_response_template_attributes;
 mod logout_session_index;
 mod metadata_role_keys;
 #[cfg_attr(

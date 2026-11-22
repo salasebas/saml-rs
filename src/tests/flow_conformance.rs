@@ -21,7 +21,6 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::template::LoginResponseAttribute;
-use saml_rs::template::LoginResponseTemplate;
 use saml_rs::tests::engine::fill_template;
 use saml_rs::tests::engine::redirect_query;
 use saml_rs::tests::engine::LogoutUser;
@@ -210,8 +209,14 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
     let id = "_8e8dc5f69a98cc4c1ff3427e5ce34606fd672f91e6".to_string();
     let now = iso8601_offset(-60);
     let later = iso8601_offset(300);
+    let attributes = crate::template::build_attribute_statement(
+        &[attr("mail", "user.email"), attr("name", "user.name")],
+        crate::template::ATTRIBUTE_TEMPLATE,
+        crate::template::ATTRIBUTE_STATEMENT_TEMPLATE,
+    );
+    let template = template.replacen("{AttributeStatement}", &attributes, 1);
     let xml = fill_template(
-        template,
+        &template,
         &[
             ("ID", id.clone()),
             ("AssertionID", "_assertion0123456789".into()),
@@ -243,12 +248,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
 }
 
 fn custom_idp() -> Result<idp::Engine, SamlError> {
-    let mut setting = signing();
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-        attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
-    });
-    idp::Engine::from_config(&idp_config(false), setting)
+    idp::Engine::from_config(&idp_config(false), signing())
 }
 
 fn attr(name: &str, tag: &str) -> LoginResponseAttribute {
@@ -358,42 +358,6 @@ fn flow_conformance_unsigned_sp_against_requiring_idp() -> Result<(), Box<dyn st
         Err(SamlError::AuthnRequestSigningRequired) => Ok(()),
         other => Err(format!("expected conflict, got {other:?}").into()),
     }
-}
-
-// ----- create login request with custom template (7,10,11) -----
-
-fn login_request_custom(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = unsigned_sp();
-    let idp = unsigned_idp();
-    let cb = |_t: &str| {
-        (
-            "_custom_req".to_string(),
-            "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_custom_req\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>".to_string(),
-        )
-    };
-    let ctx = sp.create_rendered_login_request(
-        &idp,
-        binding,
-        &LoginRequestOptions {
-            ..Default::default()
-        },
-        &cb,
-    )?;
-    assert_eq!(ctx.id, "_custom_req");
-    Ok(())
-}
-
-#[test]
-fn flow_conformance_login_request_redirect_custom() -> Result<(), Box<dyn std::error::Error>> {
-    login_request_custom(Binding::Redirect)
-}
-#[test]
-fn flow_conformance_login_request_post_custom() -> Result<(), Box<dyn std::error::Error>> {
-    login_request_custom(Binding::Post)
-}
-#[test]
-fn flow_conformance_login_request_simplesign_custom() -> Result<(), Box<dyn std::error::Error>> {
-    login_request_custom(Binding::SimpleSign)
 }
 
 // ----- detached message signature binding -----
@@ -780,16 +744,7 @@ fn send_custom_signed_assertion(binding: Binding) -> Result<(), Box<dyn std::err
     let sp = sp(true, false);
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "custom@example.com");
-    let ctx = idp.create_rendered_login_response(
-        &sp,
-        binding,
-        &User::new("custom@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_r"),
-            ..Default::default()
-        },
-        &cb,
-    )?;
+    let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("custom@example.com"));
     assert_eq!(
@@ -899,12 +854,7 @@ fn flow_conformance_send_signed_message_simplesign() -> Result<(), Box<dyn std::
 fn signed_response_without_destination_is_rejected(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut setting = signing();
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-        attributes: Vec::new(),
-    });
-    let idp = idp::Engine::from_config(&idp_config(false), setting)?;
+    let idp = idp::Engine::from_config(&idp_config(false), signing())?;
     let sp = sp(false, false);
     let callback = |template: &str| {
         fill_response(
@@ -913,16 +863,7 @@ fn signed_response_without_destination_is_rejected(
             "missing-destination@example.com",
         )
     };
-    let context = idp.create_rendered_login_response(
-        &sp,
-        binding,
-        &User::new("missing-destination@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_r"),
-            ..Default::default()
-        },
-        &callback,
-    )?;
+    let context = idp.create_rendered_login_response(&sp, binding, &callback)?;
 
     match parse_response_with_request_id(&sp, &idp, binding, &context, "_req") {
         Err(SamlError::DestinationMismatch {
@@ -955,12 +896,7 @@ fn flow_conformance_signed_simplesign_response_requires_destination(
 #[test]
 fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut setting = signing();
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-        attributes: Vec::new(),
-    });
-    let idp = idp::Engine::from_config(&idp_config(false), setting)?;
+    let idp = idp::Engine::from_config(&idp_config(false), signing())?;
     let sp = sp(true, false);
     let callback = |template: &str| {
         fill_response(
@@ -969,16 +905,7 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
             "assertion-only@example.com",
         )
     };
-    let context = idp.create_rendered_login_response(
-        &sp,
-        Binding::Post,
-        &User::new("assertion-only@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_r"),
-            ..Default::default()
-        },
-        &callback,
-    )?;
+    let context = idp.create_rendered_login_response(&sp, Binding::Post, &callback)?;
     let parsed = parse_response_with_request_id(&sp, &idp, Binding::Post, &context, "_req")?;
 
     assert_eq!(
@@ -1051,16 +978,7 @@ fn send_custom_signed_message(binding: Binding) -> Result<(), Box<dyn std::error
     let sp = sp(false, false);
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "cm@example.com");
-    let ctx = idp.create_rendered_login_response(
-        &sp,
-        binding,
-        &User::new("cm@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_r"),
-            ..Default::default()
-        },
-        &cb,
-    )?;
+    let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("cm@example.com"));
     Ok(())
@@ -1118,16 +1036,7 @@ fn send_custom_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std
     let sp = sp::Engine::from_config(&sp_config(false, true, false), sp_setting)?;
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "cam@example.com");
-    let ctx = idp.create_rendered_login_response(
-        &sp,
-        binding,
-        &User::new("cam@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_r"),
-            ..Default::default()
-        },
-        &cb,
-    )?;
+    let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("cam@example.com"));
     Ok(())
@@ -1155,12 +1064,6 @@ fn flow_conformance_send_custom_assertion_and_message_simplesign(
 fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std::error::Error>> {
     let mut idp_setting = signing();
     idp_setting.is_assertion_encrypted = true;
-    if custom {
-        idp_setting.login_response_template = Some(LoginResponseTemplate {
-            context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
-            attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
-        });
-    }
     let idp = idp::Engine::from_config(&idp_config(false), idp_setting)?;
     let mut sp_setting = signing();
     sp_setting.is_assertion_encrypted = true;
@@ -1175,7 +1078,7 @@ fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std:
     };
     let user = User::new("es@example.com");
     let ctx = if custom {
-        idp.create_rendered_login_response(&sp, Binding::Post, &user, &options, &cb)?
+        idp.create_rendered_login_response(&sp, Binding::Post, &cb)?
     } else {
         idp.create_login_response(&sp, Binding::Post, &user, &options)?
     };

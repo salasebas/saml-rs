@@ -26,9 +26,6 @@ use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::template::LoginResponseAttribute;
-use saml_rs::template::LoginResponseTemplate;
-use saml_rs::template::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::tests::engine::fill_template;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
@@ -368,75 +365,27 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
     Ok(())
 }
 
-/// A peer identity provider that ignores the producer rules: the raw
-/// samlify-port renderer writes each `(Name, NameFormat, value)` as given.
 fn accept_peer_attributes(
     attributes: &[(&str, &str, &str)],
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let template = LoginResponseTemplate {
-        context: None,
-        attributes: attributes
-            .iter()
-            .enumerate()
-            .map(|(index, (name, name_format, _))| LoginResponseAttribute {
-                name: (*name).to_string(),
-                name_format: (*name_format).to_string(),
-                value_xsi_type: "xs:string".to_string(),
-                value_tag: format!("value{index}"),
-                value_xmlns_xs: None,
-                value_xmlns_xsi: None,
-            })
-            .collect(),
-    };
-    let user_attributes = attributes
-        .iter()
-        .enumerate()
-        .map(|(index, (_, _, value))| (format!("value{index}"), (*value).to_string()))
-        .collect();
-    accept_peer_response(template, user_attributes)
+    let mut writer = crate::xml::write::XmlWriter::new();
+    writer.start("saml:AttributeStatement", &[]);
+    for &(name, format, value) in attributes {
+        writer.start("saml:Attribute", &[("Name", name), ("NameFormat", format)]);
+        writer.text_element("saml:AttributeValue", &[], value);
+        writer.end("saml:Attribute");
+    }
+    writer.end("saml:AttributeStatement");
+    accept_peer_attribute_statement(&writer.finish())
 }
 
-/// A peer identity provider that signs `statement` verbatim as the
-/// assertion's `<AttributeStatement>`.
 fn accept_peer_attribute_statement(
     statement: &str,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let template = LoginResponseTemplate {
-        context: Some(LOGIN_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", statement, 1)),
-        attributes: Vec::new(),
-    };
-    accept_peer_response(template, Vec::new())
-}
-
-fn accept_peer_response(
-    template: LoginResponseTemplate,
-    user_attributes: Vec<(String, String)>,
-) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = idp()?;
-    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let user = User {
-        name_id: "alice@example.com".to_string(),
-        attributes: user_attributes,
-    };
-    let mut raw_idp = idp.engine().clone();
-    raw_idp.setting.login_response_template = Some(template);
-    let context = raw_idp.create_login_response(
-        sp.engine(),
-        Binding::Post,
-        &user,
-        &LoginResponseOptions {
-            in_response_to: Some(started.pending.request_id().as_str()),
-            ..LoginResponseOptions::default()
-        },
-    )?;
-    Ok(sp.finish_sso(
-        &idp_descriptor,
-        &started.pending,
-        Inbound::post(vec![FormField::new("SAMLResponse", context.context)]),
-        validation(),
-    )?)
+    accept_peer_response(
+        &NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+        statement,
+    )
 }
 
 #[test]
@@ -763,7 +712,10 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
 
 /// A peer identity provider that ignores the producer rules: the raw renderer
 /// callback writes the `<NameID>` as given.
-fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::error::Error>> {
+fn accept_peer_response(
+    name_id: &NameId,
+    statement: &str,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -801,18 +753,11 @@ fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::erro
                 ("AuthnStatement", String::new()),
             ],
         );
-        (id, xml)
+        (id, xml.replacen("{AttributeStatement}", statement, 1))
     };
-    let context = idp.engine().create_rendered_login_response(
-        sp.engine(),
-        Binding::Post,
-        &User::new(name_id.value()),
-        &LoginResponseOptions {
-            in_response_to: Some(&request_id),
-            ..LoginResponseOptions::default()
-        },
-        &fill,
-    )?;
+    let context = idp
+        .engine()
+        .create_rendered_login_response(sp.engine(), Binding::Post, &fill)?;
     Ok(sp.finish_sso(
         &idp_descriptor,
         &started.pending,
@@ -828,7 +773,7 @@ fn service_provider_accepts_persistent_and_transient_identifiers_that_miss_the_p
     let value = format!("alice@example.com/{}", "x".repeat(300));
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let name_id = NameId::new(value.clone()).with_format(format);
-        let session = accept_peer_name_id(&name_id)?;
+        let session = accept_peer_response(&name_id, "")?;
         assert_eq!(session.name_id(), &name_id);
     }
     Ok(())
@@ -1084,24 +1029,18 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
     let idp = idp()?;
     let mut raw_sp = sp()?.engine().clone();
     raw_sp.setting.name_id_format = Vec::new();
-    for template in [
-        None,
-        Some(saml_rs::template::LOGIN_REQUEST_TEMPLATE.to_string()),
-    ] {
-        raw_sp.setting.login_request_template = template;
-        let context = raw_sp.create_login_request(
-            idp.engine(),
-            Binding::Post,
-            &LoginRequestOptions::default(),
-        )?;
-        let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
-        let policy = xml
-            .split("<samlp:NameIDPolicy")
-            .nth(1)
-            .and_then(|rest| rest.split("/>").next())
-            .ok_or("missing NameIDPolicy")?;
-        assert_eq!(policy, " AllowCreate=\"false\"");
-    }
+    let context = raw_sp.create_login_request(
+        idp.engine(),
+        Binding::Post,
+        &LoginRequestOptions::default(),
+    )?;
+    let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
+    let policy = xml
+        .split("<samlp:NameIDPolicy")
+        .nth(1)
+        .and_then(|rest| rest.split("/>").next())
+        .ok_or("missing NameIDPolicy")?;
+    assert_eq!(policy, " AllowCreate=\"false\"");
     Ok(())
 }
 
@@ -1111,7 +1050,7 @@ fn service_provider_accepts_a_name_id_format_that_is_not_an_absolute_uri(
     // SAML Core §1.3.2 binds the writer of the value. No receiver rule rejects it.
     for format in ["local-format", "urn:%zz"] {
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
-        let session = accept_peer_name_id(&name_id)?;
+        let session = accept_peer_response(&name_id, "")?;
         assert_eq!(session.name_id(), &name_id);
     }
     Ok(())

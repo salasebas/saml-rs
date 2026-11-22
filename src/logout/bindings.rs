@@ -2,7 +2,7 @@ use crate::binding::{build_redirect_url, encode_base64};
 use crate::constants::{Binding, ParserType};
 use crate::error::SamlError;
 
-pub(super) fn unsigned_context(
+pub(crate) fn unsigned_context(
     binding: Binding,
     xml: &str,
     destination: &str,

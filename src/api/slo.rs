@@ -530,8 +530,6 @@ fn start_slo_impl(
         binding: Binding::from(options.binding),
         subject: &request_subject,
         relay_state: options.relay_state.as_ref().map(RelayState::as_str),
-        want_signed: true,
-        message_id: None,
         name_id_format,
         issue_instant: &issue_instant,
         not_on_or_after: not_on_or_after.as_deref(),

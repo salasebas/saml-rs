@@ -324,8 +324,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
 }
 
 #[test]
-fn typed_unsolicited_sso_omits_in_response_to_under_producer_rules(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn typed_unsolicited_sso_omits_in_response_to() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
     let idp = idp_with(signed_authn_request_idp_validation(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -524,8 +523,7 @@ fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
 }
 
 #[test]
-fn typed_transient_name_id_omits_allow_create_under_producer_rules(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn typed_transient_name_id_omits_allow_create() -> Result<(), Box<dyn std::error::Error>> {
     let mut validation = SpValidationPolicy::default();
     validation.name_id_creation = NameIdCreationPolicy::AllowCreate;
     for format in [

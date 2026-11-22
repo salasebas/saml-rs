@@ -13,7 +13,7 @@ use crate::xml::{
 use super::bindings::unsigned_context;
 use super::encrypted_id::encrypt_name_id_for_peer;
 use super::rendering::{
-    issuer_of, render_default_logout_request, render_default_logout_response, LogoutRequestSubject,
+    issuer_of, render_default_logout_response, render_logout_request, LogoutRequestSubject,
     LogoutRequestTimeAttributes,
 };
 use super::signing::sign_browser_message;
@@ -25,8 +25,6 @@ pub(crate) struct CreatedLogoutRequest {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LogoutRequestValidation {
-    #[cfg(test)]
-    UncheckedTestFixture,
     /// Session participant producer rules. `NotOnOrAfter` stays optional.
     SessionParticipant,
     SessionAuthority,
@@ -39,8 +37,6 @@ pub(crate) struct LogoutRequestInput<'a> {
     pub(crate) binding: Binding,
     pub(crate) subject: &'a LogoutRequestSubject<'a>,
     pub(crate) relay_state: Option<&'a str>,
-    pub(crate) want_signed: bool,
-    pub(crate) message_id: Option<&'a str>,
     /// `<NameID>` `Format`. `None` omits the attribute.
     pub(crate) name_id_format: Option<&'a str>,
     pub(crate) issue_instant: &'a str,
@@ -61,8 +57,6 @@ pub(crate) fn create_logout_request_for_subject_inner(
         binding,
         subject,
         relay_state,
-        want_signed,
-        message_id,
         name_id_format,
         issue_instant,
         not_on_or_after,
@@ -82,88 +76,32 @@ pub(crate) fn create_logout_request_for_subject_inner(
     let destination = target_meta
         .single_logout_location(binding)
         .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?;
-    let id = message_id
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(generate_id);
+    let id = generate_id();
     let issuer = issuer_of(init_setting, init_meta);
-    let xml = if let Some(template) = init_setting.logout_request_template.as_deref() {
-        if subject.session_indexes.len() > 1 {
-            return Err(SamlError::Unsupported(
-                "custom LogoutRequest templates cannot render multiple SessionIndex values".into(),
-            ));
-        }
-        validate_tag_prefixes(
-            &init_setting.tag_prefix_protocol,
-            &init_setting.tag_prefix_assertion,
-        )?;
-        let template = apply_tag_prefixes(
-            template,
-            &init_setting.tag_prefix_protocol,
-            &init_setting.tag_prefix_assertion,
-        );
-        let mut replacements = vec![
-            ("ID", Some(id.clone())),
-            ("IssueInstant", Some(issue_instant.to_string())),
-            ("Destination", Some(destination.clone())),
-            ("Issuer", Some(issuer.clone())),
-            ("NameIDFormat", name_id_format.map(str::to_string)),
-            ("NameID", Some(subject.name_id.to_string())),
-            (
-                "NameQualifier",
-                subject.qualifiers.name_qualifier.map(str::to_string),
-            ),
-            (
-                "SPNameQualifier",
-                subject.qualifiers.sp_name_qualifier.map(str::to_string),
-            ),
-            (
-                "SPProvidedID",
-                subject.qualifiers.sp_provided_id.map(str::to_string),
-            ),
-            (
-                "SessionIndex",
-                subject
-                    .session_indexes
-                    .first()
-                    .map(|value| (*value).to_string()),
-            ),
-        ];
-        if matches!(validation, LogoutRequestValidation::SessionAuthority) {
-            replacements.push(("NotOnOrAfter", not_on_or_after.map(str::to_string)));
-        }
-        replace_tags_by_optional_value(&template, &replacements)
-    } else {
-        render_default_logout_request(
-            init_setting,
-            init_meta,
-            &id,
-            LogoutRequestTimeAttributes {
-                issue_instant,
-                not_on_or_after,
-            },
-            &destination,
-            subject,
-            name_id_format,
-        )?
-    };
+    let xml = render_logout_request(
+        init_setting,
+        &issuer,
+        &id,
+        LogoutRequestTimeAttributes {
+            issue_instant,
+            not_on_or_after,
+        },
+        &destination,
+        subject,
+        name_id_format,
+    )?;
     let session_indexes = subject.session_indexes.as_slice();
-    // `None` skips outbound checks. `Optional` checks a participant request
-    // and leaves `NotOnOrAfter` optional. `Required` checks the
-    // session-authority instant.
     let expiration = match validation {
-        #[cfg(test)]
-        LogoutRequestValidation::UncheckedTestFixture => None,
-        LogoutRequestValidation::SessionParticipant => Some(OutboundLogoutExpiration::Optional),
-        LogoutRequestValidation::SessionAuthority => Some(OutboundLogoutExpiration::Required(
-            not_on_or_after.ok_or_else(|| {
+        LogoutRequestValidation::SessionParticipant => OutboundLogoutExpiration::Optional,
+        LogoutRequestValidation::SessionAuthority => {
+            OutboundLogoutExpiration::Required(not_on_or_after.ok_or_else(|| {
                 SamlError::Invalid(
                     "Session Authority LogoutRequest is missing its generated expiration".into(),
                 )
-            })?,
-        )),
+            })?)
+        }
     };
-    let expectation = expiration.map(|expiration| OutboundLogoutRequestExpectation {
+    let expectation = OutboundLogoutRequestExpectation {
         id: &id,
         issue_instant,
         destination: &destination,
@@ -173,45 +111,27 @@ pub(crate) fn create_logout_request_for_subject_inner(
         name_id_format,
         name_id_qualifiers: subject.qualifiers,
         session_indexes,
-    });
-    if let Some(expectation) = expectation.as_ref() {
-        validate_logout_request_outbound(
-            &xml,
-            expectation,
-            OutboundLogoutRequestValidation::BeforeSigning,
-        )?;
-    }
-    let xml = encrypt_name_id_for_peer(xml, name_id_encryption, init_setting, target_meta)?;
-    let (context, signature, sig_alg) = if want_signed {
-        sign_browser_message(
-            init_setting,
-            binding,
-            &xml,
-            &destination,
-            relay_state,
-            ParserType::LogoutRequest,
-        )?
-    } else {
-        (
-            unsigned_context(
-                binding,
-                &xml,
-                &destination,
-                ParserType::LogoutRequest,
-                relay_state,
-            )?,
-            None,
-            None,
-        )
     };
-    if let Some(expectation) = expectation.as_ref().filter(|_| want_signed) {
-        if let Some(signed_xml) = embedded_signed_xml(binding, &context)? {
-            validate_logout_request_outbound(
-                &signed_xml,
-                expectation,
-                OutboundLogoutRequestValidation::AfterEmbeddedSigning(name_id_encryption),
-            )?;
-        }
+    validate_logout_request_outbound(
+        &xml,
+        &expectation,
+        OutboundLogoutRequestValidation::BeforeSigning,
+    )?;
+    let xml = encrypt_name_id_for_peer(xml, name_id_encryption, init_setting, target_meta)?;
+    let (context, signature, sig_alg) = sign_browser_message(
+        init_setting,
+        binding,
+        &xml,
+        &destination,
+        relay_state,
+        ParserType::LogoutRequest,
+    )?;
+    if let Some(signed_xml) = embedded_signed_xml(binding, &context)? {
+        validate_logout_request_outbound(
+            &signed_xml,
+            &expectation,
+            OutboundLogoutRequestValidation::AfterEmbeddedSigning(name_id_encryption),
+        )?;
     }
     Ok(CreatedLogoutRequest {
         context: BindingContext {

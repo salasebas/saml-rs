@@ -34,21 +34,32 @@ shows.
 The `SamlError::ProtocolProfile` that an `http` peer endpoint returns now names
 `allow_http` in its message. Match the variant, not the message.
 
-**Upgrade:** rename each call.
+**Upgrade:** replace or remove each call as shown in the table.
 
 ## Generate SSO and Single Logout messages
 
-Remove the producer-rule setter from request and response options. This includes
-`apply_producer_rules()` on development builds. A transient AuthnRequest
-omits `AllowCreate`. Each successful browser SSO response carries an
-`AuthnStatement`. Pass the actual authentication time and context when known.
-If the IdP advertises logout, save the session index returned with its response.
+**Affects:** callers that start or respond to SSO or Single Logout.
 
-Both logout roles sign their requests, including when their receive policy
-accepts unsigned input. Remove `StartSlo::signing` and the `LogoutSigning`
-import. Configure signing credentials and enable a document-crypto provider.
-Pass a session index when a service provider starts logout. Its browser
-endpoints require HTTPS unless the call explicitly selects `allow_http()`.
+**Before:** callers opted in to the generation rules on individual messages and
+could select unsigned logout requests.
+
+**Now:** a transient AuthnRequest omits `AllowCreate`. Each successful browser
+SSO response includes an `AuthnStatement` and includes a session index when the
+IdP advertises Single Logout. The IdP returns `SamlError::Invalid` if the
+assertion fails an exact `RequestedAuthnContext`, omits or changes a required
+`SPNameQualifier`, or fails the strong match for a requested subject identifier. The authentication
+context defaults to the `unspecified` class.
+
+Both roles sign logout requests. An SP returns `SamlError::ProtocolProfile` if
+it starts logout without a session index or sends a browser logout request or
+response to an HTTP endpoint without selecting `allow_http()`.
+
+**Upgrade:** remove the producer-rule setters, `StartSlo::signing` and the
+`LogoutSigning` import. Supply signing credentials and enable a document-crypto
+provider. Pass the actual authentication context with
+`SsoAssertion::with_authn_context` and the authentication instant when known.
+Issue a failure response when the request cannot be satisfied. Use the session
+from SSO to start logout and publish HTTPS endpoints for browser logout.
 
 ```rust
 # use saml_rs::{IdpDescriptor, ServiceProvider, SsoSession, StartSlo};
