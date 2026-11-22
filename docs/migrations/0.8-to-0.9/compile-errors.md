@@ -909,9 +909,9 @@ from `recommended()`. The table uses the 0.9 variant names;
 
 The other fields had the same value in both presets.
 
-To keep exactly what `SpValidationPolicy::compatibility()` returned, set every
-row for the service provider. Then delete each line your deployment does not
-need:
+To select the former SP settings, set the fields below. Keep only the
+relaxations your deployment needs. Even with these settings, the SP now
+[verifies every present SSO signature](logout-validation-replay.md#verify-every-signature-on-sso-responses).
 
 ```rust
 use saml_rs::{

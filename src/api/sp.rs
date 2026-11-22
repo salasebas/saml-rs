@@ -232,6 +232,9 @@ impl ServiceProvider {
     /// [`Self::finish_sso_with_outstanding_logout`] to reject a later assertion
     /// that matches one.
     ///
+    /// The service provider verifies every signature on the response and its
+    /// assertions, including any embedded signatures on HTTP-POST-SimpleSign.
+    ///
     /// A response delivered as an HTTP-Artifact is passed as
     /// [`Inbound::artifact`], after [`Self::resolve_artifact`]. It needs
     /// an XML signature on the `Response` or on each assertion, as an
@@ -247,8 +250,8 @@ impl ServiceProvider {
     /// audience, condition, or time validation fails; when the assertions do
     /// not share one issuer and one principal; or when replay validation
     /// returns `ReplayDetected` or `TimeWindowInvalid`. A status other than
-    /// `Success` returns [`SamlError::StatusNotSuccess`] once a present
-    /// signature verifies and the issuer, `InResponseTo`, and destination
+    /// `Success` returns [`SamlError::StatusNotSuccess`] once all present
+    /// signatures verify and the issuer, `InResponseTo`, and destination
     /// checks pass. An error response does not need a signature.
     ///
     /// # Examples
@@ -315,6 +318,8 @@ impl ServiceProvider {
     /// [`Self::accept_unsolicited_sso_with_outstanding_logout`] to reject a
     /// later assertion that matches one.
     ///
+    /// The same signature checks apply as in [`Self::finish_sso`].
+    ///
     /// A present `Destination` and the bearer `Recipient` must name the
     /// assertion consumer that received the response. Supply that URL with
     /// [`SamlValidationContext::with_recipient_endpoint`]; it must be published
@@ -335,7 +340,7 @@ impl ServiceProvider {
     /// [`SamlError::InResponseToMismatch`] when the response or a bearer
     /// `SubjectConfirmationData` carries an `InResponseTo` attribute, including
     /// an empty one. A status other than `Success` returns
-    /// [`SamlError::StatusNotSuccess`] once a present signature verifies and
+    /// [`SamlError::StatusNotSuccess`] once all present signatures verify and
     /// the issuer and destination checks pass. An error response does not need
     /// a signature. Returns [`SamlError::RecipientEndpointNotPublished`] when
     /// the supplied recipient endpoint is not an assertion consumer published

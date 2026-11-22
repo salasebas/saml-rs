@@ -580,6 +580,18 @@ fn first_invalid_signature_prevents_later_valid_signature_from_authorizing_respo
     Ok(())
 }
 
+fn assert_xml_signature_failure(result: Result<SignatureVerification, SamlError>) {
+    assert!(
+        matches!(
+            &result,
+            Err(SamlError::SignatureVerification {
+                reason: SignatureVerificationReason::XmlSignature,
+            })
+        ),
+        "{result:?}"
+    );
+}
+
 #[test]
 fn detailed_verification_rejects_invalid_first_signature_before_later_assertion_coverage(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -589,14 +601,13 @@ fn detailed_verification_rejects_invalid_first_signature_before_later_assertion_
         None,
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
-    )?;
-    assert!(!result.verified() && !result.response_covered());
-    assert!(result.verified_embedded_signatures().is_empty());
+    );
+    assert_xml_signature_failure(result);
     Ok(())
 }
 
 #[test]
-fn detailed_verification_excludes_untrusted_extra_signature_evidence(
+fn detailed_verification_rejects_an_untrusted_response_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let untrusted = root_signature(&signature_over_top_level_issuer(
         UNTRUSTED_PRIVKEY,
@@ -611,14 +622,8 @@ fn detailed_verification_excludes_untrusted_extra_signature_evidence(
         None,
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
-    )?;
-
-    let [signature] = result.verified_embedded_signatures() else {
-        return Err("expected only the trusted Assertion signature".into());
-    };
-    assert!(result.verified() && result.assertion_directly_covered());
-    assert_eq!(signature.algorithm_uri(), RSA_SHA256);
-    assert!(signature.assertion_directly_covered() && !signature.response_covered());
+    );
+    assert_xml_signature_failure(result);
     Ok(())
 }
 
@@ -649,7 +654,7 @@ fn detailed_verification_excludes_valid_unrelated_signature_evidence(
 }
 
 #[test]
-fn invalid_extra_response_signature_is_ignored_only_with_allow_weak_algorithms(
+fn invalid_extra_response_signature_is_rejected_under_every_profile(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let extra = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"/><ds:SignatureMethod Algorithm=\"http://www.w3.org/2000/09/xmldsig#rsa-sha1\"/><ds:Reference URI=\"#_response\"><ds:DigestMethod Algorithm=\"http://www.w3.org/2000/09/xmldsig#sha1\"/><ds:DigestValue>AAAA</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>AAAA</ds:SignatureValue></ds:Signature>",
@@ -666,24 +671,12 @@ fn invalid_extra_response_signature_is_ignored_only_with_allow_weak_algorithms(
         )
     };
 
-    let compatible = verify_under(XmlSignatureProfile::AllowWeakAlgorithms)?;
-    let [signature] = compatible.verified_embedded_signatures() else {
-        return Err("expected only the trusted Assertion signature".into());
-    };
-    assert!(compatible.verified() && compatible.assertion_directly_covered());
-    assert_eq!(signature.algorithm_uri(), RSA_SHA256);
-    assert!(signature.assertion_directly_covered() && !signature.response_covered());
-
     for profile in [
+        XmlSignatureProfile::AllowWeakAlgorithms,
         XmlSignatureProfile::ExcludeWeakAlgorithms,
         XmlSignatureProfile::StrictRsaSha2,
     ] {
-        assert!(matches!(
-            verify_under(profile),
-            Err(SamlError::SignatureVerification {
-                reason: SignatureVerificationReason::XmlSignature
-            })
-        ));
+        assert_xml_signature_failure(verify_under(profile));
     }
     Ok(())
 }
@@ -912,8 +905,8 @@ fn rolling_cert_rejects_signer_outside_the_trusted_keys() -> Result<(), Box<dyn 
         None,
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
-    )?;
-    assert!(!detailed.verified());
+    );
+    assert_xml_signature_failure(detailed);
     Ok(())
 }
 
@@ -927,15 +920,14 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
 
     let secret = HmacSecret::try_new(b"identity-provider-hmac-secret".as_slice())?;
     let certs = [SP_SIGNING_CERT.to_string(), IDP_CERT.to_string()];
-    let verified = |signed: &str| -> Result<bool, SamlError> {
-        Ok(verify_signatures_detailed_with_profile(
+    let verify = |signed: &str| {
+        verify_signatures_detailed_with_profile(
             signed,
             &certs,
             Some(&secret),
             XmlLimits::default(),
             XmlSignatureProfile::AllowWeakAlgorithms,
-        )?
-        .verified())
+        )
     };
     let sign_hmac = |key_bytes: &[u8]| -> Result<String, SamlError> {
         let key = load_hmac_secret(&HmacSecret::try_new(key_bytes)?)?;
@@ -944,8 +936,8 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
 
     let rsa_key = read_private_key(SP_PRIVKEY, None)?;
     let rsa = sign_saml_xml(RESPONSE, false, &rsa_key, IDP_CERT, RSA_SHA256, &[], None)?;
-    assert!(verified(&rsa)?);
-    assert!(verified(&sign_hmac(secret.as_bytes())?)?);
+    assert!(verify(&rsa)?.verified());
+    assert!(verify(&sign_hmac(secret.as_bytes())?)?.verified());
 
     let base64 = normalize_cert_string(IDP_CERT);
     let pem = format!("-----BEGIN CERTIFICATE-----\n{base64}\n-----END CERTIFICATE-----\n");
@@ -954,7 +946,7 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
         base64.into_bytes(),
         pem.into_bytes(),
     ] {
-        assert!(!verified(&sign_hmac(&forged_key)?)?);
+        assert_xml_signature_failure(verify(&sign_hmac(&forged_key)?));
     }
     Ok(())
 }

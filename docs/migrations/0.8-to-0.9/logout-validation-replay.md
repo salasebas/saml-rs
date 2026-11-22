@@ -5,6 +5,26 @@
 This guide covers typed API callers of `saml-rs`, `opensaml`, `samlify`, and
 `samlet`. Apply the sections that match your integration.
 
+## Verify every signature on SSO responses
+
+This affects service providers that selected
+`XmlSignatureProfile::AllowProviderSupportedForCompatibility` in 0.8, directly
+or through `SpValidationPolicy::compatibility()`. The raw service provider
+also used this profile by default.
+
+With its new name, `AllowWeakAlgorithms`, this profile still accepts the
+algorithms and key sizes the crypto provider supports. If a signature on the
+response or any assertion fails verification, the SP returns
+`SamlError::SignatureVerification`, even when another signature verifies.
+This includes embedded signatures delivered with HTTP-POST-SimpleSign and
+signatures on decrypted assertions. A response signature that verifies only
+after decryption now fails on the delivered response.
+
+If your IdP signs both elements, sign the assertion first. If you also encrypt
+the assertion, encrypt the signed assertion before signing the response.
+For SimpleSign, create the detached signature after the XML is final.
+Configure the SP with each signing key the IdP uses.
+
 ## Use one request age policy type
 
 Replace imports and type annotations for `AuthnRequestAgePolicy` and
