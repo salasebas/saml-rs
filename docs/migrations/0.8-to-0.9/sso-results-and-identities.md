@@ -256,37 +256,6 @@ let audiences: Vec<&str> = session
 # }
 ```
 
-Under `AudienceValidationPolicy::Skip`, `finish_sso` does not check the
-audience. `EvaluatePresentRestrictions` and `RequireRestriction` check it for
-every bearer assertion of the response, so prefer one of them. The session
-lists only the restrictions of its own assertion. If you check the audience
-yourself, require your entity ID in every restriction. A search of the flat
-list accepts an assertion with a second restriction that leaves you out.
-
-Before the upgrade:
-
-```rust,ignore
-let addressed = session.audience().contains(&sp_entity_id);
-```
-
-After the upgrade:
-
-```rust
-# fn check(session: &saml_rs::SsoSession, sp_entity_id: &saml_rs::EntityId) -> bool {
-let addressed = session
-	.audience_restrictions()
-	.iter()
-	.all(|restriction| restriction.audiences().contains(sp_entity_id));
-# addressed
-# }
-```
-
-The old `contains` check also rejected an assertion without
-`<AudienceRestriction>`. `all` returns `true` for it, as
-`EvaluatePresentRestrictions` accepts it. To keep rejecting it, also require
-`!session.audience_restrictions().is_empty()`, or select
-`RequireRestriction`.
-
 `binding_signature_algorithm_uri()` returns the value that `sig_alg()`
 returned: the `SigAlg` of a verified HTTP-POST-SimpleSign signature, which
 travels next to the message. A response signed only inside the XML still
@@ -295,6 +264,23 @@ returns `None`. Read its algorithms from `verified_xml_signatures()`.
 `passive()` returns the same `Option<IsPassive>` as `is_passive()`. A Rust
 method that starts with `is_` returns `bool`, and this one does not. `None`
 still means that the request omitted `IsPassive`.
+
+## Check audience restrictions before accepting a session
+
+**Affects:** service providers that selected `AudienceValidationPolicy::SkipForCompatibility`
+or `SpValidationPolicy::compatibility()`.
+
+Remove the audience override. If you used the compatibility preset, start from
+`SpValidationPolicy::default()`. The SP checks each audience restriction on every
+bearer assertion before `finish_sso` or `accept_unsolicited_sso` returns a session.
+If any restriction omits the SP's entity ID, the method returns
+`SamlError::AudienceMismatch`. Configure the IdP to include your SP's entity ID
+in each restriction intended for it.
+
+Remove any application check that only repeats the SP's membership check.
+The default, `EvaluatePresentRestrictions`, allows an assertion without an
+audience restriction. To reject omission too, set `validation.audience` to
+`AudienceValidationPolicy::RequireRestriction`.
 
 ## Let the receiving method check replay
 

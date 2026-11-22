@@ -22,10 +22,10 @@ use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, EntityId, FormField,
-    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
-    NameId, NameIdFormat, Outbound, PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso,
-    SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    AcsEndpoint, AssertionSignaturePolicy, EntityId, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
+    Outbound, PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
     SsoAssertion, SsoEndpoint, SsoSession, StartSso, VerifiedXmlSignatureCoverage,
     XmlSignatureProfile,
 };
@@ -482,12 +482,10 @@ fn accept_unsolicited_sso_rejects_an_unknown_condition() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn weak_algorithms_and_skipped_audience_still_reject_an_unknown_condition(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn weak_algorithms_still_reject_an_unknown_condition() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(
         SpValidationPolicy {
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
-            audience: AudienceValidationPolicy::Skip,
             ..SpValidationPolicy::default()
         },
         false,
@@ -558,7 +556,7 @@ fn audience_groups(session: &SsoSession) -> Vec<Vec<&str>> {
 }
 
 #[test]
-fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
+fn audience_restrictions_accept_alternative_audiences_in_each_group(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;
@@ -586,19 +584,33 @@ fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
         [[SP_ENTITY_ID, OTHER_AUDIENCE]]
     );
 
-    let missing = resigned(&insert_after_audience_restriction(
-        &original,
-        &format!(
-            "<saml:AudienceRestriction><saml:Audience>{OTHER_AUDIENCE}</saml:Audience></saml:AudienceRestriction>"
-        ),
-    )?)?;
-    match accept(&exchange, &missing) {
-        Err(error) => match error.downcast_ref::<SamlError>() {
-            Some(SamlError::AudienceMismatch { expected }) if expected == SP_ENTITY_ID => Ok(()),
-            _ => Err(format!("expected AudienceMismatch, got {error}").into()),
-        },
-        Ok(_) => Err("expected AudienceMismatch".into()),
+    Ok(())
+}
+
+#[test]
+fn each_sso_entry_point_rejects_one_unsatisfied_audience_restriction(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for unsolicited in [false, true] {
+        let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
+        let original = response_xml(&exchange.response_fields)?;
+        let missing = resigned(&insert_after_audience_restriction(
+            &original,
+            &format!(
+                "<saml:AudienceRestriction><saml:Audience>{OTHER_AUDIENCE}</saml:Audience></saml:AudienceRestriction>"
+            ),
+        )?)?;
+        let error = accept(&exchange, &missing)
+            .err()
+            .ok_or("expected AudienceMismatch")?;
+        assert!(
+            matches!(
+                error.downcast_ref::<SamlError>(),
+                Some(SamlError::AudienceMismatch { expected }) if expected == SP_ENTITY_ID
+            ),
+            "unexpected error: {error}"
+        );
     }
+    Ok(())
 }
 
 #[test]

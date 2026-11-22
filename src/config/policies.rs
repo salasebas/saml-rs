@@ -165,12 +165,10 @@ pub enum LogoutSignaturePolicy {
     AllowUnsigned,
 }
 
-/// Whether an accepting service provider evaluates `<AudienceRestriction>`.
+/// Whether a bearer assertion must contain an `<AudienceRestriction>`.
 ///
-/// [`Self::EvaluatePresentRestrictions`] checks restrictions that are present.
-/// [`Self::RequireRestriction`] also rejects a bearer assertion that omits one.
-/// [`Self::Skip`] skips the check. The accept combination is
-/// classified in `docs/conformance/web-browser-sso-acceptance.md`.
+/// The service provider checks every present restriction under both policies.
+/// At least one audience in each restriction must match its entity ID.
 ///
 /// The policy has no `Default`. Take it from the role policy, for example
 /// `SpValidationPolicy::default().audience`:
@@ -190,15 +188,6 @@ pub enum AudienceValidationPolicy {
     ///
     /// A bearer assertion that omits the element is not rejected.
     EvaluatePresentRestrictions,
-    /// Skip audience evaluation, preserving the samlify port.
-    ///
-    /// A caller that evaluates the audience itself reads
-    /// [`crate::SsoSession::audience_restrictions`] and requires its entity ID
-    /// in every restriction. An empty slice means that the assertion has no
-    /// restriction, which [`Self::RequireRestriction`] rejects. The session
-    /// lists only the restrictions of its own assertion. Another bearer
-    /// assertion in the response is evaluated only by the other variants.
-    Skip,
 }
 
 /// Whether SP AuthnRequests allow IdPs to create a new identifier.
@@ -773,19 +762,9 @@ pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {
     matches!(policy, NameIdCreationPolicy::AllowCreate)
 }
 
-pub(super) fn audience_validation_enabled(policy: AudienceValidationPolicy) -> bool {
-    match policy {
-        AudienceValidationPolicy::RequireRestriction
-        | AudienceValidationPolicy::EvaluatePresentRestrictions => true,
-        AudienceValidationPolicy::Skip => false,
-    }
-}
-
 pub(super) fn audience_restriction_required(policy: AudienceValidationPolicy) -> bool {
     match policy {
         AudienceValidationPolicy::RequireRestriction => true,
-        AudienceValidationPolicy::EvaluatePresentRestrictions | AudienceValidationPolicy::Skip => {
-            false
-        }
+        AudienceValidationPolicy::EvaluatePresentRestrictions => false,
     }
 }

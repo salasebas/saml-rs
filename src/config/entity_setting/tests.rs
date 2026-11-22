@@ -1,7 +1,7 @@
 use crate::browser::{AcsEndpoint, SsoEndpoint};
-use crate::config::{AudienceValidationPolicy, EntityId, IdpConfig, SpConfig, SpValidationPolicy};
+use crate::config::{EntityId, IdpConfig, SpConfig};
 #[cfg(crypto)]
-use crate::config::{IdpValidationPolicy, NameIdFormat};
+use crate::config::{IdpValidationPolicy, NameIdFormat, SpValidationPolicy};
 #[cfg(crypto)]
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, name_id_format, signature_algorithm,
@@ -14,9 +14,8 @@ use crate::tests::policies_without_crypto::{
 };
 
 #[test]
-fn skipped_audience_and_unsigned_logout_clear_the_raw_settings() -> Result<(), SamlError> {
+fn unsigned_logout_clears_the_raw_signature_requirements() -> Result<(), SamlError> {
     let raw = EntitySetting::default();
-    assert!(raw.validate_audience);
     assert!(raw.want_logout_request_signed);
     assert!(raw.want_logout_response_signed);
 
@@ -24,14 +23,10 @@ fn skipped_audience_and_unsigned_logout_clear_the_raw_settings() -> Result<(), S
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy {
-        audience: AudienceValidationPolicy::Skip,
-        ..sp_validation_without_crypto()
-    })
+    .validation(sp_validation_without_crypto())
     .build()?
     .engine
     .setting;
-    assert!(!sp.validate_audience);
     assert!(!sp.want_logout_request_signed);
     assert!(!sp.want_logout_response_signed);
 
@@ -43,7 +38,6 @@ fn skipped_audience_and_unsigned_logout_clear_the_raw_settings() -> Result<(), S
     .build()?
     .engine
     .setting;
-    assert!(idp.validate_audience);
     assert!(!idp.want_logout_request_signed);
     assert!(!idp.want_logout_response_signed);
     Ok(())
