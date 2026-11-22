@@ -2,16 +2,15 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::{status_code, Binding, ParserType};
-use saml_rs::entity::{iso8601_offset, EntitySetting, User};
+use saml_rs::entity::{iso8601_offset, EntitySetting};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::flow::HttpRequest;
 use saml_rs::idp;
-use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::sp;
+use saml_rs::template::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::tests::engine::fill_template;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::validator::check_status;
@@ -86,7 +85,7 @@ fn sp() -> Result<sp::Engine, SamlError> {
 }
 
 fn unsigned_response_template() -> String {
-    SSO_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", "", 1)
+    LOGIN_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", "", 1)
 }
 
 fn response_xml(template: &str, shape: &ResponseShape) -> String {
@@ -145,16 +144,7 @@ fn signed_response(shape: &ResponseShape) -> Result<String, SamlError> {
         (id, response_xml(template, shape))
     };
     Ok(idp
-        .create_rendered_login_response(
-            &sp,
-            Binding::Post,
-            &User::new("user@example.com"),
-            &LoginResponseOptions {
-                in_response_to: Some(shape.response_in_response_to.as_str()),
-                ..Default::default()
-            },
-            &custom,
-        )?
+        .create_rendered_login_response(&sp, Binding::Post, &custom)?
         .context)
 }
 

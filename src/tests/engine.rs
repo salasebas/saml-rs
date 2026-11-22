@@ -4,28 +4,20 @@
 
 use std::time::SystemTime;
 
-use crate::config::IdentifierEncryptionPolicy;
-use crate::constants::Binding;
-use crate::entity::{now_iso8601, BindingContext, EntitySetting, User};
+use crate::constants::{Binding, ParserType};
+use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, User};
 use crate::error::SamlError;
 use crate::flow::{flow_with_authentication, FlowOptions, FlowResult, HttpRequest};
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::logout::{
-    create_logout_request_for_subject_inner, create_logout_response_inner, parse_logout_request_at,
-    parse_logout_response_at, LogoutFlowValidation, LogoutReceipt, LogoutRequestInput,
-    LogoutRequestSubject, LogoutRequestValidation, LogoutResponseInput,
+    create_logout_response_inner, issuer_of, parse_logout_request_at, parse_logout_response_at,
+    reject_soap_relay_state, render_logout_request, sign_browser_message, LogoutFlowValidation,
+    LogoutReceipt, LogoutRequestSubject, LogoutRequestTimeAttributes, LogoutResponseInput,
 };
 use crate::metadata::Metadata;
-use crate::model::{ClockSkew, Status};
-use crate::sp::{
-    self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions,
-    WebBrowserSsoProducer,
-};
-use crate::template::{
-    apply_tag_prefixes, build_attribute_statement, replace_tags_by_optional_value,
-    LoginResponseTemplate, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
-    LOGIN_REQUEST_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
-};
+use crate::model::{validate_name_id_format, ClockSkew, Status};
+use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions};
+use crate::template::{replace_tags_by_optional_value, LOGIN_RESPONSE_TEMPLATE};
 
 /// The subject of a `<LogoutRequest>`.
 #[derive(Debug, Clone, Default)]
@@ -77,17 +69,6 @@ pub(crate) trait SpMessages {
         binding: Binding,
         request: &HttpRequest,
     ) -> Result<FlowResult, SamlError>;
-
-    /// `<AuthnRequest>` whose XML `render` writes from the request template,
-    /// signed and bound like [`Self::create_login_request`] output. `render`
-    /// returns the request `ID` and the XML.
-    fn create_rendered_login_request(
-        &self,
-        idp: &idp::Engine,
-        binding: Binding,
-        options: &LoginRequestOptions<'_>,
-        render: &dyn Fn(&str) -> (String, String),
-    ) -> Result<BindingContext, SamlError>;
 }
 
 impl SpMessages for sp::Engine {
@@ -97,13 +78,7 @@ impl SpMessages for sp::Engine {
         binding: Binding,
         options: &LoginRequestOptions<'_>,
     ) -> Result<BindingContext, SamlError> {
-        self.create_typed_login_request(
-            idp,
-            binding,
-            options,
-            WebBrowserSsoProducer::Compatibility,
-            &AuthnRequestPreferences::default(),
-        )
+        self.create_typed_login_request(idp, binding, options, &AuthnRequestPreferences::default())
     }
 
     fn parse_login_response_with_request_id(
@@ -141,26 +116,6 @@ impl SpMessages for sp::Engine {
             .into_parts()
             .0)
     }
-
-    fn create_rendered_login_request(
-        &self,
-        idp: &idp::Engine,
-        binding: Binding,
-        options: &LoginRequestOptions<'_>,
-        render: &dyn Fn(&str) -> (String, String),
-    ) -> Result<BindingContext, SamlError> {
-        let template = self
-            .setting
-            .login_request_template
-            .as_deref()
-            .unwrap_or(LOGIN_REQUEST_TEMPLATE);
-        let (id, xml) = render(template);
-        let mut sp = self.clone();
-        sp.setting.login_request_template = Some(xml);
-        let mut context = sp.create_login_request(idp, binding, options)?;
-        context.id = id;
-        Ok(context)
-    }
 }
 
 /// Identity provider messages without the typed facade.
@@ -176,14 +131,11 @@ pub(crate) trait IdpMessages {
 
     /// Login `<Response>` whose XML `render` writes, signed and bound like
     /// [`Self::create_login_response`] output. `render` gets the response
-    /// template with its `<AttributeStatement>` and tag prefixes applied, and
-    /// returns the response `ID` and the XML, which is not prefixed again.
+    /// template and returns the response ID and the complete peer XML.
     fn create_rendered_login_response(
         &self,
         sp: &sp::Engine,
         binding: Binding,
-        user: &User,
-        options: &LoginResponseOptions<'_>,
         render: &dyn Fn(&str) -> (String, String),
     ) -> Result<BindingContext, SamlError>;
 
@@ -219,37 +171,32 @@ impl IdpMessages for idp::Engine {
         &self,
         sp: &sp::Engine,
         binding: Binding,
-        user: &User,
-        options: &LoginResponseOptions<'_>,
         render: &dyn Fn(&str) -> (String, String),
     ) -> Result<BindingContext, SamlError> {
-        let configured = self.setting.login_response_template.as_ref();
-        let attributes = configured.map_or(&[][..], |template| template.attributes.as_slice());
-        let attribute_statement = if attributes.is_empty() {
-            String::new()
-        } else {
-            build_attribute_statement(attributes, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE)
-        };
-        let template = configured
-            .and_then(|template| template.context.as_deref())
-            .unwrap_or(LOGIN_RESPONSE_TEMPLATE)
-            .replacen("{AttributeStatement}", &attribute_statement, 1);
-        let template = apply_tag_prefixes(
-            &template,
-            &self.setting.tag_prefix_protocol,
-            &self.setting.tag_prefix_assertion,
-        );
-        let (id, xml) = render(&template);
-        let mut idp = self.clone();
-        idp.setting.login_response_template = Some(LoginResponseTemplate {
-            context: Some(xml),
-            attributes: Vec::new(),
-        });
-        idp.setting.tag_prefix_protocol = "samlp".into();
-        idp.setting.tag_prefix_assertion = "saml".into();
-        let mut context = idp.create_login_response(sp, binding, user, options)?;
-        context.id = id;
-        Ok(context)
+        let acs = sp
+            .metadata
+            .assertion_consumer_location(binding)
+            .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
+        let (id, xml) = render(LOGIN_RESPONSE_TEMPLATE);
+        let signed = self.finalize_login_response(
+            sp,
+            binding,
+            &xml,
+            false,
+            sp.setting.want_message_signed,
+            &sp.setting.transformation_algorithms,
+        )?;
+        let (context, signature, sig_alg) = self.bind_response(binding, &signed, &acs, None)?;
+        Ok(BindingContext {
+            id,
+            context,
+            signature,
+            sig_alg,
+            entity_endpoint: acs,
+            binding,
+            relay_state: None,
+            request_type: "SAMLResponse",
+        })
     }
 
     fn parse_login_request(
@@ -310,22 +257,48 @@ pub(crate) fn create_logout_request_with_id(
         qualifiers: Default::default(),
         session_indexes: user.session_index.as_deref().into_iter().collect(),
     };
-    Ok(create_logout_request_for_subject_inner(LogoutRequestInput {
+    reject_soap_relay_state(binding, relay_state)?;
+    let name_id_format = init_setting.default_name_id_format();
+    validate_name_id_format(name_id_format)?;
+    let destination = target_meta
+        .single_logout_location(binding)
+        .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?;
+    let id = message_id
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(generate_id);
+    let xml = render_logout_request(
         init_setting,
-        init_meta,
-        target_meta,
+        &issuer_of(init_setting, init_meta),
+        &id,
+        LogoutRequestTimeAttributes {
+            issue_instant: &issue_instant,
+            not_on_or_after: None,
+        },
+        &destination,
+        &subject,
+        name_id_format,
+    )?;
+    let kind = ParserType::LogoutRequest;
+    let (context, signature, sig_alg) = if want_signed {
+        sign_browser_message(init_setting, binding, &xml, &destination, relay_state, kind)?
+    } else {
+        (
+            unsigned_context(binding, &xml, &destination, kind, relay_state)?,
+            None,
+            None,
+        )
+    };
+    Ok(BindingContext {
+        id,
+        context,
+        signature,
+        sig_alg,
         binding,
-        subject: &subject,
-        relay_state,
-        want_signed,
-        message_id,
-        name_id_format: init_setting.default_name_id_format(),
-        issue_instant: &issue_instant,
-        not_on_or_after: None,
-        validation: LogoutRequestValidation::Compatibility,
-        name_id_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
-    })?
-    .context)
+        entity_endpoint: destination,
+        relay_state: relay_state.map(str::to_owned),
+        request_type: "SAMLRequest",
+    })
 }
 
 /// Successful `<LogoutResponse>` from `init` to `target` over `binding`.
@@ -338,40 +311,37 @@ pub(crate) fn create_logout_response(
     relay_state: Option<&str>,
     want_signed: bool,
 ) -> Result<BindingContext, SamlError> {
-    create_logout_response_with_id(
+    let status = Status::success();
+    let input = LogoutResponseInput {
         init_setting,
         init_meta,
         target_meta,
         binding,
         in_response_to,
         relay_state,
-        want_signed,
-        None,
-    )
-}
-
-/// Like [`create_logout_response`], with `message_id` as the response `ID`.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn create_logout_response_with_id(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    in_response_to: Option<&str>,
-    relay_state: Option<&str>,
-    want_signed: bool,
-    message_id: Option<&str>,
-) -> Result<BindingContext, SamlError> {
-    create_logout_response_inner(LogoutResponseInput {
-        init_setting,
-        init_meta,
-        target_meta,
+        status: &status,
+    };
+    if want_signed {
+        return create_logout_response_inner(input);
+    }
+    let rendered = input.render()?;
+    let endpoint = rendered.destination.unwrap_or_default();
+    let context = unsigned_context(
         binding,
-        in_response_to,
+        &rendered.xml,
+        &endpoint,
+        ParserType::LogoutResponse,
         relay_state,
-        want_signed,
-        message_id,
-        status: &Status::success(),
+    )?;
+    Ok(BindingContext {
+        id: rendered.id,
+        context,
+        entity_endpoint: endpoint,
+        binding,
+        request_type: "SAMLResponse",
+        relay_state: relay_state.map(str::to_owned),
+        signature: None,
+        sig_alg: None,
     })
 }
 
@@ -430,5 +400,24 @@ pub(crate) fn redirect_query(query: Vec<(String, String)>) -> HttpRequest {
     HttpRequest {
         query,
         ..HttpRequest::default()
+    }
+}
+
+fn unsigned_context(
+    binding: Binding,
+    xml: &str,
+    destination: &str,
+    parser_type: ParserType,
+    relay: Option<&str>,
+) -> Result<String, SamlError> {
+    match binding {
+        Binding::Redirect => {
+            crate::binding::build_redirect_url(destination, parser_type, xml, relay)
+        }
+        Binding::Post | Binding::SimpleSign => Ok(crate::binding::encode_base64(xml.as_bytes())),
+        Binding::Soap => Ok(xml.to_string()),
+        Binding::Artifact => Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact,
+        }),
     }
 }

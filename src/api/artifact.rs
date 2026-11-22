@@ -146,24 +146,18 @@ impl IdentityProvider {
     ///
     /// # Examples
     ///
-    /// The builders start on Recommended. This example selects
-    /// [`IdpValidationPolicy::compatibility`](crate::IdpValidationPolicy::compatibility)
-    /// and
-    /// [`SpValidationPolicy::compatibility`](crate::SpValidationPolicy::compatibility)
-    /// so `build` succeeds without the default crypto feature. Artifact
-    /// resolution does not read those presets.
-    ///
     /// ```
     /// use std::time::{Duration, SystemTime};
     ///
     /// use saml_rs::{
     ///     ArtifactResolutionService, EndpointUrl, EntityId, IdentityProvider, IdpConfig,
-    ///     IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, IssuedArtifacts,
-    ///     MetadataTrustPolicy, ReplayPolicy, SamlValidationContext, ServiceProvider, SoapChannel,
-    ///     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    ///     IdpDescriptor, InMemoryReplayCache, IssuedArtifacts, MetadataTrustPolicy, ReplayPolicy,
+    ///     SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
+    ///     SsoEndpoint,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
+    /// # if cfg!(not(crypto)) { return Ok(()); }
     /// let service = ArtifactResolutionService::new(
     ///     0,
     ///     EndpointUrl::try_new("https://idp.example.com/artifact")?,
@@ -171,12 +165,10 @@ impl IdentityProvider {
     /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
     ///         .artifact_resolution_service(service)
-    ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let sp = ServiceProvider::new(
     ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, saml_rs::AcsEndpoint::post("https://sp.example.com/acs")?)
-    ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let sp_descriptor = SpDescriptor::from_metadata_xml(

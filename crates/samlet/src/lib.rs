@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-//! Maintained compatibility re-export of [`saml-rs`](https://crates.io/crates/saml-rs).
+//! Maintained re-export of [`saml-rs`](https://crates.io/crates/saml-rs).
 //!
 //! ```
 //! use samlet::ServiceProvider;

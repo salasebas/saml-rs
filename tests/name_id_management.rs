@@ -5,14 +5,19 @@
 //! The service provider is a third-party peer: `ServiceProvider` has no SOAP name
 //! identifier management, so its messages are written here.
 //!
-//! Config helpers select `compatibility()` so they build without a crypto
-//! provider. Name identifier management does not read that preset.
+//! Config helpers relax the policy fields that need a crypto provider, so they
+//! build without one. Name identifier management does not read those fields.
 
 #[path = "name_id_management/schema_validation.rs"]
 mod schema_validation;
 
 #[path = "common/replay_cache.rs"]
 mod replay_cache;
+
+#[path = "common/policies_without_crypto.rs"]
+mod policies_without_crypto;
+
+use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
 
 use replay_cache::RecordingReplayCache;
 
@@ -25,7 +30,7 @@ use saml_rs::{
     NameIdFormat, NameIdManagementReceipt, NameIdManagementRefusal, PartyAuthentication,
     RelayState, ReplayPolicy, RequestAgePolicy, SamlError, SamlValidationContext, ServiceProvider,
     SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
+    SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -56,7 +61,7 @@ fn identity_provider(
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
     .name_id_format(NameIdFormat::Persistent)
-    .validation(saml_rs::IdpValidationPolicy::compatibility());
+    .validation(idp_validation_without_crypto());
     if let Some(location) = service {
         builder = builder
             .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(location)?));
@@ -75,7 +80,7 @@ fn service_provider(
             EntityId::try_new(entity_id)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
-        .validation(SpValidationPolicy::compatibility())
+        .validation(sp_validation_without_crypto())
         .build()?,
     );
     let endpoints: String = services
@@ -377,7 +382,7 @@ fn a_transient_identifier_is_not_managed() -> TestResult {
         .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
             IDP_NIM_URL,
         )?))
-        .validation(saml_rs::IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .build()?,
     );
 
@@ -902,7 +907,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
             IDP_NIM_URL,
         )?))
         .xml(xml)
-        .validation(saml_rs::IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .build()?,
     );
     let sp = soap_service_provider()?;

@@ -144,8 +144,7 @@ impl IdentityProvider {
     /// [`SsoAssertion`](crate::SsoAssertion) or [`SsoOutcome::Success`] writes
     /// a `Success` response with that assertion, and [`SsoOutcome::Failure`]
     /// writes a response with that error status and no assertion. `options`
-    /// says how the response is delivered and signed, and whether the Web
-    /// Browser SSO generation rules apply.
+    /// selects the delivery and response signing.
     ///
     /// This does not write the Identity Provider Discovery cookie. Call
     /// [`Self::common_domain_cookie`] after authentication when the
@@ -172,24 +171,18 @@ impl IdentityProvider {
     /// response binding, the configured issuance expiration overflows the
     /// supported timestamp range, or response creation fails.
     ///
-    /// For an assertion, it also returns [`SamlError`] when producer rules
-    /// are combined with a login response template,
-    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
-    /// combined with a login response template, names a basic attribute that
-    /// is not an XML name, or has a `NameFormat` that is not an absolute URI
-    /// reference, a `NameId` with `NameQualifier`, `SPNameQualifier`, or
-    /// `SPProvidedID` is combined with a login response template, the
+    /// For an assertion, it also returns [`SamlError`] when a basic attribute
+    /// name is not an XML name, its format is not an absolute URI, the
     /// persistent or transient `NameId` is longer than 256 characters, the
     /// NameID format is not an absolute URI reference,
-    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) is
-    /// set without producer rules or does not meet an exact
+    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) does not meet an exact
     /// `RequestedAuthnContext`,
     /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
-    /// set without producer rules, is later than the response `IssueInstant`,
-    /// or is before year 1, producer rules are selected and the `NameId`
+    /// later than the response `IssueInstant`,
+    /// or is before year 1, the `NameId`
     /// `SPNameQualifier` is not the one the request's `NameIDPolicy` asks for
     /// with a SAML-defined format other than `unspecified` or `encrypted`, or
-    /// producer rules are selected and the `NameId` does not strongly match the
+    /// the `NameId` does not strongly match the
     /// request's `Subject` (see [`RequestedSubject`](crate::RequestedSubject)).
     ///
     /// # Examples
@@ -246,16 +239,10 @@ impl IdentityProvider {
     /// selected binding is unsupported, the configured issuance expiration
     /// overflows the supported timestamp range, or response creation fails.
     ///
-    /// For an assertion, it also returns [`SamlError`] when producer rules
-    /// are combined with a login response template,
-    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
-    /// combined with a login response template or names a basic attribute that
-    /// is not an XML name, a `NameId` with `NameQualifier`, `SPNameQualifier`,
-    /// or `SPProvidedID` is combined with a login response template,
-    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) is
-    /// set without producer rules,
+    /// For an assertion, it also returns [`SamlError`] when a basic attribute
+    /// name is not an XML name, its format is not an absolute URI,
     /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
-    /// set without producer rules, is later than the response `IssueInstant`,
+    /// later than the response `IssueInstant`,
     /// or is before year 1, or the persistent or transient `NameId` is longer
     /// than 256 characters.
     ///
@@ -365,7 +352,6 @@ impl IdentityProvider {
             name_id_format,
             name_id_qualifiers,
             issuance_lifetime: Some(self.issuance_lifetime()),
-            web_browser_sso_producer: options.web_browser_sso_producer,
             status,
             typed_attributes,
             authn_context,
@@ -438,13 +424,13 @@ impl IdentityProvider {
     ///
     /// ```
     /// use saml_rs::{
-    ///     CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig, IdpValidationPolicy,
+    ///     CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig,
     ///     RememberIdentityProvider, SsoEndpoint,
     /// };
     ///
+    /// # if cfg!(not(crypto)) { return Ok::<(), saml_rs::SamlError>(()); }
     /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::post("https://idp.example.com/sso")?)
-    ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let cookie = idp.common_domain_cookie(RememberIdentityProvider::new(

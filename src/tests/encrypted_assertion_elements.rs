@@ -71,7 +71,7 @@ fn sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         audience: AudienceValidationPolicy::RequireRestriction,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     }
 }
 
@@ -110,7 +110,7 @@ fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, Sam
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .xml(xml(encryption))
         .build()?,
     ))
@@ -392,7 +392,7 @@ fn metadata_publishes_each_encryption_certificate_in_order(
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(rolling)
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     );
     let published = vec![
@@ -565,7 +565,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
                 AcsEndpoint::simple_sign(SP_ACS)?.with_default(),
             )
             .credentials(credentials())
-            .validation(SpValidationPolicy::recommended())
+            .validation(SpValidationPolicy::default())
             .xml(xml(sp_encryption))
             .build()?,
         );

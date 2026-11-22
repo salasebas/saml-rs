@@ -49,17 +49,16 @@ fn canonical_children() -> String {
     )
 }
 
-fn validate(xml: &str, expected_id: &str, signed: bool) -> Result<Document, SamlError> {
-    validate_with_in_response_to(xml, expected_id, None, signed)
+fn validate(xml: &str, expected_id: &str) -> Result<Document, SamlError> {
+    validate_with_in_response_to(xml, expected_id, None)
 }
 
 fn validate_with_in_response_to(
     xml: &str,
     expected_id: &str,
     expected_in_response_to: Option<&str>,
-    signed: bool,
 ) -> Result<Document, SamlError> {
-    validate_with_issuer(xml, expected_id, ISSUER, expected_in_response_to, signed)
+    validate_with_issuer(xml, expected_id, ISSUER, expected_in_response_to)
 }
 
 fn validate_with_issuer(
@@ -67,7 +66,6 @@ fn validate_with_issuer(
     expected_id: &str,
     expected_issuer: &str,
     expected_in_response_to: Option<&str>,
-    signed: bool,
 ) -> Result<Document, SamlError> {
     validate_logout_response_outbound(
         xml,
@@ -76,14 +74,12 @@ fn validate_with_issuer(
         expected_issuer,
         expected_in_response_to,
         status_code::SUCCESS,
-        OutboundLogoutValidation::BeforeSigning {
-            destination_required: signed,
-        },
+        OutboundLogoutValidation::BeforeSigning,
     )
 }
 
 fn expect_profile_error(xml: &str) -> Result<(), Box<dyn std::error::Error>> {
-    match validate(xml, RESPONSE_ID, false) {
+    match validate(xml, RESPONSE_ID) {
         Err(SamlError::ProtocolProfile(_)) => Ok(()),
         other => Err(format!("expected ProtocolProfile error, got {other:?}").into()),
     }
@@ -101,7 +97,7 @@ fn outbound_logout_response_accepts_canonical_schema_and_slo_profile(
             r#"<x:Extension opaque:attribute="value">opaque text<samlp:Nested/></x:Extension>"#,
         ),
     );
-    let document = validate(&xml, RESPONSE_ID, true)?;
+    let document = validate(&xml, RESPONSE_ID)?;
 
     assert_eq!(document.root.attr("ID"), Some(RESPONSE_ID));
     Ok(())
@@ -239,7 +235,6 @@ fn outbound_logout_response_rejects_missing_wrong_or_invalid_format_issuer(
     match validate(
         &response_xml(RESPONSE_ID, Some(DESTINATION), &wrong),
         RESPONSE_ID,
-        false,
     ) {
         Err(SamlError::IssuerMismatch { .. }) => Ok(()),
         other => Err(format!("expected IssuerMismatch, got {other:?}").into()),
@@ -253,7 +248,7 @@ fn outbound_logout_response_rejects_relative_entity_issuer(
     let children = format!("{}{}", issuer("", relative_issuer), success_status());
     let xml = response_xml(RESPONSE_ID, Some(DESTINATION), &children);
 
-    match validate_with_issuer(&xml, RESPONSE_ID, relative_issuer, None, false) {
+    match validate_with_issuer(&xml, RESPONSE_ID, relative_issuer, None) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("must be an absolute URI") => {
             Ok(())
         }
@@ -268,7 +263,7 @@ fn outbound_logout_response_rejects_entity_issuer_longer_than_1024_characters(
     let children = format!("{}{}", issuer("", &long_issuer), success_status());
     let xml = response_xml(RESPONSE_ID, Some(DESTINATION), &children);
 
-    match validate_with_issuer(&xml, RESPONSE_ID, &long_issuer, None, false) {
+    match validate_with_issuer(&xml, RESPONSE_ID, &long_issuer, None) {
         Err(SamlError::ProtocolProfile(message))
             if message.contains("no longer than 1024 characters") =>
         {
@@ -285,7 +280,7 @@ fn outbound_logout_response_accepts_entity_issuer_at_1024_character_limit(
     let children = format!("{}{}", issuer("", &boundary_issuer), success_status());
     let xml = response_xml(RESPONSE_ID, Some(DESTINATION), &children);
 
-    validate_with_issuer(&xml, RESPONSE_ID, &boundary_issuer, None, false)?;
+    validate_with_issuer(&xml, RESPONSE_ID, &boundary_issuer, None)?;
     Ok(())
 }
 
@@ -300,7 +295,6 @@ fn outbound_logout_response_enforces_xs_id_lexical_form_and_local_id_invariant(
     match validate(
         &response_xml("_other", Some(DESTINATION), &children),
         RESPONSE_ID,
-        false,
     ) {
         Err(SamlError::Invalid(message)) if message.contains("ID mismatch") => Ok(()),
         other => Err(format!("expected local ID invariant error, got {other:?}").into()),
@@ -312,12 +306,12 @@ fn outbound_logout_response_accepts_unicode_ncname_id() -> Result<(), Box<dyn st
     let children = format!("{}{}", issuer("", ISSUER), success_status());
     let xml = response_xml("Δresponse", Some(DESTINATION), &children);
 
-    validate(&xml, "Δresponse", false)?;
+    validate(&xml, "Δresponse")?;
     Ok(())
 }
 
 #[test]
-fn outbound_logout_response_enforces_destination_when_present_or_signed(
+fn outbound_logout_response_requires_the_browser_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let children = format!("{}{}", issuer("", ISSUER), success_status());
     let wrong = response_xml(
@@ -325,18 +319,17 @@ fn outbound_logout_response_enforces_destination_when_present_or_signed(
         Some("https://attacker.example.com/slo"),
         &children,
     );
-    match validate(&wrong, RESPONSE_ID, false) {
+    match validate(&wrong, RESPONSE_ID) {
         Err(SamlError::DestinationMismatch { .. }) => {}
         other => return Err(format!("expected DestinationMismatch, got {other:?}").into()),
     }
 
     let omitted = response_xml(RESPONSE_ID, None, &children);
-    match validate(&omitted, RESPONSE_ID, true) {
+    match validate(&omitted, RESPONSE_ID) {
         Err(SamlError::DestinationMismatch { .. }) => {}
         other => return Err(format!("expected signed Destination error, got {other:?}").into()),
     }
 
-    validate(&omitted, RESPONSE_ID, false)?;
     Ok(())
 }
 
@@ -350,7 +343,7 @@ fn outbound_logout_response_enforces_in_response_to_correlation_and_ncname(
         r#" InResponseTo="_request""#,
         &children,
     );
-    validate_with_in_response_to(&matching, RESPONSE_ID, Some("_request"), false)?;
+    validate_with_in_response_to(&matching, RESPONSE_ID, Some("_request"))?;
 
     let cases = [
         (
@@ -377,7 +370,7 @@ fn outbound_logout_response_enforces_in_response_to_correlation_and_ncname(
         ),
     ];
     for (xml, expected) in cases {
-        match validate_with_in_response_to(&xml, RESPONSE_ID, expected, false) {
+        match validate_with_in_response_to(&xml, RESPONSE_ID, expected) {
             Err(SamlError::InResponseToMismatch { .. }) => {}
             other => {
                 return Err(format!("expected InResponseToMismatch, got {other:?}").into());
@@ -392,7 +385,7 @@ fn outbound_logout_response_enforces_in_response_to_correlation_and_ncname(
             &format!(r#" InResponseTo="{invalid}""#),
             &children,
         );
-        match validate_with_in_response_to(&xml, RESPONSE_ID, Some(invalid), false) {
+        match validate_with_in_response_to(&xml, RESPONSE_ID, Some(invalid)) {
             Err(SamlError::ProtocolProfile(_)) => {}
             other => {
                 return Err(format!("expected invalid NCName rejection, got {other:?}").into());
@@ -541,7 +534,7 @@ fn outbound_logout_response_keeps_status_detail_open_but_element_only(
             Some(DESTINATION),
             &format!("{issuer}{}", status(&format!("{code}{detail}"))),
         );
-        validate(&xml, RESPONSE_ID, false)?;
+        validate(&xml, RESPONSE_ID)?;
     }
 
     let invalid = response_xml(

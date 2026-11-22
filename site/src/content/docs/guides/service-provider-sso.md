@@ -21,7 +21,6 @@ let sp = ServiceProvider::new(
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
     .credentials(credentials)
-    .validation(SpValidationPolicy::recommended())
     .build()?,
 );
 
@@ -58,7 +57,7 @@ With the `serde` feature, the snapshot serializes to JSON for your session store
 
 `session.attributes()` holds the attributes of the assertion. `first_value("mail")` returns the first value of the first attribute named `mail`. `Attribute::name_format()` is the attribute's `AttributeNameFormat`, and is `None` when the identity provider sent no `NameFormat`. A persistent or transient name identifier is reported as it was sent. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
-`start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. Those constructors leave the generation rules off. Call `apply_producer_rules()` when you want the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
+`start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. All three constructors enforce the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
 ## Replay
 
@@ -68,7 +67,7 @@ A new validation context allows five minutes of clock skew. Pass `ClockSkew::str
 
 ## Signatures
 
-`recommended()` is the preset for claimed features. It does not require a signature on the Assertion, and it does not select the RSA-SHA2 XML-DSig profile. Add either one by name. The calls are in [Validation](validation-preset.md).
+The builder uses the recommended policy by default. It does not require a signature on the Assertion, and it does not select the RSA-SHA2 XML-DSig profile. Add either one by name. The calls are in [Validation](validation-preset.md).
 
 `finish_sso` records embedded XML signature evidence on `verified_xml_signatures()`. `binding_signature_algorithm_uri()` is only the `SigAlg` of an HTTP-POST-SimpleSign signature, which travels next to the message instead of inside the XML.
 

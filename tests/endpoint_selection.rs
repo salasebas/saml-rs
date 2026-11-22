@@ -12,10 +12,10 @@ use base64::Engine;
 use saml_rs::constants::Binding;
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId,
-    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, SamlError,
-    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, SsoResponseBinding, StartSso,
+    FormField, IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts,
+    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SsoAssertion, SsoEndpoint, SsoResponseBinding,
+    StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -41,7 +41,6 @@ fn sp_with_default_acs() -> Result<saml_rs::ServiceProvider, SamlError> {
         )
         .acs_endpoint(AcsEndpoint::post(DEFAULT_ACS)?.with_index(1).with_default())
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::compatibility())
         .build()?,
     ))
 }
@@ -54,10 +53,7 @@ fn idp_with_sso(first: &str, more: &[&str]) -> Result<saml_rs::IdentityProvider,
     let builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?, SsoEndpoint::post(first)?)
         .sso_endpoints(more);
     Ok(IdentityProvider::new(
-        builder
-            .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::compatibility())
-            .build()?,
+        builder.credentials(signing_credentials()).build()?,
     ))
 }
 
@@ -142,7 +138,6 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
                 .with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::compatibility())
         .build()?,
     );
     let (cross_binding_descriptor, _) = descriptors(&cross_binding_sp, &idp)?;
@@ -272,7 +267,6 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
             EndpointUrl::try_new("https://idp.example.com/artifact")?,
         ))
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::compatibility())
         .build()?,
     );
     for binding in [
@@ -296,7 +290,6 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
             )
             .acs_endpoint(AcsEndpoint::new(binding, EndpointUrl::try_new(FIRST_ACS)?).with_index(1))
             .credentials(signing_credentials())
-            .validation(SpValidationPolicy::compatibility())
             .build()?,
         );
         let (sp_descriptor, _) = descriptors(&sp, &idp)?;

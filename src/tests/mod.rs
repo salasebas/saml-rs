@@ -9,7 +9,7 @@ mod assertion_conditions;
 mod authentication_context;
 mod authn_request_options;
 mod binding;
-mod browser_signing_compatibility;
+mod browser_signing_bindings;
 mod conformance;
 mod decryption_work;
 mod default_xml_limits;
@@ -28,7 +28,6 @@ mod idp_tag_prefixes;
 )]
 mod index_conformance;
 mod issues_conformance;
-mod login_response_template_attributes;
 mod logout_session_index;
 mod metadata_role_keys;
 #[cfg_attr(
@@ -42,6 +41,7 @@ mod name_id_management_redirect;
 mod namespace_version;
 mod no_default_features;
 mod paos_destination;
+pub(crate) mod policies_without_crypto;
 mod policy_presets;
 #[cfg_attr(
     crypto,

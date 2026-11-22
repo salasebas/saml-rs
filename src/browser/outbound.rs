@@ -95,17 +95,17 @@ pub enum OutboundDelivery<'a> {
 /// ```
 /// use saml_rs::{AuthnRequest, Outbound, StartSso};
 /// # use saml_rs::{
-/// #     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-/// #     MetadataTrustPolicy, ServiceProvider, SpConfig, SpValidationPolicy, SsoEndpoint,
+/// #     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, MetadataTrustPolicy,
+/// #     ServiceProvider, SpConfig, SsoEndpoint,
 /// # };
 /// #
 /// # fn main() -> Result<(), saml_rs::SamlError> {
+/// # if cfg!(not(crypto)) { return Ok(()); }
 /// # let sp = ServiceProvider::new(
 /// #     SpConfig::builder(
 /// #         EntityId::try_new("https://sp.example.com/metadata")?,
 /// #         AcsEndpoint::post("https://sp.example.com/acs")?,
 /// #     )
-/// #     .validation(SpValidationPolicy::compatibility())
 /// #     .build()?,
 /// # );
 /// # let idp = IdentityProvider::new(
@@ -114,7 +114,6 @@ pub enum OutboundDelivery<'a> {
 /// #         SsoEndpoint::redirect("https://idp.example.com/sso/redirect")?,
 /// #     )
 /// #     .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
-/// #     .validation(IdpValidationPolicy::compatibility())
 /// #     .build()?,
 /// # );
 /// # let idp = IdpDescriptor::from_metadata_xml(
@@ -259,10 +258,8 @@ impl Outbound<SsoResponse> {
     ///
     /// Record it with the user's session to match the `SessionIndex` of a
     /// later `LogoutRequest`. It is available when the assertion is encrypted
-    /// or delivered by artifact. `None` when this library wrote no
-    /// `SessionIndex`. A `SessionIndex` written by
-    /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template)
-    /// is not reported.
+    /// or delivered by artifact. An error response or an IdP without a
+    /// Single Logout endpoint has no session index.
     pub fn session_index(&self) -> Option<&SessionIndex> {
         self.session_index.as_ref()
     }

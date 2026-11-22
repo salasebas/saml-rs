@@ -10,9 +10,8 @@ use crate::binding::xml_escape;
 use crate::error::SamlError;
 use crate::util::camel_case;
 use crate::xml::name::validate_namespace_prefix;
-use crate::xml::write::XmlWriter;
 
-/// Default `<AuthnRequest>` template.
+/// Raw `<AuthnRequest>` template for standalone tag substitution.
 pub const LOGIN_REQUEST_TEMPLATE: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\" ForceAuthn=\"{ForceAuthn}\" ProtocolBinding=\"{ProtocolBinding}\" AssertionConsumerServiceURL=\"{AssertionConsumerServiceURL}\" AssertionConsumerServiceIndex=\"{AssertionConsumerServiceIndex}\"><saml:Issuer>{Issuer}</saml:Issuer><samlp:NameIDPolicy Format=\"{NameIDFormat}\" AllowCreate=\"{AllowCreate}\"/></samlp:AuthnRequest>";
 
 /// Default `<LogoutRequest>` template.
@@ -284,22 +283,14 @@ fn tagging(prefix: &str, content: &str) -> String {
     }
 }
 
-/// Placeholder key (without braces) for an attribute value tag:
-/// `attr<CamelCase>`. The runtime value fills `{<key>}`.
-pub(crate) fn attr_tag(value_tag: &str) -> String {
-    tagging("attr", value_tag)
-}
-
-/// IdP login `<Response>` template config.
+/// Raw login response template data retained for consumers of this module.
+/// Typed IdP responses accept attributes through [`crate::SsoAssertion::with_attributes`].
 #[derive(Debug, Clone, Default)]
 pub struct LoginResponseTemplate {
     /// Custom `<Response>` template; `None` uses
-    /// [`SSO_RESPONSE_TEMPLATE`](crate::config::SSO_RESPONSE_TEMPLATE).
+    /// [`LOGIN_RESPONSE_TEMPLATE`].
     pub context: Option<String>,
     /// Attributes rendered into the assertion's `<AttributeStatement>`.
-    ///
-    /// Rendering returns [`SamlError::Invalid`] when the user has no value
-    /// for an attribute's [`LoginResponseAttribute::value_tag`].
     pub attributes: Vec<LoginResponseAttribute>,
 }
 
@@ -348,68 +339,8 @@ pub(crate) fn build_attribute_statement(
     attribute_statement_template.replacen("{Attributes}", &attrs, 1)
 }
 
-pub(crate) fn login_response_attribute_value<'user>(
-    attribute: &LoginResponseAttribute,
-    user_attributes: &'user [(String, String)],
-) -> Result<&'user str, SamlError> {
-    user_attributes
-        .iter()
-        .find(|(tag, _)| tag == &attribute.value_tag)
-        .map(|(_, value)| value.as_str())
-        .ok_or_else(|| {
-            SamlError::Invalid(format!(
-                "missing login response attribute value for `{}`",
-                attribute.value_tag
-            ))
-        })
-}
-
 fn escape_literal_template_text(value: &str) -> String {
     xml_escape(value).replace('{', "&#123;")
-}
-
-pub(crate) fn write_login_response_attribute_statement(
-    writer: &mut XmlWriter,
-    attributes: &[LoginResponseAttribute],
-    user_attributes: &[(String, String)],
-    assertion_prefix: &str,
-) -> Result<(), SamlError> {
-    if attributes.is_empty() {
-        return Ok(());
-    }
-
-    let statement_name = format!("{assertion_prefix}:AttributeStatement");
-    let attribute_name = format!("{assertion_prefix}:Attribute");
-    let value_name = format!("{assertion_prefix}:AttributeValue");
-    writer.start(&statement_name, &[]);
-    for attribute in attributes {
-        let value = login_response_attribute_value(attribute, user_attributes)?;
-        writer.start(
-            &attribute_name,
-            &[
-                ("Name", attribute.name.as_str()),
-                ("NameFormat", attribute.name_format.as_str()),
-            ],
-        );
-        writer.text_element(
-            &value_name,
-            &[
-                (
-                    "xmlns:xs",
-                    attribute.value_xmlns_xs.as_deref().unwrap_or(DEFAULT_XS),
-                ),
-                (
-                    "xmlns:xsi",
-                    attribute.value_xmlns_xsi.as_deref().unwrap_or(DEFAULT_XSI),
-                ),
-                ("xsi:type", attribute.value_xsi_type.as_str()),
-            ],
-            value,
-        );
-        writer.end(&attribute_name);
-    }
-    writer.end(&statement_name);
-    Ok(())
 }
 
 #[cfg(test)]

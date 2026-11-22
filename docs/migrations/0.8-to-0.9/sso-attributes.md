@@ -14,14 +14,10 @@ already returned an error for the same configuration.
 
 **Now:** the raw API that read `LoginResponseTemplate::attributes` is removed.
 A typed identity provider has no template attributes.
-`IdpConfigBuilder::sso_response_template` takes the template text alone, as
-[Set SSO templates on the role's builder](config.md#set-sso-templates-on-the-roles-builder)
-describes.
+Use the [typed SSO inputs](config.md#replace-sso-templates-with-typed-options).
 
 **Upgrade:** pass the attributes with `SsoAssertion::with_attributes`, as
-[2.2](public-imports.md#22-pass-attributes-to-the-response) shows. A response
-with attributes needs the built-in renderer, so leave
-`IdpConfigBuilder::sso_response_template` unset.
+[2.2](public-imports.md#22-pass-attributes-to-the-response) shows.
 
 ## 5. Send a `Name` on every attribute
 

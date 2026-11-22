@@ -80,7 +80,7 @@ fn sp_publishing(encryption_cert: &str) -> Result<saml_rs::ServiceProvider, Saml
         )
         .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
         .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     ))
 }
@@ -106,7 +106,7 @@ fn idp_with(credentials: Credentials) -> Result<saml_rs::IdentityProvider, SamlE
             IDP_MANAGE_SOAP,
         )?))
         .credentials(credentials)
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     ))
 }

@@ -46,7 +46,7 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
         AcsEndpoint::post(SP_ACS)?.with_default(),
     )
     .credentials(signing_credentials())
-    .validation(SpValidationPolicy::recommended())
+    .validation(SpValidationPolicy::default())
     .build()?;
     let idp_config = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -54,7 +54,7 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     )
     .slo_endpoint(SloEndpoint::redirect("https://idp.example.com/slo")?)
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::recommended())
+    .validation(IdpValidationPolicy::default())
     .build()?;
     let sp = ServiceProvider::new(sp_config);
     let idp = IdentityProvider::new(idp_config);
@@ -79,12 +79,12 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
         &sp_descriptor,
         &received,
         SsoAssertion::new(name_id.clone()),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
         SsoAssertion::new(name_id),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     Ok(IssuedSso {
         sp,

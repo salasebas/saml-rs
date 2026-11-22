@@ -125,25 +125,18 @@ pub struct EntitySetting {
     pub tag_prefix_assertion: String,
     /// IdP: tag prefix for the `<EncryptedAssertion>` element (default `saml`).
     pub tag_prefix_encrypted_assertion: String,
-    /// IdP: login `<Response>` template + attribute configuration.
-    pub login_response_template: Option<crate::template::LoginResponseTemplate>,
-    /// SP: custom `<AuthnRequest>` template (`None` uses the default).
-    pub login_request_template: Option<String>,
     /// Custom `<LogoutRequest>` template (`None` uses the default).
     ///
     /// Typed Session Authority generation requires a complete unqualified
-    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Compatibility generation
-    /// keeps that optional placeholder omitted.
+    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute.
     ///
     /// Typed generation fills `{NameQualifier}`, `{SPNameQualifier}`, and
     /// `{SPProvidedID}` from the logout subject's `NameID`, and
     /// `{NameIDFormat}` with the `Format` sent for it. An attribute whose
     /// complete value is one of these placeholders is omitted when there is
-    /// no value for it. Compatibility generation fills `{NameIDFormat}`
-    /// from `name_id_format` and omits the qualifier attributes.
+    /// no value for it.
     ///
-    /// Typed Session Authority generation, and typed SP generation with
-    /// Single Logout generation rules, reject a template whose `NameID`
+    /// Both roles reject a template whose `NameID`
     /// attributes differ from the ones sent for the subject.
     pub logout_request_template: Option<String>,
     /// Custom `<LogoutResponse>` template (`None` uses the default).
@@ -250,8 +243,6 @@ impl fmt::Debug for EntitySetting {
                 "tag_prefix_encrypted_assertion",
                 &self.tag_prefix_encrypted_assertion,
             )
-            .field("login_response_template", &self.login_response_template)
-            .field("login_request_template", &self.login_request_template)
             .field("logout_request_template", &self.logout_request_template)
             .field("logout_response_template", &self.logout_response_template)
             .field("signature_config", &self.signature_config)
@@ -351,8 +342,6 @@ impl Default for EntitySetting {
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
             tag_prefix_encrypted_assertion: "saml".to_string(),
-            login_response_template: None,
-            login_request_template: None,
             logout_request_template: None,
             logout_response_template: None,
             signature_config: None,
@@ -398,17 +387,13 @@ pub(crate) fn random_20_bytes() -> [u8; 20] {
 pub struct User {
     /// `<NameID>` value.
     pub name_id: String,
-    /// Attribute values keyed by their `LoginResponseAttribute.value_tag`;
-    /// each fills the `{attr<Tag>}` placeholder produced for that attribute.
-    pub attributes: Vec<(String, String)>,
 }
 
 impl User {
-    /// A subject with just a NameID and no attributes.
+    /// A subject identified by its SAML NameID.
     pub fn new(name_id: impl Into<String>) -> Self {
         Self {
             name_id: name_id.into(),
-            ..Default::default()
         }
     }
 }

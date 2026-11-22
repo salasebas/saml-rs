@@ -5,7 +5,7 @@ description: "Each record is a table for one flow. A row names the rule, the obl
 
 Each record is a table for one flow. A row names the rule, the obligated actor, the direction, and the level: mandatory, recommendation, optional, or library policy.
 
-`recommended()` publishes the combination recorded for that flow. It is not an implementation of SAML V2.0 as a whole. A producer requirement does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them by name.
+The default validation policies select the settings recorded for each flow. Each conformance claim covers the role, flow, and binding in its record. A producer requirement does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them by name.
 
 Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, as corrected by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
 
@@ -23,4 +23,4 @@ Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, a
 - [XML schema validation](conformance/xml-schema-validation.md) for the optional callback on each role and explicit metadata imports.
 - [Name identifier management](conformance/name-id-management.md) for `start_name_id_management`, `receive_name_id_management`, `respond_name_id_management`, and their `_redirect` counterparts with `finish_name_id_management_redirect`.
 
-Why Compatibility and Recommended are separate is in [Validation presets](../explanation/validation-presets.md).
+Why Recommended is the only preset is in [Validation presets](../explanation/validation-presets.md).

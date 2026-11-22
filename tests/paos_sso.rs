@@ -14,7 +14,6 @@ mod authn_context;
 use std::time::{Duration, SystemTime};
 
 use roxmltree::{Document, Node};
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::{status_code::AUTHN_FAILED, transform_algorithm};
 use saml_rs::{
     check_paos_client_headers, AcsEndpoint, AlgorithmPolicy, Attribute, AttributeNameFormat,
@@ -76,12 +75,12 @@ fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     );
     let idp = IdentityProvider::new(
         idp.credentials(credentials())
-            .validation(IdpValidationPolicy::recommended())
+            .validation(IdpValidationPolicy::default())
             .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
@@ -298,38 +297,33 @@ fn paos_response_returns_the_session_index_the_service_provider_accepts(
 
 #[test]
 fn failed_authentication_does_not_establish_a_session() -> Result<(), Box<dyn std::error::Error>> {
-    for idp in [
-        idp_builder()?,
-        idp_builder()?.sso_response_template(SSO_RESPONSE_TEMPLATE),
-    ] {
-        let (sp, idp, sp_descriptor, idp_descriptor) = parties_with(idp)?;
-        let started = sp.start_paos_sso(
-            &idp_descriptor,
-            StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?),
-        )?;
-        let (client, idp_request) =
-            enhanced_client_takes_authn_request(started.http_response.envelope())?;
-        let received = idp.receive_paos_sso(
-            &sp_descriptor,
-            &idp_request,
-            &EndpointUrl::try_new(IDP_SOAP)?,
-            validation(),
-        )?;
-        let authn_failed =
-            Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?);
-        let rejected = idp.respond_paos_sso(
-            &sp_descriptor,
-            &received,
-            SsoOutcome::Failure(authn_failed.clone()),
-        )?;
-        assert_eq!(rejected.http_status(), 200);
-        assert!(!rejected.envelope().contains("Assertion>"));
-        let sp_request = enhanced_client_takes_response(&client, rejected.envelope())?;
-        match sp.finish_paos_sso(&idp_descriptor, &started.pending, &sp_request, validation()) {
-            Err(SamlError::StatusNotSuccess { status, .. }) => assert_eq!(status, authn_failed),
-            Err(error) => return Err(error.into()),
-            Ok(_) => return Err("an error status does not return a session".into()),
-        }
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?),
+    )?;
+    let (client, idp_request) =
+        enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let received = idp.receive_paos_sso(
+        &sp_descriptor,
+        &idp_request,
+        &EndpointUrl::try_new(IDP_SOAP)?,
+        validation(),
+    )?;
+    let authn_failed =
+        Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?);
+    let rejected = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        SsoOutcome::Failure(authn_failed.clone()),
+    )?;
+    assert_eq!(rejected.http_status(), 200);
+    assert!(!rejected.envelope().contains("Assertion>"));
+    let sp_request = enhanced_client_takes_response(&client, rejected.envelope())?;
+    match sp.finish_paos_sso(&idp_descriptor, &started.pending, &sp_request, validation()) {
+        Err(SamlError::StatusNotSuccess { status, .. }) => assert_eq!(status, authn_failed),
+        Err(error) => return Err(error.into()),
+        Ok(_) => return Err("an error status does not return a session".into()),
     }
     Ok(())
 }
@@ -659,7 +653,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
             saml_rs::CertificatePem::new(CERT),
             saml_rs::PrivateKeyPem::new(PRIVKEY),
         ));
-    let mut sp_validation = SpValidationPolicy::recommended();
+    let mut sp_validation = SpValidationPolicy::default();
     sp_validation.assertions = saml_rs::AssertionSignaturePolicy::RequireSigned;
     let sp = ServiceProvider::new(
         SpConfig::builder(
@@ -677,7 +671,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
             SsoEndpoint::post("https://idp.example.com/sso/post")?,
         )
         .credentials(credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .xml(encryption)
         .build()?,
     );

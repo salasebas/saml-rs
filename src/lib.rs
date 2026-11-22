@@ -9,9 +9,9 @@
 //! metadata through typed descriptors, and returns pending transaction values
 //! that callers can store with browser session state.
 //!
-//! [`SpValidationPolicy::recommended`] is the preset for claimed features.
-//! [`SpValidationPolicy::compatibility`] keeps the samlify-port behavior.
-//! `Default` and the config builders start on Recommended.
+//! The SP and IdP config builders use [`SpValidationPolicy::default`] and
+//! [`IdpValidationPolicy::default`], respectively. To customize validation,
+//! start from the role default and assign the field you want to change.
 //!
 //! Where the compact flow examples below use
 //! [`ReplayPolicy::Disabled`] or unsigned metadata, treat those
@@ -21,11 +21,11 @@
 //! [`SamlValidationContext::with_replay_retention`].
 //!
 //! ```
-//! use saml_rs::{AcsEndpoint, EntityId, SpConfig, SpValidationPolicy};
+//! use saml_rs::{AcsEndpoint, EntityId, SpConfig};
 //!
 //! # fn main() -> Result<(), saml_rs::SamlError> {
+//! # if cfg!(not(crypto)) { return Ok(()); }
 //! let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-//!     .validation(SpValidationPolicy::compatibility())
 //!     .build()?;
 //!
 //! assert_eq!(config.entity_id().as_str(), "https://sp.example.com/metadata");
@@ -40,8 +40,9 @@
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     AcsEndpoint, EntityId, FormField, IdpDescriptor, Inbound, MetadataTrustPolicy, ReplayPolicy,
-//!     SamlValidationContext, ServiceProvider, SpConfig, SpValidationPolicy, StartSso,
+//!     AcsEndpoint, EntityId, FormField, IdpDescriptor, Inbound,
+//!     MetadataTrustPolicy, ReplayPolicy, SamlValidationContext, ServiceProvider, SpConfig,
+//!     StartSso,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -51,7 +52,6 @@
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let sp = ServiceProvider::new(
 //!     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-//!         .validation(SpValidationPolicy::compatibility())
 //!         .build()?,
 //! );
 //! let idp = IdpDescriptor::from_metadata_xml(
@@ -416,11 +416,11 @@ pub mod xml;
 mod tests;
 
 pub use api::{
-    check_paos_client_headers, ForceAuthn, IdentityProvider, IsPassive, LogoutSigning,
-    MessageDelivery, NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso,
-    PendingPaosSsoSnapshot, ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo,
-    RespondSso, ServiceProvider, SoapFault, SsoAssertion, SsoOutcome, StartNameIdManagement,
-    StartPaosSso, StartSlo, StartSso, StartedPaosSso,
+    check_paos_client_headers, ForceAuthn, IdentityProvider, IsPassive, MessageDelivery,
+    NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
+    ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo, RespondSso, ServiceProvider,
+    SoapFault, SsoAssertion, SsoOutcome, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
+    StartedPaosSso,
 };
 pub use artifact::{
     AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,

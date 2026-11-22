@@ -12,11 +12,7 @@ mod policies;
 mod provider;
 
 pub use crate::entity::{SignatureAction, SignatureConfig};
-pub use crate::template::{
-    LOGIN_REQUEST_TEMPLATE as AUTHN_REQUEST_TEMPLATE,
-    LOGIN_RESPONSE_TEMPLATE as SSO_RESPONSE_TEMPLATE, LOGOUT_REQUEST_TEMPLATE,
-    LOGOUT_RESPONSE_TEMPLATE,
-};
+pub use crate::template::{LOGOUT_REQUEST_TEMPLATE, LOGOUT_RESPONSE_TEMPLATE};
 pub use crate::xml::XmlLimits;
 pub use algorithms::{
     DataEncryptionAlgorithm, DigestAlgorithm, KeyEncryptionAlgorithm, MaskGenerationFunction,

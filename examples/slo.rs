@@ -7,10 +7,9 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
         AcsEndpoint, CertificatePem, Credentials, EntityId, IdentityProvider, IdpConfig,
-        IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem,
-        ReplayPolicy, RespondSlo, RespondSso, SamlValidationContext, ServiceProvider, SloEndpoint,
-        SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo, StartSso,
-        Status, X509Credential,
+        IdpDescriptor, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
+        RespondSlo, RespondSso, SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig,
+        SpDescriptor, SsoAssertion, SsoEndpoint, StartSlo, StartSso, Status, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -32,7 +31,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo")?)
         .credentials(credentials())
-        .validation(SpValidationPolicy::recommended())
         .build()?,
     );
     let idp = IdentityProvider::new(
@@ -42,7 +40,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo")?)
         .credentials(credentials())
-        .validation(IdpValidationPolicy::recommended())
         .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(

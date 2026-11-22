@@ -36,10 +36,10 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         CertificatePem::new(CERT),
         PrivateKeyPem::new(KEY),
     ));
-    let mut sp_validation = SpValidationPolicy::recommended();
+    let mut sp_validation = SpValidationPolicy::default();
     sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     sp_validation.xml_signatures = xml_signatures;
-    let mut idp_validation = IdpValidationPolicy::recommended();
+    let mut idp_validation = IdpValidationPolicy::default();
     idp_validation.xml_signatures = xml_signatures;
     let sp = ServiceProvider::new(
         SpConfig::builder(
@@ -153,7 +153,7 @@ fn post_authn_request_with_object(
 }
 
 #[test]
-fn post_authn_request_with_object_is_rejected_unless_the_compatibility_profile_is_selected(
+fn post_authn_request_with_object_is_rejected_unless_weak_algorithms_are_allowed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for profile in [
         XmlSignatureProfile::ExcludeWeakAlgorithms,

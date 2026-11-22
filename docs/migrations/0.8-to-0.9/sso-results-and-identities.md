@@ -36,12 +36,10 @@ it says what the response reports:
   `with_authn_instant`. They take the same values and are checked as before.
 - `RespondSso::status` is removed. Pass `SsoOutcome::Failure(status)` for an
   error response. It needs no `NameId`, and it cannot carry the assertion
-  options. An error response is therefore no longer rejected for an
-  authentication context or instant set without producer rules, or for
-  attributes or `NameId` qualifiers combined with an SSO response template.
+  options. Put the authentication context, instant, attributes and NameID
+  qualifiers on the successful assertion.
 - `RespondSso` keeps `post`, `simple_sign`, `artifact`, `relay_state`,
-  `sign_response`, `allow_unsigned_encrypted_cbc`, and
-  `apply_producer_rules`.
+  `sign_response`, and `allow_unsigned_encrypted_cbc`.
 
 `respond_paos_sso` takes the same outcome, as
 [Answer PAOS login with an `SsoOutcome`](typed-operations.md#answer-paos-login-with-an-ssooutcome)

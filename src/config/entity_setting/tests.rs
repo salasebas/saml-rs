@@ -1,7 +1,7 @@
 use crate::browser::{AcsEndpoint, SsoEndpoint};
+use crate::config::{AudienceValidationPolicy, EntityId, IdpConfig, SpConfig, SpValidationPolicy};
 #[cfg(crypto)]
-use crate::config::NameIdFormat;
-use crate::config::{EntityId, IdpConfig, IdpValidationPolicy, SpConfig, SpValidationPolicy};
+use crate::config::{IdpValidationPolicy, NameIdFormat};
 #[cfg(crypto)]
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, name_id_format, signature_algorithm,
@@ -9,9 +9,12 @@ use crate::constants::{
 };
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
+use crate::tests::policies_without_crypto::{
+    idp_validation_without_crypto, sp_validation_without_crypto,
+};
 
 #[test]
-fn compatibility_relaxes_audience_and_logout_defaults_of_raw_settings() -> Result<(), SamlError> {
+fn skipped_audience_and_unsigned_logout_clear_the_raw_settings() -> Result<(), SamlError> {
     let raw = EntitySetting::default();
     assert!(raw.validate_audience);
     assert!(raw.want_logout_request_signed);
@@ -21,7 +24,10 @@ fn compatibility_relaxes_audience_and_logout_defaults_of_raw_settings() -> Resul
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy::compatibility())
+    .validation(SpValidationPolicy {
+        audience: AudienceValidationPolicy::Skip,
+        ..sp_validation_without_crypto()
+    })
     .build()?
     .engine
     .setting;
@@ -33,7 +39,7 @@ fn compatibility_relaxes_audience_and_logout_defaults_of_raw_settings() -> Resul
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(idp_validation_without_crypto())
     .build()?
     .engine
     .setting;
@@ -76,7 +82,7 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         assertions: AssertionSignaturePolicy::RequireSigned,
         responses: ResponseSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     })
     .xml(XmlPolicy {
         limits,
@@ -143,7 +149,7 @@ fn idp_config_converts_authn_request_policy() -> Result<(), SamlError> {
     .name_id_format(NameIdFormat::Transient)
     .validation(IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     })
     .build()?
     .engine

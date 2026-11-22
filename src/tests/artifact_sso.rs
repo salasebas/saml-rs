@@ -1149,7 +1149,7 @@ fn an_artifact_response_returns_the_session_index_of_its_encrypted_assertion(
         &parties.sp_metadata,
         &request,
         SsoAssertion::new(principal()),
-        RespondSso::artifact(ArtifactDelivery::redirect(0)).apply_producer_rules(),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
         &mut issued,
     )?;
     let delivered = delivered_by(&response)?;
@@ -1187,39 +1187,6 @@ fn an_artifact_for_another_protocol_message_does_not_establish_a_session(
         saml_error(result),
         Some(SamlError::ProtocolProfile(message)) if message == "artifact must resolve to a protocol Response"
     ));
-    Ok(())
-}
-
-#[test]
-fn a_login_response_template_with_another_root_is_not_stored_as_a_response(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = unsolicited_parties()?;
-    let template = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}"><saml:Issuer>{Issuer}</saml:Issuer></samlp:LogoutRequest>"#;
-    let idp = IdentityProvider::new(
-        IdpConfig::builder(
-            EntityId::try_new(IDP_ENTITY_ID)?,
-            SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,
-        )
-        .artifact_resolution_service(ArtifactResolutionService::new(
-            0,
-            EndpointUrl::try_new(RESOLUTION_URL)?,
-        ))
-        .credentials(signing_credentials())
-        .sso_response_template(template)
-        .build()?,
-    );
-    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-
-    let result = idp.initiate_sso_artifact(
-        &parties.sp_metadata,
-        SsoAssertion::new(principal()),
-        RespondSso::artifact(ArtifactDelivery::redirect(0)),
-        &mut issued,
-    );
-    assert!(
-        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message == "Web Browser SSO artifact message must be a protocol Response"),
-        "{result:?}"
-    );
     Ok(())
 }
 

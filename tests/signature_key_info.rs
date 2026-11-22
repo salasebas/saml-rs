@@ -32,7 +32,7 @@ fn credentials(key: &str, cert: &str) -> Credentials {
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
-    let mut validation = SpValidationPolicy::recommended();
+    let mut validation = SpValidationPolicy::default();
     validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     Ok(ServiceProvider::new(
         SpConfig::builder(
@@ -46,7 +46,7 @@ fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServicePr
 }
 
 fn idp_requiring_signed_authn_requests() -> Result<saml_rs::IdentityProvider, SamlError> {
-    let mut validation = IdpValidationPolicy::recommended();
+    let mut validation = IdpValidationPolicy::default();
     validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
     Ok(IdentityProvider::new(
         IdpConfig::builder(

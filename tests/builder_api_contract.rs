@@ -27,7 +27,7 @@ fn sp_config() -> Result<SpConfig, SamlError> {
     )
     .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
     .credentials(signing_credentials())
-    .validation(SpValidationPolicy::recommended())
+    .validation(SpValidationPolicy::default())
     .build()
 }
 
@@ -38,7 +38,7 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
     )
     .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::recommended())
+    .validation(IdpValidationPolicy::default())
     .build()
 }
 
@@ -58,7 +58,8 @@ fn builder_entrypoints_construct_facades_without_raw_mutation(
     assert_eq!(sso.pending.request_id(), sso.outbound.id());
     assert_eq!(sso.pending.idp_entity_id().as_str(), IDP_ENTITY_ID);
 
-    let logout_subject = LogoutSubject::new(NameId::new("alice@example.com"));
+    let logout_subject = LogoutSubject::new(NameId::new("alice@example.com"))
+        .with_session_index(saml_rs::SessionIndex::try_new("_session")?);
     let slo = sp.start_slo(&idp_descriptor, logout_subject, StartSlo::post())?;
     assert_eq!(slo.outbound.post_form()?.action().as_str(), IDP_SLO_POST);
     assert_eq!(slo.pending.request_id(), slo.outbound.id());

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
-//! Maintained compatibility re-export of [`saml-rs`](https://crates.io/crates/saml-rs).
+//! Deprecated. This crate will no longer be maintained.
+//! Please use [`saml-rs`](https://crates.io/crates/saml-rs).
 //!
 //! ```
 //! use samlify::ServiceProvider;

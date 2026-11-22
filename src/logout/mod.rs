@@ -1,6 +1,5 @@
 //! Single Logout (SLO): create and parse LogoutRequest and LogoutResponse.
 
-mod bindings;
 mod creation;
 mod encrypted_id;
 mod parsing;
@@ -19,4 +18,6 @@ pub(crate) use parsing::{
     parse_logout_request_at, parse_logout_response_at, LogoutFlowValidation, LogoutReceipt,
 };
 pub(crate) use rendering::LogoutRequestSubject;
+#[cfg(test)]
+pub(crate) use rendering::{issuer_of, render_logout_request, LogoutRequestTimeAttributes};
 pub(crate) use signing::sign_browser_message;

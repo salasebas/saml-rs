@@ -115,7 +115,7 @@ fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
         crate::AcsEndpoint::post("https://sp/acs-implicit")?,
     )
     .acs_endpoint(crate::AcsEndpoint::post("https://sp/acs-zero")?.with_index(0))
-    .validation(crate::SpValidationPolicy::compatibility())
+    .validation(crate::tests::policies_without_crypto::sp_validation_without_crypto())
     .build()?;
 
     let sp = crate::ServiceProvider::new(config);

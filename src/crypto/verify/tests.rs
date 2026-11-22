@@ -649,7 +649,7 @@ fn detailed_verification_excludes_valid_unrelated_signature_evidence(
 }
 
 #[test]
-fn extra_response_signature_that_does_not_verify_is_ignored_only_by_the_compatibility_profile(
+fn invalid_extra_response_signature_is_ignored_only_with_allow_weak_algorithms(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let extra = format!(
         "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"/><ds:SignatureMethod Algorithm=\"http://www.w3.org/2000/09/xmldsig#rsa-sha1\"/><ds:Reference URI=\"#_response\"><ds:DigestMethod Algorithm=\"http://www.w3.org/2000/09/xmldsig#sha1\"/><ds:DigestValue>AAAA</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>AAAA</ds:SignatureValue></ds:Signature>",

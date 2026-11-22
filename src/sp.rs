@@ -13,13 +13,12 @@ use crate::flow::{
 use crate::idp;
 use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataInput};
 use crate::model::{validate_name_id_format, ClockSkew};
-use crate::template::{replace_tags_by_optional_value, LOGIN_REQUEST_TEMPLATE};
 use std::time::SystemTime;
 
 mod authn_request;
 mod paos;
 
-use authn_request::{render_default_authn_request_xml, AllowCreateAttribute, AuthnRequestXml};
+use authn_request::{render_default_authn_request_xml, AuthnRequestXml};
 pub(crate) use authn_request::{validate_provider_name, AuthnRequestPreferences};
 
 pub(crate) use paos::PaosAuthnRequestInput;
@@ -45,25 +44,6 @@ pub struct LoginRequestOptions<'a> {
     pub assertion_consumer_service_index: Option<u16>,
     /// Expected SAML Response binding. Defaults to HTTP-POST.
     pub response_binding: Option<Binding>,
-}
-
-/// Whether typed Web Browser SSO generation follows producer rules.
-///
-/// [`Self::Compatibility`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
-/// recorded for this flow. It is not a validation preset.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum WebBrowserSsoProducer {
-    /// Keep the samlify-port generation.
-    #[default]
-    Compatibility,
-    /// Emit the producer obligations for this flow.
-    Follow,
-}
-
-impl WebBrowserSsoProducer {
-    pub(crate) fn follows(self) -> bool {
-        matches!(self, Self::Follow)
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -172,18 +152,6 @@ impl Engine {
         idp: &idp::Engine,
         binding: Binding,
         options: &LoginRequestOptions<'_>,
-        producer: WebBrowserSsoProducer,
-        preferences: &AuthnRequestPreferences<'_>,
-    ) -> Result<BindingContext, SamlError> {
-        self.create_login_request_inner(idp, binding, options, producer, preferences)
-    }
-
-    fn create_login_request_inner(
-        &self,
-        idp: &idp::Engine,
-        binding: Binding,
-        options: &LoginRequestOptions<'_>,
-        producer: WebBrowserSsoProducer,
         preferences: &AuthnRequestPreferences<'_>,
     ) -> Result<BindingContext, SamlError> {
         preferences.validate()?;
@@ -194,93 +162,39 @@ impl Engine {
             .metadata
             .single_sign_on_location(binding)
             .ok_or_else(|| SamlError::MissingMetadata("SingleSignOnService".into()))?;
-        let custom_template = self.setting.login_request_template.as_deref();
-        if producer.follows() && custom_template.is_some() {
-            return Err(SamlError::Invalid(
-                "Web Browser SSO generation rules require the built-in AuthnRequest renderer"
-                    .into(),
-            ));
-        }
-        if custom_template.is_some()
-            && (preferences.is_passive.is_some()
-                || preferences.provider_name.is_some()
-                || preferences.requested_authn_context.is_some())
-        {
-            return Err(SamlError::Invalid(
-                "typed authentication request preferences require the built-in AuthnRequest renderer".into(),
-            ));
-        }
-        let template = custom_template.unwrap_or(LOGIN_REQUEST_TEMPLATE);
-        let (id, xml) = {
-            let uses_acs_index = options.assertion_consumer_service_index.is_some();
-            let response_binding = options.response_binding.unwrap_or(Binding::Post);
-            let acs_url = if uses_acs_index {
-                None
-            } else {
-                Some(
-                    self.metadata
-                        .assertion_consumer_location(response_binding)
-                        .ok_or_else(|| {
-                            SamlError::MissingMetadata("AssertionConsumerService".into())
-                        })?,
-                )
-            };
-            let protocol_binding = (!uses_acs_index).then(|| response_binding.urn().to_string());
-            let acs_index = options
-                .assertion_consumer_service_index
-                .map(|index| index.to_string());
-            let name_id_format = self.setting.default_name_id_format();
-            validate_name_id_format(name_id_format)?;
-            let allow_create = if producer.follows()
-                && name_id_format == Some(crate::constants::name_id_format::TRANSIENT)
-            {
-                AllowCreateAttribute::Omit
-            } else {
-                AllowCreateAttribute::Include(self.setting.allow_create)
-            };
-            let id = generate_id();
-            let xml = if custom_template.is_none() {
-                let issue_instant = now_iso8601();
-                let issuer = self.entity_id();
-                render_default_authn_request_xml(&AuthnRequestXml {
-                    id: &id,
-                    issue_instant: &issue_instant,
-                    destination: &destination,
-                    force_authn: options.force_authn,
-                    protocol_binding: protocol_binding.as_deref(),
-                    assertion_consumer_service_url: acs_url.as_deref(),
-                    assertion_consumer_service_index: options.assertion_consumer_service_index,
-                    is_passive: preferences.is_passive,
-                    provider_name: preferences.provider_name,
-                    requested_authn_context: preferences.requested_authn_context,
-                    issuer: &issuer,
-                    name_id_format,
-                    allow_create,
-                })
-            } else {
-                replace_tags_by_optional_value(
-                    template,
-                    &[
-                        ("ID", Some(id.clone())),
-                        ("IssueInstant", Some(now_iso8601())),
-                        ("Destination", Some(destination.clone())),
-                        (
-                            "ForceAuthn",
-                            options
-                                .force_authn
-                                .map(|force_authn| force_authn.to_string()),
-                        ),
-                        ("ProtocolBinding", protocol_binding),
-                        ("AssertionConsumerServiceURL", acs_url),
-                        ("AssertionConsumerServiceIndex", acs_index),
-                        ("Issuer", Some(self.entity_id())),
-                        ("NameIDFormat", name_id_format.map(str::to_string)),
-                        ("AllowCreate", Some(self.setting.allow_create.to_string())),
-                    ],
-                )
-            };
-            (id, xml)
+        let uses_acs_index = options.assertion_consumer_service_index.is_some();
+        let response_binding = options.response_binding.unwrap_or(Binding::Post);
+        let acs_url = if uses_acs_index {
+            None
+        } else {
+            Some(
+                self.metadata
+                    .assertion_consumer_location(response_binding)
+                    .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
+            )
         };
+        let protocol_binding = (!uses_acs_index).then(|| response_binding.urn().to_string());
+        let name_id_format = self.setting.default_name_id_format();
+        validate_name_id_format(name_id_format)?;
+        let id = generate_id();
+        let issue_instant = now_iso8601();
+        let issuer = self.entity_id();
+        let request = AuthnRequestXml {
+            id: &id,
+            issue_instant: &issue_instant,
+            destination: &destination,
+            force_authn: options.force_authn,
+            protocol_binding: protocol_binding.as_deref(),
+            assertion_consumer_service_url: acs_url.as_deref(),
+            assertion_consumer_service_index: options.assertion_consumer_service_index,
+            is_passive: preferences.is_passive,
+            provider_name: preferences.provider_name,
+            requested_authn_context: preferences.requested_authn_context,
+            issuer: &issuer,
+            name_id_format,
+            allow_create: self.setting.allow_create,
+        };
+        let xml = render_default_authn_request_xml(&request);
         let relay_state = match options.relay_state {
             Some(value) => Some(value.to_string()),
             None => {

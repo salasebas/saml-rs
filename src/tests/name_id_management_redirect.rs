@@ -53,7 +53,7 @@ fn sp_with(endpoints: &[&str]) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut builder =
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(signing_credentials())
-            .validation(SpValidationPolicy::recommended());
+            .validation(SpValidationPolicy::default());
     for endpoint in endpoints {
         builder = builder.manage_name_id_redirect_service(EndpointUrl::try_new(*endpoint)?);
     }
@@ -73,7 +73,7 @@ fn idp_with_formats(formats: &[NameIdFormat]) -> Result<saml_rs::IdentityProvide
         IDP_MANAGE,
     )?))
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::recommended())
+    .validation(IdpValidationPolicy::default())
     .name_id_formats(formats.iter().cloned());
     Ok(IdentityProvider::new(builder.build()?))
 }
@@ -1163,7 +1163,7 @@ fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
             IDP_MANAGE,
         )?))
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     );
     let idp_metadata = both.metadata_xml();
@@ -1218,7 +1218,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
             .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
             .credentials(sp_credentials)
             .algorithms(sp_algorithms)
-            .validation(SpValidationPolicy::recommended())
+            .validation(SpValidationPolicy::default())
             .build()?,
     );
     let idp = IdentityProvider::new(
@@ -1231,7 +1231,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
         )?))
         .credentials(idp_credentials)
         .algorithms(idp_algorithms)
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     );
     let sp_peer =
@@ -1371,7 +1371,7 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
                 limits,
                 ..saml_rs::XmlPolicy::default()
             })
-            .validation(SpValidationPolicy::recommended())
+            .validation(SpValidationPolicy::default())
             .build()?,
     );
     let idp = idp()?;

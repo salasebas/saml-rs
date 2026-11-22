@@ -14,14 +14,17 @@ use saml_rs::sp::LoginRequestOptions;
 use saml_rs::tests::engine::flow;
 use saml_rs::tests::engine::{create_logout_request, create_logout_response, LogoutUser};
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
+use saml_rs::tests::policies_without_crypto::{
+    idp_validation_without_crypto, sp_validation_without_crypto,
+};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, CertificatePem, EntityId, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSignaturePolicy, LogoutSigning,
-    LogoutSubject, MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy,
-    SamlError, SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, XmlPolicy,
+    IdpDescriptor, Inbound, LogoutSignaturePolicy, LogoutSubject, MetadataTrustPolicy, NameId,
+    RelayState, ReplayPolicy, ResponseSignaturePolicy, SamlError, SamlValidationContext,
+    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SsoEndpoint, StartSlo, StartSso,
+    XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -71,7 +74,7 @@ fn sp_config_builder() -> Result<saml_rs::SpConfigBuilder, SamlError> {
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy::compatibility()))
+    .validation(sp_validation_without_crypto()))
 }
 
 fn idp_config_builder() -> Result<saml_rs::IdpConfigBuilder, SamlError> {
@@ -79,7 +82,7 @@ fn idp_config_builder() -> Result<saml_rs::IdpConfigBuilder, SamlError> {
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
-    .validation(IdpValidationPolicy::compatibility()))
+    .validation(idp_validation_without_crypto()))
 }
 
 fn typed_sp_config() -> Result<SpConfig, SamlError> {
@@ -88,7 +91,7 @@ fn typed_sp_config() -> Result<SpConfig, SamlError> {
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
     .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo")?)
-    .validation(SpValidationPolicy::compatibility())
+    .validation(sp_validation_without_crypto())
     .build()
 }
 
@@ -98,7 +101,7 @@ fn typed_idp_config() -> Result<IdpConfig, SamlError> {
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
     .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo")?)
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(idp_validation_without_crypto())
     .build()
 }
 
@@ -201,13 +204,13 @@ fn typed_config_builders_construct_protocol_only_without_default_crypto(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy::compatibility())
+    .validation(sp_validation_without_crypto())
     .build()?;
     let idp_config = IdpConfig::builder(
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(idp_validation_without_crypto())
     .build()?;
 
     assert_eq!(
@@ -218,11 +221,8 @@ fn typed_config_builders_construct_protocol_only_without_default_crypto(
         idp_config.entity_id().as_str(),
         "https://idp.example.com/metadata"
     );
-    assert_eq!(sp_config.validation(), &SpValidationPolicy::compatibility());
-    assert_eq!(
-        idp_config.validation(),
-        &IdpValidationPolicy::compatibility()
-    );
+    assert_eq!(sp_config.validation(), &sp_validation_without_crypto());
+    assert_eq!(idp_config.validation(), &idp_validation_without_crypto());
     Ok(())
 }
 
@@ -273,7 +273,7 @@ fn typed_config_builders_return_unsupported_for_crypto_required_policy_without_d
 #[test]
 fn sp_required_assertion_signatures_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = SpValidationPolicy::compatibility();
+    let mut validation = sp_validation_without_crypto();
     validation.assertions = AssertionSignaturePolicy::RequireSigned;
 
     assert_unsupported(sp_config_builder()?.validation(validation).build());
@@ -283,7 +283,7 @@ fn sp_required_assertion_signatures_return_unsupported_without_default_crypto(
 #[test]
 fn sp_required_response_signatures_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = SpValidationPolicy::compatibility();
+    let mut validation = sp_validation_without_crypto();
     validation.responses = ResponseSignaturePolicy::RequireSigned;
 
     assert_unsupported(sp_config_builder()?.validation(validation).build());
@@ -293,7 +293,7 @@ fn sp_required_response_signatures_return_unsupported_without_default_crypto(
 #[test]
 fn sp_signed_authn_requests_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = SpValidationPolicy::compatibility();
+    let mut validation = sp_validation_without_crypto();
     validation.authn_requests = AuthnRequestSigningPolicy::Sign;
 
     assert_unsupported(sp_config_builder()?.validation(validation).build());
@@ -303,7 +303,7 @@ fn sp_signed_authn_requests_return_unsupported_without_default_crypto(
 #[test]
 fn sp_signed_logout_policy_returns_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = SpValidationPolicy::compatibility();
+    let mut validation = sp_validation_without_crypto();
     validation.logout.requests = LogoutSignaturePolicy::RequireSigned;
 
     assert_unsupported(sp_config_builder()?.validation(validation).build());
@@ -323,7 +323,7 @@ fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 #[test]
 fn idp_required_authn_request_signatures_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = IdpValidationPolicy::compatibility();
+    let mut validation = idp_validation_without_crypto();
     validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
 
     assert_unsupported(idp_config_builder()?.validation(validation).build());
@@ -333,7 +333,7 @@ fn idp_required_authn_request_signatures_return_unsupported_without_default_cryp
 #[test]
 fn idp_signed_logout_policy_returns_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = IdpValidationPolicy::compatibility();
+    let mut validation = idp_validation_without_crypto();
     validation.logout.responses = LogoutSignaturePolicy::RequireSigned;
 
     assert_unsupported(idp_config_builder()?.validation(validation).build());
@@ -355,11 +355,14 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, _idp, _sp_descriptor, idp_descriptor) = typed_protocol_facades()?;
 
-    assert_unsupported(sp.start_slo(
-        &idp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com")),
-        StartSlo::post().signing(LogoutSigning::Sign),
-    ));
+    assert_unsupported(
+        sp.start_slo(
+            &idp_descriptor,
+            LogoutSubject::new(NameId::new("alice@example.com"))
+                .with_session_index(saml_rs::SessionIndex::try_new("_session")?),
+            StartSlo::post(),
+        ),
+    );
     Ok(())
 }
 

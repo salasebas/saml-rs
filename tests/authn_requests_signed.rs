@@ -11,10 +11,11 @@ use common::signing_credentials;
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdentityProvider,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound,
-    ReplayPolicy, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, MetadataTrustPolicy, Outbound, ReplayPolicy, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
+    StartSso,
 };
 use url::Url;
 
@@ -31,7 +32,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
-    let mut validation = SpValidationPolicy::recommended();
+    let mut validation = SpValidationPolicy::default();
     validation.authn_requests = authn_requests;
     Ok(ServiceProvider::new(
         SpConfig::builder(
@@ -109,7 +110,7 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signing_sp = sp(AuthnRequestSigningPolicy::Sign)?;
     let unsigned_sp = sp(AuthnRequestSigningPolicy::DoNotSign)?;
-    let idp = idp(IdpValidationPolicy::recommended())?;
+    let idp = idp(IdpValidationPolicy::default())?;
     let (signing_descriptor, idp_descriptor) = descriptors(&signing_sp, &idp)?;
     assert!(signing_sp
         .metadata_xml()
@@ -137,8 +138,9 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         assert_eq!(received.message().id(), started.pending.request_id());
     }
 
-    let compatibility = self::idp(IdpValidationPolicy::compatibility())?;
-    let received = compatibility.receive_sso(
+    let mut unverified = IdpValidationPolicy::default();
+    unverified.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
+    let received = self::idp(unverified)?.receive_sso(
         &signing_descriptor,
         post_input(&unsigned_post.outbound)?,
         validation(),
@@ -151,7 +153,7 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
 fn unsigned_paos_request_is_rejected_when_sp_metadata_sets_authn_requests_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signing_sp = sp(AuthnRequestSigningPolicy::Sign)?;
-    let idp = idp(IdpValidationPolicy::recommended())?;
+    let idp = idp(IdpValidationPolicy::default())?;
     let (signing_descriptor, idp_descriptor) = descriptors(&signing_sp, &idp)?;
 
     let unsigned = signing_sp.start_paos_sso(

@@ -15,13 +15,13 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::{
-    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
-    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
-    MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
-    OutboundDelivery, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
-    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status,
-    SubordinateStatusCode,
+    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
+    AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId,
+    NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, OutboundDelivery, Received,
+    ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -51,7 +51,7 @@ fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     ))
 }
@@ -189,11 +189,11 @@ fn response_xml(
 #[test]
 fn received_authn_request_exposes_force_authn_when_set_and_leaves_it_absent_when_omitted(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let omitted = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
+    let omitted = receive(IdpValidationPolicy::default(), StartSso::post(), Ok)?;
     assert_eq!(omitted.received.message().force_authn(), None);
 
     let required = receive(
-        IdpValidationPolicy::recommended(),
+        IdpValidationPolicy::default(),
         StartSso::post().force_authn(ForceAuthn::Required),
         Ok,
     )?;
@@ -203,7 +203,7 @@ fn received_authn_request_exposes_force_authn_when_set_and_leaves_it_absent_when
     );
 
     let not_required = receive(
-        IdpValidationPolicy::recommended(),
+        IdpValidationPolicy::default(),
         StartSso::post().force_authn(ForceAuthn::NotRequired),
         Ok,
     )?;
@@ -212,21 +212,17 @@ fn received_authn_request_exposes_force_authn_when_set_and_leaves_it_absent_when
         Some(ForceAuthn::NotRequired)
     );
 
-    let numeric_true = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "ForceAuthn", "1"),
-    )?;
+    let numeric_true = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "ForceAuthn", "1")
+    })?;
     assert_eq!(
         numeric_true.received.message().force_authn(),
         Some(ForceAuthn::Required)
     );
 
-    let numeric_false = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "ForceAuthn", "0"),
-    )?;
+    let numeric_false = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "ForceAuthn", "0")
+    })?;
     assert_eq!(
         numeric_false.received.message().force_authn(),
         Some(ForceAuthn::NotRequired)
@@ -237,34 +233,28 @@ fn received_authn_request_exposes_force_authn_when_set_and_leaves_it_absent_when
 #[test]
 fn received_authn_request_exposes_is_passive_when_set_and_leaves_it_absent_when_omitted(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let omitted = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
+    let omitted = receive(IdpValidationPolicy::default(), StartSso::post(), Ok)?;
     assert_eq!(omitted.received.message().passive(), None);
 
-    let required = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "IsPassive", "true"),
-    )?;
+    let required = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "IsPassive", "true")
+    })?;
     assert_eq!(
         required.received.message().passive(),
         Some(IsPassive::Required)
     );
 
-    let not_required = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "IsPassive", "false"),
-    )?;
+    let not_required = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "IsPassive", "false")
+    })?;
     assert_eq!(
         not_required.received.message().passive(),
         Some(IsPassive::NotRequired)
     );
 
-    let numeric = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "IsPassive", "0"),
-    )?;
+    let numeric = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "IsPassive", "0")
+    })?;
     assert_eq!(
         numeric.received.message().passive(),
         Some(IsPassive::NotRequired)
@@ -275,13 +265,10 @@ fn received_authn_request_exposes_is_passive_when_set_and_leaves_it_absent_when_
 #[test]
 fn received_authn_request_exposes_requested_name_id_and_confirmation(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receipt = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
-                xml,
-                concat!(
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
+            xml,
+            concat!(
                 "<saml:Subject>",
                 "<saml:NameID Format=\"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress\" ",
                 "NameQualifier=\"https://idp.example.com\" ",
@@ -290,9 +277,8 @@ fn received_authn_request_exposes_requested_name_id_and_confirmation(
                 "<saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"/>",
                 "</saml:Subject>"
             ),
-            )
-        },
-    )?;
+        )
+    })?;
     let subject = receipt
         .received
         .message()
@@ -328,7 +314,7 @@ fn received_authn_request_exposes_requested_name_id_and_confirmation(
 #[test]
 fn received_authn_request_without_subject_leaves_it_absent(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receipt = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), Ok)?;
     assert_eq!(receipt.received.message().requested_subject(), None);
     Ok(())
 }
@@ -336,16 +322,12 @@ fn received_authn_request_without_subject_leaves_it_absent(
 #[test]
 fn received_authn_request_without_identifier_presumes_the_presenter(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receipt = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
             xml,
             "<saml:Subject><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"/></saml:Subject>",
         )
-        },
-    )?;
+    })?;
     let subject = receipt
         .received
         .message()
@@ -363,16 +345,12 @@ fn received_authn_request_without_identifier_presumes_the_presenter(
 #[test]
 fn received_authn_request_keeps_base_id_and_encrypted_id_distinct_from_the_presenter(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let base_id = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
-                xml,
-                "<saml:Subject><saml:BaseID>opaque</saml:BaseID></saml:Subject>",
-            )
-        },
-    )?;
+    let base_id = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
+            xml,
+            "<saml:Subject><saml:BaseID>opaque</saml:BaseID></saml:Subject>",
+        )
+    })?;
     assert!(matches!(
         base_id
             .received
@@ -382,16 +360,12 @@ fn received_authn_request_keeps_base_id_and_encrypted_id_distinct_from_the_prese
         Some(RequestedSubjectIdentifier::BaseId)
     ));
 
-    let encrypted = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
+    let encrypted = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
             xml,
             "<saml:Subject><saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"/></saml:EncryptedID></saml:Subject>",
         )
-        },
-    )?;
+    })?;
     assert!(matches!(
         encrypted
             .received
@@ -404,12 +378,11 @@ fn received_authn_request_keeps_base_id_and_encrypted_id_distinct_from_the_prese
 }
 
 #[test]
-fn received_authn_request_accepts_these_fields_under_recommended_and_compatibility(
+fn unsigned_authn_request_fields_are_accepted_under_both_unsigned_request_policies(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for validation_policy in [
-        IdpValidationPolicy::recommended(),
-        IdpValidationPolicy::compatibility(),
-    ] {
+    let mut unverified = IdpValidationPolicy::default();
+    unverified.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
+    for validation_policy in [IdpValidationPolicy::default(), unverified] {
         let receipt = receive(validation_policy, StartSso::post(), |xml| {
             let xml = insert_root_attribute(xml, "ForceAuthn", "true")?;
             let xml = insert_root_attribute(xml, "IsPassive", "true")?;
@@ -443,32 +416,24 @@ fn received_authn_request_accepts_these_fields_under_recommended_and_compatibili
 #[test]
 fn received_authn_request_rejects_a_non_boolean_flag_or_a_non_integer_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let force_authn = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "ForceAuthn", "maybe"),
-    );
+    let force_authn = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "ForceAuthn", "maybe")
+    });
     assert!(matches!(force_authn, Err(error) if error.to_string().contains("ForceAuthn")));
 
-    let is_passive = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "IsPassive", "TRUE"),
-    );
+    let is_passive = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "IsPassive", "TRUE")
+    });
     assert!(matches!(is_passive, Err(error) if error.to_string().contains("IsPassive")));
 
-    let non_xml_space = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "ForceAuthn", "\u{a0}true"),
-    );
+    let non_xml_space = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "ForceAuthn", "\u{a0}true")
+    });
     assert!(matches!(non_xml_space, Err(error) if error.to_string().contains("ForceAuthn")));
 
-    let padded_inner_space = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 1 0 "),
-    );
+    let padded_inner_space = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 1 0 ")
+    });
     assert!(matches!(
         padded_inner_space,
         Err(error) if error.to_string().contains("assertionConsumerServiceIndex")
@@ -479,19 +444,15 @@ fn received_authn_request_rejects_a_non_boolean_flag_or_a_non_integer_index(
 #[test]
 fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receipt = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            let xml = insert_root_attribute(xml, "ForceAuthn", " true ")?;
-            let xml = insert_root_attribute(xml, "IsPassive", "&#9;0&#10;")?;
-            let xml = insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 0 ")?;
-            if !xml.contains("AllowCreate=\"false\"") {
-                return Err("missing AllowCreate".into());
-            }
-            Ok(xml.replace("AllowCreate=\"false\"", "AllowCreate=\"&#13; true \""))
-        },
-    )?;
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        let xml = insert_root_attribute(xml, "ForceAuthn", " true ")?;
+        let xml = insert_root_attribute(xml, "IsPassive", "&#9;0&#10;")?;
+        let xml = insert_root_attribute(xml, "AssertionConsumerServiceIndex", " 0 ")?;
+        if !xml.contains("AllowCreate=\"false\"") {
+            return Err("missing AllowCreate".into());
+        }
+        Ok(xml.replace("AllowCreate=\"false\"", "AllowCreate=\"&#13; true \""))
+    })?;
     let message = receipt.received.message();
     assert_eq!(message.force_authn(), Some(ForceAuthn::Required));
     assert_eq!(message.passive(), Some(IsPassive::NotRequired));
@@ -506,34 +467,26 @@ fn received_authn_request_collapses_xml_schema_whitespace_in_booleans_and_index(
 #[test]
 fn received_authn_request_rejects_two_identifiers_or_two_subjects(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let two_identifiers = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
+    let two_identifiers = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
             xml,
             "<saml:Subject><saml:NameID>alice@example.com</saml:NameID><saml:EncryptedID/></saml:Subject>",
         )
-        },
-    );
+    });
     assert!(matches!(
         two_identifiers,
         Err(error) if error.to_string().contains("one identifier")
     ));
 
-    let two_subjects = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
-                xml,
-                concat!(
-                    "<saml:Subject><saml:NameID>alice@example.com</saml:NameID></saml:Subject>",
-                    "<saml:Subject><saml:NameID>bob@example.com</saml:NameID></saml:Subject>"
-                ),
-            )
-        },
-    );
+    let two_subjects = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
+            xml,
+            concat!(
+                "<saml:Subject><saml:NameID>alice@example.com</saml:NameID></saml:Subject>",
+                "<saml:Subject><saml:NameID>bob@example.com</saml:NameID></saml:Subject>"
+            ),
+        )
+    });
     assert!(matches!(
         two_subjects,
         Err(error) if error.to_string().contains("Subject must occur once")
@@ -545,18 +498,14 @@ fn received_authn_request_rejects_two_identifiers_or_two_subjects(
 fn received_authn_request_rejects_qualified_name_id_qualifiers(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for attribute in ["NameQualifier", "SPNameQualifier", "SPProvidedID"] {
-        let prefixed_only = receive(
-            IdpValidationPolicy::recommended(),
-            StartSso::post(),
-            |xml| {
-                insert_before_name_id_policy(
+        let prefixed_only = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+            insert_before_name_id_policy(
                     xml,
                     &format!(
                         "<saml:Subject><saml:NameID xmlns:x=\"urn:example:foreign\" x:{attribute}=\"https://evil.example\">alice@example.com</saml:NameID></saml:Subject>"
                     ),
                 )
-            },
-        );
+        });
         let Err(error) = prefixed_only else {
             return Err(format!("qualified {attribute} was accepted").into());
         };
@@ -566,11 +515,8 @@ fn received_authn_request_rejects_qualified_name_id_qualifiers(
         }
     }
 
-    let both_forms = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
+    let both_forms = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
                 xml,
                 concat!(
                     "<saml:Subject><saml:NameID xmlns:x=\"urn:example:foreign\" ",
@@ -578,8 +524,7 @@ fn received_authn_request_rejects_qualified_name_id_qualifiers(
                     "x:NameQualifier=\"https://evil.example\">alice@example.com</saml:NameID></saml:Subject>"
                 ),
             )
-        },
-    );
+    });
     assert!(matches!(
         both_forms,
         Err(error) if error.to_string().contains("NameQualifier")
@@ -591,16 +536,12 @@ fn received_authn_request_rejects_qualified_name_id_qualifiers(
 #[test]
 fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let qualifier_only = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            replace_name_id_policy(
-                xml,
-                &format!("<samlp:NameIDPolicy SPNameQualifier=\"{AFFILIATION}\"/>"),
-            )
-        },
-    )?;
+    let qualifier_only = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        replace_name_id_policy(
+            xml,
+            &format!("<samlp:NameIDPolicy SPNameQualifier=\"{AFFILIATION}\"/>"),
+        )
+    })?;
     let policy = qualifier_only
         .received
         .message()
@@ -615,18 +556,14 @@ fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
         (None, Some(AFFILIATION), NameIdCreationRequest::Unspecified)
     );
 
-    let every_attribute = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            replace_name_id_policy(
+    let every_attribute = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        replace_name_id_policy(
                 xml,
                 &format!(
                     "<samlp:NameIDPolicy Format=\"{EMAIL_FORMAT}\" SPNameQualifier=\"{AFFILIATION}\" AllowCreate=\"true\"/>"
                 ),
             )
-        },
-    )?;
+    })?;
     let policy = every_attribute
         .received
         .message()
@@ -645,18 +582,14 @@ fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
         )
     );
 
-    let qualified = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            replace_name_id_policy(
+    let qualified = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        replace_name_id_policy(
                 xml,
                 &format!(
                     "<samlp:NameIDPolicy xmlns:x=\"urn:example:foreign\" x:SPNameQualifier=\"{AFFILIATION}\"/>"
                 ),
             )
-        },
-    );
+    });
     assert!(matches!(
         qualified,
         Err(error) if error.to_string().contains("SPNameQualifier")
@@ -668,52 +601,40 @@ fn received_authn_request_keeps_the_name_id_policy_sp_name_qualifier(
 #[test]
 fn received_authn_request_rejects_a_qualified_flag_and_a_foreign_subject(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let qualified = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            let needle = "<samlp:AuthnRequest ";
-            let position = xml.find(needle).ok_or("missing AuthnRequest start tag")?;
-            let insert_at = position + needle.len();
-            Ok(format!(
-                "{}xmlns:x=\"urn:example:foreign\" x:ForceAuthn=\"true\" {}",
-                &xml[..insert_at],
-                &xml[insert_at..]
-            ))
-        },
-    );
+    let qualified = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        let needle = "<samlp:AuthnRequest ";
+        let position = xml.find(needle).ok_or("missing AuthnRequest start tag")?;
+        let insert_at = position + needle.len();
+        Ok(format!(
+            "{}xmlns:x=\"urn:example:foreign\" x:ForceAuthn=\"true\" {}",
+            &xml[..insert_at],
+            &xml[insert_at..]
+        ))
+    });
     assert!(matches!(
         qualified,
         Err(error) if error.to_string().contains("ForceAuthn")
             && error.to_string().contains("unqualified")
     ));
 
-    let foreign_subject = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
+    let foreign_subject = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
                 xml,
                 "<x:Subject xmlns:x=\"urn:example:foreign\"><x:NameID>alice@example.com</x:NameID></x:Subject>",
             )
-        },
-    );
+    });
     assert!(matches!(
         foreign_subject,
         Err(error) if error.to_string().contains("Subject")
             && error.to_string().contains("namespace")
     ));
 
-    let foreign_identifier = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_before_name_id_policy(
-                xml,
-                "<saml:Subject><x:EncryptedID xmlns:x=\"urn:example:foreign\"/></saml:Subject>",
-            )
-        },
-    );
+    let foreign_identifier = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_before_name_id_policy(
+            xml,
+            "<saml:Subject><x:EncryptedID xmlns:x=\"urn:example:foreign\"/></saml:Subject>",
+        )
+    });
     assert!(matches!(
         foreign_identifier,
         Err(error) if error.to_string().contains("EncryptedID")
@@ -725,26 +646,22 @@ fn received_authn_request_rejects_a_qualified_flag_and_a_foreign_subject(
 #[test]
 fn received_authn_request_exposes_the_requested_authn_context_in_request_order(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let omitted = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
+    let omitted = receive(IdpValidationPolicy::default(), StartSso::post(), Ok)?;
     assert_eq!(omitted.received.message().requested_authn_context(), None);
 
-    let classes = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_after_name_id_policy(
-                xml,
-                &requested_authn_context(
-                    "",
-                    &format!(
-                        "{}{}",
-                        class_ref(&format!("\n  {SMARTCARD} ")),
-                        class_ref(PASSWORD_PROTECTED_TRANSPORT)
-                    ),
+    let classes = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_after_name_id_policy(
+            xml,
+            &requested_authn_context(
+                "",
+                &format!(
+                    "{}{}",
+                    class_ref(&format!("\n  {SMARTCARD} ")),
+                    class_ref(PASSWORD_PROTECTED_TRANSPORT)
                 ),
-            )
-        },
-    )?;
+            ),
+        )
+    })?;
     let requested = classes
         .received
         .message()
@@ -759,19 +676,15 @@ fn received_authn_request_exposes_the_requested_authn_context_in_request_order(
         ]
     );
 
-    let declarations = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_after_name_id_policy(
-                xml,
-                &requested_authn_context(
-                    " Comparison=\"minimum\"",
-                    &format!("<saml:AuthnContextDeclRef>{DECLARATION}</saml:AuthnContextDeclRef>"),
-                ),
-            )
-        },
-    )?;
+    let declarations = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_after_name_id_policy(
+            xml,
+            &requested_authn_context(
+                " Comparison=\"minimum\"",
+                &format!("<saml:AuthnContextDeclRef>{DECLARATION}</saml:AuthnContextDeclRef>"),
+            ),
+        )
+    })?;
     let requested = declarations
         .received
         .message()
@@ -827,11 +740,9 @@ fn received_authn_request_rejects_a_requested_authn_context_outside_its_schema(
         ),
     ];
     for (element, expected) in cases {
-        let received = receive(
-            IdpValidationPolicy::recommended(),
-            StartSso::post(),
-            |xml| insert_after_name_id_policy(xml, &element),
-        );
+        let received = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+            insert_after_name_id_policy(xml, &element)
+        });
         let Err(error) = received else {
             return Err(format!("{element} was accepted").into());
         };
@@ -845,18 +756,16 @@ fn received_authn_request_rejects_a_requested_authn_context_outside_its_schema(
 #[test]
 fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receipt = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| insert_after_name_id_policy(xml, &requested_authn_context("", &class_ref(SMARTCARD))),
-    )?;
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_after_name_id_policy(xml, &requested_authn_context("", &class_ref(SMARTCARD)))
+    })?;
     let assertion = || SsoAssertion::new(NameId::new("alice@example.com"));
     let respond = |outcome: SsoOutcome| {
         receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
             outcome,
-            RespondSso::post().apply_producer_rules(),
+            RespondSso::post(),
         )
     };
 
@@ -899,39 +808,28 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     ));
     assert!(!refused.contains("Assertion"));
 
-    let compatibility = response_xml(&receipt.idp.respond_sso(
-        &receipt.sp_descriptor,
-        &receipt.received,
-        assertion(),
-        RespondSso::post(),
-    )?)?;
-    assert!(!compatibility.contains("AuthnStatement"));
     Ok(())
 }
 
 #[test]
 fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receipt = receive(
-        IdpValidationPolicy::recommended(),
-        StartSso::post(),
-        |xml| {
-            insert_after_name_id_policy(
-                xml,
-                &requested_authn_context(
-                    " Comparison=\"minimum\"",
-                    &class_ref(PASSWORD_PROTECTED_TRANSPORT),
-                ),
-            )
-        },
-    )?;
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        insert_after_name_id_policy(
+            xml,
+            &requested_authn_context(
+                " Comparison=\"minimum\"",
+                &class_ref(PASSWORD_PROTECTED_TRANSPORT),
+            ),
+        )
+    })?;
     let response = response_xml(
         &receipt.idp.respond_sso(
             &receipt.sp_descriptor,
             &receipt.received,
             SsoAssertion::new(NameId::new("alice@example.com"))
                 .with_authn_context(AuthnContextReference::declaration(DECLARATION)?),
-            RespondSso::post().apply_producer_rules(),
+            RespondSso::post(),
         )?,
     )?;
     assert!(response.contains(&format!(
@@ -941,19 +839,19 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
 }
 
 #[test]
-fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules(
+fn respond_sso_writes_the_context_when_the_request_specifies_none(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let receipt = receive(IdpValidationPolicy::recommended(), StartSso::post(), Ok)?;
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), Ok)?;
     let response = receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
         SsoAssertion::new(NameId::new("alice@example.com"))
             .with_authn_context(AuthnContextReference::class(SMARTCARD)?),
         RespondSso::post(),
-    );
-    assert!(
-        matches!(response, Err(SamlError::Invalid(message)) if message.contains("Web Browser SSO generation rules"))
-    );
+    )?;
+    assert!(response_xml(&response)?.contains(&format!(
+        "<saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef>"
+    )));
     Ok(())
 }
 
@@ -961,16 +859,12 @@ fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules
 fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let receive_policy = |attributes: &str| {
-        receive(
-            IdpValidationPolicy::recommended(),
-            StartSso::post(),
-            |xml| {
-                replace_name_id_policy(
-                    xml,
-                    &format!("<samlp:NameIDPolicy{attributes} SPNameQualifier=\"{AFFILIATION}\"/>"),
-                )
-            },
-        )
+        receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+            replace_name_id_policy(
+                xml,
+                &format!("<samlp:NameIDPolicy{attributes} SPNameQualifier=\"{AFFILIATION}\"/>"),
+            )
+        })
     };
     let respond = |receipt: &Receipt, sp_name_qualifier: Option<&str>, options: RespondSso| {
         let pseudonym = NameId::new("pseudonym").with_format(NameIdFormat::Persistent);
@@ -985,7 +879,6 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
             options,
         )
     };
-    let rules = || RespondSso::post().apply_producer_rules();
 
     for format in [
         PERSISTENT_FORMAT.to_string(),
@@ -997,13 +890,13 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
             Some(SP_ENTITY_ID),
             Some(" https://affiliation.example.com"),
         ] {
-            let refused = respond(&receipt, issued, rules());
+            let refused = respond(&receipt, issued, RespondSso::post());
             assert!(
                 matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("SPNameQualifier") && message.contains(AFFILIATION)),
                 "{format} {issued:?}: {refused:?}"
             );
         }
-        let answered = response_xml(&respond(&receipt, Some(AFFILIATION), rules())?)?;
+        let answered = response_xml(&respond(&receipt, Some(AFFILIATION), RespondSso::post())?)?;
         assert!(answered.contains(&format!("SPNameQualifier=\"{AFFILIATION}\"")));
 
         let error = receipt.idp.respond_sso(
@@ -1013,11 +906,9 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
                 Status::responder()
                     .with_subordinate(SubordinateStatusCode::try_new(INVALID_NAME_ID_POLICY)?),
             ),
-            rules(),
+            RespondSso::post(),
         );
         assert!(error.is_ok(), "{error:?}");
-        let compatibility = respond(&receipt, None, RespondSso::post());
-        assert!(compatibility.is_ok(), "{compatibility:?}");
     }
 
     for attributes in [
@@ -1026,26 +917,21 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         String::new(),
     ] {
         let receipt = receive_policy(&attributes)?;
-        let answered = respond(&receipt, None, rules());
+        let answered = respond(&receipt, None, RespondSso::post());
         assert!(answered.is_ok(), "{attributes}: {answered:?}");
     }
     Ok(())
 }
 
 #[test]
-fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn respond_sso_issues_only_the_requested_subject() -> Result<(), Box<dyn std::error::Error>> {
     let receive_subject = |subject: &str, policy: &str| {
-        receive(
-            IdpValidationPolicy::recommended(),
-            StartSso::post(),
-            |xml| {
-                replace_name_id_policy(
-                    xml,
-                    &format!("<saml:Subject>{subject}</saml:Subject>{policy}"),
-                )
-            },
-        )
+        receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+            replace_name_id_policy(
+                xml,
+                &format!("<saml:Subject>{subject}</saml:Subject>{policy}"),
+            )
+        })
     };
     let respond = |receipt: &Receipt, name_id: NameId, options: RespondSso| {
         receipt.idp.respond_sso(
@@ -1060,10 +946,9 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
             &receipt.sp_descriptor,
             &receipt.received,
             SsoOutcome::Failure(status),
-            RespondSso::post().apply_producer_rules(),
+            RespondSso::post(),
         )
     };
-    let rules = || RespondSso::post().apply_producer_rules();
     let persistent = |value: &str| NameId::new(value).with_format(NameIdFormat::Persistent);
     let is_refused = |result: &Result<Outbound<saml_rs::SsoResponse>, SamlError>| matches!(result, Err(SamlError::Invalid(message)) if message.contains("requested Subject"));
 
@@ -1078,15 +963,15 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
             .with_format(NameIdFormat::Persistent)
             .with_sp_name_qualifier(SP_ENTITY_ID),
     ] {
-        let refused = respond(&receipt, issued.clone(), rules());
+        let refused = respond(&receipt, issued.clone(), RespondSso::post());
         assert!(is_refused(&refused), "{issued:?}: {refused:?}");
     }
-    let answered = respond(&receipt, persistent("alice"), rules());
+    let answered = respond(&receipt, persistent("alice"), RespondSso::post());
     assert!(answered.is_ok(), "{answered:?}");
     let policy_format = respond(
         &receipt,
         NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
-        rules(),
+        RespondSso::post(),
     );
     assert!(policy_format.is_ok(), "{policy_format:?}");
     let error = respond_failure(
@@ -1096,8 +981,6 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         )?),
     );
     assert!(error.is_ok(), "{error:?}");
-    let compatibility = respond(&receipt, persistent("bob"), RespondSso::post());
-    assert!(compatibility.is_ok(), "{compatibility:?}");
 
     let without_policy_format = receive_subject(
         &format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>"),
@@ -1106,7 +989,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     let other_format = respond(
         &without_policy_format,
         NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
-        rules(),
+        RespondSso::post(),
     );
     assert!(is_refused(&other_format), "{other_format:?}");
 
@@ -1117,7 +1000,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     let unspecified = respond(
         &omitted_format,
         NameId::new("alice").with_format(NameIdFormat::Custom(UNSPECIFIED_FORMAT.to_string())),
-        rules(),
+        RespondSso::post(),
     );
     assert!(unspecified.is_ok(), "{unspecified:?}");
 
@@ -1126,7 +1009,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"/></saml:EncryptedID>",
     ] {
         let receipt = receive_subject(subject, "")?;
-        let refused = respond(&receipt, persistent("alice"), rules());
+        let refused = respond(&receipt, persistent("alice"), RespondSso::post());
         assert!(is_refused(&refused), "{subject}: {refused:?}");
         let error = respond_failure(&receipt, Status::responder());
         assert!(error.is_ok(), "{subject}: {error:?}");

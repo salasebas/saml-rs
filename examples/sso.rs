@@ -8,9 +8,9 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
         AcsEndpoint, CertificatePem, Credentials, EntityId, IdentityProvider, IdpConfig,
-        IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem,
-        RelayState, ReplayPolicy, RespondSso, SamlValidationContext, ServiceProvider, SpConfig,
-        SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
+        IdpDescriptor, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
+        ReplayPolicy, RespondSso, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
+        SsoAssertion, SsoEndpoint, StartSso, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -31,7 +31,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
         .credentials(credentials())
-        .validation(SpValidationPolicy::recommended())
         .build()?,
     );
     let idp = IdentityProvider::new(
@@ -40,7 +39,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
         .credentials(credentials())
-        .validation(IdpValidationPolicy::recommended())
         .build()?,
     );
 

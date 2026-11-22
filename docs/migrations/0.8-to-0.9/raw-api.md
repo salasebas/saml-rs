@@ -29,7 +29,7 @@ typed API:
 | `HttpRequest::redirect`, `HttpRequest::post` | `Inbound::redirect` with the raw query string, `Inbound::post` with the form fields |
 | `ServiceProvider::from_metadata`, `IdentityProvider::from_metadata` | For your own role, `ServiceProvider::new` with an `SpConfig` or `IdentityProvider::new` with an `IdpConfig`. For the peer, `SpDescriptor::from_metadata_xml` or `IdpDescriptor::from_metadata_xml` |
 | `EntitySetting` | `SpConfig` and `IdpConfig`, with their builders |
-| `LoginRequestOptions::custom`, `LoginResponseOptions::custom` | `SpConfigBuilder::authn_request_template`, `IdpConfigBuilder::sso_response_template` |
+| `LoginRequestOptions::custom`, `LoginResponseOptions::custom` | Use typed SSO inputs. See [Typed config](config.md#replace-sso-templates-with-typed-options) |
 | `LoginResponseOptions::encrypt_then_sign` | Nothing. It was never read: an encrypted, message-signed response is always signed after the assertion is encrypted |
 | `Outbound::raw_context().binding` | `Outbound::delivery()` |
 | `Outbound::raw_context().context`, `into_raw_context` | `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` |
@@ -81,23 +81,24 @@ fn send<Message>(outbound: &Outbound<Message>) {
 operations check what the raw functions left to the caller, such as
 `InResponseTo` correlation, RelayState, and the receiving endpoint.
 
-`SpValidationPolicy::compatibility` is the closest typed preset to the raw
-service provider, but it is more permissive than the raw defaults in two
-places. It skips audience validation, and it accepts unsigned logout messages.
-To keep what the raw defaults checked, start from it and set those fields
-back:
+The raw service provider's defaults differ from `SpValidationPolicy::default`
+in three fields. To keep what they checked, set those fields:
 
 ```rust
-use saml_rs::{AudienceValidationPolicy, LogoutSignaturePolicy, SpValidationPolicy};
+use saml_rs::{
+    AudienceValidationPolicy, ResponseSignaturePolicy, SpValidationPolicy, XmlSignatureProfile,
+};
 
-let mut validation = SpValidationPolicy::compatibility();
+let mut validation = SpValidationPolicy::default();
+validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
 validation.audience = AudienceValidationPolicy::RequireRestriction;
-validation.logout.requests = LogoutSignaturePolicy::RequireSigned;
-validation.logout.responses = LogoutSignaturePolicy::RequireSigned;
 ```
 
-`IdpValidationPolicy::compatibility` also accepts unsigned logout messages, so
-set its `logout` the same way.
+The raw identity provider's defaults differ from
+`IdpValidationPolicy::default` in `authn_requests`, which was
+`AuthnRequestValidationPolicy::AllowUnsigned`, and in `xml_signatures`, which
+was `XmlSignatureProfile::AllowWeakAlgorithms`.
 
 `accept_unsolicited_sso` rejects an unsolicited response that carries an empty
 `InResponseTo=""`. `parse_unsolicited_login_response` read an empty value as

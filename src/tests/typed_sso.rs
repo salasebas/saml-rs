@@ -1,5 +1,4 @@
-//! Compatibility is the legacy permissive preset.
-//! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 and is not that preset.
+//! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 alone.
 #![cfg(crypto)]
 
 use super::common;
@@ -23,7 +22,6 @@ use base64::Engine;
 use saml_rs::binding::{
     append_signature, build_redirect_octet, deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
 use saml_rs::constants::Binding;
 use saml_rs::constants::{status_code, ParserType};
@@ -94,14 +92,14 @@ fn signing_sp_validation() -> SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
         audience: AudienceValidationPolicy::RequireRestriction,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     }
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     }
 }
 
@@ -193,11 +191,11 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
 
 // Field combination exercised by the typed Web Browser SSO accept tests.
 fn recommended_sso_accept_validation() -> SpValidationPolicy {
-    SpValidationPolicy::recommended()
+    SpValidationPolicy::default()
 }
 
 fn recommended_sso_accept_idp_validation() -> IdpValidationPolicy {
-    IdpValidationPolicy::recommended()
+    IdpValidationPolicy::default()
 }
 
 fn signed_idp_metadata() -> Result<String, SamlError> {
@@ -287,15 +285,13 @@ fn facades() -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), Sa
     ))
 }
 
-fn compatibility_facades(
-) -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {
+fn unsigned_request_facades() -> Result<(ServiceProvider, IdentityProvider), SamlError> {
     let sp = SpConfig::builder(
         EntityId::try_new(SP_ENTITY_ID)?,
         AcsEndpoint::post(SP_ACS_POST)?.with_default(),
     )
     .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLESIGN)?)
     .credentials(signing_credentials())
-    .validation(SpValidationPolicy::compatibility())
     .build()?;
     let idp = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -304,12 +300,19 @@ fn compatibility_facades(
     .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
     .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(unverified_authn_request_idp_validation())
     .build()?;
     Ok((ServiceProvider::new(sp), IdentityProvider::new(idp)))
 }
 
-fn hostile_facades() -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {
+fn unverified_authn_request_idp_validation() -> IdpValidationPolicy {
+    IdpValidationPolicy {
+        authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
+        ..IdpValidationPolicy::default()
+    }
+}
+
+fn hostile_facades() -> Result<(ServiceProvider, IdentityProvider), SamlError> {
     Ok((
         ServiceProvider::new(hostile_sp_config()?),
         IdentityProvider::new(hostile_idp_config()?),
@@ -675,7 +678,7 @@ fn typed_detached_authn_requests_parse_with_relay_state() -> Result<(), Box<dyn 
 #[test]
 fn typed_facade_rejects_missing_authn_request_issue_instant_in_real_flow(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp) = compatibility_facades()?;
+    let (sp, idp) = unsigned_request_facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let xml = replace_issue_instant(&authn_request_xml(&started.outbound)?, None)?;
@@ -699,7 +702,7 @@ fn typed_facade_rejects_missing_authn_request_issue_instant_in_real_flow(
 #[test]
 fn typed_facade_rejects_malformed_authn_request_issue_instant_in_real_flow(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp) = compatibility_facades()?;
+    let (sp, idp) = unsigned_request_facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let xml = replace_issue_instant(
@@ -728,7 +731,7 @@ fn typed_facade_rejects_malformed_authn_request_issue_instant_in_real_flow(
 #[test]
 fn typed_facade_accepts_old_normalized_authn_request_issue_instant_in_real_flow(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, idp) = compatibility_facades()?;
+    let (sp, idp) = unsigned_request_facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let xml = replace_issue_instant(
@@ -784,8 +787,8 @@ struct IssuedAuthnRequest {
 
 fn issued_authn_request_for_recommended_idp(
 ) -> Result<IssuedAuthnRequest, Box<dyn std::error::Error>> {
-    let (sp, _) = compatibility_facades()?;
-    let idp = IdentityProvider::new(idp_with_validation(IdpValidationPolicy::recommended())?);
+    let (sp, _) = unsigned_request_facades()?;
+    let idp = IdentityProvider::new(idp_with_validation(IdpValidationPolicy::default())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let xml = authn_request_xml(&started.outbound)?;
@@ -2347,7 +2350,7 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
     let ruled = idp.initiate_sso(
         &sp_descriptor,
         SsoAssertion::new(principal()),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     let ruled_fields = post_fields(&ruled)?;
     let ruled_xml = response_xml_from_fields(&ruled_fields)?;
@@ -2522,13 +2525,10 @@ fn typed_facade_accept_unsolicited_sso_simplesign_rejects_non_utc_response_issue
 }
 
 #[test]
-fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_template_renderers(
+fn typed_idp_issuance_lifetime_drives_both_sso_expirations(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let lifetime = Duration::from_secs(11 * 60);
-    for (template, binding) in [
-        (None, SsoResponseBinding::Post),
-        (Some(SSO_RESPONSE_TEMPLATE), SsoResponseBinding::SimpleSign),
-    ] {
+    for binding in [SsoResponseBinding::Post, SsoResponseBinding::SimpleSign] {
         let sp = ServiceProvider::new(sp_config_with_default_response_binding(binding)?);
         let idp_config = IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -2538,10 +2538,6 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
         .credentials(signing_credentials())
         .issuance_lifetime(lifetime)
         .validation(signed_authn_request_idp_validation());
-        let idp_config = match template {
-            Some(template) => idp_config.sso_response_template(template),
-            None => idp_config,
-        };
         let idp = IdentityProvider::new(idp_config.build()?);
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let options = match binding {
@@ -3205,8 +3201,9 @@ fn recommended_idp_receive_verifies_a_present_authn_request_signature(
     let strict_idp = IdentityProvider::new(idp_config()?);
     let recommended_idp =
         IdentityProvider::new(idp_with_validation(recommended_sso_accept_idp_validation())?);
-    let compatibility_idp =
-        IdentityProvider::new(idp_with_validation(IdpValidationPolicy::compatibility())?);
+    let unverified_idp = IdentityProvider::new(idp_with_validation(
+        unverified_authn_request_idp_validation(),
+    )?);
     let (sp_descriptor, idp_descriptor) = descriptors(&signing_sp, &strict_idp)?;
     let started = signing_sp.start_sso(&idp_descriptor, StartSso::post())?;
     let signed = authn_request_input(&started.outbound)?;
@@ -3227,7 +3224,7 @@ fn recommended_idp_receive_verifies_a_present_authn_request_signature(
         }
     }
 
-    compatibility_idp.receive_sso(
+    unverified_idp.receive_sso(
         &sp_descriptor,
         post_authn_request_input_with_xml(&corrupted),
         validation(),
@@ -3236,12 +3233,14 @@ fn recommended_idp_receive_verifies_a_present_authn_request_signature(
 }
 
 #[test]
-fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcomes(
+fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = recommended_post_exchange()?;
-    let compatibility =
-        ServiceProvider::new(sp_with_validation(SpValidationPolicy::compatibility())?);
-    let session = compatibility.finish_sso(
+    let audience_skipped = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
+        audience: AudienceValidationPolicy::Skip,
+        ..SpValidationPolicy::default()
+    })?);
+    let session = audience_skipped.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(exchange.response_fields.clone()),
@@ -3255,7 +3254,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
             "<saml:Audience>https://other.example/metadata</saml:Audience>",
         ),
     )?;
-    let session = compatibility.finish_sso(
+    let session = audience_skipped.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(response_fields_with_xml(
@@ -3266,10 +3265,10 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
 
-    let (compatibility_sp, compatibility_idp) = compatibility_facades()?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&compatibility_sp, &compatibility_idp)?;
-    let started = compatibility_sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let received = compatibility_idp.receive_sso(
+    let (unsigned_sp, unverified_idp) = unsigned_request_facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &unverified_idp)?;
+    let started = unsigned_sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = unverified_idp.receive_sso(
         &sp_descriptor,
         Inbound::post(post_fields(&started.outbound)?),
         validation(),
@@ -3278,7 +3277,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
 
     let wrong_destination = authn_request_xml(&started.outbound)?
         .replace(IDP_SSO_POST, "https://idp.example.com/sso/wrong");
-    match compatibility_idp.receive_sso(
+    match unverified_idp.receive_sso(
         &sp_descriptor,
         post_authn_request_input_with_xml(&wrong_destination),
         validation(),
@@ -3286,7 +3285,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
         Err(SamlError::DestinationMismatch { .. }) => {}
         other => {
             return Err(format!(
-                "expected DestinationMismatch from compatibility receive, got {other:?}"
+                "expected DestinationMismatch from an unverified receive, got {other:?}"
             )
             .into());
         }

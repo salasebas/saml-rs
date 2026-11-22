@@ -17,7 +17,6 @@ use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
 use saml_rs::constants::Binding;
 use saml_rs::entity::iso8601_offset;
@@ -27,8 +26,6 @@ use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::template::LoginResponseAttribute;
-use saml_rs::template::LoginResponseTemplate;
 use saml_rs::tests::engine::fill_template;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
@@ -55,9 +52,11 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
-    let mut validation = SpValidationPolicy::recommended();
-    validation.assertions = AssertionSignaturePolicy::RequireSigned;
-    validation.audience = AudienceValidationPolicy::RequireRestriction;
+    let validation = SpValidationPolicy {
+        assertions: AssertionSignaturePolicy::RequireSigned,
+        audience: AudienceValidationPolicy::RequireRestriction,
+        ..Default::default()
+    };
     Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -75,7 +74,7 @@ fn idp_config() -> Result<IdpConfigBuilder, SamlError> {
         SsoEndpoint::post(IDP_SSO_POST)?,
     )
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::recommended()))
+    .validation(IdpValidationPolicy::default()))
 }
 
 fn idp() -> Result<saml_rs::IdentityProvider, SamlError> {
@@ -273,6 +272,22 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
 }
 
 #[test]
+fn signed_sso_preserves_xml_characters_in_attribute_names_formats_and_values(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let attribute = Attribute::new("Research & \"Development\"", values(&["5 < 7 & 9 > 3"]))
+        .with_name_format(AttributeNameFormat::Custom(
+            "urn:groups:research&design".into(),
+        ));
+    let exchange = exchange(
+        SsoAssertion::new(alice()).with_attributes(Attributes::new([attribute.clone()])),
+        RespondSso::post().sign_response(),
+    )?;
+    assert_eq!(exchange.xml.matches("<saml:AttributeValue ").count(), 1);
+    assert_eq!(exchange.session.attributes().as_slice(), [attribute]);
+    Ok(())
+}
+
+#[test]
 fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
@@ -366,94 +381,27 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
     Ok(())
 }
 
-#[test]
-fn typed_attributes_require_the_built_in_login_response_renderer(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = templated_idp()?;
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let attributes = Attributes::new(vec![Attribute::new("mail", values(&["a@example.com"]))
-        .with_name_format(AttributeNameFormat::Basic)]);
-    match idp.initiate_sso(
-        &sp_descriptor,
-        SsoAssertion::new(alice()).with_attributes(attributes),
-        RespondSso::post(),
-    ) {
-        Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
-        other => return Err(format!("expected template error, got {other:?}").into()),
-    }
-    Ok(())
-}
-
-/// A peer identity provider that ignores the producer rules: the raw
-/// samlify-port renderer writes each `(Name, NameFormat, value)` as given.
 fn accept_peer_attributes(
     attributes: &[(&str, &str, &str)],
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let template = LoginResponseTemplate {
-        context: None,
-        attributes: attributes
-            .iter()
-            .enumerate()
-            .map(|(index, (name, name_format, _))| LoginResponseAttribute {
-                name: (*name).to_string(),
-                name_format: (*name_format).to_string(),
-                value_xsi_type: "xs:string".to_string(),
-                value_tag: format!("value{index}"),
-                value_xmlns_xs: None,
-                value_xmlns_xsi: None,
-            })
-            .collect(),
-    };
-    let user_attributes = attributes
-        .iter()
-        .enumerate()
-        .map(|(index, (_, _, value))| (format!("value{index}"), (*value).to_string()))
-        .collect();
-    accept_peer_response(template, user_attributes)
+    let mut writer = crate::xml::write::XmlWriter::new();
+    writer.start("saml:AttributeStatement", &[]);
+    for &(name, format, value) in attributes {
+        writer.start("saml:Attribute", &[("Name", name), ("NameFormat", format)]);
+        writer.text_element("saml:AttributeValue", &[], value);
+        writer.end("saml:Attribute");
+    }
+    writer.end("saml:AttributeStatement");
+    accept_peer_attribute_statement(&writer.finish())
 }
 
-/// A peer identity provider that signs `statement` verbatim as the
-/// assertion's `<AttributeStatement>`.
 fn accept_peer_attribute_statement(
     statement: &str,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let template = LoginResponseTemplate {
-        context: Some(SSO_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", statement, 1)),
-        attributes: Vec::new(),
-    };
-    accept_peer_response(template, Vec::new())
-}
-
-fn accept_peer_response(
-    template: LoginResponseTemplate,
-    user_attributes: Vec<(String, String)>,
-) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = idp()?;
-    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let user = User {
-        name_id: "alice@example.com".to_string(),
-        attributes: user_attributes,
-    };
-    let mut raw_idp = idp.engine().clone();
-    raw_idp.setting.login_response_template = Some(template);
-    let context = raw_idp.create_login_response(
-        sp.engine(),
-        Binding::Post,
-        &user,
-        &LoginResponseOptions {
-            in_response_to: Some(started.pending.request_id().as_str()),
-            ..LoginResponseOptions::default()
-        },
-    )?;
-    Ok(sp.finish_sso(
-        &idp_descriptor,
-        &started.pending,
-        Inbound::post(vec![FormField::new("SAMLResponse", context.context)]),
-        validation(),
-    )?)
+    accept_peer_response(
+        &NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+        statement,
+    )
 }
 
 #[test]
@@ -713,31 +661,6 @@ fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_iss
 }
 
 #[test]
-fn a_login_response_template_does_not_drop_a_name_id_qualifier(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = templated_idp()?;
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let pseudonym = NameId::new("pseudonym").with_format(NameIdFormat::Persistent);
-
-    for name_id in [
-        pseudonym.clone().with_name_qualifier(IDP_ENTITY_ID),
-        pseudonym.clone().with_sp_name_qualifier(SP_ENTITY_ID),
-        pseudonym.with_sp_provided_id("sp-alias"),
-    ] {
-        match idp.initiate_sso(
-            &sp_descriptor,
-            SsoAssertion::new(name_id),
-            RespondSso::post(),
-        ) {
-            Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
-            other => return Err(format!("expected a template error, got {other:?}").into()),
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn stored_persistent_identifier_is_at_most_256_characters() -> Result<(), Box<dyn std::error::Error>>
 {
     // The limit counts characters, not bytes.
@@ -783,7 +706,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .name_id_format(NameIdFormat::Persistent)
         .build()?,
     );
@@ -793,25 +716,6 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         &sp_descriptor,
         SsoAssertion::new(unformatted),
         RespondSso::post(),
-    ))?;
-
-    // The raw template renderer fills the same NameID.
-    let templated = IdentityProvider::new(
-        IdpConfig::builder(
-            EntityId::try_new(IDP_ENTITY_ID)?,
-            SsoEndpoint::post(IDP_SSO_POST)?,
-        )
-        .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
-        .name_id_format(NameIdFormat::Persistent)
-        .sso_response_template(SSO_RESPONSE_TEMPLATE)
-        .build()?,
-    );
-    expect_name_id_length_error(templated.engine().create_login_response(
-        sp.engine(),
-        Binding::Post,
-        &User::new("x".repeat(257)),
-        &LoginResponseOptions::default(),
     ))?;
 
     // The rule applies to these two formats only.
@@ -824,7 +728,10 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
 
 /// A peer identity provider that ignores the producer rules: the raw renderer
 /// callback writes the `<NameID>` as given.
-fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::error::Error>> {
+fn accept_peer_response(
+    name_id: &NameId,
+    statement: &str,
+) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -862,18 +769,11 @@ fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::erro
                 ("AuthnStatement", String::new()),
             ],
         );
-        (id, xml)
+        (id, xml.replacen("{AttributeStatement}", statement, 1))
     };
-    let context = idp.engine().create_rendered_login_response(
-        sp.engine(),
-        Binding::Post,
-        &User::new(name_id.value()),
-        &LoginResponseOptions {
-            in_response_to: Some(&request_id),
-            ..LoginResponseOptions::default()
-        },
-        &fill,
-    )?;
+    let context = idp
+        .engine()
+        .create_rendered_login_response(sp.engine(), Binding::Post, &fill)?;
     Ok(sp.finish_sso(
         &idp_descriptor,
         &started.pending,
@@ -889,7 +789,7 @@ fn service_provider_accepts_persistent_and_transient_identifiers_that_miss_the_p
     let value = format!("alice@example.com/{}", "x".repeat(300));
     for format in [NameIdFormat::Persistent, NameIdFormat::Transient] {
         let name_id = NameId::new(value.clone()).with_format(format);
-        let session = accept_peer_name_id(&name_id)?;
+        let session = accept_peer_response(&name_id, "")?;
         assert_eq!(session.name_id(), &name_id);
     }
     Ok(())
@@ -1014,35 +914,13 @@ fn expect_name_id_format_error<T>(
     }
 }
 
-fn templated_idp() -> Result<saml_rs::IdentityProvider, SamlError> {
-    Ok(IdentityProvider::new(
-        idp_config()?
-            .sso_response_template(SSO_RESPONSE_TEMPLATE)
-            .build()?,
-    ))
-}
-
 #[test]
 fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
-    let templated = templated_idp()?;
-    let (sp_descriptor, _) = descriptors(&sp, &templated)?;
     for format in INVALID_FORMATS {
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
-        for options in [
-            RespondSso::post(),
-            RespondSso::post().apply_producer_rules(),
-        ] {
-            expect_name_id_format_error(respond(SsoAssertion::new(name_id.clone()), options))?;
-        }
-        // A login response template receives the value in {NameIDFormat}.
-        expect_name_id_format_error(templated.initiate_sso(
-            &sp_descriptor,
-            SsoAssertion::new(name_id),
-            RespondSso::post(),
-        ))?;
-
+        expect_name_id_format_error(respond(SsoAssertion::new(name_id), RespondSso::post()))?;
         // A NameID without a format is issued in the first configured format.
         let mut raw_idp = idp()?.engine().clone();
         raw_idp.setting.name_id_format = vec![format.to_string()];
@@ -1167,24 +1045,18 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
     let idp = idp()?;
     let mut raw_sp = sp()?.engine().clone();
     raw_sp.setting.name_id_format = Vec::new();
-    for template in [
-        None,
-        Some(saml_rs::config::AUTHN_REQUEST_TEMPLATE.to_string()),
-    ] {
-        raw_sp.setting.login_request_template = template;
-        let context = raw_sp.create_login_request(
-            idp.engine(),
-            Binding::Post,
-            &LoginRequestOptions::default(),
-        )?;
-        let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
-        let policy = xml
-            .split("<samlp:NameIDPolicy")
-            .nth(1)
-            .and_then(|rest| rest.split("/>").next())
-            .ok_or("missing NameIDPolicy")?;
-        assert_eq!(policy, " AllowCreate=\"false\"");
-    }
+    let context = raw_sp.create_login_request(
+        idp.engine(),
+        Binding::Post,
+        &LoginRequestOptions::default(),
+    )?;
+    let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
+    let policy = xml
+        .split("<samlp:NameIDPolicy")
+        .nth(1)
+        .and_then(|rest| rest.split("/>").next())
+        .ok_or("missing NameIDPolicy")?;
+    assert_eq!(policy, " AllowCreate=\"false\"");
     Ok(())
 }
 
@@ -1194,7 +1066,7 @@ fn service_provider_accepts_a_name_id_format_that_is_not_an_absolute_uri(
     // SAML Core §1.3.2 binds the writer of the value. No receiver rule rejects it.
     for format in ["local-format", "urn:%zz"] {
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
-        let session = accept_peer_name_id(&name_id)?;
+        let session = accept_peer_response(&name_id, "")?;
         assert_eq!(session.name_id(), &name_id);
     }
     Ok(())

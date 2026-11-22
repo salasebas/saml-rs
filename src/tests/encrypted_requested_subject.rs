@@ -55,7 +55,7 @@ fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
                 PrivateKeyPem::new(PRIVKEY),
             )),
         )
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     ))
 }
@@ -83,7 +83,7 @@ fn idp_with_credentials(credentials: Credentials) -> Result<saml_rs::IdentityPro
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(credentials)
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     ))
 }

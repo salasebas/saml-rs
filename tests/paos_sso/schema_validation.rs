@@ -18,7 +18,7 @@ fn schema_policy_covers_the_sp_paos_envelope() -> Result<(), Box<dyn std::error:
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .xml(xml)
         .build()?,
     );

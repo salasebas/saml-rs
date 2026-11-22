@@ -20,7 +20,7 @@ let subject = session
 let logout = sp.start_slo(
     &idp,
     subject,
-    StartSlo::post().apply_producer_rules(),
+    StartSlo::post(),
 )?;
 store_with_session(logout.pending.snapshot());
 
@@ -36,7 +36,7 @@ let status = completed.response().status();
 
 With the `serde` feature, the snapshot serializes to JSON for your session store. `finish_slo` trusts the snapshot to name the request the response answers, so keep it on the server, or authenticate it when the browser carries it. The stored format is in [Cargo features](../reference/features.md#serialize-pending-snapshots-with-serde).
 
-`redirect()`, `post()`, and `simple_sign()` leave the logout generation rules off until you call `apply_producer_rules()`. With those rules selected, a session participant signs the request and sends the browser to an `https` logout URL. `StartSlo::allow_http()` relaxes the `https` recommendation only.
+The service provider includes at least one session index, signs the request and sends the browser to an `https` logout URL. `StartSlo::allow_http()` relaxes the `https` recommendation only.
 
 ## Identity provider
 
@@ -63,7 +63,7 @@ let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo:
 
 When the identity provider starts logout itself, `IdentityProvider::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
 
-`LogoutPolicy::recommended()` requires a signature on logout requests and responses. `LogoutPolicy::compatibility()` is the legacy unsigned hatch.
+`LogoutPolicy::default()` requires a signature on logout requests and responses. To accept an unsigned message, set `requests` or `responses` to `LogoutSignaturePolicy::AllowUnsigned`.
 
 ## Over SOAP
 

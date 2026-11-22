@@ -12,8 +12,8 @@ use crate::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use crate::model::ClockSkew;
 use crate::sp;
 use crate::tests::engine::{
-    create_logout_request, create_logout_response, create_logout_response_with_id,
-    parse_logout_request, parse_logout_response, redirect_query, LogoutUser,
+    create_logout_request, create_logout_response, parse_logout_request, parse_logout_response,
+    redirect_query, LogoutUser,
 };
 use std::time::{Duration, SystemTime};
 use url::Url;
@@ -1032,7 +1032,7 @@ fn custom_logout_response_accepts_issue_instant_placeholder_for_all_supported_bi
 }
 
 #[test]
-fn custom_logout_response_preserves_valid_literal_without_destination(
+fn custom_logout_response_preserves_literal_issue_instant_without_a_soap_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sender = idp()?;
     let target = sp()?;
@@ -1040,22 +1040,23 @@ fn custom_logout_response_preserves_valid_literal_without_destination(
         r#"<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="2000-01-01T00:00:00Z" InResponseTo="{InResponseTo}"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value="{StatusCode}"/></samlp:Status></samlp:LogoutResponse>"#.to_string(),
     );
 
-    let context = create_logout_response_with_id(
+    let context = create_logout_response(
         &sender.setting,
         sender.metadata.as_metadata(),
         target.metadata.as_metadata(),
-        Binding::Post,
+        Binding::Soap,
         Some("_req1"),
         None,
         false,
-        Some("_fixed"),
     )?;
     let xml = decode_logout_response_context(&context)?;
 
+    let document = crate::xml::dom::parse_document(&xml, crate::XmlLimits::default())?;
     assert_eq!(
-        xml,
-        r#"<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_fixed" Version="2.0" IssueInstant="2000-01-01T00:00:00Z" InResponseTo="_req1"><saml:Issuer>https://idp.example.com/metadata</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status></samlp:LogoutResponse>"#
+        document.root.attr("IssueInstant"),
+        Some("2000-01-01T00:00:00Z")
     );
+    assert_eq!(document.root.attr("Destination"), None);
     Ok(())
 }
 

@@ -65,7 +65,7 @@ fn parties() -> TestResult<Parties> {
             assertions: AssertionSignaturePolicy::RequireSigned,
             authn_requests: AuthnRequestSigningPolicy::Sign,
             audience: AudienceValidationPolicy::RequireRestriction,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         })
         .xml(raised_xml_policy())
         .build()?,
@@ -81,7 +81,7 @@ fn parties() -> TestResult<Parties> {
         .credentials(signing_credentials())
         .validation(IdpValidationPolicy {
             authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-            ..IdpValidationPolicy::recommended()
+            ..IdpValidationPolicy::default()
         })
         .xml(raised_xml_policy())
         .build()?,

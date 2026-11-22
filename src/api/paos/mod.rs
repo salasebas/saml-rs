@@ -14,9 +14,7 @@ use crate::model::{
     AuthnRequest, EndpointUrl, ForceAuthn, IsPassive, MessageId, OutstandingLogout, Received,
     RelayState, SamlValidationContext, SessionIndex, SsoResponse, SsoSession,
 };
-use crate::sp::{
-    validate_provider_name, LoginResponseParseOptions, PaosAuthnRequestInput, WebBrowserSsoProducer,
-};
+use crate::sp::{validate_provider_name, LoginResponseParseOptions, PaosAuthnRequestInput};
 use crate::xml::is_xml_char;
 
 use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
@@ -361,28 +359,21 @@ impl ServiceProvider {
     ///
     /// # Examples
     ///
-    /// The builders start on [`crate::SpValidationPolicy::recommended`] and
-    /// [`crate::IdpValidationPolicy::recommended`]. This example passes
-    /// [`crate::SpValidationPolicy::compatibility`] and
-    /// [`crate::IdpValidationPolicy::compatibility`] so it builds without a
-    /// crypto provider.
-    ///
     /// ```
     /// use saml_rs::{
     ///     check_paos_client_headers, AcsEndpoint, EndpointUrl, EntityId, IdentityProvider,
-    ///     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, ServiceProvider,
-    ///     SpConfig, SpValidationPolicy, SsoEndpoint, StartPaosSso,
+    ///     IdpConfig, IdpDescriptor, MetadataTrustPolicy, ServiceProvider, SpConfig, SsoEndpoint,
+    ///     StartPaosSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
+    /// # if cfg!(not(crypto)) { return Ok(()); }
     /// let sp = ServiceProvider::new(
     ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-    ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
-    ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let idp = IdpDescriptor::from_metadata_xml(
@@ -624,8 +615,7 @@ impl IdentityProvider {
     /// assertion, also returns [`SamlError`] when a persistent or transient
     /// `NameId` is longer than 256 characters, the NameID format is not an
     /// absolute URI reference,
-    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) is
-    /// combined with a login response template, names a basic attribute that
+    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) names a basic attribute that
     /// is not an XML name, or has a `NameFormat` that is not an absolute URI
     /// reference, the authentication context does not meet an exact
     /// `RequestedAuthnContext`,
@@ -678,7 +668,6 @@ impl IdentityProvider {
             name_id_format,
             name_id_qualifiers,
             issuance_lifetime: Some(self.issuance_lifetime()),
-            web_browser_sso_producer: WebBrowserSsoProducer::Follow,
             status,
             typed_attributes,
             authn_context,

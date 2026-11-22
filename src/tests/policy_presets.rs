@@ -10,9 +10,9 @@ fn recommended_presets_select_the_classified_validation() {
         requests: LogoutSignaturePolicy::RequireSigned,
         responses: LogoutSignaturePolicy::RequireSigned,
     };
-    assert_eq!(LogoutPolicy::recommended(), recommended_logout);
+    assert_eq!(LogoutPolicy::default(), recommended_logout);
     assert_eq!(
-        SpValidationPolicy::recommended(),
+        SpValidationPolicy::default(),
         SpValidationPolicy {
             assertions: AssertionSignaturePolicy::AllowUnsigned,
             responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
@@ -24,7 +24,7 @@ fn recommended_presets_select_the_classified_validation() {
         }
     );
     assert_eq!(
-        IdpValidationPolicy::recommended(),
+        IdpValidationPolicy::default(),
         IdpValidationPolicy {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,

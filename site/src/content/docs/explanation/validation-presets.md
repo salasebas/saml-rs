@@ -1,18 +1,18 @@
 ---
 title: "Validation presets"
-description: "saml-rs keeps two presets."
+description: "saml-rs keeps one preset, Recommended, and names each relaxation as a field."
 ---
 
-saml-rs keeps two presets.
+saml-rs keeps one preset, Recommended.
 
 **Recommended** is the preset for features the crate claims. Mandatory requirements stay in force. Recommendations start enabled and can be relaxed only by an explicit named option. A producer recommendation does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them. Recommended is not an implementation of SAML V2.0 as a whole.
 
-**Compatibility** is the legacy permissive preset: the samlify-port behaviour. It can still relax a mandatory requirement where that port did. It does not claim standards conformance.
+Library hardening that OASIS does not require stays off Recommended. Two examples are a signature directly on the Assertion, and the RSA-SHA2 XML-DSig profile. Each is selected by name, on top of Recommended. They are not collected into a second preset. One implementation-security default is the exception: Recommended excludes MD5 and RIPEMD-160 signature and digest algorithms and RSA keys shorter than 2048 bits (`XmlSignatureProfile::ExcludeWeakAlgorithms`), and `AllowWeakAlgorithms` relaxes it. Signed metadata import applies the same exclusion under `MetadataTrustPolicy::RequireSignature` and `RequireSignatureAllowingOtherCanonicalization`, and `RequireSignatureAllowingWeakAlgorithms` relaxes it. A MAY in the standard is an optional capability, not a stricter conformance level. That is why a bundled `strict()` preset was rejected.
 
-Library hardening that OASIS does not require stays off Recommended. Two examples are a signature directly on the Assertion, and the RSA-SHA2 XML-DSig profile. Each is selected by name, on top of Recommended. They are not collected into a third preset. One implementation-security default is the exception: Recommended excludes MD5 and RIPEMD-160 signature and digest algorithms and RSA keys shorter than 2048 bits (`XmlSignatureProfile::ExcludeWeakAlgorithms`), and `AllowWeakAlgorithms` relaxes it. Signed metadata import applies the same exclusion under `MetadataTrustPolicy::RequireSignature` and `RequireSignatureAllowingOtherCanonicalization`, and `RequireSignatureAllowingWeakAlgorithms` relaxes it. A MAY in the standard is an optional capability, not a stricter conformance level. That is why a bundled `strict()` preset was rejected.
+The conformance records call these settings Recommended. The role policies and
+`LogoutPolicy` expose them through `Default`. Both config builders use the
+corresponding role default. See [Conformance](../reference/conformance.md).
 
-`recommended()` publishes the combination recorded under [Conformance](../reference/conformance.md).
+There is no permissive preset either. Earlier releases had `compatibility()`, the behaviour of the samlify port that saml-rs started from. It bundled every relaxation into one call, so a service provider that only needed unsigned logout also accepted weak signature algorithms and skipped audience evaluation. Each relaxation is now a field you set by name on top of Recommended, so a configuration lists the rules it relaxes. How to replace `compatibility()` is in the [0.8 to 0.9 migration guide](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8-to-0.9/compile-errors.md#126-replace-compatibility-with-the-fields-it-relaxed).
 
-With that bundle gone, the validation policies' `Default` and the `SpConfig` and `IdpConfig` builders share Recommended. One construction path avoids a silent split between a permissive `Default` and a hardened builder. `compatibility()` remains the named legacy preset.
-
-How to select the preset is [Validation](../guides/validation-preset.md). How to upgrade from 0.6 is [0.6 to 0.7](../guides/upgrade/v0-6-to-v0-7.md).
+How to select and relax the preset is [Validation](../guides/validation-preset.md). How to upgrade from 0.6 is [0.6 to 0.7](../guides/upgrade/v0-6-to-v0-7.md).

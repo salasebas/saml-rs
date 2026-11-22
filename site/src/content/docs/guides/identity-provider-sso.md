@@ -19,7 +19,6 @@ let idp = IdentityProvider::new(
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
     .credentials(credentials)
-    .validation(IdpValidationPolicy::recommended())
     .build()?,
 );
 
@@ -41,20 +40,20 @@ let response = idp.respond_sso(
     &sp,
     &request,
     SsoAssertion::new(NameId::new("alice@example.com")),
-    RespondSso::post().apply_producer_rules(),
+    RespondSso::post(),
 )?;
 ```
 
 Send `response` back through the browser to the service provider's assertion consumer service. The identity provider writes the assertion `Subject` itself: the `NameId` of the `SsoAssertion` and one bearer `SubjectConfirmation`.
 
-The third argument says what the response reports. `RespondSso` says how it is delivered and signed, and whether the generation rules apply. When the user cannot be authenticated, answer with an error status and no assertion:
+The third argument says what the response reports. `RespondSso` says how it is delivered and signed. When the user cannot be authenticated, answer with an error status and no assertion:
 
 ```rust
 let response = idp.respond_sso(
     &sp,
     &request,
     SsoOutcome::Failure(Status::responder()),
-    RespondSso::post().apply_producer_rules(),
+    RespondSso::post(),
 )?;
 ```
 
@@ -62,7 +61,7 @@ A failure with the top-level `Success` status is rejected with `SamlError::Inval
 
 The response carries the exact `RelayState` that arrived with the request. `RespondSso::relay_state` sets one only for an unsolicited response or for a request that carried none.
 
-`post()`, `redirect()`, and `simple_sign()` leave the generation rules off until you call `apply_producer_rules()`. Those rules are the producer rows in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
+A successful response carries an authentication statement. An IdP that advertises Single Logout includes its session index. See [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
 ## Encrypted assertions
 
@@ -77,7 +76,7 @@ let response = idp.respond_sso(
 )?;
 ```
 
-`allow_unsigned_encrypted_cbc()` relaxes that recommendation only. It is not the Compatibility preset. A service provider that already requires the signature still rejects the relaxed response.
+`allow_unsigned_encrypted_cbc()` relaxes that recommendation only. A service provider that already requires the signature still rejects the relaxed response.
 
 Assertion encryption stays off until you set `XmlEncryptionPolicy::assertions` to `AssertionEncryptionPolicy::EncryptAssertions`.
 
@@ -107,7 +106,7 @@ let response = idp.respond_sso(
 )?;
 ```
 
-A `Basic` name that is not an XML name is rejected. `with_attributes` cannot be combined with an SSO response template set with `IdpConfigBuilder::sso_response_template`.
+A `Basic` name that is not an XML name is rejected.
 
 `NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` takes any value and `with_format` takes any format, but a persistent or transient value longer than 256 characters is rejected when the response is generated. `with_name_qualifier`, `with_sp_name_qualifier`, and `with_sp_provided_id` set the qualifier attributes. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 

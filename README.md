@@ -78,8 +78,8 @@ fn sign_in(
 
 Three choices in this example matter in production:
 
-- **Validation preset.** `SpConfig::builder` starts on Recommended. Add
-  hardenings as fields, or pick `compatibility()` by name. See
+- **Validation preset.** `SpConfig::builder` starts on Recommended. Add a
+  hardening or relax a rule by assigning the field that names it. See
   [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 - **Metadata trust.** `RequireSignature` pins the certificate that signs the
   IdP metadata. See
@@ -170,10 +170,11 @@ The stored format is in
 | See the rules each flow claims | [Conformance records](docs/conformance/) |
 | Contribute | [Contributing](CONTRIBUTING.md) |
 
-The [`opensaml`](https://crates.io/crates/opensaml),
-[`samlify`](https://crates.io/crates/samlify), and
+The [`opensaml`](https://crates.io/crates/opensaml) and
 [`samlet`](https://crates.io/crates/samlet) crates re-export this API under
 other names. New code depends on `saml-rs`.
+[`samlify`](https://crates.io/crates/samlify) is deprecated and will no longer
+be maintained. Please use `saml-rs`.
 
 ## License
 

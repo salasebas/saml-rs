@@ -9,6 +9,9 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
+#[path = "common/unsigned_post.rs"]
+mod unsigned_post;
+
 use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
@@ -18,9 +21,9 @@ use saml_rs::constants::status_code;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
-    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, OutstandingLogout,
-    PrivateKeyPem, Received, ReplayPolicy, RespondSlo, RespondSso, SamlError,
+    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy,
+    LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery,
+    OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy, RespondSlo, RespondSso, SamlError,
     SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel,
     SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
     StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy,
@@ -87,7 +90,7 @@ fn sp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
 ) -> Result<saml_rs::ServiceProvider, SamlError> {
-    let mut validation = SpValidationPolicy::recommended();
+    let mut validation = SpValidationPolicy::default();
     validation.logout = logout;
     Ok(ServiceProvider::new(
         SpConfig::builder(
@@ -102,6 +105,13 @@ fn sp_with(
     ))
 }
 
+fn unsigned_logout() -> LogoutPolicy {
+    let mut logout = LogoutPolicy::default();
+    logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+    logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+    logout
+}
+
 fn idp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
@@ -114,7 +124,7 @@ fn idp_with_credentials(
     encryption: XmlEncryptionPolicy,
     credentials: Credentials,
 ) -> Result<saml_rs::IdentityProvider, SamlError> {
-    let mut validation = IdpValidationPolicy::recommended();
+    let mut validation = IdpValidationPolicy::default();
     validation.logout = logout;
     Ok(IdentityProvider::new(
         IdpConfig::builder(
@@ -160,8 +170,8 @@ fn parties_with(
 
 fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
     parties_with(
-        sp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
-        idp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
+        sp_with(LogoutPolicy::default(), XmlEncryptionPolicy::default())?,
+        idp_with(LogoutPolicy::default(), XmlEncryptionPolicy::default())?,
     )
 }
 
@@ -401,7 +411,7 @@ fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certific
     ));
     for encryption_cert in [CERT, NEXT_CERT] {
         let published = idp_with_credentials(
-            LogoutPolicy::recommended(),
+            LogoutPolicy::default(),
             XmlEncryptionPolicy::default(),
             signing_credentials().with_decryption_credential(X509Credential::new(
                 CertificatePem::new(encryption_cert),
@@ -410,12 +420,12 @@ fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certific
         )?;
         let parties = Parties {
             idp: idp_with_credentials(
-                LogoutPolicy::recommended(),
+                LogoutPolicy::default(),
                 XmlEncryptionPolicy::default(),
                 rolling.clone(),
             )?,
             ..parties_with(
-                sp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
+                sp_with(LogoutPolicy::default(), XmlEncryptionPolicy::default())?,
                 published,
             )?
         };
@@ -438,7 +448,7 @@ fn identity_provider_decrypts_an_encrypted_id_made_for_either_published_certific
 fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let published = idp_with_credentials(
-        LogoutPolicy::recommended(),
+        LogoutPolicy::default(),
         XmlEncryptionPolicy::default(),
         signing_credentials().with_decryption_credential(X509Credential::new(
             CertificatePem::new(NEXT_CERT),
@@ -446,9 +456,9 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
         )),
     )?;
     let parties = Parties {
-        idp: idp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
+        idp: idp_with(LogoutPolicy::default(), XmlEncryptionPolicy::default())?,
         ..parties_with(
-            sp_with(LogoutPolicy::recommended(), XmlEncryptionPolicy::default())?,
+            sp_with(LogoutPolicy::default(), XmlEncryptionPolicy::default())?,
             published,
         )?
     };
@@ -574,23 +584,30 @@ fn encrypted_id_requires_the_peer_encryption_key() -> Result<(), Box<dyn std::er
 #[test]
 fn unsigned_encrypted_id_stays_unread() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties_with(
-        sp_with(
-            LogoutPolicy::compatibility(),
-            XmlEncryptionPolicy::default(),
-        )?,
-        idp_with(
-            LogoutPolicy::compatibility(),
-            XmlEncryptionPolicy::default(),
-        )?,
+        sp_with(unsigned_logout(), XmlEncryptionPolicy::default())?,
+        idp_with(unsigned_logout(), XmlEncryptionPolicy::default())?,
     )?;
     for initiator in INITIATORS {
         for binding in [LogoutBinding::Post, LogoutBinding::Redirect] {
             let options = start_options(binding)?
-                .signing(LogoutSigning::DoNotSign)
                 .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
             let sent = start(&parties, initiator, options)?;
             assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));
-            let input = request_input(&sent.outbound, binding)?;
+            let input = match binding {
+                LogoutBinding::Post => Inbound::post(unsigned_post::unsigned_post_fields(
+                    &sent.outbound,
+                    "SAMLRequest",
+                )?),
+                LogoutBinding::Redirect => {
+                    let query = redirect_query(&sent.outbound)?;
+                    let request = query
+                        .split('&')
+                        .find(|field| field.starts_with("SAMLRequest="))
+                        .ok_or("missing SAMLRequest")?;
+                    Inbound::redirect(request)
+                }
+                _ => return Err("unexpected test binding".into()),
+            };
             let received = receive(&parties, initiator, input)?;
             assert_eq!(
                 received.message().name_id(),
@@ -608,8 +625,8 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
     let mut encrypted_id = XmlEncryptionPolicy::default();
     encrypted_id.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers;
     let parties = parties_with(
-        sp_with(LogoutPolicy::recommended(), encrypted_id)?,
-        idp_with(LogoutPolicy::recommended(), encrypted_id)?,
+        sp_with(LogoutPolicy::default(), encrypted_id)?,
+        idp_with(LogoutPolicy::default(), encrypted_id)?,
     )?;
     let started_sso = parties
         .sp
@@ -667,7 +684,7 @@ fn a_replayed_encrypted_id_is_rejected_before_it_is_decrypted(
     let parties = parties()?;
     // Any attempt to decrypt fails, because this decryption key does not load.
     let unloadable_key = idp_with_credentials(
-        LogoutPolicy::recommended(),
+        LogoutPolicy::default(),
         XmlEncryptionPolicy::default(),
         signing_credentials().with_decryption_credential(X509Credential::new(
             CertificatePem::new(CERT),

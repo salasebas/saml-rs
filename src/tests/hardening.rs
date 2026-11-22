@@ -130,16 +130,7 @@ fn response_for_audience_restrictions(
         (id, xml)
     };
     Ok(idp
-        .create_rendered_login_response(
-            sp,
-            Binding::Post,
-            &User::new("a@example.com"),
-            &LoginResponseOptions {
-                in_response_to: Some("_req1"),
-                ..Default::default()
-            },
-            &cb,
-        )?
+        .create_rendered_login_response(sp, Binding::Post, &cb)?
         .context)
 }
 
@@ -215,16 +206,7 @@ fn response_for_subject_confirmation(
         (id, xml)
     };
     Ok(idp
-        .create_rendered_login_response(
-            sp,
-            Binding::Post,
-            &User::new("a@example.com"),
-            &LoginResponseOptions {
-                in_response_to: case.response_in_response_to,
-                ..Default::default()
-            },
-            &cb,
-        )?
+        .create_rendered_login_response(sp, Binding::Post, &cb)?
         .context)
 }
 
@@ -285,16 +267,7 @@ fn response_for_destination(
         (id, xml)
     };
     Ok(idp
-        .create_rendered_login_response(
-            sp,
-            Binding::Post,
-            &User::new("a@example.com"),
-            &LoginResponseOptions {
-                in_response_to: Some("_req1"),
-                ..Default::default()
-            },
-            &cb,
-        )?
+        .create_rendered_login_response(sp, Binding::Post, &cb)?
         .context)
 }
 

@@ -38,11 +38,11 @@ The same path calls `with_insecure(true)`. That flag skips X.509 chain building 
 
 ## Your choices
 
-The adapter does not pick your peer. `recommended()` does not invent a trust anchor or a replay cache.
+The adapter does not pick your peer. The caller supplies trust anchors and replay storage.
 
 - Import metadata with `MetadataTrustPolicy::RequireSignature` and the certificate you pinned out of band. `AllowUnsigned` is the hatch the examples use so they compile alone.
 - Pass `ReplayPolicy::RequireCache` with a cache you own on browser SSO.
-- Start from `recommended()`, then add `AssertionSignaturePolicy::RequireSigned` or `XmlSignatureProfile::StrictRsaSha2` only when you want that hardening.
+- Start from `SpValidationPolicy::default()`, then add `AssertionSignaturePolicy::RequireSigned` or `XmlSignatureProfile::StrictRsaSha2` only when you want that hardening.
 - Leave RSA-v1.5 key-transport decryption off unless a peer cannot send RSA-OAEP. See [Security](../reference/security.md).
 
 If you call bergshamra yourself, outside this crate, use the configuration secexample prints: trusted keys only, strict verification, and a minimum HMAC length. Inspect `VerifyResult` references before you read an assertion. Leave the raw-inline-key hatch off for untrusted XML. That direct use is a different API from `ServiceProvider::new`.

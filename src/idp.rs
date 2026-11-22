@@ -14,12 +14,8 @@ use crate::model::{
     ClockSkew, NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
     TopLevelStatusCode,
 };
-use crate::sp::{self, WebBrowserSsoProducer};
-use crate::template::{
-    apply_tag_prefixes, attr_tag, build_attribute_statement, login_response_attribute_value,
-    replace_tags_by_optional_value, validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE,
-    ATTRIBUTE_TEMPLATE, LOGIN_RESPONSE_TEMPLATE,
-};
+use crate::sp;
+use crate::template::validate_tag_prefixes;
 use crate::validator::offset_datetime_from_system_time;
 use crate::xml::OutboundNameIdQualifiers;
 
@@ -48,7 +44,6 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) name_id_format: Option<&'a str>,
     pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) issuance_lifetime: Option<time::Duration>,
-    pub(crate) web_browser_sso_producer: WebBrowserSsoProducer,
     pub(crate) status: Option<&'a Status>,
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
@@ -76,7 +71,6 @@ struct LoginResponseRendering<'a> {
     name_id_format: Option<&'a str>,
     name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     issuance_lifetime: time::Duration,
-    web_browser_sso_producer: WebBrowserSsoProducer,
     status: Option<&'a Status>,
     typed_attributes: &'a [Attribute],
     authn_context: Option<&'a AuthnContextReference>,
@@ -161,10 +155,8 @@ impl Engine {
     /// # Errors
     ///
     /// Returns an error when configured XML tag prefixes are invalid, a
-    /// persistent or transient `NameID` is longer than 256 characters, the
-    /// default response renderer cannot produce valid XML, `user` has no
-    /// value for a configured login response attribute, or template
-    /// rendering validation fails.
+    /// persistent or transient `NameID` is longer than 256 characters, or the
+    /// response cannot represent the supplied authentication or assertion data.
     fn render_login_response(
         &self,
         sp: &sp::Engine,
@@ -200,188 +192,82 @@ impl Engine {
                 session_index: None,
             });
         }
-        let tmpl = self.setting.login_response_template.as_ref();
-        let attributes = tmpl.map(|t| t.attributes.as_slice()).unwrap_or(&[]);
-        let has_custom_context = tmpl.and_then(|t| t.context.as_ref()).is_some();
-        let uses_template = has_custom_context;
-        if rendering.web_browser_sso_producer.follows() && uses_template {
-            return Err(SamlError::Invalid(
-                "Web Browser SSO generation rules require the built-in login response renderer"
-                    .into(),
-            ));
-        }
         let qualifiers = rendering.name_id_qualifiers;
-        if uses_template
-            && (qualifiers.name_qualifier.is_some()
-                || qualifiers.sp_name_qualifier.is_some()
-                || qualifiers.sp_provided_id.is_some())
-        {
-            return Err(SamlError::Invalid(
-                "a NameID NameQualifier, SPNameQualifier, or SPProvidedID cannot be combined with a login response template"
-                    .into(),
-            ));
-        }
-        if !rendering.typed_attributes.is_empty() && (uses_template || !attributes.is_empty()) {
-            return Err(SamlError::Invalid(
-                "response attributes cannot be combined with a login response template".into(),
-            ));
-        }
-        if (rendering.authn_context.is_some() || rendering.authn_instant.is_some())
-            && !rendering.web_browser_sso_producer.follows()
-        {
-            return Err(SamlError::Invalid(
-                "an authentication context or instant is written only under Web Browser SSO generation rules"
-                    .into(),
-            ));
-        }
         let name_id_format = rendering
             .name_id_format
             .or_else(|| self.setting.default_name_id_format());
         validate_name_id_format(name_id_format)?;
         validate_issued_name_id_length(name_id_format, &user.name_id)?;
-        if !has_custom_context {
-            let authn_context = rendering
-                .authn_context
-                .cloned()
-                .unwrap_or_else(AuthnContextReference::unspecified_class);
-            if rendering.web_browser_sso_producer.follows() {
-                if let Some(requested) = rendering.requested_authn_context {
-                    requested.ensure_met_by(&authn_context)?;
-                }
-                if let Some(policy) = rendering.requested_name_id_policy {
-                    policy.ensure_sp_name_qualifier_met_by(qualifiers.sp_name_qualifier)?;
-                }
-                if let Some(requested) = rendering.requested_subject {
-                    requested.ensure_strongly_matched_by(
-                        &user.name_id,
-                        name_id_format,
-                        qualifiers,
-                        rendering.requested_name_id_policy,
-                    )?;
-                }
-            }
-            let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
-            let authn_instant = match rendering.authn_instant {
-                Some(authenticated) => written_authn_instant(authenticated, &window)?,
-                None => window.issue_instant.clone(),
-            };
-            let id = generate_id();
-            let assertion_id = generate_id();
-            let audience = sp
-                .metadata
-                .as_metadata()
-                .entity_id()
-                .unwrap_or_default()
-                .to_string();
-            let issuer = self.entity_id();
-            let supports_single_logout = !self
-                .metadata
-                .as_metadata()
-                .single_logout_bindings()
-                .is_empty();
-            let session_index = (rendering.web_browser_sso_producer.follows()
-                && supports_single_logout)
-                .then(|| SessionIndex::try_new(assertion_id.as_str()))
-                .transpose()?;
-            let xml = render_default_login_response(&LoginResponseXml {
-                protocol_prefix: &self.setting.tag_prefix_protocol,
-                assertion_prefix: &self.setting.tag_prefix_assertion,
-                response_id: &id,
-                assertion_id: &assertion_id,
-                issue_instant: &window.issue_instant,
-                destination: acs,
-                subject_recipient: acs,
-                issuer: &issuer,
-                status,
-                subject_confirmation_not_on_or_after: &window.expiration,
-                conditions_not_before: &window.issue_instant,
-                conditions_not_on_or_after: &window.expiration,
-                audience: &audience,
-                name_id_format,
-                name_id: &user.name_id,
-                name_id_qualifiers: qualifiers,
-                in_response_to,
-                authn_statement: rendering.web_browser_sso_producer.follows().then_some(
-                    login_response::AuthnStatementXml {
-                        authn_instant: &authn_instant,
-                        session_index: session_index.as_ref().map(SessionIndex::as_str),
-                        authn_context: &authn_context,
-                    },
-                ),
-                attributes,
-                user_attributes: &user.attributes,
-                typed_attributes: rendering.typed_attributes,
-            })?;
-            return Ok(RenderedLoginResponse {
-                id,
-                xml,
-                session_index,
-            });
+        let authn_context = rendering
+            .authn_context
+            .cloned()
+            .unwrap_or_else(AuthnContextReference::unspecified_class);
+        if let Some(requested) = rendering.requested_authn_context {
+            requested.ensure_met_by(&authn_context)?;
         }
-
-        let base = tmpl
-            .and_then(|t| t.context.as_deref())
-            .unwrap_or(LOGIN_RESPONSE_TEMPLATE);
-        let attribute_statement = if attributes.is_empty() {
-            String::new()
-        } else {
-            build_attribute_statement(attributes, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE)
-        };
-        let prepared = base.replacen("{AttributeStatement}", &attribute_statement, 1);
-        let prepared = apply_tag_prefixes(
-            &prepared,
-            &self.setting.tag_prefix_protocol,
-            &self.setting.tag_prefix_assertion,
-        );
-        for attribute in attributes {
-            login_response_attribute_value(attribute, &user.attributes)?;
+        if let Some(policy) = rendering.requested_name_id_policy {
+            policy.ensure_sp_name_qualifier_met_by(qualifiers.sp_name_qualifier)?;
+        }
+        if let Some(requested) = rendering.requested_subject {
+            requested.ensure_strongly_matched_by(
+                &user.name_id,
+                name_id_format,
+                qualifiers,
+                rendering.requested_name_id_policy,
+            )?;
         }
         let window = capture_idp_issuance_window(rendering.issuance_lifetime)?;
+        let authn_instant = match rendering.authn_instant {
+            Some(authenticated) => written_authn_instant(authenticated, &window)?,
+            None => window.issue_instant.clone(),
+        };
         let id = generate_id();
-        let mut tags: Vec<(&str, String)> = vec![
-            ("ID", id.clone()),
-            ("AssertionID", generate_id()),
-            ("Destination", acs.to_string()),
-            ("SubjectRecipient", acs.to_string()),
-            ("AssertionConsumerServiceURL", acs.to_string()),
-            (
-                "Audience",
-                sp.metadata
-                    .as_metadata()
-                    .entity_id()
-                    .unwrap_or_default()
-                    .to_string(),
-            ),
-            ("Issuer", self.entity_id()),
-            ("IssueInstant", window.issue_instant.clone()),
-            ("StatusCode", status.top_level().as_uri().to_string()),
-            ("ConditionsNotBefore", window.issue_instant),
-            ("ConditionsNotOnOrAfter", window.expiration.clone()),
-            ("SubjectConfirmationDataNotOnOrAfter", window.expiration),
-            ("NameID", user.name_id.clone()),
-            ("AuthnStatement", String::new()),
-        ];
-        // Attribute value placeholders ({attr<Tag>}) are filled from the user's
-        // attributes after the AttributeStatement is expanded into the legacy template.
-        let attr_pairs: Vec<(String, String)> = user
-            .attributes
-            .iter()
-            .map(|(tag, value)| (attr_tag(tag), value.clone()))
-            .collect();
-        for (key, value) in &attr_pairs {
-            tags.push((key.as_str(), value.clone()));
-        }
-        let tags: Vec<(&str, Option<String>)> = [
-            ("NameIDFormat", name_id_format.map(str::to_string)),
-            ("InResponseTo", in_response_to.map(str::to_string)),
-        ]
-        .into_iter()
-        .chain(tags.into_iter().map(|(key, value)| (key, Some(value))))
-        .collect();
+        let assertion_id = generate_id();
+        let audience = sp
+            .metadata
+            .as_metadata()
+            .entity_id()
+            .unwrap_or_default()
+            .to_string();
+        let issuer = self.entity_id();
+        let supports_single_logout = !self
+            .metadata
+            .as_metadata()
+            .single_logout_bindings()
+            .is_empty();
+        let session_index = supports_single_logout
+            .then(|| SessionIndex::try_new(assertion_id.as_str()))
+            .transpose()?;
+        let response = LoginResponseXml {
+            protocol_prefix: &self.setting.tag_prefix_protocol,
+            assertion_prefix: &self.setting.tag_prefix_assertion,
+            response_id: &id,
+            assertion_id: &assertion_id,
+            issue_instant: &window.issue_instant,
+            destination: acs,
+            subject_recipient: acs,
+            issuer: &issuer,
+            status,
+            subject_confirmation_not_on_or_after: &window.expiration,
+            conditions_not_before: &window.issue_instant,
+            conditions_not_on_or_after: &window.expiration,
+            audience: &audience,
+            name_id_format,
+            name_id: &user.name_id,
+            name_id_qualifiers: qualifiers,
+            in_response_to,
+            authn_statement: login_response::AuthnStatementXml {
+                authn_instant: &authn_instant,
+                session_index: session_index.as_ref().map(SessionIndex::as_str),
+                authn_context: &authn_context,
+            },
+            typed_attributes: rendering.typed_attributes,
+        };
+        let xml = render_default_login_response(&response)?;
         Ok(RenderedLoginResponse {
             id,
-            xml: replace_tags_by_optional_value(&prepared, &tags),
-            session_index: None,
+            xml,
+            session_index,
         })
     }
 
@@ -414,7 +300,6 @@ impl Engine {
                 issuance_lifetime: overrides
                     .issuance_lifetime
                     .unwrap_or(time::Duration::seconds(300)),
-                web_browser_sso_producer: overrides.web_browser_sso_producer,
                 status: overrides.status,
                 typed_attributes: overrides.typed_attributes,
                 authn_context: overrides.authn_context,
@@ -459,7 +344,7 @@ impl Engine {
 
     /// Wrap the finalized response XML into the per-binding transport context.
     #[cfg(crypto)]
-    fn bind_response(
+    pub(crate) fn bind_response(
         &self,
         binding: Binding,
         xml: &str,
@@ -489,7 +374,7 @@ impl Engine {
     }
 
     #[cfg(not(crypto))]
-    fn bind_response(
+    pub(crate) fn bind_response(
         &self,
         _binding: Binding,
         _xml: &str,
@@ -502,7 +387,7 @@ impl Engine {
     }
 
     #[cfg(crypto)]
-    fn finalize_login_response(
+    pub(crate) fn finalize_login_response(
         &self,
         sp: &sp::Engine,
         binding: Binding,
@@ -589,7 +474,7 @@ impl Engine {
     }
 
     #[cfg(not(crypto))]
-    fn finalize_login_response(
+    pub(crate) fn finalize_login_response(
         &self,
         _sp: &sp::Engine,
         _binding: Binding,
@@ -873,20 +758,16 @@ mod crypto_tests {
     }
 
     #[test]
-    fn custom_login_response_template_keeps_placeholder_text_in_the_name_id_format(
+    fn raw_login_response_defaults_to_a_five_minute_issuance_window(
     ) -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
-        use crate::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
+        use crate::xml::dom::parse_document;
+        use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-        let mut setting = signing_setting();
-        setting.name_id_format = vec!["urn:example:{InResponseTo}".into()];
-        setting.login_response_template = Some(LoginResponseTemplate {
-            context: Some(LOGIN_RESPONSE_TEMPLATE.into()),
-            attributes: Vec::new(),
-        });
-        let idp = idp_with_setting(setting)?;
+        let idp = idp()?;
+        let sp = sp()?;
         let ctx = idp.create_login_response(
-            &sp()?,
+            &sp,
             Binding::Post,
             &User::new("user@example.com"),
             &LoginResponseOptions {
@@ -894,197 +775,57 @@ mod crypto_tests {
                 ..Default::default()
             },
         )?;
-
         let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
-        assert!(xml.contains("Format=\"urn:example:{InResponseTo}\""));
-        assert!(xml.contains("InResponseTo=\"_req123\""));
-        Ok(())
-    }
+        let document = parse_document(&xml, crate::XmlLimits::default())?;
+        let response_issue_instant = document
+            .root
+            .attr("IssueInstant")
+            .ok_or("missing Response IssueInstant")?;
+        let assertion = document
+            .root
+            .children
+            .iter()
+            .find(|node| node.local_name == "Assertion")
+            .ok_or("missing Assertion")?;
+        let assertion_issue_instant = assertion
+            .attr("IssueInstant")
+            .ok_or("missing Assertion IssueInstant")?;
+        let conditions = assertion
+            .children
+            .iter()
+            .find(|node| node.local_name == "Conditions")
+            .ok_or("missing Conditions")?;
+        let conditions_not_before = conditions
+            .attr("NotBefore")
+            .ok_or("missing Conditions NotBefore")?;
+        let conditions_expiration = conditions
+            .attr("NotOnOrAfter")
+            .ok_or("missing Conditions NotOnOrAfter")?;
+        let bearer_expiration = assertion
+            .children
+            .iter()
+            .find(|node| node.local_name == "Subject")
+            .and_then(|node| {
+                node.children
+                    .iter()
+                    .find(|node| node.local_name == "SubjectConfirmation")
+            })
+            .and_then(|node| {
+                node.children
+                    .iter()
+                    .find(|node| node.local_name == "SubjectConfirmationData")
+            })
+            .and_then(|node| node.attr("NotOnOrAfter"))
+            .ok_or("missing SubjectConfirmationData NotOnOrAfter")?;
 
-    #[test]
-    fn raw_login_response_defaults_to_five_minute_issuance_window_for_standard_renderers(
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use crate::binding::decode_base64;
-        use crate::template::{LoginResponseTemplate, LOGIN_RESPONSE_TEMPLATE};
-        use crate::xml::dom::parse_document;
-        use time::{format_description::well_known::Rfc3339, OffsetDateTime};
-
-        let mut custom_template = signing_setting();
-        custom_template.login_response_template = Some(LoginResponseTemplate {
-            context: Some(LOGIN_RESPONSE_TEMPLATE.into()),
-            attributes: Vec::new(),
-        });
-
-        for setting in [signing_setting(), custom_template] {
-            let idp = idp_with_setting(setting)?;
-            let sp = sp()?;
-            let ctx = idp.create_login_response(
-                &sp,
-                Binding::Post,
-                &User::new("user@example.com"),
-                &LoginResponseOptions {
-                    in_response_to: Some("_req123"),
-                    ..Default::default()
-                },
-            )?;
-            let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
-            let document = parse_document(&xml, crate::XmlLimits::default())?;
-            let response_issue_instant = document
-                .root
-                .attr("IssueInstant")
-                .ok_or("missing Response IssueInstant")?;
-            let assertion = document
-                .root
-                .children
-                .iter()
-                .find(|node| node.local_name == "Assertion")
-                .ok_or("missing Assertion")?;
-            let assertion_issue_instant = assertion
-                .attr("IssueInstant")
-                .ok_or("missing Assertion IssueInstant")?;
-            let conditions = assertion
-                .children
-                .iter()
-                .find(|node| node.local_name == "Conditions")
-                .ok_or("missing Conditions")?;
-            let conditions_not_before = conditions
-                .attr("NotBefore")
-                .ok_or("missing Conditions NotBefore")?;
-            let conditions_expiration = conditions
-                .attr("NotOnOrAfter")
-                .ok_or("missing Conditions NotOnOrAfter")?;
-            let bearer_expiration = assertion
-                .children
-                .iter()
-                .find(|node| node.local_name == "Subject")
-                .and_then(|node| {
-                    node.children
-                        .iter()
-                        .find(|node| node.local_name == "SubjectConfirmation")
-                })
-                .and_then(|node| {
-                    node.children
-                        .iter()
-                        .find(|node| node.local_name == "SubjectConfirmationData")
-                })
-                .and_then(|node| node.attr("NotOnOrAfter"))
-                .ok_or("missing SubjectConfirmationData NotOnOrAfter")?;
-
-            assert_eq!(response_issue_instant, assertion_issue_instant);
-            assert_eq!(response_issue_instant, conditions_not_before);
-            assert_eq!(conditions_expiration, bearer_expiration);
-            assert_eq!(
-                OffsetDateTime::parse(conditions_expiration, &Rfc3339)?
-                    - OffsetDateTime::parse(response_issue_instant, &Rfc3339)?,
-                time::Duration::minutes(5)
-            );
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn login_response_with_attributes() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
-        let mut setting = signing_setting();
-        setting.login_response_template = Some(LoginResponseTemplate {
-            context: None,
-            attributes: vec![LoginResponseAttribute {
-                name: "mail".into(),
-                name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".into(),
-                value_xsi_type: "xs:string".into(),
-                value_tag: "email".into(),
-                value_xmlns_xs: None,
-                value_xmlns_xsi: None,
-            }],
-        });
-        let idp = Engine::from_config(
-            &IdpMetadataInput {
-                entity_id: "https://idp.example.com/metadata".into(),
-                signing_certs: vec![CERT.into()],
-                want_authn_requests_signed: true,
-                single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-                ..Default::default()
-            },
-            setting,
-        )?;
-        let sp = sp()?;
-        let user = User {
-            name_id: "alice@example.com".into(),
-            attributes: vec![("email".into(), "alice@example.com".into())],
-        };
-        let ctx = idp.create_login_response(
-            &sp,
-            Binding::Post,
-            &user,
-            &LoginResponseOptions {
-                in_response_to: Some("_r1"),
-                ..Default::default()
-            },
-        )?;
-        let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-        let parsed =
-            sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, "_r1")?;
+        assert_eq!(response_issue_instant, assertion_issue_instant);
+        assert_eq!(response_issue_instant, conditions_not_before);
+        assert_eq!(conditions_expiration, bearer_expiration);
         assert_eq!(
-            parsed.extract.get_str("attributes.mail"),
-            Some("alice@example.com")
+            OffsetDateTime::parse(conditions_expiration, &Rfc3339)?
+                - OffsetDateTime::parse(response_issue_instant, &Rfc3339)?,
+            time::Duration::minutes(5)
         );
-        Ok(())
-    }
-
-    #[test]
-    fn login_response_escapes_attribute_xml_markup() -> Result<(), Box<dyn std::error::Error>> {
-        use crate::binding::decode_base64;
-        use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
-
-        let mut setting = signing_setting();
-        setting.login_response_template = Some(LoginResponseTemplate {
-            context: None,
-            attributes: vec![LoginResponseAttribute {
-                name: "mail".into(),
-                name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".into(),
-                value_xsi_type: "xs:string".into(),
-                value_tag: "email".into(),
-                value_xmlns_xs: None,
-                value_xmlns_xsi: None,
-            }],
-        });
-        let idp = Engine::from_config(
-            &IdpMetadataInput {
-                entity_id: "https://idp.example.com/metadata".into(),
-                signing_certs: vec![CERT.into()],
-                want_authn_requests_signed: true,
-                single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-                ..Default::default()
-            },
-            setting,
-        )?;
-        let sp = sp()?;
-        let injection = "alpha</saml:AttributeValue><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">omega";
-        let user = User {
-            name_id: "alice@example.com".into(),
-            attributes: vec![("email".into(), injection.into())],
-        };
-        let ctx = idp.create_login_response(
-            &sp,
-            Binding::Post,
-            &user,
-            &LoginResponseOptions {
-                in_response_to: Some("_r1"),
-                ..Default::default()
-            },
-        )?;
-
-        let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
-        assert!(xml.contains("<ds:Signature"));
-        assert!(xml.contains("alpha&lt;/saml:AttributeValue&gt;"));
-        assert!(xml.contains("&lt;saml:AttributeValue xmlns:xs=&quot;"));
-        assert!(!xml.contains("alpha</saml:AttributeValue><saml:AttributeValue"));
-        assert_eq!(xml.matches("<saml:AttributeValue ").count(), 1);
-
-        let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-        let parsed =
-            sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, "_r1")?;
-        assert_eq!(parsed.extract.get_str("attributes.mail"), Some(injection));
         Ok(())
     }
 

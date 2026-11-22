@@ -15,14 +15,14 @@ your integration.
 **Before:** each flow named the same option after itself, and the passive
 setter used the `is_` prefix of a `bool` getter.
 
-**Now:** one name per option. The setters do what they did before.
+**Now:** one name per option. Producer rules now apply to every call.
 
 | Before | After |
 | --- | --- |
 | `StartSso::is_passive(value)`, `StartPaosSso::is_passive(value)` | `passive(value)` |
 | `StartSso::assertion_consumer_service_index(index)` | `StartSso::acs_index(index)` |
-| `StartSso::apply_web_browser_sso_generation_rules()`, `RespondSso::apply_web_browser_sso_generation_rules()` | `apply_producer_rules()` |
-| `StartSlo::apply_single_logout_generation_rules()`, `RespondSlo::apply_single_logout_generation_rules()` | `apply_producer_rules()` |
+| `StartSso::apply_web_browser_sso_generation_rules()`, `RespondSso::apply_web_browser_sso_generation_rules()` | Remove the call. All bindings enforce the producer rules. |
+| `StartSlo::apply_single_logout_generation_rules()`, `RespondSlo::apply_single_logout_generation_rules()` | Remove the call. All bindings enforce the producer rules. |
 | `StartSlo::allow_http_single_logout()`, `RespondSlo::allow_http_single_logout()` | `allow_http()` |
 | `allow_http_name_id_management()` on `StartNameIdManagement`, `ReceiveNameIdManagement`, or `RespondNameIdManagement` | `allow_http()` |
 
@@ -34,7 +34,45 @@ shows.
 The `SamlError::ProtocolProfile` that an `http` peer endpoint returns now names
 `allow_http` in its message. Match the variant, not the message.
 
-**Upgrade:** rename each call.
+**Upgrade:** replace or remove each call as shown in the table.
+
+## Generate SSO and Single Logout messages
+
+**Affects:** callers that start or respond to SSO or Single Logout.
+
+**Before:** callers opted in to the generation rules on individual messages and
+could select unsigned logout requests.
+
+**Now:** a transient AuthnRequest omits `AllowCreate`. Each successful browser
+SSO response includes an `AuthnStatement` and includes a session index when the
+IdP advertises Single Logout. The IdP returns `SamlError::Invalid` if the
+assertion fails an exact `RequestedAuthnContext`, omits or changes a required
+`SPNameQualifier`, or fails the strong match for a requested subject identifier. The authentication
+context defaults to the `unspecified` class.
+
+Both roles sign logout requests. An SP returns `SamlError::ProtocolProfile` if
+it starts logout without a session index or sends a browser logout request or
+response to an HTTP endpoint without selecting `allow_http()`. Custom SP logout
+request templates are also checked before signing. A template with an
+unexpanded `NotOnOrAfter`, a different NameID format, or a missing requested
+qualifier fails with `SamlError::ProtocolProfile`. Preserve the subject and
+session indexes supplied by the caller, or use the built-in renderer.
+
+**Upgrade:** remove the producer-rule setters, `StartSlo::signing` and the
+`LogoutSigning` import. Supply signing credentials and enable a document-crypto
+provider. Pass the actual authentication context with
+`SsoAssertion::with_authn_context` and the authentication instant when known.
+Issue a failure response when the request cannot be satisfied. Use the session
+from SSO to start logout and publish HTTPS endpoints for browser logout.
+
+```rust
+# use saml_rs::{IdpDescriptor, ServiceProvider, SsoSession, StartSlo};
+# fn start(sp: &ServiceProvider, idp: &IdpDescriptor, session: &SsoSession) -> Result<(), Box<dyn std::error::Error>> {
+let subject = session.logout_subject().ok_or("missing logout subject")?;
+let started = sp.start_slo(idp, subject, StartSlo::post())?;
+# let _ = started;
+# Ok(()) }
+```
 
 ## Build name identifier management options with `new`
 

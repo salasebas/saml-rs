@@ -12,11 +12,7 @@ use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::util::Value;
 use saml_rs::XmlLimits;
 #[cfg(crypto)]
-use saml_rs::{
-    entity::User,
-    idp::LoginResponseOptions,
-    template::{LoginResponseAttribute, LoginResponseTemplate},
-};
+use saml_rs::{entity::User, idp::LoginResponseOptions};
 use saml_rs::{
     AuthnRequest, EndpointUrl, FormField, Inbound, LogoutRequest, LogoutResponse, MessageId,
     NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, RelayState, SamlError,
@@ -1631,32 +1627,6 @@ fn signing_setting() -> EntitySetting {
     }
 }
 
-#[cfg(crypto)]
-fn attribute(name: &str, tag: &str) -> LoginResponseAttribute {
-    LoginResponseAttribute {
-        name: name.to_string(),
-        name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".to_string(),
-        value_xsi_type: "xs:string".to_string(),
-        value_tag: tag.to_string(),
-        value_xmlns_xs: None,
-        value_xmlns_xsi: None,
-    }
-}
-
-#[cfg(crypto)]
-fn idp_with_attribute_template() -> Result<idp::Engine, SamlError> {
-    let mut setting = signing_setting();
-    setting.login_response_template = Some(LoginResponseTemplate {
-        context: None,
-        attributes: vec![
-            attribute("mail", "mail"),
-            attribute("eduPersonAffiliation", "affiliation.primary"),
-            attribute("eduPersonAffiliation", "affiliation.secondary"),
-        ],
-    });
-    idp(setting)
-}
-
 #[test]
 fn typed_models_existing_authn_request_flow_converts_to_typed_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1717,27 +1687,33 @@ fn typed_models_existing_login_response_flow_converts_to_typed_session(
 fn typed_models_existing_login_response_flow_preserves_multi_value_attributes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
-    let idp = idp_with_attribute_template()?;
-    let user = User {
-        name_id: "alice@example.com".to_string(),
-        attributes: vec![
-            ("mail".to_string(), "alice@example.com".to_string()),
-            ("affiliation.primary".to_string(), "users".to_string()),
-            (
-                "affiliation.secondary".to_string(),
-                "examplerole1".to_string(),
-            ),
-        ],
-    };
-    let context = idp.create_login_response(
-        &sp,
-        Binding::Post,
-        &user,
-        &LoginResponseOptions {
-            in_response_to: Some("_request123"),
-            ..Default::default()
-        },
-    )?;
+    let idp = idp(signing_setting())?;
+    let attributes = [
+        saml_rs::Attribute::new("mail", [saml_rs::AttributeValue::new("alice@example.com")]),
+        saml_rs::Attribute::new(
+            "eduPersonAffiliation",
+            [saml_rs::AttributeValue::new("users")],
+        ),
+        saml_rs::Attribute::new(
+            "eduPersonAffiliation",
+            [saml_rs::AttributeValue::new("examplerole1")],
+        ),
+    ];
+    let context = idp
+        .create_login_response_with_overrides(
+            &sp,
+            Binding::Post,
+            &User::new("alice@example.com"),
+            &LoginResponseOptions {
+                in_response_to: Some("_request123"),
+                ..Default::default()
+            },
+            crate::idp::LoginResponseOverrides {
+                typed_attributes: &attributes,
+                ..Default::default()
+            },
+        )?
+        .context;
     let request =
         saml_rs::flow::HttpRequest::post(vec![("SAMLResponse".to_string(), context.context)]);
 

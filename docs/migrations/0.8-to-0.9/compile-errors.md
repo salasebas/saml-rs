@@ -37,17 +37,20 @@
 | A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml`, `Sp`, `Idp`, or `Unknown` | Removed; use `ServiceProvider` and `IdentityProvider` | [1.25](#125-replace-samlsp-and-samlidp-with-serviceprovider-and-identityprovider) |
+| `SpValidationPolicy::compatibility`, `IdpValidationPolicy::compatibility`, or `LogoutPolicy::compatibility` | Removed; set the fields it relaxed | [1.26](#126-replace-compatibility-with-the-fields-it-relaxed) |
+| `recommended()` on a validation or logout policy | Use `default()` for the same settings | [1.27](#127-replace-recommended-with-default) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | `ServiceProvider::new(config)` and `IdentityProvider::new(config)` return the provider, not a `Result` | [Typed config](config.md#call-serviceprovidernew-and-identityprovidernew-without-) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
 | `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
+| `StartSlo::signing` or `LogoutSigning` | Remove the option and configure signing credentials | [Typed operations](typed-operations.md#generate-sso-and-single-logout-messages) |
 | `TemplatePolicy::relay_state` | Removed; pass RelayState on each request | [Typed config](config.md#send-relaystate-per-request) |
 | `TemplatePolicy::tag_prefix_encrypted_assertion` | Removed; `tag_prefix_assertion` sets the prefix | [Typed config](config.md#set-the-encryptedassertion-prefix-with-the-assertion-prefix) |
-| `TemplatePolicy::login_request_template` or `login_response_template` | Moved to `SpConfigBuilder::authn_request_template` and `IdpConfigBuilder::sso_response_template` | [Typed config](config.md#set-sso-templates-on-the-roles-builder) |
+| `TemplatePolicy::login_request_template` or `login_response_template` | Removed along with the role-specific setters and getters. Use typed SSO inputs | [Typed config](config.md#replace-sso-templates-with-typed-options) |
 | `E0639` on a struct literal of `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy`, `XmlEncryptionPolicy`, `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy`, `XmlLimits`, `SignatureConfig`, `Organization`, `ContactPerson`, `Endpoint`, `SpMetadataInput`, or `IdpMetadataInput` | Assign the fields on a preset, `Default`, or a value from a constructor | [Typed config](config.md#assign-fields-instead-of-writing-a-struct-literal) |
 | `E0638` on a struct pattern of one of those structs, `Started`, or `StartedPaosSso`, or `E0639` on a struct literal of a started flow | Non-exhaustive; end the pattern with `..`, and keep the started flow the operation returned | [Typed config](config.md#destructure-with-a-rest-pattern) |
-| `E0004` on a `match` over a signature, audience, or encryption policy enum, or over `LogoutSigning` | Non-exhaustive; add a `_` arm | [Typed config](config.md#add-a-wildcard-arm-to-a-match-on-a-policy-enum) |
+| `E0004` on a `match` over a signature, audience, or encryption policy enum | Non-exhaustive; add a `_` arm | [Typed config](config.md#add-a-wildcard-arm-to-a-match-on-a-policy-enum) |
 | `context::set_schema_validator` | Configure `XmlPolicy::schema_validator` | [9.1](xml-policy.md#91-configure-each-local-role) |
 | A full struct literal of `XmlPolicy` | Has a new `schema_validator` field; assign it on `XmlPolicy::default()` | [9.1](xml-policy.md#91-configure-each-local-role) |
 | `Metadata::parse` and its variants, raw metadata `Deref`, generation config names, signature evidence names, raw `get_*` and signing flag getters, `x509_certificates()`, `export_metadata()`, descriptor `metadata()`, `metadata::{sp,idp,generate}` paths, `ArtifactResolutionEndpoint`, or `Metadata::verify_signature*` | Parser arguments, getter names and types, endpoint publishing, and public paths changed; obsolete methods removed | [Metadata API](metadata-api.md) |
@@ -80,7 +83,7 @@
 | `ArtifactDereference`, `ArtifactUses`, or `resolve_artifact(idp, artifact, dereference, uses)` | Removed; pass the `SoapChannel` and a `SamlValidationContext` | [Resolve an artifact](soap-artifact-discovery.md#resolve-an-artifact-with-a-channel-and-a-validation-context) |
 | `Artifact::try_from_encoded` | Renamed to `try_new` | [Artifact](soap-artifact-discovery.md#call-artifacttry_new) |
 | `CommonDomainCookie::name`, `path`, or `secure` | Removed; use `NAME` and `PATH`, and mark the cookie `Secure` | [Discovery cookie](soap-artifact-discovery.md#write-the-discovery-cookie-name-and-path-from-the-constants) |
-| `is_passive`, `assertion_consumer_service_index`, `apply_web_browser_sso_generation_rules`, `apply_single_logout_generation_rules`, `allow_http_single_logout`, or `allow_http_name_id_management` on an options type | Renamed `passive`, `acs_index`, `apply_producer_rules`, and `allow_http` | [Option setters](typed-operations.md#rename-the-shared-option-setters) |
+| `is_passive`, `assertion_consumer_service_index`, `apply_web_browser_sso_generation_rules`, `apply_single_logout_generation_rules`, `allow_http_single_logout`, or `allow_http_name_id_management` on an options type | Renamed `passive`, `acs_index`, and `allow_http`. Remove the producer-rule calls | [Option setters](typed-operations.md#rename-the-shared-option-setters) |
 | `StartNameIdManagement::redirect`, `ReceiveNameIdManagement::redirect`, or `RespondNameIdManagement::redirect` | Renamed `new` | [Name identifier management options](typed-operations.md#build-name-identifier-management-options-with-new) |
 | `start_name_id_management` with an `IdentifierEncryptionPolicy` | Takes `StartNameIdManagement` | [SOAP name identifier management](typed-operations.md#pass-startnameidmanagement-to-start_name_id_management) |
 | `RespondSlo::status` or `RespondNameIdManagement::status` | Removed; pass the `&Status` to the operation | [Response status](typed-operations.md#pass-the-response-status-to-respond_slo-and-respond_name_id_management_redirect) |
@@ -191,8 +194,8 @@ use saml_rs::{ServiceProvider, StartSso};
 `XmlSignatureProfile`, `ResponseSignaturePolicy`,
 `AuthnRequestValidationPolicy`, or `AudienceValidationPolicy`, and code that
 needs `Default` on one of them through a generic bound or a derived `Default`.
-Code that builds `SpValidationPolicy` or `IdpValidationPolicy` from
-`recommended()`, `compatibility()`, or `default()` does not change.
+For the enclosing policies, replace [`compatibility()`](#126-replace-compatibility-with-the-fields-it-relaxed)
+or [`recommended()`](#127-replace-recommended-with-default).
 
 **Before:** each enum had a `Default` that differed from its value in
 `recommended()`:
@@ -210,14 +213,14 @@ Code that builds `SpValidationPolicy` or `IdpValidationPolicy` from
 
 ```rust
 let mut policy = current_policy;
-policy.xml_signatures = SpValidationPolicy::recommended().xml_signatures;
+policy.xml_signatures = SpValidationPolicy::default().xml_signatures;
 ```
 
 To keep the 0.8 behavior, name the variant from the `Default` in 0.8 column
-instead. For the first three enums, that variant is the `compatibility()`
-value, which relaxes a recommended check. `AudienceValidationPolicy::Validate`
-is now `RequireRestriction`. It is stricter than Recommended: it also rejects
-a bearer assertion that omits `<AudienceRestriction>`.
+instead. For the first three enums, that variant relaxes a recommended check.
+`AudienceValidationPolicy::Validate` is now `RequireRestriction`. It is
+stricter than Recommended: it also rejects a bearer assertion that omits
+`<AudienceRestriction>`.
 
 ## 1.6 Match the `SamlError` variant the crate returns
 
@@ -343,8 +346,10 @@ and build again:
 
 ```rust
 let base = SpConfig::builder(entity_id, acs);
-let strict = base.clone().validation(SpValidationPolicy::recommended()).build()?;
-let relaxed = base.validation(SpValidationPolicy::compatibility()).build()?;
+let recommended = base.clone().build()?;
+let mut unsigned_logout = SpValidationPolicy::default();
+unsigned_logout.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+let relaxed = base.validation(unsigned_logout).build()?;
 ```
 
 ## 1.8 Read config fields through getters
@@ -553,7 +558,7 @@ existed rather than what it allowed.
 | `AuthnRequestValidationPolicy::AllowUnsignedForCompatibility` | `AuthnRequestValidationPolicy::AllowUnsigned` |
 | `LogoutSignaturePolicy::AllowUnsignedForCompatibility` | `LogoutSignaturePolicy::AllowUnsigned` |
 | `AuthnRequestSigningPolicy::DoNotSignForCompatibility` | `AuthnRequestSigningPolicy::DoNotSign` |
-| `LogoutSigning::DoNotSignForCompatibility` | `LogoutSigning::DoNotSign` |
+| `LogoutSigning::DoNotSignForCompatibility` | Remove the signing option. Outgoing logout is signed. |
 | `ReplayPolicy::DisabledForCompatibility` | `ReplayPolicy::Disabled` |
 | `AudienceValidationPolicy::SkipForCompatibility` | `AudienceValidationPolicy::Skip` |
 | `DigestAlgorithm::Sha1ForCompatibility` | `DigestAlgorithm::Sha1` |
@@ -874,3 +879,106 @@ fn providers(sp: SpConfig, idp: IdpConfig) -> (ServiceProvider, IdentityProvider
     (ServiceProvider::new(sp), IdentityProvider::new(idp))
 }
 ```
+
+## 1.26 Replace `compatibility()` with the fields it relaxed
+
+**Affects:** code that calls `SpValidationPolicy::compatibility`,
+`IdpValidationPolicy::compatibility`, or `LogoutPolicy::compatibility`.
+
+**Before:** each `compatibility()` returned the legacy permissive preset, the
+behaviour of the samlify port. One call relaxed several checks at once.
+
+**Now:** the three functions are removed. Recommended is the only preset. You
+relax a check by assigning the field that names it.
+
+**Upgrade:** start from `default()` and set only the fields
+your deployment needs. These are the fields where `compatibility()` differed
+from `recommended()`. The table uses the 0.9 variant names;
+[1.16](#116-rename-the-relaxed-policy-and-algorithm-variants) maps them to the
+0.8 names:
+
+| Policy | Field | Former `compatibility()` | Current `default()` |
+| --- | --- | --- | --- |
+| `SpValidationPolicy` | `responses` | `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc` | `RequireForEncryptedCbc` |
+| `SpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
+| `SpValidationPolicy` | `audience` | `AudienceValidationPolicy::Skip` | `EvaluatePresentRestrictions` |
+| `SpValidationPolicy`, `IdpValidationPolicy` | `logout.requests`, `logout.responses` | `LogoutSignaturePolicy::AllowUnsigned` | `RequireSigned` |
+| `IdpValidationPolicy` | `authn_requests` | `AuthnRequestValidationPolicy::AllowUnsigned` | `AllowUnsignedVerifyIfPresent` |
+| `IdpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
+| `LogoutPolicy` | `requests`, `responses` | `LogoutSignaturePolicy::AllowUnsigned` | `RequireSigned` |
+
+The other fields had the same value in both presets.
+
+To keep exactly what `SpValidationPolicy::compatibility()` returned, set every
+row for the service provider. Then delete each line your deployment does not
+need:
+
+```rust
+use saml_rs::{
+    AudienceValidationPolicy, LogoutSignaturePolicy, ResponseSignaturePolicy, SpValidationPolicy,
+    XmlSignatureProfile,
+};
+
+// Before
+let validation = SpValidationPolicy::compatibility();
+
+// Now
+let mut validation = SpValidationPolicy::default();
+validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
+validation.audience = AudienceValidationPolicy::Skip;
+validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+```
+
+For the identity provider:
+
+```rust
+use saml_rs::{
+    AuthnRequestValidationPolicy, IdpValidationPolicy, LogoutSignaturePolicy, XmlSignatureProfile,
+};
+
+// Before
+let validation = IdpValidationPolicy::compatibility();
+
+// Now
+let mut validation = IdpValidationPolicy::default();
+validation.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
+validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
+validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+```
+
+If you built without a crypto provider feature, `compatibility()` was the
+preset that `build()` accepted. Without a provider, `build()` returns
+`SamlError::Unsupported` for a policy that requires a signature. Under
+Recommended, set these fields before you call `build()`:
+
+- `SpValidationPolicy`: set `responses` to `AllowUnsignedEncryptedCbc`, and
+  set `logout.requests` and `logout.responses` to `AllowUnsigned`.
+- `IdpValidationPolicy`: set `logout.requests` and `logout.responses` to
+  `AllowUnsigned`.
+
+## 1.27 Replace `recommended()` with `default()`
+
+**Affects:** callers of `recommended()` on `SpValidationPolicy`,
+`IdpValidationPolicy`, or `LogoutPolicy`.
+
+**Before:** both `recommended()` and `default()` returned the same policy.
+
+**Now:** `default()` is the sole preset on all three types.
+
+**Upgrade:** replace each call to keep the same validation settings.
+
+```diff
+-let sp = SpValidationPolicy::recommended();
++let sp = SpValidationPolicy::default();
+-let idp = IdpValidationPolicy::recommended();
++let idp = IdpValidationPolicy::default();
+-let logout = LogoutPolicy::recommended();
++let logout = LogoutPolicy::default();
+```
+
+The SP and IdP config builders already select these values. If a builder
+passed the recommended policy without modifying it, omit the `.validation(...)`
+call. Types that derive `Default` through one of these policies still compile.

@@ -98,8 +98,8 @@ fn peers(sp: Side, idp: Side, xml: XmlPolicy) -> Result<Peers, SamlError> {
         sp,
         idp,
         xml,
-        SpValidationPolicy::recommended().xml_signatures,
-        IdpValidationPolicy::recommended().xml_signatures,
+        SpValidationPolicy::default().xml_signatures,
+        IdpValidationPolicy::default().xml_signatures,
     )
 }
 
@@ -110,10 +110,10 @@ fn peers_with_profiles(
     sp_xml_signatures: XmlSignatureProfile,
     idp_xml_signatures: XmlSignatureProfile,
 ) -> Result<Peers, SamlError> {
-    let mut sp_validation = SpValidationPolicy::recommended();
+    let mut sp_validation = SpValidationPolicy::default();
     sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     sp_validation.xml_signatures = sp_xml_signatures;
-    let mut idp_validation = IdpValidationPolicy::recommended();
+    let mut idp_validation = IdpValidationPolicy::default();
     idp_validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
     idp_validation.xml_signatures = idp_xml_signatures;
     let sp = SpConfig::builder(
@@ -576,14 +576,14 @@ fn is_short_rsa_key_error(error: &SamlError) -> bool {
 fn recommended_identity_provider_does_not_verify_with_a_1024_bit_rsa_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for idp_xml_signatures in [
-        IdpValidationPolicy::recommended().xml_signatures,
+        IdpValidationPolicy::default().xml_signatures,
         XmlSignatureProfile::StrictRsaSha2,
     ] {
         let peers = peers_with_profiles(
             rsa_1024(),
             rsa(AlgorithmPolicy::default()),
             XmlPolicy::default(),
-            SpValidationPolicy::recommended().xml_signatures,
+            SpValidationPolicy::default().xml_signatures,
             idp_xml_signatures,
         )?;
         for input in redirect_and_post_authn_requests(&peers)? {
@@ -636,7 +636,7 @@ fn recommended_service_provider_does_not_verify_with_a_1024_bit_rsa_key(
         rsa_1024(),
         XmlPolicy::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
-        IdpValidationPolicy::recommended().xml_signatures,
+        IdpValidationPolicy::default().xml_signatures,
     )?;
     signed_redirect_request_then_post_response(&compatible, alice())?;
     Ok(())

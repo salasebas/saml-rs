@@ -33,13 +33,13 @@ pub enum AssertionSignaturePolicy {
 ///
 /// [`Self::RequireForEncryptedCbc`] follows the recommendation for a
 /// CBC-encrypted assertion. [`Self::AllowUnsignedEncryptedCbc`] relaxes that
-/// recommendation alone and is not the legacy permissive preset.
+/// recommendation alone.
 /// [`Self::RequireSigned`] requires a signature on every response and is
 /// library hardening. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
-/// The policy has no `Default`. Take it from a preset, such as
-/// `SpValidationPolicy::recommended().responses`:
+/// The policy has no `Default`. Take it from the role policy, for example
+/// `SpValidationPolicy::default().responses`:
 ///
 /// ```compile_fail,E0599
 /// let policy = saml_rs::ResponseSignaturePolicy::default();
@@ -76,8 +76,8 @@ pub enum ResponseSignaturePolicy {
 /// Assertion. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
-/// The profile has no `Default`. Take it from a preset, such as
-/// `SpValidationPolicy::recommended().xml_signatures`:
+/// The profile has no `Default`. Take it from the role policy, for example
+/// `SpValidationPolicy::default().xml_signatures`:
 ///
 /// ```compile_fail,E0599
 /// let profile = saml_rs::XmlSignatureProfile::default();
@@ -147,8 +147,8 @@ pub enum AuthnRequestSigningPolicy {
 /// The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
-/// The policy has no `Default`. Take it from a preset, such as
-/// `IdpValidationPolicy::recommended().authn_requests`:
+/// The policy has no `Default`. Take it from the role policy, for example
+/// `IdpValidationPolicy::default().authn_requests`:
 ///
 /// ```compile_fail,E0599
 /// let policy = saml_rs::AuthnRequestValidationPolicy::default();
@@ -184,8 +184,8 @@ pub enum LogoutSignaturePolicy {
 /// [`Self::Skip`] skips the check. The accept combination is
 /// classified in `docs/conformance/web-browser-sso-acceptance.md`.
 ///
-/// The policy has no `Default`. Take it from a preset, such as
-/// `SpValidationPolicy::recommended().audience`:
+/// The policy has no `Default`. Take it from the role policy, for example
+/// `SpValidationPolicy::default().audience`:
 ///
 /// ```compile_fail,E0599
 /// let policy = saml_rs::AudienceValidationPolicy::default();
@@ -225,12 +225,10 @@ pub enum NameIdCreationPolicy {
 
 /// SP-side validation and outbound signing policy.
 ///
-/// [`Self::recommended`] is the preset for claimed Web Browser SSO and Single
-/// Logout features. [`Self::compatibility`] is the legacy permissive preset.
-/// [`Default`](Default::default) is [`Self::recommended`]. Field classification
-/// is in `docs/conformance/`.
+/// The default policy selects the recommended settings for Web Browser SSO and Single Logout.
+/// Field classification is in `docs/conformance/`.
 ///
-/// Start from `default()` or a preset and assign the fields you change. A
+/// Start from `default()` and assign the fields you change. A
 /// struct literal does not compile outside the crate:
 ///
 /// ```compile_fail,E0639
@@ -260,7 +258,7 @@ pub struct SpValidationPolicy {
     pub logout: LogoutPolicy,
 }
 
-impl SpValidationPolicy {
+impl Default for SpValidationPolicy {
     /// Validation preset for claimed Web Browser SSO and Single Logout features.
     ///
     /// Recommendations start enabled, and
@@ -273,14 +271,14 @@ impl SpValidationPolicy {
     /// ```
     /// use saml_rs::{AssertionSignaturePolicy, SpValidationPolicy, XmlSignatureProfile};
     ///
-    /// let mut with_assertion_signature = SpValidationPolicy::recommended();
+    /// let mut with_assertion_signature = SpValidationPolicy::default();
     /// with_assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
     /// assert_eq!(
     ///     with_assertion_signature.xml_signatures,
     ///     XmlSignatureProfile::ExcludeWeakAlgorithms
     /// );
     /// ```
-    pub fn recommended() -> Self {
+    fn default() -> Self {
         Self {
             assertions: AssertionSignaturePolicy::AllowUnsigned,
             responses: ResponseSignaturePolicy::RequireForEncryptedCbc,
@@ -288,38 +286,17 @@ impl SpValidationPolicy {
             authn_requests: AuthnRequestSigningPolicy::DoNotSign,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
-            logout: LogoutPolicy::recommended(),
+            logout: LogoutPolicy::default(),
         }
-    }
-
-    /// Legacy permissive preset: samlify-port behavior.
-    pub fn compatibility() -> Self {
-        Self {
-            assertions: AssertionSignaturePolicy::AllowUnsigned,
-            responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
-            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
-            authn_requests: AuthnRequestSigningPolicy::DoNotSign,
-            audience: AudienceValidationPolicy::Skip,
-            name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
-            logout: LogoutPolicy::compatibility(),
-        }
-    }
-}
-
-impl Default for SpValidationPolicy {
-    fn default() -> Self {
-        Self::recommended()
     }
 }
 
 /// IdP-side validation policy.
 ///
-/// [`Self::recommended`] is the preset for claimed Web Browser SSO and Single
-/// Logout features. [`Self::compatibility`] is the legacy permissive preset.
-/// [`Default`](Default::default) is [`Self::recommended`]. Field classification
-/// is in `docs/conformance/`.
+/// The default policy selects the recommended settings for Web Browser SSO and Single Logout.
+/// Field classification is in `docs/conformance/`.
 ///
-/// Start from `default()` or a preset and assign the fields you change. A
+/// Start from `default()` and assign the fields you change. A
 /// struct literal does not compile outside the crate:
 ///
 /// ```compile_fail,E0639
@@ -341,52 +318,30 @@ pub struct IdpValidationPolicy {
     pub logout: LogoutPolicy,
 }
 
-impl IdpValidationPolicy {
+impl Default for IdpValidationPolicy {
     /// Validation preset for claimed Web Browser SSO and Single Logout features.
     ///
     /// An inbound `AuthnRequest` may be unsigned unless the service provider's
     /// metadata sets `AuthnRequestsSigned`. A signature that is present is
     /// verified under [`XmlSignatureProfile::ExcludeWeakAlgorithms`].
     /// Logout requests and responses require a signature.
-    pub fn recommended() -> Self {
+    fn default() -> Self {
         Self {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
-            logout: LogoutPolicy::recommended(),
+            logout: LogoutPolicy::default(),
         }
-    }
-
-    /// Legacy permissive preset.
-    ///
-    /// Samlify-port behavior. A signature present on an `AuthnRequest` is not
-    /// verified.
-    pub fn compatibility() -> Self {
-        Self {
-            authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
-            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
-            logout: LogoutPolicy::compatibility(),
-        }
-    }
-}
-
-impl Default for IdpValidationPolicy {
-    fn default() -> Self {
-        Self::recommended()
     }
 }
 
 /// Logout request and response signature policy.
 ///
-/// [`Self::recommended`] requires a signature on requests and responses.
-/// [`Default`](Default::default) is that preset. [`Self::compatibility`] is
-/// the legacy permissive preset.
+/// The default policy requires a signature on both requests and responses.
 ///
-/// `finish_slo` reads `responses`. `receive_slo` reads `requests`. With
-/// [`crate::LogoutSigning::FollowLocalPolicy`], `requests` also decides
-/// whether an outbound `LogoutRequest` is signed. See
+/// `finish_slo` reads `responses`. `receive_slo` reads `requests`. Typed logout signs outgoing requests and responses. See
 /// `docs/conformance/single-logout.md`.
 ///
-/// Start from `default()` or a preset and assign the fields you change. A
+/// Start from `default()` and assign the fields you change. A
 /// struct literal does not compile outside the crate:
 ///
 /// ```compile_fail,E0639
@@ -397,40 +352,13 @@ impl Default for IdpValidationPolicy {
 ///     ..LogoutPolicy::default()
 /// };
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct LogoutPolicy {
     /// LogoutRequest signature behavior.
     pub requests: LogoutSignaturePolicy,
     /// LogoutResponse signature behavior.
     pub responses: LogoutSignaturePolicy,
-}
-
-impl LogoutPolicy {
-    /// Require a signature on logout requests and responses.
-    pub fn recommended() -> Self {
-        Self {
-            requests: LogoutSignaturePolicy::RequireSigned,
-            responses: LogoutSignaturePolicy::RequireSigned,
-        }
-    }
-
-    /// Legacy permissive preset.
-    ///
-    /// Unsigned logout requests and responses are accepted. This is the
-    /// samlify-port hatch.
-    pub fn compatibility() -> Self {
-        Self {
-            requests: LogoutSignaturePolicy::AllowUnsigned,
-            responses: LogoutSignaturePolicy::AllowUnsigned,
-        }
-    }
-}
-
-impl Default for LogoutPolicy {
-    fn default() -> Self {
-        Self::recommended()
-    }
 }
 
 /// Whether assertions are encrypted in generated responses.
@@ -745,11 +673,6 @@ impl Default for AlgorithmPolicy {
 /// both roles use.
 ///
 /// Start from [`Default`](Default::default) and assign the fields you change.
-///
-/// The SSO templates belong to one role each: set them with
-/// [`SpConfigBuilder::authn_request_template`](crate::SpConfigBuilder::authn_request_template)
-/// and
-/// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template).
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct TemplatePolicy {
@@ -759,11 +682,10 @@ pub struct TemplatePolicy {
     /// It applies to the SSO `<Response>`, `<LogoutRequest>`,
     /// `<LogoutResponse>`, and the `<ManageNameIDRequest>` and
     /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `samlp` prefix
-    /// of an SSO response template or a logout template is rewritten to it.
+    /// of a logout template is rewritten to it.
     /// The built-in `<AuthnRequest>`, `<ArtifactResolve>`,
     /// `<ArtifactResponse>`, name identifier management messages over SOAP,
-    /// and the ECP `<Request>` header of PAOS SSO keep `samlp`. An
-    /// `<AuthnRequest>` template keeps the prefixes it writes.
+    /// and the ECP `<Request>` header of PAOS SSO keep `samlp`.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_assertion`.
@@ -775,11 +697,10 @@ pub struct TemplatePolicy {
     /// generated `<EncryptedAssertion>`, to `<LogoutRequest>` and
     /// `<LogoutResponse>`, and to the `<ManageNameIDRequest>` and
     /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `saml` prefix of
-    /// an SSO response template or a logout template is rewritten to it. The
+    /// a logout template is rewritten to it. The
     /// built-in `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`,
     /// name identifier management messages over SOAP, and the ECP `<Request>`
-    /// header of PAOS SSO keep `saml`. An `<AuthnRequest>` template keeps the
-    /// prefixes it writes.
+    /// header of PAOS SSO keep `saml`.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_protocol`.
@@ -795,11 +716,7 @@ pub struct TemplatePolicy {
     /// `Format` sent for it. An attribute whose complete value is one of these
     /// placeholders is omitted when there is no value for it.
     ///
-    /// Typed Session Authority generation, and typed SP generation with
-    /// [`crate::StartSlo::apply_producer_rules`], reject a
-    /// template whose `NameID` attributes differ from the ones sent for the
-    /// subject. Other typed SP generation sends the template's `NameID`
-    /// attributes as written.
+    /// Both roles reject a template whose `NameID` attributes differ from the subject.
     pub logout_request_template: Option<String>,
     /// Logout response template.
     ///

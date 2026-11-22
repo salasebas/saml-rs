@@ -156,9 +156,7 @@ impl ServiceProvider {
     ///
     /// Returns [`SamlError`] when relay state is invalid, the IdP metadata
     /// cannot be parsed or trusted, the requested ACS is missing or conflicts
-    /// with the selected binding, producer rules or the requested context,
-    /// `IsPassive`, or `ProviderName` are combined with a custom AuthnRequest
-    /// template, a requested authentication reference is not an absolute URI,
+    /// with the selected binding, a requested authentication reference is not an absolute URI,
     /// `ProviderName` contains invalid XML characters, or request creation fails
     /// because required metadata, signing keys, or supported bindings are unavailable.
     ///
@@ -166,17 +164,15 @@ impl ServiceProvider {
     ///
     /// ```
     /// use saml_rs::{
-    ///     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    ///     MetadataTrustPolicy, RelayState, ServiceProvider, SpConfig, SpValidationPolicy,
-    ///     SsoEndpoint, StartSso,
+    ///     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, MetadataTrustPolicy,
+    ///     RelayState, ServiceProvider, SpConfig, SsoEndpoint, StartSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
+    /// # if cfg!(not(crypto)) { return Ok(()); }
     /// let sp_config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-    ///     .validation(SpValidationPolicy::compatibility())
     ///     .build()?;
     /// let idp_config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
-    ///     .validation(IdpValidationPolicy::compatibility())
     ///     .build()?;
     ///
     /// let sp = ServiceProvider::new(sp_config);
@@ -214,7 +210,6 @@ impl ServiceProvider {
             raw_idp,
             Binding::from(options.binding),
             &raw_options,
-            options.web_browser_sso_producer,
             &AuthnRequestPreferences {
                 is_passive: options.passive.map(super::IsPassive::as_bool),
                 provider_name: options.provider_name.as_deref(),
