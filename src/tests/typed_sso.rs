@@ -2073,7 +2073,10 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
     let sp = ServiceProvider::new(encrypted_sp_config()?);
     let idp = IdentityProvider::new(encrypted_idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let started = sp.start_sso(
+        &idp_descriptor,
+        StartSso::post().relay_state(RelayState::try_new("pending-login")?),
+    )?;
     let received = idp.receive_sso(
         &sp_descriptor,
         Inbound::post(post_fields(&started.outbound)?),
@@ -2085,7 +2088,8 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
         SsoOutcome::Failure(auth_failed_status()?),
         RespondSso::post(),
     )?;
-    let response_fields = post_fields(&response)?;
+    let mut response_fields = post_fields(&response)?;
+    response_fields.retain(|field| field.name() != "RelayState");
     assert!(response_xml_from_fields(&response_fields)?.contains("<ds:Signature"));
 
     match sp.finish_sso(
