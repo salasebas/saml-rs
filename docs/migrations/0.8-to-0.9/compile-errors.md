@@ -41,7 +41,8 @@
 | `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
-| `TemplatePolicy::relay_state` or `tag_prefix_encrypted_assertion` | Removed | [Typed config](config.md#send-relaystate-per-request) |
+| `TemplatePolicy::relay_state` | Removed; pass RelayState on each request | [Typed config](config.md#send-relaystate-per-request) |
+| `TemplatePolicy::tag_prefix_encrypted_assertion` | Removed; `tag_prefix_assertion` sets the prefix | [Typed config](config.md#set-the-encryptedassertion-prefix-with-the-assertion-prefix) |
 | `TemplatePolicy::login_request_template` or `login_response_template` | Moved to `SpConfigBuilder::authn_request_template` and `IdpConfigBuilder::sso_response_template` | [Typed config](config.md#set-sso-templates-on-the-roles-builder) |
 | `E0639` on a struct literal of `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy`, `XmlEncryptionPolicy`, `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy`, `XmlLimits`, `SignatureConfig`, `Organization`, `ContactPerson`, `Endpoint`, `SpMetadataInput`, or `IdpMetadataInput` | Assign the fields on a preset, `Default`, or a value from a constructor | [Typed config](config.md#assign-fields-instead-of-writing-a-struct-literal) |
 | `E0638` on a struct pattern of one of those structs, `Started`, or `StartedPaosSso`, or `E0639` on a struct literal of a started flow | Non-exhaustive; end the pattern with `..`, and keep the started flow the operation returned | [Typed config](config.md#destructure-with-a-rest-pattern) |
@@ -598,7 +599,7 @@ without the deprecation warning. Replace `TripleDes` with `TripleDesCbc`.
 
 ```rust
 // Before
-let idp = IdpDescriptor::from_metadata_xml(
+let idp = IdpDescriptor::from_metadata_xml_for(
     entity_id,
     &metadata,
     MetadataTrustPolicy::UnsignedForCompatibility,
