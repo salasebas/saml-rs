@@ -7,7 +7,7 @@ use super::endpoint::EndpointUrl;
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::subject::{NameIdPolicy, SubjectConfirmation};
 use crate::config::{EntityId, NameIdFormat};
-use crate::constants::{attribute_name_format, name_id_format};
+use crate::constants::attribute_name_format;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::validator::conditions_time_window;
@@ -66,7 +66,7 @@ pub(super) fn name_id_policy_from_extract(
 ) -> Result<Option<NameIdPolicy>, SamlError> {
     let format = extract
         .get_str("nameIDPolicy.format")
-        .map(name_id_format_from_uri);
+        .map(NameIdFormat::from_uri);
     let sp_name_qualifier = extract
         .get_str("nameIDPolicy.spNameQualifier")
         .map(str::to_string);
@@ -84,20 +84,6 @@ pub(super) fn name_id_policy_from_extract(
 fn parse_bool(value: &str) -> Result<bool, SamlError> {
     xs_boolean(Some(value))
         .ok_or_else(|| SamlError::Invalid("NameIDPolicy AllowCreate must be a boolean".into()))
-}
-
-pub(crate) fn name_id_format_from_uri(uri: &str) -> NameIdFormat {
-    match uri {
-        name_id_format::EMAIL_ADDRESS => NameIdFormat::EmailAddress,
-        name_id_format::PERSISTENT => NameIdFormat::Persistent,
-        name_id_format::TRANSIENT => NameIdFormat::Transient,
-        name_id_format::ENTITY => NameIdFormat::Entity,
-        name_id_format::UNSPECIFIED => NameIdFormat::Unspecified,
-        name_id_format::KERBEROS => NameIdFormat::Kerberos,
-        name_id_format::WINDOWS_DOMAIN_QUALIFIED_NAME => NameIdFormat::WindowsDomainQualifiedName,
-        name_id_format::X509_SUBJECT_NAME => NameIdFormat::X509SubjectName,
-        _ => NameIdFormat::Custom(uri.to_string()),
-    }
 }
 
 fn value_strings(value: &Value) -> Vec<String> {

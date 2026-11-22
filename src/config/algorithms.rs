@@ -278,6 +278,22 @@ impl NameIdFormat {
             Self::Custom(uri) => uri.as_str(),
         }
     }
+
+    pub(crate) fn from_uri(uri: &str) -> Self {
+        [
+            Self::EmailAddress,
+            Self::Persistent,
+            Self::Transient,
+            Self::Entity,
+            Self::Unspecified,
+            Self::Kerberos,
+            Self::WindowsDomainQualifiedName,
+            Self::X509SubjectName,
+        ]
+        .into_iter()
+        .find(|format| format.as_uri() == uri)
+        .unwrap_or_else(|| Self::Custom(uri.to_string()))
+    }
 }
 
 pub(crate) fn name_id_format_uris(formats: &[NameIdFormat]) -> Vec<String> {

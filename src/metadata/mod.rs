@@ -359,9 +359,7 @@ impl Metadata {
             .iter()
             .filter_map(Value::as_str)
             .map(|value| {
-                crate::model::name_id_format_from_uri(&crate::xml::any_uri::collapse_whitespace(
-                    value,
-                ))
+                crate::NameIdFormat::from_uri(&crate::xml::any_uri::collapse_whitespace(value))
             })
             .collect()
     }
