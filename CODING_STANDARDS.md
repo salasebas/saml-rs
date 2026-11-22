@@ -75,6 +75,15 @@ states the rules that callers rely on.
   hold. When one of those tests fails, change the code. Edit the JSON only to
   add a new optional field.
 
+## Type names
+
+- When each role has its own type for one concept, the type name carries the
+  role: `SpConfig` and `IdpConfig`, `SpMetadata` and `IdpMetadata`,
+  `ServiceProvider` and `IdentityProvider`.
+- A crate-private type in a role module leaves the role out of its name.
+  Other modules write it with its module, such as `sp::Engine` and
+  `idp::Engine`.
+
 ## Method names
 
 These rules apply when an API is added or redesigned.
