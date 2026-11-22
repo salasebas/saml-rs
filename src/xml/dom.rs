@@ -5,14 +5,11 @@
 //! canonicalisation concerns — verification is delegated to bergshamra).
 
 use crate::error::{xml_err, ResourceLimit, SamlError};
-use crate::xml::name::is_ncname;
 use crate::xml::{is_xml_char, utf8_bom_len};
 use quick_xml::escape::resolve_predefined_entity;
-use quick_xml::events::{BytesRef, BytesStart, Event};
-use quick_xml::name::{
-    Namespace, NamespaceError, NamespaceResolver, PrefixDeclaration, QName, ResolveResult,
-};
-use quick_xml::{Reader, XmlVersion};
+use quick_xml::events::{BytesRef, Event};
+use quick_xml::name::{NamespaceError, NamespaceResolver};
+use quick_xml::Reader;
 
 const DEFAULT_XML_MAX_BYTES: usize = 1024 * 1024;
 const DEFAULT_XML_MAX_DEPTH: usize = 1024;
@@ -20,9 +17,6 @@ const DEFAULT_XML_MAX_NODES: usize = 50_000;
 const DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT: usize = 64;
 const DEFAULT_XML_MAX_ATTRIBUTE_VALUE_BYTES: usize = 16 * 1024;
 const DEFAULT_XML_MAX_TEXT_BYTES: usize = DEFAULT_XML_MAX_BYTES;
-
-const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
-const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
 
 /// Resource limits enforced while parsing XML into the local DOM.
 ///
@@ -134,44 +128,10 @@ impl Default for XmlLimits {
     }
 }
 
-/// A parsed XML element.
-#[derive(Debug, Clone)]
-pub struct Node {
-    /// Local element name (namespace prefix stripped).
-    pub local_name: String,
-    /// Attributes as `(local-name, unescaped-value)` pairs.
-    pub attrs: Vec<(String, String)>,
-    /// Child elements in document order.
-    pub children: Vec<Node>,
-    /// Concatenated direct text content (unescaped).
-    pub text: String,
-    /// Byte offset of the element's opening `<` in the source.
-    pub start: usize,
-    /// Byte offset just past the element's closing `>` in the source.
-    pub end: usize,
-}
+mod element;
 
-impl Node {
-    /// Direct children matching a local name, in document order.
-    pub(crate) fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Self> {
-        self.children
-            .iter()
-            .filter(move |child| child.local_name == name)
-    }
-
-    /// First direct child matching a local name.
-    pub(crate) fn child_named(&self, name: &str) -> Option<&Self> {
-        self.children.iter().find(|child| child.local_name == name)
-    }
-
-    /// Look up an attribute by local name.
-    pub fn attr(&self, name: &str) -> Option<&str> {
-        self.attrs
-            .iter()
-            .find(|(k, _)| k == name)
-            .map(|(_, v)| v.as_str())
-    }
-}
+use element::Element;
+pub(crate) use element::{Node, QualifiedElement};
 
 /// A parsed document (its single root element).
 #[derive(Debug, Clone)]
@@ -180,8 +140,8 @@ pub struct Document {
     pub root: Node,
 }
 
-fn local_name_str(name: QName) -> String {
-    name.local_name().into_inner().to_owned()
+fn local_attribute(name: &str, _: Option<&str>, value: String) -> Option<(String, String)> {
+    Some((name.to_owned(), value))
 }
 
 fn checked_append_text(
@@ -217,47 +177,6 @@ fn check_xml_chars(text: &str) -> Result<(), SamlError> {
     }
 }
 
-fn check_qname(name: &str) -> Result<(), SamlError> {
-    if name.splitn(2, ':').all(is_ncname) {
-        Ok(())
-    } else {
-        Err(SamlError::xml(format!(
-            "`{name}` is not a qualified XML name"
-        )))
-    }
-}
-
-fn check_attribute_separation(attributes: &str) -> Result<(), SamlError> {
-    let mut open_quote = None;
-    let mut after_value = false;
-    for ch in attributes.chars() {
-        if after_value && !is_xml_whitespace_char(ch) {
-            return Err(SamlError::xml("attributes must be separated by whitespace"));
-        }
-        after_value = false;
-        match open_quote {
-            Some(quote) if ch == quote => {
-                open_quote = None;
-                after_value = true;
-            }
-            Some(_) => {}
-            None if matches!(ch, '"' | '\'') => open_quote = Some(ch),
-            None => {}
-        }
-    }
-    Ok(())
-}
-
-fn check_prefix_declared(resolved: &ResolveResult<'_>, mode: ParseMode) -> Result<(), SamlError> {
-    match (resolved, mode) {
-        (ResolveResult::Unknown(prefix), ParseMode::Document | ParseMode::Roots) => Err(
-            SamlError::xml(format!("namespace prefix `{prefix}` is not declared")),
-        ),
-        (ResolveResult::Unknown(_), ParseMode::Fragment)
-        | (ResolveResult::Unbound | ResolveResult::Bound(_), _) => Ok(()),
-    }
-}
-
 /// Map a quick-xml reader error. The namespace-binding cap is a limit.
 pub(crate) fn reader_err(error: quick_xml::Error) -> SamlError {
     match error {
@@ -276,115 +195,11 @@ fn namespace_error(error: NamespaceError) -> SamlError {
     }
 }
 
-fn bind_namespace(
-    resolver: &mut NamespaceResolver,
-    declaration: PrefixDeclaration,
-    namespace: &str,
-) -> Result<(), SamlError> {
-    if declaration == PrefixDeclaration::Default
-        && matches!(namespace, XML_NAMESPACE | XMLNS_NAMESPACE)
-    {
-        return Err(SamlError::xml(format!(
-            "namespace `{namespace}` cannot be the default namespace"
-        )));
-    }
-    if let (PrefixDeclaration::Named(prefix), "") = (declaration, namespace) {
-        return Err(SamlError::xml(format!(
-            "namespace prefix `{prefix}` cannot be undeclared"
-        )));
-    }
-    resolver
-        .add(declaration, Namespace(namespace))
-        .map_err(namespace_error)
-}
-
-fn read_element(
-    e: &BytesStart,
-    resolver: &mut NamespaceResolver,
-    limits: XmlLimits,
-    mode: ParseMode,
-    on_name: impl FnOnce(Option<&str>, &str),
-) -> Result<(String, Vec<(String, String)>), SamlError> {
-    let level = resolver
-        .level()
-        .checked_add(1)
-        .ok_or_else(|| namespace_error(NamespaceError::TooDeeplyNested(usize::from(u16::MAX))))?;
-    resolver.set_level(level);
-    check_qname(e.name().into_inner())?;
-    check_attribute_separation(e.attributes_raw())?;
-    let attrs = read_attrs(e, resolver, limits)?;
-
-    let (namespace, local_name) = resolver.resolve_element(e.name());
-    check_prefix_declared(&namespace, mode)?;
-    let namespace_uri = match namespace {
-        ResolveResult::Bound(Namespace(uri)) => Some(uri),
-        ResolveResult::Unbound | ResolveResult::Unknown(_) => None,
-    };
-    on_name(namespace_uri, local_name.into_inner());
-    let mut expanded_names = Vec::with_capacity(attrs.len());
-    for (name, _) in &attrs {
-        if name.as_namespace_binding().is_some() {
-            continue;
-        }
-        let (namespace, local_name) = resolver.resolve_attribute(*name);
-        check_prefix_declared(&namespace, mode)?;
-        let expanded_name = (local_name, namespace);
-        if expanded_names.contains(&expanded_name) {
-            return Err(SamlError::xml(format!(
-                "duplicate attribute `{}`",
-                name.into_inner()
-            )));
-        }
-        expanded_names.push(expanded_name);
-    }
-
-    Ok((
-        local_name.into_inner().to_owned(),
-        attrs
-            .into_iter()
-            .map(|(name, value)| (local_name_str(name), value))
-            .collect(),
-    ))
-}
-
-fn read_attrs<'a>(
-    e: &'a BytesStart,
-    resolver: &mut NamespaceResolver,
-    limits: XmlLimits,
-) -> Result<Vec<(QName<'a>, String)>, SamlError> {
-    let mut out = Vec::new();
-    for attr in e.attributes() {
-        if out.len() >= limits.max_attributes_per_element {
-            return Err(SamlError::LimitExceeded {
-                limit: ResourceLimit::XmlAttributesPerElement,
-                maximum: limits.max_attributes_per_element,
-            });
-        }
-        let attr = attr.map_err(xml_err)?;
-        check_qname(attr.key.into_inner())?;
-        if attr.value.contains('<') {
-            return Err(SamlError::xml("`<` is not allowed in an attribute value"));
-        }
-        let value = attr
-            .normalized_value(XmlVersion::Implicit1_0)
-            .map_err(xml_err)?
-            .into_owned();
-        if value.len() > limits.max_attribute_value_bytes {
-            return Err(SamlError::LimitExceeded {
-                limit: ResourceLimit::XmlAttributeValueBytes,
-                maximum: limits.max_attribute_value_bytes,
-            });
-        }
-        check_xml_chars(&value)?;
-        if let Some(declaration) = attr.key.as_namespace_binding() {
-            bind_namespace(resolver, declaration, &value)?;
-        }
-        out.push((attr.key, value));
-    }
-    Ok(out)
-}
-
-fn push_child(stack: &mut [Node], roots: &mut Vec<Node>, node: Node) {
+fn push_child<N, A>(
+    stack: &mut [Element<N, A>],
+    roots: &mut Vec<Element<N, A>>,
+    node: Element<N, A>,
+) {
     match stack.last_mut() {
         Some(parent) => parent.children.push(node),
         None => roots.push(node),
@@ -415,19 +230,23 @@ fn reject_non_document_content(mode: ParseMode) -> Result<(), SamlError> {
     }
 }
 
-fn push_general_ref(node: &mut Node, e: BytesRef, limits: XmlLimits) -> Result<(), SamlError> {
+fn push_general_ref(
+    text_content: &mut String,
+    e: BytesRef,
+    limits: XmlLimits,
+) -> Result<(), SamlError> {
     if let Some(ch) = e.resolve_char_ref().map_err(xml_err)? {
         let mut buf = [0; 4];
         let text = ch.encode_utf8(&mut buf);
         check_xml_chars(text)?;
-        checked_append_text(&mut node.text, text, limits)?;
+        checked_append_text(text_content, text, limits)?;
         return Ok(());
     }
 
     let entity = e.as_ref();
     let resolved = resolve_predefined_entity(entity)
         .ok_or_else(|| SamlError::xml(format!("unrecognized entity `{entity}`")))?;
-    checked_append_text(&mut node.text, resolved, limits)?;
+    checked_append_text(text_content, resolved, limits)?;
     Ok(())
 }
 
@@ -448,15 +267,19 @@ pub(crate) fn parse_fragment_with_limits(
 }
 
 fn parse_single_root(xml: &str, limits: XmlLimits, mode: ParseMode) -> Result<Document, SamlError> {
-    let mut roots = parse_roots_inner(xml, limits, mode, |_, _, _| {})?;
-    let root = match roots.len() {
-        0 => return Err(SamlError::xml("no document element")),
-        1 => roots
-            .pop()
-            .ok_or_else(|| SamlError::xml("no document element"))?,
-        _ => return Err(SamlError::xml("multiple document elements")),
-    };
-    Ok(Document { root })
+    let roots = parse_roots_inner(xml, limits, mode, |_, _, _| {}, local_attribute)?;
+    Ok(Document {
+        root: single_root(roots)?,
+    })
+}
+
+fn single_root<T>(mut roots: Vec<T>) -> Result<T, SamlError> {
+    if roots.len() > 1 {
+        return Err(SamlError::xml("multiple document elements"));
+    }
+    roots
+        .pop()
+        .ok_or_else(|| SamlError::xml("no document element"))
 }
 
 /// Parse every top-level element within `limits`. Each element must be
@@ -471,15 +294,32 @@ pub(crate) fn parse_roots_with_element_names(
     limits: XmlLimits,
     on_name: impl FnMut(usize, Option<&str>, &str),
 ) -> Result<Vec<Node>, SamlError> {
-    parse_roots_inner(xml, limits, ParseMode::Roots, on_name)
+    parse_roots_inner(xml, limits, ParseMode::Roots, on_name, local_attribute)
 }
 
-fn parse_roots_inner(
+pub(crate) fn parse_qualified_document(
+    xml: &str,
+    limits: XmlLimits,
+) -> Result<QualifiedElement, SamlError> {
+    single_root(parse_roots_inner(
+        xml,
+        limits,
+        ParseMode::Document,
+        |_, ns, _| ns.unwrap_or_default().to_owned(),
+        |name, ns, value| {
+            (ns != Some(element::XMLNS_NAMESPACE))
+                .then(|| (ns.map(str::to_owned), name.to_owned(), value))
+        },
+    )?)
+}
+
+fn parse_roots_inner<N, A>(
     xml: &str,
     limits: XmlLimits,
     mode: ParseMode,
-    mut on_name: impl FnMut(usize, Option<&str>, &str),
-) -> Result<Vec<Node>, SamlError> {
+    mut element_namespace: impl FnMut(usize, Option<&str>, &str) -> N,
+    attribute: impl Fn(&str, Option<&str>, String) -> Option<A>,
+) -> Result<Vec<Element<N, A>>, SamlError> {
     limits.check_input_bytes(xml.len())?;
     check_xml_chars(xml)?;
     let mut reader = Reader::from_str(xml);
@@ -487,8 +327,8 @@ fn parse_roots_inner(
     let mut resolver = NamespaceResolver::default();
     resolver.set_max_namespace_bindings(limits.max_attributes_per_element);
     let bom_len = utf8_bom_len(xml);
-    let mut stack: Vec<Node> = Vec::new();
-    let mut roots: Vec<Node> = Vec::new();
+    let mut stack: Vec<Element<N, A>> = Vec::new();
+    let mut roots = Vec::new();
     let mut node_count = 0usize;
 
     loop {
@@ -499,18 +339,15 @@ fn parse_roots_inner(
             Event::Start(ref e) | Event::Empty(ref e) => {
                 limits.count_element(&mut node_count)?;
                 limits.check_depth(stack.len().saturating_add(1))?;
-                let (local_name, attrs) =
-                    read_element(e, &mut resolver, limits, mode, |ns, name| {
-                        on_name(before, ns, name);
-                    })?;
-                let node = Node {
-                    local_name,
-                    attrs,
-                    children: Vec::new(),
-                    text: String::new(),
-                    start: before,
-                    end: after,
-                };
+                let node = element::read_element(
+                    e,
+                    &mut resolver,
+                    limits,
+                    mode,
+                    before..after,
+                    |ns, name| element_namespace(before, ns, name),
+                    &attribute,
+                )?;
                 if matches!(event, Event::Empty(_)) {
                     resolver.pop();
                     push_child(&mut stack, &mut roots, node);
@@ -544,7 +381,7 @@ fn parse_roots_inner(
             }
             Event::GeneralRef(e) => {
                 if let Some(top) = stack.last_mut() {
-                    push_general_ref(top, e, limits)?;
+                    push_general_ref(&mut top.text, e, limits)?;
                 } else {
                     reject_non_document_content(mode)?;
                 }

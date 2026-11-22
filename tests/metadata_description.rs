@@ -272,7 +272,7 @@ fn generation_validates_localized_values_contacts_and_error_uris() -> TestResult
 
 #[test]
 fn imported_descriptions_use_entity_scope_and_resolved_namespaces() -> TestResult {
-    let xml = r#"<md:EntitiesDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:r="http://refeds.org/metadata" xmlns:f="urn:foreign">
+    let xml = r#"<md:EntitiesDescriptor xmlns:xml="&#x68;ttp://www.w3.org/XML/1998/namespace" xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:r="http://refeds.org/metadata" xmlns:f="urn:foreign">
         <md:EntityDescriptor entityID="https://idp.example.com/metadata">
           <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
             <md:ContactPerson contactType="billing"/>
