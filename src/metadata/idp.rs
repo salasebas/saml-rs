@@ -58,8 +58,10 @@ impl IdpMetadata {
     /// # Errors
     ///
     /// Returns [`SamlError::MissingMetadata`] when the entity has no such
-    /// `IDPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
-    /// limits, or IdP-specific metadata extraction fails.
+    /// `IDPSSODescriptor`. Returns [`SamlError::Invalid`] when a signing flag
+    /// on a selected descriptor has an invalid `xs:boolean` value or uses the
+    /// SAML metadata namespace. XML parsing, resource limits, and IdP-specific
+    /// metadata extraction can also fail.
     pub fn from_xml(xml: &str) -> Result<Self, SamlError> {
         Self::from_xml_with_policy(xml, &crate::XmlPolicy::default())
     }
@@ -69,16 +71,10 @@ impl IdpMetadata {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::MissingMetadata`] when the entity has no such
-    /// `IDPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
-    /// limits, schema validation, or IdP-specific metadata extraction fails.
+    /// Returns the errors from [`Self::from_xml`] and any schema validation
+    /// error from `policy`.
     pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
         let extra = vec![
-            ExtractorField::new(
-                "wantAuthnRequestsSigned",
-                &["EntityDescriptor", "IDPSSODescriptor"],
-            )
-            .attrs(&["WantAuthnRequestsSigned"]),
             ExtractorField::new(
                 "singleSignOnService",
                 &[
@@ -133,9 +129,13 @@ impl IdpMetadata {
 
     /// `WantAuthnRequestsSigned` flag.
     ///
-    /// `true` and `1` are true. An absent attribute or another value is false.
+    /// True when the first SAML 2.0 `IDPSSODescriptor` that specifies the
+    /// attribute sets it to `true` or `1`. An absent attribute is false.
     pub fn want_authn_requests_signed(&self) -> bool {
-        crate::xml::xs_boolean(self.inner.meta.get_str("wantAuthnRequestsSigned")) == Some(true)
+        self.inner
+            .signing_flags
+            .want_authn_requests_signed
+            .unwrap_or_default()
     }
 
     /// First non-empty `SingleSignOnService` `Location` for `binding`.

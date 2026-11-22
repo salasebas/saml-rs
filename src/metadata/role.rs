@@ -2,7 +2,7 @@ use crate::constants::namespace;
 use crate::error::SamlError;
 use crate::xml::dom::{self, XmlLimits};
 use crate::xml::protocol_element::{self, SamlElement};
-use crate::xml::ExtractorField;
+use crate::xml::{xs_boolean, ExtractorField};
 
 #[derive(Clone, Copy)]
 pub(super) enum SsoDescriptorRole {
@@ -14,6 +14,14 @@ pub(super) enum SsoDescriptorRole {
 pub(super) struct SelectedDescriptors<'a> {
     pub(super) nodes: Vec<&'a dom::Node>,
     pub(super) valid_until_bounds: Vec<String>,
+    pub(super) signing_flags: SigningFlags,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct SigningFlags {
+    pub(super) authn_requests_signed: bool,
+    pub(super) want_assertions_signed: bool,
+    pub(super) want_authn_requests_signed: Option<bool>,
 }
 
 impl SsoDescriptorRole {
@@ -45,6 +53,7 @@ impl SsoDescriptorRole {
                         .filter(|child| is_sso_descriptor(child))
                         .collect(),
                     valid_until_bounds: Vec::new(),
+                    signing_flags: SigningFlags::default(),
                 })
             }
             Self::ServiceProvider => "SPSSODescriptor",
@@ -54,8 +63,27 @@ impl SsoDescriptorRole {
         let entity = entity.ok_or_else(|| SamlError::MissingMetadata(local_name.into()))?;
         let (namespaced, mut valid_until_bounds) = namespaced_entity(document, entity)?;
         let mut nodes = Vec::new();
+        let mut signing_flags = SigningFlags::default();
         for (child, descriptor) in entity.children.iter().zip(namespaced.children) {
             if descriptor.is(namespace::METADATA, local_name) && lists_saml2(&descriptor) {
+                match self {
+                    Self::ServiceProvider => {
+                        signing_flags.authn_requests_signed |=
+                            signing_flag(&descriptor, "AuthnRequestsSigned")?.unwrap_or_default();
+                        let want_assertions_signed =
+                            signing_flag(&descriptor, "WantAssertionsSigned")?.unwrap_or_default();
+                        signing_flags.want_assertions_signed =
+                            nodes.is_empty() && want_assertions_signed;
+                    }
+                    Self::IdentityProvider => {
+                        let want_authn_requests_signed =
+                            signing_flag(&descriptor, "WantAuthnRequestsSigned")?;
+                        signing_flags.want_authn_requests_signed = signing_flags
+                            .want_authn_requests_signed
+                            .or(want_authn_requests_signed);
+                    }
+                    Self::Any => {}
+                }
                 nodes.push(child);
                 valid_until_bounds.extend(descriptor.attr("validUntil").map(str::to_owned));
             }
@@ -66,8 +94,29 @@ impl SsoDescriptorRole {
         Ok(SelectedDescriptors {
             nodes,
             valid_until_bounds,
+            signing_flags,
         })
     }
+}
+
+fn signing_flag(descriptor: &SamlElement, name: &str) -> Result<Option<bool>, SamlError> {
+    if descriptor.attr_ns(namespace::METADATA, name).is_some() {
+        return Err(SamlError::Invalid(format!(
+            "{} {name} must be unqualified",
+            descriptor.local_name
+        )));
+    }
+    descriptor
+        .attr(name)
+        .map(|value| {
+            xs_boolean(Some(value)).ok_or_else(|| {
+                SamlError::Invalid(format!(
+                    "{} {name} must be an xs:boolean",
+                    descriptor.local_name
+                ))
+            })
+        })
+        .transpose()
 }
 
 pub(super) fn is_sso_descriptor(node: &dom::Node) -> bool {

@@ -54,8 +54,10 @@ impl SpMetadata {
     /// # Errors
     ///
     /// Returns [`SamlError::MissingMetadata`] when the entity has no such
-    /// `SPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
-    /// limits, or SP-specific metadata extraction fails.
+    /// `SPSSODescriptor`. Returns [`SamlError::Invalid`] when a signing flag
+    /// on a selected descriptor has an invalid `xs:boolean` value or uses the
+    /// SAML metadata namespace. XML parsing, resource limits, and SP-specific
+    /// metadata extraction can also fail.
     pub fn from_xml(xml: &str) -> Result<Self, SamlError> {
         Self::from_xml_with_policy(xml, &crate::XmlPolicy::default())
     }
@@ -65,14 +67,11 @@ impl SpMetadata {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError::MissingMetadata`] when the entity has no such
-    /// `SPSSODescriptor`, and [`SamlError`] when XML parsing, parser resource
-    /// limits, schema validation, or SP-specific metadata extraction fails.
+    /// Returns the errors from [`Self::from_xml`] and any schema validation
+    /// error from `policy`.
     pub fn from_xml_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
         let limits = policy.limits;
         let extra = vec![
-            ExtractorField::new("spSSODescriptor", &["EntityDescriptor", "SPSSODescriptor"])
-                .attrs(&["WantAssertionsSigned", "AuthnRequestsSigned"]),
             ExtractorField::new("spRoleContext", &["EntityDescriptor", "SPSSODescriptor"])
                 .with_context(),
             ExtractorField::new(
@@ -129,27 +128,18 @@ impl SpMetadata {
 
     /// `WantAssertionsSigned` flag.
     ///
-    /// `true` and `1` are true. An absent attribute or another value is false.
+    /// True when the single SAML 2.0 `SPSSODescriptor` sets the attribute to
+    /// `true` or `1`. An absent attribute is false.
     pub fn want_assertions_signed(&self) -> bool {
-        crate::xml::xs_boolean(
-            self.inner
-                .meta
-                .get_str("spSSODescriptor.wantAssertionsSigned"),
-        ) == Some(true)
+        self.inner.signing_flags.want_assertions_signed
     }
 
     /// `AuthnRequestsSigned` flag.
     ///
-    /// True when any SAML 2.0 `SPSSODescriptor` sets it. `true` and `1` are
-    /// true. An absent attribute or another value is false.
+    /// True when any SAML 2.0 `SPSSODescriptor` sets the attribute to `true`
+    /// or `1`. An absent attribute is false.
     pub fn authn_requests_signed(&self) -> bool {
-        self.inner
-            .meta
-            .get("spSSODescriptor")
-            .map(as_object_list)
-            .unwrap_or_default()
-            .into_iter()
-            .any(|role| crate::xml::xs_boolean(role.get_str("authnRequestsSigned")) == Some(true))
+        self.inner.signing_flags.authn_requests_signed
     }
 
     /// Default `AssertionConsumerService` location for `binding`.

@@ -26,6 +26,7 @@ Check the topics that affect your integration.
 - [Honor the requested NameID format](name-id-policy.md)
 - [Update metadata configuration and trust](metadata.md)
 - [Update metadata imports and accessors](metadata-api.md)
+- [Correct metadata signing flags](metadata-signing-flags.md)
 - [Move schema validation into XML policy](xml-policy.md)
 - [Update AuthnRequest signature verification](authn-request-signatures.md)
 - [Update truncated XML HMAC signatures](hmac-truncation.md)

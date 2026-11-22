@@ -378,6 +378,9 @@ impl IdpDescriptor {
     /// or unexpected, the entity has no `IDPSSODescriptor` that lists the SAML 2.0
     /// protocol, the requested trust policy cannot be satisfied, or a
     /// `validUntil` is not an `xs:dateTime` with a timezone.
+    /// Returns [`SamlError::Invalid`] when `WantAuthnRequestsSigned` on a
+    /// selected descriptor has an invalid `xs:boolean` value or uses the SAML
+    /// metadata namespace.
     pub fn from_metadata_xml(
         expected_entity_id: EntityId,
         xml: &str,
@@ -549,6 +552,9 @@ impl SpDescriptor {
     /// or unexpected, the entity has no `SPSSODescriptor` that lists the SAML 2.0
     /// protocol, the requested trust policy cannot be satisfied, or a
     /// `validUntil` is not an `xs:dateTime` with a timezone.
+    /// Returns [`SamlError::Invalid`] when `AuthnRequestsSigned` or
+    /// `WantAssertionsSigned` on a selected descriptor has an invalid
+    /// `xs:boolean` value or uses the SAML metadata namespace.
     pub fn from_metadata_xml(
         expected_entity_id: EntityId,
         xml: &str,

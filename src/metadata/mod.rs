@@ -23,7 +23,7 @@ pub use lifetime::MetadataLifetime;
 pub use sp::SpMetadata;
 pub(crate) use validity::MetadataValidity;
 
-use role::SsoDescriptorRole;
+use role::{SigningFlags, SsoDescriptorRole};
 
 use std::collections::HashSet;
 use std::ops::Range;
@@ -230,6 +230,7 @@ pub struct Metadata {
     pub(crate) meta: Value,
     key_certificates: KeyCertificates,
     valid_until_bounds: Vec<String>,
+    signing_flags: SigningFlags,
     description: description_read::EntityDescription,
 }
 
@@ -310,6 +311,7 @@ impl Metadata {
             meta,
             key_certificates: KeyCertificates::from_descriptors(&descriptors.nodes),
             valid_until_bounds: descriptors.valid_until_bounds,
+            signing_flags: descriptors.signing_flags,
             description: description_read::EntityDescription::read(xml, entity, limits)?,
         })
     }
