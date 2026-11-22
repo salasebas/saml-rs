@@ -25,14 +25,15 @@ const PROTOCOL_NS: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 /// client apart by other means.
 ///
 /// Pass the two field values. A leading `Accept:` or `PAOS:` name is
-/// ignored. The PAOS version and the ECP service value must use double
-/// quotes.
+/// ignored. The PAOS version and ECP service value must each use matching
+/// quotes. The check accepts double quotes from the corrected SAML profile
+/// example and single quotes for compatibility with the original example.
 ///
 /// # Errors
 ///
 /// Returns [`SamlError::ProtocolProfile`] when `Accept` omits
 /// `application/vnd.paos+xml`, or when the PAOS header omits the
-/// double-quoted version or the double-quoted ECP service value.
+/// quoted PAOS version or the quoted ECP service value.
 ///
 /// # Examples
 ///
@@ -51,14 +52,14 @@ pub fn check_paos_client_headers(accept: &str, paos: &str) -> Result<(), SamlErr
         ));
     }
     let paos = header_value(paos, "PAOS");
-    if !has_double_quoted_version(paos) {
+    if !has_paos_version(paos) {
         return Err(SamlError::ProtocolProfile(
-            "PAOS header must include ver=\"urn:liberty:paos:2003-08\" with double quotes".into(),
+            "PAOS header must include ver=\"urn:liberty:paos:2003-08\" with matching quotes".into(),
         ));
     }
-    if !has_ecp_service(paos) {
+    if !paos_tokens(paos).any(|token| matches_quoted(token, ECP_PROFILE)) {
         return Err(SamlError::ProtocolProfile(
-            "PAOS header must include \"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp\" with double quotes"
+            "PAOS header must include \"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp\" with matching quotes"
                 .into(),
         ));
     }
@@ -249,28 +250,40 @@ fn lists_media_type(header: &str, media_type: &str) -> bool {
 }
 
 fn paos_tokens(header: &str) -> impl Iterator<Item = &str> {
+    let mut quote = None;
+    let mut escaped = false;
     header
-        .split([',', ';'])
+        .split(move |character| {
+            if let Some(delimiter) = quote {
+                if !escaped && character == delimiter {
+                    quote = None;
+                }
+                escaped = !escaped && character == '\\';
+            } else if matches!(character, '"' | '\'') {
+                quote = Some(character);
+            } else {
+                return matches!(character, ',' | ';');
+            }
+            false
+        })
         .map(str::trim)
-        .filter(|token| !token.is_empty())
 }
 
-fn has_double_quoted_version(header: &str) -> bool {
-    let expected = format!("\"{PAOS_VERSION}\"");
+fn has_paos_version(header: &str) -> bool {
     paos_tokens(header).any(|token| {
-        let Some(rest) = token.strip_prefix("ver") else {
-            return false;
-        };
-        let Some(rest) = rest.trim_start().strip_prefix('=') else {
-            return false;
-        };
-        rest.trim_start() == expected
+        token.split_once('=').is_some_and(|(name, value)| {
+            name.trim_end() == "ver" && matches_quoted(value.trim_start(), PAOS_VERSION)
+        })
     })
 }
 
-fn has_ecp_service(header: &str) -> bool {
-    let expected = format!("\"{ECP_PROFILE}\"");
-    paos_tokens(header).any(|token| token == expected)
+fn matches_quoted(token: &str, expected: &str) -> bool {
+    ['"', '\''].into_iter().any(|quote| {
+        token
+            .strip_prefix(quote)
+            .and_then(|value| value.strip_suffix(quote))
+            == Some(expected)
+    })
 }
 
 #[cfg(test)]
@@ -289,11 +302,31 @@ mod tests {
     }
 
     #[test]
-    fn single_quoted_paos_header_is_rejected() -> Result<(), String> {
-        let paos = "ver='urn:liberty:paos:2003-08';'urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp'";
-        match check_paos_client_headers("application/vnd.paos+xml", paos) {
-            Err(SamlError::ProtocolProfile(_)) => Ok(()),
-            other => Err(format!("expected ProtocolProfile, got {other:?}")),
+    fn original_profile_header_is_accepted() -> Result<(), SamlError> {
+        let paos =
+            "ver='urn:liberty:paos:2003-08' ; 'urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp'";
+        check_paos_client_headers(PAOS_MEDIA_TYPE, paos)
+    }
+
+    #[test]
+    fn escaped_quote_does_not_end_paos_value() -> Result<(), SamlError> {
+        let paos = r#"ver="urn:liberty:paos:2003-08";"urn:example:service?option=\";on";"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp""#;
+        check_paos_client_headers(PAOS_MEDIA_TYPE, paos)
+    }
+
+    #[test]
+    fn paos_values_need_matching_quotes() {
+        for paos in [
+            r#""urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp";ver='urn:liberty:paos:2003-08""#,
+            r#"ver="urn:liberty:paos:2003-08";'urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp""#,
+        ] {
+            assert!(
+                matches!(
+                    check_paos_client_headers(PAOS_MEDIA_TYPE, paos),
+                    Err(SamlError::ProtocolProfile(_))
+                ),
+                "accepted {paos}"
+            );
         }
     }
 
@@ -322,9 +355,15 @@ mod tests {
 
     #[test]
     fn ecp_service_must_be_its_own_token() {
-        let paos =
-            "ver=\"urn:liberty:paos:2003-08\";foo=\"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp\"";
-        assert!(check_paos_client_headers("application/vnd.paos+xml", paos).is_err());
+        for paos in [
+            r#"ver="urn:liberty:paos:2003-08";foo="urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp""#,
+            r#"ver="urn:liberty:paos:2003-08";"urn:example:service;'urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp';option""#,
+        ] {
+            assert!(
+                check_paos_client_headers(PAOS_MEDIA_TYPE, paos).is_err(),
+                "accepted {paos}"
+            );
+        }
     }
 
     #[test]
