@@ -18,6 +18,7 @@ use std::time::SystemTime;
 mod authn_request;
 mod paos;
 
+use crate::xml::write::Prefixes;
 use authn_request::{render_default_authn_request_xml, AuthnRequestXml};
 pub(crate) use authn_request::{validate_provider_name, AuthnRequestPreferences};
 
@@ -194,7 +195,7 @@ impl Engine {
             name_id_format,
             allow_create: self.setting.allow_create,
         };
-        let xml = render_default_authn_request_xml(&request);
+        let xml = render_default_authn_request_xml(Prefixes::of(&self.setting)?, &request);
         let relay_state = match options.relay_state {
             Some(value) => Some(value.to_string()),
             None => {

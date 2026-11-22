@@ -3,6 +3,43 @@
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::Writer;
 
+use crate::entity::EntitySetting;
+use crate::error::SamlError;
+use crate::template::validate_tag_prefixes;
+
+/// Namespace prefixes for the protocol and assertion elements.
+#[derive(Clone, Copy)]
+pub(crate) struct Prefixes<'a> {
+    protocol: &'a str,
+    assertion: &'a str,
+}
+
+impl<'a> Prefixes<'a> {
+    pub(crate) fn of(setting: &'a EntitySetting) -> Result<Self, SamlError> {
+        validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
+        Ok(Self {
+            protocol: &setting.tag_prefix_protocol,
+            assertion: &setting.tag_prefix_assertion,
+        })
+    }
+
+    pub(crate) fn xmlns_protocol(&self) -> String {
+        format!("xmlns:{}", self.protocol)
+    }
+
+    pub(crate) fn xmlns_assertion(&self) -> String {
+        format!("xmlns:{}", self.assertion)
+    }
+
+    pub(crate) fn protocol(&self, local: &str) -> String {
+        format!("{}:{local}", self.protocol)
+    }
+
+    pub(crate) fn assertion(&self, local: &str) -> String {
+        format!("{}:{local}", self.assertion)
+    }
+}
+
 pub(crate) struct XmlWriter {
     inner: Writer<Vec<u8>>,
 }

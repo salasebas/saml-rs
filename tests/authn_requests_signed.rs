@@ -6,10 +6,14 @@
 
 mod common;
 
+#[path = "common/tag_prefixes.rs"]
+mod tag_prefixes;
+
 use common::signing_credentials;
 
 use std::time::SystemTime;
 
+use base64::Engine;
 use saml_rs::{
     AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdentityProvider,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound,
@@ -38,6 +42,7 @@ fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<saml_rs::ServiceProvi
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
+        .templates(tag_prefixes::templates("p", "a"))
         .credentials(signing_credentials())
         .validation(validation)
         .build()?,
@@ -130,6 +135,13 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
     }
 
     let signed_post = signing_sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let encoded = signed_post
+        .outbound
+        .post_form()?
+        .value("SAMLRequest")
+        .ok_or("missing SAMLRequest")?;
+    let xml = String::from_utf8(base64::engine::general_purpose::STANDARD.decode(encoded)?)?;
+    assert!(xml.contains("<p:AuthnRequest ") && xml.contains("<a:Issuer>"));
     let signed_redirect = signing_sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     for (started, input) in [
         (&signed_post, post_input(&signed_post.outbound)?),
@@ -180,7 +192,12 @@ fn unsigned_paos_request_is_rejected_when_sp_metadata_sets_authn_requests_signed
         &idp_descriptor,
         StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?),
     )?;
-    let envelope = envelope_for_idp(signed.http_response.envelope())?;
+    let soap = signed.http_response.envelope();
+    assert!(soap.contains("<a:Issuer xmlns:a="));
+    assert!(soap.contains("<p:IDPList xmlns:p=") && soap.contains("<p:IDPEntry "));
+    let envelope = envelope_for_idp(soap)?;
+    assert!(envelope.contains("<p:AuthnRequest ") && envelope.contains("<a:Issuer>"));
+
     let received = idp.receive_paos_sso(
         &signing_descriptor,
         &envelope,

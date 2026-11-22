@@ -217,8 +217,7 @@ impl IdentityProvider {
             request_envelope,
             issued,
             channel,
-            self.engine().setting.xml_limits,
-            self.engine().setting.schema_validator,
+            &self.engine().setting,
         )
     }
 }
@@ -279,8 +278,7 @@ impl ServiceProvider {
             artifact,
             channel,
             &mut validation,
-            self.engine().setting.xml_limits,
-            self.engine().setting.schema_validator,
+            &self.engine().setting,
         )
     }
 }

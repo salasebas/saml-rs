@@ -19,6 +19,7 @@ use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml_with_limits, read_status, SamlElement,
 };
+use crate::xml::write::Prefixes;
 use crate::xml::XmlLimits;
 
 mod encryption;
@@ -27,7 +28,7 @@ pub(crate) mod xml;
 
 pub(crate) use encryption::protect_request;
 use encryption::{decrypt_name_id, decrypt_new_id};
-use xml::{render_request, render_response, Prefixes, RequestXml, Requester, ResponseXml};
+use xml::{render_request, render_response, RequestXml, Requester, ResponseXml};
 
 /// The change a `ManageNameIDRequest` makes to an established identifier.
 ///
@@ -273,7 +274,7 @@ pub(crate) fn start(
         .ok_or_else(|| SamlError::MissingMetadata("ManageNameIDService".into()))?;
     let request_id = generate_id();
     let xml = render_request(
-        &Prefixes::SOAP,
+        &Prefixes::of(idp.setting)?,
         &RequestXml {
             id: &request_id,
             issuer: idp.entity_id,
@@ -323,12 +324,7 @@ pub(crate) fn receive(
     let version = request.required_attr("Version")?;
     let issue_instant = require_utc_instant(&request)?;
     if version != "2.0" {
-        return refused(
-            idp.entity_id,
-            &id,
-            NameIdManagementRefusal::VersionMismatch,
-            None,
-        );
+        return refused(idp, &id, NameIdManagementRefusal::VersionMismatch, None);
     }
     let sp_entity_id = service_provider.entity_id();
     if request
@@ -365,12 +361,7 @@ pub(crate) fn receive(
             },
             None,
         )))),
-        Err(undecryptable) => refused(
-            idp.entity_id,
-            &id,
-            undecryptable.reason,
-            Some(undecryptable.error),
-        ),
+        Err(undecryptable) => refused(idp, &id, undecryptable.reason, Some(undecryptable.error)),
     }
 }
 
@@ -388,18 +379,18 @@ pub(crate) fn respond(
             Some(issuer.as_str()),
         ));
     }
-    response(idp.entity_id, request.message().id(), status)
+    response(idp, request.message().id(), status)
 }
 
 fn refused(
-    idp_entity_id: &str,
+    idp: &LocalIdentityProvider<'_>,
     in_response_to: &MessageId,
     reason: NameIdManagementRefusal,
     decryption_error: Option<SamlError>,
 ) -> Result<NameIdManagementReceipt, SamlError> {
     Ok(NameIdManagementReceipt::Refused(
         RefusedNameIdManagement::new(
-            response(idp_entity_id, in_response_to, &reason.status())?,
+            response(idp, in_response_to, &reason.status())?,
             reason,
             decryption_error,
         ),
@@ -407,15 +398,15 @@ fn refused(
 }
 
 fn response(
-    idp_entity_id: &str,
+    idp: &LocalIdentityProvider<'_>,
     in_response_to: &MessageId,
     status: &Status,
 ) -> Result<SoapResponse, SamlError> {
     SoapResponse::try_new(&render_response(
-        &Prefixes::SOAP,
+        &Prefixes::of(idp.setting)?,
         &ResponseXml {
             id: &generate_id(),
-            issuer: idp_entity_id,
+            issuer: idp.entity_id,
             destination: None,
             in_response_to: in_response_to.as_str(),
             status,

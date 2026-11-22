@@ -13,7 +13,7 @@ use sha1::{Digest, Sha1};
 
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::constants::{namespace, status_code};
-use crate::entity::{generate_id, now_iso8601};
+use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
 use crate::model::{EndpointUrl, ReplayKey, SamlValidationContext};
@@ -24,7 +24,7 @@ use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, read_status, PartyName,
     SamlElement,
 };
-use crate::xml::write::XmlWriter;
+use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::XmlLimits;
 
 const ARTIFACT_TYPE_CODE: u16 = 0x0004;
@@ -447,8 +447,7 @@ pub(crate) fn resolve(
     artifact: &Artifact,
     channel: SoapChannel,
     validation: &mut SamlValidationContext<'_>,
-    xml_limits: XmlLimits,
-    schema_validator: Option<crate::SchemaValidator>,
+    setting: &EntitySetting,
 ) -> Result<ArtifactResolution, SamlError> {
     if !channel_allows(channel, RequiredChannel::Confidential) {
         return Err(SamlError::SoapChannelProtection);
@@ -458,24 +457,25 @@ pub(crate) fn resolve(
     if artifact.source_id != source_id {
         return Err(SamlError::issuer_mismatch(idp_entity_id, None));
     }
+    let prefixes = Prefixes::of(setting)?;
     let service = soap_service(identity_provider.metadata(), artifact.endpoint_index())?;
     let request_id = generate_id();
     let issue_instant = now_iso8601();
     let mut writer = XmlWriter::new();
     writer.start(
-        "samlp:ArtifactResolve",
+        &prefixes.protocol("ArtifactResolve"),
         &[
-            ("xmlns:samlp", namespace::PROTOCOL),
-            ("xmlns:saml", namespace::ASSERTION),
+            (&prefixes.xmlns_protocol(), namespace::PROTOCOL),
+            (&prefixes.xmlns_assertion(), namespace::ASSERTION),
             ("ID", request_id.as_str()),
             ("Version", "2.0"),
             ("IssueInstant", issue_instant.as_str()),
             ("Destination", service.location()),
         ],
     );
-    writer.text_element("saml:Issuer", &[], requester_entity_id);
-    writer.text_element("samlp:Artifact", &[], artifact.as_str());
-    writer.end("samlp:ArtifactResolve");
+    writer.text_element(&prefixes.assertion("Issuer"), &[], requester_entity_id);
+    writer.text_element(&prefixes.protocol("Artifact"), &[], artifact.as_str());
+    writer.end(&prefixes.protocol("ArtifactResolve"));
     let request =
         SoapRequest::try_new(EndpointUrl::try_new(service.location())?, &writer.finish())?;
     validation.check_and_store_message_replay(ReplayKey::Artifact(artifact.clone()))?;
@@ -484,8 +484,8 @@ pub(crate) fn resolve(
         request_id,
         identity_provider: idp_entity_id.to_string(),
         artifact: artifact.as_str().to_string(),
-        xml_limits,
-        schema_validator,
+        xml_limits: setting.xml_limits,
+        schema_validator: setting.schema_validator,
     })
 }
 
@@ -495,24 +495,25 @@ pub(crate) fn answer(
     request_envelope: &str,
     issued: &mut IssuedArtifacts,
     channel: SoapChannel,
-    xml_limits: XmlLimits,
-    schema_validator: Option<crate::SchemaValidator>,
+    setting: &EntitySetting,
 ) -> Result<AnsweredArtifact, SamlError> {
     let entity_id = metadata
         .as_metadata()
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
         .to_string();
-    let body = read_soap_body(request_envelope, xml_limits, &[])?;
-    crate::schema::validate(request_envelope, schema_validator)?;
+    let body = read_soap_body(request_envelope, setting.xml_limits, &[])?;
+    crate::schema::validate(request_envelope, setting.schema_validator)?;
     if body.local_name != "ArtifactResolve" || body.namespace != namespace::PROTOCOL {
         return Err(SamlError::ProtocolProfile(
             "SOAP body must be an ArtifactResolve".into(),
         ));
     }
-    let request = parse_resolve(&body.xml, xml_limits)?;
+    let request = parse_resolve(&body.xml, setting.xml_limits)?;
+    let prefixes = Prefixes::of(setting)?;
     if request.version != "2.0" {
         return answered(
+            &prefixes,
             &entity_id,
             &request.id,
             status_code::VERSION_MISMATCH,
@@ -520,43 +521,50 @@ pub(crate) fn answer(
             ArtifactRelease::VersionMismatch,
         );
     }
+    let success_without = |reason| {
+        answered(
+            &prefixes,
+            &entity_id,
+            &request.id,
+            status_code::SUCCESS,
+            None,
+            ArtifactRelease::Withheld(reason),
+        )
+    };
     let Ok(artifact) = Artifact::try_new(request.artifact.as_str()) else {
-        return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
+        return success_without(ArtifactWithheld::NotOutstanding);
     };
     let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(entity_id.as_bytes()).into();
     if artifact.source_id != source_id {
-        return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
+        return success_without(ArtifactWithheld::NotOutstanding);
     }
     let message_xml = {
         let Some(entry) = issued.outstanding(artifact.as_str(), Instant::now()) else {
-            return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
+            return success_without(ArtifactWithheld::NotOutstanding);
         };
         if let Ok(service) = soap_service(metadata, artifact.endpoint_index()) {
             if let Some(destination) = request.destination.as_deref() {
                 if destination != service.location() {
-                    return success_without(&entity_id, &request.id, ArtifactWithheld::Destination);
+                    return success_without(ArtifactWithheld::Destination);
                 }
             }
         } else {
-            return success_without(&entity_id, &request.id, ArtifactWithheld::NotOutstanding);
+            return success_without(ArtifactWithheld::NotOutstanding);
         }
         if !channel_allows(channel, entry.required_channel) {
-            return success_without(&entity_id, &request.id, ArtifactWithheld::Channel);
+            return success_without(ArtifactWithheld::Channel);
         }
         let presenter_id = presenter.entity_id().as_str();
         let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
             issuer.value == presenter_id && issuer_format_is_entity(issuer.format.as_deref())
         });
         if !issuer_matches || presenter_id != entry.service_provider {
-            return success_without(
-                &entity_id,
-                &request.id,
-                ArtifactWithheld::DifferentPresenter,
-            );
+            return success_without(ArtifactWithheld::DifferentPresenter);
         }
         entry.message_xml.clone()
     };
     let response = answered(
+        &prefixes,
         &entity_id,
         &request.id,
         status_code::SUCCESS,
@@ -567,21 +575,8 @@ pub(crate) fn answer(
     Ok(response)
 }
 
-fn success_without(
-    issuer: &str,
-    in_response_to: &str,
-    reason: ArtifactWithheld,
-) -> Result<AnsweredArtifact, SamlError> {
-    answered(
-        issuer,
-        in_response_to,
-        status_code::SUCCESS,
-        None,
-        ArtifactRelease::Withheld(reason),
-    )
-}
-
 fn answered(
+    prefixes: &Prefixes<'_>,
     issuer: &str,
     in_response_to: &str,
     status: &str,
@@ -590,24 +585,24 @@ fn answered(
 ) -> Result<AnsweredArtifact, SamlError> {
     let mut writer = XmlWriter::new();
     writer.start(
-        "samlp:ArtifactResponse",
+        &prefixes.protocol("ArtifactResponse"),
         &[
-            ("xmlns:samlp", namespace::PROTOCOL),
-            ("xmlns:saml", namespace::ASSERTION),
+            (&prefixes.xmlns_protocol(), namespace::PROTOCOL),
+            (&prefixes.xmlns_assertion(), namespace::ASSERTION),
             ("ID", generate_id().as_str()),
             ("Version", "2.0"),
             ("IssueInstant", now_iso8601().as_str()),
             ("InResponseTo", in_response_to),
         ],
     );
-    writer.text_element("saml:Issuer", &[], issuer);
-    writer.start("samlp:Status", &[]);
-    writer.empty("samlp:StatusCode", &[("Value", status)]);
-    writer.end("samlp:Status");
+    writer.text_element(&prefixes.assertion("Issuer"), &[], issuer);
+    writer.start(&prefixes.protocol("Status"), &[]);
+    writer.empty(&prefixes.protocol("StatusCode"), &[("Value", status)]);
+    writer.end(&prefixes.protocol("Status"));
     if let Some(message_xml) = message_xml {
         writer.raw(message_xml);
     }
-    writer.end("samlp:ArtifactResponse");
+    writer.end(&prefixes.protocol("ArtifactResponse"));
     Ok(AnsweredArtifact {
         response: SoapResponse::try_new(&writer.finish())?,
         release,
