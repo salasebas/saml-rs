@@ -16,6 +16,7 @@ gone.
 | `Invalid(message)` or `Xml(message)` compared with an `ERR_*` code or a fixed message | A typed variant | [Match the new variants](#match-the-new-variants-instead-of-message-text) |
 | `UndefinedBinding`, `UndefinedStatus` | Removed or renamed | [Replace the binding and status variants](#replace-the-binding-and-status-variants) |
 | `SignatureVerificationReason::DetachedMessageSignature` | Renamed `BindingSignature` | [Match `BindingSignature`](#match-bindingsignature) |
+| `SignatureVerificationReason::RelayStateCorrelation` | Removed. Match `RelayStateMismatch` or `LimitExceeded` for `RelayStateBytes` | [Handle Redirect RelayState errors](#handle-redirect-relaystate-errors) |
 | `Xml(message)`, `Crypto(message)` | Struct variants with a source | [Read the cause](#read-the-cause-from-source) |
 | `Base64(error)`, `Deflate(error)`, or `?` on a `base64::DecodeError` or `std::io::Error` | Opaque sources, no `From` | [Convert the errors yourself](#convert-base64-and-io-errors-yourself) |
 | A pattern that lists every field of a `SamlError` variant, or code that builds a variant such as `SamlError::IssuerMismatch { .. }` | Variants with fields are non-exhaustive | [End field patterns with `..`](#end-field-patterns-with-) |
@@ -262,6 +263,21 @@ fn binding_signature_failed(error: &SamlError) -> bool {
 	)
 }
 ```
+
+For HTTP-Redirect and HTTP-POST-SimpleSign, handle a malformed base64
+`Signature` as `SamlError::Base64`. If any usable certificate rejects the
+signature and none verifies it, the error is still `BindingSignature`.
+If all configured certificates fail before a verdict, the verifier returns
+the first verification error so you can diagnose the key or provider.
+
+## Handle Redirect RelayState errors
+
+If you matched `SignatureVerificationReason::RelayStateCorrelation`, replace
+that arm with the two errors for mismatched signed and consumed HTTP-Redirect
+`RelayState` values. When both values fit the receive limit, match
+`SamlError::RelayStateMismatch { expected, actual, .. }`, including when a
+value exceeds the 80-byte send limit. When either exceeds the receive limit,
+match `SamlError::LimitExceeded { limit: ResourceLimit::RelayStateBytes, .. }`.
 
 ## Read the cause from `source`
 

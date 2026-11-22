@@ -501,21 +501,38 @@ fn verify_and_prepare(
         }
         require_response_coverage(response_signature_required, evidence.response_covered)?;
     }
-    let decrypt_key = crate::encrypted_elements::encrypted_assertion_key(root, parser_type, opts);
-    let decrypt_required = decrypt_key.is_some();
-    let decrypt_options = AssertionDecryptionOptions {
-        allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
-        max_decryption_work: opts.max_decryption_work,
-    };
-    let load_keys = || {
-        load_decryption_keys(
-            decrypt_key.unwrap_or_default(),
-            opts.decrypt_key_pass,
-            opts.additional_decrypt_keys,
-        )
-    };
-
-    if decrypt_required && evidence.verified && parser_type == ParserType::SamlResponse {
+    if let Some(key) = crate::encrypted_elements::encrypted_assertion_key(root, parser_type, opts) {
+        let decrypt_options = AssertionDecryptionOptions {
+            allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
+            max_decryption_work: opts.max_decryption_work,
+        };
+        let load_keys =
+            || load_decryption_keys(key, opts.decrypt_key_pass, opts.additional_decrypt_keys);
+        if !evidence.verified {
+            // encrypted-then-signed: decrypt first, then verify the result.
+            let (content, _) = decrypt_assertions_with_limits(
+                &xml,
+                &load_keys()?,
+                decrypt_options,
+                opts.xml_limits,
+            )?;
+            crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
+            validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
+            let re_evidence = verify_embedded_signature(&content, opts)?;
+            if !re_evidence.verified {
+                return Err(required_xml_signature_failed(re_evidence.signature_present));
+            }
+            require_direct_assertion_coverage(
+                assertion_signature,
+                re_evidence.assertion_directly_covered,
+            )?;
+            return Ok(PreparedMessage {
+                saml_content: content,
+                assertion: re_evidence.verified_node,
+                message_authenticated: false,
+                verified_xml_signatures: re_evidence.verified_xml_signatures,
+            });
+        }
         if let Some(node) = evidence.verified_node.as_deref() {
             // signed-then-encrypted
             let signed_content = if evidence.response_covered {
@@ -569,27 +586,6 @@ fn verify_and_prepare(
                 verified_xml_signatures,
             });
         }
-    }
-    if decrypt_required && !evidence.verified {
-        // encrypted-then-signed: decrypt first, then verify the result.
-        let (content, _) =
-            decrypt_assertions_with_limits(&xml, &load_keys()?, decrypt_options, opts.xml_limits)?;
-        crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
-        validate_protocol_profile(&content, parser_type, opts.xml_limits)?;
-        let re_evidence = verify_embedded_signature(&content, opts)?;
-        if !re_evidence.verified {
-            return Err(required_xml_signature_failed(re_evidence.signature_present));
-        }
-        require_direct_assertion_coverage(
-            assertion_signature,
-            re_evidence.assertion_directly_covered,
-        )?;
-        return Ok(PreparedMessage {
-            saml_content: content,
-            assertion: re_evidence.verified_node,
-            message_authenticated: false,
-            verified_xml_signatures: re_evidence.verified_xml_signatures,
-        });
     }
     if evidence.verified {
         require_direct_assertion_coverage(

@@ -351,3 +351,16 @@ let options = StartSso::post().requested_authn_context(RequestedAuthnContext::tr
 # let _ = options;
 # Ok::<(), saml_rs::SamlError>(())
 ```
+
+## Send one authentication context per statement
+
+**Affects:** service providers whose identity provider sends multiple SAML
+`AuthnContext` children in one `AuthnStatement`.
+
+Ask the identity provider to send one context per statement. Previously the
+service provider reported the last context.
+
+If a configured schema validator rejects the document, the service provider
+returns `SamlError::Invalid` from that callback. If the document reaches the
+built-in statement reader, repeated contexts in the selected assertion
+return `SamlError::ProtocolProfile`.

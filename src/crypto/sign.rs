@@ -3,7 +3,7 @@
 
 use super::keys::{load_certificate, load_hmac_secret, read_private_key};
 use super::signature_profile::check_verification_key;
-use crate::binding::{decode_base64, encode_base64, xml_escape};
+use crate::binding::{encode_base64, xml_escape};
 use crate::config::{HmacSecret, XmlSignatureProfile};
 use crate::constants::{digest_for_signature, namespace, transform_algorithm};
 use crate::entity::{EntitySetting, SignatureAction, SignatureConfig};
@@ -324,7 +324,7 @@ pub(crate) fn verify_octet_string_signature(
 ) -> Result<bool, SamlError> {
     verify_message_signature_under_profile(
         octet_string,
-        signature_b64,
+        &crate::binding::decode_base64(signature_b64)?,
         cert,
         sig_alg,
         XmlSignatureProfile::AllowWeakAlgorithms,
@@ -333,40 +333,34 @@ pub(crate) fn verify_octet_string_signature(
 
 pub(crate) fn verify_message_signature_under_profile(
     octet_string: &str,
-    signature_b64: &str,
+    signature: &[u8],
     cert: &str,
     sig_alg: &str,
     profile: XmlSignatureProfile,
 ) -> Result<bool, SamlError> {
     let key = load_certificate(cert)?;
     check_verification_key(profile, &key)?;
-    verify_detached_with_key(octet_string, signature_b64, &key, sig_alg)
+    verify_detached_with_key(octet_string, signature, &key, sig_alg)
 }
 
 pub(crate) fn verify_hmac_message_signature(
     octet_string: &str,
-    signature_b64: &str,
+    signature: &[u8],
     secret: &HmacSecret,
     sig_alg: &str,
 ) -> Result<bool, SamlError> {
-    verify_detached_with_key(
-        octet_string,
-        signature_b64,
-        &load_hmac_secret(secret)?,
-        sig_alg,
-    )
+    verify_detached_with_key(octet_string, signature, &load_hmac_secret(secret)?, sig_alg)
 }
 
 fn verify_detached_with_key(
     octet_string: &str,
-    signature_b64: &str,
+    signature: &[u8],
     key: &Key,
     sig_alg: &str,
 ) -> Result<bool, SamlError> {
     let verifying = require_operation_key(key.to_signing_key(), "no verification key")?;
     let alg = bergshamra::crypto::sign::from_uri(sig_alg).map_err(crypto_err)?;
-    let signature = decode_base64(signature_b64)?;
-    alg.verify(&verifying, octet_string.as_bytes(), &signature)
+    alg.verify(&verifying, octet_string.as_bytes(), signature)
         .map_err(crypto_err)
 }
 

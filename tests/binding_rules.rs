@@ -499,3 +499,24 @@ fn typed_simplesign_requires_the_sig_alg_field() -> Result<(), Box<dyn std::erro
     );
     Ok(())
 }
+
+#[test]
+fn typed_simplesign_reports_a_malformed_signature_encoding(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation())?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::simple_sign())?;
+    let mut fields = started.outbound.post_form()?.fields().to_vec();
+    let signature = fields
+        .iter_mut()
+        .find(|field| field.name() == "Signature")
+        .ok_or("missing Signature")?;
+    *signature = FormField::new("Signature", "invalid base64!");
+    let result = idp.receive_sso(&sp_descriptor, Inbound::simple_sign(fields), validation());
+    assert!(
+        matches!(result, Err(SamlError::Base64 { .. })),
+        "{result:?}"
+    );
+    Ok(())
+}

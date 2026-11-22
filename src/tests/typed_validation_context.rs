@@ -13,6 +13,7 @@ use saml_rs::tests::engine::flow;
 use saml_rs::util::Value;
 use saml_rs::{
     AuthnRequest, ClockSkew, ReplayKey, ReplayPolicy, SamlError, SamlValidationContext, SsoSession,
+    XmlLimits,
 };
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -546,7 +547,7 @@ fn typed_validation_context_replay_cache_stores_new_keys() -> Result<(), Box<dyn
     )
     .with_clock_skew(ClockSkew::from_millis(0, 1_000));
 
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(cache.seen.len(), 2);
     assert_eq!(
         cache.seen.get("response_id:_response123"),
@@ -579,7 +580,7 @@ fn require_cache_keeps_assertion_id_until_subject_confirmation_not_on_or_after(
     )
     .with_clock_skew(ClockSkew::strict());
 
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(
         cache.seen.get("assertion_id:_assertion123"),
         Some(&instant("2026-07-04T14:00:00Z")?)
@@ -611,7 +612,7 @@ fn typed_validation_context_replay_expiration_preserves_pre_epoch_nanoseconds(
     )
     .with_clock_skew(ClockSkew::strict());
 
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(
         cache.seen.get("response_id:_response123"),
         Some(&instant("1969-12-31T23:59:59.123456789Z")?)
@@ -636,7 +637,7 @@ fn typed_validation_context_out_of_range_instant_returns_error(
         SamlValidationContext::new(out_of_range, ReplayPolicy::RequireCache(&mut cache));
 
     assert_eq!(validation.now(), out_of_range);
-    match session.check_and_store_replay(&mut validation) {
+    match session.check_and_store_replay(&mut validation, XmlLimits::default()) {
         Err(SamlError::Invalid(message)) => {
             assert!(message.contains("validation instant"));
             Ok(())
@@ -690,11 +691,11 @@ fn typed_validation_context_duplicate_response_id_replay_returns_semantic_error(
     {
         let mut validation =
             SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
-        session.check_and_store_replay(&mut validation)?;
+        session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     }
 
     let mut validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
-    match session.check_and_store_replay(&mut validation) {
+    match session.check_and_store_replay(&mut validation, XmlLimits::default()) {
         Err(SamlError::ReplayDetected { key }) => {
             assert_eq!(key.cache_key(), "response_id:_response123");
             Ok(())
@@ -717,11 +718,11 @@ fn typed_validation_context_duplicate_assertion_id_replay_returns_semantic_error
     {
         let mut validation =
             SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
-        first.check_and_store_replay(&mut validation)?;
+        first.check_and_store_replay(&mut validation, XmlLimits::default())?;
     }
 
     let mut validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(&mut cache));
-    match second.check_and_store_replay(&mut validation) {
+    match second.check_and_store_replay(&mut validation, XmlLimits::default()) {
         Err(SamlError::ReplayDetected { key }) => {
             assert_eq!(key.cache_key(), "assertion_id:_assertion123");
             Ok(())
@@ -743,7 +744,7 @@ fn typed_validation_context_replay_expiration_uses_conditions_fallback(
     )
     .with_clock_skew(ClockSkew::from_millis(0, 2_000));
 
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(
         cache.seen.get("response_id:_response123"),
         Some(&instant("2026-07-04T13:00:02Z")?)
@@ -764,7 +765,7 @@ fn typed_validation_context_replay_expiration_uses_subject_confirmation_data(
     )
     .with_clock_skew(ClockSkew::strict());
 
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(
         cache.seen.get("response_id:_response123"),
         Some(&instant("2026-07-04T14:00:00Z")?)
@@ -785,7 +786,7 @@ fn typed_validation_context_replay_expiration_uses_session_not_on_or_after(
     )
     .with_clock_skew(ClockSkew::strict());
 
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(
         cache.seen.get("response_id:_response123"),
         Some(&instant("2026-07-04T13:30:00Z")?)
@@ -819,7 +820,7 @@ fn typed_validation_context_replay_expiration_uses_earliest_authn_statement(
     )
     .with_clock_skew(ClockSkew::strict());
 
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(
         cache.seen.get("response_id:_response123"),
         Some(&instant("2026-07-04T12:30:00Z")?)
@@ -849,7 +850,7 @@ fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_cl
         ReplayPolicy::RequireCache(&mut cache),
     );
 
-    match session.check_and_store_replay(&mut validation) {
+    match session.check_and_store_replay(&mut validation, XmlLimits::default()) {
         Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
@@ -869,7 +870,7 @@ fn typed_validation_context_replay_expiration_at_now_fails_closed(
     )
     .with_clock_skew(ClockSkew::strict());
 
-    match session.check_and_store_replay(&mut validation) {
+    match session.check_and_store_replay(&mut validation, XmlLimits::default()) {
         Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
@@ -893,7 +894,7 @@ fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_pol
         Vec::new(),
         None,
     )?;
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
 
     let mut cache = RecordingReplayCache::default();
     let mut validation = SamlValidationContext::new(
@@ -901,7 +902,7 @@ fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_pol
         ReplayPolicy::RequireCache(&mut cache),
     )
     .with_clock_skew(ClockSkew::strict());
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     assert_eq!(
         cache
             .seen
@@ -922,8 +923,8 @@ fn disabled_replay_accepts_the_same_session_twice() -> Result<(), Box<dyn std::e
     let mut validation =
         SamlValidationContext::new(instant("2026-07-04T12:05:00Z")?, ReplayPolicy::Disabled);
 
-    session.check_and_store_replay(&mut validation)?;
-    session.check_and_store_replay(&mut validation)?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
+    session.check_and_store_replay(&mut validation, XmlLimits::default())?;
     Ok(())
 }
 
@@ -942,7 +943,7 @@ fn typed_validation_context_replay_without_expiration_fails_closed(
         ReplayPolicy::RequireCache(&mut cache),
     );
 
-    match session.check_and_store_replay(&mut validation) {
+    match session.check_and_store_replay(&mut validation, XmlLimits::default()) {
         Err(SamlError::TimeWindowInvalid { field, .. }) => {
             assert_eq!(field, TimeWindowField::ReplayExpiration);
             Ok(())
