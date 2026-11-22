@@ -278,7 +278,7 @@ impl Metadata {
         fields.extend(role.fields());
         fields.extend(extra);
         let mut meta = extract_with_limits(
-            &role_xml(xml, extraction, entity, &descriptors),
+            &role_xml(xml, extraction, entity, &descriptors.nodes),
             &fields,
             limits,
         )?;
@@ -291,8 +291,8 @@ impl Metadata {
         Ok(Self {
             xml: xml.to_string(),
             meta,
-            key_certificates: KeyCertificates::from_descriptors(&descriptors),
-            valid_until_bounds: validity::valid_until_bounds(&roots, &descriptors),
+            key_certificates: KeyCertificates::from_descriptors(&descriptors.nodes),
+            valid_until_bounds: descriptors.valid_until_bounds,
             description: description_read::EntityDescription::read(xml, entity, limits)?,
         })
     }

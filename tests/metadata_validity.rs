@@ -309,18 +309,26 @@ fn an_elapsed_cache_duration_leaves_metadata_usable() -> Result<(), Box<dyn std:
 }
 
 #[test]
-fn import_rejects_a_malformed_valid_until() -> Result<(), Box<dyn std::error::Error>> {
-    let xml = format!(
-        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{IDP_ENTITY_ID}" validUntil="2001-01-01T00:00:00"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#
-    );
+fn import_checks_only_unqualified_valid_until() -> Result<(), Box<dyn std::error::Error>> {
+    let import = |entity_attrs: &str, role_attrs: &str| {
+        let xml = format!(
+            r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ext="urn:example:extension" entityID="{IDP_ENTITY_ID}" {entity_attrs}><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" {role_attrs}><SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#
+        );
+        IdpDescriptor::from_metadata_xml(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            &xml,
+            MetadataTrustPolicy::AllowUnsigned,
+        )
+    };
 
-    let imported = IdpDescriptor::from_metadata_xml(
-        EntityId::try_new(IDP_ENTITY_ID)?,
-        &xml,
-        MetadataTrustPolicy::AllowUnsigned,
-    );
-
-    assert!(is_valid_until_error(&imported));
+    let extension = r#"ext:validUntil="publisher-defined""#;
+    let valid = r#"validUntil="2030-01-01T00:00:00Z""#;
+    let malformed = r#"validUntil="2001-01-01T00:00:00""#;
+    import(extension, &format!("{extension} {valid}"))?;
+    assert!(is_valid_until_error(&import(
+        &format!("{extension} {malformed}"),
+        extension
+    )));
     Ok(())
 }
 

@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 
 use crate::error::{SamlError, TimeWindowField};
 use crate::validator::offset_datetime_from_system_time;
-use crate::xml::{dom, parse_timezoned_date_time};
+use crate::xml::parse_timezoned_date_time;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MetadataValidity {
@@ -44,34 +44,6 @@ fn metadata_valid_until() -> SamlError {
     SamlError::TimeWindowInvalid {
         field: TimeWindowField::MetadataValidUntil,
     }
-}
-
-pub(super) fn valid_until_bounds(roots: &[dom::Node], descriptors: &[&dom::Node]) -> Vec<String> {
-    roots
-        .iter()
-        .find_map(|root| entity_bounds(root, descriptors))
-        .unwrap_or_default()
-}
-
-fn entity_bounds(node: &dom::Node, descriptors: &[&dom::Node]) -> Option<Vec<String>> {
-    let mut bounds: Vec<String> = if node.local_name == "EntityDescriptor" {
-        descriptors
-            .iter()
-            .filter_map(|descriptor| descriptor.attr("validUntil"))
-            .map(str::to_string)
-            .collect()
-    } else {
-        node.children
-            .iter()
-            .find_map(|child| entity_bounds(child, descriptors))?
-    };
-    if matches!(
-        node.local_name.as_str(),
-        "EntityDescriptor" | "EntitiesDescriptor"
-    ) {
-        bounds.extend(node.attr("validUntil").map(str::to_string));
-    }
-    Some(bounds)
 }
 
 #[cfg(test)]

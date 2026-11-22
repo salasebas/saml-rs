@@ -29,8 +29,8 @@ impl EntityDescription {
         {
             return Ok(Self::default());
         }
-        let element =
-            super::role::namespaced_element(parse_saml_with_limits(xml, limits)?, entity)?;
+        let (element, _) =
+            super::role::namespaced_entity(parse_saml_with_limits(xml, limits)?, entity)?;
         if !element.is(namespace::METADATA, "EntityDescriptor") {
             return Ok(Self::default());
         }
