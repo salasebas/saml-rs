@@ -55,6 +55,26 @@ that keeps an invariant itself has private fields and `with_` setters, as
 Leave exhaustive a closed shape from the standard with no extension point,
 such as `LocalizedValue`. A new field there is a breaking change.
 
+## Stored snapshots
+
+A pending snapshot struct is a stored format. With the `serde` feature, a
+deployment keeps the JSON in its session store across an upgrade and a
+rollback.
+[Serialize pending snapshots with `serde`](site/src/content/docs/reference/features.md#serialize-pending-snapshots-with-serde)
+states the rules that callers rely on.
+
+- A new field is optional. Leave it out of `new`, give it
+  `#[cfg_attr(feature = "serde", serde(default))]`, and make its absent value
+  mean the behaviour before the field existed. Data that an older release
+  stored then still reads.
+- Keep the name of each field and the values it reads. The name is the key in
+  the stored data.
+- Do not add `deny_unknown_fields`. An older release reads data that a newer
+  release wrote.
+- The JSON in `tests/pending_snapshot_serde.rs` is the data that deployments
+  hold. When one of those tests fails, change the code. Edit the JSON only to
+  add a new optional field.
+
 ## Method names
 
 These rules apply when an API is added or redesigned.
