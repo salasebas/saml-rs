@@ -1,6 +1,43 @@
 use super::*;
 
 #[test]
+fn authn_request_uses_only_the_single_direct_signature_result(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for children in [
+        "<ds:Signature/><ds:Signature/>",
+        "<Extension><ds:Signature/></Extension><ds:Signature/>",
+    ] {
+        let xml = format!(
+            r#"<AuthnRequest xmlns:ds="{}">{children}</AuthnRequest>"#,
+            bergshamra_ns::DSIG
+        );
+        let document = uppsala::parse(&xml)?;
+        let first = document_signatures(&document)
+            .next()
+            .ok_or("missing test signature")?;
+        let results = [
+            VerifyResult::Valid {
+                signature_node: first,
+                references: Vec::new(),
+                key_info: bergshamra::VerifiedKeyInfo {
+                    algorithm: "RSA".into(),
+                    key_name: None,
+                    x509_chain: Vec::new(),
+                },
+            },
+            VerifyResult::Invalid {
+                reason: "unverified".into(),
+            },
+        ];
+        assert!(
+            verified_authn_request_signature(&document, &results).is_none(),
+            "{children}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn detailed_verification_reports_one_signature_covering_response_and_assertion(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signed = signature_over_response_and_assertion()?;

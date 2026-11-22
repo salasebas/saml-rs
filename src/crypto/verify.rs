@@ -34,7 +34,7 @@ mod processing;
 use processing::enforce_strict_profile_on_verified_signature;
 use processing::{
     document_signatures, enforce_profile_on_verified_signature, preflight_signature_processing,
-    SignatureSelection,
+    verified_authn_request_signature, SignatureSelection,
 };
 
 fn has_descendant(node: &Node, names: &[&str]) -> bool {
@@ -746,7 +746,15 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     preflight_signature_processing(&document, SignatureSelection::All, profile)?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
         .map_err(crypto_err)?;
-    reject_present_signature_that_does_not_verify(&prepared, &document, &results)?;
+    let results = if root.local_name == "AuthnRequest" {
+        let Some(signature) = verified_authn_request_signature(&document, &results) else {
+            return Ok(SignatureVerification::unverified(true));
+        };
+        std::slice::from_ref(signature)
+    } else {
+        &results
+    };
+    reject_present_signature_that_does_not_verify(&prepared, &document, results)?;
     let first_signature_verified = matches!(results.first(), Some(VerifyResult::Valid { .. }));
     let mut targets = Vec::new();
     let mut verified_embedded_signatures = Vec::new();
@@ -757,19 +765,19 @@ pub(crate) fn verify_signatures_detailed_with_profile(
                 references,
                 ..
             } => {
-                let signature_targets = verified_targets(&references)?;
+                let signature_targets = verified_targets(references)?;
                 let signature = verified_embedded_signature(
                     &document,
-                    signature_node,
-                    &references,
+                    *signature_node,
+                    references,
                     &signature_targets,
                     consumed,
                 )?;
                 if signature.is_some()
-                    || references_cover_direct_assertion(&document, &references)
+                    || references_cover_direct_assertion(&document, references)
                     || covered_content(root, &signature_targets, protocol_response).is_ok()
                 {
-                    enforce_profile_on_verified_signature(&document, signature_node, profile)?;
+                    enforce_profile_on_verified_signature(&document, *signature_node, profile)?;
                 }
                 verified_embedded_signatures.extend(signature);
                 targets.extend(signature_targets);

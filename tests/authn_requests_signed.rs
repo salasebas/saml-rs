@@ -11,11 +11,10 @@ use common::signing_credentials;
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    Inbound, MetadataTrustPolicy, Outbound, ReplayPolicy, SamlError, SamlValidationContext,
-    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
-    StartSso,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdentityProvider,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound,
+    ReplayPolicy, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
 };
 use url::Url;
 
@@ -52,6 +51,7 @@ fn idp(validation: IdpValidationPolicy) -> Result<saml_rs::IdentityProvider, Sam
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
+        .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_POST)?)
         .credentials(signing_credentials())
         .validation(validation)
         .build()?,
@@ -120,6 +120,7 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
     let unsigned_redirect = unsigned_sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     for input in [
         post_input(&unsigned_post.outbound)?,
+        Inbound::simple_sign(unsigned_post.outbound.post_form()?.fields().to_vec()),
         redirect_input(&unsigned_redirect.outbound)?,
     ] {
         match idp.receive_sso(&signing_descriptor, input, validation()) {
@@ -132,17 +133,20 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
     let signed_redirect = signing_sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     for (started, input) in [
         (&signed_post, post_input(&signed_post.outbound)?),
+        (
+            &signed_post,
+            Inbound::simple_sign(signed_post.outbound.post_form()?.fields().to_vec()),
+        ),
         (&signed_redirect, redirect_input(&signed_redirect.outbound)?),
     ] {
         let received = idp.receive_sso(&signing_descriptor, input, validation())?;
         assert_eq!(received.message().id(), started.pending.request_id());
     }
 
-    let mut unverified = IdpValidationPolicy::default();
-    unverified.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
-    let received = self::idp(unverified)?.receive_sso(
-        &signing_descriptor,
-        post_input(&unsigned_post.outbound)?,
+    let (unsigned_descriptor, _) = descriptors(&unsigned_sp, &idp)?;
+    let received = idp.receive_sso(
+        &unsigned_descriptor,
+        Inbound::simple_sign(unsigned_post.outbound.post_form()?.fields().to_vec()),
         validation(),
     )?;
     assert_eq!(received.message().id(), unsigned_post.pending.request_id());
@@ -176,12 +180,24 @@ fn unsigned_paos_request_is_rejected_when_sp_metadata_sets_authn_requests_signed
         &idp_descriptor,
         StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?),
     )?;
+    let envelope = envelope_for_idp(signed.http_response.envelope())?;
     let received = idp.receive_paos_sso(
         &signing_descriptor,
-        &envelope_for_idp(signed.http_response.envelope())?,
+        &envelope,
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
     assert_eq!(received.message().id(), signed.pending.request_id());
+    let optional_sp = sp(AuthnRequestSigningPolicy::DoNotSign)?;
+    let (optional_descriptor, _) = descriptors(&optional_sp, &idp)?;
+    assert!(matches!(
+        idp.receive_paos_sso(
+            &optional_descriptor,
+            &envelope.replace(SP_ACS, "https://sp.example.com/acs/updated"),
+            &EndpointUrl::try_new(IDP_SOAP)?,
+            validation(),
+        ),
+        Err(SamlError::SignatureVerification { .. })
+    ));
     Ok(())
 }

@@ -26,7 +26,7 @@ fn recommended_presets_select_the_classified_validation() {
     assert_eq!(
         IdpValidationPolicy::default(),
         IdpValidationPolicy {
-            authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
+            authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             logout: recommended_logout,
         }

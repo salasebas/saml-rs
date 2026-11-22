@@ -98,9 +98,9 @@ validation.audience = AudienceValidationPolicy::RequireRestriction;
 ```
 
 The raw identity provider's defaults differ from
-`IdpValidationPolicy::default` in `authn_requests`, which was
-`AuthnRequestValidationPolicy::AllowUnsigned`, and in `xml_signatures`, which
-was `XmlSignatureProfile::AllowWeakAlgorithms`.
+`IdpValidationPolicy::default` in two fields. The raw IdP skipped AuthnRequest signature
+verification and used the equivalent of `XmlSignatureProfile::AllowWeakAlgorithms`.
+The typed IdP [verifies present request signatures](authn-request-signatures.md).
 
 `accept_unsolicited_sso` rejects an unsolicited response that carries an empty
 `InResponseTo=""`. `parse_unsolicited_login_response` read an empty value as

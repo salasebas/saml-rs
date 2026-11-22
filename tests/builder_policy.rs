@@ -178,7 +178,7 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(
         idp.authn_requests,
-        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
+        AuthnRequestValidationPolicy::AllowUnsigned
     );
     assert_eq!(
         idp.xml_signatures,

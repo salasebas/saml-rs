@@ -268,8 +268,27 @@ impl Inbound<SsoResponse> {
 }
 
 impl Inbound<AuthnRequest> {
-    pub(crate) fn into_http_request(self, limits: XmlLimits) -> Result<HttpRequest, SamlError> {
-        http_request_from_transport(self.transport, true, MessageField::Request, limits)
+    pub(crate) fn into_http_request(
+        self,
+        limits: XmlLimits,
+    ) -> Result<(Binding, HttpRequest), SamlError> {
+        let binding = self.binding();
+        let (encoding, transport) = match self.transport {
+            Transport::SimpleSign { fields }
+                if field_value(&fields, url_params::SIGNATURE)?.is_none() =>
+            {
+                if field_value(&fields, url_params::SIG_ALG)?.is_some() {
+                    return Err(SamlError::SignatureMissing);
+                }
+                // Without detached signature controls, the form uses POST encoding.
+                (Binding::Post, Transport::Post { fields })
+            }
+            transport => (binding, transport),
+        };
+        Ok((
+            encoding,
+            http_request_from_transport(transport, true, MessageField::Request, limits)?,
+        ))
     }
 }
 

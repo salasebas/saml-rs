@@ -3,6 +3,8 @@
 
 use super::common;
 use super::post_validation::post_validation;
+#[path = "typed_sso/authn_request_signatures.rs"]
+mod authn_request_signatures;
 use saml_rs::tests::engine::LogoutUser;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 
@@ -301,16 +303,8 @@ fn unsigned_request_facades() -> Result<(ServiceProvider, IdentityProvider), Sam
     .sso_endpoint(SsoEndpoint::redirect(IDP_SSO_REDIRECT)?)
     .sso_endpoint(SsoEndpoint::simple_sign(IDP_SSO_SIMPLESIGN)?)
     .credentials(signing_credentials())
-    .validation(unverified_authn_request_idp_validation())
     .build()?;
     Ok((ServiceProvider::new(sp), IdentityProvider::new(idp)))
-}
-
-fn unverified_authn_request_idp_validation() -> IdpValidationPolicy {
-    IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
-        ..IdpValidationPolicy::default()
-    }
 }
 
 fn hostile_facades() -> Result<(ServiceProvider, IdentityProvider), SamlError> {
@@ -3219,13 +3213,8 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
 fn recommended_idp_receive_verifies_a_present_authn_request_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signing_sp = ServiceProvider::new(sp_config()?);
-    let strict_idp = IdentityProvider::new(idp_config()?);
-    let recommended_idp =
-        IdentityProvider::new(idp_with_validation(recommended_sso_accept_idp_validation())?);
-    let unverified_idp = IdentityProvider::new(idp_with_validation(
-        unverified_authn_request_idp_validation(),
-    )?);
-    let (sp_descriptor, idp_descriptor) = descriptors(&signing_sp, &strict_idp)?;
+    let (unsigned_sp, recommended_idp) = unsigned_request_facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &recommended_idp)?;
     let started = signing_sp.start_sso(&idp_descriptor, StartSso::post())?;
     let signed = authn_request_input(&started.outbound)?;
     recommended_idp.receive_sso(&sp_descriptor, signed, validation())?;
@@ -3245,11 +3234,6 @@ fn recommended_idp_receive_verifies_a_present_authn_request_signature(
         }
     }
 
-    unverified_idp.receive_sso(
-        &sp_descriptor,
-        post_authn_request_input_with_xml(&corrupted),
-        validation(),
-    )?;
     Ok(())
 }
 
@@ -3286,10 +3270,10 @@ fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
 
-    let (unsigned_sp, unverified_idp) = unsigned_request_facades()?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &unverified_idp)?;
+    let (unsigned_sp, default_idp) = unsigned_request_facades()?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &default_idp)?;
     let started = unsigned_sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let received = unverified_idp.receive_sso(
+    let received = default_idp.receive_sso(
         &sp_descriptor,
         Inbound::post(post_fields(&started.outbound)?),
         validation(),
@@ -3298,7 +3282,7 @@ fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
 
     let wrong_destination = authn_request_xml(&started.outbound)?
         .replace(IDP_SSO_POST, "https://idp.example.com/sso/wrong");
-    match unverified_idp.receive_sso(
+    match default_idp.receive_sso(
         &sp_descriptor,
         post_authn_request_input_with_xml(&wrong_destination),
         validation(),
@@ -3306,7 +3290,7 @@ fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
         Err(SamlError::DestinationMismatch { .. }) => {}
         other => {
             return Err(format!(
-                "expected DestinationMismatch from an unverified receive, got {other:?}"
+                "expected DestinationMismatch for an unsigned request, got {other:?}"
             )
             .into());
         }
