@@ -256,8 +256,9 @@ impl ServiceProvider {
     /// not share one issuer and one principal; or when replay validation
     /// returns `ReplayDetected` or `TimeWindowInvalid`. A status other than
     /// `Success` returns [`SamlError::StatusNotSuccess`] once all present
-    /// signatures verify and the issuer, `InResponseTo`, and destination
-    /// checks pass. An error response does not need a signature.
+    /// signatures verify and the issuer and destination checks pass. An error
+    /// response can omit `InResponseTo`. If present, it must match the pending
+    /// request ID. An error response does not need a signature.
     ///
     /// # Examples
     ///

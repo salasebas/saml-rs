@@ -27,7 +27,9 @@ pub(super) fn validate_error_response(
     }
     let extracted =
         extract_with_limits(xml, &fields::login_error_response_fields(), opts.xml_limits)?;
-    validate_in_response_to(&extracted, opts.expected_in_response_to)?;
+    if let Some(actual) = extracted.get_str("response.inResponseTo") {
+        validate_in_response_to(Some(actual), opts.expected_in_response_to)?;
+    }
     validate_message_destination(
         ParserType::SamlResponse,
         &extracted,

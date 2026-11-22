@@ -715,7 +715,10 @@ fn validate_context(
         ParserType::SamlResponse | ParserType::LogoutResponse | ParserType::ManageNameIdResponse
     );
     if is_response {
-        validate_in_response_to(extracted, opts.expected_in_response_to)?;
+        validate_in_response_to(
+            extracted.get_str("response.inResponseTo"),
+            opts.expected_in_response_to,
+        )?;
     }
     validate_message_destination(
         parser_type,
@@ -749,11 +752,10 @@ fn validate_context(
     }
 }
 
-fn validate_in_response_to(extracted: &Value, expected: Option<&str>) -> Result<(), SamlError> {
+fn validate_in_response_to(actual: Option<&str>, expected: Option<&str>) -> Result<(), SamlError> {
     let Some(expected) = expected else {
         return Ok(());
     };
-    let actual = extracted.get_str("response.inResponseTo");
     if actual != Some(expected) {
         return Err(SamlError::in_response_to_mismatch(Some(expected), actual));
     }

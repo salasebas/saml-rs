@@ -1917,6 +1917,34 @@ fn typed_facade_rejects_wrong_pending_request_id() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn typed_finish_sso_rejects_success_without_response_in_response_to(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = recommended_post_exchange()?;
+    let xml = response_xml_from_fields(&exchange.response_fields)?;
+    let request_id = exchange.pending.request_id().as_str();
+    let in_response_to = format!(" InResponseTo=\"{request_id}\"");
+    let without_in_response_to = xml.replacen(&in_response_to, "", 1);
+    assert_ne!(without_in_response_to, xml);
+    assert!(without_in_response_to.contains(&in_response_to));
+    let response = resign_response(&without_in_response_to)?;
+    let fields = response_fields_with_xml(exchange.response_fields, &response)?;
+
+    match exchange.sp.finish_sso(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        Inbound::post(fields),
+        post_validation(&mut Default::default()),
+    ) {
+        Err(SamlError::InResponseToMismatch { expected, actual }) => {
+            assert_eq!(expected.as_deref(), Some(request_id));
+            assert_eq!(actual, None);
+            Ok(())
+        }
+        other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
+    }
+}
+
+#[test]
 fn typed_facade_rejects_solicited_response_as_unsolicited() -> Result<(), Box<dyn std::error::Error>>
 {
     let exchange = start_receive_respond()?;
@@ -1967,17 +1995,53 @@ fn finish_sso_with_response_xml(
 }
 
 #[test]
-fn typed_finish_sso_reports_an_unsigned_correlated_error_status(
+fn typed_finish_sso_reports_an_unsigned_error_status_with_or_without_in_response_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = error_response_exchange()?;
     let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?;
+    let in_response_to = format!(
+        " InResponseTo=\"{}\"",
+        exchange.pending.request_id().as_str()
+    );
+    assert!(xml.contains(&in_response_to));
+    let without_in_response_to = xml.replacen(&in_response_to, "", 1);
 
-    match finish_sso_with_response_xml(&exchange, &xml) {
-        Err(SamlError::StatusNotSuccess { status }) => {
-            assert_eq!(status, auth_failed_status()?);
+    for (case, xml) in [("present", xml), ("absent", without_in_response_to)] {
+        match finish_sso_with_response_xml(&exchange, &xml) {
+            Err(SamlError::StatusNotSuccess { status }) => {
+                assert_eq!(status, auth_failed_status()?, "InResponseTo {case}");
+            }
+            other => {
+                return Err(format!(
+                    "InResponseTo {case}: expected StatusNotSuccess, got {other:?}"
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_finish_sso_rejects_an_empty_in_response_to_on_an_error_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = error_response_exchange()?;
+    let xml = strip_embedded_signatures(&response_xml_from_fields(&exchange.response_fields)?)?;
+    let request_id = exchange.pending.request_id().as_str();
+    let empty_in_response_to = xml.replacen(
+        &format!(" InResponseTo=\"{request_id}\""),
+        " InResponseTo=\"\"",
+        1,
+    );
+    assert_ne!(empty_in_response_to, xml);
+
+    match finish_sso_with_response_xml(&exchange, &empty_in_response_to) {
+        Err(SamlError::InResponseToMismatch { expected, actual }) => {
+            assert_eq!(expected.as_deref(), Some(request_id));
+            assert_eq!(actual.as_deref(), Some(""));
             Ok(())
         }
-        other => Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+        other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
     }
 }
 
