@@ -258,7 +258,9 @@ impl ServiceProvider {
     /// `Success` returns [`SamlError::StatusNotSuccess`] once all present
     /// signatures verify and the issuer and destination checks pass. An error
     /// response can omit `InResponseTo`. If present, it must match the pending
-    /// request ID. An error response does not need a signature.
+    /// request ID. An error response does not need a signature. Only a
+    /// validated success reaches the comparison with the pending request's
+    /// `RelayState`.
     ///
     /// # Examples
     ///
@@ -390,7 +392,6 @@ impl ServiceProvider {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         ensure_sso_response_binding(input.binding(), pending.acs().binding())?;
         let relay_state = relay_state_from_input(&input)?;
-        ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
         let flow = self.engine().parse_login_response_with_request_id_at(
@@ -400,6 +401,7 @@ impl ServiceProvider {
             pending.request_id().as_str(),
             parse.options(validation, pending.acs().location().as_str()),
         )?;
+        ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
         validation.check_sso_replay_policy(pending.acs().binding())?;
         session_from_verified_flow(flow, relay_state)
     }
