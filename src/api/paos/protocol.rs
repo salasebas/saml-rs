@@ -2,14 +2,13 @@
 
 use crate::error::SamlError;
 use crate::model::RelayState;
-use crate::soap::{self, HeaderEntry, UnderstoodHeader};
+use crate::soap::{self, HeaderEntry, UnderstoodHeader, SOAP_ACTOR_NEXT};
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::XmlLimits;
 
 pub(super) const PAOS_VERSION: &str = "urn:liberty:paos:2003-08";
 pub(super) const ECP_PROFILE: &str = "urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp";
 pub(super) const PAOS_MEDIA_TYPE: &str = "application/vnd.paos+xml";
-const SOAP_ACTOR_NEXT: &str = "http://schemas.xmlsoap.org/soap/actor/next";
 const SOAP_ENVELOPE_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 const PAOS_NS: &str = "urn:liberty:paos:2003-08";
 const ASSERTION_NS: &str = "urn:oasis:names:tc:SAML:2.0:assertion";

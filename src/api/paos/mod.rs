@@ -469,8 +469,8 @@ impl ServiceProvider {
     /// larger than the configured XML limits. Returns [`SamlError`] when the response does
     /// not match the pending login, including issuer, relay state,
     /// destination, recipient, or `InResponseTo`, when signature, audience,
-    /// condition, time, or status checks fail, or when a SOAP header entry
-    /// other than `ecp:RelayState` or `paos:Response` sets `mustUnderstand`.
+    /// condition, time, or status checks fail, or when a SOAP header requires the SP to process
+    /// an entry other than `ecp:RelayState` or `paos:Response`.
     /// An error response can omit `InResponseTo`. If present, it must match
     /// the pending request ID, as in [`Self::finish_sso`].
     pub fn finish_paos_sso(
@@ -549,7 +549,7 @@ impl IdentityProvider {
     /// Returns [`SamlError::Xml`] when `request_envelope` is empty, blank, or
     /// not a SOAP 1.1 envelope, and [`SamlError::LimitExceeded`] when it is
     /// larger than the configured XML limits. Returns [`SamlError`] when the envelope is not
-    /// one AuthnRequest, a SOAP header entry sets `mustUnderstand`, the issuer
+    /// one AuthnRequest, a SOAP header requires processing by the IdP, the issuer
     /// or destination does not match, the request is unsigned while the SP
     /// metadata sets `AuthnRequestsSigned`,
     /// or signature, time, or replay checks fail. Answer those errors with

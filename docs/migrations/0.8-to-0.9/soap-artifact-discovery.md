@@ -7,6 +7,21 @@ that send SAML messages over SOAP or through the browser, resolve or answer
 artifacts, or write the `_saml_idp` cookie. Apply the sections that match your
 integration.
 
+## Address mandatory SOAP headers to their receiver
+
+This affects SOAP receivers for artifact resolution, logout, name identifier
+management, and both ends of PAOS SSO.
+
+If your deployment relies on a SOAP receiver to reject an unsupported header,
+qualify `mustUnderstand="1"` with the SOAP 1.1 envelope namespace. Omit
+`soap:actor` to address the ultimate destination, or set it to
+`http://schemas.xmlsoap.org/soap/actor/next` to address the next SOAP node.
+Previously an unprefixed attribute could trigger the rejection, and the actor
+had no effect. Receivers now ignore headers addressed to other actors,
+including an ECP relay state addressed elsewhere. If the pending login expects
+a relay state and the only returned value names another actor, `finish_paos_sso`
+returns `SamlError::RelayStateMismatch`. Rust call sites stay the same.
+
 ## Send the SOAP headers from `headers()`
 
 **Affects:** code that calls `soap_action()`, `cache_control()`, `pragma()`,

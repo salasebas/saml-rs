@@ -809,7 +809,7 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
     )?;
     let required = resolution.request().envelope().replacen(
         "<soap:Body>",
-        "<soap:Header><extra mustUnderstand=\"1\">note</extra></soap:Header><soap:Body>",
+        "<soap:Header><ext:Trace xmlns:ext=\"urn:example:trace\" soap:mustUnderstand=\"1\">note</ext:Trace></soap:Header><soap:Body>",
         1,
     );
     let refused =
@@ -818,14 +818,14 @@ fn a_header_the_responder_must_understand_is_refused_without_consuming_the_artif
             .answer_artifact_resolve(&parties.sp_metadata, &required, &mut issued, channel);
     assert!(matches!(refused, Err(SamlError::Xml { .. })));
 
-    let optional = resolution.request().envelope().replacen(
+    let for_router = resolution.request().envelope().replacen(
         "<soap:Body>",
-        "<soap:Header><extra>note</extra></soap:Header><soap:Body>",
+        "<soap:Header><ext:Trace xmlns:ext=\"urn:example:trace\" soap:mustUnderstand=\"1\" soap:actor=\"urn:example:router\"/></soap:Header><soap:Body>",
         1,
     );
     let accepted = parties.idp.answer_artifact_resolve(
         &parties.sp_metadata,
-        &optional,
+        &for_router,
         &mut issued,
         channel,
     )?;
