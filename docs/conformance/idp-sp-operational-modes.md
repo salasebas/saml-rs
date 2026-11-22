@@ -6,11 +6,12 @@ Each row names the obligated actor, the level for each column, and one
 disposition. The rules of a claimed feature are on the record it links to.
 
 The IdP operational mode and the SP operational mode are not claimed. Every
-Table 2 `MUST` cell of the IdP and SP columns has a claimed feature. Two
-limits remain: the unsigned CBC `AuthnRequest` subject that the identity
-provider leaves unread by library policy under §3.4, and the HTTP Redirect
-rows, which are claimed for the default build only. This page is the
-inventory, not the claim.
+Table 2 `MUST` cell of the IdP and SP columns has a claimed feature.
+The SP's HTTP-Artifact claim covers only sessions where a signature protects
+the response or each assertion. Two other limits remain: the unsigned CBC
+`AuthnRequest` subject that the identity provider leaves unread by library
+policy under §3.4, and the HTTP Redirect rows, which are claimed for the
+default build only. This page is the inventory, not the claim.
 
 Normative text is Conformance Requirements, as corrected by Approved
 Errata 05. E11 relabels the name identifier management rows. E25 adds the
@@ -40,7 +41,7 @@ and the attribute profiles are in
 | --- | --- | --- | --- | --- | --- |
 | Web SSO, `<AuthnRequest>`, HTTP Redirect | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. `start_sso` and `receive_sso`, in [SSO generation](web-browser-sso-generation.md) and [SSO acceptance](web-browser-sso-acceptance.md). HTTP-POST and HTTP-POST-SimpleSign are claimed as well. HTTP-Artifact is not implemented, and Table 2 does not require it |
 | Web SSO, `<Response>`, HTTP POST | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. `respond_sso`, `initiate_sso`, `finish_sso`, and `accept_unsolicited_sso`, in the same records. HTTP-POST-SimpleSign is claimed as well. The identity provider never sends a `<Response>` over HTTP-Redirect: Profiles §4.1.2 prohibits it. The service provider still reads one, because no receiver rule rejects it |
-| Web SSO, `<Response>`, HTTP Artifact | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. [HTTP-Artifact response](web-browser-sso-artifact.md) |
+| Web SSO, `<Response>`, HTTP Artifact | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. The IdP signs the response or its assertion. The SP requires an XML signature on the response or each assertion to establish a session. See [HTTP-Artifact response](web-browser-sso-artifact.md) |
 | Artifact Resolution, SOAP | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. [Artifact resolution](artifact-resolution.md). The identity provider issues and answers. The service provider is the requester. It issues no artifact that a Table 2 `MUST` cell needs, so it does not answer `ArtifactResolve` |
 | Enhanced Client/Proxy SSO, PAOS | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature for the service-provider and identity-provider ends. [Enhanced Client/Proxy](enhanced-client-proxy.md) |
 | Name Identifier Management (IdP-Initiated), HTTP Redirect | `MUST` | `MUST NOT` | `MUST` | `MUST NOT` | Claimed feature for the IdP and the SP. [Name identifier management](name-id-management.md). Prohibited for IdP Lite and SP Lite: such a deployment publishes no `ManageNameIDService` and calls no `start_name_id_management_redirect`. Publishing none is the default, and without one the operations return `SamlError::MissingMetadata` |

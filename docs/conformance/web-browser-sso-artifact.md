@@ -11,14 +11,16 @@ of the `<Response>` is in
 [acceptance](web-browser-sso-acceptance.md). This page records what the
 binding adds or changes.
 
-This flow is the feature "Web SSO, `<Response>`, HTTP artifact" in Conformance
-Requirements Table 2, for the IdP, IdP Lite, SP, and SP Lite columns. It does
-not claim the IdP or SP operational mode. An `<AuthnRequest>` over
-HTTP-Artifact is not implemented.
+This flow covers signed delivery and session creation for the "Web SSO,
+`<Response>`, HTTP artifact" feature in Conformance Requirements Table 2.
+For the SP and SP Lite columns, the claim covers only sessions where an XML
+signature protects the response or each assertion. If the IdP relies solely
+on the protected SOAP exchange, the SP can retrieve the response but cannot
+establish a typed session from it.
 
 Normative text is SAML Bindings 2.0 §3.6 and Profiles 2.0 §4.1, as corrected
 by Approved Errata 05. Errata that change this flow are E2, E4, E26, E31, E59,
-E85, and E90.
+E85, E90, and E93.
 
 The deployment sends the HTTP response that carries the artifact and receives
 the request at the assertion consumer. TLS for that exchange stays there.
@@ -71,7 +73,7 @@ only to the service provider it was issued to are in
 | The message is the one resolved from the delivered artifact, by the identity provider being accepted | Service provider | Inbound `finish_sso` and `accept_unsolicited_sso` | Library policy. Profiles §4.1.3.5 has the service provider retrieve the `Response` for the artifact from the identity provider that issued it, and does not state a receiver rejection. The looser rule cannot be applied because `Inbound::artifact` pairs two caller values, and a mismatched pair would accept a message for another artifact or identity provider. Such a message is rejected |
 | Enforce single use of a received artifact, and do not retry one whose resolution did not complete | Service provider | Resolve artifact | Recommendation. Bindings §3.6.5.2. With `ReplayPolicy::RequireCache`, `resolve_artifact` stores `ReplayKey::Artifact` in the caller's `ReplayCache` when resolution starts, until the context time plus `SamlValidationContext::with_replay_retention`. The binding asks that period to exceed the time the issuer would resolve the artifact. `ReplayPolicy::Disabled` on that call relaxes it |
 | Verify any signature on the `Response` or an assertion | Service provider | Inbound | Mandatory. Profiles §4.1.4.3. The SP verifies the resolved response under the same [signature rules as HTTP-POST](web-browser-sso-acceptance.md). |
-| The `Response` or each assertion is signed | Service provider | Inbound | Library policy. Profiles §4.1.3.5 lets an assertion on this binding be unsigned, and §4.1.4.4 lets the dereference binding authenticate the parties. The looser rule cannot be applied because the typed session reads the subject, conditions, and attributes from signature-verified XML, and `SoapChannel` is the caller's attestation, which saml-rs does not check. `AssertionSignaturePolicy` and `ResponseSignaturePolicy` apply as they do for HTTP-POST |
+| An XML signature covers the `Response` or each assertion | Service provider | Inbound, `Success` response | Library policy. Profiles §4.1.3.5 as amended by Errata 05 E93 makes signing optional for the IdP on HTTP-Artifact. Section 4.1.4.4 permits the dereference binding to authenticate the parties and protect the exchange. The SP requires signature coverage because `finish_sso` and `accept_unsolicited_sso` take the subject, conditions, and attributes for `SsoSession` only from XML verified against the IdP's signing key. `AssertionSignaturePolicy` and `ResponseSignaturePolicy` apply as for HTTP-POST |
 | Bearer `Recipient` is the assertion consumer the artifact was delivered to | Service provider | Inbound | Mandatory. Profiles §4.1.4.3 as replaced by Errata 05 E26. `finish_sso` uses the pending assertion consumer. `accept_unsolicited_sso` uses the URL supplied with `SamlValidationContext::with_recipient_endpoint`, as for HTTP-POST in [acceptance](web-browser-sso-acceptance.md). Without one, it compares the `Recipient` with the local default HTTP-Artifact consumer, selected by the indexed-default algorithm in [generation](web-browser-sso-generation.md). Treating that default as the consumer the artifact reached is library policy. The looser rule cannot be applied because without a supplied URL `accept_unsolicited_sso` is not told which URL received the artifact. A response delivered to another HTTP-Artifact consumer is then rejected, as an unsolicited HTTP-POST response is |
 | A present `Destination` is that assertion consumer | Service provider | Inbound | Mandatory when the attribute is present. Core §3.2.2 |
 | A signed `Response` may omit `Destination` | Service provider | Inbound | Errata 05 E59 leaves the attribute unspecified on this binding. The HTTP-POST rule that a signed message carries it (Bindings §3.5.5.2) is not applied |
@@ -82,6 +84,22 @@ only to the service provider it was issued to are in
 The remaining acceptance rows, including bearer `NotOnOrAfter`,
 `InResponseTo`, audience, conditions, and clock skew, are the HTTP-POST rows
 in [acceptance](web-browser-sso-acceptance.md).
+
+The SP relies on the deployment's `SoapChannel` attestation for the exchange
+it starts with `resolve_artifact`. The caller supplies the reply separately.
+`ArtifactResolution::finish` uses the issuer and request ID to correlate that
+reply. Only session creation needs independent proof of the assertion data.
+For an otherwise valid unsigned plaintext login response, it returns
+`SamlError::SignatureMissing`.
+
+For the issuing IdP, Profiles §4.1.3.5 as amended by
+[Errata 05 E93](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.html)
+makes signing optional on HTTP-Artifact and recommends signing the response
+when an encrypted assertion uses CBC. Both the
+[protocol schema](https://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd)
+(`StatusResponseType`, the base of `ResponseType`) and the
+[assertion schema](https://docs.oasis-open.org/security/saml/v2.0/saml-schema-assertion-2.0.xsd)
+(`AssertionType`) give `ds:Signature` a minimum occurrence of zero.
 
 ## Outside this flow
 
