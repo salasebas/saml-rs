@@ -304,7 +304,7 @@ impl Outbound<SsoResponse> {
                 OutboundAction::Redirect(url)
             }
             ArtifactEncoding::Form => {
-                OutboundAction::Post(post_form_from_context(&raw_context, false)?)
+                OutboundAction::Post(post_form_from_context(&raw_context, None)?)
             }
         };
         Ok(Self {
@@ -455,7 +455,7 @@ fn outbound_from_context<Message>(
         }
         Binding::Post => {
             reject_detached_signature_for_post(&raw_context)?;
-            let form = post_form_from_context(&raw_context, false)?;
+            let form = post_form_from_context(&raw_context, None)?;
             Ok(Outbound {
                 id,
                 relay_state,
@@ -465,8 +465,8 @@ fn outbound_from_context<Message>(
             })
         }
         Binding::SimpleSign => {
-            require_complete_detached_signature(&raw_context)?;
-            let form = post_form_from_context(&raw_context, true)?;
+            let signature = detached_signature_fields(&raw_context)?;
+            let form = post_form_from_context(&raw_context, Some(signature))?;
             Ok(Outbound {
                 id,
                 relay_state,
@@ -528,15 +528,6 @@ fn validate_redirect_message_kind(
     }
 }
 
-fn reject_partial_detached_signature(context: &BindingContext) -> Result<(), SamlError> {
-    if context.sig_alg.is_some() != context.signature.is_some() {
-        return Err(SamlError::Invalid(
-            "partial detached signature state is invalid".into(),
-        ));
-    }
-    Ok(())
-}
-
 fn reject_detached_signature_for_post(context: &BindingContext) -> Result<(), SamlError> {
     if context.sig_alg.is_some() || context.signature.is_some() {
         return Err(SamlError::Invalid(
@@ -546,19 +537,21 @@ fn reject_detached_signature_for_post(context: &BindingContext) -> Result<(), Sa
     Ok(())
 }
 
-fn require_complete_detached_signature(context: &BindingContext) -> Result<(), SamlError> {
-    reject_partial_detached_signature(context)?;
-    match (&context.sig_alg, &context.signature) {
-        (Some(_), Some(_)) => Ok(()),
-        _ => Err(SamlError::Invalid(
+fn detached_signature_fields(context: &BindingContext) -> Result<(&str, &str), SamlError> {
+    match (context.sig_alg.as_deref(), context.signature.as_deref()) {
+        (Some(algorithm), Some(signature)) => Ok((algorithm, signature)),
+        (None, None) => Err(SamlError::Invalid(
             "SimpleSign requires SigAlg and Signature".into(),
+        )),
+        (Some(_), None) | (None, Some(_)) => Err(SamlError::Invalid(
+            "partial detached signature state is invalid".into(),
         )),
     }
 }
 
 fn post_form_from_context(
     context: &BindingContext,
-    include_signature: bool,
+    signature_fields: Option<(&str, &str)>,
 ) -> Result<PostForm, SamlError> {
     let action = EndpointUrl::try_new(context.entity_endpoint.clone())?;
     context.post_form()?;
@@ -569,15 +562,9 @@ fn post_form_from_context(
     if let Some(relay_state) = &context.relay_state {
         fields.push(FormField::new("RelayState", relay_state.clone()));
     }
-    if include_signature {
-        fields.push(FormField::new(
-            "SigAlg",
-            context.sig_alg.clone().unwrap_or_default(),
-        ));
-        fields.push(FormField::new(
-            "Signature",
-            context.signature.clone().unwrap_or_default(),
-        ));
+    if let Some((algorithm, signature)) = signature_fields {
+        fields.push(FormField::new("SigAlg", algorithm));
+        fields.push(FormField::new("Signature", signature));
     }
     Ok(PostForm::new(action, fields))
 }

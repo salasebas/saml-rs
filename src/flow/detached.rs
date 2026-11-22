@@ -15,17 +15,10 @@ fn detached_signature_verification() -> SamlError {
     }
 }
 
-fn relay_state_param(value: Option<&str>) -> Option<Option<RelayState>> {
-    value.map(RelayState::try_new).transpose().ok()
-}
-
-fn detached_relay_state_mismatch(expected: Option<&str>, actual: Option<&str>) -> SamlError {
-    match (relay_state_param(expected), relay_state_param(actual)) {
-        (Some(expected), Some(actual)) => SamlError::RelayStateMismatch { expected, actual },
-        _ => SamlError::SignatureVerification {
-            reason: SignatureVerificationReason::RelayStateCorrelation,
-        },
-    }
+fn received_relay_state(value: Option<&str>) -> Result<Option<RelayState>, SamlError> {
+    value
+        .map(|value| RelayState::received(value.to_owned()))
+        .transpose()
 }
 
 fn ensure_redirect_octet_matches_consumed_fields(
@@ -58,10 +51,10 @@ fn ensure_redirect_octet_matches_consumed_fields(
     let signed_relay_state = single_param(&signed, "RelayState")?;
     let consumed_relay_state = request.query_get("RelayState")?;
     if signed_relay_state != consumed_relay_state {
-        return Err(detached_relay_state_mismatch(
-            signed_relay_state,
-            consumed_relay_state,
-        ));
+        return Err(SamlError::RelayStateMismatch {
+            expected: received_relay_state(signed_relay_state)?,
+            actual: received_relay_state(consumed_relay_state)?,
+        });
     }
 
     Ok(())
@@ -155,37 +148,37 @@ pub(super) fn verify_detached(
     }
     crate::crypto::initialize_crypto_provider()?;
 
+    let signature = crate::binding::decode_base64(signature)?;
     if let Some(secret) = opts
         .hmac_secret
         .filter(|_| bergshamra::crypto::sign::is_hmac_algorithm(sig_alg))
     {
-        if crate::crypto::sign::verify_hmac_message_signature(octet, signature, secret, sig_alg)? {
+        if crate::crypto::sign::verify_hmac_message_signature(octet, &signature, secret, sig_alg)? {
             return Ok(sig_alg.to_string());
         }
         return Err(detached_signature_verification());
     }
 
-    let mut provider_error = None;
+    let mut first_error = None;
     let mut tried_invalid = false;
     for cert in opts.signing_certs {
         match crate::crypto::sign::verify_message_signature_under_profile(
             octet,
-            signature,
+            &signature,
             cert,
             sig_alg,
             opts.xml_signatures,
         ) {
             Ok(true) => return Ok(sig_alg.to_string()),
             Ok(false) => tried_invalid = true,
-            Err(error @ SamlError::Crypto { .. }) => {
-                provider_error.get_or_insert(error);
+            Err(error) => {
+                first_error.get_or_insert(error);
             }
-            Err(_) => {}
         }
     }
 
     // A leftover unloadable cert must not poison a rolling-cert verdict.
-    match provider_error {
+    match first_error {
         Some(error) if !tried_invalid => Err(error),
         _ => Err(detached_signature_verification()),
     }

@@ -263,6 +263,17 @@ fn binding_signature_failed(error: &SamlError) -> bool {
 }
 ```
 
+For HTTP-Redirect and HTTP-POST-SimpleSign, handle a malformed base64
+`Signature` as `SamlError::Base64`. If any usable certificate rejects the
+signature and none verifies it, the error is still `BindingSignature`.
+If all configured certificates fail before a verdict, the verifier returns
+the first verification error so you can diagnose the key or provider.
+
+A mismatch between signed and consumed HTTP-Redirect `RelayState` values
+uses the receive limit for both values. Within that limit the error is
+`RelayStateMismatch`, including for values longer than the 80-byte send
+limit. An oversized value returns `LimitExceeded` for `RelayStateBytes`.
+
 ## Read the cause from `source`
 
 `Xml` and `Crypto` are struct variants. `message` says what failed. When a

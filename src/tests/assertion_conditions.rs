@@ -2,6 +2,7 @@
 #![cfg(crypto)]
 
 mod replay;
+mod statement;
 
 use super::common;
 use super::post_validation::post_validation;

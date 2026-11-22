@@ -429,13 +429,27 @@ fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
         },
     )?;
     let mut request = redirect_request(&ctx.context)?;
-    let (_, relay_state) = request
+    let relay_index = request
         .query
-        .iter_mut()
-        .find(|(key, _)| key == "RelayState")
+        .iter()
+        .position(|(key, _)| key == "RelayState")
         .ok_or("missing RelayState")?;
-    *relay_state = "relay-actual".to_string();
+    request.query[relay_index].1 = "x".repeat(saml_rs::MAX_RECEIVED_RELAY_STATE_BYTES + 1);
+    let oversized = idp.parse_login_request(&sp, Binding::Redirect, &request);
+    assert!(
+        matches!(
+            oversized,
+            Err(SamlError::LimitExceeded {
+                limit: saml_rs::ResourceLimit::RelayStateBytes,
+                maximum: saml_rs::MAX_RECEIVED_RELAY_STATE_BYTES,
+                ..
+            })
+        ),
+        "{oversized:?}"
+    );
 
+    let received = "x".repeat(saml_rs::MAX_RELAY_STATE_BYTES + 1);
+    request.query[relay_index].1.clone_from(&received);
     match idp.parse_login_request(&sp, Binding::Redirect, &request) {
         Err(SamlError::RelayStateMismatch {
             expected, actual, ..
@@ -446,7 +460,7 @@ fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
             );
             assert_eq!(
                 actual.as_ref().map(RelayState::as_str),
-                Some("relay-actual")
+                Some(received.as_str())
             );
             Ok(())
         }

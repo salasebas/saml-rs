@@ -120,18 +120,23 @@ pub(super) fn attach_statement_details(
             "extracted AuthnStatement count does not match the assertion".into(),
         ));
     }
-    Ok(sessions
+    sessions
         .into_iter()
         .zip(statements)
         .map(|(mut session, statement)| {
             for child in &statement.children {
                 if child.is(namespace::ASSERTION, "AuthnContext") {
+                    if session.authn_context().is_some() {
+                        return Err(SamlError::ProtocolProfile(
+                            "AuthnStatement has more than one AuthnContext".into(),
+                        ));
+                    }
                     session = session.with_authn_context(AuthnContext::from_element(child));
                 } else if child.is(namespace::ASSERTION, "SubjectLocality") {
                     session = session.with_subject_locality(SubjectLocality::from_element(child));
                 }
             }
-            session
+            Ok(session)
         })
-        .collect())
+        .collect()
 }
