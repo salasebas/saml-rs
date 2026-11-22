@@ -25,7 +25,10 @@ producer selects is not stated by §4. Generating SHA-1, Triple DES, or RSA-v1.5
 only when the caller selects it is library policy. The algorithms are
 available on the RustCrypto provider with `crypto-legacy-algorithms`, which the
 default `crypto-bergshamra` feature enables. AWS-LC and FIPS have a narrower
-set, listed in each row.
+set. Neither build implements the full HTTP-Redirect `SigAlg` requirement of
+Bindings §3.4.4.1 because neither signs RSAwithSHA1 or DSAwithSHA1.
+RSA-v1.5 decryption is disabled by default even on a build that supports it.
+See the [provider matrix](#provider-supported-set).
 
 The signer's algorithm applies to every message it signs: the `AuthnRequest`,
 the `Response`, and logout messages. It is the XML-DSig `SignatureMethod` on
@@ -38,7 +41,7 @@ encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`,
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| SHA-1 digest | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. Generated only with `SignatureAlgorithm::RsaSha1` or `SignatureAlgorithm::DsaSha1`, which take their digest from the signature algorithm. Verified under `XmlSignatureProfile::ExcludeWeakAlgorithms`, the value Recommended uses, and under `AllowWeakAlgorithms`. `StrictRsaSha2` is library hardening and rejects it |
+| SHA-1 digest | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. The SHA-1 signature algorithms, including `SignatureAlgorithm::HmacSha1`, select this digest. Verified under `XmlSignatureProfile::ExcludeWeakAlgorithms`, the value Recommended uses, and under `AllowWeakAlgorithms`. `StrictRsaSha2` is library hardening and rejects it |
 | RSAwithSHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1, and Bindings §3.4.4.1 signature rule 5 for the HTTP-Redirect `SigAlg`. `SignatureAlgorithm::RsaSha1` selects it. It is never the default. AWS-LC and FIPS do not sign with it. FIPS does not verify it. Neither meets the HTTP-Redirect rule |
 | DSAwithSHA1 | Identity provider and service provider | Sign and verify | Recommendation to implement in Conformance §4.1. Mandatory to implement for the HTTP-Redirect `SigAlg`: Bindings §3.4.4.1 signature rule 5. `SignatureAlgorithm::DsaSha1` selects it with a DSA signing key, and a DSA certificate in the peer's metadata verifies it. It is never the default, on the same library policy as the SHA-1 digest. RustCrypto with `crypto-legacy-algorithms` only, so the default build meets the HTTP-Redirect rule, and `crypto-aws-lc`, `crypto-fips`, and RustCrypto without `crypto-legacy-algorithms` do not |
 | HMAC-SHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `SignatureAlgorithm::HmacSha1` signs with the secret of `Credentials::with_hmac_secret`, and the signature carries no `KeyInfo`. The verifier sets the same secret with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`, next to the peer's metadata certificates. SAML metadata has no shared-secret key, so the secret is exchanged out of band. Metadata signatures are not verified with it. The 160-bit minimum `HMACOutputLength` is existing library hardening |
@@ -121,7 +124,7 @@ build verifies them. Signed metadata import excludes them under
 | Excluded | Rule | Level |
 | --- | --- | --- |
 | RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, a detached `SigAlg`, or a verified metadata signature that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, and xmlsec1 has built without MD5 by default since 1.3.0 |
-| RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. They are outside Conformance §4.1. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
+| RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. The default excludes RIPEMD-160 for limited provider support. Conformance §4.1 does not require it. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
 | An RSA signing certificate shorter than 2048 bits | The certificate is not used to verify. When the peer has no other usable key, verification returns `SamlError::Crypto`, as it does on AWS-LC. Otherwise a message signed with the short key fails signature verification. A pinned metadata signing certificate is treated the same way | Library policy, on in Recommended for both roles and in signed metadata import. XML Signature 1.1 §6.4.2 lets a verifier use an RSA key of 1024 bits or less, and names 2048-bit public keys the minimum recommended key length. RustCrypto without `crypto-legacy-algorithms`, AWS-LC, and FIPS refuse it in every profile. OpenSAML sets no minimum |
 
 SHA-1 stays accepted under `ExcludeWeakAlgorithms`: Conformance §4.1 makes the

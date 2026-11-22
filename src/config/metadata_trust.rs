@@ -16,11 +16,10 @@ use super::policies::XmlSignatureProfile;
 /// [`crate::SpValidationPolicy`] or [`crate::IdpValidationPolicy`]. The classification is
 /// `docs/conformance/metadata-and-replay.md`.
 ///
-/// SAML metadata trust is caller-pinned or federation-driven; this type does
-/// not use a public web PKI CA store by default.
-/// [`AllowUnsigned`](Self::AllowUnsigned) accepts unsigned metadata, as the
-/// samlify port did. It is not the preferred
-/// production trust model.
+/// For signed metadata, obtain the publisher's signing certificate independently
+/// of the document and pin it as shown below. When the application authenticates
+/// the metadata through another trusted channel, such as a file provisioned by
+/// the operator, it can explicitly select [`Self::AllowUnsigned`].
 ///
 /// # Examples
 ///
@@ -45,9 +44,9 @@ use super::policies::XmlSignatureProfile;
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum MetadataTrustPolicy<'a> {
-    /// Accept unsigned metadata, as the samlify port did.
+    /// Import metadata without verifying a signature, even when one is present.
     ///
-    /// A signature on the document is not treated as verified.
+    /// The caller establishes the document's origin and integrity.
     AllowUnsigned,
     /// Require a valid metadata signature from one of the pinned certificates.
     ///
