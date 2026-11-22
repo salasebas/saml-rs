@@ -26,7 +26,7 @@ cargo add opensaml
 ```
 
 ```rust
-use opensaml::{Saml, Sp};
+use opensaml::{IdentityProvider, ServiceProvider};
 ```
 
 Feature flags match `saml-rs` and are forwarded to it. With

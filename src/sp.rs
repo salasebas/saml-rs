@@ -10,7 +10,7 @@ use crate::flow::{
     FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, ResponseSignatureRequirement,
     SignatureCheck, SignedMessageDestination,
 };
-use crate::idp::IdentityProvider;
+use crate::idp;
 use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataInput};
 use crate::model::{validate_name_id_format, ClockSkew};
 use crate::template::{replace_tags_by_optional_value, LOGIN_REQUEST_TEMPLATE};
@@ -26,7 +26,7 @@ pub(crate) use paos::PaosAuthnRequestInput;
 
 /// A SAML 2.0 Service Provider: runtime [`EntitySetting`] plus parsed [`SpMetadata`].
 #[derive(Debug, Clone)]
-pub struct ServiceProvider {
+pub struct Engine {
     /// Runtime configuration (keys, algorithms, flags).
     pub setting: EntitySetting,
     /// Parsed SP metadata.
@@ -104,7 +104,7 @@ impl<'a> LoginResponseParseOptions<'a> {
     }
 }
 
-impl ServiceProvider {
+impl Engine {
     /// Build from SP metadata XML, merging the metadata-declared flags into `setting`.
     ///
     /// # Errors
@@ -169,7 +169,7 @@ impl ServiceProvider {
 
     pub(crate) fn create_typed_login_request(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         options: &LoginRequestOptions<'_>,
         producer: WebBrowserSsoProducer,
@@ -180,7 +180,7 @@ impl ServiceProvider {
 
     fn create_login_request_inner(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         options: &LoginRequestOptions<'_>,
         producer: WebBrowserSsoProducer,
@@ -384,7 +384,7 @@ impl ServiceProvider {
 
     pub(crate) fn parse_unsolicited_login_response_at(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         request: &HttpRequest,
         options: LoginResponseParseOptions<'_>,
@@ -400,7 +400,7 @@ impl ServiceProvider {
 
     pub(crate) fn parse_login_response_with_request_id_at(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         request: &HttpRequest,
         request_id: &str,
@@ -420,7 +420,7 @@ impl ServiceProvider {
 
     fn parse_login_response_inner_with_signature_evidence(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         request: &HttpRequest,
         correlation: LoginResponseCorrelation<'_>,
@@ -513,8 +513,8 @@ mod tests {
     use crate::tests::engine::SpMessages;
     use url::Url;
 
-    fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(
+    fn unsigned_idp() -> Result<idp::Engine, SamlError> {
+        idp::Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 single_sign_on_service: vec![
@@ -527,8 +527,8 @@ mod tests {
         )
     }
 
-    fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
-        ServiceProvider::from_config(
+    fn unsigned_sp() -> Result<Engine, SamlError> {
+        Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 assertion_consumer_service: vec![Endpoint::new(
@@ -593,8 +593,8 @@ mod crypto_tests {
     const SP_SIGNING_CERT: &str =
         include_str!("../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
-    fn signing_idp() -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(
+    fn signing_idp() -> Result<idp::Engine, SamlError> {
+        idp::Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![IDP_CERT.into()],
@@ -611,7 +611,7 @@ mod crypto_tests {
 
     #[test]
     fn parse_signed_response_extracts_name_id() -> Result<(), Box<dyn std::error::Error>> {
-        let idp = IdentityProvider::from_config(
+        let idp = idp::Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![SP_SIGNING_CERT.into()],
@@ -625,7 +625,7 @@ mod crypto_tests {
                 ..Default::default()
             },
         )?;
-        let sp = ServiceProvider::from_config(
+        let sp = Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 assertion_consumer_service: vec![Endpoint::new(
@@ -657,7 +657,7 @@ mod crypto_tests {
     #[test]
     #[allow(deprecated)]
     fn create_signed_post_request_verifies() -> Result<(), Box<dyn std::error::Error>> {
-        let sp = ServiceProvider::from_config(
+        let sp = Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 authn_requests_signed: true,
@@ -687,7 +687,7 @@ mod crypto_tests {
 
     #[test]
     fn create_signed_redirect_request_has_signature() -> Result<(), Box<dyn std::error::Error>> {
-        let sp = ServiceProvider::from_config(
+        let sp = Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 authn_requests_signed: true,

@@ -25,7 +25,7 @@ cargo add samlify
 ```
 
 ```rust
-use samlify::{Saml, Sp};
+use samlify::{IdentityProvider, ServiceProvider};
 ```
 
 Feature flags match `saml-rs` and are forwarded to it. With

@@ -88,7 +88,7 @@ pub enum ManageNameIdResponse {}
 #[derive(Debug, Clone)]
 pub enum NameIdManagementReceipt<Response = SoapResponse> {
     /// Apply the change, then answer with
-    /// [`Saml::respond_name_id_management`](crate::Saml::respond_name_id_management),
+    /// [`IdentityProvider::respond_name_id_management`](crate::IdentityProvider::respond_name_id_management),
     /// or its `_redirect` counterpart for HTTP-Redirect.
     Request(Box<Received<ManageNameIdRequest>>),
     /// The provider answered the request without processing it.

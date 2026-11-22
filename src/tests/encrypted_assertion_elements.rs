@@ -22,11 +22,11 @@ use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, Attribute,
     AttributeEncryptionPolicy, AttributeNameFormat, AttributeValue, Attributes,
     AudienceValidationPolicy, CertificatePem, Credentials, EntityId, FormField,
-    IdentifierEncryptionPolicy, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy, RespondSso,
-    ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse, SsoResponseBinding, SsoSession,
-    StartSso, X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    IdentifierEncryptionPolicy, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy,
+    RespondSso, ResponseSignaturePolicy, SamlError, SamlValidationContext, ServiceProvider,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse,
+    SsoResponseBinding, SsoSession, StartSso, X509Credential, XmlEncryptionPolicy, XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -78,7 +78,7 @@ fn sp_validation() -> SpValidationPolicy {
 fn sp_with(
     encryption: XmlEncryptionPolicy,
     validation: SpValidationPolicy,
-) -> Result<Saml<saml_rs::Sp>, SamlError> {
+) -> Result<saml_rs::ServiceProvider, SamlError> {
     sp_with_credentials(encryption, validation, credentials())
 }
 
@@ -86,8 +86,8 @@ fn sp_with_credentials(
     encryption: XmlEncryptionPolicy,
     validation: SpValidationPolicy,
     credentials: Credentials,
-) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+) -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -99,12 +99,12 @@ fn sp_with_credentials(
     ))
 }
 
-fn sp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
     sp_with(encryption, sp_validation())
 }
 
-fn idp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp(encryption: XmlEncryptionPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -117,8 +117,8 @@ fn idp(encryption: XmlEncryptionPolicy) -> Result<Saml<saml_rs::Idp>, SamlError>
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     Ok((
         SpDescriptor::from_metadata_xml(
@@ -181,9 +181,9 @@ fn exchange(
 /// SP-initiated SSO over HTTP-POST, in which `idp` reads `sp` from
 /// `sp_descriptor`.
 fn exchange_between(
-    sp: &Saml<saml_rs::Sp>,
+    sp: &saml_rs::ServiceProvider,
     sp_descriptor: &SpDescriptor,
-    idp: &Saml<saml_rs::Idp>,
+    idp: &saml_rs::IdentityProvider,
     idp_descriptor: &IdpDescriptor,
 ) -> Result<Exchange, Box<dyn std::error::Error>> {
     let started = sp.start_sso(idp_descriptor, StartSso::post())?;
@@ -329,7 +329,7 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
         assertions: AssertionEncryptionPolicy::EncryptAssertions,
         ..XmlEncryptionPolicy::default()
     })?;
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -348,10 +348,10 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
         })
         .build()?,
     );
-    let mut raw = idp.identity_provider().clone();
+    let mut raw = idp.engine().clone();
     raw.setting.key_encryption_algorithm = RSA_OAEP_MGF1P.into();
     let response = raw.create_login_response(
-        sp.service_provider(),
+        sp.engine(),
         Binding::Post,
         &saml_rs::entity::User::new("alice-persistent-id"),
         &saml_rs::idp::LoginResponseOptions::default(),
@@ -386,7 +386,7 @@ fn metadata_publishes_each_encryption_certificate_in_order(
         sp_validation(),
         rolling.clone(),
     )?;
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -559,7 +559,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
             ..XmlEncryptionPolicy::default()
         },
     ] {
-        let sp = Saml::sp(
+        let sp = ServiceProvider::new(
             SpConfig::builder(
                 EntityId::try_new(SP_ENTITY_ID)?,
                 AcsEndpoint::simple_sign(SP_ACS)?.with_default(),

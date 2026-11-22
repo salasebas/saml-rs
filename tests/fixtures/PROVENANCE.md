@@ -157,7 +157,7 @@ claims about a production deployment.
 | IdP testbed | Snapshot `5.2.3-20260617.132935-11`; WAR SHA-256 `7793a24d2ab04638ac0b305bc937144b7389a4e22724749fdf0ea7ff0f7857a5`; classes JAR SHA-256 `bb76db0ac097c36d2a03b7742c9691f65648db67c86159fe0b61e022bf48ffd3` |
 | Runtime | Eclipse Temurin `17.0.19+10`, Maven `3.9.16`, Jetty `12.1.10`, Chrome `150.0.7871.129`, Selenium `4.44.0` |
 | Binding and encoder | Full IdP product flow over HTTP-Redirect, captured from Chrome's network log |
-| Direction under test | `Saml<Sp>::receive_slo` |
+| Direction under test | `ServiceProvider::receive_slo` |
 | Entity ID | `https://idp.example.org` |
 | Destination | `https://localhost:24720/sp/SAML2/Redirect/SLO` |
 | Signature | RSA-SHA256 detached Redirect signature |
@@ -211,7 +211,7 @@ The certificate SHA-256 fingerprint is
 | SLO implementation dependency | `simplesamlphp/saml2-legacy` `v4.20.3`, commit `b43d5d10ea1180f478ddcd677ff13bb324cfa866` from the release's `composer.lock` |
 | Runtime | PHP `8.3.32`, container image digest `sha256:2a3f699b6cb31e5638c5432e4d37d4047853ba6351a692c91e0a073af00a55cc` |
 | Binding and encoder | HTTP-Redirect via `SAML2\HTTPRedirect::getRedirectURL` |
-| Direction under test | `Saml<Idp>::receive_slo` |
+| Direction under test | `IdentityProvider::receive_slo` |
 | Entity ID | `https://sp.example.test/saml2` |
 | Destination | `https://idp.example.test/slo/redirect` |
 | Signature | RSA-SHA256 detached Redirect signature |

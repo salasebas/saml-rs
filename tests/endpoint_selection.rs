@@ -12,10 +12,10 @@ use base64::Engine;
 use saml_rs::constants::Binding;
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId,
-    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts,
-    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponseBinding,
-    StartSso,
+    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    IssuedArtifacts, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoResponseBinding, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -33,8 +33,8 @@ fn principal() -> NameId {
     NameId::new("alice@example.com")
 }
 
-fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp_with_default_acs() -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(FIRST_ACS)?.with_index(0),
@@ -46,14 +46,14 @@ fn sp_with_default_acs() -> Result<Saml<saml_rs::Sp>, SamlError> {
     ))
 }
 
-fn idp_with_sso(first: &str, more: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp_with_sso(first: &str, more: &[&str]) -> Result<saml_rs::IdentityProvider, SamlError> {
     let more = more
         .iter()
         .map(|url| SsoEndpoint::post(*url))
         .collect::<Result<Vec<_>, _>>()?;
     let builder = IdpConfig::builder(EntityId::try_new(IDP_ENTITY_ID)?, SsoEndpoint::post(first)?)
         .sso_endpoints(more);
-    Ok(Saml::idp(
+    Ok(IdentityProvider::new(
         builder
             .credentials(signing_credentials())
             .validation(IdpValidationPolicy::compatibility())
@@ -62,8 +62,8 @@ fn idp_with_sso(first: &str, more: &[&str]) -> Result<Saml<saml_rs::Idp>, SamlEr
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -131,7 +131,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
     )?;
     assert_eq!(response.post_form()?.action().as_str(), DEFAULT_ACS);
 
-    let cross_binding_sp = Saml::sp(
+    let cross_binding_sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(FIRST_ACS)?.with_index(0),
@@ -262,7 +262,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
 
 #[test]
 fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::error::Error>> {
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_FIRST)?,
@@ -287,7 +287,7 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
             }
             _ => return Err("unsupported response binding".into()),
         };
-        let sp = Saml::sp(
+        let sp = ServiceProvider::new(
             SpConfig::builder(
                 EntityId::try_new(SP_ENTITY_ID)?,
                 AcsEndpoint::new(global_binding, EndpointUrl::try_new(DEFAULT_ACS)?)

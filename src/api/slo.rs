@@ -18,9 +18,9 @@ use std::time::SystemTime;
 use super::raw_mapping::{
     ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
-use super::{Idp, LogoutSigning, RespondSlo, Saml, SamlError, Sp, StartSlo};
+use super::{IdentityProvider, LogoutSigning, RespondSlo, SamlError, ServiceProvider, StartSlo};
 
-impl Saml<Sp> {
+impl ServiceProvider {
     /// Start SP-initiated Single Logout.
     ///
     /// # Errors
@@ -40,10 +40,10 @@ impl Saml<Sp> {
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{IdpDescriptor, LogoutSubject, Saml, StartSlo};
+    /// use saml_rs::{IdpDescriptor, LogoutSubject, ServiceProvider, StartSlo};
     ///
     /// # fn logout(
-    /// #     sp: &Saml<saml_rs::Sp>,
+    /// #     sp: &ServiceProvider,
     /// #     idp: &IdpDescriptor,
     /// #     subject: LogoutSubject,
     /// # ) -> Result<(), saml_rs::SamlError> {
@@ -61,8 +61,8 @@ impl Saml<Sp> {
     ) -> Result<Started<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         start_slo_impl(
-            &self.service_provider().setting,
-            self.service_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             subject,
             options,
@@ -97,8 +97,8 @@ impl Saml<Sp> {
     ) -> Result<Received<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
         receive_slo_impl(
-            &self.service_provider().setting,
-            self.service_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             input,
             validation,
@@ -136,8 +136,8 @@ impl Saml<Sp> {
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         respond_slo_impl(
-            &self.service_provider().setting,
-            self.service_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             request,
             status,
@@ -173,13 +173,13 @@ impl Saml<Sp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     FormField, IdpDescriptor, Inbound, PendingLogoutRequest, ReplayPolicy, Saml,
-    ///     SamlValidationContext,
+    ///     FormField, IdpDescriptor, Inbound, PendingLogoutRequest, ReplayPolicy,
+    ///     SamlValidationContext, ServiceProvider,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn finish(
-    /// #     sp: &Saml<saml_rs::Sp>,
+    /// #     sp: &ServiceProvider,
     /// #     idp: &IdpDescriptor,
     /// #     pending: &PendingLogoutRequest,
     /// #     fields: Vec<FormField>,
@@ -208,8 +208,8 @@ impl Saml<Sp> {
     ) -> Result<LogoutCompleted, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
         finish_slo_impl(
-            &self.service_provider().setting,
-            self.service_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             pending,
             input,
@@ -218,7 +218,7 @@ impl Saml<Sp> {
     }
 }
 
-impl Saml<Idp> {
+impl IdentityProvider {
     /// Start Session Authority Single Logout.
     ///
     /// The generated `LogoutRequest` always carries a UTC `NotOnOrAfter`
@@ -253,10 +253,10 @@ impl Saml<Idp> {
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{LogoutSubject, Saml, SpDescriptor, StartSlo};
+    /// use saml_rs::{IdentityProvider, LogoutSubject, SpDescriptor, StartSlo};
     ///
     /// # fn logout(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     subject: LogoutSubject,
     /// # ) -> Result<(), saml_rs::SamlError> {
@@ -274,13 +274,13 @@ impl Saml<Idp> {
     ) -> Result<Started<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         start_slo_impl(
-            &self.identity_provider().setting,
-            self.identity_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             subject,
             options,
             StartSloRole::SessionAuthority {
-                issuance_lifetime: self.0.issuance_lifetime,
+                issuance_lifetime: self.issuance_lifetime(),
             },
         )
     }
@@ -304,13 +304,13 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     FormField, Inbound, ReplayPolicy, RespondSlo, Saml, SamlValidationContext, SpDescriptor,
-    ///     Status,
+    ///     FormField, IdentityProvider, Inbound, ReplayPolicy, RespondSlo, SamlValidationContext,
+    ///     SpDescriptor, Status,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn respond(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     fields: Vec<FormField>,
     /// # ) -> Result<(), saml_rs::SamlError> {
@@ -334,8 +334,8 @@ impl Saml<Idp> {
     ) -> Result<Received<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
         receive_slo_impl(
-            &self.identity_provider().setting,
-            self.identity_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             input,
             validation,
@@ -368,10 +368,10 @@ impl Saml<Idp> {
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{LogoutRequest, Received, RespondSlo, Saml, SpDescriptor, Status};
+    /// use saml_rs::{IdentityProvider, LogoutRequest, Received, RespondSlo, SpDescriptor, Status};
     ///
     /// # fn respond(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<LogoutRequest>,
     /// # ) -> Result<(), saml_rs::SamlError> {
@@ -389,8 +389,8 @@ impl Saml<Idp> {
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         respond_slo_impl(
-            &self.identity_provider().setting,
-            self.identity_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             request,
             status,
@@ -426,13 +426,13 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     FormField, Inbound, PendingLogoutRequest, ReplayPolicy, Saml, SamlValidationContext,
-    ///     SpDescriptor,
+    ///     FormField, IdentityProvider, Inbound, PendingLogoutRequest, ReplayPolicy,
+    ///     SamlValidationContext, SpDescriptor,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn finish(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     pending: &PendingLogoutRequest,
     /// #     fields: Vec<FormField>,
@@ -461,8 +461,8 @@ impl Saml<Idp> {
     ) -> Result<LogoutCompleted, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
         finish_slo_impl(
-            &self.identity_provider().setting,
-            self.identity_provider().metadata.as_metadata(),
+            &self.engine().setting,
+            self.engine().metadata.as_metadata(),
             peer,
             pending,
             input,

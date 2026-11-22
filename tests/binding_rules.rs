@@ -16,11 +16,11 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
-    ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpConfigBuilder,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
-    MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem,
+    RelayState, ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
+    SpConfig, SpConfigBuilder, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    StartSso, X509Credential, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 use url::Url;
 
@@ -90,12 +90,12 @@ fn sp_config(validation: SpValidationPolicy) -> Result<SpConfigBuilder, SamlErro
     .validation(validation))
 }
 
-fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(sp_config(validation)?.build()?))
+fn sp_with(validation: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(sp_config(validation)?.build()?))
 }
 
-fn idp_with(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp_with(validation: IdpValidationPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -109,8 +109,8 @@ fn idp_with(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlE
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -430,7 +430,7 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
 #[test]
 fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let unsigned_sp = Saml::sp(
+    let unsigned_sp = ServiceProvider::new(
         sp_config(SpValidationPolicy::recommended())?
             .authn_request_template(SIGNED_AUTHN_REQUEST_TEMPLATE)
             .build()?,
@@ -447,7 +447,7 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
         }
     }
 
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         sp_config(signing_sp_validation())?
             .authn_request_template(SIGNED_AUTHN_REQUEST_TEMPLATE)
             .build()?,

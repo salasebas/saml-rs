@@ -45,6 +45,6 @@ The adapter does not pick your peer. `recommended()` does not invent a trust anc
 - Start from `recommended()`, then add `AssertionSignaturePolicy::RequireSigned` or `XmlSignatureProfile::StrictRsaSha2` only when you want that hardening.
 - Leave RSA-v1.5 key-transport decryption off unless a peer cannot send RSA-OAEP. See [Security](../reference/security.md).
 
-If you call bergshamra yourself, outside this crate, use the configuration secexample prints: trusted keys only, strict verification, and a minimum HMAC length. Inspect `VerifyResult` references before you read an assertion. Leave the raw-inline-key hatch off for untrusted XML. That direct use is a different API from `Saml::sp`.
+If you call bergshamra yourself, outside this crate, use the configuration secexample prints: trusted keys only, strict verification, and a minimum HMAC length. Inspect `VerifyResult` references before you read an assertion. Leave the raw-inline-key hatch off for untrusted XML. That direct use is a different API from `ServiceProvider::new`.
 
 The runnable demos are `cargo run` in [secexample](https://github.com/kushaldas/secexample). Bergshamra's SAML note is in the [bergshamra README](https://github.com/kushaldas/bergshamra#recommended-configuration-for-saml).

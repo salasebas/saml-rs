@@ -8,11 +8,11 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
     AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EndpointUrl, EntityId,
-    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject,
-    MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RespondSlo, RespondSso,
-    Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartPaosSso, StartSlo, StartSso,
-    Status, X509Credential, XmlSignatureProfile,
+    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy,
+    RespondSlo, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex,
+    SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, StartPaosSso, StartSlo, StartSso, Status, X509Credential, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -25,8 +25,8 @@ const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 struct Parties {
-    sp: Saml<saml_rs::Sp>,
-    idp: Saml<saml_rs::Idp>,
+    sp: saml_rs::ServiceProvider,
+    idp: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     idp_descriptor: IdpDescriptor,
 }
@@ -41,7 +41,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
     sp_validation.xml_signatures = xml_signatures;
     let mut idp_validation = IdpValidationPolicy::recommended();
     idp_validation.xml_signatures = xml_signatures;
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
@@ -52,7 +52,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         .validation(sp_validation)
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post("https://idp.example.com/sso/post")?,

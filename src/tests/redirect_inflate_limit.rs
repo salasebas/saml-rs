@@ -4,10 +4,10 @@ use saml_rs::binding::{deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::{FlowOptions, HttpRequest};
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::flow;
 use saml_rs::tests::engine::redirect_query;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
@@ -29,22 +29,22 @@ fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
     ))
 }
 
-fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
+fn unsigned_sp() -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
-    ServiceProvider::from_config(&config, EntitySetting::default())
+    sp::Engine::from_config(&config, EntitySetting::default())
 }
 
-fn unsigned_idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
+fn unsigned_idp(setting: EntitySetting) -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         ..IdpMetadataInput::default()
     };
-    IdentityProvider::from_config(&config, setting)
+    idp::Engine::from_config(&config, setting)
 }
 
 #[test]

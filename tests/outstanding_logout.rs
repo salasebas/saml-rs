@@ -11,11 +11,11 @@ use common::signing_credentials;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use saml_rs::{
-    AcsEndpoint, AuthnStatement, ClockSkew, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, InMemoryReplayCache, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
-    OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlInstant, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
+    AcsEndpoint, AuthnStatement, ClockSkew, EntityId, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound, MetadataTrustPolicy, NameId,
+    NameIdFormat, OutstandingLogout, PendingAuthnRequest, RelayState, ReplayPolicy, RespondSso,
+    SamlError, SamlInstant, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
 };
 use time::OffsetDateTime;
 
@@ -29,7 +29,7 @@ fn principal() -> NameId {
 }
 
 struct IssuedSso {
-    sp: Saml<saml_rs::Sp>,
+    sp: saml_rs::ServiceProvider,
     idp_descriptor: IdpDescriptor,
     pending: PendingAuthnRequest,
     fields: Vec<FormField>,
@@ -56,8 +56,8 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     .credentials(signing_credentials())
     .validation(IdpValidationPolicy::recommended())
     .build()?;
-    let sp = Saml::sp(sp_config);
-    let idp = Saml::idp(idp_config);
+    let sp = ServiceProvider::new(sp_config);
+    let idp = IdentityProvider::new(idp_config);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),

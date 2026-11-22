@@ -11,10 +11,10 @@
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     AuthnRequest, NameId, Received, RespondSso, Saml, Sp, SpDescriptor, SsoAssertion,
+//!     AuthnRequest, NameId, Received, RespondSso, ServiceProvider, SpDescriptor, SsoAssertion,
 //! };
 //!
-//! let sp: Saml<Sp> = unreachable!();
+//! let sp: ServiceProvider = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let name_id: NameId = unreachable!();
@@ -23,9 +23,9 @@
 //! ```
 //!
 //! ```compile_fail
-//! use saml_rs::{Idp, IdpDescriptor, Saml, StartSso};
+//! use saml_rs::{IdentityProvider, IdpDescriptor, StartSso};
 //!
-//! let idp: Saml<Idp> = unreachable!();
+//! let idp: IdentityProvider = unreachable!();
 //! let peer: IdpDescriptor = unreachable!();
 //!
 //! let _ = idp.start_sso(&peer, StartSso::post());
@@ -37,11 +37,11 @@
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     ArtifactDelivery, AuthnRequest, Idp, NameId, Received, RespondSso, Saml, SpDescriptor,
-//!     SsoAssertion,
+//!     ArtifactDelivery, AuthnRequest, IdentityProvider, NameId, Received, RespondSso,
+//!     SpDescriptor, SsoAssertion,
 //! };
 //!
-//! let idp: Saml<Idp> = unreachable!();
+//! let idp: IdentityProvider = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let name_id: NameId = unreachable!();
@@ -52,11 +52,11 @@
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     AuthnRequest, Idp, IssuedArtifacts, NameId, Received, RespondSso, Saml, SpDescriptor,
+//!     AuthnRequest, IdentityProvider, IssuedArtifacts, NameId, Received, RespondSso, SpDescriptor,
 //!     SsoAssertion,
 //! };
 //!
-//! let idp: Saml<Idp> = unreachable!();
+//! let idp: IdentityProvider = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let request: Received<AuthnRequest> = unreachable!();
 //! let name_id: NameId = unreachable!();
@@ -67,9 +67,9 @@
 //! ```
 //!
 //! ```compile_fail
-//! use saml_rs::{CommonDomainCookieLifetime, RememberIdentityProvider, Saml, Sp};
+//! use saml_rs::{CommonDomainCookieLifetime, RememberIdentityProvider, ServiceProvider};
 //!
-//! let sp: Saml<Sp> = unreachable!();
+//! let sp: ServiceProvider = unreachable!();
 //! let _ = sp.common_domain_cookie(RememberIdentityProvider::new(
 //!     "example.org",
 //!     CommonDomainCookieLifetime::Session,
@@ -81,10 +81,10 @@
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     NameId, NameIdChange, Saml, SoapChannel, Sp, SpDescriptor, StartNameIdManagement,
+//!     NameId, NameIdChange, ServiceProvider, SoapChannel, SpDescriptor, StartNameIdManagement,
 //! };
 //!
-//! let sp: Saml<Sp> = unreachable!();
+//! let sp: ServiceProvider = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let name_id: NameId = unreachable!();
 //! let channel: SoapChannel = unreachable!();
@@ -99,9 +99,9 @@
 //! ```
 //!
 //! ```compile_fail
-//! use saml_rs::{Saml, SamlValidationContext, SoapChannel, Sp, SpDescriptor};
+//! use saml_rs::{SamlValidationContext, ServiceProvider, SoapChannel, SpDescriptor};
 //!
-//! let sp: Saml<Sp> = unreachable!();
+//! let sp: ServiceProvider = unreachable!();
 //! let peer: SpDescriptor = unreachable!();
 //! let channel: SoapChannel = unreachable!();
 //! let validation: SamlValidationContext<'static> = unreachable!();
@@ -121,11 +121,9 @@ mod slo;
 mod sp;
 mod sso_outcome;
 
-use crate::config::{IdpConfig, SpConfig};
 use crate::error::SamlError;
-use crate::idp::IdentityProvider;
-use crate::sp::ServiceProvider;
 
+pub use idp::IdentityProvider;
 pub use name_id_management::NameIdManagementRedirectReceipt;
 pub use options::{
     ForceAuthn, IsPassive, LogoutSigning, MessageDelivery, ReceiveNameIdManagement,
@@ -135,38 +133,5 @@ pub use paos::{
     check_paos_client_headers, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot, SoapFault,
     StartPaosSso, StartedPaosSso,
 };
+pub use sp::ServiceProvider;
 pub use sso_outcome::{SsoAssertion, SsoOutcome};
-
-/// Typed SAML facade for high-level browser SSO/SLO flows.
-pub struct Saml<Role = Unknown>(Role);
-
-/// Marker role used before a facade has been configured as an SP or IdP.
-pub enum Unknown {}
-
-/// Marker role for a Service Provider facade.
-pub struct Sp {
-    service_provider: ServiceProvider,
-}
-
-/// Marker role for an Identity Provider facade.
-pub struct Idp {
-    identity_provider: IdentityProvider,
-    issuance_lifetime: time::Duration,
-}
-
-impl Saml {
-    /// Build a typed Service Provider facade from a built config.
-    pub fn sp(config: SpConfig) -> Saml<Sp> {
-        Saml(Sp {
-            service_provider: config.service_provider,
-        })
-    }
-
-    /// Build a typed Identity Provider facade from a built config.
-    pub fn idp(config: IdpConfig) -> Saml<Idp> {
-        Saml(Idp {
-            identity_provider: config.identity_provider,
-            issuance_lifetime: config.issuance_lifetime,
-        })
-    }
-}

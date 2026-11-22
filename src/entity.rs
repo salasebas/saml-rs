@@ -1,5 +1,5 @@
-//! Entity base settings shared by [`crate::sp::ServiceProvider`] and
-//! [`crate::idp::IdentityProvider`].
+//! Entity base settings shared by [`crate::sp::Engine`] and
+//! [`crate::idp::Engine`].
 
 use core::fmt;
 

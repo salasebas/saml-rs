@@ -15,11 +15,11 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::flow::{FlowResult, HttpRequest};
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::template::LoginResponseAttribute;
 use saml_rs::template::LoginResponseTemplate;
 use saml_rs::tests::engine::fill_template;
@@ -85,25 +85,25 @@ fn sp_config(authn_signed: bool, want_assertions_signed: bool, enc: bool) -> SpM
     }
 }
 
-fn idp(want_authn_signed: bool) -> IdentityProvider {
-    IdentityProvider::from_config(&idp_config(want_authn_signed), signing()).unwrap()
+fn idp(want_authn_signed: bool) -> idp::Engine {
+    idp::Engine::from_config(&idp_config(want_authn_signed), signing()).unwrap()
 }
 
-fn sp(want_assertions_signed: bool, enc: bool) -> ServiceProvider {
+fn sp(want_assertions_signed: bool, enc: bool) -> sp::Engine {
     let mut setting = signing();
     if enc {
         setting.is_assertion_encrypted = true;
         setting.enc_private_key = Some(PRIVKEY.into());
     }
-    ServiceProvider::from_config(&sp_config(false, want_assertions_signed, enc), setting).unwrap()
+    sp::Engine::from_config(&sp_config(false, want_assertions_signed, enc), setting).unwrap()
 }
 
-fn unsigned_idp() -> IdentityProvider {
-    IdentityProvider::from_config(&idp_config(false), EntitySetting::default()).unwrap()
+fn unsigned_idp() -> idp::Engine {
+    idp::Engine::from_config(&idp_config(false), EntitySetting::default()).unwrap()
 }
 
-fn unsigned_sp() -> ServiceProvider {
-    ServiceProvider::from_config(&sp_config(false, false, false), EntitySetting::default()).unwrap()
+fn unsigned_sp() -> sp::Engine {
+    sp::Engine::from_config(&sp_config(false, false, false), EntitySetting::default()).unwrap()
 }
 
 /// Rebuild the SP-side HTTP request for a response over `binding`.
@@ -121,8 +121,8 @@ fn response_request(binding: Binding, ctx: &BindingContext) -> Result<HttpReques
 }
 
 fn parse_response_with_request_id(
-    sp: &ServiceProvider,
-    idp: &IdentityProvider,
+    sp: &sp::Engine,
+    idp: &idp::Engine,
     binding: Binding,
     ctx: &BindingContext,
     request_id: &str,
@@ -242,13 +242,13 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
     (id, xml)
 }
 
-fn custom_idp() -> Result<IdentityProvider, SamlError> {
+fn custom_idp() -> Result<idp::Engine, SamlError> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
         context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
     });
-    IdentityProvider::from_config(&idp_config(false), setting)
+    idp::Engine::from_config(&idp_config(false), setting)
 }
 
 fn attr(name: &str, tag: &str) -> LoginResponseAttribute {
@@ -320,7 +320,7 @@ fn flow_conformance_login_request_post_default() -> Result<(), Box<dyn std::erro
 fn signing_sp_against_idp_without_requirement(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::from_config(&sp_config(true, false, false), signing())?;
+    let sp = sp::Engine::from_config(&sp_config(true, false, false), signing())?;
     let ctx = sp.create_login_request(&idp(false), binding, &LoginRequestOptions::default())?;
     let request = match binding {
         Binding::Post => HttpRequest::post(vec![("SAMLRequest".into(), ctx.context.clone())]),
@@ -401,7 +401,7 @@ fn flow_conformance_login_request_simplesign_custom() -> Result<(), Box<dyn std:
 fn detached_signature_rejects_mismatched_login_request(
     binding: Binding,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::from_config(&sp_config(true, false, false), signing())?;
+    let sp = sp::Engine::from_config(&sp_config(true, false, false), signing())?;
     let idp = idp(true);
     let ctx = sp.create_login_request(&idp, binding, &LoginRequestOptions::default())?;
     let mut request = match binding {
@@ -454,7 +454,7 @@ fn flow_conformance_simplesign_signature_rejects_mismatched_consumed_request(
 #[test]
 fn flow_conformance_redirect_signature_rejects_mismatched_relay_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::from_config(&sp_config(true, false, false), signing())?;
+    let sp = sp::Engine::from_config(&sp_config(true, false, false), signing())?;
     let idp = idp(true);
     let ctx = sp.create_login_request(
         &idp,
@@ -503,7 +503,7 @@ fn signed_request_with_key(
         request_signature_algorithm: RSA_SHA256.into(),
         ..EntitySetting::default()
     };
-    let sp = ServiceProvider::from_config(&sp_config(true, false, false), setting)?;
+    let sp = sp::Engine::from_config(&sp_config(true, false, false), setting)?;
     let idp = idp(true);
     let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     assert!(ctx.context.contains("&Signature="));
@@ -632,7 +632,7 @@ fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::erro
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
-    let sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
+    let sp = sp::Engine::from_config(&sp_config, EntitySetting::default())?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -717,8 +717,7 @@ fn flow_conformance_required_response_signature_rejects_assertion_only_post(
     let assertion_only_sp = sp(true, false);
     let mut required_setting = signing();
     required_setting.want_message_signed = true;
-    let required_sp =
-        ServiceProvider::from_config(&sp_config(false, true, false), required_setting)?;
+    let required_sp = sp::Engine::from_config(&sp_config(false, true, false), required_setting)?;
     let ctx = idp.create_login_response(
         &assertion_only_sp,
         Binding::Post,
@@ -751,7 +750,7 @@ fn send_signed_assertion_custom_transforms(
         saml_rs::constants::transform_algorithm::ENVELOPED_SIGNATURE.into(),
         saml_rs::constants::transform_algorithm::EXC_C14N.into(),
     ];
-    let sp = ServiceProvider::from_config(&sp_config(false, true, false), sp_setting)?;
+    let sp = sp::Engine::from_config(&sp_config(false, true, false), sp_setting)?;
     let ctx = idp.create_login_response(&sp, binding, &User::new("a@example.com"), &opts("_r"))?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_r")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("a@example.com"));
@@ -833,8 +832,7 @@ fn flow_conformance_required_response_signature_accepts_response_root_signed_pos
     let response_signed_sp = sp(false, false);
     let mut required_setting = signing();
     required_setting.want_message_signed = true;
-    let required_sp =
-        ServiceProvider::from_config(&sp_config(false, false, false), required_setting)?;
+    let required_sp = sp::Engine::from_config(&sp_config(false, false, false), required_setting)?;
     let ctx = idp.create_login_response(
         &response_signed_sp,
         Binding::Post,
@@ -906,7 +904,7 @@ fn signed_response_without_destination_is_rejected(
         context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
-    let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
+    let idp = idp::Engine::from_config(&idp_config(false), setting)?;
     let sp = sp(false, false);
     let callback = |template: &str| {
         fill_response(
@@ -962,7 +960,7 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
         context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
-    let idp = IdentityProvider::from_config(&idp_config(false), setting)?;
+    let idp = idp::Engine::from_config(&idp_config(false), setting)?;
     let sp = sp(true, false);
     let callback = |template: &str| {
         fill_response(
@@ -997,8 +995,7 @@ fn required_response_signature_accepts_detached_without_embedded_signature(
     let detached_signed_sp = sp(false, false);
     let mut required_setting = signing();
     required_setting.want_message_signed = true;
-    let required_sp =
-        ServiceProvider::from_config(&sp_config(false, false, false), required_setting)?;
+    let required_sp = sp::Engine::from_config(&sp_config(false, false, false), required_setting)?;
     let ctx = idp.create_login_response(
         &detached_signed_sp,
         binding,
@@ -1090,7 +1087,7 @@ fn send_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std::error
     let idp = idp(false);
     let mut sp_setting = signing();
     sp_setting.want_message_signed = true;
-    let sp = ServiceProvider::from_config(&sp_config(false, true, false), sp_setting)?;
+    let sp = sp::Engine::from_config(&sp_config(false, true, false), sp_setting)?;
     let ctx = idp.create_login_response(&sp, binding, &User::new("a@example.com"), &opts("_r"))?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_r")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("a@example.com"));
@@ -1118,7 +1115,7 @@ fn send_custom_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std
     let idp = custom_idp()?;
     let mut sp_setting = signing();
     sp_setting.want_message_signed = true;
-    let sp = ServiceProvider::from_config(&sp_config(false, true, false), sp_setting)?;
+    let sp = sp::Engine::from_config(&sp_config(false, true, false), sp_setting)?;
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "cam@example.com");
     let ctx = idp.create_rendered_login_response(
@@ -1164,12 +1161,12 @@ fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std:
             attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
         });
     }
-    let idp = IdentityProvider::from_config(&idp_config(false), idp_setting)?;
+    let idp = idp::Engine::from_config(&idp_config(false), idp_setting)?;
     let mut sp_setting = signing();
     sp_setting.is_assertion_encrypted = true;
     sp_setting.enc_private_key = Some(PRIVKEY.into());
     sp_setting.want_message_signed = with_message;
-    let sp = ServiceProvider::from_config(&sp_config(false, true, true), sp_setting)?;
+    let sp = sp::Engine::from_config(&sp_config(false, true, true), sp_setting)?;
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "es@example.com");
     let options = LoginResponseOptions {
@@ -1205,14 +1202,13 @@ fn flow_conformance_required_response_signature_rejects_encrypted_assertion_only
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut idp_setting = signing();
     idp_setting.is_assertion_encrypted = true;
-    let idp = IdentityProvider::from_config(&idp_config(false), idp_setting)?;
+    let idp = idp::Engine::from_config(&idp_config(false), idp_setting)?;
     let assertion_only_sp = sp(true, true);
     let mut required_setting = signing();
     required_setting.is_assertion_encrypted = true;
     required_setting.enc_private_key = Some(PRIVKEY.into());
     required_setting.want_message_signed = true;
-    let required_sp =
-        ServiceProvider::from_config(&sp_config(false, true, true), required_setting)?;
+    let required_sp = sp::Engine::from_config(&sp_config(false, true, true), required_setting)?;
     let ctx = idp.create_login_response(
         &assertion_only_sp,
         Binding::Post,
@@ -1637,11 +1633,11 @@ fn encrypted_prefix(prefix: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut idp_setting = signing();
     idp_setting.is_assertion_encrypted = true;
     idp_setting.tag_prefix_encrypted_assertion = prefix.to_string();
-    let idp = IdentityProvider::from_config(&idp_config(false), idp_setting)?;
+    let idp = idp::Engine::from_config(&idp_config(false), idp_setting)?;
     let mut sp_setting = signing();
     sp_setting.is_assertion_encrypted = true;
     sp_setting.enc_private_key = Some(PRIVKEY.into());
-    let sp = ServiceProvider::from_config(&sp_config(false, true, true), sp_setting)?;
+    let sp = sp::Engine::from_config(&sp_config(false, true, true), sp_setting)?;
     let ctx =
         idp.create_login_response(&sp, Binding::Post, &User::new("p@example.com"), &opts("_r"))?;
     let xml = String::from_utf8(STANDARD.decode(&ctx.context)?)?;

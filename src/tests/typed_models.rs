@@ -4,10 +4,10 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::BindingContext;
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::FlowResult;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::util::Value;
 use saml_rs::XmlLimits;
@@ -1589,7 +1589,7 @@ fn typed_models_logout_response_rejects_malformed_issue_instant_with_profile_con
     ));
 }
 
-fn sp(setting: EntitySetting) -> Result<ServiceProvider, SamlError> {
+fn sp(setting: EntitySetting) -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
@@ -1599,10 +1599,10 @@ fn sp(setting: EntitySetting) -> Result<ServiceProvider, SamlError> {
         ],
         ..SpMetadataInput::default()
     };
-    ServiceProvider::from_config(&config, setting)
+    sp::Engine::from_config(&config, setting)
 }
 
-fn idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
+fn idp(setting: EntitySetting) -> Result<idp::Engine, SamlError> {
     let mut config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: setting
@@ -1619,7 +1619,7 @@ fn idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
     };
     config.single_logout_service =
         vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")];
-    IdentityProvider::from_config(&config, setting)
+    idp::Engine::from_config(&config, setting)
 }
 
 #[cfg(crypto)]
@@ -1644,7 +1644,7 @@ fn attribute(name: &str, tag: &str) -> LoginResponseAttribute {
 }
 
 #[cfg(crypto)]
-fn idp_with_attribute_template() -> Result<IdentityProvider, SamlError> {
+fn idp_with_attribute_template() -> Result<idp::Engine, SamlError> {
     let mut setting = signing_setting();
     setting.login_response_template = Some(LoginResponseTemplate {
         context: None,

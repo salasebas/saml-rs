@@ -12,9 +12,9 @@ mod redirect;
 
 pub use redirect::NameIdManagementRedirectReceipt;
 
-use super::{Idp, Saml, SamlError, StartNameIdManagement};
+use super::{IdentityProvider, SamlError, StartNameIdManagement};
 
-impl Saml<Idp> {
+impl IdentityProvider {
     /// Send `ManageNameIDRequest` to the service provider's SOAP
     /// `ManageNameIDService`.
     ///
@@ -61,11 +61,12 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     NameId, NameIdChange, Saml, SoapChannel, SpDescriptor, StartNameIdManagement,
+    ///     IdentityProvider, NameId, NameIdChange, SoapChannel, SpDescriptor,
+    ///     StartNameIdManagement,
     /// };
     ///
     /// # fn change(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     response_envelope: &str,
     /// # ) -> Result<(), saml_rs::SamlError> {
@@ -165,13 +166,13 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     NameIdManagementReceipt, ReplayPolicy, Saml, SamlValidationContext, SoapChannel,
-    ///     SpDescriptor, Status, SubordinateStatusCode,
+    ///     IdentityProvider, NameIdManagementReceipt, ReplayPolicy, SamlValidationContext,
+    ///     SoapChannel, SpDescriptor, Status, SubordinateStatusCode,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn answer(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     request_envelope: &str,
     /// #     recognized: bool,
@@ -213,7 +214,7 @@ impl Saml<Idp> {
     }
 
     fn local_identity_provider(&self) -> Result<LocalIdentityProvider<'_>, SamlError> {
-        let idp = self.identity_provider();
+        let idp = self.engine();
         Ok(LocalIdentityProvider {
             entity_id: idp
                 .metadata

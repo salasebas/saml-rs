@@ -9,13 +9,13 @@ Keep the `Pending<_>` value with the browser session until the person returns.
 
 ## Calls
 
-1. Build `SpConfig` and call `Saml::sp`.
+1. Build `SpConfig` and pass it to `ServiceProvider::new`.
 2. Import the identity provider metadata, pinned to the certificate you trust.
 3. Call `start_sso`. Store `started.pending`, and send `started.outbound` to the browser.
 4. When the browser posts back, load that pending value and call `finish_sso`.
 
 ```rust
-let sp = Saml::sp(
+let sp = ServiceProvider::new(
     SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,

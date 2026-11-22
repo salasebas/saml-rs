@@ -1,9 +1,9 @@
 //! Typed config builders to the metadata generator input and the internal providers the typed API runs on.
 
 use crate::error::SamlError;
-use crate::idp::IdentityProvider;
+use crate::idp;
 use crate::metadata::{IdpMetadataInput, SpMetadataInput};
-use crate::sp::ServiceProvider;
+use crate::sp;
 
 use super::algorithms::name_id_format_uris;
 use super::builders::{IdpConfigBuilder, SpConfigBuilder};
@@ -14,14 +14,14 @@ use super::policies::{
 };
 
 impl SpConfigBuilder {
-    pub(super) fn service_provider(&self) -> Result<ServiceProvider, SamlError> {
-        ServiceProvider::from_config(&sp_metadata_input(self), self.entity_setting())
+    pub(super) fn engine(&self) -> Result<sp::Engine, SamlError> {
+        sp::Engine::from_config(&sp_metadata_input(self), self.entity_setting())
     }
 }
 
 impl IdpConfigBuilder {
-    pub(super) fn identity_provider(&self) -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(&idp_metadata_input(self), self.entity_setting())
+    pub(super) fn engine(&self) -> Result<idp::Engine, SamlError> {
+        idp::Engine::from_config(&idp_metadata_input(self), self.entity_setting())
     }
 }
 

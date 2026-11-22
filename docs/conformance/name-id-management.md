@@ -1,12 +1,12 @@
 # Name identifier management
 
 Rules for typed name identifier management. Over SOAP, at the identity
-provider: `Saml<Idp>::start_name_id_management`,
-`StartedNameIdManagement::finish`, `Saml<Idp>::receive_name_id_management`,
-and `Saml<Idp>::respond_name_id_management`. Over HTTP-Redirect, at the
+provider: `IdentityProvider::start_name_id_management`,
+`StartedNameIdManagement::finish`, `IdentityProvider::receive_name_id_management`,
+and `IdentityProvider::respond_name_id_management`. Over HTTP-Redirect, at the
 identity provider and the service provider: `start_name_id_management_redirect`,
 `receive_name_id_management_redirect`, `respond_name_id_management_redirect`,
-and `finish_name_id_management_redirect` on `Saml<Idp>` and `Saml<Sp>`. Both
+and `finish_name_id_management_redirect` on `IdentityProvider` and `ServiceProvider`. Both
 bindings carry one change, `NameIdChange::NewId` or `NameIdChange::Terminate`,
 and return a received request as `ManageNameIdRequest`. Both bindings take
 `StartNameIdManagement` to send a request. On both bindings, the responder
@@ -18,7 +18,7 @@ Errata 05 E11, has four rows for this protocol. Name Identifier Management,
 HTTP-Redirect, IdP-initiated and SP-initiated, is `MUST` for the IdP and the
 SP. Name Identifier Management, SOAP, IdP-initiated and SP-initiated, is
 `MUST` for the IdP and `OPTIONAL` for the SP. The SP SOAP cells stay off:
-`Saml<Sp>` has no SOAP name identifier management. Every cell is `MUST NOT`
+`ServiceProvider` has no SOAP name identifier management. Every cell is `MUST NOT`
 for IdP Lite and SP Lite. Name identifier mapping is not implemented. This
 record does not claim the IdP or SP operational mode.
 
@@ -47,7 +47,7 @@ message.
 
 ## SOAP: ManageNameIDRequest from the identity provider
 
-`Saml<Idp>::start_name_id_management` is this actor, with
+`IdentityProvider::start_name_id_management` is this actor, with
 `StartNameIdManagement`. Core §3.6.1 and §3.6.3, Profiles §4.5.3.1 and
 §4.5.4.1. `StartNameIdManagement::allow_http` has no effect on this binding:
 the deployment sends the request.
@@ -88,7 +88,7 @@ Profiles §4.5.3.2 and §4.5.4.2.
 
 ## SOAP: ManageNameIDRequest from the service provider
 
-`Saml<Idp>::receive_name_id_management` is this actor. Core §§3.2.1, 3.6.1,
+`IdentityProvider::receive_name_id_management` is this actor. Core §§3.2.1, 3.6.1,
 and 3.6.3, Profiles §4.5.3.2 and §4.5.4.1.
 
 | Rule | Actor | Direction | Level |
@@ -107,7 +107,7 @@ and 3.6.3, Profiles §4.5.3.2 and §4.5.4.1.
 
 ## SOAP: ManageNameIDResponse from the identity provider
 
-`Saml<Idp>::respond_name_id_management` is this actor. Core §3.6.2 and
+`IdentityProvider::respond_name_id_management` is this actor. Core §3.6.2 and
 §3.6.3, Profiles §4.5.3.2 and §4.5.4.2.
 
 | Rule | Actor | Direction | Level |

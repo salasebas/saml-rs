@@ -18,10 +18,10 @@ use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeValue, Attributes,
-    AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    Inbound, MetadataTrustPolicy, NameId, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, SsoSession, StartSso,
+    AudienceValidationPolicy, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PendingAuthnRequest, ReplayPolicy,
+    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -41,7 +41,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 struct SignedExchange {
-    sp: Saml<saml_rs::Sp>,
+    sp: saml_rs::ServiceProvider,
     idp_descriptor: IdpDescriptor,
     pending: PendingAuthnRequest,
     fields: Vec<FormField>,
@@ -50,7 +50,7 @@ struct SignedExchange {
 
 impl SignedExchange {
     fn new() -> TestResult<Self> {
-        let sp = Saml::sp(
+        let sp = ServiceProvider::new(
             SpConfig::builder(
                 EntityId::try_new(SP_ENTITY_ID)?,
                 AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -63,7 +63,7 @@ impl SignedExchange {
             })
             .build()?,
         );
-        let idp = Saml::idp(
+        let idp = IdentityProvider::new(
             IdpConfig::builder(
                 EntityId::try_new(IDP_ENTITY_ID)?,
                 SsoEndpoint::post(IDP_SSO_POST)?,

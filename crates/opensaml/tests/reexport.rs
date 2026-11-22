@@ -7,7 +7,7 @@ fn opensaml_reexports_canonical_error_type() {
         TypeId::of::<saml_rs::SamlError>(),
     );
 
-    let _: Option<opensaml::Saml<opensaml::Sp>> = None;
+    let _: Option<opensaml::ServiceProvider> = None;
 }
 
 #[test]

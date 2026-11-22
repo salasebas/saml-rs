@@ -10,10 +10,10 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
-    EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSigning,
-    LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo, Saml, SamlError,
-    SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSlo, Status,
+    EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo, SamlError,
+    SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -32,8 +32,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn sp(validation_policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp(validation_policy: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             saml_rs::AcsEndpoint::post(SP_ACS)?,
@@ -48,12 +48,12 @@ fn sp(validation_policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlEr
 fn idp(
     validation_policy: IdpValidationPolicy,
     slo_urls: &[&str],
-) -> Result<Saml<saml_rs::Idp>, SamlError> {
+) -> Result<saml_rs::IdentityProvider, SamlError> {
     let slo_endpoints = slo_urls
         .iter()
         .map(|url| SloEndpoint::post(*url))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Saml::idp(
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO)?,
@@ -66,8 +66,8 @@ fn idp(
 }
 
 fn descriptor_pair(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     Ok((
         SpDescriptor::from_metadata_xml(
@@ -218,7 +218,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
 
 #[test]
 fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = Saml::sp(
+    let service_provider = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             saml_rs::AcsEndpoint::post(SP_ACS)?,

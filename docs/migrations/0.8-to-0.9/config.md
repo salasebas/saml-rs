@@ -48,7 +48,7 @@ let sp = SpConfig::builder(
 Remove the `MissingMetadata` arms that handled a missing endpoint from
 `build()`.
 
-## Remove the `?` after `Saml::sp` and `Saml::idp`
+## Call `ServiceProvider::new` and `IdentityProvider::new` without `?`
 
 **Affects:** every call to `Saml::sp` and `Saml::idp`.
 
@@ -58,21 +58,26 @@ endpoints that share an index.
 
 **Now:** `build()` generates the metadata, returns its errors as
 [section 6](metadata.md#6-handle-metadata-errors-from-build) lists, and keeps
-the provider it made. `Saml::sp(config)` returns `Saml<Sp>` and
-`Saml::idp(config)` returns `Saml<Idp>`.
+the provider it made. `ServiceProvider::new(config)` returns a
+`ServiceProvider` and `IdentityProvider::new(config)` returns an
+`IdentityProvider`. Both replace `Saml::sp` and `Saml::idp`, as
+[1.25](compile-errors.md#125-replace-samlsp-and-samlidp-with-serviceprovider-and-identityprovider)
+shows.
 
-**Upgrade:** handle metadata errors where you call `build()`. Then delete the
-`?`, or the error handling, after `Saml::sp` and `Saml::idp`:
+**Upgrade:** handle metadata errors where you call `build()`. Then call
+`ServiceProvider::new` and `IdentityProvider::new` without the `?`, or the
+error handling, that followed `Saml::sp` and `Saml::idp`:
 
 ```rust
 // Before
 let sp = Saml::sp(config)?;
 
 // Now
-let sp = Saml::sp(config);
+let sp = ServiceProvider::new(config);
 ```
 
-A function that returned `Saml::sp(..)` as its `Result` wraps it in `Ok`.
+A function that returned `Saml::sp(..)` as its `Result` wraps
+`ServiceProvider::new(..)` in `Ok`.
 
 The `Debug` output of `SpConfig` and `IdpConfig` shows the 0.9 field names
 and ends with `..`, for the provider it leaves out. Update a snapshot that
@@ -365,7 +370,7 @@ let sp = Saml::sp(
 let started = sp.start_sso(&idp, StartSso::redirect())?;
 
 // Now
-let sp = Saml::sp(SpConfig::builder(entity_id, acs).build()?);
+let sp = ServiceProvider::new(SpConfig::builder(entity_id, acs).build()?);
 let started = sp.start_sso(
     &idp,
     StartSso::redirect().relay_state(RelayState::try_new("/home")?),
@@ -431,7 +436,7 @@ role's template no longer compiles. The default templates to start from are
    )?;
 
    // Now
-   let sp = Saml::sp(
+   let sp = ServiceProvider::new(
        SpConfig::builder(entity_id, acs)
            .authn_request_template(template)
            .build()?,
@@ -459,7 +464,7 @@ role's template no longer compiles. The default templates to start from are
    )?;
 
    // Now
-   let idp = Saml::idp(
+   let idp = IdentityProvider::new(
        IdpConfig::builder(entity_id, sso)
            .sso_response_template(template)
            .build()?,

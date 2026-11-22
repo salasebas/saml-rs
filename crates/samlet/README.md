@@ -24,7 +24,7 @@ cargo add samlet
 ```
 
 ```rust
-use samlet::{Saml, Sp};
+use samlet::{IdentityProvider, ServiceProvider};
 ```
 
 Feature flags match `saml-rs` and are forwarded to it. With

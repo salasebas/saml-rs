@@ -4,10 +4,10 @@ use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::Binding;
 use saml_rs::entity::{BindingContext, EntitySetting};
 use saml_rs::flow::HttpRequest;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::SamlError;
 use url::Url;
@@ -38,15 +38,15 @@ fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
     }
 }
 
-fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(&idp_config(false), EntitySetting::default())
+fn unsigned_idp() -> Result<idp::Engine, SamlError> {
+    idp::Engine::from_config(&idp_config(false), EntitySetting::default())
 }
 
-fn unsigned_sp_with_setting(setting: EntitySetting) -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(&sp_config(false), setting)
+fn unsigned_sp_with_setting(setting: EntitySetting) -> Result<sp::Engine, SamlError> {
+    sp::Engine::from_config(&sp_config(false), setting)
 }
 
-fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
+fn unsigned_sp() -> Result<sp::Engine, SamlError> {
     unsigned_sp_with_setting(EntitySetting::default())
 }
 
@@ -98,7 +98,7 @@ const HOSTILE_NAME_ID_FORMAT: &str = concat!(
     "<samlp:NameIDPolicy Format=\""
 );
 
-fn hostile_unsigned_idp() -> Result<IdentityProvider, SamlError> {
+fn hostile_unsigned_idp() -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![
@@ -108,17 +108,17 @@ fn hostile_unsigned_idp() -> Result<IdentityProvider, SamlError> {
         ],
         ..IdpMetadataInput::default()
     };
-    IdentityProvider::from_config(&config, EntitySetting::default())
+    idp::Engine::from_config(&config, EntitySetting::default())
 }
 
-fn hostile_unsigned_sp() -> Result<ServiceProvider, SamlError> {
+fn hostile_unsigned_sp() -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: HOSTILE_SP_ENTITY_ID.into(),
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, HOSTILE_ACS_URL)],
         name_id_format: vec![HOSTILE_NAME_ID_FORMAT.into()],
         ..SpMetadataInput::default()
     };
-    ServiceProvider::from_config(&config, EntitySetting::default())
+    sp::Engine::from_config(&config, EntitySetting::default())
 }
 
 fn login_request_http_request(
@@ -171,8 +171,8 @@ fn assert_hostile_values_are_escaped(xml: &str, acs_index: Option<u16>) {
 }
 
 fn assert_hostile_request_parses(
-    idp: &IdentityProvider,
-    sp: &ServiceProvider,
+    idp: &idp::Engine,
+    sp: &sp::Engine,
     ctx: &BindingContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = login_request_http_request(ctx)?;
@@ -186,7 +186,7 @@ fn assert_hostile_request_parses(
 #[test]
 fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let metadata = IdentityProvider::from_config(&idp_config(true), EntitySetting::default())?
+    let metadata = idp::Engine::from_config(&idp_config(true), EntitySetting::default())?
         .metadata
         .as_metadata()
         .metadata_xml()
@@ -195,7 +195,7 @@ fn identity_provider_metadata_want_authn_requests_signed_1_rejects_an_unsigned_r
             r#"WantAuthnRequestsSigned="1""#,
         );
     assert!(metadata.contains(r#"WantAuthnRequestsSigned="1""#));
-    let idp = IdentityProvider::from_metadata(&metadata, EntitySetting::default())?;
+    let idp = idp::Engine::from_metadata(&metadata, EntitySetting::default())?;
     let sp = unsigned_sp()?;
     let ctx = sp.create_login_request(
         &unsigned_idp()?,
@@ -423,7 +423,7 @@ fn requested_response_binding_without_acs_returns_missing_metadata(
     };
     config.assertion_consumer_service =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
-    let sp = ServiceProvider::from_config(&config, EntitySetting::default())?;
+    let sp = sp::Engine::from_config(&config, EntitySetting::default())?;
 
     match sp.create_login_request(
         &unsigned_idp()?,
@@ -458,16 +458,16 @@ mod signed {
         }
     }
 
-    fn signed_idp() -> Result<IdentityProvider, SamlError> {
+    fn signed_idp() -> Result<idp::Engine, SamlError> {
         let mut config = idp_config(true);
         config.signing_certs = vec![CERT.into()];
-        IdentityProvider::from_config(&config, signing_setting())
+        idp::Engine::from_config(&config, signing_setting())
     }
 
-    fn signed_sp() -> Result<ServiceProvider, SamlError> {
+    fn signed_sp() -> Result<sp::Engine, SamlError> {
         let mut config = sp_config(true);
         config.signing_certs = vec![CERT.into()];
-        ServiceProvider::from_config(&config, signing_setting())
+        sp::Engine::from_config(&config, signing_setting())
     }
 
     fn redirect_request(url: &str) -> Result<HttpRequest, Box<dyn std::error::Error>> {

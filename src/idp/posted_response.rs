@@ -1,14 +1,12 @@
 //! Posted response rendering for SSO responses carried in SOAP.
 
-use super::{
-    IdentityProvider, LoginResponseOptions, LoginResponseOverrides, RenderedLoginResponse,
-};
+use super::{Engine, LoginResponseOptions, LoginResponseOverrides, RenderedLoginResponse};
 use crate::constants::Binding;
 use crate::entity::User;
 use crate::error::{utf8_err, SamlError};
-use crate::sp::ServiceProvider;
+use crate::sp;
 
-impl IdentityProvider {
+impl Engine {
     /// SAML `Response` XML for PAOS or HTTP-Artifact delivery.
     ///
     /// The XML is the HTTP-POST response for the assertion consumer in
@@ -16,7 +14,7 @@ impl IdentityProvider {
     /// success omits assertions.
     pub(crate) fn render_posted_sso_response(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         user: &User,
         in_response_to: Option<&str>,
         overrides: LoginResponseOverrides<'_>,

@@ -30,22 +30,22 @@ use saml_rs::constants::{status_code, ParserType};
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::create_logout_request;
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew, EntityId,
-    ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, PendingAuthnRequest,
-    PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
-    RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome,
-    SsoResponseBinding, StartSso, Status, SubordinateStatusCode, VerifiedXmlSignatureCoverage,
-    XmlSignatureProfile,
+    ForceAuthn, FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery,
+    PendingAuthnRequest, PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache,
+    ReplayPolicy, RequestAgePolicy, RespondSso, ResponseSignaturePolicy, SamlError,
+    SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponseBinding, StartSso,
+    Status, SubordinateStatusCode, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -280,11 +280,15 @@ fn hostile_idp_config() -> Result<IdpConfig, SamlError> {
     .build()
 }
 
-fn facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
-    Ok((Saml::sp(sp_config()?), Saml::idp(idp_config()?)))
+fn facades() -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {
+    Ok((
+        ServiceProvider::new(sp_config()?),
+        IdentityProvider::new(idp_config()?),
+    ))
 }
 
-fn compatibility_facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
+fn compatibility_facades(
+) -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {
     let sp = SpConfig::builder(
         EntityId::try_new(SP_ENTITY_ID)?,
         AcsEndpoint::post(SP_ACS_POST)?.with_default(),
@@ -302,19 +306,19 @@ fn compatibility_facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), Sa
     .credentials(signing_credentials())
     .validation(IdpValidationPolicy::compatibility())
     .build()?;
-    Ok((Saml::sp(sp), Saml::idp(idp)))
+    Ok((ServiceProvider::new(sp), IdentityProvider::new(idp)))
 }
 
-fn hostile_facades() -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
+fn hostile_facades() -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {
     Ok((
-        Saml::sp(hostile_sp_config()?),
-        Saml::idp(hostile_idp_config()?),
+        ServiceProvider::new(hostile_sp_config()?),
+        IdentityProvider::new(hostile_idp_config()?),
     ))
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -445,8 +449,8 @@ fn replace_element_issue_instant(
 }
 
 struct SsoExchange {
-    sp: Saml<saml_rs::Sp>,
-    idp: Saml<saml_rs::Idp>,
+    sp: saml_rs::ServiceProvider,
+    idp: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     idp_descriptor: IdpDescriptor,
     pending: PendingAuthnRequest,
@@ -619,7 +623,7 @@ fn typed_facade_rejects_unknown_acs_index() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn typed_facade_honors_custom_acs_index_from_metadata() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?.with_index(7),
@@ -628,7 +632,7 @@ fn typed_facade_honors_custom_acs_index_from_metadata() -> Result<(), Box<dyn st
         .validation(signing_sp_validation())
         .build()?,
     );
-    let idp = Saml::idp(idp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
@@ -773,7 +777,7 @@ fn bounded_authn_request_age_with_cache(
 }
 
 struct IssuedAuthnRequest {
-    idp: Saml<saml_rs::Idp>,
+    idp: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     xml: String,
 }
@@ -781,7 +785,7 @@ struct IssuedAuthnRequest {
 fn issued_authn_request_for_recommended_idp(
 ) -> Result<IssuedAuthnRequest, Box<dyn std::error::Error>> {
     let (sp, _) = compatibility_facades()?;
-    let idp = Saml::idp(idp_with_validation(IdpValidationPolicy::recommended())?);
+    let idp = IdentityProvider::new(idp_with_validation(IdpValidationPolicy::recommended())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let xml = authn_request_xml(&started.outbound)?;
@@ -1205,12 +1209,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
         exchange.pending.request_id()
     );
     assert_eq!(
-        exchange
-            .idp
-            .identity_provider()
-            .metadata
-            .as_metadata()
-            .entity_id(),
+        exchange.idp.engine().metadata.as_metadata().entity_id(),
         Some(IDP_ENTITY_ID)
     );
     assert_eq!(exchange.sp_descriptor.entity_id().as_str(), SP_ENTITY_ID);
@@ -1243,8 +1242,8 @@ fn typed_http_post_exposes_verified_assertion_signature_evidence(
 #[test]
 fn typed_http_post_exposes_verified_response_root_signature_evidence(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(response_root_only_sp_config()?);
-    let idp = Saml::idp(idp_config()?);
+    let sp = ServiceProvider::new(response_root_only_sp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -1310,8 +1309,8 @@ fn typed_http_post_preserves_distinct_response_and_assertion_signature_evidence(
 #[test]
 fn typed_required_response_signature_rejects_assertion_only_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(response_signature_required_sp_config()?);
-    let idp = Saml::idp(idp_config()?);
+    let sp = ServiceProvider::new(response_signature_required_sp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -1340,8 +1339,8 @@ fn typed_required_response_signature_rejects_assertion_only_post(
 #[test]
 fn typed_sign_response_satisfies_required_response_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(response_signature_required_sp_config()?);
-    let idp = Saml::idp(idp_config()?);
+    let sp = ServiceProvider::new(response_signature_required_sp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -1397,8 +1396,8 @@ fn with_peer_encrypted_key(xml: &str) -> Result<String, Box<dyn std::error::Erro
 #[test]
 fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(encrypted_sp_config()?);
-    let idp = Saml::idp(encrypted_idp_config()?);
+    let sp = ServiceProvider::new(encrypted_sp_config()?);
+    let idp = IdentityProvider::new(encrypted_idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -1431,8 +1430,8 @@ fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
 fn typed_sp_rejects_explicit_unsigned_encrypted_cbc() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(encrypted_sp_config()?);
-    let idp = Saml::idp(encrypted_idp_config()?);
+    let sp = ServiceProvider::new(encrypted_sp_config()?);
+    let idp = IdentityProvider::new(encrypted_idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -1611,7 +1610,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     const PEER_IDP_ENTITY_ID: &str = "idp.example.com";
     const PEER_SP_ENTITY_ID: &str = "sp.example.org";
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?.with_default(),
@@ -1621,7 +1620,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         .validation(signing_sp_validation())
         .build()?,
     );
-    let idp = Saml::idp(idp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let peer_idp_metadata = idp
         .metadata_xml()
         .replace(IDP_ENTITY_ID, PEER_IDP_ENTITY_ID);
@@ -1642,10 +1641,10 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         want_assertions_signed: true,
         ..EntitySetting::default()
     };
-    let peer_idp = IdentityProvider::from_metadata(&peer_idp_metadata, signing_setting.clone())?;
-    let peer_sp = ServiceProvider::from_metadata(&peer_sp_metadata, signing_setting)?;
-    let local_idp = IdentityProvider::from_metadata(idp.metadata_xml(), EntitySetting::default())?;
-    let local_sp = ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
+    let peer_idp = idp::Engine::from_metadata(&peer_idp_metadata, signing_setting.clone())?;
+    let peer_sp = sp::Engine::from_metadata(&peer_sp_metadata, signing_setting)?;
+    let local_idp = idp::Engine::from_metadata(idp.metadata_xml(), EntitySetting::default())?;
+    let local_sp = sp::Engine::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
 
     let request =
         peer_sp.create_login_request(&local_idp, Binding::Post, &LoginRequestOptions::default())?;
@@ -1700,7 +1699,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 #[test]
 fn typed_facade_rejects_pending_peer_mismatch() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = start_receive_respond()?;
-    let other_idp = Saml::idp(
+    let other_idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new("https://other-idp.example.com/metadata")?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -1737,7 +1736,7 @@ fn typed_facade_rejects_pending_peer_mismatch() -> Result<(), Box<dyn std::error
 fn typed_facade_rejects_response_with_wrong_sp_descriptor() -> Result<(), Box<dyn std::error::Error>>
 {
     let exchange = start_receive_respond()?;
-    let other_sp = Saml::sp(
+    let other_sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new("https://other-sp.example.com/metadata")?,
             AcsEndpoint::post(SP_ACS_POST)?,
@@ -2009,8 +2008,8 @@ fn typed_finish_sso_rejects_a_top_level_status_outside_the_four_saml_values(
 #[test]
 fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(encrypted_sp_config()?);
-    let idp = Saml::idp(encrypted_idp_config()?);
+    let sp = ServiceProvider::new(encrypted_sp_config()?);
+    let idp = IdentityProvider::new(encrypted_idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -2054,8 +2053,8 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
 #[test]
 fn typed_finish_sso_requiring_encrypted_assertions_reports_a_response_without_any_assertion(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(encrypted_sp_config()?);
-    let idp = Saml::idp(idp_config()?);
+    let sp = ServiceProvider::new(encrypted_sp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -2097,7 +2096,7 @@ fn typed_finish_sso_requiring_encrypted_assertions_reports_a_response_without_an
 #[test]
 fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?.with_default(),
@@ -2106,7 +2105,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
         .validation(signing_sp_validation())
         .build()?,
     );
-    let idp = Saml::idp(idp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -2486,7 +2485,7 @@ fn typed_facade_accept_unsolicited_sso_post_rejects_missing_assertion_issue_inst
 fn typed_facade_accept_unsolicited_sso_simplesign_rejects_non_utc_response_issue_instant(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (_, idp) = facades()?;
-    let sp = Saml::sp(sp_config_with_default_response_binding(
+    let sp = ServiceProvider::new(sp_config_with_default_response_binding(
         SsoResponseBinding::SimpleSign,
     )?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -2530,7 +2529,7 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
         (None, SsoResponseBinding::Post),
         (Some(SSO_RESPONSE_TEMPLATE), SsoResponseBinding::SimpleSign),
     ] {
-        let sp = Saml::sp(sp_config_with_default_response_binding(binding)?);
+        let sp = ServiceProvider::new(sp_config_with_default_response_binding(binding)?);
         let idp_config = IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -2543,7 +2542,7 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
             Some(template) => idp_config.sso_response_template(template),
             None => idp_config,
         };
-        let idp = Saml::idp(idp_config.build()?);
+        let idp = IdentityProvider::new(idp_config.build()?);
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let options = match binding {
             SsoResponseBinding::Post => RespondSso::post(),
@@ -2607,8 +2606,8 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
 
 #[test]
 fn typed_idp_sso_reports_issuance_expiration_overflow() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_config()?);
-    let idp = Saml::idp(
+    let sp = ServiceProvider::new(sp_config()?);
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -2662,8 +2661,8 @@ fn resign_response(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 fn recommended_post_exchange() -> Result<SsoExchange, Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?);
-    let idp = Saml::idp(idp_with_validation(recommended_sso_accept_idp_validation())?);
+    let sp = ServiceProvider::new(sp_with_validation(recommended_sso_accept_validation())?);
+    let idp = IdentityProvider::new(idp_with_validation(recommended_sso_accept_idp_validation())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
@@ -2705,7 +2704,7 @@ fn assert_response_root_signature(
 #[test]
 fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?);
+    let sp = ServiceProvider::new(sp_with_validation(recommended_sso_accept_validation())?);
     let signed = signed_idp_metadata()?;
     if !signed.contains("<ds:X509Certificate>") {
         return Err("expected the metadata signature to carry its own certificate".into());
@@ -2794,8 +2793,8 @@ fn recommended_sso_accept_does_not_store_replay_without_a_caller_cache(
 #[test]
 fn recommended_sso_receive_does_not_store_replay_without_a_caller_cache(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?);
-    let idp = Saml::idp(idp_with_validation(recommended_sso_accept_idp_validation())?);
+    let sp = ServiceProvider::new(sp_with_validation(recommended_sso_accept_validation())?);
+    let idp = IdentityProvider::new(idp_with_validation(recommended_sso_accept_idp_validation())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     assert!(!idp_descriptor.signed_metadata_xml().is_some());
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
@@ -2871,7 +2870,7 @@ fn recommended_sso_accept_rejects_response_only_signature_only_with_assertion_ha
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = recommended_post_exchange()?;
     let fields = exchange.response_fields;
-    let hardening = Saml::sp(sp_with_validation(SpValidationPolicy {
+    let hardening = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         ..recommended_sso_accept_validation()
     })?);
@@ -2890,7 +2889,7 @@ fn recommended_sso_accept_rejects_response_only_signature_only_with_assertion_ha
         }
     }
 
-    let sha2_only = Saml::sp(sp_with_validation(SpValidationPolicy {
+    let sha2_only = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
         xml_signatures: XmlSignatureProfile::StrictRsaSha2,
         ..recommended_sso_accept_validation()
     })?);
@@ -3068,7 +3067,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
 #[test]
 fn cbc_relaxation_does_not_disable_other_accept_rules() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = recommended_post_exchange()?;
-    let relaxed = Saml::sp(sp_with_validation(SpValidationPolicy {
+    let relaxed = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
         responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
         ..recommended_sso_accept_validation()
     })?);
@@ -3181,7 +3180,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert!(session.audience_restrictions().is_empty());
 
-    let validate_omission = Saml::sp(sp_with_validation(SpValidationPolicy {
+    let validate_omission = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
         audience: AudienceValidationPolicy::RequireRestriction,
         ..recommended_sso_accept_validation()
     })?);
@@ -3202,10 +3201,12 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
 #[test]
 fn recommended_idp_receive_verifies_a_present_authn_request_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let signing_sp = Saml::sp(sp_config()?);
-    let strict_idp = Saml::idp(idp_config()?);
-    let recommended_idp = Saml::idp(idp_with_validation(recommended_sso_accept_idp_validation())?);
-    let compatibility_idp = Saml::idp(idp_with_validation(IdpValidationPolicy::compatibility())?);
+    let signing_sp = ServiceProvider::new(sp_config()?);
+    let strict_idp = IdentityProvider::new(idp_config()?);
+    let recommended_idp =
+        IdentityProvider::new(idp_with_validation(recommended_sso_accept_idp_validation())?);
+    let compatibility_idp =
+        IdentityProvider::new(idp_with_validation(IdpValidationPolicy::compatibility())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&signing_sp, &strict_idp)?;
     let started = signing_sp.start_sso(&idp_descriptor, StartSso::post())?;
     let signed = authn_request_input(&started.outbound)?;
@@ -3238,7 +3239,8 @@ fn recommended_idp_receive_verifies_a_present_authn_request_signature(
 fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcomes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = recommended_post_exchange()?;
-    let compatibility = Saml::sp(sp_with_validation(SpValidationPolicy::compatibility())?);
+    let compatibility =
+        ServiceProvider::new(sp_with_validation(SpValidationPolicy::compatibility())?);
     let session = compatibility.finish_sso(
         &exchange.idp_descriptor,
         &exchange.pending,
@@ -3290,7 +3292,7 @@ fn compatibility_sso_accept_keeps_unsigned_request_and_response_signature_outcom
         }
     }
 
-    let strict_idp = Saml::idp(idp_config()?);
+    let strict_idp = IdentityProvider::new(idp_config()?);
     match strict_idp.receive_sso(
         &sp_descriptor,
         Inbound::post(post_fields(&started.outbound)?),
@@ -3333,8 +3335,8 @@ fn signed_redirect_query_without_destination(
 #[test]
 fn recommended_idp_receive_ignores_a_spurious_post_signature_field(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?);
-    let idp = Saml::idp(idp_with_validation(recommended_sso_accept_idp_validation())?);
+    let sp = ServiceProvider::new(sp_with_validation(recommended_sso_accept_validation())?);
+    let idp = IdentityProvider::new(idp_with_validation(recommended_sso_accept_idp_validation())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let mut fields = post_fields(&started.outbound)?;
@@ -3348,9 +3350,9 @@ fn recommended_idp_receive_ignores_a_spurious_post_signature_field(
 #[test]
 fn idp_receive_rejects_authenticated_request_without_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let signing_sp = Saml::sp(sp_config()?);
-    let strict_idp = Saml::idp(idp_config()?);
-    let recommended_idp = Saml::idp(
+    let signing_sp = ServiceProvider::new(sp_config()?);
+    let strict_idp = IdentityProvider::new(idp_config()?);
+    let recommended_idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -3395,7 +3397,8 @@ fn idp_receive_rejects_authenticated_request_without_destination(
         }
     }
 
-    let unsigned_sp = Saml::sp(sp_with_validation(recommended_sso_accept_validation())?);
+    let unsigned_sp =
+        ServiceProvider::new(sp_with_validation(recommended_sso_accept_validation())?);
     let (unsigned_descriptor, recommended_descriptor) =
         descriptors(&unsigned_sp, &recommended_idp)?;
     let unsigned = unsigned_sp.start_sso(&recommended_descriptor, StartSso::post())?;

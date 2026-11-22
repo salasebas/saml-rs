@@ -95,12 +95,12 @@ pub enum OutboundDelivery<'a> {
 /// ```
 /// use saml_rs::{AuthnRequest, Outbound, StartSso};
 /// # use saml_rs::{
-/// #     AcsEndpoint, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy,
-/// #     Saml, SpConfig, SpValidationPolicy, SsoEndpoint,
+/// #     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+/// #     MetadataTrustPolicy, ServiceProvider, SpConfig, SpValidationPolicy, SsoEndpoint,
 /// # };
 /// #
 /// # fn main() -> Result<(), saml_rs::SamlError> {
-/// # let sp = Saml::sp(
+/// # let sp = ServiceProvider::new(
 /// #     SpConfig::builder(
 /// #         EntityId::try_new("https://sp.example.com/metadata")?,
 /// #         AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -108,7 +108,7 @@ pub enum OutboundDelivery<'a> {
 /// #     .validation(SpValidationPolicy::compatibility())
 /// #     .build()?,
 /// # );
-/// # let idp = Saml::idp(
+/// # let idp = IdentityProvider::new(
 /// #     IdpConfig::builder(
 /// #         EntityId::try_new("https://idp.example.com/metadata")?,
 /// #         SsoEndpoint::redirect("https://idp.example.com/sso/redirect")?,

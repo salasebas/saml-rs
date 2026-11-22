@@ -13,8 +13,9 @@ use crate::xml::parse_generated_saml_utc_date_time;
 /// `cacheDuration` is how long they should cache it before refreshing; a
 /// consumer may keep using a copy older than that.
 ///
-/// A `validUntil` instant is fixed when `Saml::sp` or `Saml::idp` builds the
-/// metadata, so build a new `Saml` before it passes, or use
+/// A `validUntil` instant is fixed when `SpConfigBuilder::build` or
+/// `IdpConfigBuilder::build` generates the metadata, so build a new config
+/// and provider before it passes, or use
 /// [`MetadataLifetime::CacheDuration`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetadataLifetime {

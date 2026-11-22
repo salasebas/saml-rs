@@ -45,8 +45,8 @@ let target = session.relay_state().as_deref();
 After the upgrade, pass the `RelayState` and read an `Option`.
 
 ```rust
-# use saml_rs::{IdpDescriptor, RelayState, Saml, SamlError, Sp, SsoSession, StartSso};
-# fn start(sp: &Saml<Sp>, idp: &IdpDescriptor) -> Result<(), SamlError> {
+# use saml_rs::{IdpDescriptor, RelayState, SamlError, ServiceProvider, SsoSession, StartSso};
+# fn start(sp: &ServiceProvider, idp: &IdpDescriptor) -> Result<(), SamlError> {
 let relay_state = RelayState::try_new("return-to-cart")?;
 let started = sp.start_sso(idp, StartSso::redirect().relay_state(relay_state))?;
 # let _ = started;
@@ -263,11 +263,11 @@ After the upgrade, the operation fixes the message type.
 
 ```rust
 # use saml_rs::{
-#     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, Saml, SamlError,
-#     SamlValidationContext, SoapChannel, Sp, SpDescriptor,
+#     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, SamlError,
+#     SamlValidationContext, ServiceProvider, SoapChannel, SpDescriptor,
 # };
 # fn finish(
-#     sp: &Saml<Sp>, idp: &IdpDescriptor, pending: &PendingAuthnRequest, fields: Vec<FormField>,
+#     sp: &ServiceProvider, idp: &IdpDescriptor, pending: &PendingAuthnRequest, fields: Vec<FormField>,
 #     validation: SamlValidationContext<'_>,
 # ) -> Result<(), SamlError> {
 let session = sp.finish_sso(idp, pending, Inbound::post(fields), validation)?;
@@ -275,7 +275,7 @@ let session = sp.finish_sso(idp, pending, Inbound::post(fields), validation)?;
 # Ok(())
 # }
 # fn receive(
-#     idp: &Saml<saml_rs::Idp>, sp: &SpDescriptor, body: String,
+#     idp: &saml_rs::IdentityProvider, sp: &SpDescriptor, body: String,
 #     validation: SamlValidationContext<'_>,
 # ) -> Result<(), SamlError> {
 let request = idp.receive_slo(sp, Inbound::soap(body, SoapChannel::unattested()), validation)?;

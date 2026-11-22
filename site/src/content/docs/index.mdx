@@ -70,7 +70,7 @@ The package name is `saml-rs`. Rust imports `saml_rs`. Method signatures live on
 <div class="saml-label">Service provider</div>
 
 ```rust title="sp.rs"
-let sp = Saml::sp(
+let sp = ServiceProvider::new(
     SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,

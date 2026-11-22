@@ -5,8 +5,8 @@ use super::{
 };
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AlgorithmPolicy, Credentials, HmacSecret, LogoutBinding, RespondSlo, Saml, SamlError,
-    SignatureAlgorithm, StartSlo, Status,
+    AlgorithmPolicy, Credentials, HmacSecret, IdentityProvider, LogoutBinding, RespondSlo,
+    SamlError, ServiceProvider, SignatureAlgorithm, StartSlo, Status,
 };
 
 #[test]
@@ -25,7 +25,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
             signature: SignatureAlgorithm::HmacSha1,
             ..AlgorithmPolicy::default()
         };
-        let sp = Saml::sp(
+        let sp = ServiceProvider::new(
             sp_config_builder(signing_sp_validation(), None)?
                 .algorithms(hmac.clone())
                 .credentials(
@@ -33,7 +33,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
                 )
                 .build()?,
         );
-        let idp = Saml::idp(
+        let idp = IdentityProvider::new(
             idp_config_builder(signed_authn_request_idp_validation(), None)?
                 .algorithms(hmac)
                 .credentials(

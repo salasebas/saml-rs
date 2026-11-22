@@ -6,22 +6,22 @@ use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::flow::{FlowOptions, HttpRequest, SignatureCheck};
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::flow;
 use saml_rs::tests::engine::{create_logout_request, create_logout_response, LogoutUser};
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, CertificatePem, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
-    MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, Saml,
-    SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSlo, StartSso, XmlPolicy,
+    AuthnRequestValidationPolicy, CertificatePem, EntityId, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSignaturePolicy, LogoutSigning,
+    LogoutSubject, MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy,
+    SamlError, SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -51,15 +51,15 @@ fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
     }
 }
 
-fn idp(want_authn_requests_signed: bool) -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
+fn idp(want_authn_requests_signed: bool) -> Result<idp::Engine, SamlError> {
+    idp::Engine::from_config(
         &idp_config(want_authn_requests_signed),
         EntitySetting::default(),
     )
 }
 
-fn sp(authn_requests_signed: bool) -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(&sp_config(authn_requests_signed), EntitySetting::default())
+fn sp(authn_requests_signed: bool) -> Result<sp::Engine, SamlError> {
+    sp::Engine::from_config(&sp_config(authn_requests_signed), EntitySetting::default())
 }
 
 fn assert_unsupported(result: Result<impl Sized, SamlError>) {
@@ -104,15 +104,15 @@ fn typed_idp_config() -> Result<IdpConfig, SamlError> {
 
 fn typed_protocol_facades() -> Result<
     (
-        Saml<saml_rs::Sp>,
-        Saml<saml_rs::Idp>,
+        saml_rs::ServiceProvider,
+        saml_rs::IdentityProvider,
         SpDescriptor,
         IdpDescriptor,
     ),
     SamlError,
 > {
-    let sp = Saml::sp(typed_sp_config()?);
-    let idp = Saml::idp(typed_idp_config()?);
+    let sp = ServiceProvider::new(typed_sp_config()?);
+    let idp = IdentityProvider::new(typed_idp_config()?);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new("https://sp.example.com/metadata")?,
         sp.metadata_xml(),

@@ -12,16 +12,16 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// A `LogoutRequest` the caller has already accepted.
 ///
-/// Pass it to [`Saml<Sp>::finish_sso_with_outstanding_logout`] or
-/// [`Saml<Sp>::accept_unsolicited_sso_with_outstanding_logout`]. The library
+/// Pass it to [`ServiceProvider::finish_sso_with_outstanding_logout`] or
+/// [`ServiceProvider::accept_unsolicited_sso_with_outstanding_logout`]. The library
 /// does not store it. NameID values must be equal. A `Format` on the logout
 /// must match; an omitted or `unspecified` `Format` compares values only. An
 /// empty session list
 /// applies to every session of that NameID. The classification is in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
-/// [`Saml<Sp>::finish_sso_with_outstanding_logout`]: crate::Saml::finish_sso_with_outstanding_logout
-/// [`Saml<Sp>::accept_unsolicited_sso_with_outstanding_logout`]: crate::Saml::accept_unsolicited_sso_with_outstanding_logout
+/// [`ServiceProvider::finish_sso_with_outstanding_logout`]: crate::ServiceProvider::finish_sso_with_outstanding_logout
+/// [`ServiceProvider::accept_unsolicited_sso_with_outstanding_logout`]: crate::ServiceProvider::accept_unsolicited_sso_with_outstanding_logout
 ///
 /// # Examples
 ///

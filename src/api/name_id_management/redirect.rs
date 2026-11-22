@@ -23,14 +23,14 @@ use super::super::raw_mapping::{
     ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
 use super::super::{
-    Idp, ReceiveNameIdManagement, RespondNameIdManagement, Saml, SamlError, Sp,
+    IdentityProvider, ReceiveNameIdManagement, RespondNameIdManagement, SamlError, ServiceProvider,
     StartNameIdManagement,
 };
 
 /// Answer to a `ManageNameIDRequest` received over HTTP-Redirect.
 pub type NameIdManagementRedirectReceipt = NameIdManagementReceipt<Outbound<ManageNameIdResponse>>;
 
-impl Saml<Sp> {
+impl ServiceProvider {
     /// Send `ManageNameIDRequest` to the identity provider over HTTP-Redirect.
     ///
     /// `name_id` is the identifier as both providers know it, with the
@@ -62,10 +62,10 @@ impl Saml<Sp> {
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{IdpDescriptor, NameId, NameIdChange, Saml, StartNameIdManagement};
+    /// use saml_rs::{IdpDescriptor, NameId, NameIdChange, ServiceProvider, StartNameIdManagement};
     ///
     /// # fn manage(
-    /// #     sp: &Saml<saml_rs::Sp>,
+    /// #     sp: &ServiceProvider,
     /// #     idp: &IdpDescriptor,
     /// #     name_id: &NameId,
     /// # ) -> Result<(), saml_rs::SamlError> {
@@ -183,7 +183,7 @@ impl Saml<Sp> {
     }
 
     fn local(&self) -> Local<'_> {
-        let sp = self.service_provider();
+        let sp = self.engine();
         Local {
             setting: &sp.setting,
             metadata: sp.metadata.as_metadata(),
@@ -192,7 +192,7 @@ impl Saml<Sp> {
     }
 }
 
-impl Saml<Idp> {
+impl IdentityProvider {
     /// Send `ManageNameIDRequest` to the service provider over HTTP-Redirect.
     ///
     /// `name_id` is the identifier as both providers know it, with the
@@ -224,10 +224,10 @@ impl Saml<Idp> {
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{NameId, NameIdChange, Saml, SpDescriptor, StartNameIdManagement};
+    /// use saml_rs::{IdentityProvider, NameId, NameIdChange, SpDescriptor, StartNameIdManagement};
     ///
     /// # fn manage(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     name_id: &NameId,
     /// # ) -> Result<(), saml_rs::SamlError> {
@@ -267,7 +267,7 @@ impl Saml<Idp> {
     /// # Errors
     ///
     /// Returns the errors documented on
-    /// [`Saml::<Sp>::receive_name_id_management_redirect`], with the service
+    /// [`ServiceProvider::receive_name_id_management_redirect`], with the service
     /// provider as the peer, including when an enabled
     /// [`crate::RequestAgePolicy`] rejects `IssueInstant`.
     ///
@@ -276,13 +276,13 @@ impl Saml<Idp> {
     /// ```no_run
     /// use saml_rs::{
     ///     Inbound, ReceiveNameIdManagement, NameIdManagementReceipt, ReplayPolicy,
-    ///     RespondNameIdManagement, Saml, SamlValidationContext, SpDescriptor, Status,
-    ///     SubordinateStatusCode,
+    ///     RespondNameIdManagement, SamlValidationContext, SpDescriptor, Status,
+    ///     SubordinateStatusCode, IdentityProvider,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn respond(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     raw_query: String,
     /// #     recognized: bool,
@@ -342,7 +342,7 @@ impl Saml<Idp> {
     /// # Errors
     ///
     /// Returns the errors documented on
-    /// [`Saml::<Sp>::respond_name_id_management_redirect`], with the service
+    /// [`ServiceProvider::respond_name_id_management_redirect`], with the service
     /// provider as the peer.
     pub fn respond_name_id_management_redirect(
         &self,
@@ -360,12 +360,12 @@ impl Saml<Idp> {
     ///
     /// `Ok` means the service provider applied the change. It carries the
     /// RelayState received with the response, as on
-    /// [`Saml::<Sp>::finish_name_id_management_redirect`].
+    /// [`ServiceProvider::finish_name_id_management_redirect`].
     ///
     /// # Errors
     ///
     /// Returns the errors documented on
-    /// [`Saml::<Sp>::finish_name_id_management_redirect`], with the service
+    /// [`ServiceProvider::finish_name_id_management_redirect`], with the service
     /// provider as the peer.
     pub fn finish_name_id_management_redirect(
         &self,
@@ -379,7 +379,7 @@ impl Saml<Idp> {
     }
 
     fn local(&self) -> Local<'_> {
-        let idp = self.identity_provider();
+        let idp = self.engine();
         Local {
             setting: &idp.setting,
             metadata: idp.metadata.as_metadata(),

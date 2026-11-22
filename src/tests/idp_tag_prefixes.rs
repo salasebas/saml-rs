@@ -10,10 +10,10 @@ use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::entity::{BindingContext, EntitySetting, User};
 use saml_rs::flow::HttpRequest;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::sp::ServiceProvider;
+use saml_rs::sp;
 use saml_rs::template::LoginResponseTemplate;
 use saml_rs::tests::engine::{create_logout_request, create_logout_response};
 use saml_rs::SamlError;
@@ -31,7 +31,7 @@ fn signing() -> EntitySetting {
     }
 }
 
-fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
+fn idp_with_setting(setting: EntitySetting) -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec![CERT.into()],
@@ -43,10 +43,10 @@ fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlErro
         ],
         ..IdpMetadataInput::default()
     };
-    IdentityProvider::from_config(&config, setting)
+    idp::Engine::from_config(&config, setting)
 }
 
-fn sp(want_assertions_signed: bool) -> Result<ServiceProvider, SamlError> {
+fn sp(want_assertions_signed: bool) -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         want_assertions_signed,
@@ -59,7 +59,7 @@ fn sp(want_assertions_signed: bool) -> Result<ServiceProvider, SamlError> {
         ],
         ..SpMetadataInput::default()
     };
-    ServiceProvider::from_config(&config, signing())
+    sp::Engine::from_config(&config, signing())
 }
 
 fn decode_post_or_simplesign(ctx: &BindingContext) -> Result<String, Box<dyn std::error::Error>> {
@@ -94,8 +94,7 @@ fn decode_logout_context(ctx: &BindingContext) -> Result<String, Box<dyn std::er
 
 fn login_response_xml(
     setting: EntitySetting,
-) -> Result<(IdentityProvider, ServiceProvider, BindingContext, String), Box<dyn std::error::Error>>
-{
+) -> Result<(idp::Engine, sp::Engine, BindingContext, String), Box<dyn std::error::Error>> {
     let idp = idp_with_setting(setting)?;
     let sp = sp(true)?;
     let ctx = idp.create_login_response(

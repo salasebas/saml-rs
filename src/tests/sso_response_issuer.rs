@@ -12,10 +12,10 @@ use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
-    AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, SsoSession, StartSso,
+    AcsEndpoint, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest,
+    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -29,7 +29,7 @@ const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pk
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 struct Exchange {
-    sp: Saml<saml_rs::Sp>,
+    sp: saml_rs::ServiceProvider,
     idp_descriptor: IdpDescriptor,
     pending: Option<PendingAuthnRequest>,
     response_fields: Vec<FormField>,
@@ -54,7 +54,7 @@ fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, 
 }
 
 fn exchange(delivery: Delivery) -> TestResult<Exchange> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?.with_default(),
@@ -63,7 +63,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
         .validation(SpValidationPolicy::recommended())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,

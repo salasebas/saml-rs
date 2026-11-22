@@ -10,15 +10,15 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts, LogoutSubject,
+    AcsEndpoint, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId, IdentityProvider,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts, LogoutSubject,
     ManageNameIdService, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementReceipt, Outbound, OutboundDelivery, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
-    ReceiveNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError,
-    SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SoapRequest, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo,
-    StartSso, Status,
+    ReceiveNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, SamlError,
+    SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel, SoapRequest,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso,
+    StartSlo, StartSso, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -39,7 +39,7 @@ fn whole_seconds_from_now(seconds: u64) -> Result<SystemTime, Box<dyn std::error
     Ok(at(now.as_secs() + seconds))
 }
 
-fn sp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp(lifetime: Option<MetadataLifetime>) -> Result<saml_rs::ServiceProvider, SamlError> {
     let builder = SpConfig::builder(
         EntityId::try_new(SP_ENTITY_ID)?,
         AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
@@ -49,10 +49,10 @@ fn sp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Sp>, SamlError
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
     };
-    Ok(Saml::sp(builder.build()?))
+    Ok(ServiceProvider::new(builder.build()?))
 }
 
-fn idp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp(lifetime: Option<MetadataLifetime>) -> Result<saml_rs::IdentityProvider, SamlError> {
     let builder = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::post("https://idp.example.com/sso")?,
@@ -70,10 +70,10 @@ fn idp(lifetime: Option<MetadataLifetime>) -> Result<Saml<saml_rs::Idp>, SamlErr
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
     };
-    Ok(Saml::idp(builder.build()?))
+    Ok(IdentityProvider::new(builder.build()?))
 }
 
-fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> {
+fn idp_descriptor(idp: &saml_rs::IdentityProvider) -> Result<IdpDescriptor, SamlError> {
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
@@ -81,7 +81,7 @@ fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> 
     )
 }
 
-fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
+fn sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlError> {
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -91,7 +91,7 @@ fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
 
 /// `sp` metadata that also publishes a SOAP `ManageNameIDService`, which
 /// `SpConfig` does not build.
-fn soap_name_id_sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
+fn soap_name_id_sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlError> {
     let metadata = sp.metadata_xml().replacen(
         "<AssertionConsumerService",
         &format!(
@@ -137,8 +137,8 @@ fn is_valid_until_error<T>(result: &Result<T, SamlError>) -> bool {
 
 /// The AuthnRequest that `sp` sends to `idp`, posted to the identity provider.
 fn posted_authn_request(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
     let started = sp.start_sso(&idp_descriptor(idp)?, StartSso::post())?;
     let OutboundDelivery::PostForm(form) = started.outbound.delivery() else {
@@ -366,8 +366,8 @@ fn generated_root_carries_the_configured_lifetime() -> Result<(), Box<dyn std::e
 
 fn browser_facades(
     valid_until: SystemTime,
-) -> Result<(Saml<saml_rs::Sp>, Saml<saml_rs::Idp>), SamlError> {
-    let sp = Saml::sp(
+) -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -378,7 +378,7 @@ fn browser_facades(
         .credentials(signing_credentials())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,

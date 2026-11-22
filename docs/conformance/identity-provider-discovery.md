@@ -1,7 +1,7 @@
 # Identity Provider Discovery
 
 The identity provider returns the common domain cookie for the caller to
-write. `Saml<Idp>::common_domain_cookie` is that operation.
+write. `IdentityProvider::common_domain_cookie` is that operation.
 `respond_sso` does not write the cookie. The same operation is the IdP Lite
 column, because this crate has one identity-provider facade. The IdP
 operational mode and the SP operational mode stay unclaimed.

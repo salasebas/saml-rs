@@ -6,13 +6,13 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::SpMessages;
 
-fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
+fn sp(setting: EntitySetting) -> Result<sp::Engine, saml_rs::SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         authn_requests_signed: setting.private_key.is_some(),
@@ -26,11 +26,11 @@ fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
-    ServiceProvider::from_config(&config, setting)
+    sp::Engine::from_config(&config, setting)
 }
 
 #[cfg(crypto)]
-fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
+fn idp(setting: EntitySetting) -> Result<idp::Engine, saml_rs::SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: setting
@@ -43,7 +43,7 @@ fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
         single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
         ..IdpMetadataInput::default()
     };
-    IdentityProvider::from_config(&config, setting)
+    idp::Engine::from_config(&config, setting)
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::erro
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         ..IdpMetadataInput::default()
     };
-    let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
+    let idp = idp::Engine::from_config(&idp_config, EntitySetting::default())?;
     let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     let url = url::Url::parse(&ctx.context)?;
     let (_, value) = url
@@ -72,7 +72,7 @@ fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::erro
 #[test]
 fn sp_metadata_generate_parse_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
-    let reparsed = ServiceProvider::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
+    let reparsed = sp::Engine::from_metadata(sp.metadata_xml(), EntitySetting::default())?;
     assert_eq!(
         reparsed.metadata.as_metadata().entity_id(),
         Some("https://sp.example.com/metadata")

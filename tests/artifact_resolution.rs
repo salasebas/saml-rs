@@ -18,11 +18,11 @@ use base64::Engine;
 use saml_rs::XmlLimits;
 use saml_rs::{
     AcsEndpoint, Artifact, ArtifactRelease, ArtifactResolutionService, ArtifactWithheld,
-    EndpointUrl, EntityId, HttpHeader, Idp, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    InMemoryReplayCache, IssuedArtifacts, MessageConfidentiality, MessageIntegrity,
-    MetadataTrustPolicy, PartyAuthentication, ReplayKey, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, TimeWindowField, XmlPolicy,
+    EndpointUrl, EntityId, HttpHeader, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, InMemoryReplayCache, IssuedArtifacts, MessageConfidentiality,
+    MessageIntegrity, MetadataTrustPolicy, PartyAuthentication, ReplayKey, ReplayPolicy, SamlError,
+    SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, TimeWindowField, XmlPolicy,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -43,9 +43,9 @@ const LOGOUT_MARKER: &str = "logout-artifact-marker";
 const IDP_SOURCE_ID: &str = "d7070df08eacb863523f9c79f8215dc969a7813d";
 
 struct Parties {
-    idp: Saml<Idp>,
-    sp: Saml<Sp>,
-    other: Saml<Sp>,
+    idp: IdentityProvider,
+    sp: ServiceProvider,
+    other: ServiceProvider,
     idp_metadata: IdpDescriptor,
     sp_metadata: SpDescriptor,
     other_metadata: SpDescriptor,
@@ -56,7 +56,7 @@ fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
 }
 
 fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,
@@ -100,8 +100,8 @@ fn service_provider(
     entity_id: &str,
     acs: &str,
     xml: XmlPolicy,
-) -> Result<Saml<Sp>, Box<dyn std::error::Error>> {
-    Ok(Saml::sp(
+) -> Result<ServiceProvider, Box<dyn std::error::Error>> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(entity_id)?, AcsEndpoint::post(acs)?)
             .xml(xml)
             .validation(SpValidationPolicy::compatibility())
@@ -387,7 +387,7 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
     assert!(xml.contains(RESOLUTION_URL));
     assert!(xml.contains("index=\"0\""));
 
-    let without = Saml::idp(
+    let without = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,

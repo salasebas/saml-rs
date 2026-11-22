@@ -1,9 +1,10 @@
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, EndpointUrl, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    Inbound, MetadataTrustPolicy, ReplayPolicy, Saml, SamlError, SamlValidationContext,
-    SchemaValidator, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, XmlPolicy,
+    AcsEndpoint, EndpointUrl, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, ReplayPolicy, SamlError,
+    SamlValidationContext, SchemaValidator, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSso, XmlPolicy,
 };
 
 const SP: &str = "https://sp.example.com/metadata";
@@ -29,8 +30,8 @@ fn policy(validator: Option<SchemaValidator>) -> XmlPolicy {
     policy
 }
 
-fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -40,8 +41,8 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     ))
 }
 
-fn idp(validator: Option<SchemaValidator>) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp(validator: Option<SchemaValidator>) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,

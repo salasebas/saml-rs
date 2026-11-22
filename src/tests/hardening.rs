@@ -10,10 +10,10 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::flow::HttpRequest;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::sp::ServiceProvider;
+use saml_rs::sp;
 use saml_rs::tests::engine::fill_template;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::SamlError;
@@ -30,8 +30,8 @@ fn signing() -> EntitySetting {
     }
 }
 
-fn idp() -> IdentityProvider {
-    IdentityProvider::from_config(
+fn idp() -> idp::Engine {
+    idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
@@ -43,8 +43,8 @@ fn idp() -> IdentityProvider {
     .unwrap()
 }
 
-fn sp_with(entity_id: &str, setting: EntitySetting) -> ServiceProvider {
-    ServiceProvider::from_config(
+fn sp_with(entity_id: &str, setting: EntitySetting) -> sp::Engine {
+    sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: entity_id.into(),
             want_assertions_signed: true,
@@ -57,7 +57,7 @@ fn sp_with(entity_id: &str, setting: EntitySetting) -> ServiceProvider {
     .unwrap()
 }
 
-fn response_for(sp: &ServiceProvider) -> String {
+fn response_for(sp: &sp::Engine) -> String {
     idp()
         .create_login_response(
             sp,
@@ -73,7 +73,7 @@ fn response_for(sp: &ServiceProvider) -> String {
 }
 
 fn response_for_audience_restrictions(
-    sp: &ServiceProvider,
+    sp: &sp::Engine,
     audience_restrictions: &[&[&str]],
 ) -> Result<String, SamlError> {
     let idp = idp();
@@ -152,7 +152,7 @@ struct SubjectConfirmationCase<'a> {
 }
 
 fn response_for_subject_confirmation(
-    sp: &ServiceProvider,
+    sp: &sp::Engine,
     case: &SubjectConfirmationCase<'_>,
 ) -> Result<String, SamlError> {
     let idp = idp();
@@ -239,7 +239,7 @@ fn assert_subject_confirmation_reason(
 }
 
 fn response_for_destination(
-    sp: &ServiceProvider,
+    sp: &sp::Engine,
     destination: Option<&str>,
 ) -> Result<String, SamlError> {
     let idp = idp();
@@ -668,7 +668,7 @@ fn hardening_encrypted_message_signed_response_verifies() -> Result<(), Box<dyn 
 {
     let mut idp_setting = signing();
     idp_setting.is_assertion_encrypted = true;
-    let idp = IdentityProvider::from_config(
+    let idp = idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
@@ -680,7 +680,7 @@ fn hardening_encrypted_message_signed_response_verifies() -> Result<(), Box<dyn 
     let mut sp_setting = signing();
     sp_setting.is_assertion_encrypted = true;
     sp_setting.enc_private_key = Some(PRIVKEY.into());
-    let sp = ServiceProvider::from_config(
+    let sp = sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             want_assertions_signed: false, // message gets signed

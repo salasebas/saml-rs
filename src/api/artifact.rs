@@ -6,9 +6,9 @@ use crate::soap::SoapChannel;
 use std::time::SystemTime;
 
 use super::idp::ResponseTransport;
-use super::{Idp, RespondSso, Saml, SamlError, Sp, SsoOutcome};
+use super::{IdentityProvider, RespondSso, SamlError, ServiceProvider, SsoOutcome};
 
-impl Saml<Idp> {
+impl IdentityProvider {
     /// Store the SAML protocol element `protocol_xml` for `service_provider`
     /// and return the artifact that refers to it.
     ///
@@ -35,7 +35,7 @@ impl Saml<Idp> {
     ) -> Result<Artifact, SamlError> {
         service_provider.ensure_valid_at(SystemTime::now())?;
         artifact::issue(
-            &self.identity_provider().metadata,
+            &self.engine().metadata,
             service_provider,
             protocol_xml,
             endpoint_index,
@@ -69,12 +69,12 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     ArtifactDelivery, AuthnRequest, IssuedArtifacts, NameId, Received, RespondSso, Saml,
-    ///     SpDescriptor, SsoAssertion,
+    ///     ArtifactDelivery, AuthnRequest, IdentityProvider, IssuedArtifacts, NameId, Received,
+    ///     RespondSso, SpDescriptor, SsoAssertion,
     /// };
     ///
     /// # fn respond(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<AuthnRequest>,
     /// #     name_id: NameId,
@@ -157,10 +157,10 @@ impl Saml<Idp> {
     /// use std::time::{Duration, SystemTime};
     ///
     /// use saml_rs::{
-    ///     ArtifactResolutionService, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
-    ///     IdpValidationPolicy, InMemoryReplayCache, IssuedArtifacts, MetadataTrustPolicy,
-    ///     ReplayPolicy, Saml, SamlValidationContext, SoapChannel, SpConfig, SpDescriptor,
-    ///     SpValidationPolicy, SsoEndpoint,
+    ///     ArtifactResolutionService, EndpointUrl, EntityId, IdentityProvider, IdpConfig,
+    ///     IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, IssuedArtifacts,
+    ///     MetadataTrustPolicy, ReplayPolicy, SamlValidationContext, ServiceProvider, SoapChannel,
+    ///     SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
@@ -168,13 +168,13 @@ impl Saml<Idp> {
     ///     0,
     ///     EndpointUrl::try_new("https://idp.example.com/artifact")?,
     /// );
-    /// let idp = Saml::idp(
+    /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
     ///         .artifact_resolution_service(service)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
-    /// let sp = Saml::sp(
+    /// let sp = ServiceProvider::new(
     ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, saml_rs::AcsEndpoint::post("https://sp.example.com/acs")?)
     ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
@@ -220,18 +220,18 @@ impl Saml<Idp> {
     ) -> Result<AnsweredArtifact, SamlError> {
         presenter.ensure_valid_at(SystemTime::now())?;
         artifact::answer(
-            &self.identity_provider().metadata,
+            &self.engine().metadata,
             presenter,
             request_envelope,
             issued,
             channel,
-            self.identity_provider().setting.xml_limits,
-            self.identity_provider().setting.schema_validator,
+            self.engine().setting.xml_limits,
+            self.engine().setting.schema_validator,
         )
     }
 }
 
-impl Saml<Sp> {
+impl ServiceProvider {
     /// Send `ArtifactResolve` to the identity provider's `ArtifactResolutionService`.
     ///
     /// The endpoint comes from the artifact's endpoint index in the identity
@@ -276,7 +276,7 @@ impl Saml<Sp> {
     ) -> Result<ArtifactResolution, SamlError> {
         identity_provider.ensure_valid_at(validation.now())?;
         let entity_id = self
-            .service_provider()
+            .engine()
             .metadata
             .as_metadata()
             .entity_id()
@@ -287,8 +287,8 @@ impl Saml<Sp> {
             artifact,
             channel,
             &mut validation,
-            self.service_provider().setting.xml_limits,
-            self.service_provider().setting.schema_validator,
+            self.engine().setting.xml_limits,
+            self.engine().setting.schema_validator,
         )
     }
 }

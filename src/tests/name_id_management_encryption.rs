@@ -19,13 +19,14 @@ use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EndpointUrl, EntityId, IdentifierEncryptionPolicy,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
+    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
     ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MessageConfidentiality,
     MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
     NameIdManagementReceipt, NameIdManagementRefusal, Outbound, PartyAuthentication, PrivateKeyPem,
-    ReceiveNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, Saml,
-    SamlError, SamlValidationContext, SoapChannel, SoapProtocolMessage, SoapRequest, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status, X509Credential,
+    ReceiveNameIdManagement, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement, SamlError,
+    SamlValidationContext, ServiceProvider, SoapChannel, SoapProtocolMessage, SoapRequest,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
+    X509Credential,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -71,8 +72,8 @@ fn encrypted() -> StartNameIdManagement {
 
 /// A service provider that publishes `encryption_cert` and decrypts with its
 /// own key.
-fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp_publishing(encryption_cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -84,16 +85,16 @@ fn sp_publishing(encryption_cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> 
     ))
 }
 
-fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
     sp_publishing(SP_ENCRYPTION_CERT)
 }
 
-fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp() -> Result<saml_rs::IdentityProvider, SamlError> {
     idp_with(credentials(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY))
 }
 
-fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp_with(credentials: Credentials) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,
@@ -110,7 +111,7 @@ fn idp_with(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
     ))
 }
 
-fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
+fn sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlError> {
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -126,7 +127,7 @@ fn idp_descriptor_from(metadata: &str) -> Result<IdpDescriptor, SamlError> {
     )
 }
 
-fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> {
+fn idp_descriptor(idp: &saml_rs::IdentityProvider) -> Result<IdpDescriptor, SamlError> {
     idp_descriptor_from(idp.metadata_xml())
 }
 

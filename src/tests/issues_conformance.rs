@@ -5,10 +5,10 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::SpMessages;
 use saml_rs::util::Value;
 use saml_rs::xml::{extract, ExtractorField};
@@ -117,7 +117,7 @@ fn issue_352_no_index_on_sp_slo() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn issue_352_no_index_on_idp_sso() -> Result<(), Box<dyn std::error::Error>> {
-    let idp = IdentityProvider::from_config(&idp_config(), EntitySetting::default())?;
+    let idp = idp::Engine::from_config(&idp_config(), EntitySetting::default())?;
     let r = extract(
         idp.metadata_xml(),
         &[ExtractorField::new(
@@ -138,7 +138,7 @@ fn issue_352_no_index_on_idp_sso() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn issue_352_no_index_on_idp_slo() -> Result<(), Box<dyn std::error::Error>> {
-    let idp = IdentityProvider::from_config(&idp_config(), EntitySetting::default())?;
+    let idp = idp::Engine::from_config(&idp_config(), EntitySetting::default())?;
     let r = extract(
         idp.metadata_xml(),
         &[ExtractorField::new(
@@ -189,7 +189,7 @@ fn issue_87_existence_check_for_signature() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std::error::Error>> {
-    let idp = IdentityProvider::from_config(&idp_config(), EntitySetting::default())?;
+    let idp = idp::Engine::from_config(&idp_config(), EntitySetting::default())?;
     assert_eq!(
         idp.metadata
             .single_sign_on_location(Binding::Post)
@@ -201,8 +201,8 @@ fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std
 
 #[test]
 fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::from_metadata(SP_META_98, EntitySetting::default())?;
-    let idp = IdentityProvider::from_config(
+    let sp = sp::Engine::from_metadata(SP_META_98, EntitySetting::default())?;
+    let idp = idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],

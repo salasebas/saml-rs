@@ -1,9 +1,9 @@
 ---
 title: "Typed API"
-description: "Browser flows start from `Saml<Sp>` and `Saml<Idp>`. The local role is the configuration you build. The peer is a descriptor you import from metadata. A binding that SAML Web..."
+description: "Browser flows start from `ServiceProvider` and `IdentityProvider`. The local role is the configuration you build. The peer is a descriptor you import from metadata. A binding that SAML Web..."
 ---
 
-Browser flows start from `Saml<Sp>` and `Saml<Idp>`. The local role is the configuration you build. The peer is a descriptor you import from metadata. A binding that SAML Web SSO does not allow cannot be represented on the typed builders.
+Browser flows start from `ServiceProvider` and `IdentityProvider`. The local role is the configuration you build. The peer is a descriptor you import from metadata. A binding that SAML Web SSO does not allow cannot be represented on the typed builders.
 
 Request correlation, `RelayState`, the clock, replay, and metadata trust show up in the function arguments. There is no hidden cache and no implied metadata signer. XML-DSig, canonicalisation, and XML-Enc stay in bergshamra. This crate does not implement them.
 

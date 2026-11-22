@@ -7,5 +7,5 @@ fn samlet_reexports_canonical_saml_error_type() {
         TypeId::of::<saml_rs::SamlError>()
     );
 
-    let _: Option<samlet::Saml<samlet::Sp>> = None;
+    let _: Option<samlet::ServiceProvider> = None;
 }

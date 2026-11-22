@@ -10,11 +10,11 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    LogoutPolicy, LogoutResponse, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
-    MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy, RespondSlo, Saml,
-    SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSlo, Status,
+    AcsEndpoint, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, LogoutPolicy, LogoutResponse, LogoutSignaturePolicy,
+    LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest,
+    ReplayPolicy, RespondSlo, SamlError, SamlValidationContext, ServiceProvider, SessionIndex,
+    SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -38,8 +38,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn sp(slo: &str, policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp(slo: &str, policy: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .slo_endpoint(SloEndpoint::post(slo)?)
             .credentials(signing_credentials())
@@ -48,8 +48,8 @@ fn sp(slo: &str, policy: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlEr
     ))
 }
 
-fn idp(slo: &str, policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp(slo: &str, policy: IdpValidationPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO)?,
@@ -62,8 +62,8 @@ fn idp(slo: &str, policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, Sam
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -392,8 +392,8 @@ enum LocalRole {
 struct SignedLogoutExchange {
     response: Outbound<LogoutResponse>,
     pending: PendingLogoutRequest,
-    service_provider: Saml<saml_rs::Sp>,
-    identity_provider: Saml<saml_rs::Idp>,
+    service_provider: saml_rs::ServiceProvider,
+    identity_provider: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     idp_descriptor: IdpDescriptor,
 }

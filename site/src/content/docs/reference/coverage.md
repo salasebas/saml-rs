@@ -1,9 +1,9 @@
 ---
 title: "Coverage"
-description: "`Saml<Sp>` and `Saml<Idp>` implement this surface."
+description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 ---
 
-`Saml<Sp>` and `Saml<Idp>` implement this surface.
+`ServiceProvider` and `IdentityProvider` implement this surface.
 
 | Area | Support |
 | --- | --- |
@@ -20,7 +20,7 @@ description: "`Saml<Sp>` and `Saml<Idp>` implement this surface."
 | Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through bergshamra. The Conformance §4 algorithms, with SHA-1, Triple DES, and RSA-v1.5 used only when selected |
 | Parsing | `quick-xml` DOM with local-name extraction, bounded before authentication |
 
-HTTP-Artifact delivery of an `AuthnRequest` or a logout message, SOAP profiles other than artifact resolution, Single Logout, name identifier management at the identity provider, and the identity-provider leg of Enhanced Client/Proxy SSO, the enhanced-client role, SAML query protocols, SOAP name identifier management at the service provider, name identifier mapping, and metadata federation are outside the typed `Saml` API. The HTTP-Artifact response, artifact resolution, Single Logout over SOAP, and name identifier management do not claim the IdP or SP operational mode.
+HTTP-Artifact delivery of an `AuthnRequest` or a logout message, SOAP profiles other than artifact resolution, Single Logout, name identifier management at the identity provider, and the identity-provider leg of Enhanced Client/Proxy SSO, the enhanced-client role, SAML query protocols, SOAP name identifier management at the service provider, name identifier mapping, and metadata federation are outside the typed `ServiceProvider` and `IdentityProvider` API. The HTTP-Artifact response, artifact resolution, Single Logout over SOAP, and name identifier management do not claim the IdP or SP operational mode.
 
 A request for one of the remaining profiles needs the profile, the binding, the peer product, and a minimal expected flow on [an issue](https://github.com/salasebas/saml-rs/issues).
 
