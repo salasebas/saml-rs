@@ -44,6 +44,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # zizmor: ignore[ref-version-mismatch]
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy -p saml-rs --all-targets --features serde -- -D warnings
 
   feature-check:
     name: Feature check
@@ -64,6 +65,8 @@ jobs:
         shell: bash
         run: cargo package --list -p saml-rs | awk '$0 == "build.rs" { found = 1 } END { exit !found }'
       - run: cargo nextest run -p saml-rs --no-default-features
+      - run: cargo check -p saml-rs --no-default-features --features serde
+      - run: cargo nextest run -p saml-rs --features serde
       - run: cargo test -p saml-rs --doc --no-default-features
       - run: RUSTDOCFLAGS="-D warnings -D missing_docs" cargo doc -p saml-rs --lib --no-deps --no-default-features
 
@@ -225,7 +228,7 @@ jobs:
       matrix:
         include:
           - flag: rustcrypto
-            features: crypto-bergshamra
+            features: crypto-bergshamra,serde
           - flag: aws-lc
             features: crypto-aws-lc
           - flag: fips
