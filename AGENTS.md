@@ -54,9 +54,10 @@ work in the repo, not restate the README.
 - Cite and verify the applicable OASIS standard, schema, profile/binding, and
   approved errata. Identify the obligated actor, condition, and scope.
 - When a design or interoperability decision needs an implementation example,
-  consult a project that handles the same flow, such as OpenSAML, Shibboleth,
-  crewjam/saml, or ruby-saml. Cite the relevant code or docs and explain what
-  applies to this crate.
+  consult a maintained project that implements the same flow, role, direction,
+  and binding, such as OpenSAML, Shibboleth, PySAML2, `simplesamlphp/saml2`,
+  `crewjam/saml`, or `ruby-saml`. Cite the relevant code, test, or documentation
+  for the version examined and explain what applies to this crate.
 - A producer `MUST` or `MUST NOT` does not automatically require a receiver to
   reject non-conforming input. Add rejection only when an applicable normative
   receiver or schema rule requires it.
