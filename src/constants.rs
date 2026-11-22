@@ -31,18 +31,15 @@ pub enum Binding {
     Soap,
 }
 
-/// SOAP binding URN, the value of [`Binding::Soap`]'s [`Binding::urn`].
-pub const SOAP_BINDING_URN: &str = "urn:oasis:names:tc:SAML:2.0:bindings:SOAP";
-
 impl Binding {
     /// Full binding URN.
-    pub fn urn(self) -> &'static str {
+    pub const fn urn(self) -> &'static str {
         match self {
             Binding::Redirect => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
             Binding::Post => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
             Binding::SimpleSign => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign",
             Binding::Artifact => "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact",
-            Binding::Soap => SOAP_BINDING_URN,
+            Binding::Soap => "urn:oasis:names:tc:SAML:2.0:bindings:SOAP",
         }
     }
 
@@ -94,10 +91,6 @@ pub mod namespace {
     pub const METADATA: &str = "urn:oasis:names:tc:SAML:2.0:metadata";
     /// XML-DSig namespace.
     pub const DSIG: &str = "http://www.w3.org/2000/09/xmldsig#";
-    /// User-initiated logout reason.
-    pub const USER_LOGOUT: &str = "urn:oasis:names:tc:SAML:2.0:logout:user";
-    /// Admin-initiated logout reason.
-    pub const ADMIN_LOGOUT: &str = "urn:oasis:names:tc:SAML:2.0:logout:admin";
 }
 
 /// NameID formats (`namespace.format`).
@@ -155,7 +148,7 @@ pub mod status_code {
     pub const VERSION_MISMATCH: &str = "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch";
     // second-tier
     /// Authentication failed.
-    pub const AUTH_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
+    pub const AUTHN_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
     /// Invalid attribute name or value.
     pub const INVALID_ATTR_NAME_OR_VALUE: &str =
         "urn:oasis:names:tc:SAML:2.0:status:InvalidAttrNameOrValue";
@@ -303,7 +296,7 @@ pub mod transform_algorithm {
 }
 
 /// Query/form parameter names (`wording.urlParams`).
-pub mod url_params {
+pub(crate) mod url_params {
     /// `SAMLRequest` parameter.
     pub const SAML_REQUEST: &str = "SAMLRequest";
     /// `SAMLResponse` parameter.
@@ -337,25 +330,6 @@ impl CertUse {
     }
 }
 
-/// Message signing order (`MessageSignatureOrder` / `messageConfigurations.signingOrder`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MessageSignatureOrder {
-    /// Sign, then encrypt.
-    SignThenEncrypt,
-    /// Encrypt, then sign.
-    EncryptThenSign,
-}
-
-impl MessageSignatureOrder {
-    /// Keyword form (`sign-then-encrypt` / `encrypt-then-sign`).
-    pub fn as_str(self) -> &'static str {
-        match self {
-            MessageSignatureOrder::SignThenEncrypt => "sign-then-encrypt",
-            MessageSignatureOrder::EncryptThenSign => "encrypt-then-sign",
-        }
-    }
-}
-
 /// SAML message parser type (`ParserType`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -375,18 +349,6 @@ pub enum ParserType {
 }
 
 impl ParserType {
-    /// Local root element name.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ParserType::SamlRequest => "SAMLRequest",
-            ParserType::SamlResponse => "SAMLResponse",
-            ParserType::LogoutRequest => "LogoutRequest",
-            ParserType::LogoutResponse => "LogoutResponse",
-            ParserType::ManageNameIdRequest => "ManageNameIDRequest",
-            ParserType::ManageNameIdResponse => "ManageNameIDResponse",
-        }
-    }
-
     /// Query parameter direction (`getQueryParamByType`): request types map to
     /// `SAMLRequest`, response types to `SAMLResponse`.
     pub fn query_param(self) -> &'static str {

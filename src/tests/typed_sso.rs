@@ -18,7 +18,9 @@ use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::{append_signature, build_redirect_octet, deflate_raw_decode};
+use saml_rs::binding::{
+    append_signature, build_redirect_octet, deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES,
+};
 use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
 use saml_rs::constants::{status_code, ParserType};
@@ -353,6 +355,7 @@ fn authn_request_xml(
                 .ok_or("missing SAMLRequest")?;
             Ok(String::from_utf8(deflate_raw_decode(
                 &STANDARD.decode(encoded.as_ref())?,
+                MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
         Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(
@@ -1936,7 +1939,7 @@ fn typed_facade_rejects_solicited_response_as_unsolicited() -> Result<(), Box<dy
 
 fn auth_failed_status() -> Result<Status, SamlError> {
     Ok(Status::responder()
-        .with_subordinate(SubordinateStatusCode::try_new(status_code::AUTH_FAILED)?))
+        .with_subordinate(SubordinateStatusCode::try_new(status_code::AUTHN_FAILED)?))
 }
 
 fn error_response_exchange() -> Result<SsoExchange, SamlError> {
@@ -2285,7 +2288,7 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
                 status
                     .subordinate()
                     .map(saml_rs::SubordinateStatusCode::as_uri),
-                Some(status_code::AUTH_FAILED)
+                Some(status_code::AUTHN_FAILED)
             );
         }
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),

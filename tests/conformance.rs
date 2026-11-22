@@ -3,7 +3,7 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::deflate_raw_decode;
+use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
@@ -65,7 +65,10 @@ fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::erro
         .query_pairs()
         .find(|(k, _)| k == "SAMLRequest")
         .ok_or("missing SAMLRequest")?;
-    let xml = String::from_utf8(deflate_raw_decode(&STANDARD.decode(value.as_bytes())?)?)?;
+    let xml = String::from_utf8(deflate_raw_decode(
+        &STANDARD.decode(value.as_bytes())?,
+        MAX_DEFLATE_RAW_DECODE_BYTES,
+    )?)?;
     assert!(xml.contains("<samlp:AuthnRequest"));
     Ok(())
 }

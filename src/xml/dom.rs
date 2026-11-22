@@ -14,18 +14,12 @@ use quick_xml::name::{
 };
 use quick_xml::{Reader, XmlVersion};
 
-/// Default maximum XML bytes accepted before DOM construction.
-pub const DEFAULT_XML_MAX_BYTES: usize = 1024 * 1024;
-/// Default maximum nested element depth accepted before DOM construction.
-pub const DEFAULT_XML_MAX_DEPTH: usize = 1024;
-/// Default maximum element nodes accepted before DOM construction.
-pub const DEFAULT_XML_MAX_NODES: usize = 50_000;
-/// Default maximum attributes accepted on one element.
-pub const DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT: usize = 64;
-/// Default maximum decoded bytes accepted for one attribute value.
-pub const DEFAULT_XML_MAX_ATTRIBUTE_VALUE_BYTES: usize = 16 * 1024;
-/// Default maximum decoded direct text bytes accepted for one element.
-pub const DEFAULT_XML_MAX_TEXT_BYTES: usize = DEFAULT_XML_MAX_BYTES;
+const DEFAULT_XML_MAX_BYTES: usize = 1024 * 1024;
+const DEFAULT_XML_MAX_DEPTH: usize = 1024;
+const DEFAULT_XML_MAX_NODES: usize = 50_000;
+const DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT: usize = 64;
+const DEFAULT_XML_MAX_ATTRIBUTE_VALUE_BYTES: usize = 16 * 1024;
+const DEFAULT_XML_MAX_TEXT_BYTES: usize = DEFAULT_XML_MAX_BYTES;
 
 const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
@@ -34,19 +28,31 @@ const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct XmlLimits {
     /// Maximum input bytes accepted before parsing.
+    ///
+    /// Defaults to 1 MiB (1,048,576 bytes).
     pub max_bytes: usize,
     /// Maximum nested element depth.
+    ///
+    /// Defaults to 1,024.
     pub max_depth: usize,
     /// Maximum element nodes in the document.
+    ///
+    /// Defaults to 50,000.
     pub max_nodes: usize,
     /// Maximum attributes on one element.
     ///
     /// The DOM parser and protocol-profile validation also use this number as
     /// the maximum namespace bindings allowed in scope at once.
+    ///
+    /// Defaults to 64.
     pub max_attributes_per_element: usize,
     /// Maximum decoded bytes for one attribute value.
+    ///
+    /// Defaults to 16 KiB (16,384 bytes).
     pub max_attribute_value_bytes: usize,
     /// Maximum decoded direct text bytes for one element.
+    ///
+    /// Defaults to 1 MiB (1,048,576 bytes).
     pub max_text_bytes: usize,
 }
 

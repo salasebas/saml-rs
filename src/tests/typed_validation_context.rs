@@ -38,10 +38,7 @@ fn parse_response_at(
         binding: Some(Binding::Post),
         parser_type: Some(ParserType::SamlResponse),
         now: Some(validation.now()),
-        clock_drifts: (
-            validation.clock_skew().not_before_millis(),
-            validation.clock_skew().not_on_or_after_millis(),
-        ),
+        clock_skew: validation.clock_skew(),
         ..FlowOptions::default()
     };
     flow(&options, &response_request(xml))

@@ -8,12 +8,12 @@ use flate2::Compression;
 
 use crate::error::{ResourceLimit, SamlError};
 
-/// Default maximum inflated size accepted by [`deflate_raw_decode`].
+/// Default maximum inflated size of an HTTP-Redirect message.
 ///
 /// SAML does not define this number. It is a conservative library default for
 /// HTTP-Redirect, where messages are decoded before XML or signature validation
-/// and normally remain well below this size. Use
-/// [`deflate_raw_decode_with_limit`] when a caller needs a different cap.
+/// and normally remain well below this size. Pass it, or a different cap, to
+/// [`deflate_raw_decode`].
 pub const MAX_DEFLATE_RAW_DECODE_BYTES: usize = 1024 * 1024;
 
 /// Raw-DEFLATE compress `input` (no zlib/gzip header), as required by the
@@ -24,17 +24,15 @@ pub fn deflate_raw_encode(input: &[u8]) -> Result<Vec<u8>, SamlError> {
     encoder.finish().map_err(deflate_error)
 }
 
-/// Inflate raw-DEFLATE `input` produced by [`deflate_raw_encode`].
-pub fn deflate_raw_decode(input: &[u8]) -> Result<Vec<u8>, SamlError> {
-    deflate_raw_decode_with_limit(input, MAX_DEFLATE_RAW_DECODE_BYTES)
-}
-
 /// Inflate raw-DEFLATE `input`, failing if the inflated output exceeds
 /// `max_output_len` bytes.
-pub fn deflate_raw_decode_with_limit(
-    input: &[u8],
-    max_output_len: usize,
-) -> Result<Vec<u8>, SamlError> {
+///
+/// # Errors
+///
+/// Returns [`SamlError::LimitExceeded`] with [`ResourceLimit::InflatedBytes`]
+/// when the output exceeds `max_output_len`, and [`SamlError::Deflate`] when
+/// `input` is not valid raw DEFLATE.
+pub fn deflate_raw_decode(input: &[u8], max_output_len: usize) -> Result<Vec<u8>, SamlError> {
     let decoder = DeflateDecoder::new(input);
     let mut out = Vec::with_capacity(input.len().min(max_output_len));
     let read_limit = max_output_len.saturating_add(1);
@@ -54,5 +52,34 @@ pub fn deflate_raw_decode_with_limit(
 fn deflate_error(source: std::io::Error) -> SamlError {
     SamlError::Deflate {
         source: Box::new(source),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MAX_OUTPUT_LEN: usize = 64;
+
+    #[test]
+    fn output_of_exactly_the_limit_is_inflated() -> Result<(), Box<dyn std::error::Error>> {
+        let original = [b'A'; MAX_OUTPUT_LEN];
+        let compressed = deflate_raw_encode(&original)?;
+
+        assert_eq!(deflate_raw_decode(&compressed, MAX_OUTPUT_LEN)?, original);
+        Ok(())
+    }
+
+    #[test]
+    fn output_one_byte_over_the_limit_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+        let compressed = deflate_raw_encode(&[b'A'; MAX_OUTPUT_LEN + 1])?;
+
+        match deflate_raw_decode(&compressed, MAX_OUTPUT_LEN) {
+            Err(SamlError::LimitExceeded {
+                limit: ResourceLimit::InflatedBytes,
+                maximum: MAX_OUTPUT_LEN,
+            }) => Ok(()),
+            other => Err(format!("expected an InflatedBytes limit, got {other:?}").into()),
+        }
     }
 }

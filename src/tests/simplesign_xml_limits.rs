@@ -10,7 +10,6 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
-use saml_rs::xml::dom::DEFAULT_XML_MAX_BYTES;
 use saml_rs::XmlLimits;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
@@ -28,8 +27,11 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 
 const CONFIGURED_MAX_BYTES: usize = 2 * 1024 * 1024;
-const PADDING_ABOVE_DEFAULT_LIMIT: usize = DEFAULT_XML_MAX_BYTES + 1;
 const PADDING_ABOVE_CONFIGURED_LIMIT: usize = CONFIGURED_MAX_BYTES + 1;
+
+fn padding_above_default_limit() -> usize {
+    XmlLimits::default().max_bytes + 1
+}
 
 struct Parties {
     sp: Saml<saml_rs::Sp>,
@@ -226,7 +228,7 @@ fn is_base64_output_limit(result: &Result<(), SamlError>) -> bool {
 
 #[test]
 fn simplesign_authn_request_is_decoded_under_the_configured_limit() -> TestResult {
-    receive_padded_authn_request(PADDING_ABOVE_DEFAULT_LIMIT)??;
+    receive_padded_authn_request(padding_above_default_limit())??;
     let over_limit = receive_padded_authn_request(PADDING_ABOVE_CONFIGURED_LIMIT)?;
     assert!(is_base64_output_limit(&over_limit), "{over_limit:?}");
     Ok(())
@@ -234,7 +236,7 @@ fn simplesign_authn_request_is_decoded_under_the_configured_limit() -> TestResul
 
 #[test]
 fn simplesign_sso_response_is_decoded_under_the_configured_limit() -> TestResult {
-    finish_padded_sso_response(PADDING_ABOVE_DEFAULT_LIMIT)??;
+    finish_padded_sso_response(padding_above_default_limit())??;
     let over_limit = finish_padded_sso_response(PADDING_ABOVE_CONFIGURED_LIMIT)?;
     assert!(is_base64_output_limit(&over_limit), "{over_limit:?}");
     Ok(())
@@ -242,7 +244,7 @@ fn simplesign_sso_response_is_decoded_under_the_configured_limit() -> TestResult
 
 #[test]
 fn simplesign_logout_request_is_decoded_under_the_configured_limit() -> TestResult {
-    receive_padded_logout_request(PADDING_ABOVE_DEFAULT_LIMIT)??;
+    receive_padded_logout_request(padding_above_default_limit())??;
     let over_limit = receive_padded_logout_request(PADDING_ABOVE_CONFIGURED_LIMIT)?;
     assert!(is_base64_output_limit(&over_limit), "{over_limit:?}");
     Ok(())

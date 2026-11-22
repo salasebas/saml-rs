@@ -27,6 +27,14 @@
 | A variant ending in `ForCompatibility`, `DataEncryptionAlgorithm::Aes128`, `Aes256`, or `TripleDes` | Renamed | [1.16](#116-rename-the-relaxed-policy-and-algorithm-variants) |
 | `XmlPolicy::clock_drifts` | Removed; set `ClockSkew` on `SamlValidationContext` | [1.17](#117-set-clock-skew-on-the-validation-context) |
 | `metadata::try_generate_idp_metadata` | Removed; call `generate_idp_metadata` | [1.18](#118-call-generate_idp_metadata) |
+| `constants::SOAP_BINDING_URN` | Removed; call `Binding::Soap.urn()` | [1.19](#119-call-bindingsoapurn) |
+| `constants::namespace::USER_LOGOUT` or `constants::namespace::ADMIN_LOGOUT` | Removed | [1.20](#120-write-the-logout-reason-uri-where-you-need-it) |
+| `constants::url_params` | No longer public; write the parameter name | [1.21](#121-write-the-binding-parameter-names) |
+| `constants::MessageSignatureOrder`, `AlgorithmPolicy::message_signing_order`, or `EntitySetting::message_signing_order` | Removed; saml-rs never used the value | [1.22](#122-remove-message_signing_order) |
+| `MessageSignatureOrder::as_str` or `ParserType::as_str` | Removed | [1.23](#123-replace-parsertypeas_str) |
+| `constants::status_code::AUTH_FAILED` | Renamed to `AUTHN_FAILED` | [1.24](#124-rename-auth_failed-to-authn_failed) |
+| `FlowOptions::check_signature`, `verify_signature_if_present`, or `clock_drifts` | Replaced by `signature_check` and `clock_skew` | [3.1](raw-api.md#31-set-the-signature-check-and-clock-skew-on-flowoptions) |
+| A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | Returns the facade, not a `Result` | [Typed config](config.md#remove-the--after-samlsp-and-samlidp) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
@@ -695,4 +703,148 @@ let xml = try_generate_idp_metadata(&config)?;
 
 // Now
 let xml = generate_idp_metadata(&config)?;
+```
+
+## 1.19 Call `Binding::Soap.urn()`
+
+**Affects:** code that reads `saml_rs::constants::SOAP_BINDING_URN`.
+
+**Before:** the constant held the SOAP binding URN, the value that
+`Binding::Soap.urn()` returns.
+
+**Now:** the constant is removed.
+
+**Upgrade:** call `urn()` on the binding. It is a `const fn`, so it also
+initializes a constant:
+
+```rust
+// Before
+let urn = saml_rs::constants::SOAP_BINDING_URN;
+
+// Now
+let urn = saml_rs::constants::Binding::Soap.urn();
+```
+
+## 1.20 Write the logout reason URI where you need it
+
+**Affects:** code that reads `saml_rs::constants::namespace::USER_LOGOUT` or
+`saml_rs::constants::namespace::ADMIN_LOGOUT`.
+
+**Before:** the constants held the `urn:oasis:names:tc:SAML:2.0:logout:user`
+and `urn:oasis:names:tc:SAML:2.0:logout:admin` reason URIs. No saml-rs API
+wrote them to the `Reason` attribute of a `<LogoutRequest>` or read them from
+it.
+
+**Now:** both constants are removed. saml-rs has no API for the logout
+`Reason`.
+
+**Upgrade:** define the URI in your own code:
+
+```rust
+const USER_LOGOUT: &str = "urn:oasis:names:tc:SAML:2.0:logout:user";
+```
+
+## 1.21 Write the binding parameter names
+
+**Affects:** code that reads a constant from `saml_rs::constants::url_params`.
+
+**Before:** the module held the names of the HTTP binding parameters.
+
+**Now:** the module is crate-private. `Inbound` reads these parameters and
+`Outbound` writes them, so code that uses the typed API does not need their
+names.
+
+**Upgrade:** write the parameter name as a string:
+
+| Constant | Parameter name |
+| --- | --- |
+| `url_params::SAML_REQUEST` | `"SAMLRequest"` |
+| `url_params::SAML_RESPONSE` | `"SAMLResponse"` |
+| `url_params::RELAY_STATE` | `"RelayState"` |
+| `url_params::SIG_ALG` | `"SigAlg"` |
+| `url_params::SIGNATURE` | `"Signature"` |
+| `url_params::SAML_ART` | `"SAMLart"` |
+
+## 1.22 Remove `message_signing_order`
+
+**Affects:** code that names `saml_rs::constants::MessageSignatureOrder`, or
+sets `AlgorithmPolicy::message_signing_order` or
+`EntitySetting::message_signing_order`.
+
+**Before:** both fields compiled, but saml-rs never used them to order signing
+and encryption. A value of `MessageSignatureOrder::EncryptThenSign` changed
+nothing.
+
+**Now:** the enum and both fields are removed. An identity provider always
+builds a login response in this order: it encrypts the identifiers and
+attributes, signs the assertion, encrypts the assertion, and then signs the
+response. It skips each step that the configuration does not select.
+
+**Upgrade:** delete the field from the `AlgorithmPolicy` literal:
+
+```rust
+// Before
+let algorithms = AlgorithmPolicy {
+    signature: SignatureAlgorithm::RsaSha256,
+    message_signing_order: MessageSignatureOrder::EncryptThenSign,
+    ..AlgorithmPolicy::default()
+};
+
+// Now
+let algorithms = AlgorithmPolicy {
+    signature: SignatureAlgorithm::RsaSha256,
+    ..AlgorithmPolicy::default()
+};
+```
+
+If the literal then names every remaining field, also delete
+`..AlgorithmPolicy::default()`. Clippy's `needless_update` lint reports it.
+Delete each assignment to `EntitySetting::message_signing_order`.
+
+## 1.23 Replace `ParserType::as_str`
+
+**Affects:** code that calls `ParserType::as_str` or
+`MessageSignatureOrder::as_str`.
+
+**Before:** `ParserType::as_str` returned `SAMLRequest` or `SAMLResponse` for a
+login request or response, and the root element name, such as
+`LogoutRequest`, for the other message types. No saml-rs code called it.
+
+**Now:** the method is removed. `MessageSignatureOrder::as_str` is removed with
+its type. See [1.22](#122-remove-message_signing_order).
+
+**Upgrade:** to name the HTTP parameter that carries a message, call
+`ParserType::query_param`. It returns `SAMLRequest` for every request type and
+`SAMLResponse` for every response type:
+
+```rust
+// Before
+let name = parser_type.as_str();
+
+// Now
+let parameter = parser_type.query_param();
+```
+
+If you need the strings that `as_str` returned, write them in a `match` of your
+own. `ParserType` is `#[non_exhaustive]`, so the `match` needs a `_` arm.
+
+## 1.24 Rename `AUTH_FAILED` to `AUTHN_FAILED`
+
+**Affects:** code that reads `saml_rs::constants::status_code::AUTH_FAILED`.
+
+**Before:** the constant held the
+`urn:oasis:names:tc:SAML:2.0:status:AuthnFailed` status code under the name
+`AUTH_FAILED`.
+
+**Now:** the constant is named `AUTHN_FAILED`, after the `AuthnFailed` code in
+Core §3.2.2.2. Its value is the same.
+
+**Upgrade:** rename each use:
+
+```rust
+// Before
+let code = saml_rs::constants::status_code::AUTH_FAILED;
+
+// Now
+let code = saml_rs::constants::status_code::AUTHN_FAILED;
 ```

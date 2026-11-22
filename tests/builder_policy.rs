@@ -295,7 +295,6 @@ fn sp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         data_encryption: DataEncryptionAlgorithm::Aes128Cbc,
         key_encryption: KeyEncryptionAlgorithm::RsaOaepMgf1p,
         signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
-        ..AlgorithmPolicy::default()
     };
     let xml = XmlPolicy {
         redirect_inflate_max_bytes: 64 * 1024,
@@ -333,7 +332,6 @@ fn idp_builder_sets_policy_setters() -> Result<(), Box<dyn std::error::Error>> {
         data_encryption: DataEncryptionAlgorithm::Aes256Cbc,
         key_encryption: KeyEncryptionAlgorithm::RsaOaepMgf1p,
         signed_reference_transforms: vec![TransformAlgorithm::EnvelopedSignature],
-        ..AlgorithmPolicy::default()
     };
     let xml = XmlPolicy {
         redirect_inflate_max_bytes: 128 * 1024,

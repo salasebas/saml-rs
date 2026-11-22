@@ -22,6 +22,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{
     append_signature, build_redirect_octet, deflate_raw_decode, deflate_raw_encode,
+    MAX_DEFLATE_RAW_DECODE_BYTES,
 };
 use saml_rs::constants::{
     signature_algorithm::RSA_SHA256,
@@ -886,6 +887,7 @@ fn outbound_xml<Message>(
                 .ok_or("missing SAML message")?;
             Ok(String::from_utf8(deflate_raw_decode(
                 &STANDARD.decode(encoded.as_ref())?,
+                MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
         Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(

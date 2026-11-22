@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use common::signing_credentials;
-use saml_rs::binding::deflate_raw_decode;
+use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::raw::Binding;
@@ -100,7 +100,10 @@ fn request_xml(outbound: &Outbound<AuthnRequest>) -> Result<String, Box<dyn std:
                 .find(|(name, _)| name == "SAMLRequest")
                 .ok_or("missing request")?
                 .1;
-            deflate_raw_decode(&STANDARD.decode(value.as_bytes())?)?
+            deflate_raw_decode(
+                &STANDARD.decode(value.as_bytes())?,
+                MAX_DEFLATE_RAW_DECODE_BYTES,
+            )?
         }
         Binding::Post | Binding::SimpleSign => STANDARD.decode(&context.context)?,
         _ => return Err("unexpected request binding".into()),

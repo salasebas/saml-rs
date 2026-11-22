@@ -23,7 +23,7 @@ fn url_encode(value: &str) -> String {
 /// `saml_param` is `SAMLRequest` or `SAMLResponse`; `b64_value` is the
 /// base64-encoded, raw-DEFLATEd message. For a signed redirect, append
 /// `&SigAlg=<uri>&Signature=<b64>` computed over this encoded query (M2).
-pub fn redirect_binding_query(
+pub(crate) fn redirect_binding_query(
     saml_param: &str,
     b64_value: &str,
     relay_state: Option<&str>,
@@ -235,7 +235,9 @@ pub fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::binding::{decode_base64, deflate_raw_decode, saml_post_binding_form};
+    use crate::binding::{
+        decode_base64, deflate_raw_decode, saml_post_binding_form, MAX_DEFLATE_RAW_DECODE_BYTES,
+    };
     use url::Url;
 
     const REQUEST: &str = "<samlp:AuthnRequest ID=\"_1\">hi&amp;bye</samlp:AuthnRequest>";
@@ -253,7 +255,7 @@ mod tests {
         let mut pairs = parsed.query_pairs();
         let (k, v) = pairs.next().ok_or("missing SAMLRequest")?;
         assert_eq!(k, "SAMLRequest");
-        let inflated = deflate_raw_decode(&decode_base64(&v)?)?;
+        let inflated = deflate_raw_decode(&decode_base64(&v)?, MAX_DEFLATE_RAW_DECODE_BYTES)?;
         assert_eq!(String::from_utf8(inflated)?, REQUEST);
         let relay = parsed
             .query_pairs()
@@ -368,7 +370,10 @@ mod tests {
             .find(|(name, _)| name == "SAMLRequest")
             .map(|(_, value)| value.into_owned())
             .ok_or("missing encoded request")?;
-        let inflated = String::from_utf8(deflate_raw_decode(&decode_base64(&encoded)?)?)?;
+        let inflated = String::from_utf8(deflate_raw_decode(
+            &decode_base64(&encoded)?,
+            MAX_DEFLATE_RAW_DECODE_BYTES,
+        )?)?;
         assert!(!inflated.contains("protocol-signature"));
         assert!(inflated.contains("assertion-signature"));
         assert!(octet.contains("&RelayState=state&SigAlg=sig-alg"));
@@ -380,7 +385,10 @@ mod tests {
             .find(|(name, _)| name == "SAMLRequest")
             .map(|(_, value)| value.into_owned())
             .ok_or("missing encoded request")?;
-        let inflated_with_bom = String::from_utf8(deflate_raw_decode(&decode_base64(&encoded)?)?)?;
+        let inflated_with_bom = String::from_utf8(deflate_raw_decode(
+            &decode_base64(&encoded)?,
+            MAX_DEFLATE_RAW_DECODE_BYTES,
+        )?)?;
         assert_eq!(inflated_with_bom, format!("\u{feff}{inflated}"));
         Ok(())
     }

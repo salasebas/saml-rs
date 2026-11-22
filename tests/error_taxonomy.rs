@@ -13,7 +13,7 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::template::replace_tags_by_value;
 use saml_rs::validator::check_status;
-use saml_rs::SamlError;
+use saml_rs::{SamlError, XmlLimits};
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -416,7 +416,7 @@ fn error_taxonomy_signed_repeated_conditions_are_rejected() -> Result<(), Box<dy
 #[test]
 fn error_taxonomy_non_success_status_returns_status_not_success(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match check_status(FAILED, ParserType::SamlResponse) {
+    match check_status(FAILED, ParserType::SamlResponse, XmlLimits::default()) {
         Err(SamlError::StatusNotSuccess { status, .. }) => {
             assert_eq!(status.top_level().as_uri(), status_code::REQUESTER);
             assert_eq!(

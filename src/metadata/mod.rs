@@ -31,7 +31,7 @@ use std::ops::Range;
 use crate::constants::{Binding, CertUse};
 use crate::error::SamlError;
 use crate::util::Value;
-use crate::xml::{dom, extract_with_limits, ExtractorField, XmlLimits};
+use crate::xml::{dom, extract_with_limits, ExtractorField};
 
 const MULTIPLE_ENTITY_DESCRIPTORS: &str = "metadata has more than one EntityDescriptor";
 
@@ -225,21 +225,11 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Parse entity metadata without selecting an SSO role.
+    /// Parse entity metadata without selecting an SSO role, with the default
+    /// XML limits and no schema validator.
     ///
     /// Rejects documents carrying more than one `<EntityDescriptor>`. A root
     /// `<EntitiesDescriptor>` is accepted when it contains exactly one entity.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SamlError`] when XML parsing, parser resource limits,
-    /// extraction, or the single-`EntityDescriptor` check fails.
-    pub fn parse(xml: &str) -> Result<Self, SamlError> {
-        Self::parse_with_limits(xml, XmlLimits::default())
-    }
-
-    /// Parse `xml` with explicit XML parser resource limits.
-    ///
     /// `KeyDescriptor` certificates and `SingleLogoutService` endpoints are
     /// read from every SSO role descriptor of the entity. [`SpMetadata`] and
     /// [`IdpMetadata`] read only their own role's SAML 2.0 descriptors.
@@ -248,22 +238,17 @@ impl Metadata {
     ///
     /// Returns [`SamlError`] when XML parsing, parser resource limits,
     /// extraction, or the single-`EntityDescriptor` check fails.
-    pub fn parse_with_limits(xml: &str, limits: XmlLimits) -> Result<Self, SamlError> {
-        Self::parse_with_policy(
-            xml,
-            &crate::XmlPolicy {
-                limits,
-                ..crate::XmlPolicy::default()
-            },
-        )
+    pub fn parse(xml: &str) -> Result<Self, SamlError> {
+        Self::parse_with_policy(xml, &crate::XmlPolicy::default())
     }
 
-    /// Parse metadata using explicit XML limits and optional schema validation.
+    /// Parse metadata as [`Self::parse`] does, with the XML limits and
+    /// optional schema validator of `policy`.
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when XML parsing, schema validation, extraction,
-    /// or the single-entity check fails.
+    /// Returns [`SamlError`] when XML parsing, parser resource limits, schema
+    /// validation, extraction, or the single-`EntityDescriptor` check fails.
     pub fn parse_with_policy(xml: &str, policy: &crate::XmlPolicy) -> Result<Self, SamlError> {
         Self::parse_role_with_policy(xml, SsoDescriptorRole::Any, Vec::new(), policy)
     }

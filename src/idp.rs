@@ -7,11 +7,11 @@ use crate::entity::{
     CustomTagReplacement, EntitySetting, IdpIssuanceWindow, User,
 };
 use crate::error::SamlError;
-use crate::flow::{FlowOptions, FlowResult, HttpRequest};
+use crate::flow::{FlowOptions, FlowResult, HttpRequest, SignatureCheck};
 use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataInput};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
-    NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
+    ClockSkew, NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
     TopLevelStatusCode,
 };
 use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
@@ -688,7 +688,7 @@ impl IdentityProvider {
         request: &HttpRequest,
     ) -> Result<FlowResult, SamlError> {
         Ok(self
-            .parse_login_request_at_inner(sp, binding, request, None, self.setting.clock_drifts)?
+            .parse_login_request_at_inner(sp, binding, request, None, self.setting.clock_skew())?
             .0)
     }
 
@@ -698,9 +698,9 @@ impl IdentityProvider {
         binding: Binding,
         request: &HttpRequest,
         now: SystemTime,
-        clock_drifts: (i64, i64),
+        clock_skew: ClockSkew,
     ) -> Result<(FlowResult, bool), SamlError> {
-        self.parse_login_request_at_inner(sp, binding, request, Some(now), clock_drifts)
+        self.parse_login_request_at_inner(sp, binding, request, Some(now), clock_skew)
     }
 
     fn parse_login_request_at_inner(
@@ -709,7 +709,7 @@ impl IdentityProvider {
         binding: Binding,
         request: &HttpRequest,
         now: Option<SystemTime>,
-        clock_drifts: (i64, i64),
+        clock_skew: ClockSkew,
     ) -> Result<(FlowResult, bool), SamlError> {
         let signing_certs = sp
             .metadata
@@ -717,13 +717,19 @@ impl IdentityProvider {
             .x509_certificates(crate::constants::CertUse::Signing);
         let sp_declares_signed_requests = self.setting.verify_authn_request_signature_if_present
             && sp.metadata.authn_requests_signed();
+        let signature_check =
+            if self.metadata.want_authn_requests_signed() || sp_declares_signed_requests {
+                SignatureCheck::Require
+            } else if self.setting.verify_authn_request_signature_if_present {
+                SignatureCheck::VerifyIfPresent
+            } else {
+                SignatureCheck::Skip
+            };
         crate::flow::flow_with_authentication(
             &FlowOptions {
                 binding: Some(binding),
                 parser_type: Some(ParserType::SamlRequest),
-                check_signature: self.metadata.want_authn_requests_signed()
-                    || sp_declares_signed_requests,
-                verify_signature_if_present: self.setting.verify_authn_request_signature_if_present,
+                signature_check,
                 require_audience_restriction: true,
                 xml_signatures: self.setting.xml_signatures,
                 from_issuer: sp.metadata.as_metadata().entity_id(),
@@ -737,7 +743,7 @@ impl IdentityProvider {
                 received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
                 allow_rsa15_key_transport_decryption: false,
                 max_decryption_work: self.setting.max_decryption_work,
-                clock_drifts,
+                clock_skew,
                 now,
                 redirect_inflate_max_bytes: self.setting.redirect_inflate_max_bytes,
                 xml_limits: self.setting.xml_limits,

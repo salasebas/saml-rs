@@ -11,11 +11,12 @@ use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::flow::{
     flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
-    FlowOptions, FlowResult, HttpRequest, ResponseSignatureRequirement, SignedMessageDestination,
+    FlowOptions, FlowResult, HttpRequest, ResponseSignatureRequirement, SignatureCheck,
+    SignedMessageDestination,
 };
 use crate::logout::sign_browser_message;
 use crate::metadata::Metadata;
-use crate::model::{MessageId, SamlInstant};
+use crate::model::{ClockSkew, MessageId, SamlInstant};
 use crate::xml::protocol_element::{issuer, parse_saml_with_limits};
 use crate::xml::XmlLimits;
 
@@ -30,7 +31,7 @@ pub(crate) struct InboundValidation<'a> {
     pub(crate) expected_recipient: &'a str,
     pub(crate) peer_hmac_secret: Option<&'a HmacSecret>,
     pub(crate) now: SystemTime,
-    pub(crate) clock_drifts: (i64, i64),
+    pub(crate) clock_skew: ClockSkew,
 }
 
 pub(crate) fn create_request(
@@ -211,11 +212,11 @@ fn parse_signed(
         parser_type: Some(parser_type),
         // SAML Profiles 2.0 §4.5.3.1 and §4.5.3.2 require a signed message on
         // HTTP-Redirect.
-        check_signature: true,
+        signature_check: SignatureCheck::Require,
         xml_signatures: setting.xml_signatures,
         from_issuer: peer_meta.entity_id(),
         signing_certs,
-        clock_drifts: validation.clock_drifts,
+        clock_skew: validation.clock_skew,
         now: Some(validation.now),
         redirect_inflate_max_bytes: setting.redirect_inflate_max_bytes,
         xml_limits: setting.xml_limits,
