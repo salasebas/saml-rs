@@ -277,6 +277,7 @@ impl<Delivery> RespondSso<Delivery> {
 
 /// Explicit signing choice for typed Single Logout requests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LogoutSigning {
     /// Use the local typed logout policy.
     FollowLocalPolicy,

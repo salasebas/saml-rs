@@ -248,8 +248,8 @@ let LogoutPolicy { requests, responses, .. } = validation.logout;
 `ResponseSignaturePolicy`, `AuthnRequestSigningPolicy`,
 `AuthnRequestValidationPolicy`, `LogoutSignaturePolicy`,
 `AudienceValidationPolicy`, `AssertionEncryptionPolicy`,
-`IdentifierEncryptionPolicy`, or `AttributeEncryptionPolicy` without a
-wildcard arm.
+`IdentifierEncryptionPolicy`, `AttributeEncryptionPolicy`, or `LogoutSigning`
+without a wildcard arm.
 
 **Before:** these enums were exhaustive, so a `match` that listed every
 variant compiled. `XmlSignatureProfile` was already non-exhaustive.
