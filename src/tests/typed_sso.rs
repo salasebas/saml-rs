@@ -37,7 +37,7 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew, EntityId,
     ForceAuthn, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PendingAuthnRequest,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, PendingAuthnRequest,
     PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
     RespondSso, ResponseSignaturePolicy, Saml, SamlError, SamlValidationContext, SloEndpoint,
     SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome,
@@ -346,9 +346,9 @@ fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, 
 fn authn_request_xml(
     outbound: &Outbound<AuthnRequest>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    match outbound.raw_context().binding {
-        Binding::Redirect => {
-            let url = Url::parse(outbound.redirect_url()?)?;
+    match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => {
+            let url = Url::parse(url)?;
             let (_, encoded) = url
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
@@ -358,24 +358,30 @@ fn authn_request_xml(
                 MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(
-            STANDARD.decode(&outbound.raw_context().context)?,
+        OutboundDelivery::PostForm(form) => Ok(String::from_utf8(
+            STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,
         )?),
-        _ => Err("binding is unsupported for AuthnRequest".into()),
+        OutboundDelivery::SoapRequest(_) | OutboundDelivery::SoapResponse(_) => {
+            Err("an AuthnRequest is not sent over SOAP".into())
+        }
     }
 }
 
 fn authn_request_input(
     outbound: &Outbound<AuthnRequest>,
 ) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
-    match outbound.raw_context().binding {
-        Binding::Redirect => {
-            let url = Url::parse(outbound.redirect_url()?)?;
+    match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => {
+            let url = Url::parse(url)?;
             Ok(Inbound::redirect(url.query().unwrap_or_default()))
         }
-        Binding::Post => Ok(Inbound::post(post_fields(outbound)?)),
-        Binding::SimpleSign => Ok(Inbound::simple_sign(post_fields(outbound)?)),
-        _ => Err("binding is unsupported for AuthnRequest".into()),
+        OutboundDelivery::PostForm(form) if form.value("SigAlg").is_some() => {
+            Ok(Inbound::simple_sign(form.fields().to_vec()))
+        }
+        OutboundDelivery::PostForm(form) => Ok(Inbound::post(form.fields().to_vec())),
+        OutboundDelivery::SoapRequest(_) | OutboundDelivery::SoapResponse(_) => {
+            Err("an AuthnRequest is not sent over SOAP".into())
+        }
     }
 }
 

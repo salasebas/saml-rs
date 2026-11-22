@@ -444,11 +444,11 @@ pub use artifact::{
 };
 pub use browser::{
     AcsEndpoint, ArtifactDelivery, DeliveredArtifact, EndpointUrl, FormField, Inbound,
-    LogoutBinding, NameIdManagementBinding, Outbound, Pending, PendingAuthnRequest,
-    PendingAuthnRequestSnapshot, PendingLogoutRequest, PendingLogoutRequestSnapshot,
-    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, PostForm, PostMessage,
-    RedirectMessage, SloEndpoint, SoapMessage, SsoEndpoint, SsoRequestBinding, SsoResponseBinding,
-    Started,
+    LogoutBinding, NameIdManagementBinding, Outbound, OutboundDelivery, Pending,
+    PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
+    PostForm, PostMessage, RedirectMessage, SloEndpoint, SoapMessage, SsoEndpoint,
+    SsoRequestBinding, SsoResponseBinding, Started,
 };
 pub use config::{
     AlgorithmPolicy, ArtifactResolutionService, AssertionEncryptionPolicy,

@@ -40,6 +40,51 @@ impl OutboundAction {
     }
 }
 
+/// How to send an [`Outbound`] message, from [`Outbound::delivery`].
+///
+/// Match on it to turn any outbound message into an HTTP message. A message
+/// that carries an artifact is a [`Self::Redirect`] or a [`Self::PostForm`],
+/// like the message it stands for.
+///
+/// # Examples
+///
+/// ```
+/// use saml_rs::{Outbound, OutboundDelivery};
+///
+/// enum Send<'a> {
+///     Respond { status: u16, location: Option<&'a str> },
+///     PostTo(&'a str),
+/// }
+///
+/// fn send<Message>(outbound: &Outbound<Message>) -> Option<Send<'_>> {
+///     match outbound.delivery() {
+///         OutboundDelivery::Redirect(url) => Some(Send::Respond {
+///             status: 303,
+///             location: Some(url),
+///         }),
+///         OutboundDelivery::PostForm(_) | OutboundDelivery::SoapResponse(_) => Some(Send::Respond {
+///             status: 200,
+///             location: None,
+///         }),
+///         OutboundDelivery::SoapRequest(request) => Some(Send::PostTo(request.endpoint().as_str())),
+///         _ => None,
+///     }
+/// }
+/// ```
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub enum OutboundDelivery<'a> {
+    /// Redirect the browser to this URL, with HTTP 302 or 303.
+    Redirect(&'a str),
+    /// Render this form so the browser POSTs it, for HTTP-POST, SimpleSign,
+    /// or an artifact delivered in a form.
+    PostForm(&'a PostForm),
+    /// POST this SOAP request to its endpoint.
+    SoapRequest(&'a SoapRequest),
+    /// Return this SOAP response as the body of the HTTP response.
+    SoapResponse(&'a SoapResponse),
+}
+
 /// Typed outbound browser action, or the SOAP message of a back-channel
 /// exchange.
 ///
@@ -103,6 +148,18 @@ impl<Message> Outbound<Message> {
     /// RelayState parameter, when present.
     pub fn relay_state(&self) -> Option<&RelayState> {
         self.relay_state.as_ref()
+    }
+
+    /// How to send this message.
+    pub fn delivery(&self) -> OutboundDelivery<'_> {
+        match &self.action {
+            OutboundAction::Redirect(url) => OutboundDelivery::Redirect(url),
+            OutboundAction::Post(form) | OutboundAction::SimpleSignPost(form) => {
+                OutboundDelivery::PostForm(form)
+            }
+            OutboundAction::SoapRequest(request) => OutboundDelivery::SoapRequest(request),
+            OutboundAction::SoapResponse(response) => OutboundDelivery::SoapResponse(response),
+        }
     }
 
     /// Redirect URL for Redirect actions, and for an artifact delivered in a

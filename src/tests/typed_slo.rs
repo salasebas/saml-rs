@@ -42,7 +42,7 @@ use saml_rs::{
     IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutBinding, LogoutCompleted,
     LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy, LogoutSigning,
     LogoutSubject, MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId,
-    NameIdFormat, Outbound, PartyAuthentication, PendingLogoutRequest,
+    NameIdFormat, Outbound, OutboundDelivery, PartyAuthentication, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, Received, RelayState, ReplayCache, ReplayPolicy, RespondSlo,
     RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel,
     SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig, SpDescriptor, SpValidationPolicy,
@@ -878,9 +878,9 @@ fn outbound_xml<Message>(
     outbound: &Outbound<Message>,
     message_field: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    match outbound.raw_context().binding {
-        Binding::Redirect => {
-            let url = Url::parse(outbound.redirect_url()?)?;
+    match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => {
+            let url = Url::parse(url)?;
             let (_, encoded) = url
                 .query_pairs()
                 .find(|(key, _)| key == message_field)
@@ -890,11 +890,11 @@ fn outbound_xml<Message>(
                 MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(
-            STANDARD.decode(&outbound.raw_context().context)?,
+        OutboundDelivery::PostForm(form) => Ok(String::from_utf8(
+            STANDARD.decode(form.value(message_field).ok_or("missing SAML message")?)?,
         )?),
-        Binding::Soap => Ok(outbound.raw_context().context.clone()),
-        _ => Err("binding is unsupported".into()),
+        OutboundDelivery::SoapRequest(request) => Ok(soap_body_xml(request.envelope())?),
+        OutboundDelivery::SoapResponse(response) => Ok(soap_body_xml(response.envelope())?),
     }
 }
 

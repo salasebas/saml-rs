@@ -15,15 +15,15 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::status_code;
-use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound, LogoutBinding,
     LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
-    NameId, NameIdFormat, Outbound, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy,
-    RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint,
-    SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo,
-    StartSso, Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    NameId, NameIdFormat, Outbound, OutboundDelivery, OutstandingLogout, PrivateKeyPem, Received,
+    ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
+    SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
+    XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -258,10 +258,9 @@ fn response_input(
 
 /// The `LogoutRequest` XML that `outbound` carries.
 fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std::error::Error>> {
-    let context = outbound.raw_context();
-    match context.binding {
-        Binding::Redirect => {
-            let url = Url::parse(outbound.redirect_url()?)?;
+    match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => {
+            let url = Url::parse(url)?;
             let (_, encoded) = url
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
@@ -271,11 +270,15 @@ fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std
                 MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
-        Binding::Post | Binding::SimpleSign => {
-            Ok(String::from_utf8(STANDARD.decode(&context.context)?)?)
+        OutboundDelivery::PostForm(form) => Ok(String::from_utf8(
+            STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,
+        )?),
+        OutboundDelivery::SoapRequest(request) => {
+            Ok(SoapProtocolMessage::from_envelope(request.envelope())?
+                .xml()
+                .to_string())
         }
-        Binding::Soap => Ok(context.context.clone()),
-        _ => Err("binding is unsupported".into()),
+        _ => Err("delivery is unsupported".into()),
     }
 }
 

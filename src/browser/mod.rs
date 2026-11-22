@@ -17,7 +17,7 @@ pub use endpoints::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 pub use forms::{FormField, PostForm};
 pub(crate) use input::{field_value, parse_form_fields, Transport};
 pub use input::{Inbound, PostMessage, RedirectMessage, SoapMessage};
-pub use outbound::Outbound;
+pub use outbound::{Outbound, OutboundDelivery};
 pub use pending::{
     Pending, PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
