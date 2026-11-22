@@ -311,10 +311,12 @@ and `start_paos_sso` did not read it.
 
 **Now:** `PaosClientRequest` is removed, with its `ACCEPT` and `PAOS_HEADER`
 constants. `start_paos_sso(idp, options)` takes no client argument and does not
-read HTTP headers. `check_paos_client_headers(accept, paos)` runs the checks
-`from_headers` ran and returns the same `SamlError::ProtocolProfile`. The
-profile obliges the enhanced client to send these headers. The service
-provider may check them, or tell an enhanced client apart by other means.
+read HTTP headers. `check_paos_client_headers(accept, paos)` checks the media
+type, PAOS version, and ECP service. It returns `SamlError::ProtocolProfile`
+if the header check fails. Clients that send matching single quotes around
+either PAOS value can now pass the check and start ECP. The profile obliges
+the enhanced client to send these headers. The service provider may check
+them or identify enhanced clients by other means.
 
 **Upgrade:** call `check_paos_client_headers` where you called `from_headers`,
 and drop the client argument.

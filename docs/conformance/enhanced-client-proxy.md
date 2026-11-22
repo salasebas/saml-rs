@@ -3,7 +3,7 @@
 Typed service-provider and identity-provider ends of one Enhanced Client/Proxy
 login. The source is Profiles §4.2 and Bindings §3.3 (`saml-profiles-2.0-os`
 and `saml-bindings-2.0-os`, 15 March 2005), as corrected by Approved Errata 05
-E20, E22, and E54. The browser SSO rules that §4.2 incorporates are the rows
+E20, E21, E22, and E54. The browser SSO rules that §4.2 incorporates are the rows
 in [generation](web-browser-sso-generation.md) and
 [acceptance](web-browser-sso-acceptance.md).
 
@@ -19,11 +19,17 @@ enhanced client. The identity provider calls `receive_paos_sso`, then
 `respond_paos_sso` with an `SsoAssertion` or an `SsoOutcome::Failure`.
 `StartSso` and `RespondSso` are unchanged.
 
+## Header requirements for enhanced clients
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| Send `Accept` with `application/vnd.paos+xml` and `PAOS` with `ver="urn:liberty:paos:2003-08"` and `"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp"` | Enhanced client | Send the initial HTTP request | Mandatory for enhanced clients. Bindings §3.3.3, Profiles §4.2.3.1, Errata 05 E21 and E54. This row describes the enhanced client's request to `saml-rs` |
+
 ## Service provider
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| Accept the exchange when `Accept` lists `application/vnd.paos+xml` and the PAOS header carries `ver="urn:liberty:paos:2003-08"` and `"urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp"` | Service provider | Read the enhanced client's HTTP request | Mandatory for the sender, the enhanced client. Bindings §3.3.3, Profiles §4.2.3.1, Errata 05 E54. The service provider's check is optional: `check_paos_client_headers` performs it, and `start_paos_sso` does not read HTTP headers. `check_paos_client_headers` rejects a header that uses the single quotes E54 removed. That rejection is library policy. E54 replaced those quotes because they are problematic, and the corrected header value uses double quotes, so a single-quoted header is not that value |
+| Check `Accept` for the PAOS media type and `PAOS` for the exact version and ECP service | Service provider | Read the initial HTTP request | Optional. `check_paos_client_headers` performs the check. Each PAOS value can use matching single or double quotes. Single quotes are a library compatibility policy for clients that follow the original Profiles §4.2.3.1 example, also shown in the [Spring SAML ECP guide](https://docs.spring.io/spring-security-saml/docs/current/reference/html/configuration-advanced.html). E54 corrects the sender's example to use double quotes |
 | HTTP 200 whose body is one SOAP envelope | Service provider | Send the AuthnRequest | Mandatory. Profiles §4.2.3.2. The body contains one AuthnRequest, a `paos:Request`, and an `ecp:Request` |
 | `paos:Request` `responseConsumerURL` is the assertion consumer URL on the AuthnRequest | Service provider | Send the AuthnRequest | Mandatory. Profiles §4.2.4.1, with E22's attribute name. The URL is the service provider's default assertion consumer, or `StartPaosSso::acs_url` when that URL is already published. Only HTTP-POST and HTTP-POST-SimpleSign endpoints are considered. `ProtocolBinding` is omitted. The return path is this profile |
 | `paos:Request` `service` is `urn:oasis:names:tc:SAML:2.0:profiles:SSO:ecp`, `mustUnderstand` is `1`, and `actor` is `http://schemas.xmlsoap.org/soap/actor/next` | Service provider | Send the AuthnRequest | Mandatory. Profiles §4.2.4.1. `messageID` is omitted, so the enhanced client is not required to return `paos:Response` |
