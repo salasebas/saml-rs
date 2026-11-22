@@ -177,8 +177,10 @@ takes its limit as an argument. A call to it no longer compiles.
 | `validator::verify_time` | The typed receive operations, which check time windows with the `ClockSkew` of `SamlValidationContext` |
 | `validator::check_status_with_limits` | `validator::check_status(content, parser_type, limits)`. The two-argument `check_status` is removed. Pass `XmlLimits::default()` to keep its limits |
 
-`binding::deflate_raw_decode` and `validator::check_status` are in hidden
-modules, so they also become crate-private in the next minor release. After
+`binding::deflate_raw_decode`, `validator::check_status`, and
+`template::replace_tags_by_optional_value` are in hidden modules, so they also
+become crate-private in the next minor release. After
 that, inflate with `flate2::read::DeflateDecoder` and `std::io::Read::take`,
-and read a response status from the `SamlError::StatusNotSuccess` that the
-typed finish operations return.
+read a response status from the `SamlError::StatusNotSuccess` that the
+typed finish operations return, and fill template placeholders with your own
+string replacement.

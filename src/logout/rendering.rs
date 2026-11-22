@@ -26,8 +26,6 @@ pub(super) struct LogoutRequestTimeAttributes<'a> {
     pub(super) not_on_or_after: Option<&'a str>,
 }
 
-impl<'a> LogoutRequestSubject<'a> {}
-
 pub(super) fn render_default_logout_response(
     setting: &EntitySetting,
     id: &str,

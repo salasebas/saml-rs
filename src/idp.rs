@@ -32,7 +32,7 @@ use login_response::{
 };
 use std::time::SystemTime;
 
-/// Optional inputs for [`IdentityProvider::create_login_response`].
+/// Optional inputs for a login `<Response>` the identity provider builds.
 #[derive(Default)]
 pub struct LoginResponseOptions<'a> {
     /// `InResponseTo` — the SP request id being answered. `None` or an empty

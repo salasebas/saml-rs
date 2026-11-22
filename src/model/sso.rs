@@ -402,8 +402,6 @@ fn parse_replay_expiration(value: &str) -> Result<OffsetDateTime, SamlError> {
     })
 }
 
-impl SsoSession {}
-
 impl SsoSession {
     pub(crate) fn try_from_with_verified_xml_signatures(
         raw_flow: FlowResult,

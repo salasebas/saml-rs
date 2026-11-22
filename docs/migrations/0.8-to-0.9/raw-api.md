@@ -25,7 +25,7 @@ of the hidden `saml_rs::sp`, `saml_rs::idp`, `saml_rs::flow`, or
 | `logout::parse_logout_response`, `parse_logout_response_without_request_id` | `finish_slo` |
 | `flow::flow` | The typed receive operation for the message |
 | `HttpRequest::redirect`, `HttpRequest::post` | `Inbound::redirect` with the raw query string, `Inbound::post` with the form fields |
-| `ServiceProvider::from_metadata`, `IdentityProvider::from_metadata` | `SpDescriptor::from_metadata_xml`, `IdpDescriptor::from_metadata_xml` |
+| `ServiceProvider::from_metadata`, `IdentityProvider::from_metadata` | For your own role, `Saml::sp` with an `SpConfig` or `Saml::idp` with an `IdpConfig`. For the peer, `SpDescriptor::from_metadata_xml` or `IdpDescriptor::from_metadata_xml` |
 | `EntitySetting` | `SpConfig` and `IdpConfig`, with their builders |
 | `LoginRequestOptions::custom`, `LoginResponseOptions::custom` | `SpConfigBuilder::authn_request_template`, `IdpConfigBuilder::sso_response_template` |
 | `LoginResponseOptions::encrypt_then_sign` | Nothing. It was never read: an encrypted, message-signed response is always signed after the assertion is encrypted |
@@ -42,7 +42,7 @@ request that `finish_sso` checks the response against:
 
 ```rust
 // Before
-let request = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
+let request = sp.create_login_request(&idp, Binding::Redirect, None)?;
 // Store request.id, then redirect the browser to request.context.
 let result = sp.parse_login_response_with_request_id(&idp, Binding::Post, &http, &request.id)?;
 let name_id = result.extract.get_str("nameID");

@@ -33,7 +33,7 @@ pub struct ServiceProvider {
     pub metadata: SpMetadata,
 }
 
-/// Per-call options for [`ServiceProvider::create_login_request`].
+/// Per-call options for an `<AuthnRequest>` the service provider builds.
 #[derive(Default)]
 pub struct LoginRequestOptions<'a> {
     /// RelayState for this request. `Some("")` is preserved as an empty RelayState.

@@ -147,7 +147,7 @@ struct SubjectConfirmationCase<'a> {
     method: &'a str,
     recipient: &'a str,
     not_on_or_after: String,
-    response_in_response_to: &'a str,
+    response_in_response_to: Option<&'a str>,
     subject_in_response_to: &'a str,
 }
 
@@ -171,6 +171,10 @@ fn response_for_subject_confirmation(
                 "Recipient=\"{SubjectRecipient}\" InResponseTo=\"{SubjectInResponseTo}\"",
                 1,
             );
+        let prepared = match case.response_in_response_to {
+            Some(_) => prepared,
+            None => prepared.replacen(" InResponseTo=\"{InResponseTo}\"", "", 1),
+        };
         let xml = fill_template(
             &prepared,
             &[
@@ -197,7 +201,10 @@ fn response_for_subject_confirmation(
                     "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into(),
                 ),
                 ("NameID", "a@example.com".into()),
-                ("InResponseTo", case.response_in_response_to.to_string()),
+                (
+                    "InResponseTo",
+                    case.response_in_response_to.unwrap_or_default().to_string(),
+                ),
                 (
                     "SubjectInResponseTo",
                     case.subject_in_response_to.to_string(),
@@ -213,7 +220,7 @@ fn response_for_subject_confirmation(
             Binding::Post,
             &User::new("a@example.com"),
             &LoginResponseOptions {
-                in_response_to: Some(case.response_in_response_to),
+                in_response_to: case.response_in_response_to,
                 ..Default::default()
             },
             &cb,
@@ -445,7 +452,7 @@ fn hardening_unsolicited_response_rejects_empty_in_response_to(
             method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
             recipient: "https://sp/acs",
             not_on_or_after: iso8601_offset(300),
-            response_in_response_to: "",
+            response_in_response_to: Some(""),
             subject_in_response_to: "",
         },
     )?;
@@ -454,7 +461,25 @@ fn hardening_unsolicited_response_rejects_empty_in_response_to(
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert!(matches!(
         sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
-        Err(SamlError::InResponseToMismatch { .. })
+        Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("")
+    ));
+
+    let bearer_only = response_for_subject_confirmation(
+        &sp,
+        &SubjectConfirmationCase {
+            method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
+            recipient: "https://sp/acs",
+            not_on_or_after: iso8601_offset(300),
+            response_in_response_to: None,
+            subject_in_response_to: "",
+        },
+    )?;
+    let xml = String::from_utf8(STANDARD.decode(&bearer_only)?)?;
+    assert_eq!(xml.matches("InResponseTo=").count(), 1, "{xml}");
+    let req = HttpRequest::post(vec![("SAMLResponse".into(), bearer_only)]);
+    assert!(matches!(
+        sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
+        Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("")
     ));
     Ok(())
 }
@@ -469,14 +494,16 @@ fn hardening_unsolicited_response_rejects_subject_confirmation_in_response_to(
             method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
             recipient: "https://sp/acs",
             not_on_or_after: iso8601_offset(300),
-            response_in_response_to: "",
+            response_in_response_to: None,
             subject_in_response_to: "_req1",
         },
     )?;
+    let xml = String::from_utf8(STANDARD.decode(&response)?)?;
+    assert_eq!(xml.matches("InResponseTo=").count(), 1, "{xml}");
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
     assert!(matches!(
         sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
-        Err(SamlError::InResponseToMismatch { .. })
+        Err(SamlError::InResponseToMismatch { expected: None, actual }) if actual.as_deref() == Some("_req1")
     ));
     Ok(())
 }
@@ -491,7 +518,7 @@ fn hardening_subject_confirmation_method_must_be_bearer() -> Result<(), Box<dyn 
             method: "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key",
             recipient: "https://sp/acs",
             not_on_or_after: iso8601_offset(300),
-            response_in_response_to: "_req1",
+            response_in_response_to: Some("_req1"),
             subject_in_response_to: "_req1",
         },
     )?;
@@ -512,7 +539,7 @@ fn hardening_subject_confirmation_data_expiry_is_enforced() -> Result<(), Box<dy
             method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
             recipient: "https://sp/acs",
             not_on_or_after: iso8601_offset(-300),
-            response_in_response_to: "_req1",
+            response_in_response_to: Some("_req1"),
             subject_in_response_to: "_req1",
         },
     )?;
@@ -533,7 +560,7 @@ fn hardening_subject_confirmation_recipient_must_match_acs(
             method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
             recipient: "https://evil.example/acs",
             not_on_or_after: iso8601_offset(300),
-            response_in_response_to: "_req1",
+            response_in_response_to: Some("_req1"),
             subject_in_response_to: "_req1",
         },
     )?;
@@ -578,7 +605,7 @@ fn hardening_subject_confirmation_request_id_must_match() -> Result<(), Box<dyn 
             method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
             recipient: "https://sp/acs",
             not_on_or_after: iso8601_offset(300),
-            response_in_response_to: "_req1",
+            response_in_response_to: Some("_req1"),
             subject_in_response_to: "_wrong",
         },
     )?;

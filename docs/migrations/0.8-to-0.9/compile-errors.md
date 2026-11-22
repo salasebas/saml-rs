@@ -19,8 +19,8 @@
 | `EntitySetting::try_from(&SpConfig)` or `EntitySetting::try_from(&IdpConfig)` | Removed | [1.10](#110-stop-converting-typed-configs-to-entitysetting) |
 | `saml_rs::ServiceProvider`, `saml_rs::IdentityProvider`, `saml_rs::EntitySetting`, or a path under `saml_rs::raw` | Removed | [1.11](#111-move-the-raw-roles-to-the-typed-api) |
 | `saml_rs::raw::metadata` | Removed | [1.12](#112-import-metadata-from-metadata) |
-| `ServiceProvider::create_login_request`, `create_login_request_with_options`, or `parse_login_response` | Removed | [1.13](#113-start-sso-instead-of-create_login_request) |
-| `ServiceProvider::parse_unsolicited_login_response` | Removed | [1.14](#114-accept-unsolicited-sso-instead-of-parse_unsolicited_login_response) |
+| `ServiceProvider::create_login_request`, `create_login_request_with_options`, or `parse_login_response_with_request_id` | Removed | [1.13](#113-start-sso-instead-of-create_login_request) |
+| `ServiceProvider::parse_unsolicited_login_response` or `parse_login_response` | Removed | [1.14](#114-accept-unsolicited-sso-instead-of-parse_unsolicited_login_response) |
 | `BindingContext::post_form` or `try_post_form` | Removed | [1.15](#115-handle-the-post-form-error) |
 | `binding::try_saml_post_binding_form` | Renamed to `saml_post_binding_form` | [1.15](#115-handle-the-post-form-error) |
 | `binding::saml_post_binding_form` | Returns `Result` | [1.15](#115-handle-the-post-form-error) |
@@ -486,7 +486,7 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 ## 1.13 Start SSO instead of `create_login_request`
 
 **Affects:** raw service providers that call `create_login_request`,
-`create_login_request_with_options`, or `parse_login_response`.
+`create_login_request_with_options`, or `parse_login_response_with_request_id`.
 
 **Now:** these functions are removed with the raw API. Call
 `Saml::<Sp>::start_sso`, then `finish_sso` for the response, as
@@ -494,9 +494,10 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 
 ## 1.14 Accept unsolicited SSO instead of `parse_unsolicited_login_response`
 
-**Affects:** raw service providers that call `parse_unsolicited_login_response`.
+**Affects:** raw service providers that call `parse_unsolicited_login_response`,
+or `parse_login_response`, which was another name for it.
 
-**Now:** it is removed with the raw API. Call
+**Now:** both are removed with the raw API. Call
 `Saml::<Sp>::accept_unsolicited_sso`. It rejects an unsolicited response that
 carries `InResponseTo`, including an empty one.
 
