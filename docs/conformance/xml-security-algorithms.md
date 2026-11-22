@@ -140,7 +140,22 @@ build verifies them. Signed metadata import excludes them under
 | --- | --- | --- |
 | RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, a detached `SigAlg`, or a verified metadata signature that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, and xmlsec1 has built without MD5 by default since 1.3.0 |
 | RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. The default excludes RIPEMD-160 for limited provider support. Conformance §4.1 does not require it. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
-| An RSA signing certificate shorter than 2048 bits | The certificate is not used to verify. When the peer has no other usable key, verification returns `SamlError::Crypto`, as it does on AWS-LC. Otherwise a message signed with the short key fails signature verification. A pinned metadata signing certificate is treated the same way | Library policy, on in Recommended for both roles and in signed metadata import. XML Signature 1.1 §6.4.2 lets a verifier use an RSA key of 1024 bits or less, and names 2048-bit public keys the minimum recommended key length. RustCrypto without `crypto-legacy-algorithms`, AWS-LC, and FIPS refuse it in every profile. OpenSAML sets no minimum |
+| An RSA signing certificate with a modulus shorter than 2048 bits | The verifier skips the certificate and tries the peer's other keys. Without a usable key, verification returns `SamlError::Crypto`. The same key filter applies to a pinned metadata signing certificate | Library policy. Both roles use the same RSA minimum for inbound embedded and detached message signatures so that enabling legacy algorithms on RustCrypto cannot weaken the default below the AWS-LC and FIPS minimum. Signed metadata import has a separate [trust-root rationale](metadata-and-replay.md#metadata-trust) |
+
+The IdP and SP rely on message signatures to authenticate current requests,
+responses, and assertions. [NIST SP 800-131A Rev. 2 §3, Table 2](https://doi.org/10.6028/NIST.SP.800-131Ar2)
+classifies RSA verification with a 1024–2047-bit modulus as legacy use
+and verification with at least 2048 bits as acceptable.
+[XML Signature 1.1 §6.4.2](https://www.w3.org/TR/xmldsig-core1/#sec-RSA)
+permits verification of signatures from older systems with keys of 1024 bits
+or less. SAML Conformance §4.1 and Errata 05 E50 and E81 address algorithm
+support. Neither they nor the [XML Signature schema](https://www.w3.org/TR/2002/REC-xmldsig-core-20020212/xmldsig-core-schema.xsd)
+set a minimum RSA modulus length for a SAML receiver. OpenSAML sets no minimum.
+
+On RustCrypto with `crypto-legacy-algorithms`, `AllowWeakAlgorithms` also
+permits the other excluded algorithms. An SP processing a browser SSO response
+still rejects a signature on the Response or Assertion that fails verification
+under that profile (Profiles §4.1.4.3).
 
 SHA-1 stays accepted under `ExcludeWeakAlgorithms`: Conformance §4.1 makes the
 SHA-1 digest and RSAwithSHA1 mandatory to implement, and OpenSAML and xmlsec1
