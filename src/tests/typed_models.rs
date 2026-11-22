@@ -116,6 +116,7 @@ trait IntoHttpRequest {
 impl IntoHttpRequest for Inbound<AuthnRequest> {
     fn into_request(self) -> Result<saml_rs::flow::HttpRequest, SamlError> {
         self.into_http_request(XmlLimits::default())
+            .map(|(_, request)| request)
     }
 }
 

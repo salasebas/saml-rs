@@ -76,6 +76,7 @@ states the rules that callers rely on.
 
 ## Type names
 
+- Prefer the OASIS term for a SAML concept, such as `ServiceProvider`.
 - When each role has its own type for one concept, the type name carries the
   role: `SpConfig` and `IdpConfig`, `SpMetadata` and `IdpMetadata`,
   `ServiceProvider` and `IdentityProvider`.
@@ -105,6 +106,8 @@ These rules apply when an API is added or redesigned.
 - An option that relaxes a rule is named for what it allows, such as
   `AllowUnsigned`, `AllowWeakAlgorithms`, or `DoNotSign`, not for why it
   exists.
+- Give new options the shortest name that clearly describes the choice. When
+  merging options, keep an existing name that meets this rule, such as `AllowUnsigned`.
 - Each hardening is a separate option on the type that owns its check, such as
   a field of `SpValidationPolicy` or `SamlValidationContext::with_authn_request_age`.
   There is no bundled strict preset, because callers need the hardenings

@@ -15,13 +15,13 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::{
-    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
-    AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId,
-    NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, OutboundDelivery, Received,
-    ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, RespondSso, SamlError,
-    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status, SubordinateStatusCode,
+    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
+    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
+    MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
+    OutboundDelivery, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
+    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status,
+    SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -379,38 +379,34 @@ fn received_authn_request_keeps_base_id_and_encrypted_id_distinct_from_the_prese
 }
 
 #[test]
-fn unsigned_authn_request_fields_are_accepted_under_both_unsigned_request_policies(
+fn unsigned_authn_request_fields_are_accepted_under_default_policy(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut unverified = IdpValidationPolicy::default();
-    unverified.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
-    for validation_policy in [IdpValidationPolicy::default(), unverified] {
-        let receipt = receive(validation_policy, StartSso::post(), |xml| {
-            let xml = insert_root_attribute(xml, "ForceAuthn", "true")?;
-            let xml = insert_root_attribute(xml, "IsPassive", "true")?;
-            insert_before_name_id_policy(
-                xml,
-                "<saml:Subject><saml:NameID>alice@example.com</saml:NameID></saml:Subject>",
-            )
-        })?;
-        let message = receipt.received.message();
-        assert_eq!(message.force_authn(), Some(ForceAuthn::Required));
-        assert_eq!(message.passive(), Some(IsPassive::Required));
-        assert_eq!(
-            message
-                .requested_subject()
-                .and_then(RequestedSubject::name_id)
-                .map(NameId::value),
-            Some("alice@example.com")
-        );
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        let xml = insert_root_attribute(xml, "ForceAuthn", "true")?;
+        let xml = insert_root_attribute(xml, "IsPassive", "true")?;
+        insert_before_name_id_policy(
+            xml,
+            "<saml:Subject><saml:NameID>alice@example.com</saml:NameID></saml:Subject>",
+        )
+    })?;
+    let message = receipt.received.message();
+    assert_eq!(message.force_authn(), Some(ForceAuthn::Required));
+    assert_eq!(message.passive(), Some(IsPassive::Required));
+    assert_eq!(
+        message
+            .requested_subject()
+            .and_then(RequestedSubject::name_id)
+            .map(NameId::value),
+        Some("alice@example.com")
+    );
 
-        let response = receipt.idp.respond_sso(
-            &receipt.sp_descriptor,
-            &receipt.received,
-            SsoAssertion::new(NameId::new("alice@example.com")),
-            RespondSso::post(),
-        )?;
-        assert!(response.post_form()?.value("SAMLResponse").is_some());
-    }
+    let response = receipt.idp.respond_sso(
+        &receipt.sp_descriptor,
+        &receipt.received,
+        SsoAssertion::new(NameId::new("alice@example.com")),
+        RespondSso::post(),
+    )?;
+    assert!(response.post_form()?.value("SAMLResponse").is_some());
     Ok(())
 }
 

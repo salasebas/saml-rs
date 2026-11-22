@@ -515,15 +515,11 @@ impl Engine {
             .metadata
             .as_metadata()
             .x509_certificates(crate::constants::CertUse::Signing);
-        let sp_declares_signed_requests = self.setting.verify_authn_request_signature_if_present
-            && sp.metadata.authn_requests_signed();
         let signature_check =
-            if self.metadata.want_authn_requests_signed() || sp_declares_signed_requests {
+            if self.metadata.want_authn_requests_signed() || sp.metadata.authn_requests_signed() {
                 SignatureCheck::Require
-            } else if self.setting.verify_authn_request_signature_if_present {
-                SignatureCheck::VerifyIfPresent
             } else {
-                SignatureCheck::Skip
+                SignatureCheck::VerifyIfPresent
             };
         crate::flow::flow_with_authentication(
             &FlowOptions {

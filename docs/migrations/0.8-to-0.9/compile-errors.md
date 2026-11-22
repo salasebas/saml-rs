@@ -539,7 +539,11 @@ of the peer's endpoint.
 ## 1.16 Rename the relaxed policy and algorithm variants
 
 **Affects:** code that names one of the variants below, in a value, a `match`,
-or a `use`. For HTTP-POST SSO responses, [supply replay storage](logout-validation-replay.md#supply-replay-storage-for-http-post-sso). The compiler finds each qualified use, such
+or a `use`. Renames preserve defaults and algorithm URIs. For changes in
+behaviour, see [AuthnRequest signature verification](authn-request-signatures.md),
+the row for `LogoutSigning`, and
+[replay storage for HTTP-POST SSO](logout-validation-replay.md#supply-replay-storage-for-http-post-sso).
+The compiler finds each qualified use, such
 as `ReplayPolicy::DisabledForCompatibility`. An old variant name written bare in
 a pattern, after a glob import such as `use saml_rs::ReplayPolicy::*;`, still
 compiles as a binding that matches every value, so search for the old names
@@ -555,7 +559,7 @@ existed rather than what it allowed.
 | `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithmsForCompatibility` | `MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms` |
 | `XmlSignatureProfile::AllowProviderSupportedForCompatibility` | `XmlSignatureProfile::AllowWeakAlgorithms` |
 | `AssertionSignaturePolicy::AllowUnsignedForCompatibility` | `AssertionSignaturePolicy::AllowUnsigned` |
-| `AuthnRequestValidationPolicy::AllowUnsignedForCompatibility` | `AuthnRequestValidationPolicy::AllowUnsigned` |
+| `AuthnRequestValidationPolicy::AllowUnsignedForCompatibility`, `AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent` | `AuthnRequestValidationPolicy::AllowUnsigned` |
 | `LogoutSignaturePolicy::AllowUnsignedForCompatibility` | `LogoutSignaturePolicy::AllowUnsigned` |
 | `AuthnRequestSigningPolicy::DoNotSignForCompatibility` | `AuthnRequestSigningPolicy::DoNotSign` |
 | `LogoutSigning::DoNotSignForCompatibility` | Remove the signing option. Outgoing logout is signed. |
@@ -596,9 +600,10 @@ This command renames them in a Rust source tree. Run the substitutions in this
 order, so that `AllowUnsignedForCompatibility` is not renamed twice:
 
 ```bash
-rg -l 'ForCompatibility|Aes128\b|Aes256\b|TripleDes\b' --type rust | xargs perl -pi -e '
+rg -l 'ForCompatibility|AllowUnsignedVerifyIfPresent|Aes128\b|Aes256\b|TripleDes\b' --type rust | xargs perl -pi -e '
 s/\bRequireSignatureAllowingWeakAlgorithmsForCompatibility\b/RequireSignatureAllowingWeakAlgorithms/g;
 s/\bAllowProviderSupportedForCompatibility\b/AllowWeakAlgorithms/g;
+s/\bAllowUnsignedVerifyIfPresent\b/AllowUnsigned/g;
 s/\bAllowUnsignedForCompatibility\b/AllowUnsigned/g;
 s/\bUnsignedForCompatibility\b/AllowUnsigned/g;
 s/\bDoNotSignForCompatibility\b/DoNotSign/g;
@@ -903,7 +908,7 @@ from `recommended()`. The table uses the 0.9 variant names;
 | `SpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
 | `SpValidationPolicy` | `audience` | `AudienceValidationPolicy::Skip` | `EvaluatePresentRestrictions` |
 | `SpValidationPolicy`, `IdpValidationPolicy` | `logout.requests`, `logout.responses` | `LogoutSignaturePolicy::AllowUnsigned` | `RequireSigned` |
-| `IdpValidationPolicy` | `authn_requests` | `AuthnRequestValidationPolicy::AllowUnsigned` | `AllowUnsignedVerifyIfPresent` |
+| `IdpValidationPolicy` | `authn_requests` | Skipped verification (removed) | `AllowUnsigned` |
 | `IdpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
 | `LogoutPolicy` | `requests`, `responses` | `LogoutSignaturePolicy::AllowUnsigned` | `RequireSigned` |
 
@@ -935,7 +940,7 @@ For the identity provider:
 
 ```rust
 use saml_rs::{
-    AuthnRequestValidationPolicy, IdpValidationPolicy, LogoutSignaturePolicy, XmlSignatureProfile,
+    IdpValidationPolicy, LogoutSignaturePolicy, XmlSignatureProfile,
 };
 
 // Before
@@ -943,11 +948,13 @@ let validation = IdpValidationPolicy::compatibility();
 
 // Now
 let mut validation = IdpValidationPolicy::default();
-validation.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
 validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
 validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
 validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
 ```
+
+The IdP now [verifies every AuthnRequest signature](authn-request-signatures.md),
+including when you select the remaining compatibility settings.
 
 If you built without a crypto provider feature, `compatibility()` was the
 preset that `build()` accepted. Without a provider, `build()` returns

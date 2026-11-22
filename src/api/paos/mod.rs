@@ -545,8 +545,7 @@ impl IdentityProvider {
     /// larger than the configured XML limits. Returns [`SamlError`] when the envelope is not
     /// one AuthnRequest, a SOAP header entry sets `mustUnderstand`, the issuer
     /// or destination does not match, the request is unsigned while the SP
-    /// metadata sets `AuthnRequestsSigned` under
-    /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent),
+    /// metadata sets `AuthnRequestsSigned`,
     /// or signature, time, or replay checks fail. Answer those errors with
     /// [`PaosHttpResponse::soap_fault`].
     pub fn receive_paos_sso(

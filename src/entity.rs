@@ -68,9 +68,6 @@ pub struct EntitySetting {
     pub(crate) want_encrypted_cbc_response_signed: bool,
     /// IdP: requires signed AuthnRequests.
     pub want_authn_requests_signed: bool,
-    /// IdP: verify an AuthnRequest signature when one is present, without
-    /// requiring a signature.
-    pub(crate) verify_authn_request_signature_if_present: bool,
     /// Requires signed LogoutRequest (default `true`).
     pub want_logout_request_signed: bool,
     /// Requires signed LogoutResponse.
@@ -204,10 +201,6 @@ impl fmt::Debug for EntitySetting {
                 &self.want_authn_requests_signed,
             )
             .field(
-                "verify_authn_request_signature_if_present",
-                &self.verify_authn_request_signature_if_present,
-            )
-            .field(
                 "want_logout_request_signed",
                 &self.want_logout_request_signed,
             )
@@ -323,7 +316,6 @@ impl Default for EntitySetting {
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             want_encrypted_cbc_response_signed: false,
             want_authn_requests_signed: false,
-            verify_authn_request_signature_if_present: false,
             want_logout_request_signed: true,
             want_logout_response_signed: true,
             name_id_format: Vec::new(),

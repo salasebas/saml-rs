@@ -131,10 +131,9 @@ pub enum AuthnRequestSigningPolicy {
 /// Whether an identity provider requires a signed inbound `<AuthnRequest>`.
 ///
 /// [`Self::RequireSigned`] is optional and stays off.
-/// [`Self::AllowUnsignedVerifyIfPresent`] verifies a signature that is present
+/// [`Self::AllowUnsigned`] verifies a signature that is present
 /// and accepts an unsigned request unless the service provider's metadata sets
 /// `AuthnRequestsSigned`.
-/// [`Self::AllowUnsigned`] does not verify a present signature.
 /// The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
 ///
@@ -152,8 +151,6 @@ pub enum AuthnRequestValidationPolicy {
     /// Verify a signature that is present, and accept an unsigned AuthnRequest
     /// from a service provider whose metadata does not set
     /// `AuthnRequestsSigned`.
-    AllowUnsignedVerifyIfPresent,
-    /// Accept unsigned AuthnRequests without verifying a signature that is present.
     AllowUnsigned,
 }
 
@@ -318,7 +315,7 @@ impl Default for IdpValidationPolicy {
     /// Logout requests and responses require a signature.
     fn default() -> Self {
         Self {
-            authn_requests: AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent,
+            authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
             logout: LogoutPolicy::default(),
         }
@@ -746,16 +743,7 @@ pub(super) fn authn_request_signing_enabled(policy: AuthnRequestSigningPolicy) -
 pub(super) fn authn_request_signature_required(policy: AuthnRequestValidationPolicy) -> bool {
     match policy {
         AuthnRequestValidationPolicy::RequireSigned => true,
-        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent
-        | AuthnRequestValidationPolicy::AllowUnsigned => false,
-    }
-}
-
-pub(super) fn verify_present_authn_request_signature(policy: AuthnRequestValidationPolicy) -> bool {
-    match policy {
-        AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent => true,
-        AuthnRequestValidationPolicy::RequireSigned
-        | AuthnRequestValidationPolicy::AllowUnsigned => false,
+        AuthnRequestValidationPolicy::AllowUnsigned => false,
     }
 }
 

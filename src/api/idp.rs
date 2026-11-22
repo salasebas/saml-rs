@@ -62,9 +62,7 @@ impl IdentityProvider {
     /// Returns [`SamlError`] when the inbound message or relay state is invalid, the
     /// request binding is unsupported, SP metadata cannot be parsed, XML
     /// parsing or signature/trust validation fails, the request is unsigned
-    /// while the SP metadata sets `AuthnRequestsSigned` under
-    /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent),
-    /// the request destination
+    /// while the SP metadata sets `AuthnRequestsSigned`, the request destination
     /// does not match the receiving `SingleSignOnService` location for the
     /// binding, the receiving URL is unpublished, multiple local endpoints
     /// have no explicit receiving URL,
@@ -108,10 +106,10 @@ impl IdentityProvider {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoRequestBinding::try_from(input.binding())?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
-        let request = input.into_http_request(self.engine().setting.xml_limits)?;
+        let (encoding, request) = input.into_http_request(self.engine().setting.xml_limits)?;
         let (flow, message_authenticated) = self.engine().parse_login_request_at(
             raw_sp,
-            Binding::from(binding),
+            encoding,
             &request,
             validation.now(),
             validation.clock_skew(),

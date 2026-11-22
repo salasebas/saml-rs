@@ -3,7 +3,7 @@
 use super::{
     allows_digest_method, allows_signature_method, bergshamra_ns, reference_resolution,
     transform_algorithm, verified_target_from_uri, BergshamraDocument, BergshamraNodeId,
-    ReferenceResolutionReason, SamlError, XmlSignatureProfile,
+    ReferenceResolutionReason, SamlError, VerifyResult, XmlSignatureProfile,
 };
 
 fn exactly_one_dsig_child(
@@ -16,6 +16,21 @@ fn exactly_one_dsig_child(
         .into_iter();
     let only = children.next()?;
     children.next().is_none().then_some(only)
+}
+
+pub(super) fn verified_authn_request_signature<'a>(
+    document: &BergshamraDocument<'_>,
+    results: &'a [VerifyResult],
+) -> Option<&'a VerifyResult> {
+    let signature = exactly_one_dsig_child(
+        document,
+        document.document_element()?,
+        bergshamra_ns::node::SIGNATURE,
+    )?;
+    results.iter().find(|result| match result {
+        VerifyResult::Valid { signature_node, .. } => *signature_node == signature,
+        VerifyResult::Invalid { .. } => false,
+    })
 }
 
 fn dsig_algorithm<'a>(

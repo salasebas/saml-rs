@@ -827,8 +827,11 @@ fn flow_inner(
             match binding {
                 Binding::Redirect | Binding::SimpleSign => {
                     let sig_alg = verify_detached(binding, parser_type, request, opts, &xml)?;
-                    let prepared = if parser_type == ParserType::SamlResponse
-                        && assertion_signature == AssertionSignatureRequirement::Direct
+                    let signed_request = parser_type == ParserType::SamlRequest
+                        && !saml_signature_candidates(&document.root).is_empty();
+                    let prepared = if signed_request
+                        || (parser_type == ParserType::SamlResponse
+                            && assertion_signature == AssertionSignatureRequirement::Direct)
                     {
                         verify_and_prepare(
                             xml,
