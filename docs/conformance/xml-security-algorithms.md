@@ -140,25 +140,19 @@ build verifies them. Signed metadata import excludes them under
 | --- | --- | --- |
 | RSA-MD5, HMAC-MD5, and the MD5 digest | A verified signature that authenticates the accepted message, a detached `SigAlg`, or a verified metadata signature that uses one is rejected with `SamlError::AlgorithmUnsupported` | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. XML Signature 1.1 §6.2 says MD5 `SHOULD NOT` be used in `DigestMethod`, a rule on use. OpenSAML excludes these three URIs in `DefaultSecurityConfigurationBootstrap.buildDefaultSignatureValidationConfiguration`, and xmlsec1 has built without MD5 by default since 1.3.0 |
 | RSA-RIPEMD160, ECDSA-RIPEMD160, HMAC-RIPEMD160, and the RIPEMD-160 digest | As above | Library policy, on in Recommended for both roles and in signed metadata import. No OASIS rule requires a receiver to reject them. The default excludes RIPEMD-160 for limited provider support. Conformance §4.1 does not require it. xmlsec1 has built without RIPEMD-160 by default since 1.3.7, and the AWS-LC and FIPS providers do not verify them. OpenSAML does not exclude them |
-| An RSA signing certificate with a modulus shorter than 2048 bits | The verifier skips the certificate and tries the peer's other keys. Without a usable key, verification returns `SamlError::Crypto`. The same key filter applies to a pinned metadata signing certificate | Library policy. The default `ExcludeWeakAlgorithms` and `StrictRsaSha2` enforce the floor for inbound embedded and detached message signatures. This keeps the default RSA minimum for both roles consistent with AWS-LC and FIPS even when RustCrypto supports legacy keys. Signed metadata import has a separate [trust-root rationale](metadata-and-replay.md#metadata-trust) |
+| RSA modulus under 2048 bits | Skip the certificate. If no usable key remains, return `SamlError::Crypto`. Pinned metadata keys have the same floor for a separate [trust-root reason](metadata-and-replay.md#metadata-trust) | Library policy. For embedded and detached message signatures, `ExcludeWeakAlgorithms` (the default) and `StrictRsaSha2` keep RustCrypto's minimum consistent with AWS-LC and FIPS |
 
-[NIST SP 800-131A Rev. 2 §3, Table 2](https://doi.org/10.6028/NIST.SP.800-131Ar2)
-classifies RSA verification with a 1024–2047-bit modulus as legacy use
-and verification with at least 2048 bits as acceptable.
-[XML Signature 1.1 §6.4.2](https://www.w3.org/TR/xmldsig-core1/#sec-PKCS1)
-permits verification of signatures from older systems with keys of 1024 bits
-or less. Because the IdP and SP use these signatures to authenticate current
-requests, responses, and assertions, the default reserves legacy keys for
-explicit opt-in. SAML Conformance §4.1 and Errata 05 E50 and E81 address algorithm
-support. Neither they nor the [XML Signature schema](https://www.w3.org/TR/2002/REC-xmldsig-core-20020212/xmldsig-core-schema.xsd)
-set a minimum RSA modulus length for a SAML receiver. OpenSAML sets no minimum.
+SAML leaves the receiver's RSA minimum to the implementation (Conformance §4.1,
+Errata 05 E50 and E81, and the [XML Signature schema](https://www.w3.org/TR/2002/REC-xmldsig-core-20020212/xmldsig-core-schema.xsd)).
+[XML Signature §6.4.2](https://www.w3.org/TR/xmldsig-core1/#sec-PKCS1) permits keys of
+1024 bits or less for legacy verification. The IdP and SP authenticate current
+messages, so their default excludes the 1024–2047-bit keys that
+[NIST classifies as legacy](https://doi.org/10.6028/NIST.SP.800-131Ar2) (§3, Table 2).
 
-Only `AllowWeakAlgorithms` on RustCrypto with `crypto-legacy-algorithms`
-can verify message signatures with 1024–2047-bit RSA keys. That profile also
-permits the MD5 and RIPEMD-160 algorithms above and a `ds:Object` in a
-signature, which can carry unsigned data. The SP still rejects a browser SSO
-response if a signature on the Response or an Assertion fails verification
-(Profiles §4.1.4.3).
+Only `AllowWeakAlgorithms` on RustCrypto with `crypto-legacy-algorithms` accepts
+those keys. It also permits MD5, RIPEMD-160, and `ds:Object`, which can carry
+unsigned data. An invalid Response or Assertion signature still causes the SP
+to reject the browser SSO response (Profiles §4.1.4.3).
 
 SHA-1 stays accepted under `ExcludeWeakAlgorithms`: Conformance §4.1 makes the
 SHA-1 digest and RSAwithSHA1 mandatory to implement, and OpenSAML and xmlsec1
