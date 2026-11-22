@@ -1837,6 +1837,31 @@ fn typed_facade_rejects_a_response_without_the_relay_state_the_request_carried(
 }
 
 #[test]
+fn typed_finish_sso_reports_a_signed_refusal_when_relay_state_is_missing(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let status = auth_failed_status()?;
+    let mut exchange = start_receive_respond_with(
+        StartSso::post().relay_state(RelayState::try_new("pending-login")?),
+        SsoOutcome::Failure(status.clone()),
+        RespondSso::post().sign_response(),
+    )?;
+    exchange
+        .response_fields
+        .retain(|field| field.name() != "RelayState");
+
+    match exchange.sp.finish_sso(
+        &exchange.idp_descriptor,
+        &exchange.pending,
+        Inbound::post(exchange.response_fields),
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess { status: received }) => assert_eq!(received, status),
+        other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for added in [RelayState::try_new("added")?, RelayState::try_new("")?] {
@@ -2073,10 +2098,7 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
     let sp = ServiceProvider::new(encrypted_sp_config()?);
     let idp = IdentityProvider::new(encrypted_idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(
-        &idp_descriptor,
-        StartSso::post().relay_state(RelayState::try_new("pending-login")?),
-    )?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let received = idp.receive_sso(
         &sp_descriptor,
         Inbound::post(post_fields(&started.outbound)?),
@@ -2088,8 +2110,7 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
         SsoOutcome::Failure(auth_failed_status()?),
         RespondSso::post(),
     )?;
-    let mut response_fields = post_fields(&response)?;
-    response_fields.retain(|field| field.name() != "RelayState");
+    let response_fields = post_fields(&response)?;
     assert!(response_xml_from_fields(&response_fields)?.contains("<ds:Signature"));
 
     match sp.finish_sso(

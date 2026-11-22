@@ -22,6 +22,6 @@ establishing which request the response answered.
 validate the response before comparing its RelayState with the pending login.
 Previously, a mismatch hid both the IdP's refusal and any response validation
 error. If your handler matched `SamlError::RelayStateMismatch` in these cases,
-handle `SamlError::StatusNotSuccess { status }` for a refusal and the specific
+handle `SamlError::StatusNotSuccess { status, .. }` for a refusal and the specific
 validation error for an invalid response. A successful response with a missing
 or different RelayState still fails when the request supplied a value.
