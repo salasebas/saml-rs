@@ -23,6 +23,9 @@ work in the repo, not restate the README.
 ## Working Rules
 
 - Use English for all repository content and collaboration.
+- Before implementing an issue, check its claims against the code and tests
+  on the latest `main`. If the problem is already solved, report the evidence.
+  If it remains, judge the proposed fix against the behavior callers need.
 - Read the nearby code and tests before changing behavior. Prefer existing
   module boundaries and error styles.
 - Keep diffs focused. Do not mix documentation cleanup, behavior changes, and
@@ -39,6 +42,8 @@ work in the repo, not restate the README.
   same change or report it. Migration guides describe past releases.
 - Report a rule or design choice without a stated reason as an open question
   instead of following or defending it.
+- When an existing design conflicts with the caller's needs or the applicable
+  SAML rule, explain the trade-off and the compatibility impact of changing it.
 - API design, naming, error, and review rules are in `CODING_STANDARDS.md`.
 
 ## Standards Conformance
@@ -48,6 +53,10 @@ work in the repo, not restate the README.
   It also says how to record a rule in `docs/conformance/`.
 - Cite and verify the applicable OASIS standard, schema, profile/binding, and
   approved errata. Identify the obligated actor, condition, and scope.
+- When a design or interoperability decision needs an implementation example,
+  consult a project that handles the same flow, such as OpenSAML, Shibboleth,
+  crewjam/saml, or ruby-saml. Cite the relevant code or docs and explain what
+  applies to this crate.
 - A producer `MUST` or `MUST NOT` does not automatically require a receiver to
   reject non-conforming input. Add rejection only when an applicable normative
   receiver or schema rule requires it.
@@ -65,6 +74,8 @@ work in the repo, not restate the README.
 - Do not present library safety or application policy as an OASIS wire
   requirement, and do not invent validation for unspecified behavior.
 - A stricter receiver rule is recorded as library policy in the pull request.
+  If a deployment needs an exception, weigh its interoperability benefit
+  against the protection it would give up before adding an option.
 
 ## Fixture Provenance
 
@@ -165,6 +176,12 @@ Add regression tests for security fixes.
 
 Issues and specs live as GitHub issues in `salasebas/saml-rs`. See
 `docs/agents/issue-tracker.md`.
+
+Report confirmed pre-existing bugs and conformance gaps found during the task.
+For suspected vulnerabilities, follow [the security policy](SECURITY.md).
+For other findings that need follow-up, search open and closed issues. Link
+the existing issue or file one with the observed behavior, the expected
+behavior, and the evidence.
 
 ### Triage labels
 
