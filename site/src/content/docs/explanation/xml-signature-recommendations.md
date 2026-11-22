@@ -28,9 +28,11 @@ The typed verification path does not take a `DsigContext` from the application. 
 - `trusted_keys_only`, so the signature is checked against the certificate you pass in. For SSO that is the certificate declared in metadata, not an inline `KeyInfo` key.
 - `strict_verification`, so a reference has to land on the document element, an ancestor of the signature, or a sibling of the signature.
 - `require_reference_digests`, so a signature without local digest coverage does not count.
-- a minimum HMAC length of 160 bits.
 - rejection of an `Assertion` or `Signature` nested under `SubjectConfirmationData`.
 - extraction limited to content a verified reference covered.
+
+The verifier requires at least 160 bits for explicit XML HMAC truncation,
+192 bits for HMAC-SHA384, and 256 bits for HMAC-SHA512.
 
 The same path calls `with_insecure(true)`. That flag skips X.509 chain building and certificate time checks only. Metadata certificates are pinned key material, so saml-rs does not ask bergshamra to validate them as a public CA chain. Signature, digest, reference, duplicate-ID, and wrapping checks stay on. Do not replace this adapter with `DsigContext::new_permissive()`.
 

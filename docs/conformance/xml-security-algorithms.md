@@ -44,7 +44,7 @@ encryption algorithms apply to `EncryptedAssertion`, `EncryptedID`,
 | SHA-1 digest | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. The SHA-1 signature algorithms, including `SignatureAlgorithm::HmacSha1`, select this digest. Verified under `XmlSignatureProfile::ExcludeWeakAlgorithms`, the value Recommended uses, and under `AllowWeakAlgorithms`. `StrictRsaSha2` is library hardening and rejects it |
 | RSAwithSHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1, and Bindings §3.4.4.1 signature rule 5 for the HTTP-Redirect `SigAlg`. `SignatureAlgorithm::RsaSha1` selects it. It is never the default. AWS-LC and FIPS do not sign with it. FIPS does not verify it. Neither meets the HTTP-Redirect rule |
 | DSAwithSHA1 | Identity provider and service provider | Sign and verify | Recommendation to implement in Conformance §4.1. Mandatory to implement for the HTTP-Redirect `SigAlg`: Bindings §3.4.4.1 signature rule 5. `SignatureAlgorithm::DsaSha1` selects it with a DSA signing key, and a DSA certificate in the peer's metadata verifies it. It is never the default, on the same library policy as the SHA-1 digest. RustCrypto with `crypto-legacy-algorithms` only, so the default build meets the HTTP-Redirect rule, and `crypto-aws-lc`, `crypto-fips`, and RustCrypto without `crypto-legacy-algorithms` do not |
-| HMAC-SHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `SignatureAlgorithm::HmacSha1` signs with the secret of `Credentials::with_hmac_secret`, and the signature carries no `KeyInfo`. The verifier sets the same secret with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`, next to the peer's metadata certificates. SAML metadata has no shared-secret key, so the secret is exchanged out of band. Metadata signatures are not verified with it. The 160-bit minimum `HMACOutputLength` is existing library hardening |
+| HMAC-SHA1 | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `SignatureAlgorithm::HmacSha1` signs with the secret of `Credentials::with_hmac_secret`, and the signature carries no `KeyInfo`. The verifier sets the same secret with `IdpDescriptor::with_hmac_secret` or `SpDescriptor::with_hmac_secret`, next to the peer's metadata certificates. SAML metadata has no shared-secret key, so the secret is exchanged out of band. Metadata signatures are not verified with it |
 | An HMAC secret is at least 20 bytes | Identity provider and service provider | Configure signing and verification | Library policy. RFC 2104 §3 discourages a key shorter than the hash output, which is 20 bytes for SHA-1. `HmacSecret::try_new` rejects a shorter secret with `SamlError::Invalid`. It is local configuration and does not reject a message |
 | Canonical XML 1.0 without comments | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::CanonicalXml` puts it in `signed_reference_transforms`, for the messages in the row below. `SignedInfo` is canonicalized with exclusive canonicalization. Verification accepts it on `SignedInfo` and on a reference under `ExcludeWeakAlgorithms` and `AllowWeakAlgorithms`. `StrictRsaSha2` rejects it |
 | Enveloped-signature transform | Identity provider and service provider | Sign and verify | Mandatory to implement. Conformance §4.1. `TransformAlgorithm::EnvelopedSignature` is the first default transform |
@@ -73,6 +73,21 @@ key of the same parameter set.
 | An embedded signature on a received `AuthnRequest` or logout message is verified under `xml_signatures` | Identity provider | Inbound | Optional. Errata 05 E50. The same profiles as the row above |
 | A detached `SigAlg` signature is verified under `xml_signatures` | Identity provider and service provider | Inbound HTTP-Redirect and HTTP-POST-SimpleSign | Optional. Errata 05 E50. `AllowWeakAlgorithms` accepts any `SigAlg` in the provider-supported set. `ExcludeWeakAlgorithms` excludes the [weak algorithms and keys](#weak-algorithms-and-keys). `StrictRsaSha2` is library hardening and accepts RSA-SHA256, RSA-SHA384, or RSA-SHA512. Another `SigAlg` is rejected with `SamlError::AlgorithmUnsupported` before the signature is verified. A verifier that selects `StrictRsaSha2` does not meet Bindings §3.4.4.1 signature rule 5, which makes DSAwithSHA1 and RSAwithSHA1 mandatory for HTTP-Redirect |
 | A signed metadata document is verified under `MetadataTrustPolicy` | Metadata consumer | Inbound typed descriptor import | Optional. Errata 05 E50, and E81 for Metadata §3.1.1. `RequireSignature` and `RequireSignatureAllowingOtherCanonicalization` accept the provider-supported set without the [weak algorithms and keys](#weak-algorithms-and-keys). `RequireSignatureAllowingWeakAlgorithms` accepts the provider-supported set. The raw `verify_metadata_signature` functions and `Metadata::verify_signature` accept the provider-supported set |
+
+### HMAC truncation
+
+These rules apply when an identity provider or service provider verifies an
+enveloped HMAC XML signature with a configured peer secret and a provider
+that supports the selected algorithm. They apply under every profile that
+allows the algorithm.
+
+| Rule | Level |
+| --- | --- |
+| An explicit `ds:HMACOutputLength` must be at least half the hash output length and at least 80 bits | Mandatory for the verifier. [XML Signature 1.1 §§4.4.2 and 6.3.1](https://www.w3.org/TR/xmldsig-core1/#sec-SignatureMethod). This requires 192 bits for HMAC-SHA384 and 256 bits for HMAC-SHA512 |
+| An explicit `ds:HMACOutputLength` must be at least 160 bits | Library policy. A lower floor would let a peer choose a shorter tag and reduce the number of bits an attacker must guess for an accepted signature |
+
+Omitting `ds:HMACOutputLength` requests the full MAC. Detached signatures
+use a separate verifier and have no `ds:HMACOutputLength` parameter.
 
 ### Reference and coverage processing
 
