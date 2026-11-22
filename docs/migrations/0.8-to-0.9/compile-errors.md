@@ -541,7 +541,7 @@ of the peer's endpoint.
 **Affects:** code that names one of the variants below, in a value, a `match`,
 or a `use`. Renames preserve defaults and algorithm URIs. For changes in
 behaviour, see [AuthnRequest signature verification](authn-request-signatures.md),
-the row for `LogoutSigning`, and
+[audience restrictions](sso-results-and-identities.md#check-audience-restrictions-before-accepting-a-session), the row for `LogoutSigning`, and
 [replay storage for HTTP-POST SSO](logout-validation-replay.md#supply-replay-storage-for-http-post-sso).
 The compiler finds each qualified use, such
 as `ReplayPolicy::DisabledForCompatibility`. An old variant name written bare in
@@ -564,7 +564,7 @@ existed rather than what it allowed.
 | `AuthnRequestSigningPolicy::DoNotSignForCompatibility` | `AuthnRequestSigningPolicy::DoNotSign` |
 | `LogoutSigning::DoNotSignForCompatibility` | Remove the signing option. Outgoing logout is signed. |
 | `ReplayPolicy::DisabledForCompatibility` | `ReplayPolicy::Disabled` |
-| `AudienceValidationPolicy::SkipForCompatibility` | `AudienceValidationPolicy::Skip` |
+| `AudienceValidationPolicy::SkipForCompatibility` | Removed. [Keep the default audience policy](sso-results-and-identities.md#check-audience-restrictions-before-accepting-a-session) |
 | `DigestAlgorithm::Sha1ForCompatibility` | `DigestAlgorithm::Sha1` |
 | `KeyEncryptionAlgorithm::Rsa15ForCompatibility` | `KeyEncryptionAlgorithm::Rsa15` |
 | `DataEncryptionAlgorithm::TripleDesForCompatibility` | `DataEncryptionAlgorithm::TripleDesCbc` |
@@ -596,8 +596,8 @@ let idp = IdpDescriptor::from_metadata_xml(
 let context = SamlValidationContext::new(now, ReplayPolicy::Disabled);
 ```
 
-This command renames them in a Rust source tree. Run the substitutions in this
-order, so that `AllowUnsignedForCompatibility` is not renamed twice:
+The command below renames the remaining variants in a Rust source tree.
+Run the substitutions in this order so that `AllowUnsignedForCompatibility` is not renamed twice:
 
 ```bash
 rg -l 'ForCompatibility|AllowUnsignedVerifyIfPresent|Aes128\b|Aes256\b|TripleDes\b' --type rust | xargs perl -pi -e '
@@ -608,7 +608,6 @@ s/\bAllowUnsignedForCompatibility\b/AllowUnsigned/g;
 s/\bUnsignedForCompatibility\b/AllowUnsigned/g;
 s/\bDoNotSignForCompatibility\b/DoNotSign/g;
 s/\bDisabledForCompatibility\b/Disabled/g;
-s/\bSkipForCompatibility\b/Skip/g;
 s/\bSha1ForCompatibility\b/Sha1/g;
 s/\bRsa15ForCompatibility\b/Rsa15/g;
 s/\bTripleDesForCompatibility\b/TripleDesCbc/g;
@@ -906,7 +905,7 @@ from `recommended()`. The table uses the 0.9 variant names;
 | --- | --- | --- | --- |
 | `SpValidationPolicy` | `responses` | `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc` | `RequireForEncryptedCbc` |
 | `SpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
-| `SpValidationPolicy` | `audience` | `AudienceValidationPolicy::Skip` | `EvaluatePresentRestrictions` |
+| `SpValidationPolicy` | `audience` | Skipped evaluation (removed) | `EvaluatePresentRestrictions` |
 | `SpValidationPolicy`, `IdpValidationPolicy` | `logout.requests`, `logout.responses` | `LogoutSignaturePolicy::AllowUnsigned` | `RequireSigned` |
 | `IdpValidationPolicy` | `authn_requests` | Skipped verification (removed) | `AllowUnsigned` |
 | `IdpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
@@ -915,13 +914,13 @@ from `recommended()`. The table uses the 0.9 variant names;
 The other fields had the same value in both presets.
 
 To select the former SP settings, set the fields below. Keep only the
-relaxations your deployment needs. Even with these settings, the SP now
+relaxations your deployment needs. The SP
+[checks every present audience restriction](sso-results-and-identities.md#check-audience-restrictions-before-accepting-a-session) and
 [verifies every present SSO signature](logout-validation-replay.md#verify-every-signature-on-sso-responses).
 
 ```rust
 use saml_rs::{
-    AudienceValidationPolicy, LogoutSignaturePolicy, ResponseSignaturePolicy, SpValidationPolicy,
-    XmlSignatureProfile,
+    LogoutSignaturePolicy, ResponseSignaturePolicy, SpValidationPolicy, XmlSignatureProfile,
 };
 
 // Before
@@ -931,7 +930,6 @@ let validation = SpValidationPolicy::compatibility();
 let mut validation = SpValidationPolicy::default();
 validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
 validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
-validation.audience = AudienceValidationPolicy::Skip;
 validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
 validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
 ```

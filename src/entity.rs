@@ -51,13 +51,7 @@ pub struct EntitySetting {
     pub authn_requests_signed: bool,
     /// SP: requires signed assertions.
     pub want_assertions_signed: bool,
-    /// SP: reject a `<Response>` whose `<Audience>` is not this entity (default `true`).
-    pub validate_audience: bool,
     /// SP: reject a bearer assertion that omits `<AudienceRestriction>`.
-    ///
-    /// Applies only when `validate_audience` is set. Default `true` requires
-    /// the element. Typed Web Browser SSO acceptance can evaluate
-    /// restrictions that are present without requiring the element.
     pub(crate) require_audience_restriction: bool,
     /// SP: requires signed messages.
     pub want_message_signed: bool,
@@ -185,7 +179,6 @@ impl fmt::Debug for EntitySetting {
             .field("max_decryption_work", &self.max_decryption_work)
             .field("authn_requests_signed", &self.authn_requests_signed)
             .field("want_assertions_signed", &self.want_assertions_signed)
-            .field("validate_audience", &self.validate_audience)
             .field(
                 "require_audience_restriction",
                 &self.require_audience_restriction,
@@ -310,7 +303,6 @@ impl Default for EntitySetting {
             relay_state: String::new(),
             authn_requests_signed: false,
             want_assertions_signed: false,
-            validate_audience: true,
             require_audience_restriction: true,
             want_message_signed: false,
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,

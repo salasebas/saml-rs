@@ -5,11 +5,10 @@ use super::builders::{IdpConfigBuilder, SpConfigBuilder};
 use super::credentials::{Credentials, X509Credential};
 use super::descriptors::EntityId;
 use super::policies::{
-    assertion_signature_required, audience_restriction_required, audience_validation_enabled,
-    authn_request_signature_required, authn_request_signing_enabled,
-    encrypted_cbc_response_signature_required, logout_signature_required, name_id_creation_allowed,
-    response_signature_required, AlgorithmPolicy, ReceivedEncryptedElements, TemplatePolicy,
-    XmlPolicy,
+    assertion_signature_required, audience_restriction_required, authn_request_signature_required,
+    authn_request_signing_enabled, encrypted_cbc_response_signature_required,
+    logout_signature_required, name_id_creation_allowed, response_signature_required,
+    AlgorithmPolicy, ReceivedEncryptedElements, TemplatePolicy, XmlPolicy,
 };
 
 impl SpConfigBuilder {
@@ -26,7 +25,6 @@ impl SpConfigBuilder {
         setting.allow_create = name_id_creation_allowed(validation.name_id_creation);
         setting.authn_requests_signed = authn_request_signing_enabled(validation.authn_requests);
         setting.want_assertions_signed = assertion_signature_required(validation.assertions);
-        setting.validate_audience = audience_validation_enabled(validation.audience);
         setting.require_audience_restriction = audience_restriction_required(validation.audience);
         setting.want_message_signed = response_signature_required(validation.responses);
         setting.xml_signatures = validation.xml_signatures;

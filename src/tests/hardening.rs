@@ -293,18 +293,6 @@ fn hardening_audience_mismatch_rejected() {
 }
 
 #[test]
-fn hardening_audience_validation_opt_out() -> Result<(), Box<dyn std::error::Error>> {
-    let sp1 = sp_with("https://sp1.example.com/metadata", signing());
-    let mut setting = signing();
-    setting.validate_audience = false;
-    let sp2 = sp_with("https://sp2.example.com/metadata", setting);
-    let req = HttpRequest::post(vec![("SAMLResponse".into(), response_for(&sp1))]);
-    // With audience validation disabled, sp2 accepts it (signature still checked).
-    sp2.parse_login_response_with_request_id(&idp(), Binding::Post, &req, "_req1")?;
-    Ok(())
-}
-
-#[test]
 fn hardening_audience_restrictions_reject_when_missing() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with("https://sp.example.com/metadata", signing());
     let response = response_for_audience_restrictions(&sp, &[])?;

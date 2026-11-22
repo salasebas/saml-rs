@@ -3238,38 +3238,8 @@ fn recommended_idp_receive_verifies_a_present_authn_request_signature(
 }
 
 #[test]
-fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
+fn unsigned_authn_requests_still_require_the_correct_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = recommended_post_exchange()?;
-    let audience_skipped = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
-        audience: AudienceValidationPolicy::Skip,
-        ..SpValidationPolicy::default()
-    })?);
-    let session = audience_skipped.finish_sso(
-        &exchange.idp_descriptor,
-        &exchange.pending,
-        Inbound::post(exchange.response_fields.clone()),
-        post_validation(&mut Default::default()),
-    )?;
-    assert_response_root_signature(&session)?;
-
-    let wrong_audience = resign_response(
-        &response_xml_from_fields(&exchange.response_fields)?.replace(
-            &format!("<saml:Audience>{SP_ENTITY_ID}</saml:Audience>"),
-            "<saml:Audience>https://other.example/metadata</saml:Audience>",
-        ),
-    )?;
-    let session = audience_skipped.finish_sso(
-        &exchange.idp_descriptor,
-        &exchange.pending,
-        Inbound::post(response_fields_with_xml(
-            exchange.response_fields,
-            &wrong_audience,
-        )?),
-        post_validation(&mut Default::default()),
-    )?;
-    assert_eq!(session.name_id().value(), "alice@example.com");
-
     let (unsigned_sp, default_idp) = unsigned_request_facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&unsigned_sp, &default_idp)?;
     let started = unsigned_sp.start_sso(&idp_descriptor, StartSso::post())?;
