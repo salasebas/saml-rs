@@ -1,5 +1,8 @@
 #![cfg(crypto)]
 
+#[path = "common/post_validation.rs"]
+mod post_validation;
+use post_validation::post_validation;
 use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
@@ -216,7 +219,7 @@ fn signed_redirect_request_then_post_response(
         &peers.idp_descriptor,
         &started.pending,
         Inbound::post(fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(Exchange {

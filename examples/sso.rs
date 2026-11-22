@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             PrivateKeyPem::new(privkey),
         ))
     };
-    // A deployment passes a shared replay cache with ReplayPolicy::RequireCache.
+    let mut replay_cache = saml_rs::InMemoryReplayCache::new();
     let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
 
     let sp = ServiceProvider::new(
@@ -83,7 +83,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        SamlValidationContext::new(
+            SystemTime::now(),
+            ReplayPolicy::RequireCache(&mut replay_cache),
+        ),
     );
     let session = session?;
     println!("SP  <- authenticated   = {}", session.name_id().value());

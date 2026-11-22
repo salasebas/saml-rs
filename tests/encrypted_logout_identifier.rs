@@ -12,6 +12,9 @@
 #[path = "common/unsigned_post.rs"]
 mod unsigned_post;
 
+#[path = "common/post_validation.rs"]
+mod post_validation;
+use post_validation::post_validation;
 use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
@@ -671,7 +674,7 @@ fn outstanding_logout_from_a_decrypted_name_id_rejects_a_later_assertion(
         &parties.idp_descriptor,
         &started_sso.pending,
         Inbound::post(sso_response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
         &outstanding,
     ) {
         Err(SamlError::AssertionMatchesOutstandingLogout) => Ok(()),

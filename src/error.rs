@@ -438,6 +438,9 @@ pub enum SamlError {
         /// Key that was already accepted.
         key: ReplayKey,
     },
+    /// An HTTP-POST SSO response requires a caller-owned replay cache.
+    #[error("HTTP-POST SSO requires a replay cache")]
+    ReplayCacheRequired,
     /// The replay cache could not check or store a key, so the message was
     /// not accepted.
     #[error("replay cache could not check or store the key")]

@@ -1,6 +1,7 @@
 #![cfg(crypto)]
 
 use super::common;
+use super::post_validation::post_validation;
 
 use std::time::SystemTime;
 
@@ -257,7 +258,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
             &idp_descriptor,
             &started.pending,
             response_input(&response)?,
-            validation(),
+            post_validation(&mut Default::default()),
         )?;
         let statement = session
             .authn_statements()
@@ -285,8 +286,11 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
         SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
         RespondSso::post(),
     )?;
-    let session =
-        sp.accept_unsolicited_sso(&idp_descriptor, response_input(&response)?, validation())?;
+    let session = sp.accept_unsolicited_sso(
+        &idp_descriptor,
+        response_input(&response)?,
+        post_validation(&mut Default::default()),
+    )?;
     assert_eq!(
         session
             .authn_statements()
@@ -422,7 +426,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
             "SAMLResponse",
             STANDARD.encode(signed.as_bytes()),
         )]),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     let sessions = session.authn_statements();
     assert_eq!(session.assertion_id().as_str(), selected_id);
@@ -522,7 +526,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
         &idp_descriptor,
         &started.pending,
         response_input(&response)?,
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(
         session

@@ -9,6 +9,7 @@
 #![cfg(crypto)]
 
 use super::common;
+use super::post_validation::post_validation;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 
 use common::signing_credentials;
@@ -159,7 +160,7 @@ fn exchange(
         &idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     Ok(Exchange { xml, session })
 }
@@ -306,7 +307,7 @@ fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifie
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     assert_eq!(session.name_id(), &name_id);
@@ -779,7 +780,7 @@ fn accept_peer_response(
         &idp_descriptor,
         &started.pending,
         Inbound::post(vec![FormField::new("SAMLResponse", context.context)]),
-        validation(),
+        post_validation(&mut Default::default()),
     )?)
 }
 

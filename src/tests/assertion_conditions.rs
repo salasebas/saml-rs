@@ -2,6 +2,7 @@
 #![cfg(crypto)]
 
 use super::common;
+use super::post_validation::post_validation;
 
 use super::replay_cache;
 
@@ -243,7 +244,7 @@ fn assertion_ids(xml: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 }
 
 fn accept(exchange: &Exchange, xml: &str) -> Result<SsoSession, Box<dyn std::error::Error>> {
-    accept_with(exchange, xml, validation())
+    accept_with(exchange, xml, post_validation(&mut Default::default()))
 }
 
 fn accept_with<'a>(

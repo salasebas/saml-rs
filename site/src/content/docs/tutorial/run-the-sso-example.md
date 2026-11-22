@@ -21,9 +21,9 @@ SP  <- authenticated   = alice@example.com
 
 The request id changes every run. The example does not open a browser. It posts the same fields a browser would.
 
-## What it skips
+## Replay storage and metadata trust
 
-The example has to compile on its own, so it imports unsigned metadata and does not store replay identifiers. A service you deploy pins the metadata signing certificate and passes a replay cache. That is [Service provider](../guides/service-provider-sso.md).
+The example imports unsigned metadata and keeps replay identifiers in memory for one run. In a deployment, pin the metadata signing certificate and share the replay cache across requests. See the [service provider guide](../guides/service-provider-sso.md).
 
 ## Next
 

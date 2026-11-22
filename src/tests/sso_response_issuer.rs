@@ -2,6 +2,7 @@
 #![cfg(crypto)]
 
 use super::common;
+use super::post_validation::post_validation;
 
 use common::signing_credentials;
 
@@ -164,14 +165,17 @@ fn accept(exchange: &Exchange, xml: &str) -> Result<SsoSession, SamlError> {
         STANDARD.encode(xml.as_bytes()),
     )]);
     match &exchange.pending {
-        Some(pending) => {
-            exchange
-                .sp
-                .finish_sso(&exchange.idp_descriptor, pending, input, validation())
-        }
-        None => exchange
-            .sp
-            .accept_unsolicited_sso(&exchange.idp_descriptor, input, validation()),
+        Some(pending) => exchange.sp.finish_sso(
+            &exchange.idp_descriptor,
+            pending,
+            input,
+            post_validation(&mut Default::default()),
+        ),
+        None => exchange.sp.accept_unsolicited_sso(
+            &exchange.idp_descriptor,
+            input,
+            post_validation(&mut Default::default()),
+        ),
     }
 }
 

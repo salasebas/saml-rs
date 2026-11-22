@@ -9,6 +9,9 @@
 //! SimpleSign to sign the raw XML octets, including RelayState when present.
 #![cfg(crypto)]
 
+#[path = "common/post_validation.rs"]
+mod post_validation;
+use post_validation::post_validation;
 use std::time::SystemTime;
 
 use saml_rs::{
@@ -239,7 +242,7 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
         &idp_descriptor,
         &started.pending,
         Inbound::post(response_fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(
         session.relay_state().map(RelayState::as_str),
@@ -253,8 +256,11 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
     )?;
     let mut fields = unsolicited.post_form()?.fields().to_vec();
     fields.push(FormField::new("RelayState", long.as_str()));
-    let session =
-        sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation())?;
+    let session = sp.accept_unsolicited_sso(
+        &idp_descriptor,
+        Inbound::post(fields),
+        post_validation(&mut Default::default()),
+    )?;
     assert_eq!(
         session.relay_state().map(RelayState::as_str),
         Some(long.as_str())
