@@ -5,6 +5,11 @@ This guide moves an integration of `saml-rs`, `opensaml`, `samlify`, or
 re-export the same API, so every step applies to them too. Compatible
 additions are in the [changelog](../../../CHANGELOG.md).
 
+`samlify` is deprecated and will no longer be maintained. To move off it,
+rename the `samlify` key in `Cargo.toml` to `saml-rs`, keeping its version,
+`default-features`, and `features`. Then change the import path from
+`samlify` to `saml_rs`. The API and the feature flags are the same.
+
 Starting with 0.9, we're focusing on stabilizing the public API ahead of 1.0.
 We expect breaking changes to be less frequent and will document any changes
 that require updates to existing integrations.

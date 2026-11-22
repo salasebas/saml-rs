@@ -1,9 +1,9 @@
 ---
 title: "Compatibility crates"
-description: "New code depends on `saml-rs`. These three packages re-export the same API."
+description: "New code depends on `saml-rs`. These packages re-export the same API."
 ---
 
-New code depends on `saml-rs`. These three packages re-export the same API.
+New code depends on `saml-rs`. These packages re-export the same API.
 
 | Package | Import | docs.rs |
 | --- | --- | --- |
@@ -11,6 +11,6 @@ New code depends on `saml-rs`. These three packages re-export the same API.
 | [`samlify`](https://crates.io/crates/samlify) | `samlify` | [docs](https://docs.rs/samlify) |
 | [`samlet`](https://crates.io/crates/samlet) | `samlet` | [docs](https://docs.rs/samlet) |
 
-`opensaml` still exports the deprecated `OpenSamlError` alias of `SamlError`. `opensaml`, `samlify`, and `samlet` are maintained with `saml-rs`.
+`opensaml` still exports the deprecated `OpenSamlError` alias of `SamlError`. `opensaml` and `samlet` are maintained with `saml-rs`. `samlify` is deprecated and will no longer be maintained. Please use `saml-rs`.
 
 These packages are separate from Shibboleth OpenSAML and from the Node.js samlify project. [`samael`](https://crates.io/crates/samael) is the other established Rust SAML crate. It commonly uses the native `xmlsec` stack.
