@@ -22,6 +22,15 @@ including an ECP relay state addressed elsewhere. If the pending login expects
 a relay state and the only returned value names another actor, `finish_paos_sso`
 returns `SamlError::RelayStateMismatch`. Rust call sites stay the same.
 
+## Handle longer RelayState values in PAOS sessions
+
+When your service provider sends no RelayState, both PAOS completion methods
+now accept responder-added state up to 4096 UTF-8 bytes. Previously a value
+over 80 bytes returned `SamlError::Invalid`. If you store
+`SsoSession::relay_state()`, allow up to 4096 bytes or enforce your own
+limit. If you handle oversize errors, match `SamlError::LimitExceeded` with
+`ResourceLimit::RelayStateBytes` for values above 4096 bytes in this flow.
+
 ## Send the SOAP headers from `headers()`
 
 **Affects:** code that calls `soap_action()`, `cache_control()`, `pragma()`,

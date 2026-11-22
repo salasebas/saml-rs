@@ -461,12 +461,16 @@ impl ServiceProvider {
     /// This accepts the response without applying an outstanding logout. Use
     /// [`Self::finish_paos_sso_with_outstanding_logout`] to reject a later
     /// assertion that matches one.
+    /// If the request carried no relay state, the session can carry a
+    /// responder-supplied value up to [`crate::MAX_RECEIVED_RELAY_STATE_BYTES`].
     ///
     /// # Errors
     ///
     /// Returns [`SamlError::Xml`] when `response_envelope` is empty, blank, or
     /// not a SOAP 1.1 envelope, and [`SamlError::LimitExceeded`] when it is
-    /// larger than the configured XML limits. Returns [`SamlError`] when the response does
+    /// larger than the configured XML limits or a responder-supplied relay
+    /// state exceeds [`crate::MAX_RECEIVED_RELAY_STATE_BYTES`].
+    /// Returns [`SamlError`] when the response does
     /// not match the pending login, including issuer, relay state,
     /// destination, recipient, or `InResponseTo`, when signature, audience,
     /// condition, time, or status checks fail, or when a SOAP header requires the SP to process
@@ -515,6 +519,13 @@ impl ServiceProvider {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
         let limits = self.engine().setting.xml_limits;
         let body = read_soap_body(response_envelope, "Response", limits, SP_UNDERSTOOD_HEADERS)?;
+        let relay_state = body
+            .relay_state
+            .map(|value| match pending.relay_state() {
+                Some(_) => RelayState::try_new(value),
+                None => RelayState::received(value),
+            })
+            .transpose()?;
         crate::schema::validate(response_envelope, self.engine().setting.schema_validator)?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let request = HttpRequest::post(vec![(
@@ -529,9 +540,8 @@ impl ServiceProvider {
             LoginResponseParseOptions::at(validation.now(), validation.clock_skew())
                 .with_expected_recipient(pending.acs_url().as_str()),
         )?;
-        // The expected value is compared after the response signature verifies.
-        super::raw_mapping::ensure_relay_state(pending.relay_state(), body.relay_state.as_ref())?;
-        super::sp::session_from_verified_flow(parsed, body.relay_state)
+        super::raw_mapping::ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
+        super::sp::session_from_verified_flow(parsed, relay_state)
     }
 }
 
@@ -563,6 +573,9 @@ impl IdentityProvider {
     ) -> Result<Received<AuthnRequest>, SamlError> {
         let limits = self.engine().setting.xml_limits;
         let body = read_soap_body(request_envelope, "AuthnRequest", limits, &[])?;
+        if let Some(state) = body.relay_state {
+            RelayState::try_new(state)?;
+        }
         crate::schema::validate(request_envelope, self.engine().setting.schema_validator)?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let http = HttpRequest::post(vec![(
