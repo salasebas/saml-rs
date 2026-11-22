@@ -252,8 +252,8 @@ This is a borrowed view and does not reparse or clone the metadata.
 The raw `metadata::SpMetadataConfig` and `metadata::IdpMetadataConfig` types
 are renamed to `metadata::SpMetadataInput` and `metadata::IdpMetadataInput`.
 They are the records passed to `generate_sp_metadata` and
-`generate_idp_metadata`. Their fields keep their
-names and meanings. Both are now non-exhaustive, so start from `default()` and
+`generate_idp_metadata`. [Remove the `elements_order` field](metadata.md#8-remove-metadata-element-orders)
+from both inputs. Both are now non-exhaustive, so start from `default()` and
 assign the fields you set. The crate-root typed `SpMetadataConfig` and
 `IdpMetadataConfig` readers keep their names.
 

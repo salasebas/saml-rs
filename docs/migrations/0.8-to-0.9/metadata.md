@@ -125,60 +125,26 @@ The import checks more than the deprecated `crypto` functions:
   `from_metadata_xml_with_policy` to supply other limits and an optional schema
   validator.
 
-## 8. Update metadata element orders
+## 8. Remove metadata element orders
 
-**Affects:** callers that set `elements_order` on raw metadata generation
-config, including through the compatibility crates. The typed builders no
-longer take an order; see
-[Remove `elements_order` from typed builders](config.md#remove-elements_order-from-typed-builders).
+If you set `elements_order` on `metadata::SpMetadataConfig` or
+`metadata::IdpMetadataConfig`, delete the assignment when you switch to
+`SpMetadataInput` or `IdpMetadataInput`. Remove imports of `constants::elements_order`, including
+the `idp` submodule. Both roles' `DEFAULT`, `SHIBBOLETH`, and `ONELOGIN`
+constants have been removed. For builder calls, see [Remove `elements_order` from typed builders](config.md#remove-elements_order-from-typed-builders).
 
-### 8.1 Remove unknown and duplicate group names
+```diff
+- use saml_rs::constants::elements_order;
+- sp.elements_order = Some(elements_order::ONELOGIN.iter().map(|s| s.to_string()).collect());
+  let xml = generate_sp_metadata(&sp)?;
+```
 
-**Before:** generation silently ignored unknown names and wrote repeated
-groups again.
-
-**Now:** raw generation returns `SamlError::Invalid` when an order contains an
-unknown name or repeats a group.
-
-**Upgrade:** correct spelling and use each group name once. Raw SP orders
-accept `KeyDescriptor`, `SingleLogoutService`, `ManageNameIDService`,
-`NameIDFormat`, and `AssertionConsumerService`. The raw
-`AttributeConsumingService` slot remains accepted for the existing Shibboleth
-profile, but writes nothing because the generator has no configuration for
-it.
-
-Raw IdP orders accept `KeyDescriptor`, `ArtifactResolutionService`,
-`SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`, and
-`SingleSignOnService`.
-
-Remove `Organization` and `ContactPerson` from the order. Configure those
-entity-level elements with `organization` and `contacts`, or the builder's
-`organization` and `contact` methods. They still follow the role descriptor.
-
-### 8.2 Select published data in the config
-
-**Before:** an order could filter out configured groups. For example, with a
-signing certificate, logout endpoint, NameID format, and ACS configured,
-an order of only `AssertionConsumerService` wrote only the ACS.
-
-**Now:** an order controls placement, including when it is empty. It no
-longer filters configured groups. Missing groups are inserted before the
-first listed group that follows them in the metadata schema, or at the end
-if there is none. Explicitly listed groups keep their relative order.
-
-The example now writes `KeyDescriptor`, `SingleLogoutService`,
-`NameIDFormat`, and `AssertionConsumerService`. SP generation also keeps its
-default email-address NameID format when the order does not mention
-`NameIDFormat`.
-
-**Upgrade:** to omit optional data, remove it from the metadata config or
-credentials instead of leaving its group out of the order. Do not remove a
-credential that your signing or decryption policy requires. If you need a
-separately curated document, generate it with a separate raw metadata config.
-
-Default profiles retain their output. Explicit non-schema compatibility
-orders, including ONELOGIN, retain their relative order and can still produce
-schema-invalid metadata. Use the default order for the schema sequence.
+Both generators write populated groups in schema order. If you used `ONELOGIN`,
+expect `SingleLogoutService` before `NameIDFormat` when both appear. If you
+used a partial order to omit optional data, configure only the data you want
+to publish. SP metadata still advertises the email-address NameID format when
+the format list is empty. To choose the order of endpoints of the same kind,
+supply them in that order in the endpoint list.
 
 ## 10. Update expectations for the generated root
 

@@ -42,6 +42,7 @@
 | `Saml::sp(config)?` or `Saml::idp(config)?` | `ServiceProvider::new(config)` and `IdentityProvider::new(config)` return the provider, not a `Result` | [Typed config](config.md#call-serviceprovidernew-and-identityprovidernew-without-) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
 | `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
+| `elements_order` on a standalone metadata input, or `constants::elements_order` | Removed. Both generators write role children in schema order | [8](metadata.md#8-remove-metadata-element-orders) |
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
 | `StartSlo::signing` or `LogoutSigning` | Remove the option and configure signing credentials | [Typed operations](typed-operations.md#generate-sso-and-single-logout-messages) |

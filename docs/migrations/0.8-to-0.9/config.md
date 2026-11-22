@@ -117,8 +117,7 @@ let builder = builder.manage_name_id_redirect_service(EndpointUrl::try_new(
 
 **Before:** `elements_order` took a `Vec<String>` of element group names and
 wrote the children of the role descriptor in that order. Generation ignored an
-unknown name and wrote a repeated group again, as
-[section 8](metadata.md#8-update-metadata-element-orders) describes.
+unknown name and wrote a repeated group again.
 
 **Now:** the typed builders have no `elements_order`, and the typed metadata
 config has no getter for it. Typed metadata always lists `KeyDescriptor`,
@@ -127,8 +126,8 @@ config has no getter for it. Typed metadata always lists `KeyDescriptor`,
 metadata schema declares these children as an `xs:sequence` (Metadata
 §§2.4.1 to 2.4.4). Any other order of the groups a config fills produces
 metadata the schema rejects, and an order that keeps the sequence changes
-nothing. The raw `SpMetadataInput` and `IdpMetadataInput` keep their
-`elements_order`.
+nothing. The same sequence applies to the
+[standalone generators](metadata.md#8-remove-metadata-element-orders).
 
 **Upgrade:** delete the call. A peer that validates metadata against the
 schema accepts the new order. With the OneLogin order, which put
