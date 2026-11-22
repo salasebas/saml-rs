@@ -12,11 +12,11 @@ use saml_rs::Rsa15KeyTransportPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
     CertificatePem, Credentials, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
-    PrivateKeyPem, ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
-    SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, SsoSession, StartSlo, StartSso, TransformAlgorithm, X509Credential,
-    XmlPolicy, XmlSignatureProfile,
+    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat,
+    Outbound, PrivateKeyPem, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSlo, StartSso,
+    TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
     AssertionEncryptionPolicy, Attribute, AttributeEncryptionPolicy, AttributeValue, Attributes,
@@ -174,7 +174,7 @@ struct Exchange {
 }
 
 fn alice() -> SsoAssertion {
-    SsoAssertion::new(NameId::new("alice@example.com"))
+    SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress))
 }
 
 fn signed_redirect_request_then_post_response(

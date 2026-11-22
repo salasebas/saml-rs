@@ -150,11 +150,15 @@ impl IdentityProvider {
     /// [`Self::common_domain_cookie`] after authentication when the
     /// caller wants this identity provider remembered.
     ///
-    /// The assertion `Subject` has the assertion's `NameId` as its `NameID`,
+    /// The assertion `Subject` uses the assertion's `NameId`,
     /// with its value, `Format`, `NameQualifier`, `SPNameQualifier`, and
     /// `SPProvidedID`, and the bearer `SubjectConfirmation` this identity
     /// provider writes. A `NameId` without a format is written with the first
     /// configured NameID format; with none configured, `Format` is omitted.
+    /// When `NameIDPolicy` requests `encrypted`, enable identifier encryption
+    /// and use a service provider that publishes an encryption certificate.
+    /// If you cannot meet the requested policy, answer with
+    /// [`SsoOutcome::Failure`] and an error status.
     /// After a service provider sets its alternative identifier through
     /// [`Self::receive_name_id_management`], pass that value with
     /// [`NameId::with_sp_provided_id`](crate::NameId::with_sp_provided_id).
@@ -170,6 +174,11 @@ impl IdentityProvider {
     /// unsupported metadata default or a default incompatible with the chosen
     /// response binding, the configured issuance expiration overflows the
     /// supported timestamp range, or response creation fails.
+    /// Returns [`SamlError::NameIdPolicyFormatMismatch`] if the effective
+    /// identifier format differs from a specific standard format in the
+    /// request's `NameIDPolicy`. Returns
+    /// [`SamlError::NameIdPolicyRequiresEncryptedId`] if the request asks for
+    /// `encrypted` and identifier encryption is disabled.
     ///
     /// For an assertion, it also returns [`SamlError`] when a basic attribute
     /// name is not an XML name, its format is not an absolute URI, the

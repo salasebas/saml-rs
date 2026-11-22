@@ -14,10 +14,10 @@ use std::time::SystemTime;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem,
-    RelayState, ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
-    SpConfig, SpConfigBuilder, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
-    StartSso, X509Credential, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
+    PrivateKeyPem, RelayState, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpConfigBuilder, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, StartSso, X509Credential, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -57,7 +57,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn principal() -> NameId {
-    NameId::new("alice@example.com")
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 fn sp_config(validation: SpValidationPolicy) -> Result<SpConfigBuilder, SamlError> {

@@ -571,6 +571,19 @@ fn requested_sp_name_qualifier_is_checked_and_written() -> Result<(), Box<dyn st
         .with_format(NameIdFormat::EmailAddress)
         .with_name_qualifier(IDP_ENTITY_ID)
         .with_sp_name_qualifier(AFFILIATION);
+    let mismatched = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(qualified.clone().with_format(NameIdFormat::Persistent)),
+    );
+    assert!(matches!(
+        mismatched,
+        Err(SamlError::NameIdPolicyFormatMismatch {
+            requested: NameIdFormat::EmailAddress,
+            issued: Some(NameIdFormat::Persistent),
+            ..
+        })
+    ));
     let answered = idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(qualified))?;
     assert!(answered.envelope().contains(&format!(
         "<saml:NameID NameQualifier=\"{IDP_ENTITY_ID}\" SPNameQualifier=\"{AFFILIATION}\" Format=\"{}\">alice@example.com</saml:NameID>",

@@ -337,7 +337,7 @@ fn descriptors(
 }
 
 fn principal() -> NameId {
-    NameId::new("alice@example.com")
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 fn validation() -> SamlValidationContext<'static> {

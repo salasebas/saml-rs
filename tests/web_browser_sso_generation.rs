@@ -65,7 +65,7 @@ fn encrypted_assertions() -> XmlPolicy {
 }
 
 fn principal() -> NameId {
-    NameId::new("alice@example.com")
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 fn validation() -> SamlValidationContext<'static> {
@@ -365,7 +365,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
 
     let response = idp.initiate_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        SsoAssertion::new(NameId::new("alice@example.com")),
         RespondSso::post(),
     )?;
     let xml = response_xml(&response)?;
@@ -395,11 +395,18 @@ fn typed_sso_assertion_name_id_keeps_the_configured_format(
         .validation(signed_authn_request_idp_validation())
         .build()?,
     );
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-
-    let response = idp.initiate_sso(
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
         &sp_descriptor,
-        SsoAssertion::new(principal()),
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(NameId::new("alice@example.com")),
         RespondSso::post(),
     )?;
     assert_eq!(

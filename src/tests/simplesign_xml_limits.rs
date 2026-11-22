@@ -14,10 +14,10 @@ use saml_rs::XmlLimits;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
-    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponseBinding,
-    StartSlo, StartSso, XmlPolicy,
+    IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat,
+    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex,
+    SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    SsoResponseBinding, StartSlo, StartSso, XmlPolicy,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -178,7 +178,7 @@ fn finish_padded_sso_response(padding: usize) -> TestResult<Result<(), SamlError
     let response = parties.idp.respond_sso(
         &parties.sp_descriptor,
         &received,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
         RespondSso::simple_sign(),
     )?;
     let fields = padded(response.post_form()?.fields(), "SAMLResponse", padding)?;

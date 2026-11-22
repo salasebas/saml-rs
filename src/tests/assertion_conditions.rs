@@ -23,8 +23,8 @@ use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, EntityId, FormField,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
-    NameId, Outbound, PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso, SamlError,
-    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    NameId, NameIdFormat, Outbound, PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso,
+    SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
     SsoAssertion, SsoEndpoint, SsoSession, StartSso, VerifiedXmlSignatureCoverage,
     XmlSignatureProfile,
 };
@@ -84,6 +84,7 @@ fn exchange_for(
             AcsEndpoint::post(SP_ACS_POST)?.with_default(),
         )
         .credentials(signing_credentials())
+        .name_id_format(NameIdFormat::Unspecified)
         .validation(sp_validation)
         .build()?,
     );
@@ -372,6 +373,7 @@ fn exchange_simple_sign(
             AcsEndpoint::post(SP_ACS_POST)?,
         )
         .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default())
+        .name_id_format(NameIdFormat::Unspecified)
         .credentials(signing_credentials())
         .validation(validation)
         .build()?,
@@ -1076,6 +1078,7 @@ mod encrypted_assertions {
     ) -> Result<saml_rs::ServiceProvider, SamlError> {
         Ok(ServiceProvider::new(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs)
+                .name_id_format(NameIdFormat::Unspecified)
                 .credentials(signing_credentials().with_decryption_credential(
                     saml_rs::X509Credential::new(
                         CertificatePem::new(CERT),

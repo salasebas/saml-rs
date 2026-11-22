@@ -13,9 +13,10 @@ use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
     AcsEndpoint, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest,
-    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
+    PendingAuthnRequest, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    SsoSession, StartSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -46,7 +47,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn principal() -> NameId {
-    NameId::new("alice@example.com")
+    NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)
 }
 
 fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, SamlError> {

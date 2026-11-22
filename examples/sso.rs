@@ -8,9 +8,9 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
         AcsEndpoint, CertificatePem, Credentials, EntityId, IdentityProvider, IdpConfig,
-        IdpDescriptor, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, RelayState,
-        ReplayPolicy, RespondSso, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-        SsoAssertion, SsoEndpoint, StartSso, X509Credential,
+        IdpDescriptor, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem,
+        RelayState, ReplayPolicy, RespondSso, SamlValidationContext, ServiceProvider, SpConfig,
+        SpDescriptor, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = idp.respond_sso(
         &sp_descriptor,
         &request,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
         RespondSso::post(),
     )?;
 
