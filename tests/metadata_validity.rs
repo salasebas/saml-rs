@@ -9,17 +9,16 @@ use common::signing_credentials;
 use std::time::{Duration, SystemTime};
 
 use saml_rs::error::TimeWindowField;
-use saml_rs::raw::Binding;
 use saml_rs::{
-    AcsEndpoint, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts, LogoutSubject,
+    AcsEndpoint, ArtifactResolutionService, AuthnRequest, EndpointUrl, EntityId, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, IssuedArtifacts, LogoutSubject,
     ManageNameIdService, MetadataLifetime, MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat,
-    NameIdManagementReceipt, Outbound, PendingLogoutRequest, PendingLogoutRequestSnapshot,
-    PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot, ReceiveNameIdManagement,
-    ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError, SamlValidationContext,
-    SessionIndex, SloEndpoint, SoapChannel, SoapRequest, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
-    Status,
+    NameIdManagementReceipt, Outbound, OutboundDelivery, PendingLogoutRequest,
+    PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
+    ReceiveNameIdManagement, ReplayPolicy, RespondNameIdManagement, RespondSlo, Saml, SamlError,
+    SamlValidationContext, SessionIndex, SloEndpoint, SoapChannel, SoapRequest, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, StartPaosSso, StartSlo,
+    StartSso, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -142,14 +141,10 @@ fn posted_authn_request(
     idp: &Saml<saml_rs::Idp>,
 ) -> Result<Inbound<AuthnRequest>, Box<dyn std::error::Error>> {
     let started = sp.start_sso(&idp_descriptor(idp)?, StartSso::post())?;
-    let context = started.outbound.raw_context();
-    if context.binding != Binding::Post {
+    let OutboundDelivery::PostForm(form) = started.outbound.delivery() else {
         return Err("expected an HTTP-POST AuthnRequest".into());
-    }
-    Ok(Inbound::post(vec![FormField::new(
-        "SAMLRequest",
-        context.context.clone(),
-    )]))
+    };
+    Ok(Inbound::post(form.fields().to_vec()))
 }
 
 #[test]

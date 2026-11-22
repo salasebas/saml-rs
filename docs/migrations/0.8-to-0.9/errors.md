@@ -218,6 +218,9 @@ names the binding or the mistake:
 | `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` on another binding | `OutboundBindingMismatch { actual, .. }` |
 | A pending snapshot whose binding name is not a SAML binding | `Invalid` |
 
+To choose how to send any `Outbound`, match on `Outbound::delivery()`
+instead of reading `actual` from the error.
+
 `UndefinedStatus` is renamed `StatusMissing`. Its `Display` text is
 `response status code is missing`.
 
@@ -229,9 +232,9 @@ fn redirect_location(outbound: &Outbound<AuthnRequest>) -> Result<&str, String> 
 	match outbound.redirect_url() {
 		Ok(url) => Ok(url),
 		Err(SamlError::OutboundBindingMismatch {
-			actual: Binding::Post,
+			actual: Binding::Post | Binding::SimpleSign,
 			..
-		}) => Err("this request is an HTTP-POST form; render post_form() instead".into()),
+		}) => Err("this request is a POST form; render post_form() instead".into()),
 		Err(error) => Err(error.to_string()),
 	}
 }

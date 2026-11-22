@@ -14,14 +14,13 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
-use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
     FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
     MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
-    Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, RespondSso, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, SsoOutcome, StartSso, Status, SubordinateStatusCode,
+    OutboundDelivery, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
+    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -111,9 +110,9 @@ fn receive(
 fn authn_request_xml(
     outbound: &Outbound<AuthnRequest>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    match outbound.raw_context().binding {
-        Binding::Post => Ok(String::from_utf8(
-            STANDARD.decode(&outbound.raw_context().context)?,
+    match outbound.delivery() {
+        OutboundDelivery::PostForm(form) => Ok(String::from_utf8(
+            STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,
         )?),
         _ => Err("expected an HTTP-POST AuthnRequest".into()),
     }

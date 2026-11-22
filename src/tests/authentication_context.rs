@@ -10,14 +10,14 @@ use common::signing_credentials;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
-use saml_rs::raw::Binding;
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig,
     IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId, Outbound,
-    ReplayPolicy, RequestedAuthnContext, RespondSso, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse, StartSso,
+    OutboundDelivery, ReplayPolicy, RequestedAuthnContext, RespondSso, Saml, SamlError,
+    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    SsoResponse, StartSso,
 };
 
 const SP: &str = "https://sp.example.com";
@@ -91,10 +91,9 @@ fn principal() -> NameId {
 }
 
 fn request_xml(outbound: &Outbound<AuthnRequest>) -> Result<String, Box<dyn std::error::Error>> {
-    let context = outbound.raw_context();
-    let bytes = match context.binding {
-        Binding::Redirect => {
-            let url = url::Url::parse(&context.context)?;
+    let bytes = match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => {
+            let url = url::Url::parse(url)?;
             let value = url
                 .query_pairs()
                 .find(|(name, _)| name == "SAMLRequest")
@@ -105,26 +104,30 @@ fn request_xml(outbound: &Outbound<AuthnRequest>) -> Result<String, Box<dyn std:
                 MAX_DEFLATE_RAW_DECODE_BYTES,
             )?
         }
-        Binding::Post | Binding::SimpleSign => STANDARD.decode(&context.context)?,
-        _ => return Err("unexpected request binding".into()),
+        OutboundDelivery::PostForm(form) => {
+            STANDARD.decode(form.value("SAMLRequest").ok_or("missing request")?)?
+        }
+        OutboundDelivery::SoapRequest(_) | OutboundDelivery::SoapResponse(_) => {
+            return Err("an AuthnRequest is not sent over SOAP".into())
+        }
     };
     Ok(String::from_utf8(bytes)?)
 }
 
 fn request_input(outbound: &Outbound<AuthnRequest>) -> Result<Inbound<AuthnRequest>, SamlError> {
-    match outbound.raw_context().binding {
-        Binding::Redirect => Ok(Inbound::redirect(
-            outbound
-                .redirect_url()?
-                .split_once('?')
+    match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => Ok(Inbound::redirect(
+            url.split_once('?')
                 .ok_or_else(|| SamlError::Invalid("missing query".into()))?
                 .1,
         )),
-        Binding::Post => Ok(Inbound::post(outbound.post_form()?.fields().to_vec())),
-        Binding::SimpleSign => Ok(Inbound::simple_sign(
-            outbound.post_form()?.fields().to_vec(),
-        )),
-        binding => Err(SamlError::UnsupportedBinding { binding }),
+        OutboundDelivery::PostForm(form) if form.value("SigAlg").is_some() => {
+            Ok(Inbound::simple_sign(form.fields().to_vec()))
+        }
+        OutboundDelivery::PostForm(form) => Ok(Inbound::post(form.fields().to_vec())),
+        OutboundDelivery::SoapRequest(_) | OutboundDelivery::SoapResponse(_) => Err(
+            SamlError::Invalid("an AuthnRequest is not sent over SOAP".into()),
+        ),
     }
 }
 
@@ -589,10 +592,9 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
             )?),
         )?;
         let xml = request_xml(&started.outbound)?.replace(MFA, "urn:example:weaker");
-        let context = started.outbound.raw_context();
-        let input = match context.binding {
-            Binding::Redirect => {
-                let original = url::Url::parse(started.outbound.redirect_url()?)?;
+        let input = match started.outbound.delivery() {
+            OutboundDelivery::Redirect(url) => {
+                let original = url::Url::parse(url)?;
                 let redirected = saml_rs::binding::build_redirect_url(
                     SSO,
                     saml_rs::constants::ParserType::SamlRequest,
@@ -608,10 +610,8 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
                 }
                 Inbound::redirect(redirected.query().ok_or("missing query")?)
             }
-            Binding::Post | Binding::SimpleSign => {
-                let fields = started
-                    .outbound
-                    .post_form()?
+            OutboundDelivery::PostForm(form) => {
+                let fields = form
                     .fields()
                     .iter()
                     .map(|field| {
@@ -622,13 +622,15 @@ fn request_signature_covers_the_requested_context_for_all_bindings(
                         }
                     })
                     .collect();
-                if context.binding == Binding::Post {
-                    Inbound::post(fields)
-                } else {
+                if form.value("SigAlg").is_some() {
                     Inbound::simple_sign(fields)
+                } else {
+                    Inbound::post(fields)
                 }
             }
-            _ => return Err("unexpected request binding".into()),
+            OutboundDelivery::SoapRequest(_) | OutboundDelivery::SoapResponse(_) => {
+                return Err("an AuthnRequest is not sent over SOAP".into())
+            }
         };
         assert!(idp
             .receive_sso(&sp_descriptor, input, validation())

@@ -18,10 +18,10 @@ use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId,
-    NameIdCreationPolicy, NameIdFormat, Outbound, ReplayPolicy, RespondSso, Saml, SamlError,
-    SamlInstant, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse, StartSso, Status, SubordinateStatusCode,
-    TemplatePolicy,
+    NameIdCreationPolicy, NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy, RespondSso, Saml,
+    SamlError, SamlInstant, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse, StartSso, Status,
+    SubordinateStatusCode, TemplatePolicy,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, XmlPolicy};
@@ -122,9 +122,9 @@ fn descriptors(
 fn authn_request_xml(
     outbound: &Outbound<AuthnRequest>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    match outbound.raw_context().binding {
-        Binding::Redirect => {
-            let url = Url::parse(outbound.redirect_url()?)?;
+    match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => {
+            let url = Url::parse(url)?;
             let (_, encoded) = url
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
@@ -134,10 +134,10 @@ fn authn_request_xml(
                 MAX_DEFLATE_RAW_DECODE_BYTES,
             )?)?)
         }
-        Binding::Post | Binding::SimpleSign => Ok(String::from_utf8(
-            STANDARD.decode(&outbound.raw_context().context)?,
+        OutboundDelivery::PostForm(form) => Ok(String::from_utf8(
+            STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,
         )?),
-        _ => Err("binding is unsupported".into()),
+        _ => Err("delivery is unsupported".into()),
     }
 }
 
