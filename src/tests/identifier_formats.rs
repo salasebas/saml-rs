@@ -272,6 +272,22 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
 }
 
 #[test]
+fn signed_sso_preserves_xml_characters_in_attribute_names_formats_and_values(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let attribute = Attribute::new("Research & \"Development\"", values(&["5 < 7 & 9 > 3"]))
+        .with_name_format(AttributeNameFormat::Custom(
+            "urn:groups:research&design".into(),
+        ));
+    let exchange = exchange(
+        SsoAssertion::new(alice()).with_attributes(Attributes::new([attribute.clone()])),
+        RespondSso::post().sign_response(),
+    )?;
+    assert_eq!(exchange.xml.matches("<saml:AttributeValue ").count(), 1);
+    assert_eq!(exchange.session.attributes().as_slice(), [attribute]);
+    Ok(())
+}
+
+#[test]
 fn unsolicited_response_carries_attribute_name_formats_and_a_generated_identifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;

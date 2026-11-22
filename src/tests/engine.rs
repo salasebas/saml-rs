@@ -11,9 +11,8 @@ use crate::flow::{flow_with_authentication, FlowOptions, FlowResult, HttpRequest
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::logout::{
     create_logout_response_inner, issuer_of, parse_logout_request_at, parse_logout_response_at,
-    reject_soap_relay_state, render_logout_request, sign_browser_message, unsigned_context,
-    LogoutFlowValidation, LogoutReceipt, LogoutRequestSubject, LogoutRequestTimeAttributes,
-    LogoutResponseInput,
+    reject_soap_relay_state, render_logout_request, sign_browser_message, LogoutFlowValidation,
+    LogoutReceipt, LogoutRequestSubject, LogoutRequestTimeAttributes, LogoutResponseInput,
 };
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, ClockSkew, Status};
@@ -312,40 +311,37 @@ pub(crate) fn create_logout_response(
     relay_state: Option<&str>,
     want_signed: bool,
 ) -> Result<BindingContext, SamlError> {
-    create_logout_response_with_id(
+    let status = Status::success();
+    let input = LogoutResponseInput {
         init_setting,
         init_meta,
         target_meta,
         binding,
         in_response_to,
         relay_state,
-        want_signed,
-        None,
-    )
-}
-
-/// Like [`create_logout_response`], with `message_id` as the response `ID`.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn create_logout_response_with_id(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    in_response_to: Option<&str>,
-    relay_state: Option<&str>,
-    want_signed: bool,
-    message_id: Option<&str>,
-) -> Result<BindingContext, SamlError> {
-    create_logout_response_inner(LogoutResponseInput {
-        init_setting,
-        init_meta,
-        target_meta,
+        status: &status,
+    };
+    if want_signed {
+        return create_logout_response_inner(input);
+    }
+    let rendered = input.render()?;
+    let endpoint = rendered.destination.unwrap_or_default();
+    let context = unsigned_context(
         binding,
-        in_response_to,
+        &rendered.xml,
+        &endpoint,
+        ParserType::LogoutResponse,
         relay_state,
-        want_signed,
-        message_id,
-        status: &Status::success(),
+    )?;
+    Ok(BindingContext {
+        id: rendered.id,
+        context,
+        entity_endpoint: endpoint,
+        binding,
+        request_type: "SAMLResponse",
+        relay_state: relay_state.map(str::to_owned),
+        signature: None,
+        sig_alg: None,
     })
 }
 
@@ -404,5 +400,24 @@ pub(crate) fn redirect_query(query: Vec<(String, String)>) -> HttpRequest {
     HttpRequest {
         query,
         ..HttpRequest::default()
+    }
+}
+
+fn unsigned_context(
+    binding: Binding,
+    xml: &str,
+    destination: &str,
+    parser_type: ParserType,
+    relay: Option<&str>,
+) -> Result<String, SamlError> {
+    match binding {
+        Binding::Redirect => {
+            crate::binding::build_redirect_url(destination, parser_type, xml, relay)
+        }
+        Binding::Post | Binding::SimpleSign => Ok(crate::binding::encode_base64(xml.as_bytes())),
+        Binding::Soap => Ok(xml.to_string()),
+        Binding::Artifact => Err(SamlError::UnsupportedBinding {
+            binding: Binding::Artifact,
+        }),
     }
 }

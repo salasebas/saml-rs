@@ -1,6 +1,5 @@
 //! Single Logout (SLO): create and parse LogoutRequest and LogoutResponse.
 
-mod bindings;
 mod creation;
 mod encrypted_id;
 mod parsing;
@@ -10,8 +9,6 @@ mod signing;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-pub(crate) use bindings::unsigned_context;
 pub(crate) use creation::{
     create_logout_request_for_subject_inner, create_logout_response_inner, reject_soap_relay_state,
     LogoutRequestInput, LogoutRequestValidation, LogoutResponseInput,

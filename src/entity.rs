@@ -390,7 +390,7 @@ pub struct User {
 }
 
 impl User {
-    /// A subject with just a NameID and no attributes.
+    /// A subject identified by its SAML NameID.
     pub fn new(name_id: impl Into<String>) -> Self {
         Self {
             name_id: name_id.into(),

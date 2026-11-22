@@ -52,7 +52,11 @@ context defaults to the `unspecified` class.
 
 Both roles sign logout requests. An SP returns `SamlError::ProtocolProfile` if
 it starts logout without a session index or sends a browser logout request or
-response to an HTTP endpoint without selecting `allow_http()`.
+response to an HTTP endpoint without selecting `allow_http()`. Custom SP logout
+request templates are also checked before signing. A template with an
+unexpanded `NotOnOrAfter`, a different NameID format, or a missing requested
+qualifier fails with `SamlError::ProtocolProfile`. Preserve the subject and
+session indexes supplied by the caller, or use the built-in renderer.
 
 **Upgrade:** remove the producer-rule setters, `StartSlo::signing` and the
 `LogoutSigning` import. Supply signing credentials and enable a document-crypto

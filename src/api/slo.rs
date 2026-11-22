@@ -620,10 +620,6 @@ fn respond_slo_impl(
         binding: Binding::from(options.binding),
         in_response_to: Some(request.message().id().as_str()),
         relay_state,
-        // SAML Profiles 2.0 §§4.4.3.4 and 4.4.4.2 require front-channel
-        // LogoutResponses to authenticate the responder and protect integrity.
-        want_signed: true,
-        message_id: None,
         status,
     })?;
     Outbound::<LogoutResponse>::echoing_received_relay_state(context)

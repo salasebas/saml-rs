@@ -10,7 +10,6 @@ use crate::xml::{
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
 };
 
-use super::bindings::unsigned_context;
 use super::encrypted_id::encrypt_name_id_for_peer;
 use super::rendering::{
     issuer_of, render_default_logout_response, render_logout_request, LogoutRequestSubject,
@@ -155,142 +154,136 @@ pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) binding: Binding,
     pub(crate) in_response_to: Option<&'a str>,
     pub(crate) relay_state: Option<&'a str>,
-    pub(crate) want_signed: bool,
-    pub(crate) message_id: Option<&'a str>,
     pub(crate) status: &'a Status,
+}
+
+pub(crate) struct RenderedLogoutResponse {
+    pub(crate) id: String,
+    pub(crate) xml: String,
+    pub(crate) destination: Option<String>,
+    issuer: String,
+}
+
+impl LogoutResponseInput<'_> {
+    pub(crate) fn render(&self) -> Result<RenderedLogoutResponse, SamlError> {
+        let Self {
+            init_setting,
+            init_meta,
+            target_meta,
+            binding,
+            in_response_to,
+            relay_state,
+            status,
+        } = *self;
+        reject_soap_relay_state(binding, relay_state)?;
+        // A SOAP response returns on the requester's own HTTP exchange, so it has
+        // no Destination.
+        let destination = match binding {
+            Binding::Soap => None,
+            Binding::Artifact => return Err(SamlError::UnsupportedBinding { binding }),
+            Binding::Redirect | Binding::Post | Binding::SimpleSign => Some(
+                target_meta
+                    .single_logout_response_location(binding)
+                    .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?,
+            ),
+        };
+        let id = generate_id();
+        let issue_instant = now_iso8601();
+        let issuer = issuer_of(init_setting, init_meta);
+        let xml = if let Some(template) = init_setting.logout_response_template.as_deref() {
+            if status.subordinate().is_some() {
+                return Err(SamlError::Invalid(
+                    "LogoutResponse template StatusCode placeholder cannot carry a subordinate status code"
+                        .into(),
+                ));
+            }
+            validate_tag_prefixes(
+                &init_setting.tag_prefix_protocol,
+                &init_setting.tag_prefix_assertion,
+            )?;
+            let template = apply_tag_prefixes(
+                template,
+                &init_setting.tag_prefix_protocol,
+                &init_setting.tag_prefix_assertion,
+            );
+            replace_tags_by_optional_value(
+                &template,
+                &[
+                    ("ID", Some(id.clone())),
+                    ("IssueInstant", Some(issue_instant)),
+                    ("Destination", destination.clone()),
+                    ("Issuer", Some(issuer.clone())),
+                    ("StatusCode", Some(status.top_level().as_uri().to_string())),
+                    ("InResponseTo", in_response_to.map(str::to_string)),
+                ],
+            )
+        } else {
+            render_default_logout_response(
+                init_setting,
+                &id,
+                &issue_instant,
+                destination.as_deref(),
+                in_response_to,
+                &issuer,
+                status,
+            )?
+        };
+        validate_logout_response_outbound(
+            &xml,
+            &id,
+            destination.as_deref(),
+            &issuer,
+            in_response_to,
+            status.top_level().as_uri(),
+            OutboundLogoutValidation::BeforeSigning,
+        )?;
+        Ok(RenderedLogoutResponse {
+            id,
+            xml,
+            destination,
+            issuer,
+        })
+    }
 }
 
 pub(crate) fn create_logout_response_inner(
     input: LogoutResponseInput<'_>,
 ) -> Result<BindingContext, SamlError> {
-    let LogoutResponseInput {
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        in_response_to,
-        relay_state,
-        want_signed,
-        message_id,
-        status,
-    } = input;
-
-    if matches!(binding, Binding::Artifact) {
-        return Err(SamlError::UnsupportedBinding {
-            binding: Binding::Artifact,
-        });
-    }
-    reject_soap_relay_state(binding, relay_state)?;
-    // A SOAP response returns on the requester's own HTTP exchange, so it has
-    // no Destination.
-    let destination = match binding {
-        Binding::Soap => None,
-        Binding::Redirect | Binding::Post | Binding::SimpleSign | Binding::Artifact => Some(
-            target_meta
-                .single_logout_response_location(binding)
-                .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))?,
-        ),
-    };
-    let id = message_id
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(generate_id);
-    let issue_instant = now_iso8601();
-    let issuer = issuer_of(init_setting, init_meta);
-    let xml = if let Some(template) = init_setting.logout_response_template.as_deref() {
-        if status.subordinate().is_some() {
-            return Err(SamlError::Invalid(
-                "LogoutResponse template StatusCode placeholder cannot carry a subordinate status code"
-                    .into(),
-            ));
-        }
-        validate_tag_prefixes(
-            &init_setting.tag_prefix_protocol,
-            &init_setting.tag_prefix_assertion,
-        )?;
-        let template = apply_tag_prefixes(
-            template,
-            &init_setting.tag_prefix_protocol,
-            &init_setting.tag_prefix_assertion,
-        );
-        replace_tags_by_optional_value(
-            &template,
-            &[
-                ("ID", Some(id.clone())),
-                ("IssueInstant", Some(issue_instant)),
-                ("Destination", destination.clone()),
-                ("Issuer", Some(issuer.clone())),
-                ("StatusCode", Some(status.top_level().as_uri().to_string())),
-                ("InResponseTo", in_response_to.map(str::to_string)),
-            ],
-        )
-    } else {
-        render_default_logout_response(
-            init_setting,
-            &id,
-            &issue_instant,
-            destination.as_deref(),
-            in_response_to,
-            &issuer,
-            status,
-        )?
-    };
-    validate_logout_response_outbound(
+    let RenderedLogoutResponse {
+        id,
+        xml,
+        destination,
+        issuer,
+    } = input.render()?;
+    let endpoint = destination.as_deref().unwrap_or_default();
+    let (context, signature, sig_alg) = sign_browser_message(
+        input.init_setting,
+        input.binding,
         &xml,
-        &id,
-        destination.as_deref(),
-        &issuer,
-        in_response_to,
-        status.top_level().as_uri(),
-        OutboundLogoutValidation::BeforeSigning {
-            destination_required: want_signed,
-        },
+        endpoint,
+        input.relay_state,
+        ParserType::LogoutResponse,
     )?;
-    let entity_endpoint = destination.clone().unwrap_or_default();
-    let (context, signature, sig_alg) = if want_signed {
-        sign_browser_message(
-            init_setting,
-            binding,
-            &xml,
-            &entity_endpoint,
-            relay_state,
-            ParserType::LogoutResponse,
-        )?
-    } else {
-        (
-            unsigned_context(
-                binding,
-                &xml,
-                &entity_endpoint,
-                ParserType::LogoutResponse,
-                relay_state,
-            )?,
-            None,
-            None,
-        )
-    };
-    if want_signed {
-        if let Some(signed_xml) = embedded_signed_xml(binding, &context)? {
-            validate_logout_response_outbound(
-                &signed_xml,
-                &id,
-                destination.as_deref(),
-                &issuer,
-                in_response_to,
-                status.top_level().as_uri(),
-                OutboundLogoutValidation::AfterEmbeddedSigning,
-            )?;
-        }
+    if let Some(signed_xml) = embedded_signed_xml(input.binding, &context)? {
+        validate_logout_response_outbound(
+            &signed_xml,
+            &id,
+            destination.as_deref(),
+            &issuer,
+            input.in_response_to,
+            input.status.top_level().as_uri(),
+            OutboundLogoutValidation::AfterEmbeddedSigning,
+        )?;
     }
     Ok(BindingContext {
         id,
         context,
-        relay_state: relay_state.map(str::to_string),
-        entity_endpoint,
-        binding,
-        request_type: "SAMLResponse",
         signature,
         sig_alg,
+        relay_state: input.relay_state.map(str::to_owned),
+        entity_endpoint: destination.unwrap_or_default(),
+        binding: input.binding,
+        request_type: "SAMLResponse",
     })
 }
 

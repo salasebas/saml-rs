@@ -11,7 +11,7 @@ use crate::error::SamlError;
 use crate::util::camel_case;
 use crate::xml::name::validate_namespace_prefix;
 
-/// Default `<AuthnRequest>` template.
+/// Raw `<AuthnRequest>` template for standalone tag substitution.
 pub const LOGIN_REQUEST_TEMPLATE: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\" ForceAuthn=\"{ForceAuthn}\" ProtocolBinding=\"{ProtocolBinding}\" AssertionConsumerServiceURL=\"{AssertionConsumerServiceURL}\" AssertionConsumerServiceIndex=\"{AssertionConsumerServiceIndex}\"><saml:Issuer>{Issuer}</saml:Issuer><samlp:NameIDPolicy Format=\"{NameIDFormat}\" AllowCreate=\"{AllowCreate}\"/></samlp:AuthnRequest>";
 
 /// Default `<LogoutRequest>` template.
@@ -283,7 +283,8 @@ fn tagging(prefix: &str, content: &str) -> String {
     }
 }
 
-/// IdP login `<Response>` template config.
+/// Raw login response template data retained for consumers of this module.
+/// Typed IdP responses accept attributes through [`crate::SsoAssertion::with_attributes`].
 #[derive(Debug, Clone, Default)]
 pub struct LoginResponseTemplate {
     /// Custom `<Response>` template; `None` uses

@@ -70,20 +70,11 @@ enum StatusCodeLevel<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutboundLogoutValidation {
-    BeforeSigning { destination_required: bool },
+    BeforeSigning,
     AfterEmbeddedSigning,
 }
 
 impl OutboundLogoutValidation {
-    fn destination_required(self) -> bool {
-        match self {
-            Self::BeforeSigning {
-                destination_required,
-            } => destination_required,
-            Self::AfterEmbeddedSigning => true,
-        }
-    }
-
     fn root_signature_required(self) -> bool {
         matches!(self, Self::AfterEmbeddedSigning)
     }
@@ -512,9 +503,7 @@ pub(crate) fn validate_logout_response_outbound(
         ));
     }
     if let Some(expected) = expectation.destination {
-        if (expectation.validation.destination_required() || state.saw_signature)
-            && state.destination.is_none()
-        {
+        if state.destination.is_none() {
             return Err(SamlError::destination_mismatch(expected, None));
         }
     }
