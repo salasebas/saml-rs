@@ -5,6 +5,15 @@
 These changes apply to callers of `saml_rs::metadata` and peer descriptors.
 The compatibility crates re-export the same API.
 
+## Import a single entity from a metadata group
+
+If your aggregate supplied its only entity through an extension, a foreign
+element, or an element with no namespace, import now returns
+`SamlError::MissingMetadata("EntityDescriptor".into())`. Place the member
+`EntityDescriptor` directly inside an `EntitiesDescriptor` group. Use
+`urn:oasis:names:tc:SAML:2.0:metadata` for the member and every group from
+the root to that member.
+
 ## Parse without extractor fields, and pass limits in `XmlPolicy`
 
 Remove the extractor list from `Metadata::parse`. Custom extraction remains an
