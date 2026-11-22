@@ -133,8 +133,13 @@ fn schema_policy_covers_paos_envelope() -> Result<(), Box<dyn std::error::Error>
     use base64::Engine;
     let started = sp.start_sso(&destination, StartSso::post())?;
     let xml = String::from_utf8(
-        base64::engine::general_purpose::STANDARD
-            .decode(&started.outbound.raw_context().context)?,
+        base64::engine::general_purpose::STANDARD.decode(
+            started
+                .outbound
+                .post_form()?
+                .value("SAMLRequest")
+                .ok_or("missing SAMLRequest")?,
+        )?,
     )?;
     let envelope = format!(
         r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>{xml}</soap:Body></soap:Envelope>"#

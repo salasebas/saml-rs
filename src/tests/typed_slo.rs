@@ -5,6 +5,7 @@
 mod schema_validation;
 
 use super::common;
+use saml_rs::tests::engine::LogoutUser;
 
 #[cfg(feature = "crypto-rustcrypto")]
 #[path = "typed_slo/peer_hmac.rs"]
@@ -24,6 +25,7 @@ use saml_rs::binding::{
     append_signature, build_redirect_octet, deflate_raw_decode, deflate_raw_encode,
     MAX_DEFLATE_RAW_DECODE_BYTES,
 };
+use saml_rs::constants::Binding;
 use saml_rs::constants::{
     signature_algorithm::RSA_SHA256,
     transform_algorithm::{C14N, ENVELOPED_SIGNATURE},
@@ -31,8 +33,8 @@ use saml_rs::constants::{
 };
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
-use saml_rs::raw::Value;
-use saml_rs::raw::{Binding, FlowResult};
+use saml_rs::flow::FlowResult;
+use saml_rs::util::Value;
 use saml_rs::xml::dom::parse_document;
 use saml_rs::xml::extract;
 use saml_rs::xml::fields::login_response_fields;
@@ -945,7 +947,6 @@ fn sp_started_exchange_answered_with(status: &Status) -> Result<SloExchange, Sam
         subject()?,
         StartSlo::post().relay_state(relay_state),
     )?;
-    assert_eq!(started.outbound.raw_context().request_type, "SAMLRequest");
 
     let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
@@ -958,7 +959,6 @@ fn sp_started_exchange_answered_with(status: &Status) -> Result<SloExchange, Sam
     assert!(!received.message().raw_flow().saml_content.is_empty());
 
     let response = idp.respond_slo(&sp_descriptor, &received, status, RespondSlo::post())?;
-    assert_eq!(response.raw_context().request_type, "SAMLResponse");
     let response_fields = post_fields(&response)?;
 
     Ok(SloExchange {
@@ -986,38 +986,42 @@ fn value_object(entries: Vec<(&str, Value)>) -> Value {
 }
 
 fn sso_session() -> Result<SsoSession, SamlError> {
-    SsoSession::try_from(FlowResult {
-        saml_content: "<samlp:Response/>".to_string(),
-        sig_alg: None,
-        extract: value_object(vec![
-            (
-                "response",
-                value_object(vec![
-                    ("id", value_str("_response123")),
-                    ("issueInstant", value_str("2024-01-01T00:00:00Z")),
-                ]),
-            ),
-            (
-                "assertion",
-                value_object(vec![
-                    ("id", value_str("_assertion123")),
-                    ("issueInstant", value_str("2024-01-01T00:00:01Z")),
-                ]),
-            ),
-            ("issuer", value_str(IDP_ENTITY_ID)),
-            ("nameID", value_str("alice@example.com")),
-            (
-                "sessionIndex",
-                Value::Array(vec![
+    SsoSession::try_from_with_verified_xml_signatures(
+        FlowResult {
+            saml_content: "<samlp:Response/>".to_string(),
+            sig_alg: None,
+            extract: value_object(vec![
+                (
+                    "response",
                     value_object(vec![
-                        ("sessionIndex", value_str("_session123")),
-                        ("authnInstant", value_str("2026-07-04T12:00:00Z")),
+                        ("id", value_str("_response123")),
+                        ("issueInstant", value_str("2024-01-01T00:00:00Z")),
                     ]),
-                    value_object(vec![("sessionIndex", value_str("_session456"))]),
-                ]),
-            ),
-        ]),
-    })
+                ),
+                (
+                    "assertion",
+                    value_object(vec![
+                        ("id", value_str("_assertion123")),
+                        ("issueInstant", value_str("2024-01-01T00:00:01Z")),
+                    ]),
+                ),
+                ("issuer", value_str(IDP_ENTITY_ID)),
+                ("nameID", value_str("alice@example.com")),
+                (
+                    "sessionIndex",
+                    Value::Array(vec![
+                        value_object(vec![
+                            ("sessionIndex", value_str("_session123")),
+                            ("authnInstant", value_str("2026-07-04T12:00:00Z")),
+                        ]),
+                        value_object(vec![("sessionIndex", value_str("_session456"))]),
+                    ]),
+                ),
+            ]),
+        },
+        Vec::new(),
+        None,
+    )
 }
 
 #[test]
@@ -1228,7 +1232,6 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
         response.issue_instant().as_str().trim()
     );
     assert!(response.issue_instant().as_str().ends_with('Z'));
-    assert!(!completed.raw_flow().saml_content.is_empty());
     assert_eq!(
         exchange.received.message().id(),
         exchange.pending.request_id()
@@ -1237,7 +1240,7 @@ fn typed_facade_runs_sp_initiated_slo() -> Result<(), Box<dyn std::error::Error>
     assert_eq!(
         exchange
             .idp
-            .raw_identity_provider()
+            .identity_provider()
             .metadata
             .as_metadata()
             .entity_id(),
@@ -3447,7 +3450,7 @@ fn typed_logout_response_targets_a_peer_slo_location_the_url_parser_accepts(
             RespondSlo::post(),
         )?;
 
-        assert_eq!(response.raw_context().entity_endpoint, location);
+        assert_eq!(response.post_form()?.action().as_str(), location);
     }
     Ok(())
 }
@@ -3798,7 +3801,6 @@ fn custom_format_subject(format: &str) -> Result<LogoutSubject, SamlError> {
 }
 
 #[test]
-#[allow(deprecated)]
 fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // SAML Core §1.3.2 binds the writer of the LogoutRequest, in either role.
@@ -3822,15 +3824,15 @@ fn typed_logout_request_does_not_write_a_name_id_format_that_is_not_an_absolute_
     }
 
     // A NameID without a format is sent in the first configured format.
-    let mut raw_idp = idp.raw_identity_provider().clone();
+    let mut raw_idp = idp.identity_provider().clone();
     raw_idp.setting.name_id_format = vec!["local-format".into()];
-    let raw_sp = sp.raw_service_provider();
-    let result = saml_rs::raw::logout::create_logout_request(
+    let raw_sp = sp.service_provider();
+    let result = saml_rs::tests::engine::create_logout_request(
         &raw_idp.setting,
         raw_idp.metadata.as_metadata(),
         raw_sp.metadata.as_metadata(),
         Binding::Post,
-        &saml_rs::raw::User::new("alice@example.com"),
+        &LogoutUser::new("alice@example.com"),
         None,
         false,
     );
@@ -4056,11 +4058,15 @@ fn typed_slo_subject_from_sso_session_keeps_name_id_qualifiers(
     let response = format!(
         r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response123" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">{assertion}</samlp:Response>"#,
     );
-    let session = SsoSession::try_from(FlowResult {
-        extract: extract(&response, &login_response_fields(&assertion))?,
-        saml_content: response,
-        sig_alg: None,
-    })?;
+    let session = SsoSession::try_from_with_verified_xml_signatures(
+        FlowResult {
+            extract: extract(&response, &login_response_fields(&assertion))?,
+            saml_content: response,
+            sig_alg: None,
+        },
+        Vec::new(),
+        None,
+    )?;
     let subject = session.logout_subject().ok_or("missing logout subject")?;
 
     assert_eq!(subject.name_id(), qualified_subject()?.name_id());

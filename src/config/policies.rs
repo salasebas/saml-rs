@@ -292,8 +292,7 @@ impl SpValidationPolicy {
         }
     }
 
-    /// Legacy permissive preset: samlify-port behavior for a caller leaving
-    /// the raw API.
+    /// Legacy permissive preset: samlify-port behavior.
     pub fn compatibility() -> Self {
         Self {
             assertions: AssertionSignaturePolicy::AllowUnsigned,
@@ -359,8 +358,8 @@ impl IdpValidationPolicy {
 
     /// Legacy permissive preset.
     ///
-    /// Samlify-port behavior for a caller leaving the raw API. A signature
-    /// present on an `AuthnRequest` is not verified.
+    /// Samlify-port behavior. A signature present on an `AuthnRequest` is not
+    /// verified.
     pub fn compatibility() -> Self {
         Self {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
@@ -625,7 +624,7 @@ impl AssertionElementEncryption {
 /// decrypts with its decryption key.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum ReceivedEncryptedElements {
-    /// Raw samlify port: only the `<EncryptedAssertion>` that
+    /// Samlify port: only the `<EncryptedAssertion>` that
     /// `is_assertion_encrypted` selects.
     #[default]
     DecryptSelected,
@@ -788,8 +787,8 @@ pub struct TemplatePolicy {
     /// Logout request template.
     ///
     /// Typed Session Authority generation requires a complete unqualified
-    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Typed SP and raw
-    /// samlify-port generation do not synthesize the attribute.
+    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Typed SP generation does
+    /// not synthesize the attribute.
     ///
     /// `{NameQualifier}`, `{SPNameQualifier}`, and `{SPProvidedID}` are filled
     /// from the logout subject's `NameID`, and `{NameIDFormat}` with the

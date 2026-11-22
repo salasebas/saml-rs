@@ -17,7 +17,7 @@ use saml_rs::crypto::{
     keys::{load_certificate, read_private_key},
     sign_saml_xml,
 };
-use saml_rs::raw::Binding;
+use saml_rs::OutboundDelivery;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem,
@@ -145,11 +145,12 @@ fn received_by(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let context = started.outbound.raw_context();
-    if context.binding != Binding::Post {
+    let OutboundDelivery::PostForm(form) = started.outbound.delivery() else {
         return Err("expected an HTTP-POST AuthnRequest".into());
-    }
-    let xml = String::from_utf8(STANDARD.decode(&context.context)?)?;
+    };
+    let xml = String::from_utf8(
+        STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,
+    )?;
     let position = xml
         .find("<samlp:NameIDPolicy")
         .ok_or("missing NameIDPolicy")?;

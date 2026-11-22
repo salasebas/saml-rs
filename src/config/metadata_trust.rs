@@ -46,7 +46,7 @@ use super::policies::XmlSignatureProfile;
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum MetadataTrustPolicy<'a> {
-    /// Accept unsigned metadata to preserve a samlify-port or raw import.
+    /// Accept unsigned metadata, as the samlify port did.
     ///
     /// A signature on the document is not treated as verified.
     AllowUnsigned,

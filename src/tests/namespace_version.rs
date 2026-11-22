@@ -2,8 +2,9 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::deflate_raw_encode;
 use saml_rs::constants::{Binding, ParserType};
-#[allow(deprecated)]
-use saml_rs::flow::{flow, FlowOptions, FlowResult, HttpRequest, SignatureCheck};
+use saml_rs::flow::{FlowOptions, FlowResult, HttpRequest, SignatureCheck};
+use saml_rs::tests::engine::flow;
+use saml_rs::tests::engine::redirect_query;
 use saml_rs::{SamlError, SsoSession};
 
 #[cfg(all(
@@ -53,7 +54,6 @@ const PRIVATE_KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unen
 ))]
 const CERTIFICATE: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
-#[allow(deprecated)]
 fn parse_flow_with_binding(
     xml: &str,
     parser_type: ParserType,
@@ -67,7 +67,7 @@ fn parse_flow_with_binding(
     };
     let parameter = (parser_type.query_param().to_string(), encoded);
     let request = match binding {
-        Binding::Redirect => HttpRequest::redirect(vec![parameter]),
+        Binding::Redirect => redirect_query(vec![parameter]),
         Binding::Post | Binding::SimpleSign => HttpRequest::post(vec![parameter]),
         _ => return Err(SamlError::UnsupportedBinding { binding }),
     };
@@ -202,7 +202,6 @@ fn response_xml_with_issue_instants(
     not(feature = "crypto-fips"),
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
-#[allow(deprecated)]
 fn expect_decrypted_assertion_profile_rejection_with_context(
     xml: &str,
     context: &str,
@@ -683,7 +682,7 @@ fn sso_issue_instant_normalizes_real_flow_values_in_typed_session(
         Binding::Post,
         SignatureCheck::Skip,
     )?;
-    let session = SsoSession::try_from(raw_flow)?;
+    let session = SsoSession::try_from_with_verified_xml_signatures(raw_flow, Vec::new(), None)?;
 
     assert_eq!(
         (
@@ -965,7 +964,6 @@ fn decrypted_assertion_qualified_issue_instant_is_revalidated_before_signature_s
     any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc")
 ))]
 #[test]
-#[allow(deprecated)]
 fn decrypted_assertion_honors_xml_depth_limit_before_profile(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let nested_extension = format!(

@@ -90,7 +90,6 @@ pub struct AuthnRequest {
     provider_name: Option<String>,
     requested_subject: Option<RequestedSubject>,
     requested_authn_context: Option<RequestedAuthnContext>,
-    raw_flow: FlowResult,
 }
 
 impl AuthnRequest {
@@ -158,18 +157,11 @@ impl AuthnRequest {
     pub fn requested_authn_context(&self) -> Option<&RequestedAuthnContext> {
         self.requested_authn_context.as_ref()
     }
-
-    /// Raw validated flow result.
-    pub fn raw_flow(&self) -> &FlowResult {
-        &self.raw_flow
-    }
 }
 
-impl TryFrom<FlowResult> for AuthnRequest {
-    type Error = SamlError;
-
-    fn try_from(raw_flow: FlowResult) -> Result<Self, Self::Error> {
-        Self::from_flow(raw_flow, optional_response_binding)
+impl AuthnRequest {
+    pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
+        Self::from_flow_with(raw_flow, optional_response_binding)
     }
 }
 
@@ -177,10 +169,9 @@ impl AuthnRequest {
     /// Typed request from the SOAP leg of Enhanced Client/Proxy SSO.
     ///
     /// A `ProtocolBinding` that names the PAOS binding is reported as none.
-    /// The raw flow keeps the attribute. One that names HTTP-Artifact is
-    /// rejected.
+    /// One that names HTTP-Artifact is rejected.
     pub(crate) fn try_from_paos_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
-        Self::from_flow(raw_flow, |extract| {
+        Self::from_flow_with(raw_flow, |extract| {
             if extract.get_str("request.protocolBinding") == Some(PAOS_BINDING) {
                 return Ok(None);
             }
@@ -194,7 +185,7 @@ impl AuthnRequest {
         })
     }
 
-    fn from_flow(
+    fn from_flow_with(
         raw_flow: FlowResult,
         response_binding: fn(&crate::util::Value) -> Result<Option<SsoResponseBinding>, SamlError>,
     ) -> Result<Self, SamlError> {
@@ -229,7 +220,6 @@ impl AuthnRequest {
                 .map(str::to_string),
             requested_subject,
             requested_authn_context,
-            raw_flow,
         })
     }
 }

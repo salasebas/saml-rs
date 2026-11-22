@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             PrivateKeyPem::new(privkey),
         ))
     };
-    // Disabled preserves the raw API, which has no replay cache.
+    // A deployment passes a shared replay cache with ReplayPolicy::RequireCache.
     let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
 
     let sp = Saml::sp(

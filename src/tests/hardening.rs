@@ -10,10 +10,12 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::flow::HttpRequest;
+use saml_rs::idp::IdentityProvider;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, ServiceProvider};
-use saml_rs::template::replace_tags_by_value;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::fill_template;
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::SamlError;
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -98,7 +100,7 @@ fn response_for_audience_restrictions(
             prepared, template,
             "grouped audience tests must replace the template audience restriction"
         );
-        let xml = replace_tags_by_value(
+        let xml = fill_template(
             &prepared,
             &[
                 ("ID", id.clone()),
@@ -128,15 +130,15 @@ fn response_for_audience_restrictions(
         (id, xml)
     };
     Ok(idp
-        .create_login_response(
+        .create_rendered_login_response(
             sp,
             Binding::Post,
             &User::new("a@example.com"),
             &LoginResponseOptions {
                 in_response_to: Some("_req1"),
-                custom: Some(&cb),
                 ..Default::default()
             },
+            &cb,
         )?
         .context)
 }
@@ -169,7 +171,7 @@ fn response_for_subject_confirmation(
                 "Recipient=\"{SubjectRecipient}\" InResponseTo=\"{SubjectInResponseTo}\"",
                 1,
             );
-        let xml = replace_tags_by_value(
+        let xml = fill_template(
             &prepared,
             &[
                 ("ID", id.clone()),
@@ -206,15 +208,15 @@ fn response_for_subject_confirmation(
         (id, xml)
     };
     Ok(idp
-        .create_login_response(
+        .create_rendered_login_response(
             sp,
             Binding::Post,
             &User::new("a@example.com"),
             &LoginResponseOptions {
                 in_response_to: Some(case.response_in_response_to),
-                custom: Some(&cb),
                 ..Default::default()
             },
+            &cb,
         )?
         .context)
 }
@@ -243,7 +245,7 @@ fn response_for_destination(
         } else {
             template.replacen(" Destination=\"{Destination}\"", "", 1)
         };
-        let xml = replace_tags_by_value(
+        let xml = fill_template(
             &prepared,
             &[
                 ("ID", id.clone()),
@@ -276,15 +278,15 @@ fn response_for_destination(
         (id, xml)
     };
     Ok(idp
-        .create_login_response(
+        .create_rendered_login_response(
             sp,
             Binding::Post,
             &User::new("a@example.com"),
             &LoginResponseOptions {
                 in_response_to: Some("_req1"),
-                custom: Some(&cb),
                 ..Default::default()
             },
+            &cb,
         )?
         .context)
 }
@@ -434,7 +436,7 @@ fn hardening_unsolicited_response_rejects_non_empty_in_response_to() {
 }
 
 #[test]
-fn hardening_unsolicited_response_accepts_empty_in_response_to(
+fn hardening_unsolicited_response_rejects_empty_in_response_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with("https://sp.example.com/metadata", signing());
     let response = response_for_subject_confirmation(
@@ -450,7 +452,10 @@ fn hardening_unsolicited_response_accepts_empty_in_response_to(
     let xml = String::from_utf8(STANDARD.decode(&response)?)?;
     assert_eq!(xml.matches("InResponseTo=\"\"").count(), 2, "{xml}");
     let req = HttpRequest::post(vec![("SAMLResponse".into(), response)]);
-    sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req)?;
+    assert!(matches!(
+        sp.parse_unsolicited_login_response(&idp(), Binding::Post, &req),
+        Err(SamlError::InResponseToMismatch { .. })
+    ));
     Ok(())
 }
 
@@ -632,10 +637,8 @@ fn hardening_duplicate_confirmation_data_keeps_the_missing_expiry_error(
 
 #[cfg(not(feature = "crypto-fips"))]
 #[test]
-fn hardening_sign_then_encrypt_message_auto_resolves() -> Result<(), Box<dyn std::error::Error>> {
-    // Request sign-then-encrypt (encrypt_then_sign=false) with an encrypted,
-    // message-signed response. The IdP must produce a verifiable response
-    // (it signs the message after encryption, since the other order is unsound).
+fn hardening_encrypted_message_signed_response_verifies() -> Result<(), Box<dyn std::error::Error>>
+{
     let mut idp_setting = signing();
     idp_setting.is_assertion_encrypted = true;
     let idp = IdentityProvider::from_config(
@@ -667,7 +670,6 @@ fn hardening_sign_then_encrypt_message_auto_resolves() -> Result<(), Box<dyn std
         &User::new("a@example.com"),
         &LoginResponseOptions {
             in_response_to: Some("_req1"),
-            encrypt_then_sign: false, // requested sign-then-encrypt; resolved safely
             ..Default::default()
         },
     )?;

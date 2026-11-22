@@ -213,7 +213,7 @@ impl Saml<Idp> {
     }
 
     fn local_identity_provider(&self) -> Result<LocalIdentityProvider<'_>, SamlError> {
-        let idp = self.raw_identity_provider();
+        let idp = self.identity_provider();
         Ok(LocalIdentityProvider {
             entity_id: idp
                 .metadata

@@ -21,15 +21,10 @@ A logout operation in which the Session Authority constructs the outbound
 `LogoutRequest`; its obligations are narrower than those of generic logout.
 _Avoid_: IdP-initiated logout, when the producer role is what matters
 
-**Raw compatibility parser**:
-A low-level SAML operation whose guarantees are limited to the protocol context
-explicitly supplied by its caller.
-_Avoid_: Raw receiver, conformant raw flow
-
 **Typed SLO receiver**:
 An inbound Single Logout flow that carries the role, binding, local endpoint,
 peer, and transaction context of the actual SAML recipient.
-_Avoid_: Typed parser, checked raw parser
+_Avoid_: Typed parser
 
 **Actual recipient**:
 The protocol participant operating the endpoint at which a SAML message was
@@ -85,15 +80,10 @@ become a receiver rejection.
 _Avoid_: default, full SAML conformance, profile
 
 **Compatibility**:
-The legacy permissive preset. It is the samlify-port behaviour kept for a
-caller leaving the raw API. It does not claim standards conformance, and it
-does not name a relaxation of an OASIS recommendation.
+The legacy permissive preset. It is the samlify-port behaviour. It does not
+claim standards conformance, and it does not name a relaxation of an OASIS
+recommendation.
 _Avoid_: OASIS relaxation, recommended, default
-
-**Raw settings**:
-Historical configuration that predates the validation presets. Its defaults
-are independent of Compatibility.
-_Avoid_: compatibility, recommended
 
 **Binding signature**:
 The signature that HTTP-Redirect or HTTP-POST-SimpleSign carries in the

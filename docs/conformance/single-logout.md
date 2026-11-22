@@ -5,8 +5,7 @@ both roles. `receive_slo` reads the same request-signature field as the accept
 combination below. `LogoutPolicy::recommended`, and the `logout` field of
 `SpValidationPolicy::recommended` and `IdpValidationPolicy::recommended`,
 publish that accept combination. `Default` and the
-config builders are Recommended. Raw logout generation and parsing keep
-their existing validation defaults. The preset distinction is recorded in
+config builders are Recommended. The preset distinction is recorded in
 [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected
@@ -17,8 +16,7 @@ used when it narrows Core for this flow.
 `StartSlo::apply_producer_rules` and `RespondSlo::apply_producer_rules`
 select the producer rules
 below. The constructors `redirect`, `post`, and `simple_sign` leave that
-selection off, which is the samlify-port generation kept for callers leaving
-the raw API. `soap` always selects it. The SOAP rules are in
+selection off, which is the samlify-port generation. `soap` always selects it. The SOAP rules are in
 [SOAP binding](#soap-binding).
 
 `finish_slo` reads `LogoutPolicy::responses`. The accept combination is

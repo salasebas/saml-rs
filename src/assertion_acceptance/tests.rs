@@ -44,27 +44,13 @@ fn unsolicited_duplicate_data_uses_the_first_child_with_a_request_id(
             <SubjectConfirmationData InResponseTo=""/>
         </SubjectConfirmation>
     </Subject></Assertion></Response>"#;
-    for rule in [
-        UnsolicitedInResponseTo::RejectPresent,
-        UnsolicitedInResponseTo::RejectNonEmpty,
-    ] {
-        assert!(matches!(
-            reject_unsolicited_bearer_in_response_to(xml, XmlLimits::default(), rule),
-            Err(SamlError::InResponseToMismatch { actual, .. }) if actual.as_deref() == Some("_req1")
-        ));
-    }
-    let empty_first = xml.replace("InResponseTo=\"_req1\"", "InResponseTo=\"\"");
-    reject_unsolicited_bearer_in_response_to(
-        &empty_first,
-        XmlLimits::default(),
-        UnsolicitedInResponseTo::RejectNonEmpty,
-    )?;
     assert!(matches!(
-        reject_unsolicited_bearer_in_response_to(
-            &empty_first,
-            XmlLimits::default(),
-            UnsolicitedInResponseTo::RejectPresent,
-        ),
+        reject_unsolicited_bearer_in_response_to(xml, XmlLimits::default()),
+        Err(SamlError::InResponseToMismatch { actual, .. }) if actual.as_deref() == Some("_req1")
+    ));
+    let empty_first = xml.replace("InResponseTo=\"_req1\"", "InResponseTo=\"\"");
+    assert!(matches!(
+        reject_unsolicited_bearer_in_response_to(&empty_first, XmlLimits::default()),
         Err(SamlError::InResponseToMismatch { .. })
     ));
     Ok(())

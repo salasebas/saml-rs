@@ -62,7 +62,6 @@ export default defineConfig({
 						{ label: 'Single Logout', slug: 'guides/single-logout' },
 						{ label: 'Crypto provider', slug: 'guides/crypto-provider' },
 						{ label: 'Validation', slug: 'guides/validation-preset' },
-						{ label: 'Raw API', slug: 'guides/raw-compatibility' },
 						{
 							label: 'Upgrade',
 							items: [

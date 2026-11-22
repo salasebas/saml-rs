@@ -1,11 +1,11 @@
 use std::time::Duration;
 
+use saml_rs::constants::Binding;
 use saml_rs::constants::{elements_order, name_id_format};
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, Metadata,
     SpMetadata, SpMetadataInput,
 };
-use saml_rs::raw::Binding;
 use saml_rs::{
     AcsEndpoint, ContactPerson, ContactType, EntityId, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, LocalizedValue, MetadataLifetime, MetadataTrustPolicy, Organization, Saml,

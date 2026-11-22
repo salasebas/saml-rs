@@ -2,8 +2,9 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::deflate_raw_encode;
 use saml_rs::constants::{Binding, ParserType};
-#[allow(deprecated)]
-use saml_rs::flow::{flow, FlowOptions, HttpRequest};
+use saml_rs::flow::{FlowOptions, HttpRequest};
+use saml_rs::tests::engine::flow;
+use saml_rs::tests::engine::redirect_query;
 use saml_rs::SamlError;
 
 const AUTHN_REQUEST: &str = concat!(
@@ -16,10 +17,11 @@ const AUTHN_REQUEST: &str = concat!(
 );
 
 fn options(binding: Binding) -> FlowOptions<'static> {
-    let mut options = FlowOptions::default();
-    options.binding = Some(binding);
-    options.parser_type = Some(ParserType::SamlRequest);
-    options
+    FlowOptions {
+        binding: Some(binding),
+        parser_type: Some(ParserType::SamlRequest),
+        ..FlowOptions::default()
+    }
 }
 
 fn post_request(xml: &str) -> HttpRequest {
@@ -29,10 +31,9 @@ fn post_request(xml: &str) -> HttpRequest {
     )])
 }
 
-#[allow(deprecated)]
 fn redirect_request(xml: &str) -> Result<HttpRequest, SamlError> {
     let compressed = deflate_raw_encode(xml.as_bytes())?;
-    Ok(HttpRequest::redirect(vec![(
+    Ok(redirect_query(vec![(
         "SAMLRequest".to_string(),
         STANDARD.encode(&compressed),
     )]))
@@ -46,7 +47,6 @@ fn assert_multiple_document_elements(error: SamlError) {
 }
 
 #[test]
-#[allow(deprecated)]
 fn post_flow_rejects_multiple_document_elements() -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!("{AUTHN_REQUEST}<garbage/>");
     let error = flow(&options(Binding::Post), &post_request(&xml))
@@ -58,7 +58,6 @@ fn post_flow_rejects_multiple_document_elements() -> Result<(), Box<dyn std::err
 }
 
 #[test]
-#[allow(deprecated)]
 fn redirect_flow_rejects_multiple_document_elements() -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!("{AUTHN_REQUEST}<garbage/>");
     let error = flow(&options(Binding::Redirect), &redirect_request(&xml)?)
@@ -70,7 +69,6 @@ fn redirect_flow_rejects_multiple_document_elements() -> Result<(), Box<dyn std:
 }
 
 #[test]
-#[allow(deprecated)]
 fn post_flow_accepts_xml_misc_around_document_element() -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!(
         "<?xml version=\"1.0\"?>\n<!-- before --><?before allowed?>{AUTHN_REQUEST}<?after allowed?><!-- after -->"

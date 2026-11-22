@@ -1,4 +1,4 @@
-//! Black-box conformance scenarios over the public API, including historical
+//! Conformance scenarios for the protocol engine, including historical
 //! regression cases derived from npm `samlify` behavior.
 
 use base64::engine::general_purpose::STANDARD;
@@ -6,46 +6,54 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
+use saml_rs::idp::IdentityProvider;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::SpMessages;
 
 fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = "https://sp.example.com/metadata".into();
-    config.authn_requests_signed = setting.private_key.is_some();
-    config.want_assertions_signed = setting.private_key.is_some();
-    config.signing_certs = setting
-        .signing_cert
-        .clone()
-        .map(|c| vec![c])
-        .unwrap_or_default();
-    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp/slo")];
-    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    let config = SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        authn_requests_signed: setting.private_key.is_some(),
+        want_assertions_signed: setting.private_key.is_some(),
+        signing_certs: setting
+            .signing_cert
+            .clone()
+            .map(|c| vec![c])
+            .unwrap_or_default(),
+        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        ..SpMetadataInput::default()
+    };
     ServiceProvider::from_config(&config, setting)
 }
 
 #[cfg(crypto)]
 fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = "https://idp.example.com/metadata".into();
-    config.signing_certs = setting
-        .signing_cert
-        .clone()
-        .map(|c| vec![c])
-        .unwrap_or_default();
-    config.want_authn_requests_signed = setting.private_key.is_some();
-    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
-    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://idp/slo")];
+    let config = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        signing_certs: setting
+            .signing_cert
+            .clone()
+            .map(|c| vec![c])
+            .unwrap_or_default(),
+        want_authn_requests_signed: setting.private_key.is_some(),
+        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
+        ..IdpMetadataInput::default()
+    };
     IdentityProvider::from_config(&config, setting)
 }
 
 #[test]
-#[allow(deprecated)]
 fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
-    let mut idp_config = IdpMetadataInput::default();
-    idp_config.entity_id = "https://idp.example.com/metadata".into();
-    idp_config.single_sign_on_service = vec![Endpoint::new(Binding::Redirect, "https://idp/sso")];
+    let idp_config = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+        ..IdpMetadataInput::default()
+    };
     let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
     let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     let url = url::Url::parse(&ctx.context)?;
@@ -84,22 +92,23 @@ mod signed {
     use super::*;
     use saml_rs::constants::signature_algorithm::RSA_SHA256;
     use saml_rs::flow::HttpRequest;
-    #[allow(deprecated)]
-    use saml_rs::logout::{create_logout_request, parse_logout_request};
+    use saml_rs::tests::engine::{
+        create_logout_request, parse_logout_request, IdpMessages, LogoutUser,
+    };
 
-    const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-    const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+    const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
     fn signing_setting() -> EntitySetting {
-        let mut setting = EntitySetting::default();
-        setting.private_key = Some(PRIVKEY.into());
-        setting.signing_cert = Some(CERT.into());
-        setting.request_signature_algorithm = RSA_SHA256.into();
-        setting
+        EntitySetting {
+            private_key: Some(PRIVKEY.into()),
+            signing_cert: Some(CERT.into()),
+            request_signature_algorithm: RSA_SHA256.into(),
+            ..EntitySetting::default()
+        }
     }
 
     #[test]
-    #[allow(deprecated)]
     fn full_signed_sso() -> Result<(), Box<dyn std::error::Error>> {
         let sp = sp(signing_setting())?;
         let idp = idp(signing_setting())?;
@@ -121,7 +130,6 @@ mod signed {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn signed_logout_request_round_trips() -> Result<(), Box<dyn std::error::Error>> {
         let sp = sp(signing_setting())?;
         let idp = idp(signing_setting())?;
@@ -130,7 +138,7 @@ mod signed {
             sp.metadata.as_metadata(),
             idp.metadata.as_metadata(),
             Binding::Post,
-            &saml_rs::entity::User::new("alice@example.com"),
+            &LogoutUser::new("alice@example.com"),
             None,
             true, // want signed
         )?;

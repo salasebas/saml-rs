@@ -61,8 +61,8 @@ impl Saml<Sp> {
     ) -> Result<Started<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         start_slo_impl(
-            &self.raw_service_provider().setting,
-            self.raw_service_provider().metadata.as_metadata(),
+            &self.service_provider().setting,
+            self.service_provider().metadata.as_metadata(),
             peer,
             subject,
             options,
@@ -97,8 +97,8 @@ impl Saml<Sp> {
     ) -> Result<Received<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
         receive_slo_impl(
-            &self.raw_service_provider().setting,
-            self.raw_service_provider().metadata.as_metadata(),
+            &self.service_provider().setting,
+            self.service_provider().metadata.as_metadata(),
             peer,
             input,
             validation,
@@ -136,8 +136,8 @@ impl Saml<Sp> {
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
         let peer = RawPeer::from_idp(idp, SystemTime::now())?;
         respond_slo_impl(
-            &self.raw_service_provider().setting,
-            self.raw_service_provider().metadata.as_metadata(),
+            &self.service_provider().setting,
+            self.service_provider().metadata.as_metadata(),
             peer,
             request,
             status,
@@ -208,8 +208,8 @@ impl Saml<Sp> {
     ) -> Result<LogoutCompleted, SamlError> {
         let peer = RawPeer::from_idp(idp, validation.now())?;
         finish_slo_impl(
-            &self.raw_service_provider().setting,
-            self.raw_service_provider().metadata.as_metadata(),
+            &self.service_provider().setting,
+            self.service_provider().metadata.as_metadata(),
             peer,
             pending,
             input,
@@ -274,8 +274,8 @@ impl Saml<Idp> {
     ) -> Result<Started<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         start_slo_impl(
-            &self.raw_identity_provider().setting,
-            self.raw_identity_provider().metadata.as_metadata(),
+            &self.identity_provider().setting,
+            self.identity_provider().metadata.as_metadata(),
             peer,
             subject,
             options,
@@ -334,8 +334,8 @@ impl Saml<Idp> {
     ) -> Result<Received<LogoutRequest>, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
         receive_slo_impl(
-            &self.raw_identity_provider().setting,
-            self.raw_identity_provider().metadata.as_metadata(),
+            &self.identity_provider().setting,
+            self.identity_provider().metadata.as_metadata(),
             peer,
             input,
             validation,
@@ -389,8 +389,8 @@ impl Saml<Idp> {
     ) -> Result<Outbound<LogoutResponse>, SamlError> {
         let peer = RawPeer::from_sp(sp, SystemTime::now())?;
         respond_slo_impl(
-            &self.raw_identity_provider().setting,
-            self.raw_identity_provider().metadata.as_metadata(),
+            &self.identity_provider().setting,
+            self.identity_provider().metadata.as_metadata(),
             peer,
             request,
             status,
@@ -461,8 +461,8 @@ impl Saml<Idp> {
     ) -> Result<LogoutCompleted, SamlError> {
         let peer = RawPeer::from_sp(sp, validation.now())?;
         finish_slo_impl(
-            &self.raw_identity_provider().setting,
-            self.raw_identity_provider().metadata.as_metadata(),
+            &self.identity_provider().setting,
+            self.identity_provider().metadata.as_metadata(),
             peer,
             pending,
             input,
@@ -561,7 +561,7 @@ fn start_slo_impl(
         validation: request_validation,
         name_id_encryption: options.identifier_encryption,
     })?;
-    let outbound = Outbound::<LogoutRequest>::try_from(created.context)?;
+    let outbound = Outbound::<LogoutRequest>::from_context(created.context)?;
     let pending = PendingLogoutRequest::new(
         outbound.id().clone(),
         outbound.relay_state().cloned(),
@@ -610,7 +610,7 @@ fn receive_slo_impl(
         validation.now_offset()?,
         validation.clock_skew().not_on_or_after_millis(),
     )?;
-    let logout = LogoutRequest::try_from(flow)?;
+    let logout = LogoutRequest::from_flow(flow)?;
     validation.check_and_store_message_replay_until(
         ReplayKey::LogoutRequest(logout.id().clone()),
         replay_deadline,
@@ -696,7 +696,7 @@ fn finish_slo_impl(
             peer.hmac_secret,
         ),
     )?;
-    let response = LogoutResponse::try_from(flow)?;
+    let response = LogoutResponse::from_flow(flow)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
     Ok(LogoutCompleted::new(response, relay_state))
 }

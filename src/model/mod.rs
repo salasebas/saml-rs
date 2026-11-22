@@ -1,4 +1,4 @@
-//! Typed SAML domain models built from validated raw flow results.
+//! Typed SAML domain models built from validated messages.
 //!
 //! References: SAML Core 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf> and SAML Profiles 2.0 <https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf>.
 

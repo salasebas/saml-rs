@@ -30,8 +30,7 @@ return the facade without a `Result`. `generate_sp_metadata` returns
 `SamlError::MissingMetadata("AssertionConsumerService")` and
 `generate_idp_metadata` returns
 `SamlError::MissingMetadata("SingleSignOnService")` for a config without that
-endpoint. The raw `ServiceProvider::from_config` and
-`IdentityProvider::from_config` return the same errors.
+endpoint.
 
 **Upgrade:** handle these errors where you call `build()`. A config with a
 bad tag prefix that never sent a message now fails to build, so fix the

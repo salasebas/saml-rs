@@ -94,35 +94,15 @@ pub(crate) fn accept_response_assertions(
     Ok(())
 }
 
-/// `InResponseTo` values an unsolicited login response is rejected for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum UnsolicitedInResponseTo {
-    /// Reject the attribute whenever it is present, including an empty value.
-    RejectPresent,
-    /// Reject a non-empty value and read an empty attribute as absent.
-    RejectNonEmpty,
-}
-
-impl UnsolicitedInResponseTo {
-    /// Whether an unsolicited response carrying `in_response_to` is rejected.
-    pub(crate) fn rejects(self, in_response_to: &str) -> bool {
-        match self {
-            Self::RejectPresent => true,
-            Self::RejectNonEmpty => !in_response_to.is_empty(),
-        }
-    }
-}
-
 /// Reject an unsolicited response whose bearer confirmation carries `InResponseTo`.
 ///
 /// # Errors
 ///
 /// Returns [`SamlError::InResponseToMismatch`] when any bearer confirmation in
-/// any direct assertion carries an `InResponseTo` that `rule` rejects.
+/// any direct assertion carries an `InResponseTo`, including an empty one.
 pub(crate) fn reject_unsolicited_bearer_in_response_to(
     response_xml: &str,
     limits: XmlLimits,
-    rule: UnsolicitedInResponseTo,
 ) -> Result<(), SamlError> {
     let document = dom::parse_document(response_xml, limits)?;
     for assertion in direct_assertions(&document.root) {
@@ -133,7 +113,7 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
                 .iter()
                 .filter(|child| child.local_name == "SubjectConfirmationData")
                 .find_map(|data| data.attr("InResponseTo"));
-            if is_bearer && request_id.is_some_and(|actual| rule.rejects(actual)) {
+            if is_bearer && request_id.is_some() {
                 return Err(SamlError::in_response_to_mismatch(None, request_id));
             }
         }

@@ -214,7 +214,7 @@ names the binding or the mistake:
 | Case | After |
 | --- | --- |
 | `SsoRequestBinding`, `SsoResponseBinding`, `LogoutBinding`, or `NameIdManagementBinding` `try_from` a binding it does not support | `UnsupportedBinding { binding, .. }` |
-| An `Inbound` or raw context whose binding the operation does not handle | `UnsupportedBinding { binding, .. }` |
+| An `Inbound` whose binding the operation does not handle | `UnsupportedBinding { binding, .. }` |
 | `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` on another binding | `OutboundBindingMismatch { actual, .. }` |
 | A pending snapshot whose binding name is not a SAML binding | `Invalid` |
 

@@ -5,13 +5,15 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::{EntitySetting, User};
-#[allow(deprecated)]
-use saml_rs::flow::{flow, FlowOptions, HttpRequest, SignatureCheck};
+use saml_rs::flow::{FlowOptions, HttpRequest, SignatureCheck};
+use saml_rs::idp::IdentityProvider;
 use saml_rs::idp::LoginResponseOptions;
-#[allow(deprecated)]
-use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadata, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::flow;
+use saml_rs::tests::engine::{create_logout_request, create_logout_response, LogoutUser};
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
@@ -24,26 +26,29 @@ use saml_rs::{
 use std::time::SystemTime;
 
 fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataInput {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = "https://idp.example.com/metadata".into();
-    config.want_authn_requests_signed = want_authn_requests_signed;
-    config.single_sign_on_service = vec![
-        Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
-        Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
-    ];
-    config.single_logout_service =
-        vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")];
-    config
+    IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        want_authn_requests_signed,
+        single_sign_on_service: vec![
+            Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
+            Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
+        ],
+        single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")],
+        ..IdpMetadataInput::default()
+    }
 }
 
 fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = "https://sp.example.com/metadata".into();
-    config.authn_requests_signed = authn_requests_signed;
-    config.assertion_consumer_service =
-        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
-    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")];
-    config
+    SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        authn_requests_signed,
+        assertion_consumer_service: vec![Endpoint::new(
+            Binding::Post,
+            "https://sp.example.com/acs",
+        )],
+        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
+        ..SpMetadataInput::default()
+    }
 }
 
 fn idp(want_authn_requests_signed: bool) -> Result<IdentityProvider, SamlError> {
@@ -359,7 +364,6 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 }
 
 #[test]
-#[allow(deprecated)]
 fn unsigned_login_request_creation_still_works() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = sp(false)?.create_login_request(
         &idp(false)?,
@@ -373,7 +377,6 @@ fn unsigned_login_request_creation_still_works() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-#[allow(deprecated)]
 fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn std::error::Error>>
 {
     let ctx = sp(false)?.create_login_request(
@@ -395,7 +398,6 @@ fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn 
 }
 
 #[test]
-#[allow(deprecated)]
 fn signing_login_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(sp(true)?.create_login_request(
         &idp(true)?,
@@ -406,7 +408,6 @@ fn signing_login_request_returns_unsupported() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-#[allow(deprecated)]
 fn signed_login_response_creation_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(idp(false)?.create_login_response(
         &sp(false)?,
@@ -418,7 +419,6 @@ fn signed_login_response_creation_returns_unsupported() -> Result<(), Box<dyn st
 }
 
 #[test]
-#[allow(deprecated)]
 fn encrypted_assertion_parse_path_returns_unsupported() {
     let request = HttpRequest::post(vec![(
         "SAMLResponse".into(),
@@ -426,24 +426,25 @@ fn encrypted_assertion_parse_path_returns_unsupported() {
             br#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_encrypted_response" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">https://idp.example.com/metadata</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status><saml:EncryptedAssertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"/></samlp:Response>"#,
         ),
     )]);
-    let mut options = FlowOptions::default();
-    options.binding = Some(Binding::Post);
-    options.parser_type = Some(ParserType::SamlResponse);
-    options.signature_check = SignatureCheck::Require;
-    options.decrypt_key = Some("private key is unavailable without crypto feature");
+    let options = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlResponse),
+        signature_check: SignatureCheck::Require,
+        decrypt_key: Some("private key is unavailable without crypto feature"),
+        ..FlowOptions::default()
+    };
 
     assert_unsupported(flow(&options, &request));
 }
 
 #[test]
-#[allow(deprecated)]
 fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(create_logout_request(
         &EntitySetting::default(),
         sp(false)?.metadata.as_metadata(),
         idp(false)?.metadata.as_metadata(),
         Binding::Post,
-        &User::new("user@example.com"),
+        &LogoutUser::new("user@example.com"),
         None,
         true,
     ));
@@ -451,7 +452,6 @@ fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
-#[allow(deprecated)]
 fn signed_logout_response_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(create_logout_response(
         &EntitySetting::default(),

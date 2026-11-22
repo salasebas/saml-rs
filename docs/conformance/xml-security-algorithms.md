@@ -75,7 +75,7 @@ key of the same parameter set.
 ### Reference and coverage processing
 
 This section covers inbound embedded-signature processing in the public XML
-verification functions and the internal verifier used by typed and raw flows.
+verification functions and the internal verifier used by the typed flows.
 It does not claim conformance with an entire SAML profile or binding.
 
 | Rule | Actor and condition | Scope and basis |

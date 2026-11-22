@@ -143,8 +143,7 @@ impl SsoSession {
     ///
     /// When the request carried RelayState, this is the same value. When it
     /// carried none, this is whatever the identity provider supplied, which
-    /// the caller interprets by prior agreement. A session built with
-    /// [`TryFrom<FlowResult>`] reports `None`.
+    /// the caller interprets by prior agreement.
     pub fn relay_state(&self) -> Option<&RelayState> {
         self.relay_state.as_ref()
     }
@@ -203,9 +202,8 @@ impl SsoSession {
     /// The `SigAlg` URI of the verified binding signature, when the response
     /// carried one.
     ///
-    /// A binding signature travels as a parameter next to the message: an
-    /// HTTP-POST-SimpleSign signature, or an HTTP-Redirect signature on a
-    /// session built with [`TryFrom<FlowResult>`]. Every other response
+    /// A binding signature travels as a parameter next to the message: the
+    /// HTTP-POST-SimpleSign `Signature` parameter. Every other response
     /// returns `None`, including one signed only inside the XML. Those
     /// signatures are in [`Self::verified_xml_signatures`].
     pub fn binding_signature_algorithm_uri(&self) -> Option<&str> {
@@ -333,23 +331,6 @@ impl SsoSession {
         }
     }
 
-    /// Raw validated flow result.
-    ///
-    /// `saml_content` is the whole response after decryption, so it can hold
-    /// assertions other than this session's. Each one shares the session
-    /// issuer and principal. One without a bearer `SubjectConfirmation` was
-    /// not checked for audience, `Conditions` time window,
-    /// `SessionNotOnOrAfter`, or subject confirmation; evaluate it before
-    /// relying on it. A later bearer assertion passed those checks, but its
-    /// statements, attributes, and `SessionNotOnOrAfter` are not in this
-    /// session.
-    ///
-    /// When this session is built directly with [`TryFrom<FlowResult>`], it
-    /// carries only the checks of the flow that produced the `FlowResult`.
-    pub fn raw_flow(&self) -> &FlowResult {
-        &self.raw_flow
-    }
-
     fn earliest_replay_instant(&self) -> Result<OffsetDateTime, SamlError> {
         let mut candidates = Vec::with_capacity(3);
         if let Some(instant) = self.not_on_or_after() {
@@ -421,13 +402,7 @@ fn parse_replay_expiration(value: &str) -> Result<OffsetDateTime, SamlError> {
     })
 }
 
-impl TryFrom<FlowResult> for SsoSession {
-    type Error = SamlError;
-
-    fn try_from(raw_flow: FlowResult) -> Result<Self, Self::Error> {
-        Self::try_from_with_verified_xml_signatures(raw_flow, Vec::new(), None)
-    }
-}
+impl SsoSession {}
 
 impl SsoSession {
     pub(crate) fn try_from_with_verified_xml_signatures(

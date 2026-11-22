@@ -10,6 +10,7 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
+use saml_rs::tests::engine::IdpMessages;
 use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
@@ -314,7 +315,6 @@ fn each_encrypted_element() -> [XmlEncryptionPolicy; 3] {
 }
 
 #[test]
-#[allow(deprecated)]
 fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dyn std::error::Error>>
 {
     use saml_rs::constants::{key_encryption_algorithm::RSA_OAEP_MGF1P, Binding};
@@ -348,10 +348,10 @@ fn raw_key_transport_override_drops_typed_oaep_parameters() -> Result<(), Box<dy
         })
         .build()?,
     );
-    let mut raw = idp.raw_identity_provider().clone();
+    let mut raw = idp.identity_provider().clone();
     raw.setting.key_encryption_algorithm = RSA_OAEP_MGF1P.into();
     let response = raw.create_login_response(
-        sp.raw_service_provider(),
+        sp.service_provider(),
         Binding::Post,
         &saml_rs::entity::User::new("alice-persistent-id"),
         &saml_rs::idp::LoginResponseOptions::default(),

@@ -8,7 +8,8 @@
 //! not reject it for missing one of them.
 #![cfg(crypto)]
 
-mod common;
+use super::common;
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 
 use common::signing_credentials;
 
@@ -18,15 +19,17 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
+use saml_rs::constants::Binding;
 use saml_rs::entity::iso8601_offset;
+use saml_rs::entity::User;
+use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
-use saml_rs::raw::{
-    Binding, LoginRequestOptions, LoginResponseAttribute, LoginResponseOptions,
-    LoginResponseTemplate, User,
-};
-use saml_rs::template::replace_tags_by_value;
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::template::LoginResponseAttribute;
+use saml_rs::template::LoginResponseTemplate;
+use saml_rs::tests::engine::fill_template;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
     Attributes, AudienceValidationPolicy, EntityId, FormField, IdpConfig, IdpConfigBuilder,
@@ -422,7 +425,6 @@ fn accept_peer_attribute_statement(
     accept_peer_response(template, Vec::new())
 }
 
-#[allow(deprecated)]
 fn accept_peer_response(
     template: LoginResponseTemplate,
     user_attributes: Vec<(String, String)>,
@@ -434,12 +436,11 @@ fn accept_peer_response(
     let user = User {
         name_id: "alice@example.com".to_string(),
         attributes: user_attributes,
-        session_index: None,
     };
-    let mut raw_idp = idp.raw_identity_provider().clone();
+    let mut raw_idp = idp.identity_provider().clone();
     raw_idp.setting.login_response_template = Some(template);
     let context = raw_idp.create_login_response(
-        sp.raw_service_provider(),
+        sp.service_provider(),
         Binding::Post,
         &user,
         &LoginResponseOptions {
@@ -756,7 +757,6 @@ fn expect_name_id_length_error<T: std::fmt::Debug>(
 }
 
 #[test]
-#[allow(deprecated)]
 fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_256_characters(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // The limit counts characters, not bytes.
@@ -807,8 +807,8 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         .sso_response_template(SSO_RESPONSE_TEMPLATE)
         .build()?,
     );
-    expect_name_id_length_error(templated.raw_identity_provider().create_login_response(
-        sp.raw_service_provider(),
+    expect_name_id_length_error(templated.identity_provider().create_login_response(
+        sp.service_provider(),
         Binding::Post,
         &User::new("x".repeat(257)),
         &LoginResponseOptions::default(),
@@ -824,7 +824,6 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
 
 /// A peer identity provider that ignores the producer rules: the raw renderer
 /// callback writes the `<NameID>` as given.
-#[allow(deprecated)]
 fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let sp = sp()?;
     let idp = idp()?;
@@ -840,7 +839,7 @@ fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::erro
         let id = "_peer-response".to_string();
         let now = iso8601_offset(-60);
         let later = iso8601_offset(300);
-        let xml = replace_tags_by_value(
+        let xml = fill_template(
             template,
             &[
                 ("ID", id.clone()),
@@ -865,15 +864,15 @@ fn accept_peer_name_id(name_id: &NameId) -> Result<SsoSession, Box<dyn std::erro
         );
         (id, xml)
     };
-    let context = idp.raw_identity_provider().create_login_response(
-        sp.raw_service_provider(),
+    let context = idp.identity_provider().create_rendered_login_response(
+        sp.service_provider(),
         Binding::Post,
         &User::new(name_id.value()),
         &LoginResponseOptions {
             in_response_to: Some(&request_id),
-            custom: Some(&fill as &dyn Fn(&str) -> (String, String)),
             ..LoginResponseOptions::default()
         },
+        &fill,
     )?;
     Ok(sp.finish_sso(
         &idp_descriptor,
@@ -905,7 +904,15 @@ fn identity_provider_accepts_a_requested_identifier_that_misses_the_producer_rul
         let idp = idp()?;
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-        let xml = String::from_utf8(STANDARD.decode(&started.outbound.raw_context().context)?)?;
+        let xml = String::from_utf8(
+            STANDARD.decode(
+                started
+                    .outbound
+                    .post_form()?
+                    .value("SAMLRequest")
+                    .ok_or("missing SAMLRequest")?,
+            )?,
+        )?;
         let policy = xml
             .find("<samlp:NameIDPolicy")
             .ok_or("missing NameIDPolicy")?;
@@ -1016,7 +1023,6 @@ fn templated_idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
 }
 
 #[test]
-#[allow(deprecated)]
 fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
@@ -1038,10 +1044,10 @@ fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri
         ))?;
 
         // A NameID without a format is issued in the first configured format.
-        let mut raw_idp = idp()?.raw_identity_provider().clone();
+        let mut raw_idp = idp()?.identity_provider().clone();
         raw_idp.setting.name_id_format = vec![format.to_string()];
         expect_name_id_format_error(raw_idp.create_login_response(
-            sp.raw_service_provider(),
+            sp.service_provider(),
             Binding::Post,
             &User::new("subject-1"),
             &LoginResponseOptions::default(),
@@ -1122,29 +1128,30 @@ fn metadata_is_not_generated_for_an_entity_id_that_is_not_a_uri_of_at_most_1024_
 }
 
 fn raw_sp_metadata_config(entity_id: &str) -> SpMetadataInput {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = entity_id.into();
-    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, SP_ACS)];
-    config
+    SpMetadataInput {
+        entity_id: entity_id.into(),
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, SP_ACS)],
+        ..SpMetadataInput::default()
+    }
 }
 
 fn raw_idp_metadata_config(entity_id: &str) -> IdpMetadataInput {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = entity_id.into();
-    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, IDP_SSO_POST)];
-    config
+    IdpMetadataInput {
+        entity_id: entity_id.into(),
+        single_sign_on_service: vec![Endpoint::new(Binding::Post, IDP_SSO_POST)],
+        ..IdpMetadataInput::default()
+    }
 }
 
 #[test]
-#[allow(deprecated)]
 fn service_provider_does_not_request_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp()?;
     for format in INVALID_FORMATS {
-        let mut raw_sp = sp()?.raw_service_provider().clone();
+        let mut raw_sp = sp()?.service_provider().clone();
         raw_sp.setting.name_id_format = vec![format.to_string()];
         expect_name_id_format_error(raw_sp.create_login_request(
-            idp.raw_identity_provider(),
+            idp.identity_provider(),
             Binding::Post,
             &LoginRequestOptions::default(),
         ))?;
@@ -1153,13 +1160,12 @@ fn service_provider_does_not_request_a_name_id_format_that_is_not_an_absolute_ur
 }
 
 #[test]
-#[allow(deprecated)]
 fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // An omitted NameIDPolicy Format leaves the identity provider free to
     // return any kind of identifier (SAML Core §3.4.1.1).
     let idp = idp()?;
-    let mut raw_sp = sp()?.raw_service_provider().clone();
+    let mut raw_sp = sp()?.service_provider().clone();
     raw_sp.setting.name_id_format = Vec::new();
     for template in [
         None,
@@ -1167,7 +1173,7 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
     ] {
         raw_sp.setting.login_request_template = template;
         let context = raw_sp.create_login_request(
-            idp.raw_identity_provider(),
+            idp.identity_provider(),
             Binding::Post,
             &LoginRequestOptions::default(),
         )?;

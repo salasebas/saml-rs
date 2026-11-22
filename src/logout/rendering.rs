@@ -1,5 +1,5 @@
 use crate::constants::namespace;
-use crate::entity::{EntitySetting, User};
+use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::Status;
@@ -26,15 +26,7 @@ pub(super) struct LogoutRequestTimeAttributes<'a> {
     pub(super) not_on_or_after: Option<&'a str>,
 }
 
-impl<'a> LogoutRequestSubject<'a> {
-    pub(super) fn from_user(user: &'a User) -> Self {
-        Self {
-            name_id: &user.name_id,
-            qualifiers: OutboundNameIdQualifiers::default(),
-            session_indexes: user.session_index.as_deref().into_iter().collect(),
-        }
-    }
-}
+impl<'a> LogoutRequestSubject<'a> {}
 
 pub(super) fn render_default_logout_response(
     setting: &EntitySetting,

@@ -1,7 +1,7 @@
 //! Default SAML message templates and tag substitution.
 //!
-//! `{Tag}` placeholders are filled by [`replace_tags_by_value`] or
-//! [`replace_tags_by_optional_value`]. Replacement values are XML-escaped in
+//! `{Tag}` placeholders are filled by [`replace_tags_by_optional_value`].
+//! Replacement values are XML-escaped in
 //! both attribute and element-text positions so caller-provided data cannot
 //! become signed SAML markup. Text inserted for a value is not scanned for
 //! further placeholders.
@@ -81,19 +81,6 @@ pub(crate) fn validate_tag_prefixes(
         ));
     }
     Ok(())
-}
-
-/// Replace `{key}` placeholders in `raw_xml`.
-///
-/// Placeholder replacement text is XML-escaped before insertion and is not
-/// scanned for `{key}` tokens. XML fragments such as generated attribute
-/// statements must be spliced into templates before calling this helper.
-pub fn replace_tags_by_value(raw_xml: &str, tags: &[(&str, String)]) -> String {
-    substitute_placeholders(raw_xml, |key| {
-        tags.iter()
-            .find(|(tag, _)| *tag == key)
-            .map(|(_, value)| value.as_str())
-    })
 }
 
 /// Replace `{key}` placeholders in `raw_xml`, omitting optional placeholders.
@@ -319,11 +306,11 @@ pub struct LoginResponseTemplate {
 /// Build an `<AttributeStatement>` from `attributes`.
 ///
 /// Each attribute's value becomes a new `{attr<Tag>}` placeholder to be filled
-/// later by [`replace_tags_by_value`]. The other attribute fields are
+/// later by [`replace_tags_by_optional_value`]. The other attribute fields are
 /// XML-escaped, and each `{` in them is written as the character reference
 /// `&#123;`, so no placeholder pass substitutes inside them.
 #[deprecated(
-    note = "`saml_rs::template` becomes crate-private in the next minor release; pass attributes with `SsoAssertion::with_attributes`, or set `LoginResponseTemplate::attributes` for a custom login response template"
+    note = "`saml_rs::template` becomes crate-private in the next minor release; pass attributes with `SsoAssertion::with_attributes`"
 )]
 pub fn attribute_statement_builder(
     attributes: &[LoginResponseAttribute],
@@ -431,11 +418,11 @@ mod tests {
 
     #[test]
     fn replacement_values_are_escaped_in_attributes_and_element_text() {
-        let rendered = replace_tags_by_value(
+        let rendered = replace_tags_by_optional_value(
             "<a X=\"{V}\">{T}</a>",
             &[
-                ("V", "a\"b&c<d".to_string()),
-                ("T", "<raw>&amp;".to_string()),
+                ("V", Some("a\"b&c<d".to_string())),
+                ("T", Some("<raw>&amp;".to_string())),
             ],
         );
         assert_eq!(
@@ -570,13 +557,13 @@ mod tests {
 
     #[test]
     fn inserted_values_are_not_scanned_for_later_placeholders() {
-        let rendered = replace_tags_by_value(
+        let rendered = replace_tags_by_optional_value(
             "<n>{NameID}</n><a>{attrRole}</a><m>{attrMail}</m><r>{InResponseTo}</r>",
             &[
-                ("NameID", "a<b>{InResponseTo}".to_string()),
-                ("attrRole", "admin-{attrMail}".to_string()),
-                ("attrMail", "user".to_string()),
-                ("InResponseTo", "_req".to_string()),
+                ("NameID", Some("a<b>{InResponseTo}".to_string())),
+                ("attrRole", Some("admin-{attrMail}".to_string())),
+                ("attrMail", Some("user".to_string())),
+                ("InResponseTo", Some("_req".to_string())),
             ],
         );
         assert_eq!(

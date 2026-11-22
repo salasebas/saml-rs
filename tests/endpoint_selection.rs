@@ -261,9 +261,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
 }
 
 #[test]
-#[allow(deprecated)]
-fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::error::Error>> {
     let idp = Saml::idp(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -327,13 +325,6 @@ fn protocol_binding_alone_and_raw_responses_use_the_binding_default(
                     options,
                 )?;
                 assert_eq!(response.post_form()?.action().as_str(), FIRST_ACS);
-                let raw_response = idp.raw_identity_provider().create_login_response(
-                    sp.raw_service_provider(),
-                    Binding::from(binding),
-                    &saml_rs::entity::User::new("alice@example.com"),
-                    &saml_rs::idp::LoginResponseOptions::default(),
-                )?;
-                assert_eq!(raw_response.entity_endpoint, FIRST_ACS);
             }
             SsoResponseBinding::Artifact => {
                 let mut issued = IssuedArtifacts::expire_after(std::time::Duration::from_secs(60));

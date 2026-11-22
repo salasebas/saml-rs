@@ -1,9 +1,6 @@
 #![cfg(crypto)]
 
-#[path = "common/replay_cache.rs"]
-mod replay_cache;
-
-use replay_cache::RecordingReplayCache;
+use super::replay_cache::RecordingReplayCache;
 use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
@@ -41,13 +38,13 @@ const MISMATCHED_DESTINATION: &str = "https://untrusted.example.test/slo/redirec
 const RSA_SHA256: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
 
 const SHIBBOLETH_QUERY: &str =
-    include_str!("fixtures/interop/shibboleth-idp-5.2.3/logout-request.query");
+    include_str!("../../tests/fixtures/interop/shibboleth-idp-5.2.3/logout-request.query");
 const SHIBBOLETH_METADATA: &str =
-    include_str!("fixtures/interop/shibboleth-idp-5.2.3/idp-metadata.xml");
+    include_str!("../../tests/fixtures/interop/shibboleth-idp-5.2.3/idp-metadata.xml");
 const SIMPLESAMLPHP_QUERY: &str =
-    include_str!("fixtures/interop/simplesamlphp-2.5.2/logout-request.query");
+    include_str!("../../tests/fixtures/interop/simplesamlphp-2.5.2/logout-request.query");
 const SIMPLESAMLPHP_METADATA: &str =
-    include_str!("fixtures/interop/simplesamlphp-2.5.2/sp-metadata.xml");
+    include_str!("../../tests/fixtures/interop/simplesamlphp-2.5.2/sp-metadata.xml");
 
 fn fixed_time(value: &str) -> Result<SystemTime, Box<dyn std::error::Error>> {
     Ok(SystemTime::from(OffsetDateTime::parse(value, &Rfc3339)?))

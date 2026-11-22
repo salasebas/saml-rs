@@ -112,7 +112,8 @@ are removed from the public API. Call `finish_slo` on either role to obtain a
 completion with the response and received RelayState. Use a logout exchange
 in tests that previously constructed a completion by hand.
 
-`response()` and `raw_flow()` now return references directly. Replace the
+`response()` now returns a reference directly, and `raw_flow()` is removed
+with the raw API. Replace the
 removed `LogoutCompleted::status()` with `completed.response().status()` to
 read the typed status, including any subordinate code such as `PartialLogout`.
 
@@ -132,7 +133,6 @@ After the upgrade, read the fields from the completion returned by `finish_slo`.
 #     input: Inbound<LogoutResponse>, validation: SamlValidationContext<'_>) -> Result<(), SamlError> {
 let completed = sp.finish_slo(idp, pending, input, validation)?;
 let response = completed.response();
-let raw = completed.raw_flow();
 let status = response.status();
 let top_level_uri = status.top_level().as_uri();
 let subordinate = status.subordinate();

@@ -3,14 +3,17 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use saml_rs::constants::Binding;
 use saml_rs::constants::ParserType;
 use saml_rs::crypto::keys::read_private_key;
 use saml_rs::crypto::{
     verify_signature, verify_signature_with_limits, BergshamraBackend, XmlSecurityBackend,
 };
 use saml_rs::error::{ReferenceResolutionReason, SignatureVerificationReason};
-#[allow(deprecated)]
-use saml_rs::raw::{flow, Binding, FlowOptions, HttpRequest, SignatureCheck};
+use saml_rs::flow::FlowOptions;
+use saml_rs::flow::HttpRequest;
+use saml_rs::flow::SignatureCheck;
+use saml_rs::tests::engine::flow;
 use saml_rs::XmlLimits;
 use saml_rs::{SamlError, XmlSignatureProfile};
 
@@ -44,7 +47,6 @@ fn sign(xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     )?)
 }
 
-#[allow(deprecated)]
 fn verify_flow(xml: &str, profile: XmlSignatureProfile) -> Result<(), SamlError> {
     let certs = [CERT.to_string()];
     let options = FlowOptions {

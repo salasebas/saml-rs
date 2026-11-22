@@ -3,42 +3,46 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::config::LOGOUT_REQUEST_TEMPLATE;
 use saml_rs::constants::Binding;
-use saml_rs::entity::{EntitySetting, User};
-#[allow(deprecated)]
-use saml_rs::logout::{
+use saml_rs::entity::EntitySetting;
+use saml_rs::idp::IdentityProvider;
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::LogoutUser;
+use saml_rs::tests::engine::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
 };
-use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, ServiceProvider};
 use saml_rs::SamlError;
 
 fn idp() -> Result<IdentityProvider, SamlError> {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = "https://idp.example.com/metadata".into();
-    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
-    config.single_logout_service = vec![
-        Endpoint::new(Binding::Post, "https://idp/slo"),
-        Endpoint::new(Binding::Redirect, "https://idp/slo"),
-        Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
-    ];
+    let config = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        single_logout_service: vec![
+            Endpoint::new(Binding::Post, "https://idp/slo"),
+            Endpoint::new(Binding::Redirect, "https://idp/slo"),
+            Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
+        ],
+        ..IdpMetadataInput::default()
+    };
     IdentityProvider::from_config(&config, EntitySetting::default())
 }
 
 fn sp() -> Result<ServiceProvider, SamlError> {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = "https://sp.example.com/metadata".into();
-    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp/slo")];
-    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    let config = SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        ..SpMetadataInput::default()
+    };
     ServiceProvider::from_config(&config, EntitySetting::default())
 }
 
-fn user(session_index: Option<&str>) -> User {
-    let mut user = User::new("user@example.com");
+fn user(session_index: Option<&str>) -> LogoutUser {
+    let mut user = LogoutUser::new("user@example.com");
     user.session_index = session_index.map(str::to_string);
     user
 }
 
-#[allow(deprecated)]
 fn logout_request_xml(
     binding: Binding,
     session_index: Option<&str>,
@@ -58,7 +62,6 @@ fn logout_request_xml(
     decode_logout_request(binding, &context.context)
 }
 
-#[allow(deprecated)]
 fn logout_response_xml(
     binding: Binding,
     in_response_to: Option<&str>,
@@ -146,7 +149,6 @@ fn logout_request_omits_session_index_when_absent() -> Result<(), Box<dyn std::e
 }
 
 #[test]
-#[allow(deprecated)]
 fn public_raw_logout_request_generation_keeps_expiration_omitted_for_supported_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Redirect, Binding::Post, Binding::SimpleSign] {
@@ -172,7 +174,6 @@ fn public_raw_logout_request_generation_keeps_expiration_omitted_for_supported_b
 }
 
 #[test]
-#[allow(deprecated)]
 fn public_raw_logout_request_preserves_unrecognized_expiration_placeholder(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sp = sp()?;

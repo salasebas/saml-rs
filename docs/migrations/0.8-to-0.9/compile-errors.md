@@ -17,13 +17,13 @@
 | A field of `SpConfig`, `IdpConfig`, `SpMetadataConfig`, or `IdpMetadataConfig`, read or assigned | Private; read it through the getter of the same name | [1.8](#18-read-config-fields-through-getters) |
 | A struct literal of `Credentials`, one of its fields, or `DecryptionCredential` | Private; set them with the `with_*` methods and `X509Credential`, and read them through getters | [1.9](#19-fill-credentials-with-the-with-methods) |
 | `EntitySetting::try_from(&SpConfig)` or `EntitySetting::try_from(&IdpConfig)` | Removed | [1.10](#110-stop-converting-typed-configs-to-entitysetting) |
-| `saml_rs::ServiceProvider`, `saml_rs::IdentityProvider`, `saml_rs::EntitySetting` | Removed from the crate root | [1.11](#111-import-the-raw-roles-from-raw) |
+| `saml_rs::ServiceProvider`, `saml_rs::IdentityProvider`, `saml_rs::EntitySetting`, or a path under `saml_rs::raw` | Removed | [1.11](#111-move-the-raw-roles-to-the-typed-api) |
 | `saml_rs::raw::metadata` | Removed | [1.12](#112-import-metadata-from-metadata) |
-| `ServiceProvider::create_login_request_with_options` | Renamed to `create_login_request` | [1.13](#113-pass-options-to-create_login_request) |
-| `ServiceProvider::create_login_request(idp, binding, custom)` | Takes `&LoginRequestOptions` | [1.13](#113-pass-options-to-create_login_request) |
-| `ServiceProvider::parse_login_response` | Removed | [1.14](#114-call-parse_unsolicited_login_response) |
-| `BindingContext::try_post_form`, `binding::try_saml_post_binding_form` | Renamed to `post_form` and `saml_post_binding_form` | [1.15](#115-handle-the-post-form-error) |
-| `BindingContext::post_form`, `binding::saml_post_binding_form` | Return `Result` | [1.15](#115-handle-the-post-form-error) |
+| `ServiceProvider::create_login_request`, `create_login_request_with_options`, or `parse_login_response` | Removed | [1.13](#113-start-sso-instead-of-create_login_request) |
+| `ServiceProvider::parse_unsolicited_login_response` | Removed | [1.14](#114-accept-unsolicited-sso-instead-of-parse_unsolicited_login_response) |
+| `BindingContext::post_form` or `try_post_form` | Removed | [1.15](#115-handle-the-post-form-error) |
+| `binding::try_saml_post_binding_form` | Renamed to `saml_post_binding_form` | [1.15](#115-handle-the-post-form-error) |
+| `binding::saml_post_binding_form` | Returns `Result` | [1.15](#115-handle-the-post-form-error) |
 | A variant ending in `ForCompatibility`, `DataEncryptionAlgorithm::Aes128`, `Aes256`, or `TripleDes` | Renamed | [1.16](#116-rename-the-relaxed-policy-and-algorithm-variants) |
 | `XmlPolicy::clock_drifts` | Removed; set `ClockSkew` on `SamlValidationContext` | [1.17](#117-set-clock-skew-on-the-validation-context) |
 | `metadata::try_generate_idp_metadata` | Removed; call `generate_idp_metadata` | [1.18](#118-call-generate_idp_metadata) |
@@ -33,7 +33,7 @@
 | `constants::MessageSignatureOrder`, `AlgorithmPolicy::message_signing_order`, or `EntitySetting::message_signing_order` | Removed; saml-rs never used the value | [1.22](#122-remove-message_signing_order) |
 | `MessageSignatureOrder::as_str` or `ParserType::as_str` | Removed | [1.23](#123-replace-parsertypeas_str) |
 | `constants::status_code::AUTH_FAILED` | Renamed to `AUTHN_FAILED` | [1.24](#124-rename-auth_failed-to-authn_failed) |
-| `FlowOptions::check_signature`, `verify_signature_if_present`, or `clock_drifts` | Replaced by `signature_check` and `clock_skew` | [3.1](raw-api.md#31-set-the-signature-check-and-clock-skew-on-flowoptions) |
+| `FlowOptions` or any of its fields | Removed with the raw API; set signature rules on the typed validation policies and clock skew on `SamlValidationContext` | [3](raw-api.md) |
 | A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | Returns the facade, not a `Result` | [Typed config](config.md#remove-the--after-samlsp-and-samlidp) |
@@ -460,20 +460,17 @@ secret back. See [1.3](#13-keep-your-own-copy-of-credential-material).
 **Affects:** callers that converted a typed config into the raw
 `EntitySetting` with `TryFrom`.
 
-The conversion is now internal to `Saml::sp` and `Saml::idp`. Keep the typed
-config and pass it to `Saml::sp` or `Saml::idp`. A raw integration builds its
-own `EntitySetting`, as the raw API always has.
+The conversion is now internal to `Saml::sp` and `Saml::idp`, and
+`EntitySetting` is no longer public. Keep the typed config and pass it to
+`Saml::sp` or `Saml::idp`.
 
-## 1.11 Import the raw roles from `raw`
+## 1.11 Move the raw roles to the typed API
 
 **Affects:** code that imports `ServiceProvider`, `IdentityProvider`, or
-`EntitySetting` from the crate root.
+`EntitySetting` from the crate root or from `saml_rs::raw`.
 
-**Now:** each item has one path, under `raw`:
-
-```rust
-use saml_rs::raw::{EntitySetting, IdentityProvider, ServiceProvider};
-```
+**Now:** the raw API is removed. Configure `SpConfig` or `IdpConfig` and call
+the typed `Saml` operations, as [section 3](raw-api.md) shows.
 
 ## 1.12 Import metadata from `metadata`
 
@@ -486,71 +483,39 @@ named `IdpMetadataInput` and `SpMetadataInput`:
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 ```
 
-## 1.13 Pass options to `create_login_request`
+## 1.13 Start SSO instead of `create_login_request`
 
-**Affects:** raw service providers that build an `AuthnRequest` with
-`create_login_request` or `create_login_request_with_options`.
+**Affects:** raw service providers that call `create_login_request`,
+`create_login_request_with_options`, or `parse_login_response`.
 
-**Before:** `create_login_request` took an optional template replacement, and
-`create_login_request_with_options` took `&LoginRequestOptions`.
-**Now:** one `create_login_request` takes `&LoginRequestOptions`.
+**Now:** these functions are removed with the raw API. Call
+`Saml::<Sp>::start_sso`, then `finish_sso` for the response, as
+[section 3](raw-api.md) shows.
 
-Replace `None` with the default options:
+## 1.14 Accept unsolicited SSO instead of `parse_unsolicited_login_response`
 
-```rust
-use saml_rs::raw::LoginRequestOptions;
+**Affects:** raw service providers that call `parse_unsolicited_login_response`.
 
-let request = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
-```
-
-Move a template replacement into `custom`:
-
-```rust
-let request = sp.create_login_request(
-    &idp,
-    Binding::Post,
-    &LoginRequestOptions {
-        custom: Some(&replace),
-        ..Default::default()
-    },
-)?;
-```
-
-Rename calls to `create_login_request_with_options`; the arguments do not
-change.
-
-## 1.14 Call `parse_unsolicited_login_response`
-
-**Affects:** raw service providers that call `parse_login_response`.
-
-**Before:** `parse_login_response` was another name for
-`parse_unsolicited_login_response`. It accepted only an unsolicited response
-and rejected a non-empty `InResponseTo`.
-**Now:** it is removed. Rename the call; the behaviour is the same:
-
-```rust
-let result = sp.parse_unsolicited_login_response(&idp, Binding::Post, &request)?;
-```
-
-If the response answers an `AuthnRequest` you sent, call
-`parse_login_response_with_request_id` with that request's ID instead.
+**Now:** it is removed with the raw API. Call
+`Saml::<Sp>::accept_unsolicited_sso`. It rejects an unsolicited response that
+carries `InResponseTo`, including an empty one.
 
 ## 1.15 Handle the POST form error
 
-**Affects:** code that renders an HTTP-POST form with `BindingContext::post_form`,
-`BindingContext::try_post_form`, `binding::saml_post_binding_form`, or
-`binding::try_saml_post_binding_form`.
+**Affects:** code that renders an HTTP-POST form with
+`binding::saml_post_binding_form` or `binding::try_saml_post_binding_form`.
+`BindingContext::post_form` and `try_post_form` are removed with the raw API;
+render `Outbound::post_form` instead.
 
-**Before:** `post_form` and `saml_post_binding_form` rendered any form
-`action`, and dropped a detached SimpleSign signature that had only one of
-`SigAlg` or `Signature`. The `try_` versions rejected both cases.
-**Now:** only the checked versions remain, under the shorter names.
-`post_form` and `saml_post_binding_form` return `SamlError::Invalid` when the
-action is not an absolute `http` or `https` URL, or when the SimpleSign
-signature state is partial:
+**Before:** `saml_post_binding_form` rendered any form `action`, and dropped a
+detached SimpleSign signature that had only one of `SigAlg` or `Signature`.
+The `try_` version rejected both cases.
+**Now:** only the checked version remains, under the shorter name.
+`saml_post_binding_form` returns `SamlError::Invalid` when the action is not an
+absolute `http` or `https` URL, or when the SimpleSign signature state is
+partial:
 
 ```rust
-let html = context.post_form()?;
 let html = saml_rs::binding::saml_post_binding_form(action, "SAMLResponse", &b64, None)?;
 ```
 
@@ -653,12 +618,10 @@ it. `finish_sso`, `accept_unsolicited_sso`, `receive_sso`, `receive_slo`,
 `finish_slo`, and the other typed receive operations took their clock skew
 from `SamlValidationContext`. A response inside the configured drift but
 outside the context's skew failed with `SamlError::TimeWindowInvalid`. Only
-the deprecated raw functions, reached through `raw_service_provider` or
-`raw_identity_provider`, read the configured drift.
+the raw functions read the configured drift.
 
 **Now:** the field is removed. `SamlValidationContext` is the only place that
-sets clock skew for a typed operation. The raw `ServiceProvider` and
-`IdentityProvider` that a typed facade wraps check time windows with no drift.
+sets clock skew.
 
 **Upgrade:** stop setting `clock_drifts`. To keep the tolerance it named, pass
 the same values to every validation context.
@@ -680,10 +643,6 @@ let config = SpConfig::builder(entity_id, acs).build()?;
 let validation = SamlValidationContext::new(now, replay)
     .with_clock_skew(ClockSkew::from_millis(-120_000, 180_000));
 ```
-
-If you call a deprecated raw function through `raw_service_provider` or
-`raw_identity_provider` and depend on the drift, move that call to the typed
-operation in [section 3](raw-api.md#3-move-off-the-deprecated-raw-api).
 
 ## 1.18 Call `generate_idp_metadata`
 

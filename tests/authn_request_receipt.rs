@@ -176,7 +176,12 @@ fn response_xml(
     response: &Outbound<saml_rs::SsoResponse>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     Ok(String::from_utf8(
-        STANDARD.decode(&response.raw_context().context)?,
+        STANDARD.decode(
+            response
+                .post_form()?
+                .value("SAMLResponse")
+                .ok_or("missing SAMLResponse")?,
+        )?,
     )?)
 }
 
@@ -429,7 +434,7 @@ fn received_authn_request_accepts_these_fields_under_recommended_and_compatibili
             SsoAssertion::new(NameId::new("alice@example.com")),
             RespondSso::post(),
         )?;
-        assert_eq!(response.raw_context().request_type, "SAMLResponse");
+        assert!(response.post_form()?.value("SAMLResponse").is_some());
     }
     Ok(())
 }

@@ -256,8 +256,8 @@
 //!
 //! Metadata trust is explicit and caller-pinned. [`MetadataTrustPolicy`] can
 //! accept unsigned metadata with
-//! [`MetadataTrustPolicy::AllowUnsigned`] to preserve a samlify-port
-//! or raw import, or require a signature from caller-provided certificates with
+//! [`MetadataTrustPolicy::AllowUnsigned`], or require a signature from
+//! caller-provided certificates with
 //! [`MetadataTrustPolicy::RequireSignature`].
 //! [`MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization`]
 //! also accepts inclusive canonicalization. Both reject MD5 and RIPEMD-160
@@ -266,17 +266,6 @@
 //! accepts them. Prefer signed metadata with
 //! pinned certificates for production trust decisions; the crate does not treat
 //! the public web PKI CA store as SAML metadata trust.
-//!
-//! # Raw samlify-port API
-//!
-//! The [`raw`] module is the samlify-port surface. It is deprecated and is
-//! removed in the next minor release: each raw message function warns with its
-//! typed replacement, and [`raw`] lists them. [`SpValidationPolicy::compatibility`]
-//! keeps the raw behavior when leaving the raw API. The two surfaces keep their
-//! own defaults. `Default` and the config builders start
-//! on Recommended. Import [`raw::ServiceProvider`], [`raw::IdentityProvider`],
-//! [`raw::EntitySetting`], [`raw::HttpRequest`], and [`raw::BindingContext`]
-//! from [`raw`]; the crate root does not re-export them.
 //!
 //! Visible docs.rs modules and crate-root re-exports are the supported public
 //! documentation surface. Hidden modules are lower-level implementation paths
@@ -402,23 +391,17 @@ pub use schema::SchemaValidator;
 pub mod crypto;
 mod discovery;
 mod encrypted_elements;
-#[doc(hidden)]
-pub mod entity;
+mod entity;
 pub mod error;
-#[doc(hidden)]
-pub mod flow;
+mod flow;
 mod http_header;
-#[doc(hidden)]
-pub mod idp;
-#[doc(hidden)]
-pub mod logout;
+mod idp;
+mod logout;
 pub mod metadata;
 pub mod model;
 mod name_id_management;
-pub mod raw;
 mod soap;
-#[doc(hidden)]
-pub mod sp;
+mod sp;
 #[doc(hidden)]
 pub mod template;
 #[doc(hidden)]

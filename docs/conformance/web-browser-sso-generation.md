@@ -5,7 +5,7 @@ Producer rules for typed Web Browser SSO generation: service-provider
 `SpValidationPolicy::recommended` leaves AuthnRequest signing and identifier
 creation off. `IdpValidationPolicy::recommended` does not turn assertion
 encryption on. `Default` and the config builders are
-Recommended. Raw generation keeps its existing validation defaults. The
+Recommended. The
 preset distinction is recorded in
 [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
@@ -16,8 +16,7 @@ Schema citations are the OASIS assertion and protocol schemas. A profile or bind
 `StartSso::apply_producer_rules` and `RespondSso::apply_producer_rules` select
 the producer rules below.
 The constructors `redirect`, `post`, and `simple_sign` leave that selection
-off, which is the samlify-port generation kept for callers leaving the raw
-API.
+off, which is the samlify-port generation.
 
 A response delivered as an HTTP-Artifact is built by these same rules. Its
 delivery is in [HTTP-Artifact response](web-browser-sso-artifact.md).
@@ -40,7 +39,7 @@ delivery is in [HTTP-Artifact response](web-browser-sso-artifact.md).
 | `IsPassive` | Service provider | Generate AuthnRequest over HTTP-Redirect, HTTP-POST, or SimpleSign | Optional. Core §3.4.1. Omitted unless `StartSso::passive`; omission means false. A true value requires the responding IdP and user agent to avoid visibly taking control of the requester's interface; when `ForceAuthn` is also true, fresh authentication must meet that passive constraint |
 | `ProviderName` | Service provider | Generate AuthnRequest over HTTP-Redirect, HTTP-POST, or SimpleSign | Optional. Core §3.4.1 and protocol schema `AuthnRequestType`. `StartSso::provider_name` writes the requester's human-readable name only when set, with XML escaping. The `xs:string` type allows an empty name, which is sent. A character XML 1.0 forbids cannot be written, so `start_sso` returns `Invalid` for it, the rule `start_paos_sso` applies to `ecp:Request`. These three options require the built-in AuthnRequest renderer; combining one with a custom template returns `Invalid` rather than silently omitting it |
 | Identifier creation (`AllowCreate="true"`) | Service provider | Generate AuthnRequest | Optional capability. Errata 05 E14 says a requester that does not make specific use of the attribute `SHOULD` generally set it to true, and the schema default is false when the attribute is omitted. `NameIdCreationPolicy` is that specific use. The capability stays off (`AllowCreate="false"`) unless `NameIdCreationPolicy::AllowCreate`. It is not emitted at all for a transient format when producer rules are selected. A service provider with no configured format omits `Format`, which leaves the identity provider free to return any kind of identifier (Core §3.4.1.1). Typed service providers with no configured format already advertise and request `emailAddress` |
-| `NameIDPolicy` `Format` is omitted or an absolute URI reference | Service provider | Generate AuthnRequest | Mandatory. Core §1.3.2, as read in [identifiers](identifiers.md#name-identifier-formats). The first configured NameID format is checked with and without producer rules, also when a template receives it in `{NameIDFormat}`. A raw `custom` callback writes its own XML and is not checked |
+| `NameIDPolicy` `Format` is omitted or an absolute URI reference | Service provider | Generate AuthnRequest | Mandatory. Core §1.3.2, as read in [identifiers](identifiers.md#name-identifier-formats). The first configured NameID format is checked with and without producer rules, also when a template receives it in `{NameIDFormat}`. |
 | `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Service provider | HTTP | Recommendation. Bindings §3.4.5.1 and §3.5.5.1, and HTTP-POST-SimpleSign CD-04 §2.7.1. `Outbound::headers` includes those values for the redirect, the POST form, and the SimpleSign form. saml-rs does not send the HTTP response |
 
 ## Identity provider Response

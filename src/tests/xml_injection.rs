@@ -15,12 +15,15 @@ use saml_rs::crypto::{decrypt_assertion_with_limits, AssertionDecryptionOptions}
 use saml_rs::crypto::{encrypt_assertion, sign_saml_xml, verify_signature};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::flow::HttpRequest;
+use saml_rs::idp::IdentityProvider;
 use saml_rs::idp::LoginResponseOptions;
-use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{
-    IdentityProvider, LoginResponseAttribute, LoginResponseTemplate, ServiceProvider,
-};
+use saml_rs::sp::ServiceProvider;
+use saml_rs::template::LoginResponseAttribute;
+use saml_rs::template::LoginResponseTemplate;
+use saml_rs::tests::engine::LogoutUser;
+use saml_rs::tests::engine::{create_logout_request, create_logout_response};
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::xml::dom::{parse_all_roots, Node};
 use saml_rs::SamlError;
 use saml_rs::{SignatureAction, SignatureConfig};
@@ -385,7 +388,6 @@ fn login_response_attribute_values_escape_xml_markup_before_signing() -> TestRes
     let user = User {
         name_id: "attacker@example.com".into(),
         attributes: vec![("user.role".into(), injected_role.into())],
-        session_index: None,
     };
 
     let ctx = idp.create_login_response(
@@ -443,7 +445,6 @@ fn login_response_attribute_default_rendering_uses_exact_value_tags() -> TestRes
             ("user.email".into(), DOT_EMAIL.into()),
             ("user_email".into(), UNDERSCORE_EMAIL.into()),
         ],
-        session_index: None,
     };
 
     let ctx = idp.create_login_response(
@@ -532,7 +533,6 @@ fn login_response_attribute_default_rendering_leaves_no_attr_placeholders() -> T
     let user = User {
         name_id: "attacker@example.com".into(),
         attributes: vec![("user.email".into(), "user@example.com".into())],
-        session_index: None,
     };
 
     let ctx = idp.create_login_response(
@@ -574,7 +574,6 @@ fn login_response_attribute_metadata_escapes_xml_markup_before_signing() -> Test
     let user = User {
         name_id: "attacker@example.com".into(),
         attributes: vec![("user.email".into(), ATTRIBUTE_VALUE.into())],
-        session_index: None,
     };
 
     let ctx = idp.create_login_response(
@@ -649,7 +648,6 @@ fn login_response_attribute_metadata_placeholders_are_written_literally() -> Tes
             ("user.role".into(), "admin".into()),
             ("user.email".into(), "user@example.com".into()),
         ],
-        session_index: None,
     };
 
     let ctx = idp.create_login_response(
@@ -716,7 +714,7 @@ fn logout_request_name_id_escapes_xml_markup_before_signing() -> TestResult {
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         Binding::Post,
-        &User::new(injected_name_id),
+        &LogoutUser::new(injected_name_id),
         None,
         true,
     )?;
@@ -740,7 +738,7 @@ fn logout_request_session_index_escapes_xml_markup_before_signing() -> TestResul
         "<samlp:SessionIndex>admin-session</samlp:SessionIndex>",
         "<samlp:SessionIndex>"
     );
-    let mut user = User::new("attacker@example.com");
+    let mut user = LogoutUser::new("attacker@example.com");
     user.session_index = Some(injected_session_index.into());
 
     let ctx = create_logout_request(

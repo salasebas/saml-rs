@@ -3,6 +3,8 @@
 #![cfg(crypto)]
 
 use super::common;
+use saml_rs::tests::engine::LogoutUser;
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 
 #[cfg(not(feature = "crypto-fips"))]
 #[path = "typed_sso/encryption.rs"]
@@ -23,15 +25,16 @@ use saml_rs::binding::{
 };
 use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
+use saml_rs::constants::Binding;
 use saml_rs::constants::{status_code, ParserType};
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
+use saml_rs::idp::IdentityProvider;
 use saml_rs::idp::LoginResponseOptions;
-#[allow(deprecated)]
-use saml_rs::logout::create_logout_request;
-use saml_rs::raw::Binding;
-use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::create_logout_request;
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
@@ -459,15 +462,12 @@ fn start_receive_respond_with(
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, start_options)?;
-    assert_eq!(started.outbound.raw_context().request_type, "SAMLRequest");
 
     let request_input = Inbound::post(post_fields(&started.outbound)?);
     let received = idp.receive_sso(&sp_descriptor, request_input, validation())?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
-    assert!(!received.message().raw_flow().saml_content.is_empty());
 
     let response = idp.respond_sso(&sp_descriptor, &received, outcome, respond_options)?;
-    assert_eq!(response.raw_context().request_type, "SAMLResponse");
     let response_fields = post_fields(&response)?;
 
     Ok(SsoExchange {
@@ -1200,7 +1200,6 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
     );
     assert!(session.response_issue_instant().as_str().ends_with('Z'));
     assert_eq!(session.name_id().value(), "alice@example.com");
-    assert!(!session.raw_flow().saml_content.is_empty());
     assert_eq!(
         exchange.received.message().id(),
         exchange.pending.request_id()
@@ -1208,7 +1207,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
     assert_eq!(
         exchange
             .idp
-            .raw_identity_provider()
+            .identity_provider()
             .metadata
             .as_metadata()
             .entity_id(),
@@ -1608,7 +1607,6 @@ fn typed_facade_persists_indexed_acs_for_response_validation(
 }
 
 #[test]
-#[allow(deprecated)]
 fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     const PEER_IDP_ENTITY_ID: &str = "idp.example.com";
@@ -1683,7 +1681,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         peer_idp.metadata.as_metadata(),
         local_sp.metadata.as_metadata(),
         Binding::Post,
-        &User::new("alice@example.com"),
+        &LogoutUser::new("alice@example.com"),
         None,
         true,
     )?;
@@ -1787,7 +1785,7 @@ fn typed_facade_rejects_response_binding_mismatch() -> Result<(), Box<dyn std::e
         validation(),
     ) {
         Err(SamlError::UnsupportedBinding { binding }) => {
-            assert_eq!(binding, saml_rs::raw::Binding::Post);
+            assert_eq!(binding, saml_rs::constants::Binding::Post);
             Ok(())
         }
         other => Err(format!("expected UnsupportedBinding, got {other:?}").into()),

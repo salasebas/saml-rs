@@ -158,7 +158,7 @@ pub trait ReplayCache {
 /// `docs/conformance/metadata-and-replay.md`.
 #[non_exhaustive]
 pub enum ReplayPolicy<'a> {
-    /// Skip replay checks. The raw API and the samlify port have no replay cache.
+    /// Skip replay checks, as the samlify port did.
     Disabled,
     /// Require the caller to provide replay storage.
     RequireCache(&'a mut dyn ReplayCache),

@@ -95,7 +95,7 @@ pub(crate) fn decrypt_encrypted_id(
         &crate::xml::fields::logout_request_fields(),
         setting.xml_limits,
     )?;
-    LogoutRequest::try_from(FlowResult {
+    LogoutRequest::from_flow(FlowResult {
         saml_content,
         extract,
         sig_alg: flow.sig_alg.clone(),

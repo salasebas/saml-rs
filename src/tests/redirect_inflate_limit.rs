@@ -1,12 +1,16 @@
-#![allow(deprecated)]
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
-use saml_rs::flow::{flow, FlowOptions, HttpRequest};
+use saml_rs::flow::{FlowOptions, HttpRequest};
+use saml_rs::idp::IdentityProvider;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::flow;
+use saml_rs::tests::engine::redirect_query;
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::{ResourceLimit, SamlError};
 use url::Url;
 
@@ -17,7 +21,7 @@ fn oversized_deflate_payload() -> Result<Vec<u8>, SamlError> {
 
 fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
     let parsed = Url::parse(url).map_err(|e| SamlError::Invalid(e.to_string()))?;
-    Ok(HttpRequest::redirect(
+    Ok(redirect_query(
         parsed
             .query_pairs()
             .map(|(key, value)| (key.into_owned(), value.into_owned()))
@@ -26,28 +30,33 @@ fn redirect_request(url: &str) -> Result<HttpRequest, SamlError> {
 }
 
 fn unsigned_sp() -> Result<ServiceProvider, SamlError> {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = "https://sp.example.com/metadata".into();
-    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    let config = SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        ..SpMetadataInput::default()
+    };
     ServiceProvider::from_config(&config, EntitySetting::default())
 }
 
 fn unsigned_idp(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = "https://idp.example.com/metadata".into();
-    config.single_sign_on_service = vec![Endpoint::new(Binding::Redirect, "https://idp/sso")];
+    let config = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+        ..IdpMetadataInput::default()
+    };
     IdentityProvider::from_config(&config, setting)
 }
 
 #[test]
 fn redirect_flow_rejects_oversized_compressed_input_before_inflate(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let request =
-        HttpRequest::redirect(vec![("SAMLRequest".to_string(), STANDARD.encode([0u8; 9]))]);
-    let mut opts = FlowOptions::default();
-    opts.binding = Some(Binding::Redirect);
-    opts.parser_type = Some(ParserType::SamlRequest);
-    opts.redirect_inflate_max_bytes = 8;
+    let request = redirect_query(vec![("SAMLRequest".to_string(), STANDARD.encode([0u8; 9]))]);
+    let opts = FlowOptions {
+        binding: Some(Binding::Redirect),
+        parser_type: Some(ParserType::SamlRequest),
+        redirect_inflate_max_bytes: 8,
+        ..FlowOptions::default()
+    };
 
     let err = flow(&opts, &request)
         .err()
@@ -71,14 +80,16 @@ fn flow_options_custom_redirect_inflate_limit_is_enforced() -> Result<(), Box<dy
     if compressed.len() >= inflated.len() {
         return Err("test payload did not compress below inflated size".into());
     }
-    let request = HttpRequest::redirect(vec![(
+    let request = redirect_query(vec![(
         "SAMLRequest".to_string(),
         STANDARD.encode(&compressed),
     )]);
-    let mut opts = FlowOptions::default();
-    opts.binding = Some(Binding::Redirect);
-    opts.parser_type = Some(ParserType::SamlRequest);
-    opts.redirect_inflate_max_bytes = compressed.len();
+    let opts = FlowOptions {
+        binding: Some(Binding::Redirect),
+        parser_type: Some(ParserType::SamlRequest),
+        redirect_inflate_max_bytes: compressed.len(),
+        ..FlowOptions::default()
+    };
 
     let err = flow(&opts, &request)
         .err()
@@ -121,13 +132,15 @@ fn entity_setting_custom_redirect_compressed_limit_is_enforced(
 #[test]
 fn redirect_flow_rejects_oversized_inflated_message() -> Result<(), Box<dyn std::error::Error>> {
     let compressed = oversized_deflate_payload()?;
-    let request = HttpRequest::redirect(vec![(
+    let request = redirect_query(vec![(
         "SAMLRequest".to_string(),
         STANDARD.encode(&compressed),
     )]);
-    let mut opts = FlowOptions::default();
-    opts.binding = Some(Binding::Redirect);
-    opts.parser_type = Some(ParserType::SamlRequest);
+    let opts = FlowOptions {
+        binding: Some(Binding::Redirect),
+        parser_type: Some(ParserType::SamlRequest),
+        ..FlowOptions::default()
+    };
 
     let err = flow(&opts, &request)
         .err()
@@ -149,9 +162,11 @@ fn post_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::error::
         "SAMLRequest".to_string(),
         STANDARD.encode(b"<AuthnRequest/>"),
     )]);
-    let mut opts = FlowOptions::default();
-    opts.binding = Some(Binding::Post);
-    opts.parser_type = Some(ParserType::SamlRequest);
+    let mut opts = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlRequest),
+        ..FlowOptions::default()
+    };
     opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
@@ -174,9 +189,11 @@ fn simplesign_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::e
         "SAMLRequest".to_string(),
         STANDARD.encode(b"<AuthnRequest/>"),
     )]);
-    let mut opts = FlowOptions::default();
-    opts.binding = Some(Binding::SimpleSign);
-    opts.parser_type = Some(ParserType::SamlRequest);
+    let mut opts = FlowOptions {
+        binding: Some(Binding::SimpleSign),
+        parser_type: Some(ParserType::SamlRequest),
+        ..FlowOptions::default()
+    };
     opts.xml_limits.max_bytes = 8;
 
     let err = flow(&opts, &request)
@@ -201,9 +218,11 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
         "SAMLRequest".to_string(),
         STANDARD.encode(xml.as_bytes()),
     )]);
-    let mut opts = FlowOptions::default();
-    opts.binding = Some(Binding::Post);
-    opts.parser_type = Some(ParserType::SamlRequest);
+    let mut opts = FlowOptions {
+        binding: Some(Binding::Post),
+        parser_type: Some(ParserType::SamlRequest),
+        ..FlowOptions::default()
+    };
     opts.xml_limits.max_nodes = 3;
 
     let err = flow(&opts, &request)

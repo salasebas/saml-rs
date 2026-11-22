@@ -8,16 +8,18 @@ use saml_rs::constants::{status_code, Binding, ParserType};
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::flow::HttpRequest;
+use saml_rs::idp::IdentityProvider;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, ServiceProvider};
-use saml_rs::template::replace_tags_by_value;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::fill_template;
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::validator::check_status;
 use saml_rs::{SamlError, XmlLimits};
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const FAILED: &str = include_str!("fixtures/misc/failed_response.xml");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const FAILED: &str = include_str!("../../tests/fixtures/misc/failed_response.xml");
 
 #[derive(Debug, Clone)]
 struct ResponseShape {
@@ -53,26 +55,31 @@ impl Default for ResponseShape {
 }
 
 fn signing() -> EntitySetting {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some(PRIVKEY.into());
-    setting.signing_cert = Some(CERT.into());
-    setting.request_signature_algorithm = RSA_SHA256.into();
-    setting
+    EntitySetting {
+        private_key: Some(PRIVKEY.into()),
+        signing_cert: Some(CERT.into()),
+        request_signature_algorithm: RSA_SHA256.into(),
+        ..EntitySetting::default()
+    }
 }
 
 fn idp() -> Result<IdentityProvider, SamlError> {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = "https://idp.example.com/metadata".into();
-    config.signing_certs = vec![CERT.into()];
-    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
+    let config = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        signing_certs: vec![CERT.into()],
+        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        ..IdpMetadataInput::default()
+    };
     IdentityProvider::from_config(&config, signing())
 }
 
 fn sp() -> Result<ServiceProvider, SamlError> {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = "https://sp.example.com/metadata".into();
-    config.want_assertions_signed = true;
-    config.signing_certs = vec![CERT.into()];
+    let mut config = SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        want_assertions_signed: true,
+        signing_certs: vec![CERT.into()],
+        ..SpMetadataInput::default()
+    };
     config.assertion_consumer_service =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
     ServiceProvider::from_config(&config, signing())
@@ -95,7 +102,7 @@ fn response_xml(template: &str, shape: &ResponseShape) -> String {
         &format!("{}{}", shape.additional_conditions, shape.authn_statement),
         1,
     );
-    replace_tags_by_value(
+    fill_template(
         &prepared,
         &[
             ("ID", id),
@@ -130,7 +137,6 @@ fn response_xml(template: &str, shape: &ResponseShape) -> String {
     )
 }
 
-#[allow(deprecated)]
 fn signed_response(shape: &ResponseShape) -> Result<String, SamlError> {
     let idp = idp()?;
     let sp = sp()?;
@@ -139,20 +145,19 @@ fn signed_response(shape: &ResponseShape) -> Result<String, SamlError> {
         (id, response_xml(template, shape))
     };
     Ok(idp
-        .create_login_response(
+        .create_rendered_login_response(
             &sp,
             Binding::Post,
             &User::new("user@example.com"),
             &LoginResponseOptions {
                 in_response_to: Some(shape.response_in_response_to.as_str()),
-                custom: Some(&custom),
                 ..Default::default()
             },
+            &custom,
         )?
         .context)
 }
 
-#[allow(deprecated)]
 fn parse_response(response: String, request_id: &str) -> Result<(), SamlError> {
     let sp = sp()?;
     let idp = idp()?;
@@ -161,7 +166,6 @@ fn parse_response(response: String, request_id: &str) -> Result<(), SamlError> {
     Ok(())
 }
 
-#[allow(deprecated)]
 fn parse_raw_response(response: String, request_id: &str) -> Result<(), SamlError> {
     let sp = sp()?;
     let idp = idp()?;

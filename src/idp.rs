@@ -4,7 +4,7 @@ use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
     capture_idp_issuance_window, format_saml_utc_date_time, generate_id, BindingContext,
-    CustomTagReplacement, EntitySetting, IdpIssuanceWindow, User,
+    EntitySetting, IdpIssuanceWindow, User,
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResult, HttpRequest, SignatureCheck};
@@ -40,13 +40,6 @@ pub struct LoginResponseOptions<'a> {
     pub in_response_to: Option<&'a str>,
     /// RelayState to echo back to the SP.
     pub relay_state: Option<&'a str>,
-    /// Request encrypt-then-sign ordering for encrypted responses.
-    ///
-    /// When message-signing encrypted assertions, the implementation resolves
-    /// to the sound order required for verifiable signatures.
-    pub encrypt_then_sign: bool,
-    /// Custom template rendering hook.
-    pub custom: Option<CustomTagReplacement<'a>>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -82,7 +75,6 @@ pub(crate) struct IssuedLoginResponse {
 struct LoginResponseRendering<'a> {
     name_id_format: Option<&'a str>,
     name_id_qualifiers: OutboundNameIdQualifiers<'a>,
-    custom: Option<CustomTagReplacement<'a>>,
     issuance_lifetime: time::Duration,
     web_browser_sso_producer: WebBrowserSsoProducer,
     status: Option<&'a Status>,
@@ -166,9 +158,6 @@ impl IdentityProvider {
 
     /// Render the login `<Response>` XML for `sp`.
     ///
-    /// `custom` overrides tag filling: it receives the template with the
-    /// `<AttributeStatement>` already injected.
-    ///
     /// # Errors
     ///
     /// Returns an error when configured XML tag prefixes are invalid, a
@@ -214,7 +203,7 @@ impl IdentityProvider {
         let tmpl = self.setting.login_response_template.as_ref();
         let attributes = tmpl.map(|t| t.attributes.as_slice()).unwrap_or(&[]);
         let has_custom_context = tmpl.and_then(|t| t.context.as_ref()).is_some();
-        let uses_template = rendering.custom.is_some() || has_custom_context;
+        let uses_template = has_custom_context;
         if rendering.web_browser_sso_producer.follows() && uses_template {
             return Err(SamlError::Invalid(
                 "Web Browser SSO generation rules require the built-in login response renderer"
@@ -248,11 +237,9 @@ impl IdentityProvider {
         let name_id_format = rendering
             .name_id_format
             .or_else(|| self.setting.default_name_id_format());
-        if rendering.custom.is_none() {
-            validate_name_id_format(name_id_format)?;
-            validate_issued_name_id_length(name_id_format, &user.name_id)?;
-        }
-        if rendering.custom.is_none() && !has_custom_context {
+        validate_name_id_format(name_id_format)?;
+        validate_issued_name_id_length(name_id_format, &user.name_id)?;
+        if !has_custom_context {
             let authn_context = rendering
                 .authn_context
                 .cloned()
@@ -346,14 +333,6 @@ impl IdentityProvider {
             &self.setting.tag_prefix_protocol,
             &self.setting.tag_prefix_assertion,
         );
-        if let Some(f) = rendering.custom {
-            let (id, xml) = f(&prepared);
-            return Ok(RenderedLoginResponse {
-                id,
-                xml,
-                session_index: None,
-            });
-        }
         for attribute in attributes {
             login_response_attribute_value(attribute, &user.attributes)?;
         }
@@ -406,45 +385,6 @@ impl IdentityProvider {
         })
     }
 
-    /// Generate a login `<Response>` for `sp` over `binding`.
-    ///
-    /// Requires a crypto provider feature: the response is always signed
-    /// (assertion- or message-level) and optionally encrypted. Attributes are
-    /// taken from `user`; `options` carries `InResponseTo`, RelayState, the
-    /// encrypt-then-sign toggle, and an optional `customTagReplacement` hook.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `binding` is unsupported, the SP metadata has no ACS
-    /// endpoint for `binding`, the persistent or transient `user.name_id` is
-    /// longer than 256 characters or the first configured NameID format is not
-    /// an absolute URI reference and `options.custom` is not set, response
-    /// template rendering fails, the IdP
-    /// signing key or certificate configuration is missing or invalid, the
-    /// no crypto provider feature is enabled, XML signature construction
-    /// fails, the SP encryption certificate is missing when assertion
-    /// encryption is enabled, XML encryption fails, or detached-signature
-    /// construction for Redirect/SimpleSign fails.
-    #[deprecated(
-        note = "the raw API is removed in the next minor release; use `Saml::<Idp>::respond_sso`, or `Saml::<Idp>::initiate_sso` for an unsolicited response"
-    )]
-    pub fn create_login_response(
-        &self,
-        sp: &ServiceProvider,
-        binding: Binding,
-        user: &User,
-        options: &LoginResponseOptions<'_>,
-    ) -> Result<BindingContext, SamlError> {
-        self.create_login_response_with_overrides(
-            sp,
-            binding,
-            user,
-            options,
-            LoginResponseOverrides::default(),
-        )
-        .map(|issued| issued.context)
-    }
-
     pub(crate) fn create_login_response_with_overrides(
         &self,
         sp: &ServiceProvider,
@@ -471,7 +411,6 @@ impl IdentityProvider {
             LoginResponseRendering {
                 name_id_format: overrides.name_id_format,
                 name_id_qualifiers: overrides.name_id_qualifiers,
-                custom: options.custom,
                 issuance_lifetime: overrides
                     .issuance_lifetime
                     .unwrap_or(time::Duration::seconds(300)),
@@ -664,34 +603,6 @@ impl IdentityProvider {
         ))
     }
 
-    /// Parse and validate an SP login `<AuthnRequest>`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `binding` is unsupported, the request is missing
-    /// required binding parameters, the SAML payload cannot be base64/DEFLATE
-    /// decoded, XML parsing or extraction fails, the status is invalid for the
-    /// parser, the SP issuer does not match metadata, or AuthnRequest signature
-    /// validation fails when this IdP metadata requires signed requests, or
-    /// when the SP metadata sets `AuthnRequestsSigned` under
-    /// [`AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent`](crate::AuthnRequestValidationPolicy::AllowUnsignedVerifyIfPresent).
-    /// Signature failures include missing signatures, untrusted SP signing
-    /// certificates, invalid detached signatures, and XML signature validation
-    /// errors.
-    #[deprecated(
-        note = "the raw API is removed in the next minor release; use `Saml::<Idp>::receive_sso`"
-    )]
-    pub fn parse_login_request(
-        &self,
-        sp: &ServiceProvider,
-        binding: Binding,
-        request: &HttpRequest,
-    ) -> Result<FlowResult, SamlError> {
-        Ok(self
-            .parse_login_request_at_inner(sp, binding, request, None, self.setting.clock_skew())?
-            .0)
-    }
-
     pub(crate) fn parse_login_request_at(
         &self,
         sp: &ServiceProvider,
@@ -792,6 +703,7 @@ mod tests {
     use crate::constants::Binding;
     use crate::metadata::{Endpoint, SpMetadataInput};
     use crate::sp::LoginRequestOptions;
+    use crate::tests::engine::{IdpMessages, SpMessages};
 
     const IDPMETA: &str = include_str!("../tests/fixtures/misc/idpmeta.xml");
 
@@ -846,7 +758,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn parse_login_request_accepts_matching_sp_issuer() -> Result<(), Box<dyn std::error::Error>> {
         let idp = unsigned_idp()?;
         let sp = unsigned_sp("https://sp.example.com/metadata")?;
@@ -863,7 +774,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn parse_login_request_rejects_unexpected_sp_issuer() -> Result<(), Box<dyn std::error::Error>>
     {
         let idp = unsigned_idp()?;
@@ -889,6 +799,7 @@ mod crypto_tests {
     use crate::constants::signature_algorithm::RSA_SHA256;
     use crate::metadata::{Endpoint, SpMetadataInput};
     use crate::sp::LoginRequestOptions;
+    use crate::tests::engine::{IdpMessages, SpMessages};
 
     // A working RSA keypair (used as both IdP and SP signing material in tests).
     const PRIVKEY: &str = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -939,7 +850,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn idp_response_consumed_by_sp() -> Result<(), Box<dyn std::error::Error>> {
         let (idp, sp) = (idp()?, sp()?);
         let ctx = idp.create_login_response(
@@ -963,7 +873,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn custom_login_response_template_keeps_placeholder_text_in_the_name_id_format(
     ) -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
@@ -993,7 +902,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn raw_login_response_defaults_to_five_minute_issuance_window_for_standard_renderers(
     ) -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
@@ -1075,7 +983,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn login_response_with_attributes() -> Result<(), Box<dyn std::error::Error>> {
         use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
         let mut setting = signing_setting();
@@ -1104,7 +1011,6 @@ mod crypto_tests {
         let user = User {
             name_id: "alice@example.com".into(),
             attributes: vec![("email".into(), "alice@example.com".into())],
-            session_index: None,
         };
         let ctx = idp.create_login_response(
             &sp,
@@ -1126,7 +1032,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn login_response_escapes_attribute_xml_markup() -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
         use crate::template::{LoginResponseAttribute, LoginResponseTemplate};
@@ -1158,7 +1063,6 @@ mod crypto_tests {
         let user = User {
             name_id: "alice@example.com".into(),
             attributes: vec![("email".into(), injection.into())],
-            session_index: None,
         };
         let ctx = idp.create_login_response(
             &sp,
@@ -1185,7 +1089,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn parse_signed_login_request() -> Result<(), Box<dyn std::error::Error>> {
         use crate::binding::decode_base64;
         let (idp, sp) = (idp()?, sp()?);
@@ -1199,7 +1102,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn parse_signed_login_request_rejects_unexpected_sp_issuer(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idp = idp()?;
