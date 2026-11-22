@@ -72,8 +72,7 @@ pub struct SpMetadataInput {
     /// Missing groups are inserted in schema-relative positions. Unknown or
     /// repeated names are invalid. Explicit names retain their relative order.
     pub elements_order: Option<Vec<String>>,
-    /// `validUntil` and `cacheDuration` on the `EntityDescriptor`. `None`
-    /// writes neither.
+    /// Lifetime on the root `EntityDescriptor`. `None` writes `cacheDuration="PT86400S"`.
     pub lifetime: Option<MetadataLifetime>,
     /// Entity-level organization. `None` writes no `Organization`.
     pub organization: Option<crate::metadata::Organization>,
@@ -111,8 +110,7 @@ pub struct IdpMetadataInput {
     /// Missing groups are inserted in schema-relative positions. Unknown or
     /// repeated names are invalid. Explicit names retain their relative order.
     pub elements_order: Option<Vec<String>>,
-    /// `validUntil` and `cacheDuration` on the `EntityDescriptor`. `None`
-    /// writes neither.
+    /// Lifetime on the root `EntityDescriptor`. `None` writes `cacheDuration="PT86400S"`.
     pub lifetime: Option<MetadataLifetime>,
     /// Entity-level organization. `None` writes no `Organization`.
     pub organization: Option<crate::metadata::Organization>,

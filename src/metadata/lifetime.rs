@@ -7,11 +7,14 @@ use crate::error::SamlError;
 use crate::validator::offset_datetime_from_system_time;
 use crate::xml::parse_generated_saml_utc_date_time;
 
+const DEFAULT_CACHE_DURATION: Duration = Duration::from_secs(86_400);
+
 /// Lifetime written on the root `EntityDescriptor` of generated metadata.
 ///
 /// `validUntil` is when consumers must stop using the metadata.
-/// `cacheDuration` is how long they should cache it before refreshing; a
-/// consumer may keep using a copy older than that.
+/// `cacheDuration` is how long they should cache it before trying to refresh.
+/// A consumer may keep using a stale copy that is still valid.
+/// Generation writes a one-day `cacheDuration` when no lifetime is configured.
 ///
 /// A `validUntil` instant is fixed when `SpConfigBuilder::build` or
 /// `IdpConfigBuilder::build` generates the metadata, so build a new config
@@ -39,14 +42,14 @@ pub(super) struct LifetimeAttributes {
 
 impl LifetimeAttributes {
     pub(super) fn new(lifetime: Option<MetadataLifetime>) -> Result<Self, SamlError> {
+        let lifetime = lifetime.unwrap_or(MetadataLifetime::CacheDuration(DEFAULT_CACHE_DURATION));
         let (valid_until, cache_duration) = match lifetime {
-            None => (None, None),
-            Some(MetadataLifetime::ValidUntil(valid_until)) => (Some(valid_until), None),
-            Some(MetadataLifetime::CacheDuration(cache_duration)) => (None, Some(cache_duration)),
-            Some(MetadataLifetime::ValidUntilAndCacheDuration {
+            MetadataLifetime::ValidUntil(valid_until) => (Some(valid_until), None),
+            MetadataLifetime::CacheDuration(cache_duration) => (None, Some(cache_duration)),
+            MetadataLifetime::ValidUntilAndCacheDuration {
                 valid_until,
                 cache_duration,
-            }) => (Some(valid_until), Some(cache_duration)),
+            } => (Some(valid_until), Some(cache_duration)),
         };
         Ok(Self {
             valid_until: valid_until.map(valid_until_value).transpose()?,

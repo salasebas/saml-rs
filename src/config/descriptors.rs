@@ -212,8 +212,7 @@ impl SpMetadataConfig {
         &self.manage_name_id_services
     }
 
-    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
-    /// neither.
+    /// Configured metadata lifetime. `None` uses a one-day `cacheDuration` in the generated XML.
     pub fn lifetime(&self) -> Option<MetadataLifetime> {
         self.lifetime
     }
@@ -304,8 +303,7 @@ impl IdpMetadataConfig {
         &self.manage_name_id_services
     }
 
-    /// `validUntil` and `cacheDuration` on generated metadata. `None` writes
-    /// neither.
+    /// Configured metadata lifetime. `None` uses a one-day `cacheDuration` in the generated XML.
     pub fn lifetime(&self) -> Option<MetadataLifetime> {
         self.lifetime
     }
