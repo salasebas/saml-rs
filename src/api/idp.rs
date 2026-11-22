@@ -262,6 +262,7 @@ impl IdentityProvider {
     /// #     idp_descriptor: &IdpDescriptor,
     /// #     name_id: NameId,
     /// #     form_fields: Vec<FormField>,
+    /// #     replay_cache: &mut dyn saml_rs::ReplayCache,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let response = idp.initiate_sso(
     ///     sp_descriptor,
@@ -273,7 +274,7 @@ impl IdentityProvider {
     ///
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::Disabled,
+    ///     ReplayPolicy::RequireCache(replay_cache),
     /// );
     /// let session = sp.accept_unsolicited_sso(
     ///     idp_descriptor,

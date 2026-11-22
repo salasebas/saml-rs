@@ -102,8 +102,9 @@ impl SoapMessage for LogoutResponse {}
 ///     idp: &IdpDescriptor,
 ///     pending: &PendingAuthnRequest,
 ///     fields: Vec<FormField>,
+///     replay_cache: &mut dyn saml_rs::ReplayCache,
 /// ) -> Result<SsoSession, SamlError> {
-///     let validation = SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
+///     let validation = SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(replay_cache));
 ///     sp.finish_sso(idp, pending, Inbound::post(fields), validation)
 /// }
 /// # let _ = finish;

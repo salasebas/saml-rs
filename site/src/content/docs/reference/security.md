@@ -1,9 +1,9 @@
 ---
 title: "Security"
-description: "Properties of the crate. Metadata trust and replay are caller choices, covered in the guides. The signature trust model is XML signatures."
+description: "Properties of the crate. HTTP-POST SSO requires caller-owned replay storage. The signature trust model is XML signatures."
 ---
 
-Properties of the crate. Metadata trust and replay are caller choices, covered in the guides. The signature trust model is [XML signatures](../explanation/xml-signature-recommendations.md).
+Properties of the crate. HTTP-POST SSO requires caller-owned replay storage. The signature trust model is [XML signatures](../explanation/xml-signature-recommendations.md).
 
 - `#![forbid(unsafe_code)]` on the crate root.
 - DOCTYPE and XXE rejection, with bounded XML parsing before authentication.

@@ -7,6 +7,7 @@
 #![cfg(crypto)]
 
 use super::common;
+use super::post_validation::post_validation;
 
 use common::signing_credentials;
 
@@ -129,7 +130,7 @@ impl SignedExchange {
             &self.idp_descriptor,
             &self.pending,
             Inbound::post(fields),
-            validation(),
+            post_validation(&mut Default::default()),
         )
     }
 

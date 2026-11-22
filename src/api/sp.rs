@@ -235,6 +235,11 @@ impl ServiceProvider {
     /// The service provider verifies every signature on the response and its
     /// assertions, including any embedded signatures on HTTP-POST-SimpleSign.
     ///
+    /// HTTP-POST requires [`crate::ReplayPolicy::RequireCache`]. After response
+    /// parsing and verification, a missing cache returns
+    /// [`SamlError::ReplayCacheRequired`]. A storage failure returns
+    /// [`SamlError::ReplayCacheUnavailable`].
+    ///
     /// A response delivered as an HTTP-Artifact is passed as
     /// [`Inbound::artifact`], after [`Self::resolve_artifact`]. It needs
     /// an XML signature on the `Response` or on each assertion, as an
@@ -268,10 +273,11 @@ impl ServiceProvider {
     /// #     idp: &IdpDescriptor,
     /// #     pending: &PendingAuthnRequest,
     /// #     fields: Vec<FormField>,
+    /// #     replay_cache: &mut dyn saml_rs::ReplayCache,
     /// # ) -> Result<(), saml_rs::SamlError> {
     /// let validation = SamlValidationContext::new(
     ///     SystemTime::now(),
-    ///     ReplayPolicy::Disabled,
+    ///     ReplayPolicy::RequireCache(replay_cache),
     /// );
     /// let input = Inbound::post(fields);
     /// let session = sp.finish_sso(idp, pending, input, validation)?;
@@ -318,7 +324,7 @@ impl ServiceProvider {
     /// [`Self::accept_unsolicited_sso_with_outstanding_logout`] to reject a
     /// later assertion that matches one.
     ///
-    /// The same signature checks apply as in [`Self::finish_sso`].
+    /// The same signature and replay checks apply as in [`Self::finish_sso`].
     ///
     /// A present `Destination` and the bearer `Recipient` must name the
     /// assertion consumer that received the response. Supply that URL with
@@ -336,7 +342,8 @@ impl ServiceProvider {
     /// verification fails, destination, recipient, audience, condition, or
     /// time validation fails,
     /// the assertions do not share one issuer and one principal, or replay
-    /// validation returns `ReplayDetected` or `TimeWindowInvalid`. Returns
+    /// validation fails. After response parsing and verification, HTTP-POST
+    /// returns [`SamlError::ReplayCacheRequired`] if the cache is absent. Returns
     /// [`SamlError::InResponseToMismatch`] when the response or a bearer
     /// `SubjectConfirmationData` carries an `InResponseTo` attribute, including
     /// an empty one. A status other than `Success` returns
@@ -392,6 +399,7 @@ impl ServiceProvider {
             pending.request_id().as_str(),
             parse.options(validation, pending.acs().location().as_str()),
         )?;
+        validation.check_sso_replay_policy(pending.acs().binding())?;
         session_from_verified_flow(flow, relay_state)
     }
 
@@ -420,6 +428,7 @@ impl ServiceProvider {
             &parse.request,
             parse.options(validation, &expected_recipient),
         )?;
+        validation.check_sso_replay_policy(binding)?;
         session_from_verified_flow(flow, relay_state)
     }
 }

@@ -2,6 +2,7 @@
 //! metadata role descriptor of the role a message is from.
 #![cfg(crypto)]
 
+use super::post_validation::post_validation;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use std::time::SystemTime;
 
@@ -76,7 +77,7 @@ fn sso_response_from(
         idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     ))
 }
 

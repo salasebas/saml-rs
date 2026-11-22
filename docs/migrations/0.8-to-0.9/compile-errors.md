@@ -538,8 +538,7 @@ of the peer's endpoint.
 ## 1.16 Rename the relaxed policy and algorithm variants
 
 **Affects:** code that names one of the variants below, in a value, a `match`,
-or a `use`. Behaviour, defaults, and the URIs the algorithms return are
-unchanged. Only the names change. The compiler finds each qualified use, such
+or a `use`. For HTTP-POST SSO responses, [supply replay storage](logout-validation-replay.md#supply-replay-storage-for-http-post-sso). The compiler finds each qualified use, such
 as `ReplayPolicy::DisabledForCompatibility`. An old variant name written bare in
 a pattern, after a glob import such as `use saml_rs::ReplayPolicy::*;`, still
 compiles as a binding that matches every value, so search for the old names

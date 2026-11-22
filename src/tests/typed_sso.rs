@@ -2,6 +2,7 @@
 #![cfg(crypto)]
 
 use super::common;
+use super::post_validation::post_validation;
 use saml_rs::tests::engine::LogoutUser;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 
@@ -1192,7 +1193,7 @@ fn typed_facade_runs_sp_initiated_sso() -> Result<(), Box<dyn std::error::Error>
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(exchange.response_fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
@@ -1227,7 +1228,7 @@ fn typed_http_post_exposes_verified_assertion_signature_evidence(
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(exchange.response_fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     let [signature] = session.verified_xml_signatures() else {
@@ -1264,7 +1265,7 @@ fn typed_http_post_exposes_verified_response_root_signature_evidence(
         &idp_descriptor,
         &started.pending,
         Inbound::post(post_fields(&response)?),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     let [signature] = session.verified_xml_signatures() else {
@@ -1293,7 +1294,7 @@ fn typed_http_post_preserves_distinct_response_and_assertion_signature_evidence(
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(response_fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     assert_eq!(session.verified_xml_signatures().len(), 2);
@@ -1361,7 +1362,7 @@ fn typed_sign_response_satisfies_required_response_signature(
         &idp_descriptor,
         &started.pending,
         Inbound::post(post_fields(&response)?),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -1424,7 +1425,7 @@ fn typed_sp_decrypts_an_assertion_whose_key_is_beside_encrypted_data(
         &idp_descriptor,
         &started.pending,
         Inbound::post(response_fields_with_xml(fields, &peer)?),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())
@@ -1674,7 +1675,7 @@ fn typed_facades_accept_a_peer_entity_id_that_is_not_a_uri(
         &peer_idp_descriptor,
         &pending,
         Inbound::post(vec![FormField::new("SAMLResponse", response.context)]),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.issuer().as_str(), PEER_IDP_ENTITY_ID);
 
@@ -1855,7 +1856,7 @@ fn typed_facade_accepts_relay_state_the_idp_adds_to_a_request_without_one(
             &exchange.idp_descriptor,
             &exchange.pending,
             Inbound::post(exchange.response_fields),
-            validation(),
+            post_validation(&mut Default::default()),
         )?;
 
         assert_eq!(session.relay_state(), Some(&added));
@@ -2436,10 +2437,19 @@ fn typed_facade_accepts_unsolicited_sso_explicitly() -> Result<(), Box<dyn std::
         SsoAssertion::new(principal()),
         RespondSso::post().relay_state(RelayState::try_new("")?),
     )?;
+    assert!(matches!(
+        sp.accept_unsolicited_sso(
+            &idp_descriptor,
+            Inbound::post(post_fields(&response)?),
+            validation(),
+        ),
+        Err(SamlError::ReplayCacheRequired)
+    ));
+    let mut cache = RecordingReplayCache::default();
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
         Inbound::post(post_fields(&response)?),
-        validation(),
+        validation_with_cache(&mut cache),
     )?;
 
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);
@@ -2591,7 +2601,11 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations(
             SsoResponseBinding::SimpleSign => Inbound::simple_sign(fields),
             _ => return Err("not a posted response binding".into()),
         };
-        let session = sp.accept_unsolicited_sso(&idp_descriptor, input, validation())?;
+        let session = sp.accept_unsolicited_sso(
+            &idp_descriptor,
+            input,
+            post_validation(&mut Default::default()),
+        )?;
         assert_eq!(
             session.not_on_or_after().map(|value| value.as_str()),
             Some(conditions)
@@ -2745,22 +2759,29 @@ fn recommended_sso_trusts_signed_metadata_only_with_pinned_certificates(
 }
 
 #[test]
-fn recommended_sso_accept_does_not_store_replay_without_a_caller_cache(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn post_sso_requires_replay_storage() -> Result<(), Box<dyn std::error::Error>> {
     let exchange = recommended_post_exchange()?;
     let fields = exchange.response_fields;
-    exchange.sp.finish_sso(
-        &exchange.idp_descriptor,
-        &exchange.pending,
-        Inbound::post(fields.clone()),
-        validation(),
-    )?;
-    exchange.sp.finish_sso(
-        &exchange.idp_descriptor,
-        &exchange.pending,
-        Inbound::post(fields.clone()),
-        validation(),
-    )?;
+    assert!(matches!(
+        exchange.sp.finish_sso(
+            &exchange.idp_descriptor,
+            &exchange.pending,
+            Inbound::post(fields.clone()),
+            validation(),
+        ),
+        Err(SamlError::ReplayCacheRequired)
+    ));
+
+    let mut full = saml_rs::InMemoryReplayCache::new().with_max_entries(1);
+    assert!(matches!(
+        exchange.sp.finish_sso(
+            &exchange.idp_descriptor,
+            &exchange.pending,
+            Inbound::post(fields.clone()),
+            validation_with_cache(&mut full),
+        ),
+        Err(SamlError::ReplayCacheUnavailable { .. })
+    ));
 
     let mut cache = RecordingReplayCache::default();
     exchange.sp.finish_sso(
@@ -2836,7 +2857,7 @@ fn recommended_sso_accept_accepts_response_signature_without_assertion_signature
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(exchange.response_fields.clone()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_response_root_signature(&session)?;
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -2854,7 +2875,7 @@ fn recommended_sso_accept_accepts_response_signature_without_assertion_signature
     let session = exchange.sp.accept_unsolicited_sso(
         &exchange.idp_descriptor,
         Inbound::post(unsolicited_fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_response_root_signature(&session)?;
     assert_eq!(session.in_response_to(), None);
@@ -2874,7 +2895,7 @@ fn recommended_sso_accept_rejects_response_only_signature_only_with_assertion_ha
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(fields.clone()),
-        validation(),
+        post_validation(&mut Default::default()),
     ) {
         Err(SamlError::AssertionSignatureRequired) => {}
         other => {
@@ -2893,7 +2914,7 @@ fn recommended_sso_accept_rejects_response_only_signature_only_with_assertion_ha
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_response_root_signature(&session)?;
     Ok(())
@@ -3007,7 +3028,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
             exchange.response_fields,
             &leap_xml,
         )?),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.response_issue_instant().as_str(), leap_second);
 
@@ -3028,7 +3049,7 @@ fn recommended_sso_accept_requires_issue_instant_and_accepts_leap_seconds(
             unsolicited_fields,
             &unsolicited_leap,
         )?),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.response_issue_instant().as_str(), leap_second);
 
@@ -3171,7 +3192,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(fields.clone()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert!(session.audience_restrictions().is_empty());
@@ -3184,7 +3205,7 @@ fn recommended_sso_accept_does_not_require_an_audience_restriction(
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(fields),
-        validation(),
+        post_validation(&mut Default::default()),
     ) {
         Err(SamlError::AudienceMismatch { .. }) => Ok(()),
         other => Err(format!(
@@ -3244,7 +3265,7 @@ fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(exchange.response_fields.clone()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_response_root_signature(&session)?;
 
@@ -3261,7 +3282,7 @@ fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
             exchange.response_fields,
             &wrong_audience,
         )?),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
 
@@ -3430,7 +3451,7 @@ fn typed_facade_accepts_metadata_and_response_that_start_with_a_byte_order_mark(
         &idp_descriptor,
         &exchange.pending,
         Inbound::post(fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     assert_eq!(session.issuer().as_str(), IDP_ENTITY_ID);

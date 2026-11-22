@@ -67,7 +67,7 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
             &exchange.idp_descriptor,
             &exchange.pending,
             Inbound::post(fields),
-            validation(),
+            post_validation(&mut Default::default()),
         )?;
         assert_eq!(session.name_id().value(), "alice@example.com");
     }
@@ -112,7 +112,7 @@ fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
                 &exchange.idp_descriptor,
                 &exchange.pending,
                 Inbound::post(response_fields_with_xml(fields.clone(), &variant)?),
-                validation(),
+                post_validation(&mut Default::default()),
             )?;
             assert_eq!(session.name_id().value(), "alice@example.com");
         }
@@ -222,7 +222,7 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
                     exchange.response_fields.clone(),
                     &variant,
                 )?),
-                validation(),
+                post_validation(&mut Default::default()),
             );
             if accepted {
                 assert_eq!(result?.name_id().value(), "alice@example.com");
@@ -289,7 +289,7 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
         &idp_descriptor,
         &started.pending,
         Inbound::post(fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
 
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -322,7 +322,7 @@ fn schema_validator_rejects_the_decrypted_response() -> Result<(), Box<dyn std::
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(exchange.response_fields.clone()),
-        validation(),
+        post_validation(&mut Default::default()),
     );
     assert!(
         matches!(result, Err(SamlError::Invalid(ref reason)) if reason == "schema rejected decrypted assertion"),
@@ -332,7 +332,7 @@ fn schema_validator_rejects_the_decrypted_response() -> Result<(), Box<dyn std::
         &exchange.idp_descriptor,
         &exchange.pending,
         Inbound::post(exchange.response_fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     Ok(())
 }

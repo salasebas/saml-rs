@@ -61,7 +61,7 @@ With the `serde` feature, the snapshot serializes to JSON for your session store
 
 ## Replay
 
-`ReplayPolicy::RequireCache` stores identifiers in the cache you pass. The context has no hidden cache. `ReplayPolicy::Disabled` stores nothing. The rules are in [Metadata and replay](../reference/conformance/metadata-and-replay.md).
+HTTP-POST SSO requires `ReplayPolicy::RequireCache`. Reuse the cache across requests. If several nodes accept logins, use shared storage that atomically records each identifier. A duplicate, a missing cache, or a storage failure prevents acceptance. The rules are in [Metadata and replay](../reference/conformance/metadata-and-replay.md).
 
 A new validation context allows five minutes of clock skew. Pass `ClockSkew::strict()` for zero skew.
 

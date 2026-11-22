@@ -10,6 +10,7 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
+use super::post_validation::post_validation;
 use saml_rs::tests::engine::IdpMessages;
 use std::time::SystemTime;
 
@@ -203,7 +204,7 @@ fn exchange_between(
         idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     );
     Ok(Exchange { xml, session })
 }
@@ -817,7 +818,7 @@ fn encrypted_elements_decrypt_with_namespaces_declared_on_the_response(
             &idp_descriptor,
             &started.pending,
             Inbound::post(fields),
-            validation(),
+            post_validation(&mut Default::default()),
         )?;
         assert_eq!(session.name_id(), &alice());
         assert_eq!(session.attributes(), &attributes());

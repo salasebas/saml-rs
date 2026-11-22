@@ -13,6 +13,7 @@
 //! [`IdpValidationPolicy::default`], respectively. To customize validation,
 //! start from the role default and assign the field you want to change.
 //!
+//! HTTP-POST SSO responses require a caller-owned replay cache.
 //! Where the compact flow examples below use
 //! [`ReplayPolicy::Disabled`] or unsigned metadata, treat those
 //! as explicit interoperability choices. Production-shaped inbound flows should
@@ -49,6 +50,7 @@
 //! # fn run(
 //! #     idp_metadata_xml: &str,
 //! #     form_fields: Vec<FormField>,
+//! #     replay_cache: &mut dyn saml_rs::ReplayCache,
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let sp = ServiceProvider::new(
 //!     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
@@ -66,7 +68,7 @@
 //!
 //! let validation = SamlValidationContext::new(
 //!     SystemTime::now(),
-//!     ReplayPolicy::Disabled,
+//!     ReplayPolicy::RequireCache(replay_cache),
 //! );
 //! let session = sp.finish_sso(
 //!     &idp,
@@ -102,10 +104,11 @@
 //! #     sp: &ServiceProvider,
 //! #     idp: &IdpDescriptor,
 //! #     form_fields: Vec<FormField>,
+//! #     replay_cache: &mut dyn saml_rs::ReplayCache,
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let validation = SamlValidationContext::new(
 //!     SystemTime::now(),
-//!     ReplayPolicy::Disabled,
+//!     ReplayPolicy::RequireCache(replay_cache),
 //! );
 //! let session = sp.accept_unsolicited_sso(
 //!     idp,

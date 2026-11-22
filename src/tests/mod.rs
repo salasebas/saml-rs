@@ -1,6 +1,9 @@
 #[cfg(crypto)]
 #[path = "../../tests/common/mod.rs"]
 mod common;
+#[cfg(crypto)]
+#[path = "../../tests/common/post_validation.rs"]
+mod post_validation;
 #[path = "../../tests/common/replay_cache.rs"]
 mod replay_cache;
 

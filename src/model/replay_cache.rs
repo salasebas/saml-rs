@@ -100,7 +100,8 @@ impl ReplayCache for InMemoryReplayCache {
     /// # Errors
     ///
     /// Returns [`SamlError::ReplayDetected`] for a live duplicate, even if the
-    /// supplied deadline has passed. Returns
+    /// supplied deadline has passed. Returns [`SamlError::TimeWindowInvalid`]
+    /// if a new assertion key has already expired. Returns
     /// [`SamlError::ReplayCacheUnavailable`] when the entry limit prevents
     /// storage. Neither error removes a live key or changes its deadline.
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError> {
@@ -117,6 +118,11 @@ impl ReplayCache for InMemoryReplayCache {
             return Err(SamlError::ReplayDetected { key });
         }
         if expires_at <= now {
+            if matches!(key, ReplayKey::Assertion(_)) {
+                return Err(SamlError::TimeWindowInvalid {
+                    field: crate::TimeWindowField::ReplayExpiration,
+                });
+            }
             return Ok(());
         }
         if let Some(max_entries) = self

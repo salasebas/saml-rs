@@ -3,7 +3,10 @@
 
 mod common;
 
+#[path = "common/post_validation.rs"]
+mod post_validation;
 use common::signing_credentials;
+use post_validation::post_validation;
 
 use std::time::{Duration, SystemTime};
 
@@ -229,7 +232,7 @@ fn typed_sso_response_carries_profile_authentication_statement(
         &idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     assert_eq!(
@@ -303,7 +306,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
         &idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(
         session
@@ -343,7 +346,7 @@ fn typed_unsolicited_sso_omits_in_response_to() -> Result<(), Box<dyn std::error
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.in_response_to(), None);
     assert_eq!(session.name_id().value(), "alice@example.com");
@@ -374,7 +377,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().format(), None);
 
@@ -435,7 +438,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     let session = sp.accept_unsolicited_sso(
         &idp_descriptor,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     let logout_subject = session
         .logout_subject()
@@ -704,7 +707,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         &idp_descriptor,
         &started.pending,
         Inbound::post(signed.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
 
@@ -722,7 +725,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         &idp_descriptor,
         &started.pending,
         Inbound::post(unsigned_fields.clone()),
-        validation(),
+        post_validation(&mut Default::default()),
     ) {
         Err(SamlError::SignatureMissing) => {}
         other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
@@ -744,7 +747,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         &idp_descriptor,
         &started.pending,
         Inbound::post(unsigned_fields),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())
@@ -773,7 +776,7 @@ fn typed_plaintext_response_is_accepted() -> Result<(), Box<dyn std::error::Erro
         &idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())

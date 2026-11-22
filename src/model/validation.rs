@@ -117,7 +117,7 @@ impl ReplayKey {
 
 /// Caller-owned replay cache.
 ///
-/// Implementations should atomically reject duplicate keys and return
+/// Implementations must atomically reject duplicate keys and return
 /// [`SamlError::ReplayDetected`] for duplicate SAML messages.
 ///
 /// Use [`super::InMemoryReplayCache`] for a single process. Multiple processes
@@ -138,13 +138,15 @@ impl ReplayKey {
 /// ```
 pub trait ReplayCache {
     /// Check whether `key` has already been seen, then store it until
-    /// `expires_at` if it is new.
+    /// `expires_at` if it is new. For an assertion, return an error if the
+    /// deadline has passed before the key can be stored.
     ///
     /// # Errors
     ///
-    /// Implementations should return [`SamlError::ReplayDetected`] for
-    /// duplicate keys, and [`SamlError::ReplayCacheUnavailable`] with the
-    /// storage error as its source when they cannot check or store a key.
+    /// Return [`SamlError::ReplayDetected`] for a duplicate key. If your
+    /// store cannot check or retain a key, return [`SamlError::ReplayCacheUnavailable`]
+    /// with the cause. Use this error when a new assertion key reaches its
+    /// deadline before your store can record it.
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError>;
 }
 
@@ -157,7 +159,8 @@ pub trait ReplayCache {
 /// `docs/conformance/metadata-and-replay.md`.
 #[non_exhaustive]
 pub enum ReplayPolicy<'a> {
-    /// Skip replay checks, as the samlify port did.
+    /// Skip optional replay checks. HTTP-POST SSO responses require a cache
+    /// and return [`SamlError::ReplayCacheRequired`] with this policy.
     Disabled,
     /// Require the caller to provide replay storage.
     RequireCache(&'a mut dyn ReplayCache),
@@ -327,6 +330,18 @@ impl<'a> SamlValidationContext<'a> {
 
     pub(crate) fn now_offset(&self) -> Result<OffsetDateTime, SamlError> {
         crate::validator::offset_datetime_from_system_time(self.now)
+    }
+
+    pub(crate) fn check_sso_replay_policy(
+        &self,
+        binding: crate::SsoResponseBinding,
+    ) -> Result<(), SamlError> {
+        if binding == crate::SsoResponseBinding::Post
+            && matches!(self.replay, ReplayPolicy::Disabled)
+        {
+            return Err(SamlError::ReplayCacheRequired);
+        }
+        Ok(())
     }
 
     pub(crate) fn replay_policy(&mut self) -> &mut ReplayPolicy<'a> {

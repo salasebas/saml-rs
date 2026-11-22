@@ -89,8 +89,16 @@ fn a_full_cache_keeps_live_keys_and_does_not_store_refused_keys() -> TestResult 
 #[test]
 fn already_expired_keys_do_not_consume_capacity() -> TestResult {
     let mut cache = InMemoryReplayCache::with_clock(|| at(10)).with_max_entries(0);
-    cache.check_and_store(key("_past")?, at(9))?;
-    cache.check_and_store(key("_present")?, at(10))?;
+    for deadline in [at(9), at(10)] {
+        assert!(matches!(
+            cache.check_and_store(key("_expired")?, deadline),
+            Err(SamlError::TimeWindowInvalid {
+                field: saml_rs::TimeWindowField::ReplayExpiration,
+                ..
+            })
+        ));
+    }
+    cache.check_and_store(ReplayKey::SsoResponse(MessageId::try_new("_past")?), at(9))?;
     assert!(matches!(
         cache.check_and_store(key("_future")?, at(11)),
         Err(SamlError::ReplayCacheUnavailable { .. })

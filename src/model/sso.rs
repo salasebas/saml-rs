@@ -276,7 +276,7 @@ impl SsoSession {
     ///
     /// Returns [`SamlError::TimeWindowInvalid`] when no valid replay
     /// expiration can be derived or a stored deadline has already passed.
-    /// Nothing is stored in that case. Returns [`SamlError::ReplayDetected`]
+    /// Keys recorded before a later failure remain in the cache. Returns [`SamlError::ReplayDetected`]
     /// when any session replay key has already been seen. Cache
     /// implementations may also return storage-specific failures mapped to
     /// [`SamlError`].

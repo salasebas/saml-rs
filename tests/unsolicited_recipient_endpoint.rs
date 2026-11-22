@@ -164,7 +164,15 @@ fn at(location: &str) -> Result<SamlValidationContext<'static>, SamlError> {
 fn a_response_to_the_supplied_non_default_consumer_is_accepted(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in BINDINGS {
-        let session = accept(binding, ACS_B, at(ACS_B)?)?;
+        let mut cache = saml_rs::InMemoryReplayCache::new();
+        let policy = if binding == SsoResponseBinding::Post {
+            ReplayPolicy::RequireCache(&mut cache)
+        } else {
+            ReplayPolicy::Disabled
+        };
+        let validation = SamlValidationContext::new(SystemTime::now(), policy)
+            .with_recipient_endpoint(EndpointUrl::try_new(ACS_B)?);
+        let session = accept(binding, ACS_B, validation)?;
         assert_eq!(session.name_id().value(), USER, "{binding:?}");
     }
     Ok(())

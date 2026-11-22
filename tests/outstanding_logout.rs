@@ -73,7 +73,8 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
     let received = idp.receive_sso(
         &sp_descriptor,
         Inbound::post(started.outbound.post_form()?.fields().to_vec()),
-        open_validation(unix_seconds()?)?,
+        SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
+            .with_clock_skew(ClockSkew::strict()),
     )?;
     let response = idp.respond_sso(
         &sp_descriptor,
@@ -126,16 +127,13 @@ fn instant_at(seconds: i64) -> Result<SamlInstant, SamlError> {
     ))
 }
 
-fn open_validation(seconds: i64) -> Result<SamlValidationContext<'static>, SamlError> {
-    validation_at(seconds, ClockSkew::strict())
-}
-
 fn validation_at(
     seconds: i64,
     skew: ClockSkew,
-) -> Result<SamlValidationContext<'static>, SamlError> {
+    cache: &mut InMemoryReplayCache,
+) -> Result<SamlValidationContext<'_>, SamlError> {
     Ok(
-        SamlValidationContext::new(system_time_at(seconds)?, ReplayPolicy::Disabled)
+        SamlValidationContext::new(system_time_at(seconds)?, ReplayPolicy::RequireCache(cache))
             .with_clock_skew(skew),
     )
 }
@@ -163,7 +161,8 @@ fn finish(
     skew: ClockSkew,
     outstanding: Option<&OutstandingLogout>,
 ) -> Result<SsoSession, SamlError> {
-    let validation = validation_at(seconds, skew)?;
+    let mut cache = InMemoryReplayCache::new();
+    let validation = validation_at(seconds, skew, &mut cache)?;
     let input = Inbound::post(issued.fields.clone());
     match outstanding {
         Some(outstanding) => issued.sp.finish_sso_with_outstanding_logout(
@@ -185,7 +184,8 @@ fn accept_unsolicited(
     skew: ClockSkew,
     outstanding: Option<&OutstandingLogout>,
 ) -> Result<SsoSession, SamlError> {
-    let validation = validation_at(seconds, skew)?;
+    let mut cache = InMemoryReplayCache::new();
+    let validation = validation_at(seconds, skew, &mut cache)?;
     let input = Inbound::post(issued.unsolicited_fields.clone());
     match outstanding {
         Some(outstanding) => issued.sp.accept_unsolicited_sso_with_outstanding_logout(

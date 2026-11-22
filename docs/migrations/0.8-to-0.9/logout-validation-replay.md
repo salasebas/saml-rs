@@ -161,6 +161,28 @@ implements `PartialEq` or `Eq`. The old equality compared only the peer.
 Use `first.peer_entity_id() == second.peer_entity_id()` for that same
 comparison. Use the response ID and request correlation to distinguish exchanges.
 
+## Supply replay storage for HTTP-POST SSO
+
+Pass a shared cache to every `finish_sso` and `accept_unsolicited_sso` call
+that receives an HTTP-POST response, including the outstanding-logout variants.
+With `ReplayPolicy::Disabled`, these calls now return `SamlError::ReplayCacheRequired`.
+
+```rust
+# use saml_rs::{ReplayCache, ReplayPolicy, SamlValidationContext};
+# use std::time::SystemTime;
+# fn receive(now: SystemTime, cache: &mut dyn ReplayCache) {
+let validation = SamlValidationContext::new(now, ReplayPolicy::RequireCache(cache));
+# }
+```
+
+Keep the cache across requests. For multiple nodes or protection across
+restarts, use durable storage that checks and inserts each ID atomically.
+If you implement `ReplayCache`, return `SamlError::ReplayCacheUnavailable`
+with the cause when your store cannot retain an assertion ID through its
+deadline. For a new assertion ID already expired at
+insertion, `InMemoryReplayCache` now returns `TimeWindowInvalid` with
+`TimeWindowField::ReplayExpiration`.
+
 ## Update replay keys and cache access
 
 Rename the variants you construct or match on.
