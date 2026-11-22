@@ -2,10 +2,11 @@
 
 [How to upgrade from 0.8 to 0.9](README.md)
 
-In 0.8, replace either `AllowUnsignedVerifyIfPresent` or
+When upgrading from 0.8, replace `AllowUnsignedVerifyIfPresent` or
 `AllowUnsignedForCompatibility` with `AuthnRequestValidationPolicy::AllowUnsigned`.
-If you already use `AllowUnsigned` from an unreleased revision, your code now
-verifies present signatures. Callers using `IdpValidationPolicy::default()`
+If you used `AllowUnsignedForCompatibility`, or `AllowUnsigned` from an
+unreleased revision, the IdP now verifies present signatures and enforces
+`AuthnRequestsSigned` in SP metadata. Callers using `IdpValidationPolicy::default()`
 need no code changes.
 
 ```diff
