@@ -49,13 +49,13 @@ pub struct LoginRequestOptions<'a> {
 
 /// Whether typed Web Browser SSO generation follows producer rules.
 ///
-/// [`Self::Compatibility`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
+/// [`Self::Legacy`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
 /// recorded for this flow. It is not a validation preset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum WebBrowserSsoProducer {
     /// Keep the samlify-port generation.
     #[default]
-    Compatibility,
+    Legacy,
     /// Emit the producer obligations for this flow.
     Follow,
 }

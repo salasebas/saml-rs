@@ -218,10 +218,9 @@ fn custom_algorithm_variants_keep_simple_names() {
         format!("{:?}", TransformAlgorithm::Custom("urn:test".into())),
     ];
 
-    assert!(variants.iter().all(|variant| variant.contains("Custom")));
     assert!(variants
         .iter()
-        .all(|variant| !variant.contains("Compatibility")));
+        .all(|variant| variant.starts_with("Custom(")));
 }
 
 #[cfg(crypto)]

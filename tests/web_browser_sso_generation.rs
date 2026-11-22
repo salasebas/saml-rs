@@ -363,7 +363,7 @@ fn typed_unsolicited_sso_omits_in_response_to_under_producer_rules(
 }
 
 #[test]
-fn typed_sso_compatibility_generation_keeps_todays_response_shape(
+fn default_unsolicited_sso_omits_authn_statement_and_session_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
     let idp = idp_with(signed_authn_request_idp_validation(), true)?;
@@ -661,9 +661,9 @@ fn typed_transient_name_id_omits_allow_create_under_producer_rules(
     let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
 
-    let compatibility = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
-    let compatibility_xml = authn_request_xml(&compatibility.outbound)?;
-    assert!(compatibility_xml.contains("AllowCreate=\"true\""));
+    let default_request = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
+    let default_xml = authn_request_xml(&default_request.outbound)?;
+    assert!(default_xml.contains("AllowCreate=\"true\""));
 
     let producer = sp.start_sso(&idp_descriptor, StartSso::redirect().apply_producer_rules())?;
     let producer_xml = authn_request_xml(&producer.outbound)?;
@@ -1126,16 +1126,16 @@ fn typed_unsolicited_error_response_follows_in_response_to_rules(
         )
     );
 
-    let compatibility = idp.initiate_sso(
+    let default_response = idp.initiate_sso(
         &sp_descriptor,
         SsoOutcome::Failure(Status::version_mismatch()),
         RespondSso::post(),
     )?;
-    let compatibility_xml = response_xml(&compatibility)?;
-    assert_error_response_has_no_assertion(&compatibility_xml)?;
-    assert!(!compatibility_xml.contains("InResponseTo"));
-    assert!(compatibility_xml.contains(&format!("Destination=\"{SP_ACS}\"")));
-    assert!(compatibility_xml.contains(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")));
+    let default_xml = response_xml(&default_response)?;
+    assert_error_response_has_no_assertion(&default_xml)?;
+    assert!(!default_xml.contains("InResponseTo"));
+    assert!(default_xml.contains(&format!("Destination=\"{SP_ACS}\"")));
+    assert!(default_xml.contains(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")));
     Ok(())
 }
 

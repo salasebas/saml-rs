@@ -510,7 +510,7 @@ fn start_slo_impl(
             if follows_rules {
                 LogoutRequestValidation::SessionParticipant
             } else {
-                LogoutRequestValidation::Compatibility
+                LogoutRequestValidation::SkipProducerChecks
             },
         ),
         StartSloRole::SessionAuthority { issuance_lifetime } => {

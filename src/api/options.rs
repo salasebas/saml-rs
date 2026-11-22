@@ -45,7 +45,7 @@ impl StartSso {
             passive: None,
             provider_name: None,
             requested_authn_context: None,
-            web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
+            web_browser_sso_producer: WebBrowserSsoProducer::Legacy,
         }
     }
 
@@ -168,7 +168,7 @@ impl RespondSso {
             delivery: MessageDelivery,
             relay_state: None,
             response_signing: ResponseSigning::FollowEncryptedCbcRecommendation,
-            web_browser_sso_producer: WebBrowserSsoProducer::Compatibility,
+            web_browser_sso_producer: WebBrowserSsoProducer::Legacy,
         }
     }
 }
@@ -288,13 +288,13 @@ pub enum LogoutSigning {
 
 /// Whether typed Single Logout generation follows producer rules.
 ///
-/// [`Self::Compatibility`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
+/// [`Self::Legacy`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
 /// recorded for this flow. It is not a validation preset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum SingleLogoutGeneration {
     /// Keep the samlify-port generation.
     #[default]
-    Compatibility,
+    Legacy,
     /// Emit the producer obligations for this flow.
     Follow,
 }

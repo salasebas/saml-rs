@@ -132,14 +132,14 @@ pub struct EntitySetting {
     /// Custom `<LogoutRequest>` template (`None` uses the default).
     ///
     /// Typed Session Authority generation requires a complete unqualified
-    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Compatibility generation
+    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Legacy generation
     /// keeps that optional placeholder omitted.
     ///
     /// Typed generation fills `{NameQualifier}`, `{SPNameQualifier}`, and
     /// `{SPProvidedID}` from the logout subject's `NameID`, and
     /// `{NameIDFormat}` with the `Format` sent for it. An attribute whose
     /// complete value is one of these placeholders is omitted when there is
-    /// no value for it. Compatibility generation fills `{NameIDFormat}`
+    /// no value for it. Legacy generation fills `{NameIDFormat}`
     /// from `name_id_format` and omits the qualifier attributes.
     ///
     /// Typed Session Authority generation, and typed SP generation with

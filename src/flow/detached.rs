@@ -87,8 +87,7 @@ fn ensure_simplesign_octet_matches_consumed_fields(
             octet == expected
         }
         // Older saml-rs outbound SimpleSign signed an empty RelayState field
-        // even when the form body omitted RelayState; keep accepting it for
-        // compatibility.
+        // even when the form body omitted RelayState.
         None => octet == message_and_sig_alg || octet == message_empty_relay_and_sig_alg,
     };
 

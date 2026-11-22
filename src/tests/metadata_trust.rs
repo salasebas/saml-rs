@@ -577,7 +577,7 @@ fn entities_descriptor_import_rejects_two_entities() -> Result<(), Box<dyn std::
 }
 
 #[test]
-fn unsigned_for_compatibility_does_not_record_a_signature_as_verified(
+fn allow_unsigned_does_not_record_a_metadata_signature_as_verified(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let signed = sign_root_metadata(idp_metadata_xml())?;
     let descriptor = IdpDescriptor::from_metadata_xml(

@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-//! Maintained compatibility re-export of [`saml-rs`](https://crates.io/crates/saml-rs).
+//! Maintained re-export of [`saml-rs`](https://crates.io/crates/saml-rs).
 //!
 //! ```
 //! use opensaml::{OpenSamlError, ServiceProvider};
@@ -11,6 +11,6 @@
 
 pub use saml_rs::*;
 
-/// Deprecated compatibility name for [`SamlError`].
+/// Deprecated alias for [`SamlError`].
 #[deprecated(since = "0.2.0", note = "use `SamlError` instead")]
 pub type OpenSamlError = saml_rs::SamlError;

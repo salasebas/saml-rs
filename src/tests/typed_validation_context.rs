@@ -912,8 +912,7 @@ fn unevaluated_bearer_confirmation_gives_the_same_replay_outcome_under_every_pol
 }
 
 #[test]
-fn typed_validation_context_disabled_replay_is_explicit_compatibility(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn disabled_replay_accepts_the_same_session_twice() -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = session_flow();
     remove_extract_keys(
         &mut flow,

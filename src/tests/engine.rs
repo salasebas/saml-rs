@@ -101,7 +101,7 @@ impl SpMessages for sp::Engine {
             idp,
             binding,
             options,
-            WebBrowserSsoProducer::Compatibility,
+            WebBrowserSsoProducer::Legacy,
             &AuthnRequestPreferences::default(),
         )
     }
@@ -322,7 +322,7 @@ pub(crate) fn create_logout_request_with_id(
         name_id_format: init_setting.default_name_id_format(),
         issue_instant: &issue_instant,
         not_on_or_after: None,
-        validation: LogoutRequestValidation::Compatibility,
+        validation: LogoutRequestValidation::SkipProducerChecks,
         name_id_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
     })?
     .context)

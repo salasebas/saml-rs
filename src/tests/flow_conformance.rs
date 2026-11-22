@@ -852,10 +852,10 @@ fn flow_conformance_required_response_signature_accepts_response_root_signed_pos
 fn flow_conformance_strict_assertion_signature_rejects_response_only_post(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp(false);
-    let compatibility_sp = sp(false, false);
+    let sp_allowing_unsigned_assertions = sp(false, false);
     let strict_sp = sp(true, false);
     let ctx = idp.create_login_response(
-        &compatibility_sp,
+        &sp_allowing_unsigned_assertions,
         Binding::Post,
         &User::new("response-only@example.com"),
         &opts("_r"),

@@ -25,7 +25,7 @@ pub(crate) struct CreatedLogoutRequest {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LogoutRequestValidation {
-    Compatibility,
+    SkipProducerChecks,
     /// Session participant producer rules. `NotOnOrAfter` stays optional.
     SessionParticipant,
     SessionAuthority,
@@ -151,7 +151,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
     // and leaves `NotOnOrAfter` optional. `Required` checks the
     // session-authority instant.
     let expiration = match validation {
-        LogoutRequestValidation::Compatibility => None,
+        LogoutRequestValidation::SkipProducerChecks => None,
         LogoutRequestValidation::SessionParticipant => Some(OutboundLogoutExpiration::Optional),
         LogoutRequestValidation::SessionAuthority => Some(OutboundLogoutExpiration::Required(
             not_on_or_after.ok_or_else(|| {

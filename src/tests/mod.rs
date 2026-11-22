@@ -9,7 +9,7 @@ mod assertion_conditions;
 mod authentication_context;
 mod authn_request_options;
 mod binding;
-mod browser_signing_compatibility;
+mod browser_signing_bindings;
 mod conformance;
 mod decryption_work;
 mod default_xml_limits;

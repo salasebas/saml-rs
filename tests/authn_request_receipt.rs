@@ -808,13 +808,13 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     ));
     assert!(!refused.contains("Assertion"));
 
-    let compatibility = response_xml(&receipt.idp.respond_sso(
+    let default_xml = response_xml(&receipt.idp.respond_sso(
         &receipt.sp_descriptor,
         &receipt.received,
         assertion(),
         RespondSso::post(),
     )?)?;
-    assert!(!compatibility.contains("AuthnStatement"));
+    assert!(!default_xml.contains("AuthnStatement"));
     Ok(())
 }
 
@@ -917,8 +917,8 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
             rules(),
         );
         assert!(error.is_ok(), "{error:?}");
-        let compatibility = respond(&receipt, None, RespondSso::post());
-        assert!(compatibility.is_ok(), "{compatibility:?}");
+        let default_response = respond(&receipt, None, RespondSso::post());
+        assert!(default_response.is_ok(), "{default_response:?}");
     }
 
     for attributes in [
@@ -993,8 +993,8 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         )?),
     );
     assert!(error.is_ok(), "{error:?}");
-    let compatibility = respond(&receipt, persistent("bob"), RespondSso::post());
-    assert!(compatibility.is_ok(), "{compatibility:?}");
+    let default_response = respond(&receipt, persistent("bob"), RespondSso::post());
+    assert!(default_response.is_ok(), "{default_response:?}");
 
     let without_policy_format = receive_subject(
         &format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>"),

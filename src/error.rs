@@ -1,8 +1,7 @@
 //! Error types for `saml-rs`.
 //!
 //! [`SamlError`] is non-exhaustive. Callers should include a fallback match arm
-//! so new semantic SAML validation failures can be added without breaking
-//! source compatibility.
+//! so they can handle variants added in later releases.
 
 use crate::constants::Binding;
 use crate::model::{RelayState, ReplayKey, Status, SubordinateStatusCode};
@@ -194,7 +193,7 @@ impl fmt::Display for ResourceLimit {
 /// - SAML protocol validation failures;
 /// - signature, signed-reference, and delegated crypto failures;
 /// - metadata and trust selection failures;
-/// - configuration, unsupported binding, and compatibility failures.
+/// - configuration and unsupported binding failures.
 ///
 /// A variant that wraps a lower-level failure returns it from
 /// [`std::error::Error::source`]. Its type is not part of the API.

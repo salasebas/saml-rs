@@ -153,7 +153,7 @@ fn post_authn_request_with_object(
 }
 
 #[test]
-fn post_authn_request_with_object_is_rejected_unless_the_compatibility_profile_is_selected(
+fn post_authn_request_with_object_is_rejected_unless_weak_algorithms_are_allowed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for profile in [
         XmlSignatureProfile::ExcludeWeakAlgorithms,
