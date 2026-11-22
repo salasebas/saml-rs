@@ -16,8 +16,8 @@ xml.schema_validator = Some(validate_schema);
 let config = sp_builder.xml(xml).build()?;
 ```
 
-The callback signature remains `fn(&str) -> Result<(), String>`, and
-`context::SchemaValidator` remains available. An error
+Import `saml_rs::SchemaValidator` in place of `context::SchemaValidator`.
+The callback signature remains `fn(&str) -> Result<(), String>`. An error
 rejects the input with `SamlError::Invalid`. Use `None` to build a configuration
 without the additional schema check. A configuration does not change another
 configuration's validator.
@@ -28,7 +28,6 @@ one operation. Support every document type used by that role, including SOAP
 and extension schemas. Load schemas from trusted local resources and disable
 network resolution in your validator.
 
-`context::is_valid_xml_with_limits` now performs baseline parsing checks only.
 `XmlPolicy` is non-exhaustive now. Replace a full
 `XmlPolicy` literal as
 [Assign fields instead of writing a struct literal](config.md#assign-fields-instead-of-writing-a-struct-literal)
@@ -51,5 +50,4 @@ let idp = IdpDescriptor::from_metadata_xml_with_policy(
 `SpDescriptor` has the same constructor. Raw metadata offers
 `IdpMetadata::from_xml_with_policy`, `SpMetadata::from_xml_with_policy`, and
 `Metadata::parse_with_policy`. Existing constructors keep their default XML
-limits and have no callback. Low-level DOM, extractor, signature, and encryption
-utilities do not inherit a role's policy.
+limits and have no callback.

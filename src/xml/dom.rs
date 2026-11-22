@@ -431,25 +431,6 @@ fn push_general_ref(node: &mut Node, e: BytesRef, limits: XmlLimits) -> Result<(
     Ok(())
 }
 
-/// Parse `xml` into a well-formed [`Document`] with one document element.
-///
-/// `xml` must also be namespace-well-formed: it declares every namespace
-/// prefix it uses.
-#[deprecated(
-    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
-)]
-pub fn parse(xml: &str) -> Result<Document, SamlError> {
-    parse_document(xml, XmlLimits::default())
-}
-
-/// Parse `xml` into a well-formed [`Document`] with explicit resource limits.
-#[deprecated(
-    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
-)]
-pub fn parse_with_limits(xml: &str, limits: XmlLimits) -> Result<Document, SamlError> {
-    parse_document(xml, limits)
-}
-
 /// Parse `xml` into a well-formed, namespace-well-formed [`Document`] with one
 /// document element, within `limits`.
 pub(crate) fn parse_document(xml: &str, limits: XmlLimits) -> Result<Document, SamlError> {
@@ -478,27 +459,9 @@ fn parse_single_root(xml: &str, limits: XmlLimits, mode: ParseMode) -> Result<Do
     Ok(Document { root })
 }
 
-/// Parse every top-level element (used to detect multiple root descriptors).
-///
-/// Each element must be well-formed and declare every namespace prefix it
-/// uses.
-#[deprecated(
-    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
-)]
-pub fn parse_roots(xml: &str) -> Result<Vec<Node>, SamlError> {
-    parse_all_roots(xml, XmlLimits::default())
-}
-
-/// Parse every top-level element with explicit resource limits.
-#[deprecated(
-    note = "`saml_rs::xml` becomes crate-private in the next minor release; parse XML with an XML library such as `roxmltree`. The typed API parses every message it receives"
-)]
-pub fn parse_roots_with_limits(xml: &str, limits: XmlLimits) -> Result<Vec<Node>, SamlError> {
-    parse_all_roots(xml, limits)
-}
-
 /// Parse every top-level element within `limits`. Each element must be
 /// well-formed and declare every namespace prefix it uses.
+#[cfg(test)]
 pub(crate) fn parse_all_roots(xml: &str, limits: XmlLimits) -> Result<Vec<Node>, SamlError> {
     parse_roots_with_element_names(xml, limits, |_, _, _| {})
 }
@@ -628,20 +591,22 @@ mod tests {
     use super::*;
 
     #[test]
-    #[expect(
-        deprecated,
-        reason = "the deprecated public parsers keep their behaviour until removal"
-    )]
-    fn deprecated_parse_functions_keep_their_behaviour() -> Result<(), Box<dyn std::error::Error>> {
+    fn document_and_root_list_parsers_apply_their_limits() -> Result<(), Box<dyn std::error::Error>>
+    {
         let shallow = XmlLimits {
             max_depth: 1,
             ..XmlLimits::default()
         };
-        assert_eq!(parse("<a><b/></a>")?.root.local_name, "a");
-        assert!(parse("<a/><b/>").is_err());
-        assert!(parse_with_limits("<a><b/></a>", shallow).is_err());
-        assert_eq!(parse_roots("<a/><b/>")?.len(), 2);
-        assert!(parse_roots_with_limits("<a><b/></a><c/>", shallow).is_err());
+        assert_eq!(
+            parse_document("<a><b/></a>", XmlLimits::default())?
+                .root
+                .local_name,
+            "a"
+        );
+        assert!(parse_document("<a/><b/>", XmlLimits::default()).is_err());
+        assert!(parse_document("<a><b/></a>", shallow).is_err());
+        assert_eq!(parse_all_roots("<a/><b/>", XmlLimits::default())?.len(), 2);
+        assert!(parse_all_roots("<a><b/></a><c/>", shallow).is_err());
         Ok(())
     }
 

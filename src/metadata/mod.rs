@@ -11,9 +11,6 @@ mod sp;
 mod validity;
 mod write;
 
-#[cfg(crypto)]
-#[allow(deprecated)]
-pub use crate::crypto::MetadataSignatureVerification;
 pub use description::{ContactPerson, ContactType, LocalizedValue, Organization};
 pub use generate::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,

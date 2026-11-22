@@ -22,7 +22,7 @@ const RSA15_DECRYPTION_DISABLED: &str = "XML-Enc RSA-v1.5 key transport (http://
 /// Options for XML-Enc assertion decryption.
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
-pub struct AssertionDecryptionOptions {
+pub(crate) struct AssertionDecryptionOptions {
     /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport.
     ///
     /// When this is `false`, an encrypted element whose XML names
@@ -116,25 +116,8 @@ fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
 /// [`ResourceLimit::DecryptionWork`](crate::ResourceLimit::DecryptionWork)
 /// when `options.max_decryption_work` is exceeded, and another
 /// [`SamlError`] when decryption fails.
-#[deprecated(
-    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed service provider decrypts assertions in `finish_sso`. To decrypt other XML, use `bergshamra` directly"
-)]
-pub fn decrypt_assertion(
-    xml: &str,
-    enc_key: &Key,
-    options: AssertionDecryptionOptions,
-) -> Result<(String, String), SamlError> {
-    decrypt_assertion_with_limits(xml, enc_key, options, XmlLimits::default())
-}
-
-/// Decrypt each `<EncryptedAssertion>` with explicit XML parser resource limits.
-/// Encrypted identifiers and attributes inside each assertion stay encrypted.
-///
-/// # Errors
-///
-/// As `decrypt_assertion`, and [`SamlError::LimitExceeded`] when a limit is
-/// exceeded.
-pub fn decrypt_assertion_with_limits(
+#[cfg(all(test, not(feature = "crypto-fips")))]
+pub(crate) fn decrypt_assertion_with_limits(
     xml: &str,
     enc_key: &Key,
     options: AssertionDecryptionOptions,

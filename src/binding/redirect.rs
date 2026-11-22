@@ -74,7 +74,8 @@ pub(crate) fn append_redirect_query(base_url: &str, query: &str) -> String {
 ///
 /// Removes a direct child `ds:Signature` before raw DEFLATE. A nested
 /// signature stays. Bindings §3.4.4.1.
-pub fn build_redirect_octet(
+#[cfg(any(crypto, test))]
+pub(crate) fn build_redirect_octet(
     parser_type: ParserType,
     xml: &str,
     relay_state: Option<&str>,
@@ -227,7 +228,8 @@ fn remove_spans(xml: &str, spans: &[(usize, usize)]) -> String {
 /// Finish a signed HTTP-Redirect URL by adding `<octet>&Signature=<enc(sig)>`
 /// to the query of `base_url`, after any existing query and before any
 /// fragment. `octet` is added unchanged.
-pub fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> String {
+#[cfg(any(crypto, test))]
+pub(crate) fn append_signature(base_url: &str, octet: &str, signature_b64: &str) -> String {
     let signed = format!("{octet}&Signature={}", url_encode(signature_b64));
     append_redirect_query(base_url, &signed)
 }

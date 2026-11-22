@@ -21,9 +21,8 @@
 | `saml_rs::raw::metadata` | Removed | [1.12](#112-import-metadata-from-metadata) |
 | `ServiceProvider::create_login_request`, `create_login_request_with_options`, or `parse_login_response_with_request_id` | Removed | [1.13](#113-start-sso-instead-of-create_login_request) |
 | `ServiceProvider::parse_unsolicited_login_response` or `parse_login_response` | Removed | [1.14](#114-accept-unsolicited-sso-instead-of-parse_unsolicited_login_response) |
-| `BindingContext::post_form` or `try_post_form` | Removed | [1.15](#115-handle-the-post-form-error) |
-| `binding::try_saml_post_binding_form` | Renamed to `saml_post_binding_form` | [1.15](#115-handle-the-post-form-error) |
-| `binding::saml_post_binding_form` | Returns `Result` | [1.15](#115-handle-the-post-form-error) |
+| `BindingContext::post_form` or `try_post_form` | Removed | [1.15](#115-render-the-outbound-post-form) |
+| `binding::try_saml_post_binding_form` or `saml_post_binding_form` | Use `Outbound::post_form()` | [1.15](#115-render-the-outbound-post-form) |
 | A variant ending in `ForCompatibility`, `DataEncryptionAlgorithm::Aes128`, `Aes256`, or `TripleDes` | Renamed | [1.16](#116-rename-the-relaxed-policy-and-algorithm-variants) |
 | `XmlPolicy::clock_drifts` | Removed; set `ClockSkew` on `SamlValidationContext` | [1.17](#117-set-clock-skew-on-the-validation-context) |
 | `metadata::try_generate_idp_metadata` | Removed; call `generate_idp_metadata` | [1.18](#118-call-generate_idp_metadata) |
@@ -34,7 +33,7 @@
 | `MessageSignatureOrder::as_str` or `ParserType::as_str` | Removed | [1.23](#123-replace-parsertypeas_str) |
 | `constants::status_code::AUTH_FAILED` | Renamed to `AUTHN_FAILED` | [1.24](#124-rename-auth_failed-to-authn_failed) |
 | `FlowOptions` or any of its fields | Removed with the raw API; set signature rules on the typed validation policies and clock skew on `SamlValidationContext` | [3](raw-api.md) |
-| A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
+| A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, `binding::deflate_raw_decode`, or `validator::check_status` | No longer public | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml`, `Sp`, `Idp`, or `Unknown` | Removed; use `ServiceProvider` and `IdentityProvider` | [1.25](#125-replace-samlsp-and-samlidp-with-serviceprovider-and-identityprovider) |
 | `SpValidationPolicy::compatibility` or `IdpValidationPolicy::compatibility` | Removed; set the fields it relaxed | [1.26](#126-replace-compatibility-with-the-fields-it-relaxed) |
@@ -513,29 +512,25 @@ or `parse_login_response`, which was another name for it.
 `ServiceProvider::accept_unsolicited_sso`. It rejects an unsolicited response that
 carries `InResponseTo`, including an empty one.
 
-## 1.15 Handle the POST form error
+## 1.15 Render the outbound POST form
 
 **Affects:** code that renders an HTTP-POST form with
 `binding::saml_post_binding_form` or `binding::try_saml_post_binding_form`.
-`BindingContext::post_form` and `try_post_form` are removed with the raw API;
-render `Outbound::post_form` instead.
+This also affects callers of `BindingContext::post_form` and `try_post_form`.
 
-**Before:** `saml_post_binding_form` rendered any form `action`, and dropped a
-detached SimpleSign signature that had only one of `SigAlg` or `Signature`.
-The `try_` version rejected both cases.
-**Now:** only the checked version remains, under the shorter name.
-`saml_post_binding_form` returns `SamlError::Invalid` when the action is not an
-absolute `http` or `https` URL, or when the SimpleSign signature state is
-partial:
+**Now:** these helpers are removed. For an outgoing POST or SimpleSign message,
+get the form data from `Outbound::post_form()` and render it in your
+application:
 
 ```rust
-let html = saml_rs::binding::saml_post_binding_form(action, "SAMLResponse", &b64, None)?;
+let form = outbound.post_form()?;
+let action = form.action();
+let fields = form.fields();
 ```
 
-Rename calls to the `try_` versions. Add `?` or error handling to calls to the
-old unchecked versions. An endpoint that the unchecked version accepted, such as
-a relative path or a `javascript:` URL, now fails; configure the absolute URL
-of the peer's endpoint.
+Configure an absolute HTTP(S) URL for the peer's POST endpoint. If you render
+forms for XML outside the typed flows, escape the action and field names and
+values in your HTML template.
 
 ## 1.16 Rename the relaxed policy and algorithm variants
 

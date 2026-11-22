@@ -19,13 +19,16 @@ use crate::error::{crypto_err, xml_err, SamlError};
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeSet};
 
-pub use decrypt::*;
+#[cfg(all(test, not(feature = "crypto-fips")))]
+pub(crate) use decrypt::decrypt_assertion_with_limits;
 pub(crate) use decrypt::{
     carries_encrypted_assertion_elements, decrypt_assertion_elements,
     decrypt_assertions_with_limits, decrypt_authn_request_encrypted_id,
-    decrypt_logout_request_encrypted_id, decrypt_root_child, RequestAuthentication,
+    decrypt_logout_request_encrypted_id, decrypt_root_child, AssertionDecryptionOptions,
+    RequestAuthentication,
 };
-pub use encrypt::encrypt_assertion;
+#[cfg(test)]
+pub(crate) use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{
     encrypt_assertion_elements, encrypt_assertion_with_key_transport,
     encrypt_logout_request_name_id, encrypt_root_children, KeyTransport,
@@ -223,10 +226,6 @@ mod tests {
     const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 
     #[test]
-    #[expect(
-        deprecated,
-        reason = "the deprecated public decryptor keeps its behaviour until removal"
-    )]
     fn encrypt_then_decrypt_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         let start = RESPONSE
             .find("<saml:Assertion ")
@@ -251,8 +250,12 @@ mod tests {
         );
 
         let key = read_private_key(SP_PRIVKEY, None)?;
-        let (response, assertion) =
-            decrypt_assertion(&encrypted, &key, AssertionDecryptionOptions::default())?;
+        let (response, assertion) = decrypt_assertion_with_limits(
+            &encrypted,
+            &key,
+            AssertionDecryptionOptions::default(),
+            XmlLimits::default(),
+        )?;
         assert_eq!(assertion, standalone);
         assert_eq!(
             response,

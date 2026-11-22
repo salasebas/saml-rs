@@ -156,7 +156,7 @@ fn schema_policy_covers_paos_envelope() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn schema_callback_participates_in_xml_policy_equality() {
-    let validator: saml_rs::context::SchemaValidator = reject_xml;
+    let validator: SchemaValidator = reject_xml;
     let unchecked = policy(None);
     let checked = policy(Some(validator));
     assert_ne!(unchecked, checked);

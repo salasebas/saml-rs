@@ -1,6 +1,6 @@
 use crate::constants::transform_algorithm;
 use crate::error::SamlError;
-use crate::xml::dom::{self, Node};
+use crate::xml::dom::{self, Node, XmlLimits};
 
 /// Transform allowlist for a metadata import that requires a signature.
 ///
@@ -26,8 +26,9 @@ pub(super) enum MetadataSignatureTransforms {
 pub(super) fn ensure_import_signature_shape(
     xml: &str,
     transforms: MetadataSignatureTransforms,
+    limits: XmlLimits,
 ) -> Result<(), SamlError> {
-    let document = dom::parse_document(xml, crate::XmlLimits::default())?;
+    let document = dom::parse_document(xml, limits)?;
     let root = &document.root;
     if !is_metadata_root(root) {
         return Ok(());

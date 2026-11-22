@@ -16,7 +16,7 @@ use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
+use flate2::read::DeflateDecoder;
 use saml_rs::constants::status_code;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
@@ -135,10 +135,10 @@ fn authn_request_xml(
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
                 .ok_or("missing SAMLRequest")?;
-            Ok(String::from_utf8(deflate_raw_decode(
-                &STANDARD.decode(encoded.as_ref())?,
-                MAX_DEFLATE_RAW_DECODE_BYTES,
-            )?)?)
+            let compressed = STANDARD.decode(encoded.as_ref())?;
+            Ok(std::io::read_to_string(DeflateDecoder::new(
+                compressed.as_slice(),
+            ))?)
         }
         OutboundDelivery::PostForm(form) => Ok(String::from_utf8(
             STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,

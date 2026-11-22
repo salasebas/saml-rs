@@ -71,23 +71,20 @@ let xml = generate_sp_metadata(&input)?;
 `verify_signature_with_limits`, `verify_signature_detailed`, or
 `verify_signature_detailed_with_limits`, including calls through
 `IdpMetadata` and `SpMetadata`. It also affects callers of
-`crypto::verify_metadata_signature` and its three variants.
+`crypto::verify_metadata_signature`, its three variants, and
+`MetadataSignatureVerification`.
 
-**Now:** the `Metadata` methods are removed. The `crypto` functions remain
-deprecated. Those functions return `Ok(false)`, or an unverified
-`MetadataSignatureVerification`, when the metadata is unsigned or its
-signature does not verify. They also accept MD5, RIPEMD-160, and RSA keys
-shorter than 2048 bits where the crypto provider verifies them.
-`MetadataSignatureVerification` is deprecated with them. Its `verified()`
-returns `true` exactly when `signed_metadata_xml()` returns `Some`. A call
-that only applies `?` to the result accepts unsigned metadata:
+**Before:** the old verifiers returned `Ok(false)` or an unverified result
+when metadata was unsigned or its signature failed verification. A call that
+only applied `?` to the result therefore accepted unsigned metadata:
 
 ```rust
 use saml_rs::crypto::verify_metadata_signature;
 verify_metadata_signature(&xml, &[certificate_pem])?;
 ```
 
-**Upgrade:** import the metadata with `IdpDescriptor::from_metadata_xml` or
+**Upgrade:** the old verifiers and `MetadataSignatureVerification` are
+removed. Import the metadata with `IdpDescriptor::from_metadata_xml` or
 `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`.
 The import returns `SamlError::SignatureVerification` when the signature is
 missing or does not verify against a pinned certificate:
@@ -106,7 +103,7 @@ let idp = IdpDescriptor::from_metadata_xml(
 let signed_descriptor = idp.signed_metadata_xml();
 ```
 
-The import checks more than the deprecated `crypto` functions:
+The import enforces these signature rules:
 
 - The document holds exactly one signature, directly under the metadata
   root. That signature has one reference, to the root's `ID` as `#ID`, with
@@ -122,8 +119,8 @@ The import checks more than the deprecated `crypto` functions:
   them where the crypto provider verifies them. See the
   [metadata trust](../../conformance/metadata-and-replay.md#metadata-trust) rows.
 - `from_metadata_xml` parses with the default `XmlLimits`. Use
-  `from_metadata_xml_with_policy` to supply other limits and an optional schema
-  validator.
+  `from_metadata_xml_with_policy` to supply limits for parsing and signature
+  verification, and to configure an optional schema validator.
 
 ## 8. Remove metadata element orders
 

@@ -1,7 +1,6 @@
 //! Production-hardening tests: Audience restriction and InResponseTo / anti-replay.
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
-#![allow(deprecated)]
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -671,8 +670,11 @@ fn hardening_encrypted_message_signed_response_verifies() -> Result<(), Box<dyn 
 fn hardening_signed_metadata_verifies_against_trust_anchor(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::crypto::keys::read_private_key;
-    use saml_rs::crypto::{sign_saml_xml, verify_metadata_signature};
-    use saml_rs::{SignatureAction, SignatureConfig};
+    use saml_rs::crypto::sign_saml_xml;
+    use saml_rs::{
+        CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy, SignatureAction,
+        SignatureConfig, SignatureVerificationReason,
+    };
 
     let md = "<EntityDescriptor ID=\"_md1\" entityID=\"https://idp.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"><IDPSSODescriptor protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://idp/sso\"/></IDPSSODescriptor></EntityDescriptor>";
     let key = read_private_key(PRIVKEY, None)?;
@@ -683,56 +685,31 @@ fn hardening_signed_metadata_verifies_against_trust_anchor(
     };
     let signed = sign_saml_xml(md, true, &key, CERT, RSA_SHA256, &[], Some(&config))?;
 
-    // Valid against the trust anchor.
-    assert!(verify_metadata_signature(&signed, &[CERT.to_string()])?);
-    // Tampered entityID no longer verifies.
+    let trusted_certificates = [CertificatePem::new(CERT)];
+    let trust = MetadataTrustPolicy::RequireSignature {
+        trusted_certificates: &trusted_certificates,
+    };
+    let descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        &signed,
+        trust,
+    )?;
+    assert!(descriptor.signed_metadata_xml().is_some());
+
     let tampered = signed.replacen(
         "https://idp.example.com/metadata",
         "https://evil/metadata",
         1,
     );
-    assert!(!verify_metadata_signature(&tampered, &[CERT.to_string()])?);
+    assert!(matches!(
+        IdpDescriptor::from_metadata_xml(
+            EntityId::try_new("https://evil/metadata")?,
+            &tampered,
+            trust,
+        ),
+        Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature
+        })
+    ));
     Ok(())
-}
-
-#[test]
-fn hardening_metadata_signature_requires_root_coverage() -> Result<(), Box<dyn std::error::Error>> {
-    use bergshamra::{sign, DsigContext, KeysManager};
-    use saml_rs::constants::{digest_for_signature, namespace, transform_algorithm};
-    use saml_rs::crypto::keys::read_private_key;
-    use saml_rs::crypto::verify_metadata_signature;
-    use saml_rs::metadata::IdpMetadata;
-    use saml_rs::util::normalize_cert_string;
-
-    let digest = digest_for_signature(RSA_SHA256).ok_or("unknown digest")?;
-    let signature = format!(
-        "<ds:Signature xmlns:ds=\"{dsig}\"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm=\"{exc_c14n}\"/><ds:SignatureMethod Algorithm=\"{sig_alg}\"/><ds:Reference URI=\"#_signed_child\"><ds:Transforms><ds:Transform Algorithm=\"{enveloped}\"/><ds:Transform Algorithm=\"{exc_c14n}\"/></ds:Transforms><ds:DigestMethod Algorithm=\"{digest}\"/><ds:DigestValue></ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue></ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>{cert}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature>",
-        dsig = namespace::DSIG,
-        exc_c14n = transform_algorithm::EXC_C14N,
-        sig_alg = RSA_SHA256,
-        enveloped = transform_algorithm::ENVELOPED_SIGNATURE,
-        cert = normalize_cert_string(CERT),
-    );
-    let template = format!(
-        "<EntityDescriptor ID=\"_evil_root\" entityID=\"https://evil.example.com/metadata\" xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">{signature}<IDPSSODescriptor ID=\"_signed_child\" protocolSupportEnumeration=\"urn:oasis:names:tc:SAML:2.0:protocol\"><SingleSignOnService Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://trusted.example.com/sso\"/></IDPSSODescriptor></EntityDescriptor>"
-    );
-    let key = read_private_key(PRIVKEY, None)?;
-    let mut manager = KeysManager::new();
-    manager.add_key(key);
-    let ctx = DsigContext::new(manager).with_insecure(true);
-    let wrapped_metadata = sign(&ctx, &template)?;
-
-    assert_eq!(
-        IdpMetadata::from_xml(&wrapped_metadata)?
-            .as_metadata()
-            .entity_id(),
-        Some("https://evil.example.com/metadata")
-    );
-    match verify_metadata_signature(&wrapped_metadata, &[CERT.to_string()]) {
-        Err(SamlError::SignedReferenceMismatch) => Ok(()),
-        other => Err(format!(
-            "metadata verification must reject signatures that do not cover the consumed root: {other:?}"
-        )
-        .into()),
-    }
 }

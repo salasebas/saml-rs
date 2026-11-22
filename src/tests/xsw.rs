@@ -93,7 +93,6 @@ fn xsw_baseline_signed_response_verifies() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-#[allow(deprecated)]
 fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn std::error::Error>>
 {
     let signed = authn_request_signed_over_issuer()?;

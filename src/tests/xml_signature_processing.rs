@@ -1,4 +1,4 @@
-//! Processing restrictions and content coverage at public XML verification entry points.
+//! Processing restrictions and content coverage for XML signature verification.
 #![cfg(crypto)]
 
 use base64::engine::general_purpose::STANDARD;
@@ -6,15 +6,12 @@ use base64::Engine;
 use saml_rs::constants::Binding;
 use saml_rs::constants::ParserType;
 use saml_rs::crypto::keys::read_private_key;
-use saml_rs::crypto::{
-    verify_signature, verify_signature_with_limits, BergshamraBackend, XmlSecurityBackend,
-};
-use saml_rs::error::{ReferenceResolutionReason, SignatureVerificationReason};
+use saml_rs::crypto::verify_signature;
+use saml_rs::error::ReferenceResolutionReason;
 use saml_rs::flow::FlowOptions;
 use saml_rs::flow::HttpRequest;
 use saml_rs::flow::SignatureCheck;
 use saml_rs::tests::engine::flow;
-use saml_rs::XmlLimits;
 use saml_rs::{SamlError, XmlSignatureProfile};
 
 const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -68,7 +65,7 @@ fn verify_flow(xml: &str, profile: XmlSignatureProfile) -> Result<(), SamlError>
 }
 
 #[test]
-fn public_verifiers_reject_a_signature_covering_only_a_sibling_object(
+fn verification_rejects_a_signature_covering_only_a_sibling_object(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for root in ["ArtifactResolve", "ManageNameIDRequest", "Response"] {
         let xml = sign(&message(
@@ -76,23 +73,17 @@ fn public_verifiers_reject_a_signature_covering_only_a_sibling_object(
             &signature("#_payload"),
             r#"<Payload xmlns="urn:example:extension" ID="_payload">signed sibling</Payload>"#,
         ))?;
-        for result in [
-            verify_signature(&xml, &[CERT.to_string()]).map(|_| ()),
-            verify_signature_with_limits(&xml, &[CERT.to_string()], XmlLimits::default())
-                .map(|_| ()),
-            BergshamraBackend::default().verify_signature(&xml, CERT),
-        ] {
-            assert!(
-                matches!(result, Err(SamlError::SignedReferenceMismatch)),
-                "{root}: {result:?}"
-            );
-        }
+        let result = verify_signature(&xml, &[CERT.to_string()]);
+        assert!(
+            matches!(result, Err(SamlError::SignedReferenceMismatch)),
+            "{root}: {result:?}"
+        );
     }
     Ok(())
 }
 
 #[test]
-fn public_verifiers_return_the_covered_root_for_protocol_documents(
+fn verification_returns_the_covered_root_for_protocol_documents(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for root in [
         "ArtifactResolve",
@@ -106,23 +97,16 @@ fn public_verifiers_return_the_covered_root_for_protocol_documents(
             verify_signature(&xml, &[CERT.to_string()])?,
             (true, Some(xml.clone()))
         );
-        BergshamraBackend::default().verify_signature(&xml, CERT)?;
     }
     Ok(())
 }
 
 #[test]
-fn backend_rejects_a_signature_no_trusted_key_verifies() -> Result<(), Box<dyn std::error::Error>> {
+fn verification_requires_a_trusted_key() -> Result<(), Box<dyn std::error::Error>> {
     let xml = sign(&message("Response", &signature("#_root"), ""))?;
-    let result = BergshamraBackend::default().verify_signature(&xml, OTHER_CERT);
-    assert!(
-        matches!(
-            result,
-            Err(SamlError::SignatureVerification {
-                reason: SignatureVerificationReason::XmlSignature
-            })
-        ),
-        "{result:?}"
+    assert_eq!(
+        verify_signature(&xml, &[OTHER_CERT.to_string()])?,
+        (false, None)
     );
     Ok(())
 }
@@ -146,7 +130,6 @@ fn assertion_only_sso_signature_still_returns_the_assertion(
         verify_signature(&xml, &[CERT.to_string()])?,
         (true, Some(xml[assertion.start..assertion.end].into()))
     );
-    BergshamraBackend::default().verify_signature(&xml, CERT)?;
     Ok(())
 }
 

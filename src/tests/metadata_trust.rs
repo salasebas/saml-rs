@@ -11,7 +11,7 @@ use saml_rs::util::normalize_cert_string;
 use saml_rs::{
     CertificatePem, EntityId, IdpDescriptor, MetadataTrustPolicy, SamlError, SpDescriptor,
 };
-use saml_rs::{SignatureAction, SignatureConfig};
+use saml_rs::{SignatureAction, SignatureConfig, XmlPolicy};
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -180,10 +180,21 @@ fn metadata_trust_accepts_signed_idp_descriptor_with_pinned_certificate(
         trust(std::slice::from_ref(&cert)),
     )?;
 
-    assert!(descriptor.signed_metadata_xml().is_some());
-    assert!(descriptor
+    let signed_xml = descriptor
         .signed_metadata_xml()
-        .is_some_and(|xml| xml.contains("https://idp.example.com/metadata")));
+        .ok_or("missing signed descriptor")?;
+    assert!(signed_xml.contains("https://idp.example.com/metadata"));
+    assert!(signed_xml.contains("<ds:Signature"));
+
+    let other_certificate =
+        CertificatePem::new(include_str!("../../tests/fixtures/key/idp/cert.cer"));
+    let result = import_idp(&signed, trust(&[other_certificate]));
+    assert!(matches!(
+        result,
+        Err(SamlError::SignatureVerification {
+            reason: SignatureVerificationReason::XmlSignature
+        })
+    ));
     Ok(())
 }
 
@@ -202,6 +213,37 @@ fn metadata_trust_accepts_signed_sp_descriptor_with_pinned_certificate(
     assert!(descriptor
         .signed_metadata_xml()
         .is_some_and(|xml| xml.contains("https://sp.example.com/metadata")));
+    Ok(())
+}
+
+#[test]
+fn signed_descriptor_import_honors_the_configured_byte_limit(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut policy = XmlPolicy::default();
+    let padding = " ".repeat(policy.limits.max_bytes);
+    let certificates = [CertificatePem::new(CERT)];
+
+    let signed_idp = sign_root_metadata(idp_metadata_xml())?;
+    let idp_xml = format!("{padding}{signed_idp}");
+    policy.limits.max_bytes = idp_xml.len();
+    let idp = IdpDescriptor::from_metadata_xml_with_policy(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        &idp_xml,
+        trust(&certificates),
+        &policy,
+    )?;
+    assert_eq!(idp.signed_metadata_xml(), Some(signed_idp.as_str()));
+
+    let signed_sp = sign_root_metadata(sp_metadata_xml())?;
+    let sp_xml = format!("{padding}{signed_sp}");
+    policy.limits.max_bytes = sp_xml.len();
+    let sp = SpDescriptor::from_metadata_xml_with_policy(
+        EntityId::try_new("https://sp.example.com/metadata")?,
+        &sp_xml,
+        trust(&certificates),
+        &policy,
+    )?;
+    assert_eq!(sp.signed_metadata_xml(), Some(signed_sp.as_str()));
     Ok(())
 }
 
@@ -655,7 +697,6 @@ fn sign_idp_metadata_with(
 }
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
-#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 #[test]
 fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -684,10 +725,6 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
         }
         let compatible = import_idp(&signed, trust_allowing_weak_algorithms(certificates))?;
         assert!(compatible.signed_metadata_xml().is_some());
-        assert!(saml_rs::crypto::verify_metadata_signature(
-            &signed,
-            &[CERT.to_string()]
-        )?);
     }
 
     if !failures.is_empty() {
@@ -705,7 +742,6 @@ fn require_signature_rejects_md5_and_ripemd160_metadata_signatures(
 }
 
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
-#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 #[test]
 fn require_signature_does_not_verify_with_a_1024_bit_rsa_key(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -724,10 +760,6 @@ fn require_signature_does_not_verify_with_a_1024_bit_rsa_key(
 
     let compatible = import_idp(&signed, trust_allowing_weak_algorithms(only_short))?;
     assert!(compatible.signed_metadata_xml().is_some());
-    assert!(saml_rs::crypto::verify_metadata_signature(
-        &signed,
-        &[RSA_1024_CERT.to_string()]
-    )?);
 
     let with_usable_key = [short, CertificatePem::new(CERT)];
     match import_idp(&signed, trust(&with_usable_key))

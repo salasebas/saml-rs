@@ -19,10 +19,10 @@ use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use bergshamra::keys::loader::load_x509_cert_pem;
 use bergshamra::{encrypt, EncContext, KeysManager};
-use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
+use flate2::read::DeflateDecoder;
 use saml_rs::constants::status_code;
-use saml_rs::crypto::keys::load_certificate;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
     IdentityProvider, IdpConfig, IdpDescriptor, InMemoryReplayCache, Inbound, LogoutBinding,
@@ -264,10 +264,10 @@ fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std
                 .query_pairs()
                 .find(|(key, _)| key == "SAMLRequest")
                 .ok_or("missing SAMLRequest")?;
-            Ok(String::from_utf8(deflate_raw_decode(
-                &STANDARD.decode(encoded.as_ref())?,
-                MAX_DEFLATE_RAW_DECODE_BYTES,
-            )?)?)
+            let compressed = STANDARD.decode(encoded.as_ref())?;
+            Ok(std::io::read_to_string(DeflateDecoder::new(
+                compressed.as_slice(),
+            ))?)
         }
         OutboundDelivery::PostForm(form) => Ok(String::from_utf8(
             STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,
@@ -528,7 +528,8 @@ fn encrypted_id(plaintext: &str) -> Result<String, Box<dyn std::error::Error>> {
         <xenc:CipherData><xenc:CipherValue/></xenc:CipherData>
     </xenc:EncryptedData>"#;
     let mut keys = KeysManager::new();
-    keys.add_key(load_certificate(CERT)?);
+    saml_rs::initialize_crypto_provider()?;
+    keys.add_key(load_x509_cert_pem(CERT.as_bytes())?);
     let encrypted = encrypt(&EncContext::new(keys), template, plaintext.as_bytes())?;
     Ok(format!("<saml:EncryptedID>{encrypted}</saml:EncryptedID>"))
 }

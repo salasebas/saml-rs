@@ -2,8 +2,8 @@
 
 pub(crate) mod any_uri;
 mod date_time;
-pub mod dom;
-pub mod extract;
+pub(crate) mod dom;
+pub(crate) mod extract;
 pub(crate) mod fields;
 pub(crate) mod fragment;
 pub(crate) mod name;
@@ -17,7 +17,9 @@ pub(crate) use date_time::{
     parse_generated_saml_utc_date_time, parse_saml_utc_date_time, parse_timezoned_date_time,
 };
 pub use dom::XmlLimits;
-pub use extract::{extract, extract_with_limits, ExtractorField, LocalPath};
+#[cfg(test)]
+pub(crate) use extract::extract;
+pub(crate) use extract::{extract_with_limits, ExtractorField};
 pub(crate) use profile::{
     validate_logout_request_outbound, validate_logout_response_outbound, validate_protocol_profile,
     OutboundLogoutExpiration, OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation,

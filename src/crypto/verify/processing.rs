@@ -2,9 +2,10 @@
 
 use super::{
     allows_digest_method, allows_signature_method, bergshamra_ns, crypto_err, reference_resolution,
-    transform_algorithm, verified_target_from_uri, BergshamraDocument, BergshamraNodeId,
-    DsigContext, ReferenceResolutionReason, SamlError, VerifyResult, XmlSignatureProfile,
+    verified_target_from_uri, BergshamraDocument, BergshamraNodeId, DsigContext,
+    ReferenceResolutionReason, SamlError, VerifyResult, XmlSignatureProfile,
 };
+use crate::constants::transform_algorithm;
 use bergshamra::core::algorithm;
 use bergshamra::dsig::verify::verify_all_document_with_source;
 

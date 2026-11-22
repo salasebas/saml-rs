@@ -1,16 +1,12 @@
 use saml_rs::constants::ParserType;
-use saml_rs::context::is_valid_xml_with_limits;
 use saml_rs::validator::check_status;
+use saml_rs::xml::dom::parse_document;
 use saml_rs::xml::{extract, extract_with_limits};
 use saml_rs::SamlError;
 use saml_rs::XmlLimits;
 
-#[cfg_attr(
-    crypto,
-    expect(deprecated, reason = "pins the deprecated signature verifiers")
-)]
 #[test]
-fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::error::Error>> {
+fn internal_parsers_enforce_xml_limits() -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!(
         "<Response><Status><StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/></Status>{}</Response>",
         " ".repeat(XmlLimits::default().max_bytes)
@@ -20,15 +16,14 @@ fn raw_conveniences_enforce_default_xml_limits() -> Result<(), Box<dyn std::erro
         ..XmlLimits::default()
     };
     let defaults = [
-        is_valid_xml_with_limits(&xml, saml_rs::XmlLimits::default()),
+        parse_document(&xml, saml_rs::XmlLimits::default()).map(drop),
         check_status(&xml, ParserType::SamlResponse, XmlLimits::default()),
         extract(&xml, &[]).map(drop),
-        saml_rs::xml::extract::extract(&xml, &[]).map(drop),
     ];
     for result in defaults {
         assert!(matches!(result, Err(SamlError::LimitExceeded { .. })));
     }
-    is_valid_xml_with_limits(&xml, raised)?;
+    parse_document(&xml, raised)?;
     check_status(&xml, ParserType::SamlResponse, raised)?;
     extract_with_limits(&xml, &[], raised)?;
 

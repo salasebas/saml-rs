@@ -219,8 +219,8 @@ Import with `IdpDescriptor::from_metadata_xml` or
 `SpDescriptor::from_metadata_xml` and `MetadataTrustPolicy::RequireSignature`.
 A failed verification then returns an error that `?` propagates. See
 [Verify signed metadata on import](metadata.md#7-verify-signed-metadata-on-import)
-for the replacement. The separate deprecated `crypto::verify_metadata_signature*`
-functions remain for their own removal task. For the former limited variants,
+for the replacement. It also covers the removed `crypto::verify_metadata_signature*`
+functions. For the former limited variants,
 configure `XmlPolicy::limits` and import with `from_metadata_xml_with_policy`.
 For the former detailed variants, read `signed_metadata_xml()` from the
 imported descriptor. The import contract also checks expected identity and
@@ -323,7 +323,7 @@ expiration and does not imply that the caller selected the default algorithm
 policy. Import with `AllowUnsigned` returns `None` even if XML has a signature.
 
 `signed_entity_descriptor_xml()` becomes `signed_metadata_xml()` on both
-peer descriptors and on the deprecated `MetadataSignatureVerification`. The result
+peer descriptors. The result
 can be a signed `EntityDescriptor` or a covering `EntitiesDescriptor`, so the
 new name covers both. The original signed XML is retained.
 
