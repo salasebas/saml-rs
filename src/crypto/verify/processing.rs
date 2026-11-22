@@ -1,10 +1,12 @@
 //! Preflight restrictions and verified-signature profile checks.
 
 use super::{
-    allows_digest_method, allows_signature_method, bergshamra_ns, reference_resolution,
+    allows_digest_method, allows_signature_method, bergshamra_ns, crypto_err, reference_resolution,
     transform_algorithm, verified_target_from_uri, BergshamraDocument, BergshamraNodeId,
-    ReferenceResolutionReason, SamlError, VerifyResult, XmlSignatureProfile,
+    DsigContext, ReferenceResolutionReason, SamlError, VerifyResult, XmlSignatureProfile,
 };
+use bergshamra::core::algorithm;
+use bergshamra::dsig::verify::verify_all_document_with_source;
 
 fn exactly_one_dsig_child(
     document: &BergshamraDocument<'_>,
@@ -40,6 +42,69 @@ fn dsig_algorithm<'a>(
     document
         .element(node)
         .and_then(|element| element.get_attribute(bergshamra_ns::attr::ALGORITHM))
+}
+
+pub(super) fn verify_all_signatures(
+    context: &DsigContext,
+    document: &BergshamraDocument<'_>,
+    xml: &str,
+    profile: XmlSignatureProfile,
+) -> Result<Vec<VerifyResult>, SamlError> {
+    preflight_signature_processing(document, SignatureSelection::All, profile)?;
+    let mut results =
+        verify_all_document_with_source(context, document, Some(xml)).map_err(crypto_err)?;
+    for result in &mut results {
+        enforce_hmac_truncation_minimum(document, result);
+    }
+    Ok(results)
+}
+
+pub(super) fn enforce_hmac_truncation_minimum(
+    document: &BergshamraDocument<'_>,
+    result: &mut VerifyResult,
+) {
+    if let VerifyResult::Valid { signature_node, .. } = result {
+        if let Some(reason) = invalid_hmac_truncation(document, *signature_node) {
+            *result = VerifyResult::Invalid { reason };
+        }
+    }
+}
+
+fn invalid_hmac_truncation(
+    document: &BergshamraDocument<'_>,
+    signature: BergshamraNodeId,
+) -> Option<String> {
+    // Match the first namespaced children and first text or CDATA node read by Bergshamra.
+    let signed_info = document.first_child_element_by_name_ns(
+        signature,
+        bergshamra_ns::DSIG,
+        bergshamra_ns::node::SIGNED_INFO,
+    )?;
+    let method = document.first_child_element_by_name_ns(
+        signed_info,
+        bergshamra_ns::DSIG,
+        bergshamra_ns::node::SIGNATURE_METHOD,
+    )?;
+    let minimum_bits = match dsig_algorithm(document, method)? {
+        algorithm::HMAC_SHA384 => 192,
+        algorithm::HMAC_SHA512 => 256,
+        _ => return None, // Bergshamra's 160-bit floor covers the other supported HMAC algorithms.
+    };
+    let length = document.first_child_element_by_name_ns(
+        method,
+        bergshamra_ns::DSIG,
+        bergshamra_ns::node::HMAC_OUTPUT_LENGTH,
+    )?;
+    match document
+        .element_text(length)
+        .and_then(|text| text.trim().parse::<usize>().ok())
+    {
+        Some(bits) if bits >= minimum_bits => None,
+        Some(bits) => Some(format!(
+            "HMACOutputLength {bits} bits is below minimum {minimum_bits} bits"
+        )),
+        None => Some("invalid HMACOutputLength value".to_owned()),
+    }
 }
 
 /// Check one verifier-accepted signature against `profile`.
@@ -257,4 +322,48 @@ pub(super) fn preflight_signature_processing(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bergshamra::core::algorithm::{HMAC_SHA384, HMAC_SHA512};
+    use bergshamra::xml::uppsala;
+
+    #[test]
+    fn hmac_truncation_uses_the_minimum_for_each_signature_method(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for (method, bits, expected_valid) in [
+            (HMAC_SHA384, Some(184), false),
+            (HMAC_SHA384, Some(192), true),
+            (HMAC_SHA512, Some(248), false),
+            (HMAC_SHA512, Some(256), true),
+            (HMAC_SHA512, None, true),
+        ] {
+            let length = bits.map_or_else(String::new, |bits| {
+                format!("<ds:HMACOutputLength>{bits}</ds:HMACOutputLength>")
+            });
+            let xml = format!(
+                r#"<ds:Signature xmlns:ds="{dsig}"><ds:SignedInfo><ds:SignatureMethod Algorithm="{method}">{length}</ds:SignatureMethod></ds:SignedInfo></ds:Signature>"#,
+                dsig = bergshamra_ns::DSIG,
+            );
+            let document = uppsala::parse(&xml)?;
+            let mut result = VerifyResult::Valid {
+                signature_node: document.document_element().ok_or("missing Signature")?,
+                references: Vec::new(),
+                key_info: bergshamra::VerifiedKeyInfo {
+                    algorithm: "HMAC".into(),
+                    key_name: None,
+                    x509_chain: Vec::new(),
+                },
+            };
+            enforce_hmac_truncation_minimum(&document, &mut result);
+            assert_eq!(
+                matches!(result, VerifyResult::Valid { .. }),
+                expected_valid,
+                "{method}, {bits:?}: {result:?}"
+            );
+        }
+        Ok(())
+    }
 }

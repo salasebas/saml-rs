@@ -19,7 +19,7 @@ Properties of the crate. HTTP-POST SSO requires caller-owned replay storage. The
 - An `Assertion` or `Signature` nested under `SubjectConfirmationData` is rejected.
 - Only content covered by a verified reference is returned for extraction.
 - Local digest and reference coverage is required.
-- HMAC output shorter than 160 bits is rejected.
+- Explicit XML HMAC truncation requires at least 160 bits, with higher minimums of 192 bits for HMAC-SHA384 and 256 bits for HMAC-SHA512.
 - The adapter skips X.509 chain and time checks because metadata certificates are pinned key material. Signature, digest, reference, duplicate-ID, and wrapping checks stay on.
 - RSA-v1.5 key-transport decryption is refused before any key is decrypted unless `XmlEncryptionPolicy::rsa15_key_transport` is `Rsa15KeyTransportPolicy::AllowDecryption`.
 

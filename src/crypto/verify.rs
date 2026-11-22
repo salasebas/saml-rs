@@ -24,7 +24,7 @@ use crate::error::{
 use crate::xml::dom::{self, Node, XmlLimits};
 use crate::xml::signature_placement::saml_signature_candidates;
 use bergshamra::core::ns as bergshamra_ns;
-use bergshamra::dsig::verify::{verify_all_document_with_source, verify_document_with_source};
+use bergshamra::dsig::verify::verify_document_with_source;
 use bergshamra::xml::{uppsala, Document as BergshamraDocument, NodeId as BergshamraNodeId};
 use bergshamra::{DsigContext, KeysManager, VerifiedReference, VerifyResult};
 use std::collections::HashSet;
@@ -33,8 +33,9 @@ mod processing;
 #[cfg(test)]
 use processing::enforce_strict_profile_on_verified_signature;
 use processing::{
-    document_signatures, enforce_profile_on_verified_signature, preflight_signature_processing,
-    verified_authn_request_signature, SignatureSelection,
+    document_signatures, enforce_hmac_truncation_minimum, enforce_profile_on_verified_signature,
+    preflight_signature_processing, verified_authn_request_signature, verify_all_signatures,
+    SignatureSelection,
 };
 
 fn has_descendant(node: &Node, names: &[&str]) -> bool {
@@ -597,19 +598,21 @@ pub(crate) fn verify_first_signature_with_profile(
     let root = &prepared.dom.root;
     let document = uppsala::parse(xml).map_err(xml_err)?;
     preflight_signature_processing(&document, SignatureSelection::First, profile)?;
-    match verify_document_with_source(&prepared.context, &document, Some(xml)) {
-        Ok(VerifyResult::Valid {
+    let mut result =
+        verify_document_with_source(&prepared.context, &document, Some(xml)).map_err(crypto_err)?;
+    enforce_hmac_truncation_minimum(&document, &mut result);
+    match result {
+        VerifyResult::Valid {
             signature_node,
             references,
             ..
-        }) => {
+        } => {
             enforce_profile_on_verified_signature(&document, signature_node, profile)?;
             let targets = verified_targets(&references)?;
             let content = verified_content(root, xml, &targets, prepared.protocol_response)?;
             Ok((true, Some(content)))
         }
-        Ok(VerifyResult::Invalid { .. }) => Ok((false, None)),
-        Err(error) => Err(crypto_err(error)),
+        VerifyResult::Invalid { .. } => Ok((false, None)),
     }
 }
 
@@ -666,9 +669,7 @@ pub(crate) fn verify_present_signatures(
         return Ok(());
     };
     let document = uppsala::parse(xml).map_err(xml_err)?;
-    preflight_signature_processing(&document, SignatureSelection::All, profile)?;
-    let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
-        .map_err(crypto_err)?;
+    let results = verify_all_signatures(&prepared.context, &document, xml, profile)?;
     reject_present_signature_that_does_not_verify(&prepared, &document, &results)
 }
 
@@ -743,9 +744,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     // Signature nodes in the results index this DOM, so evidence is read
     // from the same document the verifier saw.
     let document = uppsala::parse(xml).map_err(xml_err)?;
-    preflight_signature_processing(&document, SignatureSelection::All, profile)?;
-    let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
-        .map_err(crypto_err)?;
+    let results = verify_all_signatures(&prepared.context, &document, xml, profile)?;
     let results = if root.local_name == "AuthnRequest" {
         let Some(signature) = verified_authn_request_signature(&document, &results) else {
             return Ok(SignatureVerification::unverified(true));
