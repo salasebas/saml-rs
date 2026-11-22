@@ -266,7 +266,8 @@ impl SpConfigBuilder {
     ///   characters, or the organization, contacts, or error URI are invalid;
     /// - the selected policy needs a credential that is not set, or crypto
     ///   that a build without a crypto provider lacks;
-    /// - the algorithm policy is not supported;
+    /// - the crypto provider does not support the selected combination of
+    ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
     /// - generating SP metadata fails: a NameID format that is not an absolute
@@ -566,7 +567,8 @@ impl IdpConfigBuilder {
     ///   range;
     /// - the selected policy requires crypto that a build without a crypto
     ///   provider lacks;
-    /// - the algorithm policy is not supported;
+    /// - the crypto provider does not support the selected combination of
+    ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
     ///   begins with `xml` in any case, or the two tag prefixes are equal;
     /// - generating IdP metadata fails: a NameID format that is not an
