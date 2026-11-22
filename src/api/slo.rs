@@ -70,6 +70,9 @@ impl ServiceProvider {
 
     /// Receive an IdP LogoutRequest.
     ///
+    /// Browser requests require a verified signature. SOAP also accepts an
+    /// unsigned request over a mutually authenticated, integrity-protected channel.
+    ///
     /// # Errors
     ///
     /// Returns [`SamlError`] when the inbound message or relay state is invalid,
@@ -84,9 +87,8 @@ impl ServiceProvider {
     ///
     /// An `<EncryptedID>` is decrypted with the configured decryption key and
     /// returned as the request `NameID`. It stays unread, and the request has
-    /// no `NameID`, when no decryption key is configured, when no configured
-    /// decryption key decrypts it, or when neither a verified signature nor an
-    /// authenticated SOAP channel covers it.
+    /// no `NameID`, when no decryption key is configured, or when no configured
+    /// decryption key decrypts it.
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
@@ -160,9 +162,7 @@ impl ServiceProvider {
     /// signature, trust, status, or time validation fails; when the receiving
     /// URL is unpublished or multiple local endpoints have no explicit
     /// receiving URL; or when replay
-    /// validation detects a duplicate or expired message. Response signatures
-    /// follow [`crate::LogoutPolicy::responses`]. The Single Logout accept
-    /// combination sets that field to [`crate::LogoutSignaturePolicy::RequireSigned`].
+    /// validation detects a duplicate or expired message. Browser responses require a verified signature.
     /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
     /// only after the signature, issuer, `InResponseTo`, and destination
     /// checks pass.
@@ -281,6 +281,9 @@ impl IdentityProvider {
     }
 
     /// Receive an SP LogoutRequest.
+    ///
+    /// Browser requests require a verified signature. SOAP also accepts an
+    /// unsigned request over a mutually authenticated, integrity-protected channel.
     ///
     /// # Errors
     ///
@@ -408,9 +411,7 @@ impl IdentityProvider {
     /// signature, trust, status, or time validation fails; when the receiving
     /// URL is unpublished or multiple local endpoints have no explicit
     /// receiving URL; or when replay
-    /// validation detects a duplicate or expired message. Response signatures
-    /// follow [`crate::LogoutPolicy::responses`]. The Single Logout accept
-    /// combination sets that field to [`crate::LogoutSignaturePolicy::RequireSigned`].
+    /// validation detects a duplicate or expired message. Browser responses require a verified signature.
     /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
     /// only after the signature, issuer, `InResponseTo`, and destination
     /// checks pass.
@@ -568,7 +569,7 @@ fn receive_slo_impl(
     let receipt = LogoutReceipt::of_input(&input)?;
     let request =
         input.into_http_request(local_setting.xml_limits, local_setting.schema_validator)?;
-    let (flow, authentication) = parse_logout_request_at(
+    let flow = parse_logout_request_at(
         local_setting,
         peer.metadata,
         receipt,
@@ -590,7 +591,7 @@ fn receive_slo_impl(
         ReplayKey::LogoutRequest(logout.id().clone()),
         replay_deadline,
     )?;
-    let logout = decrypt_encrypted_id(logout, local_setting, authentication)?;
+    let logout = decrypt_encrypted_id(logout, local_setting)?;
     Ok(Received::new(logout, relay_state))
 }
 

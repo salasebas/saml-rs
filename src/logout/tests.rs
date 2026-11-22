@@ -2,7 +2,7 @@ use super::*;
 use crate::binding::{
     decode_base64, deflate_raw_decode, encode_base64, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-use crate::browser::Inbound;
+
 use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
@@ -12,8 +12,7 @@ use crate::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use crate::model::ClockSkew;
 use crate::sp;
 use crate::tests::engine::{
-    create_logout_request, create_logout_response, parse_logout_request, parse_logout_response,
-    redirect_query, LogoutUser,
+    create_logout_request, create_logout_response, parse_logout_response, LogoutUser,
 };
 use std::time::{Duration, SystemTime};
 use url::Url;
@@ -47,25 +46,6 @@ fn idp() -> Result<idp::Engine, SamlError> {
             ..Default::default()
         },
         EntitySetting::default(),
-    )
-}
-
-fn unsigned_setting() -> EntitySetting {
-    EntitySetting {
-        want_logout_request_signed: false,
-        ..Default::default()
-    }
-}
-
-fn unsigned_sp(entity_id: &str) -> Result<sp::Engine, SamlError> {
-    sp::Engine::from_config(
-        &SpMetadataInput {
-            entity_id: entity_id.into(),
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            ..Default::default()
-        },
-        unsigned_setting(),
     )
 }
 
@@ -148,18 +128,16 @@ fn logout_response_request(issue_instant_attribute: &str) -> HttpRequest {
     HttpRequest::post(vec![("SAMLResponse".into(), encode_base64(xml.as_bytes()))])
 }
 
-fn parse_unsigned_logout_response(
+fn parse_attested_soap_logout_response(
     issue_instant_attribute: &str,
 ) -> Result<crate::flow::FlowResult, SamlError> {
-    let mut sp = sp()?;
-    let idp = idp()?;
-    sp.setting.want_logout_response_signed = false;
-    parse_logout_response(
-        &sp.setting,
-        idp.metadata.as_metadata(),
-        Binding::Post,
+    parse_logout_response_at(
+        &sp()?.setting,
+        idp()?.metadata.as_metadata(),
+        LogoutReceipt::soap(crate::SoapChannel::mutually_authenticated_confidential()),
         &logout_response_request(issue_instant_attribute),
         "_req1",
+        LogoutFlowValidation::typed(None, SystemTime::now(), ClockSkew::strict(), None),
     )
 }
 
@@ -180,23 +158,21 @@ fn logout_request_request(issue_instant: &str, not_on_or_after: Option<&str>) ->
     HttpRequest::post(vec![("SAMLRequest".into(), encode_base64(xml.as_bytes()))])
 }
 
-fn parse_unsigned_logout_request_at(
+fn parse_attested_soap_logout_request_at(
     issue_instant: &str,
     not_on_or_after: Option<&str>,
     now: SystemTime,
     clock_skew: ClockSkew,
 ) -> Result<crate::flow::FlowResult, SamlError> {
-    let mut receiver = idp()?;
+    let receiver = idp()?;
     let sender = sp()?;
-    receiver.setting.want_logout_request_signed = false;
     parse_logout_request_at(
         &receiver.setting,
         sender.metadata.as_metadata(),
-        LogoutReceipt::of_input(&Inbound::<crate::LogoutRequest>::post(Vec::new()))?,
+        LogoutReceipt::soap(crate::SoapChannel::mutually_authenticated_confidential()),
         &logout_request_request(issue_instant, not_on_or_after),
         LogoutFlowValidation::typed(Some("https://idp/slo"), now, clock_skew, None),
     )
-    .map(|(flow, _)| flow)
 }
 
 fn unix_time(seconds: u64) -> Result<SystemTime, Box<dyn std::error::Error>> {
@@ -208,7 +184,7 @@ fn unix_time(seconds: u64) -> Result<SystemTime, Box<dyn std::error::Error>> {
 #[test]
 fn logout_request_accepts_old_issue_instant_without_not_on_or_after(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let result = parse_unsigned_logout_request_at(
+    let result = parse_attested_soap_logout_request_at(
         "2000-01-01T00:00:00Z",
         None,
         unix_time(1_735_689_600)?,
@@ -224,7 +200,7 @@ fn logout_request_accepts_old_issue_instant_without_not_on_or_after(
 
 #[test]
 fn logout_request_extracts_future_not_on_or_after() -> Result<(), Box<dyn std::error::Error>> {
-    let result = parse_unsigned_logout_request_at(
+    let result = parse_attested_soap_logout_request_at(
         "2000-01-01T00:00:00Z",
         Some("2025-01-01T00:01:00Z"),
         unix_time(1_735_689_600)?,
@@ -241,7 +217,7 @@ fn logout_request_extracts_future_not_on_or_after() -> Result<(), Box<dyn std::e
 #[test]
 fn logout_request_rejects_not_on_or_after_at_exact_boundary(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match parse_unsigned_logout_request_at(
+    match parse_attested_soap_logout_request_at(
         "2000-01-01T00:00:00Z",
         Some("2025-01-01T00:00:00Z"),
         unix_time(1_735_689_600)?,
@@ -266,7 +242,7 @@ fn logout_request_runtime_unrepresentable_not_on_or_after_fails_as_time_window_p
         "2025-01-01T24:00:00Z",
         "12345-01-01T00:00:00Z",
     ] {
-        match parse_unsigned_logout_request_at(
+        match parse_attested_soap_logout_request_at(
             "2000-01-01T00:00:00Z",
             Some(not_on_or_after),
             unix_time(1_735_689_600)?,
@@ -290,9 +266,9 @@ fn logout_request_runtime_unrepresentable_not_on_or_after_fails_as_time_window_p
 }
 
 #[test]
-fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, mut idp) = (sp()?, idp()?);
-    idp.setting.want_logout_request_signed = false;
+fn logout_request_redirect_encodes_the_subject_and_endpoint(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = (sp()?, idp()?);
     let ctx = create_logout_request(
         &sp.setting,
         sp.metadata.as_metadata(),
@@ -315,52 +291,6 @@ fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error
     assert!(xml.contains("<samlp:LogoutRequest"));
     assert!(xml.contains("user@example.com"));
 
-    // IdP parses it (unsigned)
-    let request = redirect_query(vec![("SAMLRequest".into(), value.into_owned())]);
-    let result = parse_logout_request(
-        &idp.setting,
-        sp.metadata.as_metadata(),
-        Binding::Redirect,
-        &request,
-    )?;
-    assert_eq!(
-        result.extract.get_str("issuer"),
-        Some("https://sp.example.com/metadata")
-    );
-    Ok(())
-}
-
-#[test]
-fn logout_requests_require_signatures_by_default() {
-    assert!(EntitySetting::default().want_logout_request_signed);
-}
-
-#[test]
-fn unsigned_logout_request_rejects_unexpected_issuer_when_explicitly_allowed(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp = idp()?;
-    idp.setting.want_logout_request_signed = false;
-    let expected_sp = unsigned_sp("https://expected-sp.example.com/metadata")?;
-    let attacker_sp = unsigned_sp("https://attacker-sp.example.com/metadata")?;
-    let ctx = create_logout_request(
-        &attacker_sp.setting,
-        attacker_sp.metadata.as_metadata(),
-        idp.metadata.as_metadata(),
-        Binding::Post,
-        &LogoutUser::new("victim@example.com"),
-        None,
-        false,
-    )?;
-    let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
-
-    let result = parse_logout_request(
-        &idp.setting,
-        expected_sp.metadata.as_metadata(),
-        Binding::Post,
-        &request,
-    );
-
-    assert!(matches!(result, Err(SamlError::IssuerMismatch { .. })));
     Ok(())
 }
 
@@ -368,8 +298,7 @@ fn unsigned_logout_request_rejects_unexpected_issuer_when_explicitly_allowed(
 fn raw_logout_request_parser_does_not_infer_actual_recipient(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sender = sp()?;
-    let mut receiver = idp()?;
-    receiver.setting.want_logout_request_signed = false;
+    let receiver = idp()?;
     let context = create_logout_request(
         &sender.setting,
         sender.metadata.as_metadata(),
@@ -385,11 +314,12 @@ fn raw_logout_request_parser_does_not_infer_actual_recipient(
     );
     let request = HttpRequest::post(vec![("SAMLRequest".into(), encode_base64(xml.as_bytes()))]);
 
-    let result = parse_logout_request(
+    let result = parse_logout_request_at(
         &receiver.setting,
         sender.metadata.as_metadata(),
-        Binding::Post,
+        LogoutReceipt::soap(crate::SoapChannel::mutually_authenticated_confidential()),
         &request,
+        LogoutFlowValidation::typed(None, SystemTime::now(), ClockSkew::strict(), None),
     )?;
 
     assert_eq!(
@@ -404,6 +334,7 @@ mod signed_tests {
     use super::*;
     use crate::constants::signature_algorithm::RSA_SHA256;
     use crate::entity::{SignatureAction, SignatureConfig};
+    use crate::tests::engine::parse_logout_request;
 
     const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
     const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -615,9 +546,7 @@ mod signed_tests {
             crate::constants::transform_algorithm::ENVELOPED_SIGNATURE.to_string(),
             "http://www.w3.org/TR/2001/REC-xml-c14n-20010315".to_string(),
         ];
-        let mut compatible = sp()?;
-        compatible.setting.want_logout_request_signed = true;
-        compatible.setting.want_logout_response_signed = true;
+        let compatible = sp()?;
         let strict = strict_sp()?;
 
         let request = create_logout_request(
@@ -693,8 +622,7 @@ mod signed_tests {
         let mut idp = signed_idp()?;
         idp.setting.request_signature_algorithm =
             crate::constants::signature_algorithm::RSA_SHA1.to_string();
-        let mut compatible = sp()?;
-        compatible.setting.want_logout_request_signed = true;
+        let compatible = sp()?;
         let strict = strict_sp()?;
         let request = create_logout_request(
             &idp.setting,
@@ -724,38 +652,6 @@ mod signed_tests {
         ));
         Ok(())
     }
-}
-
-#[test]
-fn logout_response_post_round_trips() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut sp, idp) = (sp()?, idp()?);
-    sp.setting.want_logout_response_signed = false;
-    // IdP responds to SP's logout; target is the SP (SLO via redirect endpoint)
-    let ctx = create_logout_response(
-        &idp.setting,
-        idp.metadata.as_metadata(),
-        sp.metadata.as_metadata(),
-        Binding::Post,
-        Some("_req1"),
-        None,
-        false,
-    )?;
-    let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
-    assert!(xml.contains("<samlp:LogoutResponse"));
-
-    let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let result = parse_logout_response(
-        &sp.setting,
-        idp.metadata.as_metadata(),
-        Binding::Post,
-        &request,
-        "_req1",
-    )?;
-    assert_eq!(
-        result.extract.get_str("issuer"),
-        Some("https://idp.example.com/metadata")
-    );
-    Ok(())
 }
 
 #[test]
@@ -885,7 +781,7 @@ fn custom_logout_response_keeps_placeholder_text_in_the_destination(
             assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
             ..Default::default()
         },
-        unsigned_setting(),
+        EntitySetting::default(),
     )?;
     sender.setting.logout_response_template = Some(custom_logout_response_template(
         r#"IssueInstant="{IssueInstant}""#,
@@ -1062,7 +958,7 @@ fn custom_logout_response_preserves_literal_issue_instant_without_a_soap_destina
 
 #[test]
 fn logout_response_rejects_missing_issue_instant() {
-    let result = parse_unsigned_logout_response("");
+    let result = parse_attested_soap_logout_response("");
 
     assert!(matches!(
         result,
@@ -1073,7 +969,7 @@ fn logout_response_rejects_missing_issue_instant() {
 
 #[test]
 fn logout_response_rejects_malformed_issue_instant() {
-    let result = parse_unsigned_logout_response("IssueInstant=\"not-a-date\"");
+    let result = parse_attested_soap_logout_response("IssueInstant=\"not-a-date\"");
 
     assert!(matches!(
         result,
@@ -1084,7 +980,7 @@ fn logout_response_rejects_malformed_issue_instant() {
 
 #[test]
 fn logout_response_rejects_non_utc_issue_instant() {
-    let result = parse_unsigned_logout_response("IssueInstant=\"2024-01-01T00:00:00+00:00\"");
+    let result = parse_attested_soap_logout_response("IssueInstant=\"2024-01-01T00:00:00+00:00\"");
 
     assert!(matches!(
         result,
@@ -1096,7 +992,7 @@ fn logout_response_rejects_non_utc_issue_instant() {
 #[test]
 fn logout_response_accepts_well_formed_utc_issue_instant_without_age_policy(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let parsed = parse_unsigned_logout_response("IssueInstant=\"2000-01-01T00:00:00Z\"")?;
+    let parsed = parse_attested_soap_logout_response("IssueInstant=\"2000-01-01T00:00:00Z\"")?;
 
     assert_eq!(
         parsed.extract.get_str("response.issueInstant"),
@@ -1107,8 +1003,7 @@ fn logout_response_accepts_well_formed_utc_issue_instant_without_age_policy(
 
 #[test]
 fn logout_response_rejects_empty_request_id() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut sp, idp) = (sp()?, idp()?);
-    sp.setting.want_logout_response_signed = false;
+    let (sp, idp) = (sp()?, idp()?);
     let ctx = create_logout_response(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1129,34 +1024,6 @@ fn logout_response_rejects_empty_request_id() -> Result<(), Box<dyn std::error::
             ""
         ),
         Err(SamlError::InvalidInResponseTo)
-    ));
-    Ok(())
-}
-
-#[test]
-fn logout_response_rejects_wrong_request_id() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut sp, idp) = (sp()?, idp()?);
-    sp.setting.want_logout_response_signed = false;
-    let ctx = create_logout_response(
-        &idp.setting,
-        idp.metadata.as_metadata(),
-        sp.metadata.as_metadata(),
-        Binding::Post,
-        Some("_req1"),
-        None,
-        false,
-    )?;
-    let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-
-    assert!(matches!(
-        parse_logout_response(
-            &sp.setting,
-            idp.metadata.as_metadata(),
-            Binding::Post,
-            &request,
-            "_other"
-        ),
-        Err(SamlError::InResponseToMismatch { .. })
     ));
     Ok(())
 }

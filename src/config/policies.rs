@@ -154,17 +154,6 @@ pub enum AuthnRequestValidationPolicy {
     AllowUnsigned,
 }
 
-/// Whether logout messages require signatures.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum LogoutSignaturePolicy {
-    /// Reject unsigned logout messages.
-    #[default]
-    RequireSigned,
-    /// Accept unsigned logout messages, preserving the samlify port.
-    AllowUnsigned,
-}
-
 /// Whether a bearer assertion must contain an `<AudienceRestriction>`.
 ///
 /// The service provider checks every present restriction under both policies.
@@ -231,8 +220,6 @@ pub struct SpValidationPolicy {
     pub audience: AudienceValidationPolicy,
     /// NameID creation behavior for AuthnRequests.
     pub name_id_creation: NameIdCreationPolicy,
-    /// Logout signature validation behavior.
-    pub logout: LogoutPolicy,
 }
 
 impl Default for SpValidationPolicy {
@@ -263,7 +250,6 @@ impl Default for SpValidationPolicy {
             authn_requests: AuthnRequestSigningPolicy::DoNotSign,
             audience: AudienceValidationPolicy::EvaluatePresentRestrictions,
             name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
-            logout: LogoutPolicy::default(),
         }
     }
 }
@@ -291,8 +277,6 @@ pub struct IdpValidationPolicy {
     pub authn_requests: AuthnRequestValidationPolicy,
     /// Signature algorithm and reference requirements.
     pub xml_signatures: XmlSignatureProfile,
-    /// Logout signature validation behavior.
-    pub logout: LogoutPolicy,
 }
 
 impl Default for IdpValidationPolicy {
@@ -301,41 +285,12 @@ impl Default for IdpValidationPolicy {
     /// An inbound `AuthnRequest` may be unsigned unless the service provider's
     /// metadata sets `AuthnRequestsSigned`. A signature that is present is
     /// verified under [`XmlSignatureProfile::ExcludeWeakAlgorithms`].
-    /// Logout requests and responses require a signature.
     fn default() -> Self {
         Self {
             authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
             xml_signatures: XmlSignatureProfile::ExcludeWeakAlgorithms,
-            logout: LogoutPolicy::default(),
         }
     }
-}
-
-/// Logout request and response signature policy.
-///
-/// The default policy requires a signature on both requests and responses.
-///
-/// `finish_slo` reads `responses`. `receive_slo` reads `requests`. Typed logout signs outgoing requests and responses. See
-/// `docs/conformance/single-logout.md`.
-///
-/// Start from `default()` and assign the fields you change. A
-/// struct literal does not compile outside the crate:
-///
-/// ```compile_fail,E0639
-/// use saml_rs::{LogoutPolicy, LogoutSignaturePolicy};
-///
-/// let policy = LogoutPolicy {
-///     responses: LogoutSignaturePolicy::AllowUnsigned,
-///     ..LogoutPolicy::default()
-/// };
-/// ```
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct LogoutPolicy {
-    /// LogoutRequest signature behavior.
-    pub requests: LogoutSignaturePolicy,
-    /// LogoutResponse signature behavior.
-    pub responses: LogoutSignaturePolicy,
 }
 
 /// Whether assertions are encrypted in generated responses.
@@ -752,12 +707,6 @@ pub(super) fn encrypted_cbc_response_signature_required(policy: ResponseSignatur
     }
 }
 
-pub(super) fn logout_signature_required(policy: LogoutSignaturePolicy) -> bool {
-    match policy {
-        LogoutSignaturePolicy::RequireSigned => true,
-        LogoutSignaturePolicy::AllowUnsigned => false,
-    }
-}
 pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {
     matches!(policy, NameIdCreationPolicy::AllowCreate)
 }

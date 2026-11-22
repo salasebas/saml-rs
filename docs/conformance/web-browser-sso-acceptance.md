@@ -2,13 +2,10 @@
 
 Inbound rules for typed Web Browser SSO: service-provider `finish_sso` and
 `accept_unsolicited_sso`, and identity-provider `receive_sso`.
-`SpValidationPolicy::default` includes the service-provider rows below. It
-also includes the Single Logout accept combination and leaves AuthnRequest
-signing and identifier creation off. Those last three are not part of this
-accept combination; they are recorded with logout and generation.
-`IdpValidationPolicy::default` includes the identity-provider rows below
-and the same logout accept combination. Both config builders use these
-defaults. Callers select the RSA-SHA2 XML-DSig profile explicitly.
+Both config builders use their role's default validation policy. The
+service-provider default also leaves AuthnRequest signing and identifier
+creation off. [Single Logout](single-logout.md) defines its own binding-specific
+authentication rules. Callers select the RSA-SHA2 XML-DSig profile explicitly.
 See [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected

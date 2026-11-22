@@ -4,9 +4,7 @@ use saml_rs::constants::{
 };
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::FlowOptions;
-use saml_rs::tests::policies_without_crypto::{
-    idp_validation_without_crypto, sp_validation_without_crypto,
-};
+use saml_rs::tests::policies_without_crypto::sp_validation_without_crypto;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId,
     HmacSecret, IdentityProvider, IdpConfig, IdpDescriptor, KeyEncryptionAlgorithm,
@@ -106,7 +104,6 @@ fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
     .credentials(credentials.clone())
-    .validation(idp_validation_without_crypto())
     .build()?;
 
     let service_provider = ServiceProvider::new(sp.clone());

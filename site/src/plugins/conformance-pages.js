@@ -44,7 +44,7 @@ const pages = {
 	'single-logout.md': {
 		title: 'Logout',
 		description:
-			'Rules for typed Single Logout: `start_slo`, `respond_slo`, and `finish_slo` on both roles. `receive_slo` reads the same request-signature field as the accept combination below....',
+			'How the service provider and identity provider send and authenticate logout requests and responses over browser bindings and SOAP.',
 	},
 	'web-browser-sso-acceptance.md': {
 		title: 'SSO acceptance',

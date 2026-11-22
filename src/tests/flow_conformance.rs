@@ -1139,10 +1139,9 @@ fn flow_conformance_encrypted_custom_signed_assertion_and_message(
 
 // ----- logout request/response with & without signature (48-53) -----
 
-fn logout_request_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn logout_request_flow(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp(false);
-    let mut sp = sp(false, false);
-    sp.setting.want_logout_request_signed = signed;
+    let sp = sp(false, false);
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1150,7 +1149,7 @@ fn logout_request_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn std
         binding,
         &LogoutUser::new("a@e.com"),
         None,
-        signed,
+        true,
     )?;
     let request = logout_request_to_http(binding, &ctx)?;
     let parsed = parse_logout_request(&sp.setting, idp.metadata.as_metadata(), binding, &request)?;
@@ -1223,21 +1222,12 @@ fn tamper_body_message(
 }
 
 #[test]
-fn flow_conformance_idp_redirect_logout_request_unsigned() -> Result<(), Box<dyn std::error::Error>>
-{
-    logout_request_flow(Binding::Redirect, false)
-}
-#[test]
 fn flow_conformance_idp_redirect_logout_request_signed() -> Result<(), Box<dyn std::error::Error>> {
-    logout_request_flow(Binding::Redirect, true)
-}
-#[test]
-fn flow_conformance_idp_post_logout_request_unsigned() -> Result<(), Box<dyn std::error::Error>> {
-    logout_request_flow(Binding::Post, false)
+    logout_request_flow(Binding::Redirect)
 }
 #[test]
 fn flow_conformance_idp_post_logout_request_signed() -> Result<(), Box<dyn std::error::Error>> {
-    logout_request_flow(Binding::Post, true)
+    logout_request_flow(Binding::Post)
 }
 
 #[test]
@@ -1265,8 +1255,7 @@ fn flow_conformance_signed_simplesign_logout_request_returns_detached_signature_
 fn flow_conformance_signed_simplesign_logout_request_parses_when_required(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp(false);
-    let mut sp = sp(false, false);
-    sp.setting.want_logout_request_signed = true;
+    let sp = sp(false, false);
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1294,8 +1283,7 @@ fn flow_conformance_signed_simplesign_logout_request_parses_when_required(
 fn flow_conformance_tampered_simplesign_logout_request_body_fails_signature_verification(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp(false);
-    let mut sp = sp(false, false);
-    sp.setting.want_logout_request_signed = true;
+    let sp = sp(false, false);
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
@@ -1347,10 +1335,8 @@ fn flow_conformance_signed_simplesign_logout_request_with_relay_state_includes_b
     Ok(())
 }
 
-fn logout_response_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn logout_response_flow(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let idp = idp(false);
-    let mut idp_recv = idp.clone();
-    idp_recv.setting.want_logout_response_signed = signed;
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
@@ -1359,11 +1345,11 @@ fn logout_response_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn st
         binding,
         Some("_r"),
         None,
-        signed,
+        true,
     )?;
     let request = logout_response_to_http(binding, &ctx)?;
     let parsed = parse_logout_response(
-        &idp_recv.setting,
+        &idp.setting,
         sp.metadata.as_metadata(),
         binding,
         &request,
@@ -1377,17 +1363,13 @@ fn logout_response_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn st
 }
 
 #[test]
-fn flow_conformance_sp_post_logout_response_unsigned() -> Result<(), Box<dyn std::error::Error>> {
-    logout_response_flow(Binding::Post, false)
-}
-#[test]
 fn flow_conformance_sp_post_logout_response_signed() -> Result<(), Box<dyn std::error::Error>> {
-    logout_response_flow(Binding::Post, true)
+    logout_response_flow(Binding::Post)
 }
 
 #[test]
 fn flow_conformance_sp_redirect_logout_response_signed() -> Result<(), Box<dyn std::error::Error>> {
-    logout_response_flow(Binding::Redirect, true)
+    logout_response_flow(Binding::Redirect)
 }
 
 #[test]
@@ -1414,8 +1396,7 @@ fn flow_conformance_signed_simplesign_logout_response_returns_detached_signature
 #[test]
 fn flow_conformance_signed_simplesign_logout_response_parses_when_required(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp_recv = idp(false);
-    idp_recv.setting.want_logout_response_signed = true;
+    let idp_recv = idp(false);
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
@@ -1444,8 +1425,7 @@ fn flow_conformance_signed_simplesign_logout_response_parses_when_required(
 #[test]
 fn flow_conformance_tampered_simplesign_logout_response_body_fails_signature_verification(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp_recv = idp(false);
-    idp_recv.setting.want_logout_response_signed = true;
+    let idp_recv = idp(false);
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,
@@ -1502,8 +1482,7 @@ fn flow_conformance_signed_simplesign_logout_response_with_relay_state_includes_
 #[test]
 fn flow_conformance_signed_logout_response_wrong_request_id_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp_recv = idp(false);
-    idp_recv.setting.want_logout_response_signed = true;
+    let idp_recv = idp(false);
     let sp = sp(false, false);
     let ctx = create_logout_response(
         &sp.setting,

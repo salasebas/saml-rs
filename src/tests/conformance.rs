@@ -142,12 +142,9 @@ mod signed {
             None,
             true, // want signed
         )?;
-        // IdP requires logout requests to be signed and verifies it.
-        let mut idp_signed = idp;
-        idp_signed.setting.want_logout_request_signed = true;
         let request = HttpRequest::post(vec![("SAMLRequest".into(), ctx.context)]);
         let parsed = parse_logout_request(
-            &idp_signed.setting,
+            &idp.setting,
             sp.metadata.as_metadata(),
             Binding::Post,
             &request,

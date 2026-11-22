@@ -13,8 +13,6 @@ use crate::metadata::Metadata;
 use crate::model::ClockSkew;
 use std::time::SystemTime;
 
-use super::encrypted_id::LogoutRequestAuthentication;
-
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogoutFlowValidation<'a> {
     expected_recipient: Option<&'a str>,
@@ -45,23 +43,15 @@ impl<'a> LogoutFlowValidation<'a> {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogoutReceipt {
     decode_as: Binding,
-    signature: LogoutReceiptSignature,
+    signature: SignatureCheck,
     signed_destination: SignedMessageDestination,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum LogoutReceiptSignature {
-    FollowLocalPolicy,
-    Required,
-    /// The deployment authenticated the peer. A present signature is verified.
-    VerifyIfPresent,
-}
-
 impl LogoutReceipt {
-    pub(crate) fn of_binding(binding: Binding) -> Self {
+    pub(crate) fn browser(binding: Binding) -> Self {
         Self {
             decode_as: binding,
-            signature: LogoutReceiptSignature::FollowLocalPolicy,
+            signature: SignatureCheck::Require,
             signed_destination: SignedMessageDestination::Required,
         }
     }
@@ -70,87 +60,42 @@ impl LogoutReceipt {
     /// XML signature unless `channel` authenticated the peer.
     pub(crate) fn of_input<Message>(input: &Inbound<Message>) -> Result<Self, SamlError> {
         match &input.transport {
-            Transport::Redirect { .. } => Ok(Self::of_binding(Binding::Redirect)),
-            Transport::Post { .. } => Ok(Self::of_binding(Binding::Post)),
-            Transport::SimpleSign { .. } => Ok(Self::of_binding(Binding::SimpleSign)),
-            Transport::Soap { channel, .. } => Ok(Self {
-                decode_as: Binding::Post,
-                signature: if channel.authenticates_peer() {
-                    LogoutReceiptSignature::VerifyIfPresent
-                } else {
-                    LogoutReceiptSignature::Required
-                },
-                signed_destination: SignedMessageDestination::Optional,
-            }),
+            Transport::Redirect { .. } => Ok(Self::browser(Binding::Redirect)),
+            Transport::Post { .. } => Ok(Self::browser(Binding::Post)),
+            Transport::SimpleSign { .. } => Ok(Self::browser(Binding::SimpleSign)),
+            Transport::Soap { channel, .. } => Ok(Self::soap(*channel)),
             Transport::Artifact { .. } => Err(SamlError::UnsupportedBinding {
                 binding: Binding::Artifact,
             }),
         }
     }
 
-    fn signature_check(self, local_policy_requires_signature: bool) -> SignatureCheck {
-        match self.signature {
-            LogoutReceiptSignature::FollowLocalPolicy => {
-                if local_policy_requires_signature {
-                    SignatureCheck::Require
-                } else {
-                    SignatureCheck::Skip
-                }
-            }
-            LogoutReceiptSignature::Required => SignatureCheck::Require,
-            LogoutReceiptSignature::VerifyIfPresent => SignatureCheck::VerifyIfPresent,
-        }
-    }
-
-    /// A verified signature authenticates the message. On a SOAP channel that
-    /// authenticated the peer, the channel does.
-    fn authentication(self, signature_verified: bool) -> LogoutRequestAuthentication {
-        match (self.signature, signature_verified) {
-            (
-                LogoutReceiptSignature::FollowLocalPolicy
-                | LogoutReceiptSignature::Required
-                | LogoutReceiptSignature::VerifyIfPresent,
-                true,
-            )
-            | (LogoutReceiptSignature::VerifyIfPresent, false) => {
-                LogoutRequestAuthentication::Authenticated
-            }
-            (
-                LogoutReceiptSignature::FollowLocalPolicy | LogoutReceiptSignature::Required,
-                false,
-            ) => LogoutRequestAuthentication::Unauthenticated,
+    pub(crate) fn soap(channel: crate::SoapChannel) -> Self {
+        Self {
+            decode_as: Binding::Post,
+            signature: if channel.authenticates_peer() {
+                SignatureCheck::VerifyIfPresent
+            } else {
+                SignatureCheck::Require
+            },
+            signed_destination: SignedMessageDestination::Optional,
         }
     }
 }
 
-/// Typed `LogoutRequest` parsing. The returned authentication selects
-/// whether [`super::decrypt_encrypted_id`] decrypts an `<EncryptedID>`.
 pub(crate) fn parse_logout_request_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
     receipt: LogoutReceipt,
     request: &HttpRequest,
     validation: LogoutFlowValidation<'_>,
-) -> Result<(FlowResult, LogoutRequestAuthentication), SamlError> {
-    let (flow, signature_verified) =
-        parse_logout_request_inner(self_setting, from_meta, receipt, request, validation)?;
-    Ok((flow, receipt.authentication(signature_verified)))
-}
-
-/// The flow result and whether a signature authenticated the message.
-fn parse_logout_request_inner(
-    self_setting: &EntitySetting,
-    from_meta: &Metadata,
-    receipt: LogoutReceipt,
-    request: &HttpRequest,
-    validation: LogoutFlowValidation<'_>,
-) -> Result<(FlowResult, bool), SamlError> {
+) -> Result<FlowResult, SamlError> {
     let signing_certs = from_meta.x509_certificates(CertUse::Signing);
     run_logout_flow(
         &FlowOptions {
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutRequest),
-            signature_check: receipt.signature_check(self_setting.want_logout_request_signed),
+            signature_check: receipt.signature,
             require_audience_restriction: true,
             xml_signatures: self_setting.xml_signatures,
             from_issuer: from_meta.entity_id(),
@@ -178,20 +123,23 @@ fn parse_logout_request_inner(
     )
 }
 
-fn parse_logout_response_inner(
+pub(crate) fn parse_logout_response_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
     receipt: LogoutReceipt,
     request: &HttpRequest,
-    expected_in_response_to: Option<&str>,
+    request_id: &str,
     validation: LogoutFlowValidation<'_>,
 ) -> Result<FlowResult, SamlError> {
+    if request_id.is_empty() {
+        return Err(SamlError::InvalidInResponseTo);
+    }
     let signing_certs = from_meta.x509_certificates(CertUse::Signing);
-    Ok(run_logout_flow(
+    run_logout_flow(
         &FlowOptions {
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutResponse),
-            signature_check: receipt.signature_check(self_setting.want_logout_response_signed),
+            signature_check: receipt.signature,
             require_audience_restriction: true,
             xml_signatures: self_setting.xml_signatures,
             from_issuer: from_meta.entity_id(),
@@ -211,43 +159,20 @@ fn parse_logout_response_inner(
             xml_limits: self_setting.xml_limits,
             schema_validator: self_setting.schema_validator,
             expected_audience: None,
-            expected_in_response_to,
+            expected_in_response_to: Some(request_id),
         },
         request,
         validation.expected_recipient,
         receipt.signed_destination,
-    )?
-    .0)
-}
-
-pub(crate) fn parse_logout_response_at(
-    self_setting: &EntitySetting,
-    from_meta: &Metadata,
-    receipt: LogoutReceipt,
-    request: &HttpRequest,
-    request_id: &str,
-    validation: LogoutFlowValidation<'_>,
-) -> Result<FlowResult, SamlError> {
-    if request_id.is_empty() {
-        return Err(SamlError::InvalidInResponseTo);
-    }
-    parse_logout_response_inner(
-        self_setting,
-        from_meta,
-        receipt,
-        request,
-        Some(request_id),
-        validation,
     )
 }
 
-/// The flow result and whether a signature authenticated the message.
 fn run_logout_flow(
     options: &FlowOptions<'_>,
     request: &HttpRequest,
     expected_recipient: Option<&str>,
     signed_destination: SignedMessageDestination,
-) -> Result<(FlowResult, bool), SamlError> {
+) -> Result<FlowResult, SamlError> {
     match expected_recipient {
         Some(expected_recipient) => {
             let result = flow_with_expected_recipient_and_signature_evidence(
@@ -258,9 +183,8 @@ fn run_logout_flow(
                 ResponseSignatureRequirement::Optional,
                 signed_destination,
             )?;
-            let message_authenticated = result.message_authenticated();
-            Ok((result.into_parts().0, message_authenticated))
+            Ok(result.into_parts().0)
         }
-        None => flow_with_authentication(options, request),
+        None => Ok(flow_with_authentication(options, request)?.0),
     }
 }

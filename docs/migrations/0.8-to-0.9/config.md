@@ -160,7 +160,7 @@ another base:
 
 | Struct | Start from |
 | --- | --- |
-| `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `default()` |
+| `SpValidationPolicy`, `IdpValidationPolicy` | `default()` |
 | `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy` | `default()` |
 | `XmlLimits` | `default()` or `unbounded()` |
 | `SignatureConfig`, `Organization` | `default()` |
@@ -239,18 +239,16 @@ returned, and move its fields out where you need them:
 ```rust
 // Before
 let Started { pending, outbound } = sp.start_sso(&idp, StartSso::redirect())?;
-let LogoutPolicy { requests, responses } = validation.logout;
 
 // Now
 let Started { pending, outbound, .. } = sp.start_sso(&idp, StartSso::redirect())?;
-let LogoutPolicy { requests, responses, .. } = validation.logout;
 ```
 
 ## Add a wildcard arm to a `match` on a policy enum
 
 **Affects:** code that matches on `AssertionSignaturePolicy`,
 `ResponseSignaturePolicy`, `AuthnRequestSigningPolicy`,
-`AuthnRequestValidationPolicy`, `LogoutSignaturePolicy`,
+`AuthnRequestValidationPolicy`,
 `AudienceValidationPolicy`, `AssertionEncryptionPolicy`,
 `IdentifierEncryptionPolicy`, or `AttributeEncryptionPolicy`
 without a wildcard arm.
@@ -269,15 +267,15 @@ code does with a variant it does not know:
 
 ```rust
 // Before
-let label = match validation.logout.requests {
-    LogoutSignaturePolicy::RequireSigned => "signed",
-    LogoutSignaturePolicy::AllowUnsignedForCompatibility => "unsigned allowed",
+let label = match validation.assertions {
+    AssertionSignaturePolicy::RequireSigned => "signed",
+    AssertionSignaturePolicy::AllowUnsignedForCompatibility => "unsigned allowed",
 };
 
 // Now
-let label = match validation.logout.requests {
-    LogoutSignaturePolicy::RequireSigned => "signed",
-    LogoutSignaturePolicy::AllowUnsigned => "unsigned allowed",
+let label = match validation.assertions {
+    AssertionSignaturePolicy::RequireSigned => "signed",
+    AssertionSignaturePolicy::AllowUnsigned => "unsigned allowed",
     _ => "other",
 };
 ```

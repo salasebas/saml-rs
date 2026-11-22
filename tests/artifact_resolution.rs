@@ -17,7 +17,7 @@ mod policies_without_crypto;
 #[path = "common/tag_prefixes.rs"]
 mod tag_prefixes;
 
-use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+use policies_without_crypto::sp_validation_without_crypto;
 
 use std::time::{Duration, SystemTime};
 
@@ -83,7 +83,6 @@ fn parties_with_templates(
         ))
         .templates(idp_templates)
         .xml(xml)
-        .validation(idp_validation_without_crypto())
         .build()?,
     );
     let sp = service_provider(
@@ -429,7 +428,6 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,
         )
-        .validation(idp_validation_without_crypto())
         .build()?,
     );
     assert!(!without.metadata_xml().contains("ArtifactResolutionService"));
@@ -457,7 +455,6 @@ fn duplicate_resolution_indexes_are_rejected() -> Result<(), Box<dyn std::error:
     )
     .artifact_resolution_service(ArtifactResolutionService::new(0, location))
     .artifact_resolution_service(ArtifactResolutionService::new(0, other))
-    .validation(idp_validation_without_crypto())
     .build();
     assert!(matches!(built, Err(SamlError::Invalid(detail)) if detail.contains("duplicate")));
     Ok(())

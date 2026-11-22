@@ -25,19 +25,19 @@ let mut require_rsa_sha2 = SpValidationPolicy::default();
 require_rsa_sha2.xml_signatures = XmlSignatureProfile::StrictRsaSha2;
 ```
 
-Set both fields when you want both. `IdpValidationPolicy::default()` and `LogoutPolicy::default()` are the matching presets. `LogoutPolicy::default()` requires a signature on logout requests and responses.
+Set both fields when you want both. Use `IdpValidationPolicy::default()` for the identity provider.
 
 ## Relax one rule
 
-To relax a rule, assign the field that names it. For example, to accept unsigned logout requests and responses:
+If a peer uses CBC encryption and cannot sign the enclosing SSO response,
+you can relax the SP's outer signature requirement for those responses.
 
 ```rust
-let mut unsigned_logout = SpValidationPolicy::default();
-unsigned_logout.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
-unsigned_logout.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+let mut validation = SpValidationPolicy::default();
+validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
 ```
 
-The other fields stay on Recommended. The validation policies' `Default` and the `SpConfig` and `IdpConfig` builders already use Recommended. Each field and what its values relax is in the [conformance records](../reference/conformance.md).
+The validation policies' `Default` and the `SpConfig` and `IdpConfig` builders already use Recommended. Each field and what its values relax is in the [conformance records](../reference/conformance.md).
 
 An upgrade from 0.6, including a call to `strict()`, is [0.6 to 0.7](upgrade/v0-6-to-v0-7.md).
 

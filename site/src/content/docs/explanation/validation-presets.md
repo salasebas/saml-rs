@@ -9,10 +9,10 @@ saml-rs keeps one preset, Recommended.
 
 Library hardening that OASIS does not require stays off Recommended. Two examples are a signature directly on the Assertion, and the RSA-SHA2 XML-DSig profile. Each is selected by name, on top of Recommended. They are not collected into a second preset. One implementation-security default is the exception: Recommended excludes MD5 and RIPEMD-160 signature and digest algorithms and RSA keys shorter than 2048 bits (`XmlSignatureProfile::ExcludeWeakAlgorithms`), and `AllowWeakAlgorithms` relaxes it. Signed metadata import applies the same exclusion under `MetadataTrustPolicy::RequireSignature` and `RequireSignatureAllowingOtherCanonicalization`, and `RequireSignatureAllowingWeakAlgorithms` relaxes it. A MAY in the standard is an optional capability, not a stricter conformance level. That is why a bundled `strict()` preset was rejected.
 
-The conformance records call these settings Recommended. The role policies and
-`LogoutPolicy` expose them through `Default`. Both config builders use the
+The conformance records call these settings Recommended. The role policies
+expose them through `Default`. Both config builders use the
 corresponding role default. See [Conformance](../reference/conformance.md).
 
-There is no permissive preset either. Earlier releases had `compatibility()`, the behaviour of the samlify port that saml-rs started from. It bundled every relaxation into one call, so a service provider that only needed unsigned logout also accepted weak signature algorithms and skipped audience evaluation. The SP now checks every present audience restriction. You can still relax other checks individually, such as the logout signature requirement. How to replace `compatibility()` is in the [0.8 to 0.9 migration guide](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8-to-0.9/compile-errors.md#126-replace-compatibility-with-the-fields-it-relaxed).
+Earlier releases had a permissive `compatibility()` preset. Selecting it for unsigned logout also allowed weak signature algorithms and skipped audience evaluation. Browser logout now requires a verified signature, and the SP checks every present audience restriction. To keep an individual relaxation, such as allowing weak signature algorithms, see the [0.8 to 0.9 migration guide](https://github.com/salasebas/saml-rs/blob/main/docs/migrations/0.8-to-0.9/compile-errors.md#126-replace-compatibility-with-the-fields-it-relaxed).
 
 How to select and relax the preset is [Validation](../guides/validation-preset.md). How to upgrade from 0.6 is [0.6 to 0.7](../guides/upgrade/v0-6-to-v0-7.md).

@@ -7,13 +7,11 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
 use saml_rs::{
-    EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    LogoutSignaturePolicy, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo,
-    SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
+    EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
+    LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo, SamlError,
+    SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -30,20 +28,6 @@ const IDP_SLO_RESPONSE: &str = "https://idp.example.com/slo/response";
 
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
-}
-
-fn unsigned_logout_sp_validation() -> SpValidationPolicy {
-    let mut policy = SpValidationPolicy::default();
-    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
-    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
-    policy
-}
-
-fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
-    let mut policy = IdpValidationPolicy::default();
-    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
-    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
-    policy
 }
 
 fn sp(validation_policy: SpValidationPolicy) -> Result<ServiceProvider, SamlError> {
@@ -136,8 +120,8 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
 #[test]
 fn logout_response_uses_response_location_and_request_uses_location(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = sp(unsigned_logout_sp_validation())?;
-    let identity_provider = idp(unsigned_logout_idp_validation(), &[IDP_SLO])?;
+    let service_provider = sp(SpValidationPolicy::default())?;
+    let identity_provider = idp(IdpValidationPolicy::default(), &[IDP_SLO])?;
     let idp_for_requests = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &format!(
@@ -158,8 +142,9 @@ fn logout_response_uses_response_location_and_request_uses_location(
 
     let sp_for_responses = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
-        &format!(
-            r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{SP_ENTITY_ID}"><SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_SLO}" ResponseLocation="{SP_SLO_RESPONSE}"/><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{SP_ACS}" index="0"/></SPSSODescriptor></EntityDescriptor>"#
+        &service_provider.metadata_xml().replace(
+            &format!(r#"Location="{SP_SLO}""#),
+            &format!(r#"Location="{SP_SLO}" ResponseLocation="{SP_SLO_RESPONSE}""#),
         ),
         MetadataTrustPolicy::AllowUnsigned,
     )?;
@@ -302,28 +287,30 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
 #[test]
 fn slo_destination_matches_the_actual_published_receiving_endpoint(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = sp(unsigned_logout_sp_validation())?;
-    let identity_provider = idp(unsigned_logout_idp_validation(), &[IDP_SLO, IDP_SLO_SECOND])?;
+    let service_provider = sp(SpValidationPolicy::default())?;
+    let identity_provider = idp(IdpValidationPolicy::default(), &[IDP_SLO, IDP_SLO_SECOND])?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         service_provider.metadata_xml(),
         MetadataTrustPolicy::AllowUnsigned,
     )?;
-    let logout_request = |destination: &str| {
-        format!(
-            r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_logout" Version="2.0" IssueInstant="2026-01-01T00:00:00Z" Destination="{destination}"><saml:Issuer>{SP_ENTITY_ID}</saml:Issuer><saml:NameID>alice@example.com</saml:NameID></samlp:LogoutRequest>"#
-        )
-    };
-    let input = |xml: &str| {
-        Inbound::post(vec![FormField::new(
-            "SAMLRequest",
-            STANDARD.encode(xml.as_bytes()),
-        )])
+    let input = |destination: &str| -> Result<_, SamlError> {
+        let peer = IdpDescriptor::from_metadata_xml(
+            EntityId::try_new(IDP_ENTITY_ID)?,
+            idp(IdpValidationPolicy::default(), &[destination])?.metadata_xml(),
+            MetadataTrustPolicy::AllowUnsigned,
+        )?;
+        let subject = LogoutSubject::new(NameId::new("alice@example.com"))
+            .with_session_index(SessionIndex::try_new("_session")?);
+        let started = service_provider.start_slo(&peer, subject, StartSlo::post())?;
+        Ok(Inbound::post(
+            started.outbound.post_form()?.fields().to_vec(),
+        ))
     };
 
     let accepted = identity_provider.receive_slo(
         &sp_descriptor,
-        input(&logout_request(IDP_SLO_SECOND)),
+        input(IDP_SLO_SECOND)?,
         validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO_SECOND)?),
     )?;
     assert_eq!(
@@ -333,7 +320,7 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
 
     let rejected = identity_provider.receive_slo(
         &sp_descriptor,
-        input(&logout_request("https://idp.example.com/slo/unknown")),
+        input("https://idp.example.com/slo/unknown")?,
         validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO)?),
     );
     match rejected {
@@ -351,7 +338,7 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
 
     let wrong_handler = identity_provider.receive_slo(
         &sp_descriptor,
-        input(&logout_request(IDP_SLO_SECOND)),
+        input(IDP_SLO_SECOND)?,
         validation().with_recipient_endpoint(saml_rs::EndpointUrl::try_new(IDP_SLO)?),
     );
     assert!(matches!(
@@ -359,11 +346,8 @@ fn slo_destination_matches_the_actual_published_receiving_endpoint(
         Err(SamlError::DestinationMismatch { .. })
     ));
 
-    let ambiguous = identity_provider.receive_slo(
-        &sp_descriptor,
-        input(&logout_request(IDP_SLO_SECOND)),
-        validation(),
-    );
+    let ambiguous =
+        identity_provider.receive_slo(&sp_descriptor, input(IDP_SLO_SECOND)?, validation());
     assert!(matches!(
         ambiguous,
         Err(SamlError::RecipientEndpointAmbiguous)

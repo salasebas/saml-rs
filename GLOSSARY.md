@@ -73,8 +73,8 @@ records are in `docs/conformance/`.
 _Avoid_: SAML V2.0 as a whole, operational mode
 
 **Recommended**:
-The validation settings returned by `SpValidationPolicy::default()`,
-`IdpValidationPolicy::default()`, and `LogoutPolicy::default()` for claimed features.
+The validation settings returned by `SpValidationPolicy::default()` and
+`IdpValidationPolicy::default()` for claimed features.
 For the obligated actor, mandatory requirements stay in force. Recommendations start enabled and can be relaxed
 only by an explicit named option. A producer recommendation does not by itself
 become a receiver rejection.
