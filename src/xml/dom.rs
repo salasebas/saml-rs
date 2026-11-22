@@ -25,7 +25,11 @@ const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 const XMLNS_NAMESPACE: &str = "http://www.w3.org/2000/xmlns/";
 
 /// Resource limits enforced while parsing XML into the local DOM.
+///
+/// Start from [`Default`](Default::default) or [`Self::unbounded`] and assign
+/// the limits you change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct XmlLimits {
     /// Maximum input bytes accepted before parsing.
     ///

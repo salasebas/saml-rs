@@ -19,34 +19,31 @@ use saml_rs::{
     IdpValidationPolicy, Inbound, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
     MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, Saml,
     SamlError, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartSlo, StartSso, XmlEncryptionPolicy, XmlPolicy,
+    SsoEndpoint, StartSlo, StartSso, XmlPolicy,
 };
 use std::time::SystemTime;
 
 fn idp_config(want_authn_requests_signed: bool) -> IdpMetadataInput {
-    IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        want_authn_requests_signed,
-        single_sign_on_service: vec![
-            Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
-            Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
-        ],
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")],
-        ..Default::default()
-    }
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.want_authn_requests_signed = want_authn_requests_signed;
+    config.single_sign_on_service = vec![
+        Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
+        Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
+    ];
+    config.single_logout_service =
+        vec![Endpoint::new(Binding::Post, "https://idp.example.com/slo")];
+    config
 }
 
 fn sp_config(authn_requests_signed: bool) -> SpMetadataInput {
-    SpMetadataInput {
-        entity_id: "https://sp.example.com/metadata".into(),
-        authn_requests_signed,
-        assertion_consumer_service: vec![Endpoint::new(
-            Binding::Post,
-            "https://sp.example.com/acs",
-        )],
-        single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")],
-        ..Default::default()
-    }
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.authn_requests_signed = authn_requests_signed;
+    config.assertion_consumer_service =
+        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp.example.com/slo")];
+    config
 }
 
 fn idp(want_authn_requests_signed: bool) -> Result<IdentityProvider, SamlError> {
@@ -311,13 +308,8 @@ fn sp_signed_logout_policy_returns_unsupported_without_default_crypto(
 #[test]
 fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let mut xml = XmlPolicy::default();
+    xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 
     assert_unsupported(sp_config_builder()?.xml(xml).build());
     Ok(())
@@ -346,13 +338,8 @@ fn idp_signed_logout_policy_returns_unsupported_without_default_crypto(
 #[test]
 fn idp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let xml = XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    };
+    let mut xml = XmlPolicy::default();
+    xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 
     assert_unsupported(idp_config_builder()?.xml(xml).build());
     Ok(())

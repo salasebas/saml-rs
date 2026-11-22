@@ -1315,14 +1315,10 @@ fn an_artifact_past_its_lifetime_is_no_longer_outstanding() -> Result<(), Box<dy
 #[test]
 fn soap_envelopes_are_read_under_the_configured_xml_limits(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties_with(XmlPolicy {
-        limits: XmlLimits {
-            max_depth: 6,
-            max_attribute_value_bytes: 64 * 1024,
-            ..XmlLimits::default()
-        },
-        ..XmlPolicy::default()
-    })?;
+    let mut xml = XmlPolicy::default();
+    xml.limits.max_depth = 6;
+    xml.limits.max_attribute_value_bytes = 64 * 1024;
+    let parties = parties_with(xml)?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();

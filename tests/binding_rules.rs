@@ -59,19 +59,17 @@ fn credentials() -> Credentials {
 }
 
 fn signing_sp_validation() -> SpValidationPolicy {
-    SpValidationPolicy {
-        assertions: AssertionSignaturePolicy::RequireSigned,
-        authn_requests: AuthnRequestSigningPolicy::Sign,
-        audience: AudienceValidationPolicy::RequireRestriction,
-        ..SpValidationPolicy::recommended()
-    }
+    let mut validation = SpValidationPolicy::recommended();
+    validation.assertions = AssertionSignaturePolicy::RequireSigned;
+    validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    validation.audience = AudienceValidationPolicy::RequireRestriction;
+    validation
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
-    IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::recommended()
-    }
+    let mut validation = IdpValidationPolicy::recommended();
+    validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    validation
 }
 
 fn validation() -> SamlValidationContext<'static> {

@@ -30,7 +30,7 @@ request that `finish_sso` checks the response against:
 
 ```rust
 // Before
-let request = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
+let request = sp.create_login_request(&idp, Binding::Redirect, None)?;
 // Store request.id, then redirect the browser to request.context.
 let result = sp.parse_login_response_with_request_id(&idp, Binding::Post, &http, &request.id)?;
 let name_id = result.extract.get_str("nameID");

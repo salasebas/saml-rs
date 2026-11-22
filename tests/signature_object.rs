@@ -36,6 +36,11 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         CertificatePem::new(CERT),
         PrivateKeyPem::new(KEY),
     ));
+    let mut sp_validation = SpValidationPolicy::recommended();
+    sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    sp_validation.xml_signatures = xml_signatures;
+    let mut idp_validation = IdpValidationPolicy::recommended();
+    idp_validation.xml_signatures = xml_signatures;
     let sp = Saml::sp(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -44,11 +49,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         .slo_endpoint(SloEndpoint::post("https://sp.example.com/slo/post")?)
         .slo_endpoint(SloEndpoint::soap("https://sp.example.com/slo/soap")?)
         .credentials(credentials.clone())
-        .validation(SpValidationPolicy {
-            authn_requests: AuthnRequestSigningPolicy::Sign,
-            xml_signatures,
-            ..SpValidationPolicy::recommended()
-        })
+        .validation(sp_validation)
         .build()?,
     );
     let idp = Saml::idp(
@@ -59,10 +60,7 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo/post")?)
         .slo_endpoint(SloEndpoint::soap("https://idp.example.com/slo/soap")?)
         .credentials(credentials)
-        .validation(IdpValidationPolicy {
-            xml_signatures,
-            ..IdpValidationPolicy::recommended()
-        })
+        .validation(idp_validation)
         .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(

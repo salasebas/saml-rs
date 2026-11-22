@@ -26,33 +26,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         setting
     };
 
-    let idp = IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            signing_certs: vec![cert.into()],
-            want_authn_requests_signed: true,
-            single_sign_on_service: vec![Endpoint::new(
-                Binding::Post,
-                "https://idp.example.com/sso",
-            )],
-            ..Default::default()
-        },
-        signing(),
-    )?;
-    let sp = ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            authn_requests_signed: true,
-            want_assertions_signed: true,
-            signing_certs: vec![cert.into()],
-            assertion_consumer_service: vec![Endpoint::new(
-                Binding::Post,
-                "https://sp.example.com/acs",
-            )],
-            ..Default::default()
-        },
-        signing(),
-    )?;
+    let mut idp_metadata = IdpMetadataInput::default();
+    idp_metadata.entity_id = "https://idp.example.com/metadata".into();
+    idp_metadata.signing_certs = vec![cert.into()];
+    idp_metadata.want_authn_requests_signed = true;
+    idp_metadata.single_sign_on_service =
+        vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")];
+    let idp = IdentityProvider::from_config(&idp_metadata, signing())?;
+    let mut sp_metadata = SpMetadataInput::default();
+    sp_metadata.entity_id = "https://sp.example.com/metadata".into();
+    sp_metadata.authn_requests_signed = true;
+    sp_metadata.want_assertions_signed = true;
+    sp_metadata.signing_certs = vec![cert.into()];
+    sp_metadata.assertion_consumer_service =
+        vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
+    let sp = ServiceProvider::from_config(&sp_metadata, signing())?;
 
     let request = sp.create_login_request(&idp, Binding::Post, &LoginRequestOptions::default())?;
     let parsed = idp.parse_login_request(

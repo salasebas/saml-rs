@@ -12,7 +12,10 @@ use crate::model::validate_name_id_format;
 use crate::util::normalize_cert_string;
 
 /// A protocol endpoint (`SingleSignOnService` / `SingleLogoutService` / ACS).
+///
+/// Start from [`Self::new`] and assign the fields you set.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Endpoint {
     /// Protocol binding.
     pub binding: Binding,
@@ -42,7 +45,10 @@ impl Endpoint {
 }
 
 /// SP metadata generation input.
+///
+/// Start from [`Default`](Default::default) and assign the fields you set.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct SpMetadataInput {
     /// `entityID`.
     pub entity_id: String,
@@ -78,7 +84,10 @@ pub struct SpMetadataInput {
 }
 
 /// IdP metadata generation input.
+///
+/// Start from [`Default`](Default::default) and assign the fields you set.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct IdpMetadataInput {
     /// `entityID`.
     pub entity_id: String,

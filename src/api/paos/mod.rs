@@ -196,6 +196,7 @@ pub struct PendingPaosSsoSnapshot {
 
 /// PAOS login the service provider has handed to the enhanced client.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct StartedPaosSso {
     /// State to store until the enhanced client returns the response.
     pub pending: PendingPaosSso,

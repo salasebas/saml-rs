@@ -46,14 +46,15 @@ use super::credentials::Credentials;
 use super::descriptors::{
     ArtifactResolutionService, EntityId, IdpMetadataConfig, ManageNameIdService, SpMetadataConfig,
 };
-use super::policies::{
-    AlgorithmPolicy, AuthnRequestSigningPolicy, IdpValidationPolicy, SpValidationPolicy,
-    TemplatePolicy, XmlPolicy,
-};
 #[cfg(not(crypto))]
 use super::policies::{
-    AssertionSignaturePolicy, AuthnRequestValidationPolicy, LogoutPolicy, LogoutSignaturePolicy,
-    ResponseSignaturePolicy,
+    assertion_signature_required, authn_request_signature_required,
+    encrypted_cbc_response_signature_required, logout_signature_required,
+    response_signature_required, LogoutPolicy,
+};
+use super::policies::{
+    authn_request_signing_enabled, AlgorithmPolicy, IdpValidationPolicy, SpValidationPolicy,
+    TemplatePolicy, XmlPolicy,
 };
 use crate::model::EndpointUrl;
 
@@ -726,10 +727,7 @@ fn validate_shared_policy(
 fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     validate_sp_crypto_support(config)?;
     validate_shared_policy(&config.algorithms, &config.templates)?;
-    if matches!(
-        config.validation.authn_requests,
-        AuthnRequestSigningPolicy::Sign
-    ) {
+    if authn_request_signing_enabled(config.validation.authn_requests) {
         validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
     }
     if config.xml.encryption.selects_any_element()
@@ -808,37 +806,25 @@ fn validate_idp_crypto_support(config: &IdpConfigBuilder) -> Result<(), SamlErro
 
 #[cfg(not(crypto))]
 fn sp_config_requires_crypto(config: &SpConfigBuilder) -> bool {
-    matches!(
-        config.validation.assertions,
-        AssertionSignaturePolicy::RequireSigned
-    ) || matches!(
-        config.validation.responses,
-        ResponseSignaturePolicy::RequireSigned | ResponseSignaturePolicy::RequireForEncryptedCbc
-    ) || matches!(
-        config.validation.authn_requests,
-        AuthnRequestSigningPolicy::Sign
-    ) || logout_policy_requires_crypto(config.validation.logout)
+    let validation = &config.validation;
+    assertion_signature_required(validation.assertions)
+        || response_signature_required(validation.responses)
+        || encrypted_cbc_response_signature_required(validation.responses)
+        || authn_request_signing_enabled(validation.authn_requests)
+        || logout_policy_requires_crypto(validation.logout)
         || config.xml.encryption.selects_any_element()
 }
 
 #[cfg(not(crypto))]
 fn idp_config_requires_crypto(config: &IdpConfigBuilder) -> bool {
-    matches!(
-        config.validation.authn_requests,
-        AuthnRequestValidationPolicy::RequireSigned
-    ) || logout_policy_requires_crypto(config.validation.logout)
+    authn_request_signature_required(config.validation.authn_requests)
+        || logout_policy_requires_crypto(config.validation.logout)
         || config.xml.encryption.selects_any_element()
 }
 
 #[cfg(not(crypto))]
 fn logout_policy_requires_crypto(policy: LogoutPolicy) -> bool {
-    logout_signature_policy_requires_crypto(policy.requests)
-        || logout_signature_policy_requires_crypto(policy.responses)
-}
-
-#[cfg(not(crypto))]
-fn logout_signature_policy_requires_crypto(policy: LogoutSignaturePolicy) -> bool {
-    matches!(policy, LogoutSignaturePolicy::RequireSigned)
+    logout_signature_required(policy.requests) || logout_signature_required(policy.responses)
 }
 
 #[cfg(all(test, not(crypto)))]

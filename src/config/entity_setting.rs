@@ -10,7 +10,7 @@ use super::policies::{
     authn_request_signature_required, authn_request_signing_enabled,
     encrypted_cbc_response_signature_required, logout_signature_required, name_id_creation_allowed,
     response_signature_required, verify_present_authn_request_signature, AlgorithmPolicy,
-    AssertionEncryptionPolicy, ReceivedEncryptedElements, TemplatePolicy, XmlPolicy,
+    ReceivedEncryptedElements, TemplatePolicy, XmlPolicy,
 };
 
 impl SpConfigBuilder {
@@ -94,10 +94,7 @@ fn common_setting(
         } else {
             None
         },
-        is_assertion_encrypted: matches!(
-            xml.encryption.assertions,
-            AssertionEncryptionPolicy::EncryptAssertions
-        ),
+        is_assertion_encrypted: xml.encryption.encrypts_assertions(),
         assertion_element_encryption: xml.encryption.assertion_elements(),
         received_encrypted_elements: ReceivedEncryptedElements::DecryptReceived,
         allow_rsa15_key_transport_decryption: xml

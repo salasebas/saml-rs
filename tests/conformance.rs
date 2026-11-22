@@ -10,55 +10,43 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
 
 fn sp(setting: EntitySetting) -> Result<ServiceProvider, saml_rs::SamlError> {
-    ServiceProvider::from_config(
-        &SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            authn_requests_signed: setting.private_key.is_some(),
-            want_assertions_signed: setting.private_key.is_some(),
-            signing_certs: setting
-                .signing_cert
-                .clone()
-                .map(|c| vec![c])
-                .unwrap_or_default(),
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            ..Default::default()
-        },
-        setting,
-    )
+    let mut config = SpMetadataInput::default();
+    config.entity_id = "https://sp.example.com/metadata".into();
+    config.authn_requests_signed = setting.private_key.is_some();
+    config.want_assertions_signed = setting.private_key.is_some();
+    config.signing_certs = setting
+        .signing_cert
+        .clone()
+        .map(|c| vec![c])
+        .unwrap_or_default();
+    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://sp/slo")];
+    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    ServiceProvider::from_config(&config, setting)
 }
 
 #[cfg(crypto)]
 fn idp(setting: EntitySetting) -> Result<IdentityProvider, saml_rs::SamlError> {
-    IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            signing_certs: setting
-                .signing_cert
-                .clone()
-                .map(|c| vec![c])
-                .unwrap_or_default(),
-            want_authn_requests_signed: setting.private_key.is_some(),
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            single_logout_service: vec![Endpoint::new(Binding::Post, "https://idp/slo")],
-            ..Default::default()
-        },
-        setting,
-    )
+    let mut config = IdpMetadataInput::default();
+    config.entity_id = "https://idp.example.com/metadata".into();
+    config.signing_certs = setting
+        .signing_cert
+        .clone()
+        .map(|c| vec![c])
+        .unwrap_or_default();
+    config.want_authn_requests_signed = setting.private_key.is_some();
+    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
+    config.single_logout_service = vec![Endpoint::new(Binding::Post, "https://idp/slo")];
+    IdentityProvider::from_config(&config, setting)
 }
 
 #[test]
 #[allow(deprecated)]
 fn unsigned_authn_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(EntitySetting::default())?;
-    let idp = IdentityProvider::from_config(
-        &IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-            ..Default::default()
-        },
-        EntitySetting::default(),
-    )?;
+    let mut idp_config = IdpMetadataInput::default();
+    idp_config.entity_id = "https://idp.example.com/metadata".into();
+    idp_config.single_sign_on_service = vec![Endpoint::new(Binding::Redirect, "https://idp/sso")];
+    let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
     let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
     let url = url::Url::parse(&ctx.context)?;
     let (_, value) = url

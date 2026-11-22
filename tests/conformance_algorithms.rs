@@ -72,15 +72,18 @@ fn rsa(algorithms: AlgorithmPolicy) -> Side {
     signed_with(algorithms, RSA_KEY, RSA_CERT)
 }
 
+#[cfg(feature = "crypto-rustcrypto")]
+fn signing(signature: SignatureAlgorithm) -> AlgorithmPolicy {
+    let mut algorithms = AlgorithmPolicy::default();
+    algorithms.signature = signature;
+    algorithms
+}
+
 #[cfg(not(feature = "crypto-fips"))]
 fn encrypted_assertions() -> XmlPolicy {
-    XmlPolicy {
-        encryption: XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        ..XmlPolicy::default()
-    }
+    let mut xml = XmlPolicy::default();
+    xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
+    xml
 }
 
 struct Peers {
@@ -107,6 +110,12 @@ fn peers_with_profiles(
     sp_xml_signatures: XmlSignatureProfile,
     idp_xml_signatures: XmlSignatureProfile,
 ) -> Result<Peers, SamlError> {
+    let mut sp_validation = SpValidationPolicy::recommended();
+    sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
+    sp_validation.xml_signatures = sp_xml_signatures;
+    let mut idp_validation = IdpValidationPolicy::recommended();
+    idp_validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
+    idp_validation.xml_signatures = idp_xml_signatures;
     let sp = SpConfig::builder(
         EntityId::try_new(SP_ENTITY_ID)?,
         AcsEndpoint::post(SP_ACS_POST)?.with_default(),
@@ -114,11 +123,7 @@ fn peers_with_profiles(
     .slo_endpoint(SloEndpoint::redirect(SP_SLO_REDIRECT)?)
     .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
     .credentials(sp.credentials)
-    .validation(SpValidationPolicy {
-        authn_requests: AuthnRequestSigningPolicy::Sign,
-        xml_signatures: sp_xml_signatures,
-        ..SpValidationPolicy::recommended()
-    })
+    .validation(sp_validation)
     .algorithms(sp.algorithms)
     .xml(xml)
     .build()?;
@@ -130,11 +135,7 @@ fn peers_with_profiles(
     .slo_endpoint(SloEndpoint::redirect(IDP_SLO_REDIRECT)?)
     .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
     .credentials(idp.credentials)
-    .validation(IdpValidationPolicy {
-        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        xml_signatures: idp_xml_signatures,
-        ..IdpValidationPolicy::recommended()
-    })
+    .validation(idp_validation)
     .algorithms(idp.algorithms)
     .xml(xml)
     .build()?;
@@ -246,28 +247,16 @@ fn verified_algorithms(session: &SsoSession) -> Vec<&str> {
 #[test]
 fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn std::error::Error>>
 {
+    let mut encrypted_assertion = XmlEncryptionPolicy::default();
+    encrypted_assertion.assertions = AssertionEncryptionPolicy::EncryptAssertions;
+    let mut encrypted_id = XmlEncryptionPolicy::default();
+    encrypted_id.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers;
+    let mut encrypted_attribute = XmlEncryptionPolicy::default();
+    encrypted_attribute.attributes = AttributeEncryptionPolicy::EncryptAttributes;
     for (encryption, wrapper) in [
-        (
-            XmlEncryptionPolicy {
-                assertions: AssertionEncryptionPolicy::EncryptAssertions,
-                ..XmlEncryptionPolicy::default()
-            },
-            "EncryptedAssertion",
-        ),
-        (
-            XmlEncryptionPolicy {
-                identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
-                ..XmlEncryptionPolicy::default()
-            },
-            "EncryptedID",
-        ),
-        (
-            XmlEncryptionPolicy {
-                attributes: AttributeEncryptionPolicy::EncryptAttributes,
-                ..XmlEncryptionPolicy::default()
-            },
-            "EncryptedAttribute",
-        ),
+        (encrypted_assertion, "EncryptedAssertion"),
+        (encrypted_id, "EncryptedID"),
+        (encrypted_attribute, "EncryptedAttribute"),
     ] {
         for (digest, mgf) in [
             (DigestAlgorithm::Sha256, MaskGenerationFunction::Mgf1Sha256),
@@ -276,21 +265,15 @@ fn xmlenc11_algorithms_round_trip_each_encrypted_element() -> Result<(), Box<dyn
             #[cfg(feature = "crypto-rustcrypto")]
             (DigestAlgorithm::Sha256, MaskGenerationFunction::Mgf1Sha384),
         ] {
-            let peers = peers(
-                rsa(AlgorithmPolicy::default()),
-                rsa(AlgorithmPolicy {
-                    data_encryption: DataEncryptionAlgorithm::Aes256Gcm,
-                    key_encryption: KeyEncryptionAlgorithm::RsaOaep {
-                        digest: digest.clone(),
-                        mgf,
-                    },
-                    ..AlgorithmPolicy::default()
-                }),
-                XmlPolicy {
-                    encryption,
-                    ..XmlPolicy::default()
-                },
-            )?;
+            let mut idp_algorithms = AlgorithmPolicy::default();
+            idp_algorithms.data_encryption = DataEncryptionAlgorithm::Aes256Gcm;
+            idp_algorithms.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+                digest: digest.clone(),
+                mgf,
+            };
+            let mut xml = XmlPolicy::default();
+            xml.encryption = encryption;
+            let peers = peers(rsa(AlgorithmPolicy::default()), rsa(idp_algorithms), xml)?;
             let attributes = Attributes::new(vec![Attribute::new(
                 "mail",
                 vec![AttributeValue::new("alice@example.com")],
@@ -415,10 +398,7 @@ fn recommended_generation_uses_rsa_sha256_aes256_and_rsa_oaep(
 #[test]
 fn selected_rsa_sha1_signs_the_authn_request_and_the_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rsa_sha1 = || AlgorithmPolicy {
-        signature: SignatureAlgorithm::RsaSha1,
-        ..AlgorithmPolicy::default()
-    };
+    let rsa_sha1 = || signing(SignatureAlgorithm::RsaSha1);
     let peers = peers(rsa(rsa_sha1()), rsa(rsa_sha1()), XmlPolicy::default())?;
     let exchange = signed_redirect_request_then_post_response(&peers, alice())?;
 
@@ -443,10 +423,7 @@ fn rsa_sha1_peers(
     sp_xml_signatures: XmlSignatureProfile,
     idp_xml_signatures: XmlSignatureProfile,
 ) -> Result<Peers, SamlError> {
-    let rsa_sha1 = || AlgorithmPolicy {
-        signature: SignatureAlgorithm::RsaSha1,
-        ..AlgorithmPolicy::default()
-    };
+    let rsa_sha1 = || signing(SignatureAlgorithm::RsaSha1);
     peers_with_profiles(
         rsa(rsa_sha1()),
         rsa(rsa_sha1()),
@@ -552,12 +529,7 @@ fn recommended_identity_provider_rejects_an_md5_or_ripemd160_sig_alg(
         "http://www.w3.org/2001/04/xmldsig-more#rsa-md5",
         "http://www.w3.org/2001/04/xmldsig-more#rsa-ripemd160",
     ] {
-        let signer = || {
-            rsa(AlgorithmPolicy {
-                signature: SignatureAlgorithm::Custom(algorithm.into()),
-                ..AlgorithmPolicy::default()
-            })
-        };
+        let signer = || rsa(signing(SignatureAlgorithm::Custom(algorithm.into())));
         let recommended = peers(
             signer(),
             rsa(AlgorithmPolicy::default()),
@@ -674,16 +646,7 @@ fn recommended_service_provider_does_not_verify_with_a_1024_bit_rsa_key(
 #[test]
 fn selected_dsa_sha1_signs_the_authn_request_and_the_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let dsa_sha1 = || {
-        signed_with(
-            AlgorithmPolicy {
-                signature: SignatureAlgorithm::DsaSha1,
-                ..AlgorithmPolicy::default()
-            },
-            DSA_KEY,
-            DSA_CERT,
-        )
-    };
+    let dsa_sha1 = || signed_with(signing(SignatureAlgorithm::DsaSha1), DSA_KEY, DSA_CERT);
     let peers = peers(dsa_sha1(), dsa_sha1(), XmlPolicy::default())?;
     let exchange = signed_redirect_request_then_post_response(&peers, alice())?;
 
@@ -705,15 +668,14 @@ fn selected_dsa_sha1_signs_the_authn_request_and_the_response(
 
 #[test]
 fn selected_canonical_xml_transform_signs_the_response() -> Result<(), Box<dyn std::error::Error>> {
+    let mut idp_algorithms = AlgorithmPolicy::default();
+    idp_algorithms.signed_reference_transforms = vec![
+        TransformAlgorithm::EnvelopedSignature,
+        TransformAlgorithm::CanonicalXml,
+    ];
     let peers = peers(
         rsa(AlgorithmPolicy::default()),
-        rsa(AlgorithmPolicy {
-            signed_reference_transforms: vec![
-                TransformAlgorithm::EnvelopedSignature,
-                TransformAlgorithm::CanonicalXml,
-            ],
-            ..AlgorithmPolicy::default()
-        }),
+        rsa(idp_algorithms),
         XmlPolicy::default(),
     )?;
     let exchange = signed_redirect_request_then_post_response(&peers, alice())?;
@@ -771,21 +733,12 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
                 data_encryption.as_uri().to_string(),
                 key_encryption.as_uri().to_string(),
             ];
-            let peers = peers(
-                rsa(AlgorithmPolicy::default()),
-                rsa(AlgorithmPolicy {
-                    data_encryption: data_encryption.clone(),
-                    key_encryption: key_encryption.clone(),
-                    ..AlgorithmPolicy::default()
-                }),
-                XmlPolicy {
-                    encryption: XmlEncryptionPolicy {
-                        rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
-                        ..encrypted_assertions().encryption
-                    },
-                    ..XmlPolicy::default()
-                },
-            )?;
+            let mut idp_algorithms = AlgorithmPolicy::default();
+            idp_algorithms.data_encryption = data_encryption.clone();
+            idp_algorithms.key_encryption = key_encryption.clone();
+            let mut xml = encrypted_assertions();
+            xml.encryption.rsa15_key_transport = Rsa15KeyTransportPolicy::AllowDecryption;
+            let peers = peers(rsa(AlgorithmPolicy::default()), rsa(idp_algorithms), xml)?;
             let exchange = signed_redirect_request_then_post_response(&peers, alice())?;
 
             assert_eq!(
@@ -800,27 +753,19 @@ fn selected_block_encryption_and_key_transport_round_trip() -> Result<(), Box<dy
 #[cfg(all(feature = "crypto-rustcrypto", feature = "crypto-legacy-algorithms"))]
 #[test]
 fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn std::error::Error>> {
-    let rsa15 = AlgorithmPolicy {
-        key_encryption: KeyEncryptionAlgorithm::Rsa15,
-        ..AlgorithmPolicy::default()
-    };
-    for encryption in [
-        XmlEncryptionPolicy {
-            assertions: AssertionEncryptionPolicy::EncryptAssertions,
-            ..XmlEncryptionPolicy::default()
-        },
-        XmlEncryptionPolicy {
-            identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
-            ..XmlEncryptionPolicy::default()
-        },
-    ] {
+    let mut rsa15 = AlgorithmPolicy::default();
+    rsa15.key_encryption = KeyEncryptionAlgorithm::Rsa15;
+    let mut encrypted_assertion = XmlEncryptionPolicy::default();
+    encrypted_assertion.assertions = AssertionEncryptionPolicy::EncryptAssertions;
+    let mut encrypted_id = XmlEncryptionPolicy::default();
+    encrypted_id.identifiers = IdentifierEncryptionPolicy::EncryptIdentifiers;
+    for encryption in [encrypted_assertion, encrypted_id] {
+        let mut default_xml = XmlPolicy::default();
+        default_xml.encryption = encryption;
         let default = peers(
             rsa(AlgorithmPolicy::default()),
             rsa(rsa15.clone()),
-            XmlPolicy {
-                encryption,
-                ..XmlPolicy::default()
-            },
+            default_xml,
         )?;
         let refused = signed_redirect_request_then_post_response(&default, alice())
             .err()
@@ -833,16 +778,12 @@ fn rsa15_key_transport_is_decrypted_only_when_selected() -> Result<(), Box<dyn s
             "{refused:?}"
         );
 
+        let mut selected_xml = default_xml;
+        selected_xml.encryption.rsa15_key_transport = Rsa15KeyTransportPolicy::AllowDecryption;
         let selected = peers(
             rsa(AlgorithmPolicy::default()),
             rsa(rsa15.clone()),
-            XmlPolicy {
-                encryption: XmlEncryptionPolicy {
-                    rsa15_key_transport: Rsa15KeyTransportPolicy::AllowDecryption,
-                    ..encryption
-                },
-                ..XmlPolicy::default()
-            },
+            selected_xml,
         )?;
         let exchange = signed_redirect_request_then_post_response(&selected, alice())?;
         assert!(exchange
@@ -860,10 +801,7 @@ const IDP_HMAC_SECRET: &[u8] = b"identity-provider-hmac-sha1-secret";
 #[cfg(feature = "crypto-rustcrypto")]
 fn hmac_sha1(secret: &[u8]) -> Result<Side, SamlError> {
     Ok(Side {
-        algorithms: AlgorithmPolicy {
-            signature: SignatureAlgorithm::HmacSha1,
-            ..AlgorithmPolicy::default()
-        },
+        algorithms: signing(SignatureAlgorithm::HmacSha1),
         credentials: Credentials::default().with_hmac_secret(HmacSecret::try_new(secret)?),
     })
 }

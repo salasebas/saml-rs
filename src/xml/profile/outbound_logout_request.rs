@@ -23,10 +23,11 @@ pub(crate) enum OutboundLogoutRequestValidation {
 
 impl OutboundLogoutRequestValidation {
     fn expects_encrypted_id(self) -> bool {
-        matches!(
-            self,
-            Self::AfterEmbeddedSigning(IdentifierEncryptionPolicy::EncryptIdentifiers)
-        )
+        match self {
+            Self::AfterEmbeddedSigning(IdentifierEncryptionPolicy::EncryptIdentifiers) => true,
+            Self::AfterEmbeddedSigning(IdentifierEncryptionPolicy::PlaintextIdentifiers)
+            | Self::BeforeSigning => false,
+        }
     }
 }
 
