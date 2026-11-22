@@ -9,7 +9,7 @@ use super::{
     ENCRYPTED_ATTRIBUTE, ENCRYPTED_ID, LOGOUT_REQUEST_ENCRYPTED_ID,
 };
 use super::{policy::encrypted_data_algorithm, work};
-use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, X509Credential};
+use crate::config::{AssertionElementEncryption, X509Credential};
 use crate::constants::{key_encryption_algorithm, namespace};
 use crate::error::{crypto_err, utf8_err, xml_err, SamlError};
 use crate::xml::dom::{self, XmlLimits};
@@ -103,6 +103,7 @@ fn names_rsa15_key_transport(xml: &str) -> Result<bool, SamlError> {
 /// names.
 ///
 /// Returns `(response_with_decrypted_assertions, first_decrypted_assertion)`.
+/// Encrypted identifiers and attributes inside each assertion stay encrypted.
 ///
 /// # Errors
 ///
@@ -127,6 +128,7 @@ pub fn decrypt_assertion(
 }
 
 /// Decrypt each `<EncryptedAssertion>` with explicit XML parser resource limits.
+/// Encrypted identifiers and attributes inside each assertion stay encrypted.
 ///
 /// # Errors
 ///
@@ -303,9 +305,7 @@ pub(crate) fn carries_encrypted_assertion_elements(xml: &str) -> Result<bool, Sa
     Ok(false)
 }
 
-/// Decrypt the children of each assertion in `xml` with `enc_keys`: the ones
-/// `selection` selects, and every one when `received` is
-/// [`ReceivedEncryptedElements::DecryptReceived`].
+/// Decrypt each received assertion subject identifier and attribute with `enc_keys`.
 ///
 /// Each `<EncryptedID>` of an assertion `<Subject>` becomes the `<NameID>` it
 /// carries, and each `<EncryptedAttribute>` of an `<AttributeStatement>`
@@ -324,18 +324,10 @@ pub(crate) fn decrypt_assertion_elements(
     enc_keys: &[Key],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
-    selection: AssertionElementEncryption,
-    received: ReceivedEncryptedElements,
+    required: AssertionElementEncryption,
 ) -> Result<String, SamlError> {
     let decrypted = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
-        let selected = selected_kinds(selection);
-        let decrypted = match received {
-            ReceivedEncryptedElements::DecryptReceived => {
-                vec![ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE]
-            }
-            ReceivedEncryptedElements::DecryptSelected => selected.clone(),
-        };
-        for kind in &selected {
+        for kind in selected_kinds(required) {
             if !assertion_elements(document, kind.parent, kind.plaintext)?.is_empty() {
                 return Err(SamlError::EncryptionRequired {
                     element: kind.plaintext,
@@ -343,7 +335,7 @@ pub(crate) fn decrypt_assertion_elements(
             }
         }
         let mut replacements = Vec::new();
-        for kind in decrypted {
+        for kind in [ENCRYPTED_ID, ENCRYPTED_ATTRIBUTE] {
             for element in assertion_elements(document, kind.parent, kind.encrypted)? {
                 replacements.push(decrypted_element(
                     document, element, kind, enc_keys, options, limits,

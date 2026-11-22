@@ -9,7 +9,8 @@ This map lists the behaviour whose file name does not give it away.
 | Checks on a login `Response` with an error status, before its status is reported | `src/flow/error_response.rs` |
 | `Issuer` of a login `Response` | `src/flow/response_issuer.rs` |
 | Assertion conditions, audience, and bearer confirmation of an accepted response | `src/assertion_acceptance.rs` |
-| Decryption of a verified response's encrypted children | `src/flow.rs`, `src/encrypted_elements.rs` |
+| SP processing of each encrypted assertion, subject identifier, and attribute in a login response | `src/flow.rs`, `src/encrypted_elements.rs` |
+| SP or IdP decryption of the principal identifier in an authenticated logout request | `src/logout/encrypted_id.rs` |
 | Protocol responses that take the wrapping and coverage checks | `src/crypto/response_root.rs` |
 | Algorithms and RSA key sizes each `XmlSignatureProfile` accepts | `src/crypto/signature_profile.rs` |
 | Response rendering for HTTP-Artifact and PAOS | `src/idp/posted_response.rs` |

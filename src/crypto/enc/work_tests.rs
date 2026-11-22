@@ -117,7 +117,6 @@ fn other_inbound_encrypted_elements_preflight_the_document(
                 options,
                 limits,
                 AssertionElementEncryption::default(),
-                crate::config::ReceivedEncryptedElements::DecryptReceived,
             )
             .map(|_| ()),
             decrypt_assertion_elements(
@@ -126,7 +125,6 @@ fn other_inbound_encrypted_elements_preflight_the_document(
                 options,
                 limits,
                 AssertionElementEncryption::default(),
-                crate::config::ReceivedEncryptedElements::DecryptReceived,
             )
             .map(|_| ()),
         ] {

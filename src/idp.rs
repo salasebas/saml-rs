@@ -1,6 +1,5 @@
 //! SAML Identity Provider entity.
 
-use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
     capture_idp_issuance_window, format_saml_utc_date_time, generate_id, BindingContext,
@@ -531,14 +530,6 @@ impl Engine {
                 from_issuer: sp.metadata.as_metadata().entity_id(),
                 signing_certs,
                 hmac_secret: sp.setting.hmac_secret.as_ref(),
-                decrypt_key: None,
-                decrypt_key_pass: None,
-                additional_decrypt_keys: &[],
-                assertion_elements: AssertionElementEncryption::default(),
-                element_decrypt_key: None,
-                received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
-                allow_rsa15_key_transport_decryption: false,
-                max_decryption_work: self.setting.max_decryption_work,
                 clock_skew,
                 now,
                 redirect_inflate_max_bytes: self.setting.redirect_inflate_max_bytes,
@@ -546,6 +537,7 @@ impl Engine {
                 schema_validator: self.setting.schema_validator,
                 expected_audience: None,
                 expected_in_response_to: None,
+                ..FlowOptions::default()
             },
             request,
         )

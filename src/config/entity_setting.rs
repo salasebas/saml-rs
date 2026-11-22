@@ -7,8 +7,8 @@ use super::descriptors::EntityId;
 use super::policies::{
     assertion_signature_required, audience_restriction_required, authn_request_signature_required,
     authn_request_signing_enabled, encrypted_cbc_response_signature_required,
-    name_id_creation_allowed, response_signature_required, AlgorithmPolicy,
-    ReceivedEncryptedElements, TemplatePolicy, XmlPolicy,
+    name_id_creation_allowed, response_signature_required, AlgorithmPolicy, TemplatePolicy,
+    XmlPolicy,
 };
 
 impl SpConfigBuilder {
@@ -79,7 +79,6 @@ fn common_setting(
         },
         is_assertion_encrypted: xml.encryption.encrypts_assertions(),
         assertion_element_encryption: xml.encryption.assertion_elements(),
-        received_encrypted_elements: ReceivedEncryptedElements::DecryptReceived,
         allow_rsa15_key_transport_decryption: xml
             .encryption
             .allows_rsa15_key_transport_decryption(),

@@ -1,8 +1,6 @@
 //! Decryption of the `<EncryptedAssertion>`, `<EncryptedID>`, and
 //! `<EncryptedAttribute>` children of a verified login response.
 
-#[cfg(crypto)]
-use crate::config::ReceivedEncryptedElements;
 use crate::constants::ParserType;
 use crate::error::SamlError;
 use crate::flow::FlowOptions;
@@ -74,7 +72,6 @@ pub(crate) fn decrypt_verified_assertion_elements(
         options,
         opts.xml_limits,
         opts.assertion_elements,
-        opts.received_encrypted_elements,
     )?;
     crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;
     validate_protocol_profile(&content, ParserType::SamlResponse, opts.xml_limits)?;
@@ -136,39 +133,25 @@ pub(crate) fn decrypt_verified_assertion_elements(
     ))
 }
 
-/// The key that decrypts each `<EncryptedAssertion>` child of `root`. A selected
-/// `decrypt_key` requires one. A typed service provider also decrypts one it
-/// did not select.
+/// The SP key when a login response requires or carries an encrypted assertion.
 #[cfg(crypto)]
 pub(crate) fn encrypted_assertion_key<'a>(
     root: &crate::xml::dom::Node,
     parser_type: ParserType,
     opts: &FlowOptions<'a>,
 ) -> Option<&'a str> {
-    if opts.decrypt_key.is_some() {
-        return opts.decrypt_key;
-    }
-    match (opts.received_encrypted_elements, parser_type) {
-        (ReceivedEncryptedElements::DecryptReceived, ParserType::SamlResponse) => {
-            let carries_encrypted_assertion = root
-                .children
-                .iter()
-                .any(|child| child.local_name == "EncryptedAssertion");
-            if carries_encrypted_assertion {
-                opts.element_decrypt_key
-            } else {
-                None
-            }
-        }
-        (ReceivedEncryptedElements::DecryptReceived, _)
-        | (ReceivedEncryptedElements::DecryptSelected, _) => None,
+    if parser_type == ParserType::SamlResponse
+        && (opts.require_encrypted_assertion || root.child_named("EncryptedAssertion").is_some())
+    {
+        opts.decrypt_key
+    } else {
+        None
     }
 }
 
 /// `xml`, whose detached signature verified, with each `<EncryptedAssertion>`
 /// decrypted for a typed service provider, and the decrypted assertions.
-/// `None` when no key applies, and under
-/// [`ReceivedEncryptedElements::DecryptSelected`].
+/// Returns `None` when no key applies.
 #[cfg(crypto)]
 pub(crate) fn decrypt_detached_signed_assertions(
     xml: &str,
@@ -181,13 +164,7 @@ pub(crate) fn decrypt_detached_signed_assertions(
         keys::load_decryption_keys,
     };
 
-    let key_pem = match opts.received_encrypted_elements {
-        ReceivedEncryptedElements::DecryptReceived => {
-            encrypted_assertion_key(root, parser_type, opts)
-        }
-        ReceivedEncryptedElements::DecryptSelected => None,
-    };
-    let Some(key_pem) = key_pem else {
+    let Some(key_pem) = encrypted_assertion_key(root, parser_type, opts) else {
         return Ok(None);
     };
     let (content, assertions) = decrypt_assertions_with_limits(
