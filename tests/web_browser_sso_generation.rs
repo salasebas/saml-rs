@@ -1,7 +1,11 @@
 //! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 alone.
 #![cfg(crypto)]
 
+#[path = "web_browser_sso_generation/assertion_prefix.rs"]
+mod assertion_prefix;
 mod common;
+#[path = "common/tag_prefixes.rs"]
+mod tag_prefixes;
 
 #[path = "common/post_validation.rs"]
 mod post_validation;
@@ -613,55 +617,6 @@ fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_reque
         validation(),
     )?;
     assert_eq!(received.message().issuer().as_str(), SP_ENTITY_ID);
-    Ok(())
-}
-
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn std::error::Error>>
-{
-    let encryption = encrypted_assertions();
-    let mut templates = saml_rs::TemplatePolicy::default();
-    templates.tag_prefix_assertion = "é".into();
-    let sp = ServiceProvider::new(
-        SpConfig::builder(
-            EntityId::try_new(SP_ENTITY_ID)?,
-            AcsEndpoint::post(SP_ACS)?.with_default(),
-        )
-        .credentials(signing_credentials().with_decryption_credential(
-            saml_rs::X509Credential::new(CertificatePem::new(CERT), PrivateKeyPem::new(PRIVKEY)),
-        ))
-        .validation(signing_sp_validation())
-        .build()?,
-    );
-    let idp = IdentityProvider::new(
-        IdpConfig::builder(
-            EntityId::try_new(IDP_ENTITY_ID)?,
-            SsoEndpoint::post(IDP_SSO_POST)?,
-        )
-        .credentials(signing_credentials())
-        .validation(signed_authn_request_idp_validation())
-        .xml(encryption)
-        .templates(templates)
-        .build()?,
-    );
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
-    let received = idp.receive_sso(
-        &sp_descriptor,
-        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
-        validation(),
-    )?;
-    let response = idp.respond_sso(
-        &sp_descriptor,
-        &received,
-        SsoAssertion::new(principal()),
-        RespondSso::post(),
-    )?;
-
-    let xml = response_xml(&response)?;
-    assert!(xml.contains("<é:EncryptedAssertion "), "{xml}");
-    assert!(!xml.contains("<saml:EncryptedAssertion"), "{xml}");
     Ok(())
 }
 
