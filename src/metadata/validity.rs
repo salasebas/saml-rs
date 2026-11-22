@@ -3,7 +3,7 @@
 use std::time::SystemTime;
 
 use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 
 use crate::error::{SamlError, TimeWindowField};
 use crate::validator::offset_datetime_from_system_time;
@@ -37,7 +37,16 @@ impl MetadataValidity {
 
 fn parse_valid_until(value: &str) -> Result<OffsetDateTime, SamlError> {
     let normalized = parse_timezoned_date_time(value).ok_or_else(metadata_valid_until)?;
-    OffsetDateTime::parse(normalized, &Rfc3339).map_err(|_| metadata_valid_until())
+    let Some((date, rest)) = normalized.split_once("T24:") else {
+        return OffsetDateTime::parse(normalized, &Rfc3339).map_err(|_| metadata_valid_until());
+    };
+
+    let midnight = OffsetDateTime::parse(&format!("{date}T00:{rest}"), &Rfc3339)
+        .map_err(|_| metadata_valid_until())?;
+    midnight
+        .checked_add(Duration::days(1))
+        .filter(|next_day| next_day.year() <= 9999)
+        .ok_or_else(metadata_valid_until)
 }
 
 fn metadata_valid_until() -> SamlError {
@@ -52,6 +61,7 @@ mod tests {
 
     use crate::error::{SamlError, TimeWindowField};
     use crate::metadata::{IdpMetadata, SpMetadata};
+    use crate::{EntityId, IdpDescriptor, MetadataTrustPolicy};
 
     const Y2030: u64 = 1_893_456_000;
 
@@ -80,14 +90,28 @@ mod tests {
 
     #[test]
     fn metadata_is_invalid_from_valid_until_onward() -> Result<(), SamlError> {
-        let xml = entity(&valid_until("2030-01-01T00:00:00Z"), "", "");
-        let validity = IdpMetadata::from_xml(&xml)?.as_metadata().validity()?;
+        for (value, expires_at) in [
+            ("2030-01-01T00:00:00Z", Y2030),
+            ("2029-12-31T24:00:00Z", Y2030),
+            ("2029-12-31T24:00:00.000-02:00", Y2030 + 7_200),
+        ] {
+            let xml = entity(&valid_until(value), "", "");
+            let descriptor = IdpDescriptor::from_metadata_xml(
+                EntityId::try_new("https://idp.example.com/metadata")?,
+                &xml,
+                MetadataTrustPolicy::AllowUnsigned,
+            )?;
 
-        validity.ensure_valid_at(at(Y2030 - 1))?;
-        assert!(is_valid_until_error(validity.ensure_valid_at(at(Y2030))));
-        assert!(is_valid_until_error(
-            validity.ensure_valid_at(at(Y2030 + 1))
-        ));
+            descriptor.ensure_valid_at(at(expires_at - 1))?;
+            assert!(
+                is_valid_until_error(descriptor.ensure_valid_at(at(expires_at))),
+                "{value}"
+            );
+            assert!(
+                is_valid_until_error(descriptor.ensure_valid_at(at(expires_at + 1))),
+                "{value}"
+            );
+        }
         Ok(())
     }
 
@@ -163,7 +187,8 @@ mod tests {
             "2030-01-01",
             "2030-01-01T00:00:00+15:00",
             "soon",
-            "2099-12-31T24:00:00Z",
+            "2099-12-31T24:00:00.0000000001Z",
+            "9999-12-31T24:00:00+14:00",
             "2099-06-30T12:00:60Z",
             "10000-01-01T00:00:00Z",
             "-0001-01-01T00:00:00Z",
