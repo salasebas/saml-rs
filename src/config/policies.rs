@@ -338,9 +338,7 @@ impl Default for IdpValidationPolicy {
 ///
 /// The default policy requires a signature on both requests and responses.
 ///
-/// `finish_slo` reads `responses`. `receive_slo` reads `requests`. With
-/// [`crate::LogoutSigning::FollowLocalPolicy`], `requests` also decides
-/// whether an outbound `LogoutRequest` is signed. See
+/// `finish_slo` reads `responses`. `receive_slo` reads `requests`. Typed logout signs outgoing requests and responses. See
 /// `docs/conformance/single-logout.md`.
 ///
 /// Start from `default()` and assign the fields you change. A
@@ -675,11 +673,6 @@ impl Default for AlgorithmPolicy {
 /// both roles use.
 ///
 /// Start from [`Default`](Default::default) and assign the fields you change.
-///
-/// The SSO templates belong to one role each: set them with
-/// [`SpConfigBuilder::authn_request_template`](crate::SpConfigBuilder::authn_request_template)
-/// and
-/// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template).
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct TemplatePolicy {
@@ -689,11 +682,10 @@ pub struct TemplatePolicy {
     /// It applies to the SSO `<Response>`, `<LogoutRequest>`,
     /// `<LogoutResponse>`, and the `<ManageNameIDRequest>` and
     /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `samlp` prefix
-    /// of an SSO response template or a logout template is rewritten to it.
+    /// of a logout template is rewritten to it.
     /// The built-in `<AuthnRequest>`, `<ArtifactResolve>`,
     /// `<ArtifactResponse>`, name identifier management messages over SOAP,
-    /// and the ECP `<Request>` header of PAOS SSO keep `samlp`. An
-    /// `<AuthnRequest>` template keeps the prefixes it writes.
+    /// and the ECP `<Request>` header of PAOS SSO keep `samlp`.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_assertion`.
@@ -705,11 +697,10 @@ pub struct TemplatePolicy {
     /// generated `<EncryptedAssertion>`, to `<LogoutRequest>` and
     /// `<LogoutResponse>`, and to the `<ManageNameIDRequest>` and
     /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `saml` prefix of
-    /// an SSO response template or a logout template is rewritten to it. The
+    /// a logout template is rewritten to it. The
     /// built-in `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`,
     /// name identifier management messages over SOAP, and the ECP `<Request>`
-    /// header of PAOS SSO keep `saml`. An `<AuthnRequest>` template keeps the
-    /// prefixes it writes.
+    /// header of PAOS SSO keep `saml`.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_protocol`.
@@ -725,11 +716,7 @@ pub struct TemplatePolicy {
     /// `Format` sent for it. An attribute whose complete value is one of these
     /// placeholders is omitted when there is no value for it.
     ///
-    /// Typed Session Authority generation, and typed SP generation with
-    /// [`crate::StartSlo::apply_producer_rules`], reject a
-    /// template whose `NameID` attributes differ from the ones sent for the
-    /// subject. Other typed SP generation sends the template's `NameID`
-    /// attributes as written.
+    /// Both roles reject a template whose `NameID` attributes differ from the subject.
     pub logout_request_template: Option<String>,
     /// Logout response template.
     ///

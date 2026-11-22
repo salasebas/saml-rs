@@ -17,7 +17,6 @@ use std::time::SystemTime;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
 use saml_rs::constants::Binding;
 use saml_rs::entity::iso8601_offset;
@@ -29,6 +28,7 @@ use saml_rs::metadata::{
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::template::LoginResponseAttribute;
 use saml_rs::template::LoginResponseTemplate;
+use saml_rs::template::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::tests::engine::fill_template;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
@@ -368,25 +368,6 @@ fn identity_provider_does_not_generate_a_basic_attribute_whose_name_is_not_an_xm
     Ok(())
 }
 
-#[test]
-fn typed_attributes_require_the_built_in_login_response_renderer(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = templated_idp()?;
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let attributes = Attributes::new(vec![Attribute::new("mail", values(&["a@example.com"]))
-        .with_name_format(AttributeNameFormat::Basic)]);
-    match idp.initiate_sso(
-        &sp_descriptor,
-        SsoAssertion::new(alice()).with_attributes(attributes),
-        RespondSso::post(),
-    ) {
-        Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
-        other => return Err(format!("expected template error, got {other:?}").into()),
-    }
-    Ok(())
-}
-
 /// A peer identity provider that ignores the producer rules: the raw
 /// samlify-port renderer writes each `(Name, NameFormat, value)` as given.
 fn accept_peer_attributes(
@@ -421,7 +402,7 @@ fn accept_peer_attribute_statement(
     statement: &str,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let template = LoginResponseTemplate {
-        context: Some(SSO_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", statement, 1)),
+        context: Some(LOGIN_RESPONSE_TEMPLATE.replacen("{AttributeStatement}", statement, 1)),
         attributes: Vec::new(),
     };
     accept_peer_response(template, Vec::new())
@@ -715,31 +696,6 @@ fn identity_provider_writes_the_qualifiers_and_alternative_identifier_of_the_iss
 }
 
 #[test]
-fn a_login_response_template_does_not_drop_a_name_id_qualifier(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = templated_idp()?;
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let pseudonym = NameId::new("pseudonym").with_format(NameIdFormat::Persistent);
-
-    for name_id in [
-        pseudonym.clone().with_name_qualifier(IDP_ENTITY_ID),
-        pseudonym.clone().with_sp_name_qualifier(SP_ENTITY_ID),
-        pseudonym.with_sp_provided_id("sp-alias"),
-    ] {
-        match idp.initiate_sso(
-            &sp_descriptor,
-            SsoAssertion::new(name_id),
-            RespondSso::post(),
-        ) {
-            Err(SamlError::Invalid(message)) if message.contains("login response template") => {}
-            other => return Err(format!("expected a template error, got {other:?}").into()),
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn stored_persistent_identifier_is_at_most_256_characters() -> Result<(), Box<dyn std::error::Error>>
 {
     // The limit counts characters, not bytes.
@@ -795,25 +751,6 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
         &sp_descriptor,
         SsoAssertion::new(unformatted),
         RespondSso::post(),
-    ))?;
-
-    // The raw template renderer fills the same NameID.
-    let templated = IdentityProvider::new(
-        IdpConfig::builder(
-            EntityId::try_new(IDP_ENTITY_ID)?,
-            SsoEndpoint::post(IDP_SSO_POST)?,
-        )
-        .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::default())
-        .name_id_format(NameIdFormat::Persistent)
-        .sso_response_template(SSO_RESPONSE_TEMPLATE)
-        .build()?,
-    );
-    expect_name_id_length_error(templated.engine().create_login_response(
-        sp.engine(),
-        Binding::Post,
-        &User::new("x".repeat(257)),
-        &LoginResponseOptions::default(),
     ))?;
 
     // The rule applies to these two formats only.
@@ -1016,35 +953,13 @@ fn expect_name_id_format_error<T>(
     }
 }
 
-fn templated_idp() -> Result<saml_rs::IdentityProvider, SamlError> {
-    Ok(IdentityProvider::new(
-        idp_config()?
-            .sso_response_template(SSO_RESPONSE_TEMPLATE)
-            .build()?,
-    ))
-}
-
 #[test]
 fn identity_provider_does_not_write_a_name_id_format_that_is_not_an_absolute_uri(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp()?;
-    let templated = templated_idp()?;
-    let (sp_descriptor, _) = descriptors(&sp, &templated)?;
     for format in INVALID_FORMATS {
         let name_id = NameId::new("subject-1").with_format(NameIdFormat::Custom(format.into()));
-        for options in [
-            RespondSso::post(),
-            RespondSso::post().apply_producer_rules(),
-        ] {
-            expect_name_id_format_error(respond(SsoAssertion::new(name_id.clone()), options))?;
-        }
-        // A login response template receives the value in {NameIDFormat}.
-        expect_name_id_format_error(templated.initiate_sso(
-            &sp_descriptor,
-            SsoAssertion::new(name_id),
-            RespondSso::post(),
-        ))?;
-
+        expect_name_id_format_error(respond(SsoAssertion::new(name_id), RespondSso::post()))?;
         // A NameID without a format is issued in the first configured format.
         let mut raw_idp = idp()?.engine().clone();
         raw_idp.setting.name_id_format = vec![format.to_string()];
@@ -1171,7 +1086,7 @@ fn service_provider_without_a_name_id_format_omits_the_name_id_policy_format(
     raw_sp.setting.name_id_format = Vec::new();
     for template in [
         None,
-        Some(saml_rs::config::AUTHN_REQUEST_TEMPLATE.to_string()),
+        Some(saml_rs::template::LOGIN_REQUEST_TEMPLATE.to_string()),
     ] {
         raw_sp.setting.login_request_template = template;
         let context = raw_sp.create_login_request(

@@ -1,6 +1,6 @@
 //! AuthnRequest rendering for the PAOS leg of Enhanced Client/Proxy SSO.
 
-use super::{render_default_authn_request_xml, AllowCreateAttribute, AuthnRequestXml, Engine};
+use super::{render_default_authn_request_xml, AuthnRequestXml, Engine};
 use crate::constants::Binding;
 use crate::entity::{generate_id, now_iso8601};
 use crate::error::{utf8_err, SamlError};
@@ -26,11 +26,6 @@ impl Engine {
     ) -> Result<(String, String), SamlError> {
         let name_id_format = self.setting.default_name_id_format();
         validate_name_id_format(name_id_format)?;
-        let allow_create = if name_id_format == Some(crate::constants::name_id_format::TRANSIENT) {
-            AllowCreateAttribute::Omit
-        } else {
-            AllowCreateAttribute::Include(self.setting.allow_create)
-        };
         let id = generate_id();
         let issue_instant = now_iso8601();
         let issuer = self.entity_id();
@@ -47,7 +42,7 @@ impl Engine {
             requested_authn_context: None,
             issuer: &issuer,
             name_id_format,
-            allow_create,
+            allow_create: self.setting.allow_create,
         });
         if !input.sign {
             return Ok((id, xml));

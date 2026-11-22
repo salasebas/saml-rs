@@ -9,6 +9,9 @@
 //! FIPS rejects the SHA-1 RSA-OAEP key transport these tests use.
 #![cfg(any(feature = "crypto-rustcrypto", feature = "crypto-aws-lc"))]
 
+#[path = "common/unsigned_post.rs"]
+mod unsigned_post;
+
 use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
@@ -19,12 +22,12 @@ use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
     LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy,
-    LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
-    OutboundDelivery, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy, RespondSlo,
-    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
-    SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
-    XmlEncryptionPolicy, XmlPolicy,
+    LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery,
+    OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy, RespondSlo, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel,
+    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy,
+    XmlPolicy,
 };
 use url::Url;
 
@@ -587,11 +590,24 @@ fn unsigned_encrypted_id_stays_unread() -> Result<(), Box<dyn std::error::Error>
     for initiator in INITIATORS {
         for binding in [LogoutBinding::Post, LogoutBinding::Redirect] {
             let options = start_options(binding)?
-                .signing(LogoutSigning::DoNotSign)
                 .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers);
             let sent = start(&parties, initiator, options)?;
             assert!(request_xml(&sent.outbound)?.contains("<saml:EncryptedID>"));
-            let input = request_input(&sent.outbound, binding)?;
+            let input = match binding {
+                LogoutBinding::Post => Inbound::post(unsigned_post::unsigned_post_fields(
+                    &sent.outbound,
+                    "SAMLRequest",
+                )?),
+                LogoutBinding::Redirect => {
+                    let query = redirect_query(&sent.outbound)?;
+                    let request = query
+                        .split('&')
+                        .find(|field| field.starts_with("SAMLRequest="))
+                        .ok_or("missing SAMLRequest")?;
+                    Inbound::redirect(request)
+                }
+                _ => return Err("unexpected test binding".into()),
+            };
             let received = receive(&parties, initiator, input)?;
             assert_eq!(
                 received.message().name_id(),

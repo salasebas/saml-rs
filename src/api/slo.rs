@@ -18,7 +18,7 @@ use std::time::SystemTime;
 use super::raw_mapping::{
     ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
-use super::{IdentityProvider, LogoutSigning, RespondSlo, SamlError, ServiceProvider, StartSlo};
+use super::{IdentityProvider, RespondSlo, SamlError, ServiceProvider, StartSlo};
 
 impl ServiceProvider {
     /// Start SP-initiated Single Logout.
@@ -29,10 +29,8 @@ impl ServiceProvider {
     /// be parsed, a compatible logout endpoint or signing key is missing, the
     /// selected binding is unsupported, the subject's NameID format is not an
     /// absolute URI reference, or logout request creation fails.
-    /// [`StartSlo::apply_producer_rules`] also rejects a
-    /// missing `SessionIndex`, an `http` peer endpoint unless
-    /// [`StartSlo::allow_http`] is selected, and rejects the
-    /// samlify-port [`LogoutSigning::DoNotSign`].
+    /// The participant must supply a `SessionIndex`. A browser endpoint must
+    /// use HTTPS unless [`StartSlo::allow_http`] is selected.
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
     /// certificate.
@@ -123,7 +121,7 @@ impl ServiceProvider {
     /// subordinate code in `status` is rejected when a template is set.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
-    /// [`RespondSlo::apply_producer_rules`] also rejects an
+    /// Browser bindings also reject an
     /// `http` peer endpoint unless
     /// [`RespondSlo::allow_http`] is
     /// selected.
@@ -224,9 +222,7 @@ impl IdentityProvider {
     /// The generated `LogoutRequest` always carries a UTC `NotOnOrAfter`
     /// derived from the configured [`crate::IdpConfig::issuance_lifetime`] and
     /// the same captured `IssueInstant`. That attribute cannot be omitted.
-    /// [`StartSlo::apply_producer_rules`] signs the request
-    /// and still allows `SessionIndex` to be omitted. It does not require an
-    /// `https` peer endpoint.
+    /// The authority signs the request and may omit `SessionIndex`.
     ///
     /// A subject `NameId` without a format is sent with the first configured
     /// NameID format, the one [`Self::respond_sso`] writes for that `NameId`.
@@ -244,8 +240,7 @@ impl IdentityProvider {
     /// selected binding is unsupported, the NameID format sent for the subject
     /// is not an absolute URI reference, logout request creation fails, or the
     /// configured issuance lifetime cannot be added to the current issue
-    /// instant. [`StartSlo::apply_producer_rules`] also
-    /// rejects [`LogoutSigning::DoNotSign`].
+    /// instant.
     /// [`StartSlo::identifier_encryption`] returns
     /// [`SamlError::MissingMetadata`] when the peer metadata has no encryption
     /// certificate.
@@ -362,8 +357,6 @@ impl IdentityProvider {
     /// subordinate code in `status` is rejected when a template is set.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
-    /// [`RespondSlo::apply_producer_rules`] does not add an
-    /// `https` requirement for this role.
     ///
     /// # Examples
     ///
@@ -488,17 +481,10 @@ fn start_slo_impl(
     if let Some(relay_state) = &options.relay_state {
         relay_state.ensure_sendable()?;
     }
-    let follows_rules = options.follows_generation_rules();
-    if follows_rules && matches!(options.signing, LogoutSigning::DoNotSign) {
-        return Err(SamlError::ProtocolProfile(
-            "a LogoutRequest signature cannot be disabled when Single Logout generation rules apply".into(),
-        ));
-    }
     if matches!(role, StartSloRole::SessionParticipant) {
         enforce_participant_https(
             peer.metadata,
             options.binding,
-            follows_rules,
             options.allows_http(),
             EndpointDirection::Request,
         )?;
@@ -507,11 +493,7 @@ fn start_slo_impl(
         StartSloRole::SessionParticipant => (
             now_iso8601(),
             None,
-            if follows_rules {
-                LogoutRequestValidation::SessionParticipant
-            } else {
-                LogoutRequestValidation::SkipProducerChecks
-            },
+            LogoutRequestValidation::SessionParticipant,
         ),
         StartSloRole::SessionAuthority { issuance_lifetime } => {
             let window = capture_idp_issuance_window(issuance_lifetime)?;
@@ -521,11 +503,6 @@ fn start_slo_impl(
                 LogoutRequestValidation::SessionAuthority,
             )
         }
-    };
-    let want_signed = if follows_rules {
-        true
-    } else {
-        logout_request_signing(local_setting, options.signing)
     };
     let name_id = subject.name_id();
     let name_id_format = name_id.format().map(NameIdFormat::as_uri);
@@ -553,7 +530,7 @@ fn start_slo_impl(
         binding: Binding::from(options.binding),
         subject: &request_subject,
         relay_state: options.relay_state.as_ref().map(RelayState::as_str),
-        want_signed,
+        want_signed: true,
         message_id: None,
         name_id_format,
         issue_instant: &issue_instant,
@@ -633,7 +610,6 @@ fn respond_slo_impl(
         enforce_participant_https(
             peer.metadata,
             options.binding,
-            options.follows_generation_rules(),
             options.allows_http(),
             EndpointDirection::Response,
         )?;
@@ -711,7 +687,6 @@ enum LogoutResponseTransport {
 fn enforce_participant_https(
     peer_metadata: &Metadata,
     binding: LogoutBinding,
-    follows_rules: bool,
     allow_http: bool,
     direction: EndpointDirection,
 ) -> Result<(), SamlError> {
@@ -719,7 +694,7 @@ fn enforce_participant_https(
         LogoutBinding::Soap => return Ok(()),
         LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => {}
     }
-    if !follows_rules || allow_http {
+    if allow_http {
         return Ok(());
     }
     let destination = peer_logout_endpoint(peer_metadata, Binding::from(binding), direction)?;
@@ -734,14 +709,6 @@ fn peer_logout_endpoint(
     peer_metadata
         .single_logout_service_location(binding, direction)
         .ok_or_else(|| SamlError::MissingMetadata("SingleLogoutService".into()))
-}
-
-fn logout_request_signing(setting: &EntitySetting, signing: LogoutSigning) -> bool {
-    match signing {
-        LogoutSigning::FollowLocalPolicy => setting.want_logout_request_signed,
-        LogoutSigning::Sign => true,
-        LogoutSigning::DoNotSign => false,
-    }
 }
 
 fn logout_response_binding(

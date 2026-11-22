@@ -253,7 +253,7 @@ let LogoutPolicy { requests, responses, .. } = validation.logout;
 `ResponseSignaturePolicy`, `AuthnRequestSigningPolicy`,
 `AuthnRequestValidationPolicy`, `LogoutSignaturePolicy`,
 `AudienceValidationPolicy`, `AssertionEncryptionPolicy`,
-`IdentifierEncryptionPolicy`, `AttributeEncryptionPolicy`, or `LogoutSigning`
+`IdentifierEncryptionPolicy`, or `AttributeEncryptionPolicy`
 without a wildcard arm.
 
 **Before:** these enums were exhaustive, so a `match` that listed every
@@ -395,7 +395,7 @@ as the old field did.
 The namespace is the same, so a peer that reads namespaces reads the same
 element.
 
-## Set SSO templates on the role's builder
+## Replace SSO templates with typed options
 
 **Affects:** callers that set `TemplatePolicy::login_request_template` or
 `TemplatePolicy::login_response_template`.
@@ -410,78 +410,16 @@ list. A config that set the other role's template built and ignored it.
 `LoginResponseTemplate` and the default templates were importable only from
 the hidden `saml_rs::template` module.
 
-**Now:** `TemplatePolicy` has no SSO template. Set the `<AuthnRequest>`
-template with `SpConfigBuilder::authn_request_template` and the SSO
-`<Response>` template with `IdpConfigBuilder::sso_response_template`. Each
-takes the template text, and `SpConfig::authn_request_template()` and
-`IdpConfig::sso_response_template()` return it. A config that sets the other
-role's template no longer compiles. The default templates to start from are
-`saml_rs::config::AUTHN_REQUEST_TEMPLATE` and
-`saml_rs::config::SSO_RESPONSE_TEMPLATE`.
+**Now:** browser SSO and PAOS generate XML from typed inputs. Both role-specific
+template setters and their config getters from development builds are removed.
+There is no raw XML substitution in these flows.
 
-**Upgrade:**
-
-1. On a service provider, pass the template to `authn_request_template`:
-
-   ```rust
-   // Before
-   let sp = Saml::sp(
-       SpConfig::builder(entity_id)
-           .acs_endpoint(acs)
-           .templates(TemplatePolicy {
-               login_request_template: Some(template),
-               ..TemplatePolicy::default()
-           })
-           .build()?,
-   )?;
-
-   // Now
-   let sp = ServiceProvider::new(
-       SpConfig::builder(entity_id, acs)
-           .authn_request_template(template)
-           .build()?,
-   );
-   ```
-
-2. On an identity provider, pass the `context` text to
-   `sso_response_template`:
-
-   ```rust
-   // Before
-   use saml_rs::template::LoginResponseTemplate;
-
-   let idp = Saml::idp(
-       IdpConfig::builder(entity_id)
-           .sso_endpoint(sso)
-           .templates(TemplatePolicy {
-               login_response_template: Some(LoginResponseTemplate {
-                   context: Some(template),
-                   attributes: vec![],
-               }),
-               ..TemplatePolicy::default()
-           })
-           .build()?,
-   )?;
-
-   // Now
-   let idp = IdentityProvider::new(
-       IdpConfig::builder(entity_id, sso)
-           .sso_response_template(template)
-           .build()?,
-   );
-   ```
-
-3. Delete a template that you set on the other role's config. That role never
-   rendered it.
-4. Delete `LoginResponseTemplate::attributes` from a typed identity provider.
-   The typed response methods never gave those attributes values, as
-   [4](sso-attributes.md#4-give-each-login-response-template-attribute-a-value)
-   describes. Pass the attributes with `SsoAssertion::with_attributes`. A
-   response with attributes needs the built-in renderer, so leave
-   `sso_response_template` unset.
-5. Import the default templates from `saml_rs::config`:
-   `template::LOGIN_REQUEST_TEMPLATE` is `AUTHN_REQUEST_TEMPLATE`, and
-   `template::LOGIN_RESPONSE_TEMPLATE` is `SSO_RESPONSE_TEMPLATE`.
+**Upgrade:** delete the template from your configuration. Set the ACS, binding,
+and NameID formats on the role that advertises them. Use `StartSso` for request
+preferences, `SsoAssertion` for the subject, attributes, authentication context
+and instant, and `SsoOutcome::Failure` for an error status. Arbitrary XML
+extensions have no typed replacement. Logout templates remain available on
+`TemplatePolicy`.
 
 ## Use one rule for generated XML prefixes
 

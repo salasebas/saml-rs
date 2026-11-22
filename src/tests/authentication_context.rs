@@ -250,7 +250,7 @@ fn respond_and_finish_sso_preserve_class_and_declaration_references(
             &sp_descriptor,
             &received,
             SsoAssertion::new(principal()).with_authn_context(reference.clone()),
-            RespondSso::post().apply_producer_rules(),
+            RespondSso::post(),
         )?;
         let session = sp.finish_sso(
             &idp_descriptor,
@@ -282,7 +282,7 @@ fn unsolicited_sso_exposes_the_asserted_context() -> Result<(), Box<dyn std::err
     let response = idp.initiate_sso(
         &sp_descriptor,
         SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     let session =
         sp.accept_unsolicited_sso(&idp_descriptor, response_input(&response)?, validation())?;
@@ -312,7 +312,7 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         &sp_descriptor,
         &received,
         SsoAssertion::new(principal()),
-        RespondSso::post().apply_producer_rules().sign_response(),
+        RespondSso::post().sign_response(),
     )?;
     let xml = String::from_utf8(
         STANDARD.decode(
@@ -505,7 +505,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
         &sp_descriptor,
         &received,
         SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     let xml = String::from_utf8(
         STANDARD.decode(
@@ -532,40 +532,6 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
             .map(AuthnContextReference::uri),
         Some(MFA)
     );
-    Ok(())
-}
-
-#[test]
-fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dyn std::error::Error>>
-{
-    let (_, _, _, idp_descriptor) = parties()?;
-    let sp = ServiceProvider::new(
-        SpConfig::builder(
-            EntityId::try_new(SP)?,
-            AcsEndpoint::post(ACS)?.with_default(),
-        )
-        .credentials(signing_credentials())
-        .validation(SpValidationPolicy {
-            authn_requests: AuthnRequestSigningPolicy::Sign,
-            ..SpValidationPolicy::default()
-        })
-        .authn_request_template(saml_rs::config::AUTHN_REQUEST_TEMPLATE)
-        .build()?,
-    );
-    sp.start_sso(&idp_descriptor, StartSso::post())?;
-    for start in [
-        StartSso::post().passive(IsPassive::Required),
-        StartSso::post().provider_name(PROVIDER),
-        StartSso::post().requested_authn_context(RequestedAuthnContext::try_new(
-            AuthnContextComparison::Exact,
-            vec![AuthnContextReference::class(MFA)?],
-        )?),
-    ] {
-        assert!(matches!(
-            sp.start_sso(&idp_descriptor, start),
-            Err(SamlError::Invalid(_))
-        ));
-    }
     Ok(())
 }
 

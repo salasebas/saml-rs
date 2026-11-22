@@ -1,7 +1,6 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
 use crate::model::{RelayState, RequestedAuthnContext};
-use crate::sp::WebBrowserSsoProducer;
 
 pub use crate::model::{ForceAuthn, IsPassive};
 
@@ -16,7 +15,6 @@ pub struct StartSso {
     pub(super) passive: Option<IsPassive>,
     pub(super) provider_name: Option<String>,
     pub(super) requested_authn_context: Option<RequestedAuthnContext>,
-    pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
 }
 
 impl StartSso {
@@ -45,7 +43,6 @@ impl StartSso {
             passive: None,
             provider_name: None,
             requested_authn_context: None,
-            web_browser_sso_producer: WebBrowserSsoProducer::Legacy,
         }
     }
 
@@ -106,18 +103,6 @@ impl StartSso {
         self.acs_index = Some(acs_index);
         self
     }
-
-    /// Apply Web Browser SSO generation rules to this AuthnRequest.
-    ///
-    /// [`Self::redirect`], [`Self::post`], and [`Self::simple_sign`] leave this
-    /// off, so existing generation is unchanged. When enabled, a transient
-    /// `NameIDPolicy` omits `AllowCreate`. SAML Core forbids that attribute on
-    /// a transient identifier request. Signing stays on
-    /// [`crate::AuthnRequestSigningPolicy`] and is not turned on here.
-    pub fn apply_producer_rules(mut self) -> Self {
-        self.web_browser_sso_producer = WebBrowserSsoProducer::Follow;
-        self
-    }
 }
 
 /// Delivery of a `<Response>` the browser carries itself.
@@ -130,8 +115,7 @@ pub struct MessageDelivery;
 
 /// Options for issuing SAML Responses from an IdP.
 ///
-/// These options say how the response is delivered and signed, and whether
-/// the Web Browser SSO generation rules apply. The
+/// These options select delivery and response signing. The
 /// [`SsoOutcome`](crate::SsoOutcome) passed with them says what it reports.
 /// `Delivery` is [`MessageDelivery`] when the browser carries the response,
 /// and [`ArtifactDelivery`] when it carries an artifact for a stored one.
@@ -141,7 +125,6 @@ pub struct RespondSso<Delivery = MessageDelivery> {
     pub(super) delivery: Delivery,
     pub(super) relay_state: Option<RelayState>,
     response_signing: ResponseSigning,
-    pub(super) web_browser_sso_producer: WebBrowserSsoProducer,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,7 +151,6 @@ impl RespondSso {
             delivery: MessageDelivery,
             relay_state: None,
             response_signing: ResponseSigning::FollowEncryptedCbcRecommendation,
-            web_browser_sso_producer: WebBrowserSsoProducer::Legacy,
         }
     }
 }
@@ -195,7 +177,6 @@ impl<Delivery> RespondSso<Delivery> {
             delivery,
             relay_state: self.relay_state,
             response_signing: self.response_signing,
-            web_browser_sso_producer: self.web_browser_sso_producer,
         }
     }
 
@@ -217,30 +198,6 @@ impl<Delivery> RespondSso<Delivery> {
     /// providers sign such Responses unless this is selected.
     pub fn allow_unsigned_encrypted_cbc(mut self) -> Self {
         self.response_signing = ResponseSigning::AllowUnsignedEncryptedCbc;
-        self
-    }
-
-    /// Apply Web Browser SSO generation rules to this response.
-    ///
-    /// [`RespondSso::post`], [`RespondSso::simple_sign`], and
-    /// [`RespondSso::artifact`] leave this off. When enabled, a
-    /// successful response carries an authentication statement whose
-    /// `AuthnInstant` is
-    /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant), or
-    /// the assertion `IssueInstant` when it is omitted, and whose
-    /// `AuthnContext` is
-    /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context).
-    /// Without it, the `AuthnContextClassRef` is
-    /// `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified`. That class means
-    /// the authentication mechanism was not recorded. It is not evidence of a
-    /// particular authentication strength. When the identity provider metadata
-    /// advertises `SingleLogoutService`, `SessionIndex` is the assertion `ID`.
-    /// An unsolicited response omits `InResponseTo` on the response and on
-    /// bearer subject confirmation data. CBC response signing is unchanged: it
-    /// stays on unless
-    /// [`Self::allow_unsigned_encrypted_cbc`] is selected.
-    pub fn apply_producer_rules(mut self) -> Self {
-        self.web_browser_sso_producer = WebBrowserSsoProducer::Follow;
         self
     }
 
@@ -274,37 +231,6 @@ impl<Delivery> RespondSso<Delivery> {
     }
 }
 
-/// Explicit signing choice for typed Single Logout requests.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum LogoutSigning {
-    /// Use the local typed logout policy.
-    FollowLocalPolicy,
-    /// Sign this logout message.
-    Sign,
-    /// Send unsigned logout, preserving the samlify-port choice.
-    DoNotSign,
-}
-
-/// Whether typed Single Logout generation follows producer rules.
-///
-/// [`Self::Legacy`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
-/// recorded for this flow. It is not a validation preset.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum SingleLogoutGeneration {
-    /// Keep the samlify-port generation.
-    #[default]
-    Legacy,
-    /// Emit the producer obligations for this flow.
-    Follow,
-}
-
-impl SingleLogoutGeneration {
-    fn follows(self) -> bool {
-        matches!(self, Self::Follow)
-    }
-}
-
 /// HTTPS recommendation for a message the user agent carries to a peer
 /// endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -322,41 +248,14 @@ impl PeerEndpointTransport {
     }
 }
 
-/// Producer-rule selection shared by logout requests and responses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-struct SingleLogoutRules {
-    generation: SingleLogoutGeneration,
-    transport: PeerEndpointTransport,
-}
-
-impl SingleLogoutRules {
-    fn apply_generation_rules(mut self) -> Self {
-        self.generation = SingleLogoutGeneration::Follow;
-        self
-    }
-
-    fn allow_http(mut self) -> Self {
-        self.transport = PeerEndpointTransport::AllowHttp;
-        self
-    }
-
-    fn follows(self) -> bool {
-        self.generation.follows()
-    }
-
-    fn allows_http(self) -> bool {
-        self.transport.allows_http()
-    }
-}
-
-/// Options for issuing a LogoutRequest.
+/// Options for issuing a signed LogoutRequest. A service provider must
+/// include at least one session index. A session authority includes an expiration.
 #[derive(Debug, Clone)]
 pub struct StartSlo {
     pub(super) binding: LogoutBinding,
     pub(super) relay_state: Option<RelayState>,
-    pub(super) signing: LogoutSigning,
     pub(super) identifier_encryption: IdentifierEncryptionPolicy,
-    rules: SingleLogoutRules,
+    transport: PeerEndpointTransport,
 }
 
 impl StartSlo {
@@ -377,9 +276,8 @@ impl StartSlo {
 
     /// Start SLO over SOAP.
     ///
-    /// The Single Logout generation rules always apply: the request carries
-    /// an XML signature, [`LogoutSigning::DoNotSign`] is
-    /// rejected, and a service provider includes at least one `SessionIndex`.
+    /// The request carries an XML signature. A service provider includes at
+    /// least one `SessionIndex`.
     /// The request carries no RelayState, so a present
     /// [`Self::relay_state`] is rejected. The `https` check and
     /// [`Self::allow_http`] apply only to the browser bindings.
@@ -388,18 +286,15 @@ impl StartSlo {
     /// deployment's HTTP client, then pass the SOAP response body to
     /// `finish_slo` as [`Inbound::soap`](crate::Inbound::soap).
     pub fn soap() -> Self {
-        let mut options = Self::new(LogoutBinding::Soap);
-        options.rules = options.rules.apply_generation_rules();
-        options
+        Self::new(LogoutBinding::Soap)
     }
 
     fn new(binding: LogoutBinding) -> Self {
         Self {
             binding,
             relay_state: None,
-            signing: LogoutSigning::FollowLocalPolicy,
             identifier_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
-            rules: SingleLogoutRules::default(),
+            transport: PeerEndpointTransport::default(),
         }
     }
 
@@ -411,12 +306,6 @@ impl StartSlo {
     /// fails `start_slo`.
     pub fn relay_state(mut self, relay_state: RelayState) -> Self {
         self.relay_state = Some(relay_state);
-        self
-    }
-
-    /// Set logout request signing behavior.
-    pub fn signing(mut self, signing: LogoutSigning) -> Self {
-        self.signing = signing;
         self
     }
 
@@ -433,24 +322,6 @@ impl StartSlo {
         self
     }
 
-    /// Apply Single Logout generation rules to this LogoutRequest.
-    ///
-    /// [`Self::redirect`], [`Self::post`], and [`Self::simple_sign`] leave this
-    /// off, so existing generation is unchanged. When enabled, HTTP-Redirect,
-    /// HTTP-POST, and HTTP-POST-SimpleSign requests are signed.
-    /// [`LogoutSigning::DoNotSign`] is rejected.
-    /// A service provider, acting as a session participant, includes at least
-    /// one `SessionIndex` and sends the user agent to an `https`
-    /// `SingleLogoutService` unless
-    /// [`Self::allow_http`] is selected.
-    /// An identity provider, acting as a session authority, still emits
-    /// `NotOnOrAfter` and may omit `SessionIndex`. The `https` recommendation
-    /// is not applied to that role.
-    pub fn apply_producer_rules(mut self) -> Self {
-        self.rules = self.rules.apply_generation_rules();
-        self
-    }
-
     /// Allow a session participant to deliver this LogoutRequest to an `http`
     /// endpoint.
     ///
@@ -458,16 +329,12 @@ impl StartSlo {
     /// exchange with TLS. It does not remove `SessionIndex`, the request
     /// signature, or session-authority `NotOnOrAfter`.
     pub fn allow_http(mut self) -> Self {
-        self.rules = self.rules.allow_http();
+        self.transport = PeerEndpointTransport::AllowHttp;
         self
     }
 
-    pub(super) fn follows_generation_rules(&self) -> bool {
-        self.rules.follows()
-    }
-
     pub(super) fn allows_http(&self) -> bool {
-        self.rules.allows_http()
+        self.transport.allows_http()
     }
 }
 
@@ -478,7 +345,7 @@ impl StartSlo {
 #[derive(Debug, Clone)]
 pub struct RespondSlo {
     pub(super) binding: LogoutBinding,
-    rules: SingleLogoutRules,
+    transport: PeerEndpointTransport,
 }
 
 impl RespondSlo {
@@ -511,21 +378,8 @@ impl RespondSlo {
     fn new(binding: LogoutBinding) -> Self {
         Self {
             binding,
-            rules: SingleLogoutRules::default(),
+            transport: PeerEndpointTransport::default(),
         }
-    }
-
-    /// Apply Single Logout generation rules to this LogoutResponse.
-    ///
-    /// [`Self::redirect`], [`Self::post`], and [`Self::simple_sign`] leave this
-    /// off. Typed responses are already signed. When a service provider
-    /// selects these rules, the response is delivered to an `https`
-    /// `SingleLogoutService` unless
-    /// [`Self::allow_http`] is selected.
-    /// An identity provider response does not gain that transport check.
-    pub fn apply_producer_rules(mut self) -> Self {
-        self.rules = self.rules.apply_generation_rules();
-        self
     }
 
     /// Allow a service provider to deliver this LogoutResponse to an `http`
@@ -534,16 +388,12 @@ impl RespondSlo {
     /// This relaxes the Single Logout recommendation to protect that HTTP
     /// exchange with TLS. The response remains signed.
     pub fn allow_http(mut self) -> Self {
-        self.rules = self.rules.allow_http();
+        self.transport = PeerEndpointTransport::AllowHttp;
         self
     }
 
-    pub(super) fn follows_generation_rules(&self) -> bool {
-        self.rules.follows()
-    }
-
     pub(super) fn allows_http(&self) -> bool {
-        self.rules.allows_http()
+        self.transport.allows_http()
     }
 }
 

@@ -1,33 +1,4 @@
 //! Typed SP and IdP config builders.
-//!
-//! Each SSO template is set on the builder of the role that renders it. A
-//! service provider builder has no SSO response template:
-//!
-//! ```compile_fail,E0599
-//! use saml_rs::{AcsEndpoint, EntityId, SpConfig};
-//!
-//! let builder = SpConfig::builder(
-//!     EntityId::try_new("https://sp.example.com/metadata")?,
-//!     AcsEndpoint::post("https://sp.example.com/acs")?,
-//! )
-//! .sso_response_template("<samlp:AuthnRequest/>");
-//! # let _ = builder;
-//! # Ok::<(), saml_rs::SamlError>(())
-//! ```
-//!
-//! An identity provider builder has no AuthnRequest template:
-//!
-//! ```compile_fail,E0599
-//! use saml_rs::{EntityId, IdpConfig, SsoEndpoint};
-//!
-//! let builder = IdpConfig::builder(
-//!     EntityId::try_new("https://idp.example.com/metadata")?,
-//!     SsoEndpoint::post("https://idp.example.com/sso")?,
-//! )
-//! .authn_request_template("<samlp:Response/>");
-//! # let _ = builder;
-//! # Ok::<(), saml_rs::SamlError>(())
-//! ```
 
 use std::time::Duration;
 
@@ -89,7 +60,6 @@ pub struct SpConfig {
     algorithms: AlgorithmPolicy,
     xml: XmlPolicy,
     templates: TemplatePolicy,
-    authn_request_template: Option<String>,
     pub(crate) engine: sp::Engine,
 }
 
@@ -103,7 +73,6 @@ impl fmt::Debug for SpConfig {
             .field("algorithms", &self.algorithms)
             .field("xml", &self.xml)
             .field("templates", &self.templates)
-            .field("authn_request_template", &self.authn_request_template)
             .finish_non_exhaustive()
     }
 }
@@ -120,7 +89,6 @@ impl SpConfig {
             algorithms: AlgorithmPolicy::default(),
             xml: XmlPolicy::default(),
             templates: TemplatePolicy::default(),
-            authn_request_template: None,
         }
     }
 
@@ -158,13 +126,6 @@ impl SpConfig {
     pub fn templates(&self) -> &TemplatePolicy {
         &self.templates
     }
-
-    /// `<AuthnRequest>` template set with
-    /// [`SpConfigBuilder::authn_request_template`], or `None` for the built-in
-    /// renderer.
-    pub fn authn_request_template(&self) -> Option<&str> {
-        self.authn_request_template.as_deref()
-    }
 }
 
 /// Builder for [`SpConfig`].
@@ -177,7 +138,6 @@ pub struct SpConfigBuilder {
     pub(super) algorithms: AlgorithmPolicy,
     pub(super) xml: XmlPolicy,
     pub(super) templates: TemplatePolicy,
-    pub(super) authn_request_template: Option<String>,
 }
 
 impl SpConfigBuilder {
@@ -296,32 +256,6 @@ impl SpConfigBuilder {
         self
     }
 
-    /// Set the template [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso)
-    /// renders the `<AuthnRequest>` from, in place of the built-in renderer.
-    /// [`ServiceProvider::start_paos_sso`](crate::ServiceProvider::start_paos_sso) always uses
-    /// the built-in renderer.
-    ///
-    /// [`AUTHN_REQUEST_TEMPLATE`](crate::config::AUTHN_REQUEST_TEMPLATE) is
-    /// the default template to start from. `{NameIDFormat}` receives the first
-    /// configured NameID format, checked to be an absolute URI reference. With
-    /// no configured format, an attribute whose complete value is
-    /// `{NameIDFormat}` is omitted.
-    ///
-    /// The request is sent with the prefixes the template writes:
-    /// [`TemplatePolicy::tag_prefix_protocol`] and
-    /// [`TemplatePolicy::tag_prefix_assertion`] do not rewrite it.
-    ///
-    /// `start_sso` returns [`SamlError::Invalid`] when a template is set and
-    /// the [`StartSso`](crate::StartSso) options select
-    /// [`apply_producer_rules`](crate::StartSso::apply_producer_rules),
-    /// [`passive`](crate::StartSso::passive),
-    /// [`provider_name`](crate::StartSso::provider_name), or
-    /// [`requested_authn_context`](crate::StartSso::requested_authn_context).
-    pub fn authn_request_template(mut self, template: impl Into<String>) -> Self {
-        self.authn_request_template = Some(template.into());
-        self
-    }
-
     /// Build and validate the SP config.
     ///
     /// # Errors
@@ -350,7 +284,6 @@ impl SpConfigBuilder {
             algorithms: self.algorithms,
             xml: self.xml,
             templates: self.templates,
-            authn_request_template: self.authn_request_template,
             engine,
         })
     }
@@ -392,7 +325,6 @@ pub struct IdpConfig {
     algorithms: AlgorithmPolicy,
     xml: XmlPolicy,
     templates: TemplatePolicy,
-    sso_response_template: Option<String>,
     pub(crate) engine: idp::Engine,
 }
 
@@ -407,7 +339,6 @@ impl fmt::Debug for IdpConfig {
             .field("algorithms", &self.algorithms)
             .field("xml", &self.xml)
             .field("templates", &self.templates)
-            .field("sso_response_template", &self.sso_response_template)
             .finish_non_exhaustive()
     }
 }
@@ -426,7 +357,6 @@ impl IdpConfig {
             algorithms: AlgorithmPolicy::default(),
             xml: XmlPolicy::default(),
             templates: TemplatePolicy::default(),
-            sso_response_template: None,
         }
     }
 
@@ -476,13 +406,6 @@ impl IdpConfig {
     pub fn templates(&self) -> &TemplatePolicy {
         &self.templates
     }
-
-    /// SSO `<Response>` template set with
-    /// [`IdpConfigBuilder::sso_response_template`], or `None` for the built-in
-    /// renderer.
-    pub fn sso_response_template(&self) -> Option<&str> {
-        self.sso_response_template.as_deref()
-    }
 }
 
 /// Builder for [`IdpConfig`].
@@ -496,7 +419,6 @@ pub struct IdpConfigBuilder {
     pub(super) algorithms: AlgorithmPolicy,
     pub(super) xml: XmlPolicy,
     pub(super) templates: TemplatePolicy,
-    pub(super) sso_response_template: Option<String>,
 }
 
 impl IdpConfigBuilder {
@@ -630,41 +552,6 @@ impl IdpConfigBuilder {
         self
     }
 
-    /// Set the template the identity provider renders the SSO `<Response>`
-    /// from, in place of the built-in renderer.
-    ///
-    /// [`SSO_RESPONSE_TEMPLATE`](crate::config::SSO_RESPONSE_TEMPLATE) is the
-    /// default template to start from. `{NameIDFormat}` receives a format
-    /// that has been checked to be an absolute URI reference. A `Format` the
-    /// template writes itself is not checked.
-    ///
-    /// Tags written as `<samlp:` and `<saml:` and declarations written as
-    /// `xmlns:samlp=` and `xmlns:saml=` are rewritten to
-    /// [`TemplatePolicy::tag_prefix_protocol`] and
-    /// [`TemplatePolicy::tag_prefix_assertion`]. A template that writes other
-    /// prefixes, or whitespace before the `=`, is not rewritten.
-    ///
-    /// The template renders only a response that carries an assertion. An
-    /// [`SsoOutcome::Failure`](crate::SsoOutcome::Failure) is written by the
-    /// built-in renderer, as it is without a template: an `Issuer`, the
-    /// `Status`, `Destination`, and, in answer to a request, `InResponseTo`,
-    /// with the [`TemplatePolicy`] prefixes and no assertion.
-    ///
-    /// With a template set, the response methods return
-    /// [`SamlError::Invalid`] for an assertion:
-    ///
-    /// - from [`IdentityProvider::respond_paos_sso`](crate::IdentityProvider::respond_paos_sso),
-    ///   which always applies the producer rules, or with
-    ///   [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules);
-    /// - with attributes from
-    ///   [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes);
-    /// - whose [`NameId`](crate::NameId) has a `NameQualifier`,
-    ///   `SPNameQualifier`, or `SPProvidedID`.
-    pub fn sso_response_template(mut self, template: impl Into<String>) -> Self {
-        self.sso_response_template = Some(template.into());
-        self
-    }
-
     /// Build and validate the IdP config.
     ///
     /// # Errors
@@ -698,7 +585,6 @@ impl IdpConfigBuilder {
             algorithms: self.algorithms,
             xml: self.xml,
             templates: self.templates,
-            sso_response_template: self.sso_response_template,
             engine,
         })
     }

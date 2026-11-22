@@ -1,6 +1,9 @@
 #![cfg(crypto)]
 
 mod common;
+#[path = "common/unsigned_post.rs"]
+mod unsigned_post;
+use unsigned_post::unsigned_post_fields;
 
 use common::signing_credentials;
 
@@ -10,10 +13,10 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
     AcsEndpoint, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, LogoutResponse, LogoutSignaturePolicy, LogoutSigning,
-    LogoutSubject, MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy,
-    RespondSlo, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
+    IdpValidationPolicy, Inbound, LogoutResponse, LogoutSignaturePolicy, LogoutSubject,
+    MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy, RespondSlo,
+    SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -113,44 +116,13 @@ fn post_input<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, S
     Ok(outbound.post_form()?.fields().to_vec())
 }
 
-fn unsigned_response_fields(
-    outbound: &Outbound<LogoutResponse>,
-) -> Result<Vec<FormField>, Box<dyn std::error::Error>> {
-    let xml = post_xml(outbound)?;
-    let start = xml
-        .find("<ds:Signature")
-        .ok_or("signed LogoutResponse is missing ds:Signature")?;
-    let end_rel = xml[start..]
-        .find("</ds:Signature>")
-        .ok_or("signed LogoutResponse has an unclosed ds:Signature")?;
-    let end = start + end_rel + "</ds:Signature>".len();
-    let unsigned = format!("{}{}", &xml[..start], &xml[end..]);
-    assert!(!unsigned.contains("ds:Signature"));
-    Ok(outbound
-        .post_form()?
-        .fields()
-        .iter()
-        .map(|field| {
-            if field.name() == "SAMLResponse" {
-                FormField::new("SAMLResponse", STANDARD.encode(unsigned.as_bytes()))
-            } else {
-                field.clone()
-            }
-        })
-        .collect())
-}
-
 #[test]
 fn session_participant_generation_rules_sign_and_require_session_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
     let idp = idp(IDP_SLO_HTTPS, idp_with_slo_accept())?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(
-        &idp_descriptor,
-        subject_with_session()?,
-        StartSlo::post().apply_producer_rules(),
-    )?;
+    let started = sp.start_slo(&idp_descriptor, subject_with_session()?, StartSlo::post())?;
     let xml = post_xml(&started.outbound)?;
 
     assert!(xml.contains("SessionIndex"));
@@ -159,35 +131,23 @@ fn session_participant_generation_rules_sign_and_require_session_index(
     assert!(xml.contains(&format!("Destination=\"{IDP_SLO_HTTPS}\"")));
     assert!(!xml.contains("NotOnOrAfter"));
 
-    match sp.start_slo(
-        &idp_descriptor,
-        subject_without_session(),
-        StartSlo::post().apply_producer_rules(),
-    ) {
+    match sp.start_slo(&idp_descriptor, subject_without_session(), StartSlo::post()) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("SessionIndex") => Ok(()),
         other => Err(format!("expected a SessionIndex rejection, got {other:?}").into()),
     }
 }
 
 #[test]
-fn session_participant_logout_stays_unsigned_without_session_index_under_unsigned_logout(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn logout_request_receipt_obeys_the_signature_policy() -> Result<(), Box<dyn std::error::Error>> {
     let service_provider = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
     let identity_provider = idp(IDP_SLO_HTTP, unsigned_logout_idp_validation())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&service_provider, &identity_provider)?;
     let started = service_provider.start_slo(
         &idp_descriptor,
-        subject_without_session(),
-        StartSlo::post().signing(LogoutSigning::DoNotSign),
+        subject_with_session()?,
+        StartSlo::post().allow_http(),
     )?;
-    let xml = post_xml(&started.outbound)?;
-
-    assert!(!xml.contains("SessionIndex"));
-    assert!(!xml.contains("ds:Signature"));
-    assert!(!xml.contains("NotOnOrAfter"));
-    assert!(xml.contains(&format!("Destination=\"{IDP_SLO_HTTP}\"")));
-
-    let input = Inbound::post(post_input(&started.outbound)?);
+    let input = Inbound::post(unsigned_post_fields(&started.outbound, "SAMLRequest")?);
     identity_provider.receive_slo(&sp_descriptor, input.clone(), validation())?;
 
     let rejecting = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
@@ -207,11 +167,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
     let idp = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
-    match sp.start_slo(
-        &idp_descriptor,
-        subject_with_session()?,
-        StartSlo::post().apply_producer_rules(),
-    ) {
+    match sp.start_slo(&idp_descriptor, subject_with_session()?, StartSlo::post()) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("https") => {}
         other => {
             return Err(format!("expected an https rejection, got {other:?}").into());
@@ -221,7 +177,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
     match sp.start_slo(
         &idp_descriptor,
         subject_without_session(),
-        StartSlo::post().apply_producer_rules().allow_http(),
+        StartSlo::post().allow_http(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("SessionIndex") => {}
         other => {
@@ -229,24 +185,10 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
         }
     }
 
-    match sp.start_slo(
-        &idp_descriptor,
-        subject_with_session()?,
-        StartSlo::post()
-            .apply_producer_rules()
-            .allow_http()
-            .signing(LogoutSigning::DoNotSign),
-    ) {
-        Err(SamlError::ProtocolProfile(message)) if message.contains("signature") => {}
-        other => {
-            return Err(format!("expected the signature to stay required, got {other:?}").into());
-        }
-    }
-
     let started = sp.start_slo(
         &idp_descriptor,
         subject_with_session()?,
-        StartSlo::post().apply_producer_rules().allow_http(),
+        StartSlo::post().allow_http(),
     )?;
     let xml = post_xml(&started.outbound)?;
     assert!(xml.contains("ds:Signature"));
@@ -276,27 +218,13 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
     let idp = idp(IDP_SLO_HTTPS, unsigned_logout_idp_validation())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
-    let started = idp.start_slo(
-        &sp_descriptor,
-        subject_without_session(),
-        StartSlo::post().apply_producer_rules(),
-    )?;
+    let started = idp.start_slo(&sp_descriptor, subject_without_session(), StartSlo::post())?;
     let xml = post_xml(&started.outbound)?;
     assert!(xml.contains("NotOnOrAfter="));
     assert!(xml.contains("ds:Signature"));
     assert!(!xml.contains("SessionIndex"));
     assert!(xml.contains(&format!("Destination=\"{SP_SLO_HTTP}\"")));
     assert!(xml.contains(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")));
-
-    let compatible = idp.start_slo(
-        &sp_descriptor,
-        subject_without_session(),
-        StartSlo::post().signing(LogoutSigning::DoNotSign),
-    )?;
-    let compatible_xml = post_xml(&compatible.outbound)?;
-    assert!(compatible_xml.contains("NotOnOrAfter="));
-    assert!(!compatible_xml.contains("ds:Signature"));
-    assert!(!compatible_xml.contains("SessionIndex"));
 
     let received = sp.receive_slo(
         &idp_descriptor,
@@ -322,7 +250,7 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
         &sp_descriptor,
         &received_by_authority,
         &Status::success(),
-        RespondSlo::post().apply_producer_rules(),
+        RespondSlo::post(),
     )?;
     let response_xml = post_xml(&response)?;
     assert!(response_xml.contains("ds:Signature"));
@@ -344,11 +272,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
     let sp = sp(SP_SLO_HTTPS, sp_with_slo_accept())?;
     let idp = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = idp.start_slo(
-        &sp_descriptor,
-        subject_with_session()?,
-        StartSlo::post().apply_producer_rules(),
-    )?;
+    let started = idp.start_slo(&sp_descriptor, subject_with_session()?, StartSlo::post())?;
     let received = sp.receive_slo(
         &idp_descriptor,
         Inbound::post(post_input(&started.outbound)?),
@@ -359,7 +283,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
         &idp_descriptor,
         &received,
         &Status::success(),
-        RespondSlo::post().apply_producer_rules(),
+        RespondSlo::post(),
     ) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("https") => {}
         other => {
@@ -371,7 +295,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
         &idp_descriptor,
         &received,
         &Status::success(),
-        RespondSlo::post().apply_producer_rules().allow_http(),
+        RespondSlo::post().allow_http(),
     )?;
     let xml = post_xml(&response)?;
     assert!(xml.contains("ds:Signature"));
@@ -421,7 +345,7 @@ fn finish_rejects_unsigned_response(role: LocalRole) -> Result<(), Box<dyn std::
         sp_descriptor,
         idp_descriptor,
     } = exchange;
-    let unsigned = unsigned_response_fields(&response)?;
+    let unsigned = unsigned_post_fields(&response, "SAMLResponse")?;
     let accept_finish = match role {
         LocalRole::Sp => service_provider.finish_slo(
             &idp_descriptor,
@@ -475,11 +399,8 @@ fn signed_logout_response(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let (response, pending) = match finishing_role {
         LocalRole::Sp => {
-            let started = sp.start_slo(
-                &idp_descriptor,
-                subject_with_session()?,
-                StartSlo::post().apply_producer_rules(),
-            )?;
+            let started =
+                sp.start_slo(&idp_descriptor, subject_with_session()?, StartSlo::post())?;
             let received = idp.receive_slo(
                 &sp_descriptor,
                 Inbound::post(post_input(&started.outbound)?),
@@ -494,11 +415,8 @@ fn signed_logout_response(
             (response, started.pending)
         }
         LocalRole::Idp => {
-            let started = idp.start_slo(
-                &sp_descriptor,
-                subject_without_session(),
-                StartSlo::post().apply_producer_rules(),
-            )?;
+            let started =
+                idp.start_slo(&sp_descriptor, subject_without_session(), StartSlo::post())?;
             let received = sp.receive_slo(
                 &idp_descriptor,
                 Inbound::post(post_input(&started.outbound)?),

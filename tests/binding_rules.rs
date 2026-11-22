@@ -11,9 +11,6 @@
 
 use std::time::SystemTime;
 
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
-use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, Credentials, EntityId, FormField, IdentityProvider, IdpConfig,
@@ -22,7 +19,6 @@ use saml_rs::{
     SpConfig, SpConfigBuilder, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
     StartSso, X509Credential, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
 };
-use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -34,22 +30,6 @@ const IDP_SSO_SIMPLESIGN: &str = "https://idp.example.com/sso/simple-sign";
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-
-const SIGNED_AUTHN_REQUEST_TEMPLATE: &str = r#"
-<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-    ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}" Destination="{Destination}">
-    <saml:Issuer>{Issuer}</saml:Issuer>
-    <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-        <ds:SignatureValue>protocol-signature</ds:SignatureValue>
-    </ds:Signature>
-    <saml:Assertion>
-        <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
-            <ds:SignatureValue>assertion-signature</ds:SignatureValue>
-        </ds:Signature>
-    </saml:Assertion>
-</samlp:AuthnRequest>
-"#;
 
 fn credentials() -> Credentials {
     Credentials::default().with_signing_credential(X509Credential::new(
@@ -123,19 +103,6 @@ fn descriptors(
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     Ok((sp_descriptor, idp_descriptor))
-}
-
-fn redirect_xml(url: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let parsed = Url::parse(url)?;
-    let encoded = parsed
-        .query_pairs()
-        .find(|(name, _)| name == "SAMLRequest")
-        .map(|(_, value)| value.into_owned())
-        .ok_or("missing SAMLRequest")?;
-    Ok(String::from_utf8(deflate_raw_decode(
-        &STANDARD.decode(&encoded)?,
-        MAX_DEFLATE_RAW_DECODE_BYTES,
-    )?)?)
 }
 
 fn query_names(url: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -428,55 +395,9 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
 }
 
 #[test]
-fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
+fn typed_redirect_signs_in_binding_order_and_verifies_reordered_parameters(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let unsigned_sp = ServiceProvider::new(
-        sp_config(SpValidationPolicy::default())?
-            .authn_request_template(SIGNED_AUTHN_REQUEST_TEMPLATE)
-            .build()?,
-    );
-    let recommended_idp = idp_with(IdpValidationPolicy::default())?;
-    let (_, idp_descriptor) = descriptors(&unsigned_sp, &recommended_idp)?;
-    match unsigned_sp.start_sso(&idp_descriptor, StartSso::redirect()) {
-        Err(SamlError::ProtocolProfile(message)) if message.contains("HTTP-Redirect") => {}
-        other => {
-            return Err(format!(
-                "expected unsigned HTTP-Redirect to reject a protocol XML signature, got {other:?}"
-            )
-            .into())
-        }
-    }
-
-    let sp = ServiceProvider::new(
-        sp_config(signing_sp_validation())?
-            .authn_request_template(SIGNED_AUTHN_REQUEST_TEMPLATE)
-            .build()?,
-    );
     let idp = idp_with(signed_authn_request_idp_validation())?;
-    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let relay_state = RelayState::try_new("ordered-state")?;
-    let started = sp.start_sso(
-        &idp_descriptor,
-        StartSso::redirect().relay_state(relay_state),
-    )?;
-    let url = started.outbound.redirect_url()?.to_string();
-    let xml = redirect_xml(&url)?;
-    roxmltree::Document::parse(&xml)?;
-    if xml.contains("protocol-signature") || !xml.contains("assertion-signature") {
-        return Err(
-            "HTTP-Redirect must drop the protocol signature and keep an assertion signature".into(),
-        );
-    }
-    assert_eq!(
-        query_names(&url)?,
-        vec![
-            "SAMLRequest".to_string(),
-            "RelayState".to_string(),
-            "SigAlg".to_string(),
-            "Signature".to_string(),
-        ]
-    );
-
     let sp = sp_with(signing_sp_validation())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let relay_state = RelayState::try_new("ordered-state")?;
@@ -484,6 +405,10 @@ fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
         &idp_descriptor,
         StartSso::redirect().relay_state(relay_state),
     )?;
+    assert_eq!(
+        query_names(started.outbound.redirect_url()?)?,
+        ["SAMLRequest", "RelayState", "SigAlg", "Signature"]
+    );
     let query = started
         .outbound
         .redirect_url()?

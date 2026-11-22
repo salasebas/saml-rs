@@ -17,10 +17,7 @@ use crate::logout::{
 };
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, Status};
-use crate::sp::{
-    self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions,
-    WebBrowserSsoProducer,
-};
+use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions};
 use crate::template::{
     apply_tag_prefixes, build_attribute_statement, replace_tags_by_optional_value,
     LoginResponseTemplate, ATTRIBUTE_STATEMENT_TEMPLATE, ATTRIBUTE_TEMPLATE,
@@ -97,13 +94,7 @@ impl SpMessages for sp::Engine {
         binding: Binding,
         options: &LoginRequestOptions<'_>,
     ) -> Result<BindingContext, SamlError> {
-        self.create_typed_login_request(
-            idp,
-            binding,
-            options,
-            WebBrowserSsoProducer::Legacy,
-            &AuthnRequestPreferences::default(),
-        )
+        self.create_typed_login_request(idp, binding, options, &AuthnRequestPreferences::default())
     }
 
     fn parse_login_response_with_request_id(
@@ -322,7 +313,7 @@ pub(crate) fn create_logout_request_with_id(
         name_id_format: init_setting.default_name_id_format(),
         issue_instant: &issue_instant,
         not_on_or_after: None,
-        validation: LogoutRequestValidation::SkipProducerChecks,
+        validation: LogoutRequestValidation::UncheckedTestFixture,
         name_id_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
     })?
     .context)

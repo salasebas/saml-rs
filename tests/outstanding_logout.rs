@@ -79,12 +79,12 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
         &sp_descriptor,
         &received,
         SsoAssertion::new(name_id.clone()),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     let unsolicited = idp.initiate_sso(
         &sp_descriptor,
         SsoAssertion::new(name_id),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     Ok(IssuedSso {
         sp,

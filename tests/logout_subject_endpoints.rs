@@ -11,9 +11,9 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
     EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
-    RespondSlo, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
+    LogoutSignaturePolicy, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo,
+    SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -149,7 +149,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
         &idp_for_requests,
         LogoutSubject::new(NameId::new("alice@example.com"))
             .with_session_index(SessionIndex::try_new("_session")?),
-        StartSlo::post().signing(LogoutSigning::DoNotSign),
+        StartSlo::post(),
     )?;
     assert_eq!(
         started.outbound.post_form()?.action().as_str(),
@@ -172,7 +172,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
         &local_idp,
         LogoutSubject::new(NameId::new("alice@example.com"))
             .with_session_index(SessionIndex::try_new("_session")?),
-        StartSlo::post().signing(LogoutSigning::DoNotSign),
+        StartSlo::post(),
     )?;
     let received = identity_provider.receive_slo(
         &sp_for_responses,

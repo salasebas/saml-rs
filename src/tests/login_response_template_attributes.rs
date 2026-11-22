@@ -5,12 +5,12 @@ use saml_rs::tests::engine::IdpMessages;
 
 use common::signing_credentials;
 
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::Binding;
 use saml_rs::entity::User;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::template::LoginResponseAttribute;
 use saml_rs::template::LoginResponseTemplate;
+use saml_rs::template::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::{
     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, SamlError, ServiceProvider, SpConfig,
     SpValidationPolicy, SsoEndpoint,
@@ -53,7 +53,7 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
 
     for (renderer, context) in [
         ("built-in", None),
-        ("custom template", Some(SSO_RESPONSE_TEMPLATE.to_string())),
+        ("custom template", Some(LOGIN_RESPONSE_TEMPLATE.to_string())),
     ] {
         let mut raw_idp = idp.engine().clone();
         raw_idp.setting.login_response_template = Some(LoginResponseTemplate {

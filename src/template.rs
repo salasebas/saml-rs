@@ -286,6 +286,7 @@ fn tagging(prefix: &str, content: &str) -> String {
 
 /// Placeholder key (without braces) for an attribute value tag:
 /// `attr<CamelCase>`. The runtime value fills `{<key>}`.
+#[cfg(test)]
 pub(crate) fn attr_tag(value_tag: &str) -> String {
     tagging("attr", value_tag)
 }
@@ -294,7 +295,7 @@ pub(crate) fn attr_tag(value_tag: &str) -> String {
 #[derive(Debug, Clone, Default)]
 pub struct LoginResponseTemplate {
     /// Custom `<Response>` template; `None` uses
-    /// [`SSO_RESPONSE_TEMPLATE`](crate::config::SSO_RESPONSE_TEMPLATE).
+    /// [`LOGIN_RESPONSE_TEMPLATE`].
     pub context: Option<String>,
     /// Attributes rendered into the assertion's `<AttributeStatement>`.
     ///

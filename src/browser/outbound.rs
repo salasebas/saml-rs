@@ -258,10 +258,8 @@ impl Outbound<SsoResponse> {
     ///
     /// Record it with the user's session to match the `SessionIndex` of a
     /// later `LogoutRequest`. It is available when the assertion is encrypted
-    /// or delivered by artifact. `None` when this library wrote no
-    /// `SessionIndex`. A `SessionIndex` written by
-    /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template)
-    /// is not reported.
+    /// or delivered by artifact. An error response or an IdP without a
+    /// Single Logout endpoint has no session index.
     pub fn session_index(&self) -> Option<&SessionIndex> {
         self.session_index.as_ref()
     }

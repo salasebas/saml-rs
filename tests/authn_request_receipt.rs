@@ -765,7 +765,7 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
             &receipt.sp_descriptor,
             &receipt.received,
             outcome,
-            RespondSso::post().apply_producer_rules(),
+            RespondSso::post(),
         )
     };
 
@@ -808,13 +808,6 @@ fn respond_sso_writes_the_stated_authn_context_and_refuses_an_unmet_exact_reques
     ));
     assert!(!refused.contains("Assertion"));
 
-    let default_xml = response_xml(&receipt.idp.respond_sso(
-        &receipt.sp_descriptor,
-        &receipt.received,
-        assertion(),
-        RespondSso::post(),
-    )?)?;
-    assert!(!default_xml.contains("AuthnStatement"));
     Ok(())
 }
 
@@ -836,7 +829,7 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
             &receipt.received,
             SsoAssertion::new(NameId::new("alice@example.com"))
                 .with_authn_context(AuthnContextReference::declaration(DECLARATION)?),
-            RespondSso::post().apply_producer_rules(),
+            RespondSso::post(),
         )?,
     )?;
     assert!(response.contains(&format!(
@@ -846,7 +839,7 @@ fn respond_sso_leaves_a_comparison_other_than_exact_to_the_caller(
 }
 
 #[test]
-fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules(
+fn respond_sso_writes_the_context_when_the_request_specifies_none(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), Ok)?;
     let response = receipt.idp.respond_sso(
@@ -855,10 +848,10 @@ fn respond_sso_rejects_an_authn_context_without_web_browser_sso_generation_rules
         SsoAssertion::new(NameId::new("alice@example.com"))
             .with_authn_context(AuthnContextReference::class(SMARTCARD)?),
         RespondSso::post(),
-    );
-    assert!(
-        matches!(response, Err(SamlError::Invalid(message)) if message.contains("Web Browser SSO generation rules"))
-    );
+    )?;
+    assert!(response_xml(&response)?.contains(&format!(
+        "<saml:AuthnContextClassRef>{SMARTCARD}</saml:AuthnContextClassRef>"
+    )));
     Ok(())
 }
 
@@ -886,7 +879,6 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
             options,
         )
     };
-    let rules = || RespondSso::post().apply_producer_rules();
 
     for format in [
         PERSISTENT_FORMAT.to_string(),
@@ -898,13 +890,13 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
             Some(SP_ENTITY_ID),
             Some(" https://affiliation.example.com"),
         ] {
-            let refused = respond(&receipt, issued, rules());
+            let refused = respond(&receipt, issued, RespondSso::post());
             assert!(
                 matches!(&refused, Err(SamlError::Invalid(message)) if message.contains("SPNameQualifier") && message.contains(AFFILIATION)),
                 "{format} {issued:?}: {refused:?}"
             );
         }
-        let answered = response_xml(&respond(&receipt, Some(AFFILIATION), rules())?)?;
+        let answered = response_xml(&respond(&receipt, Some(AFFILIATION), RespondSso::post())?)?;
         assert!(answered.contains(&format!("SPNameQualifier=\"{AFFILIATION}\"")));
 
         let error = receipt.idp.respond_sso(
@@ -914,11 +906,9 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
                 Status::responder()
                     .with_subordinate(SubordinateStatusCode::try_new(INVALID_NAME_ID_POLICY)?),
             ),
-            rules(),
+            RespondSso::post(),
         );
         assert!(error.is_ok(), "{error:?}");
-        let default_response = respond(&receipt, None, RespondSso::post());
-        assert!(default_response.is_ok(), "{default_response:?}");
     }
 
     for attributes in [
@@ -927,7 +917,7 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
         String::new(),
     ] {
         let receipt = receive_policy(&attributes)?;
-        let answered = respond(&receipt, None, rules());
+        let answered = respond(&receipt, None, RespondSso::post());
         assert!(answered.is_ok(), "{attributes}: {answered:?}");
     }
     Ok(())
@@ -957,10 +947,9 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
             &receipt.sp_descriptor,
             &receipt.received,
             SsoOutcome::Failure(status),
-            RespondSso::post().apply_producer_rules(),
+            RespondSso::post(),
         )
     };
-    let rules = || RespondSso::post().apply_producer_rules();
     let persistent = |value: &str| NameId::new(value).with_format(NameIdFormat::Persistent);
     let is_refused = |result: &Result<Outbound<saml_rs::SsoResponse>, SamlError>| matches!(result, Err(SamlError::Invalid(message)) if message.contains("requested Subject"));
 
@@ -975,15 +964,15 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
             .with_format(NameIdFormat::Persistent)
             .with_sp_name_qualifier(SP_ENTITY_ID),
     ] {
-        let refused = respond(&receipt, issued.clone(), rules());
+        let refused = respond(&receipt, issued.clone(), RespondSso::post());
         assert!(is_refused(&refused), "{issued:?}: {refused:?}");
     }
-    let answered = respond(&receipt, persistent("alice"), rules());
+    let answered = respond(&receipt, persistent("alice"), RespondSso::post());
     assert!(answered.is_ok(), "{answered:?}");
     let policy_format = respond(
         &receipt,
         NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
-        rules(),
+        RespondSso::post(),
     );
     assert!(policy_format.is_ok(), "{policy_format:?}");
     let error = respond_failure(
@@ -993,8 +982,6 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         )?),
     );
     assert!(error.is_ok(), "{error:?}");
-    let default_response = respond(&receipt, persistent("bob"), RespondSso::post());
-    assert!(default_response.is_ok(), "{default_response:?}");
 
     let without_policy_format = receive_subject(
         &format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>"),
@@ -1003,7 +990,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     let other_format = respond(
         &without_policy_format,
         NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
-        rules(),
+        RespondSso::post(),
     );
     assert!(is_refused(&other_format), "{other_format:?}");
 
@@ -1014,7 +1001,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
     let unspecified = respond(
         &omitted_format,
         NameId::new("alice").with_format(NameIdFormat::Custom(UNSPECIFIED_FORMAT.to_string())),
-        rules(),
+        RespondSso::post(),
     );
     assert!(unspecified.is_ok(), "{unspecified:?}");
 
@@ -1023,7 +1010,7 @@ fn respond_sso_issues_only_the_requested_subject_under_generation_rules(
         "<saml:EncryptedID><xenc:EncryptedData xmlns:xenc=\"http://www.w3.org/2001/04/xmlenc#\"/></saml:EncryptedID>",
     ] {
         let receipt = receive_subject(subject, "")?;
-        let refused = respond(&receipt, persistent("alice"), rules());
+        let refused = respond(&receipt, persistent("alice"), RespondSso::post());
         assert!(is_refused(&refused), "{subject}: {refused:?}");
         let error = respond_failure(&receipt, Status::responder());
         assert!(error.is_ok(), "{subject}: {error:?}");

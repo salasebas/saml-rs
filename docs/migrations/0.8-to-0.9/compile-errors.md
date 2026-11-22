@@ -46,10 +46,10 @@
 | `AudienceValidationPolicy::Validate` | Renamed to `RequireRestriction` | [Typed config](config.md#rename-audiencevalidationpolicyvalidate-to-requirerestriction) |
 | `TemplatePolicy::relay_state` | Removed; pass RelayState on each request | [Typed config](config.md#send-relaystate-per-request) |
 | `TemplatePolicy::tag_prefix_encrypted_assertion` | Removed; `tag_prefix_assertion` sets the prefix | [Typed config](config.md#set-the-encryptedassertion-prefix-with-the-assertion-prefix) |
-| `TemplatePolicy::login_request_template` or `login_response_template` | Moved to `SpConfigBuilder::authn_request_template` and `IdpConfigBuilder::sso_response_template` | [Typed config](config.md#set-sso-templates-on-the-roles-builder) |
+| `TemplatePolicy::login_request_template` or `login_response_template` | Removed along with the role-specific setters and getters. Use typed SSO inputs | [Typed config](config.md#replace-sso-templates-with-typed-options) |
 | `E0639` on a struct literal of `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy`, `XmlEncryptionPolicy`, `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy`, `XmlLimits`, `SignatureConfig`, `Organization`, `ContactPerson`, `Endpoint`, `SpMetadataInput`, or `IdpMetadataInput` | Assign the fields on a preset, `Default`, or a value from a constructor | [Typed config](config.md#assign-fields-instead-of-writing-a-struct-literal) |
 | `E0638` on a struct pattern of one of those structs, `Started`, or `StartedPaosSso`, or `E0639` on a struct literal of a started flow | Non-exhaustive; end the pattern with `..`, and keep the started flow the operation returned | [Typed config](config.md#destructure-with-a-rest-pattern) |
-| `E0004` on a `match` over a signature, audience, or encryption policy enum, or over `LogoutSigning` | Non-exhaustive; add a `_` arm | [Typed config](config.md#add-a-wildcard-arm-to-a-match-on-a-policy-enum) |
+| `E0004` on a `match` over a signature, audience, or encryption policy enum | Non-exhaustive; add a `_` arm | [Typed config](config.md#add-a-wildcard-arm-to-a-match-on-a-policy-enum) |
 | `context::set_schema_validator` | Configure `XmlPolicy::schema_validator` | [9.1](xml-policy.md#91-configure-each-local-role) |
 | A full struct literal of `XmlPolicy` | Has a new `schema_validator` field; assign it on `XmlPolicy::default()` | [9.1](xml-policy.md#91-configure-each-local-role) |
 | `Metadata::parse` and its variants, raw metadata `Deref`, generation config names, signature evidence names, raw `get_*` and signing flag getters, `x509_certificates()`, `export_metadata()`, descriptor `metadata()`, `metadata::{sp,idp,generate}` paths, `ArtifactResolutionEndpoint`, or `Metadata::verify_signature*` | Parser arguments, getter names and types, endpoint publishing, and public paths changed; obsolete methods removed | [Metadata API](metadata-api.md) |
@@ -82,7 +82,7 @@
 | `ArtifactDereference`, `ArtifactUses`, or `resolve_artifact(idp, artifact, dereference, uses)` | Removed; pass the `SoapChannel` and a `SamlValidationContext` | [Resolve an artifact](soap-artifact-discovery.md#resolve-an-artifact-with-a-channel-and-a-validation-context) |
 | `Artifact::try_from_encoded` | Renamed to `try_new` | [Artifact](soap-artifact-discovery.md#call-artifacttry_new) |
 | `CommonDomainCookie::name`, `path`, or `secure` | Removed; use `NAME` and `PATH`, and mark the cookie `Secure` | [Discovery cookie](soap-artifact-discovery.md#write-the-discovery-cookie-name-and-path-from-the-constants) |
-| `is_passive`, `assertion_consumer_service_index`, `apply_web_browser_sso_generation_rules`, `apply_single_logout_generation_rules`, `allow_http_single_logout`, or `allow_http_name_id_management` on an options type | Renamed `passive`, `acs_index`, `apply_producer_rules`, and `allow_http` | [Option setters](typed-operations.md#rename-the-shared-option-setters) |
+| `is_passive`, `assertion_consumer_service_index`, `apply_web_browser_sso_generation_rules`, `apply_single_logout_generation_rules`, `allow_http_single_logout`, or `allow_http_name_id_management` on an options type | Renamed `passive`, `acs_index`, and `allow_http`. Remove the producer-rule calls | [Option setters](typed-operations.md#rename-the-shared-option-setters) |
 | `StartNameIdManagement::redirect`, `ReceiveNameIdManagement::redirect`, or `RespondNameIdManagement::redirect` | Renamed `new` | [Name identifier management options](typed-operations.md#build-name-identifier-management-options-with-new) |
 | `start_name_id_management` with an `IdentifierEncryptionPolicy` | Takes `StartNameIdManagement` | [SOAP name identifier management](typed-operations.md#pass-startnameidmanagement-to-start_name_id_management) |
 | `RespondSlo::status` or `RespondNameIdManagement::status` | Removed; pass the `&Status` to the operation | [Response status](typed-operations.md#pass-the-response-status-to-respond_slo-and-respond_name_id_management_redirect) |
@@ -557,7 +557,7 @@ existed rather than what it allowed.
 | `AuthnRequestValidationPolicy::AllowUnsignedForCompatibility` | `AuthnRequestValidationPolicy::AllowUnsigned` |
 | `LogoutSignaturePolicy::AllowUnsignedForCompatibility` | `LogoutSignaturePolicy::AllowUnsigned` |
 | `AuthnRequestSigningPolicy::DoNotSignForCompatibility` | `AuthnRequestSigningPolicy::DoNotSign` |
-| `LogoutSigning::DoNotSignForCompatibility` | `LogoutSigning::DoNotSign` |
+| `LogoutSigning::DoNotSignForCompatibility` | Remove the signing option. Outgoing logout is signed. |
 | `ReplayPolicy::DisabledForCompatibility` | `ReplayPolicy::Disabled` |
 | `AudienceValidationPolicy::SkipForCompatibility` | `AudienceValidationPolicy::Skip` |
 | `DigestAlgorithm::Sha1ForCompatibility` | `DigestAlgorithm::Sha1` |

@@ -3,7 +3,6 @@
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
 use saml_rs::constants::{
@@ -21,6 +20,7 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::sp;
 use saml_rs::template::LoginResponseAttribute;
 use saml_rs::template::LoginResponseTemplate;
+use saml_rs::template::LOGIN_RESPONSE_TEMPLATE;
 use saml_rs::tests::engine::LogoutUser;
 use saml_rs::tests::engine::{create_logout_request, create_logout_response};
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
@@ -359,7 +359,7 @@ fn login_response_wrapper_fields_escape_xml_markup_before_signing() -> TestResul
 fn login_response_attribute_values_escape_xml_markup_before_signing() -> TestResult {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: vec![LoginResponseAttribute {
             name: "role".into(),
             name_format: "urn:oasis:names:tc:SAML:2.0:attrname-format:basic".into(),
@@ -557,7 +557,7 @@ fn login_response_attribute_metadata_escapes_xml_markup_before_signing() -> Test
 
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: vec![LoginResponseAttribute {
             name: ATTRIBUTE_NAME.into(),
             name_format: "urn:format\" injected_format=\"yes".into(),
@@ -633,7 +633,7 @@ fn login_response_attribute_metadata_placeholders_are_written_literally() -> Tes
 
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: vec![
             attribute("role{NameFormat}", BASIC, "user.role"),
             attribute("{Value}", BASIC, "user.email"),

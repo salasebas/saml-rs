@@ -416,11 +416,11 @@ pub mod xml;
 mod tests;
 
 pub use api::{
-    check_paos_client_headers, ForceAuthn, IdentityProvider, IsPassive, LogoutSigning,
-    MessageDelivery, NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso,
-    PendingPaosSsoSnapshot, ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo,
-    RespondSso, ServiceProvider, SoapFault, SsoAssertion, SsoOutcome, StartNameIdManagement,
-    StartPaosSso, StartSlo, StartSso, StartedPaosSso,
+    check_paos_client_headers, ForceAuthn, IdentityProvider, IsPassive, MessageDelivery,
+    NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
+    ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo, RespondSso, ServiceProvider,
+    SoapFault, SsoAssertion, SsoOutcome, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
+    StartedPaosSso,
 };
 pub use artifact::{
     AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,

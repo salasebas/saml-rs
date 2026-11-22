@@ -39,7 +39,7 @@ pub(super) struct LoginResponseXml<'a> {
     pub(super) name_id: &'a str,
     pub(super) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(super) in_response_to: Option<&'a str>,
-    pub(super) authn_statement: Option<AuthnStatementXml<'a>>,
+    pub(super) authn_statement: AuthnStatementXml<'a>,
     pub(super) attributes: &'a [LoginResponseAttribute],
     pub(super) user_attributes: &'a [(String, String)],
     pub(super) typed_attributes: &'a [Attribute],
@@ -132,9 +132,7 @@ pub(super) fn render_default_login_response(
     );
     writer.end(&qname(input.assertion_prefix, "AudienceRestriction"));
     writer.end(&qname(input.assertion_prefix, "Conditions"));
-    if let Some(statement) = input.authn_statement.as_ref() {
-        write_authn_statement(&mut writer, input.assertion_prefix, statement);
-    }
+    write_authn_statement(&mut writer, input.assertion_prefix, &input.authn_statement);
     write_login_response_attribute_statement(
         &mut writer,
         input.attributes,

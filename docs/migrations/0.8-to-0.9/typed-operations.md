@@ -15,14 +15,14 @@ your integration.
 **Before:** each flow named the same option after itself, and the passive
 setter used the `is_` prefix of a `bool` getter.
 
-**Now:** one name per option. The setters do what they did before.
+**Now:** one name per option. Producer rules now apply to every call.
 
 | Before | After |
 | --- | --- |
 | `StartSso::is_passive(value)`, `StartPaosSso::is_passive(value)` | `passive(value)` |
 | `StartSso::assertion_consumer_service_index(index)` | `StartSso::acs_index(index)` |
-| `StartSso::apply_web_browser_sso_generation_rules()`, `RespondSso::apply_web_browser_sso_generation_rules()` | `apply_producer_rules()` |
-| `StartSlo::apply_single_logout_generation_rules()`, `RespondSlo::apply_single_logout_generation_rules()` | `apply_producer_rules()` |
+| `StartSso::apply_web_browser_sso_generation_rules()`, `RespondSso::apply_web_browser_sso_generation_rules()` | Remove the call. All bindings enforce the producer rules. |
+| `StartSlo::apply_single_logout_generation_rules()`, `RespondSlo::apply_single_logout_generation_rules()` | Remove the call. All bindings enforce the producer rules. |
 | `StartSlo::allow_http_single_logout()`, `RespondSlo::allow_http_single_logout()` | `allow_http()` |
 | `allow_http_name_id_management()` on `StartNameIdManagement`, `ReceiveNameIdManagement`, or `RespondNameIdManagement` | `allow_http()` |
 
@@ -35,6 +35,29 @@ The `SamlError::ProtocolProfile` that an `http` peer endpoint returns now names
 `allow_http` in its message. Match the variant, not the message.
 
 **Upgrade:** rename each call.
+
+## Generate SSO and Single Logout messages
+
+Remove the producer-rule setter from request and response options. This includes
+`apply_producer_rules()` on development builds. A transient AuthnRequest
+omits `AllowCreate`. Each successful browser SSO response carries an
+`AuthnStatement`. Pass the actual authentication time and context when known.
+If the IdP advertises logout, save the session index returned with its response.
+
+Both logout roles sign their requests, including when their receive policy
+accepts unsigned input. Remove `StartSlo::signing` and the `LogoutSigning`
+import. Configure signing credentials and enable a document-crypto provider.
+Pass a session index when a service provider starts logout. Its browser
+endpoints require HTTPS unless the call explicitly selects `allow_http()`.
+
+```rust
+# use saml_rs::{IdpDescriptor, ServiceProvider, SsoSession, StartSlo};
+# fn start(sp: &ServiceProvider, idp: &IdpDescriptor, session: &SsoSession) -> Result<(), Box<dyn std::error::Error>> {
+let subject = session.logout_subject().ok_or("missing logout subject")?;
+let started = sp.start_slo(idp, subject, StartSlo::post())?;
+# let _ = started;
+# Ok(()) }
+```
 
 ## Build name identifier management options with `new`
 

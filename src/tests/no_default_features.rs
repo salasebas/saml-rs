@@ -21,10 +21,10 @@ use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, CertificatePem, EntityId, IdentityProvider, IdpConfig,
-    IdpDescriptor, Inbound, LogoutSignaturePolicy, LogoutSigning, LogoutSubject,
-    MetadataTrustPolicy, NameId, RelayState, ReplayPolicy, ResponseSignaturePolicy, SamlError,
-    SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SsoEndpoint,
-    StartSlo, StartSso, XmlPolicy,
+    IdpDescriptor, Inbound, LogoutSignaturePolicy, LogoutSubject, MetadataTrustPolicy, NameId,
+    RelayState, ReplayPolicy, ResponseSignaturePolicy, SamlError, SamlValidationContext,
+    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SsoEndpoint, StartSlo, StartSso,
+    XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -355,11 +355,14 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, _idp, _sp_descriptor, idp_descriptor) = typed_protocol_facades()?;
 
-    assert_unsupported(sp.start_slo(
-        &idp_descriptor,
-        LogoutSubject::new(NameId::new("alice@example.com")),
-        StartSlo::post().signing(LogoutSigning::Sign),
-    ));
+    assert_unsupported(
+        sp.start_slo(
+            &idp_descriptor,
+            LogoutSubject::new(NameId::new("alice@example.com"))
+                .with_session_index(saml_rs::SessionIndex::try_new("_session")?),
+            StartSlo::post(),
+        ),
+    );
     Ok(())
 }
 

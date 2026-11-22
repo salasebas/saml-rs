@@ -245,7 +245,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
 fn custom_idp() -> Result<idp::Engine, SamlError> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
     });
     idp::Engine::from_config(&idp_config(false), setting)
@@ -901,7 +901,7 @@ fn signed_response_without_destination_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = idp::Engine::from_config(&idp_config(false), setting)?;
@@ -957,7 +957,7 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = signing();
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let idp = idp::Engine::from_config(&idp_config(false), setting)?;
@@ -1157,7 +1157,7 @@ fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std:
     idp_setting.is_assertion_encrypted = true;
     if custom {
         idp_setting.login_response_template = Some(LoginResponseTemplate {
-            context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
+            context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
             attributes: vec![attr("mail", "user.email"), attr("name", "user.name")],
         });
     }

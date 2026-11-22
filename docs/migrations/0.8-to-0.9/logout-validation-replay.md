@@ -96,9 +96,8 @@ LogoutSubject::new(name_id)
 
 The plural method accepts any `IntoIterator<Item = SessionIndex>`. Both
 methods append in order and keep duplicates. An empty iterator leaves the
-selection alone. With no indexes, the subject selects every session for its
-NameID. A session participant still needs an index when applying the Single
-Logout generation rules.
+selection alone. A session authority may omit all indexes to end every applicable session
+for the NameID. A service provider must always supply at least one index.
 
 On `OutstandingLogout`, change `principal()` to `name_id()` and `sessions()`
 to `session_indexes()`. The types returned by those methods stay the same.

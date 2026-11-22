@@ -20,7 +20,7 @@ because Rust ignores `#[deprecated]` on a re-export.
 | `xml::XmlLimits`, `xml::dom::XmlLimits` | `saml_rs::XmlLimits` |
 | `template::LoginResponseTemplate`, `template::LoginResponseAttribute` | None. Only the raw API read them. Pass attributes with `SsoAssertion::with_attributes` and the built-in renderer, or write them into your own template text for `IdpConfigBuilder::sso_response_template`. The two do not combine |
 | `entity::SignatureConfig`, `entity::SignatureAction` | `saml_rs::SignatureConfig`, `saml_rs::SignatureAction` |
-| `template::LOGIN_REQUEST_TEMPLATE`, `template::LOGIN_RESPONSE_TEMPLATE` | `saml_rs::config::AUTHN_REQUEST_TEMPLATE`, `saml_rs::config::SSO_RESPONSE_TEMPLATE` |
+| `template::LOGIN_REQUEST_TEMPLATE`, `template::LOGIN_RESPONSE_TEMPLATE` | No configuration replacement. Use typed SSO inputs |
 | `template::LOGOUT_REQUEST_TEMPLATE`, `template::LOGOUT_RESPONSE_TEMPLATE` | The same names under `saml_rs::config` |
 | `xml::ExtractorField`, `xml::LocalPath`, `util::Value` | None. They describe the raw `FlowResult::extract`, which the typed API does not expose |
 | `binding::base64_encode`, `binding::base64_decode` (deprecated) | The `base64` crate. See [2.1](#21-use-the-base64-crate) |
@@ -30,19 +30,8 @@ because Rust ignores `#[deprecated]` on a re-export.
 | `crypto::verify_metadata_signature`, `verify_metadata_signature_with_limits`, `verify_metadata_signature_detailed`, `verify_metadata_signature_detailed_with_limits` (deprecated) | `IdpDescriptor::from_metadata_xml` or `SpDescriptor::from_metadata_xml`. See [7](metadata.md#7-verify-signed-metadata-on-import) |
 | `xml::dom::parse`, `parse_with_limits`, `parse_roots`, `parse_roots_with_limits`, `context::is_valid_xml` (deprecated) | An XML library. See [2.4](#24-parse-xml-with-an-xml-library) |
 
-Update the imports, and rename `LOGIN_REQUEST_TEMPLATE` and
-`LOGIN_RESPONSE_TEMPLATE` where you use them. The other items are the same, so
-the code that uses them does not change:
-
-```rust
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
-use saml_rs::{TemplatePolicy, XmlLimits, XmlPolicy};
-```
-
-A typed config sets an SSO template on the role's builder, not through
-`TemplatePolicy`, as
-[Set SSO templates on the role's builder](config.md#set-sso-templates-on-the-roles-builder)
-shows.
+Replace SSO templates with the typed request and assertion options described
+in [Typed config](config.md#replace-sso-templates-with-typed-options).
 
 ## 2.1 Use the `base64` crate
 
@@ -107,11 +96,6 @@ let assertion = SsoAssertion::new(NameId::new("alice@example.com")).with_attribu
     .with_name_format(AttributeNameFormat::Uri),
 ]));
 ```
-
-`SsoAssertion::with_attributes` cannot be combined with
-`IdpConfigBuilder::sso_response_template`, and a typed identity provider has
-no template attributes. See
-[4](sso-attributes.md#4-give-each-login-response-template-attribute-a-value).
 
 ## 2.3 Sign, verify, and decrypt through the typed API
 

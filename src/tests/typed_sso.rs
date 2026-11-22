@@ -22,7 +22,6 @@ use base64::Engine;
 use saml_rs::binding::{
     append_signature, build_redirect_octet, deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA512};
 use saml_rs::constants::Binding;
 use saml_rs::constants::{status_code, ParserType};
@@ -2351,7 +2350,7 @@ fn typed_facade_rejects_an_empty_in_response_to_as_unsolicited(
     let ruled = idp.initiate_sso(
         &sp_descriptor,
         SsoAssertion::new(principal()),
-        RespondSso::post().apply_producer_rules(),
+        RespondSso::post(),
     )?;
     let ruled_fields = post_fields(&ruled)?;
     let ruled_xml = response_xml_from_fields(&ruled_fields)?;
@@ -2526,13 +2525,10 @@ fn typed_facade_accept_unsolicited_sso_simplesign_rejects_non_utc_response_issue
 }
 
 #[test]
-fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_template_renderers(
+fn typed_idp_issuance_lifetime_drives_both_sso_expirations(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let lifetime = Duration::from_secs(11 * 60);
-    for (template, binding) in [
-        (None, SsoResponseBinding::Post),
-        (Some(SSO_RESPONSE_TEMPLATE), SsoResponseBinding::SimpleSign),
-    ] {
+    for binding in [SsoResponseBinding::Post, SsoResponseBinding::SimpleSign] {
         let sp = ServiceProvider::new(sp_config_with_default_response_binding(binding)?);
         let idp_config = IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -2542,10 +2538,6 @@ fn typed_idp_issuance_lifetime_drives_both_sso_expirations_for_default_and_templ
         .credentials(signing_credentials())
         .issuance_lifetime(lifetime)
         .validation(signed_authn_request_idp_validation());
-        let idp_config = match template {
-            Some(template) => idp_config.sso_response_template(template),
-            None => idp_config,
-        };
         let idp = IdentityProvider::new(idp_config.build()?);
         let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
         let options = match binding {

@@ -29,7 +29,7 @@ typed API:
 | `HttpRequest::redirect`, `HttpRequest::post` | `Inbound::redirect` with the raw query string, `Inbound::post` with the form fields |
 | `ServiceProvider::from_metadata`, `IdentityProvider::from_metadata` | For your own role, `ServiceProvider::new` with an `SpConfig` or `IdentityProvider::new` with an `IdpConfig`. For the peer, `SpDescriptor::from_metadata_xml` or `IdpDescriptor::from_metadata_xml` |
 | `EntitySetting` | `SpConfig` and `IdpConfig`, with their builders |
-| `LoginRequestOptions::custom`, `LoginResponseOptions::custom` | `SpConfigBuilder::authn_request_template`, `IdpConfigBuilder::sso_response_template` |
+| `LoginRequestOptions::custom`, `LoginResponseOptions::custom` | Use typed SSO inputs. See [Typed config](config.md#replace-sso-templates-with-typed-options) |
 | `LoginResponseOptions::encrypt_then_sign` | Nothing. It was never read: an encrypted, message-signed response is always signed after the assertion is encrypted |
 | `Outbound::raw_context().binding` | `Outbound::delivery()` |
 | `Outbound::raw_context().context`, `into_raw_context` | `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` |

@@ -126,8 +126,8 @@ use crate::error::SamlError;
 pub use idp::IdentityProvider;
 pub use name_id_management::NameIdManagementRedirectReceipt;
 pub use options::{
-    ForceAuthn, IsPassive, LogoutSigning, MessageDelivery, ReceiveNameIdManagement,
-    RespondNameIdManagement, RespondSlo, RespondSso, StartNameIdManagement, StartSlo, StartSso,
+    ForceAuthn, IsPassive, MessageDelivery, ReceiveNameIdManagement, RespondNameIdManagement,
+    RespondSlo, RespondSso, StartNameIdManagement, StartSlo, StartSso,
 };
 pub use paos::{
     check_paos_client_headers, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot, SoapFault,

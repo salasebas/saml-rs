@@ -44,10 +44,8 @@ impl SsoAssertion {
     /// writes no `AttributeStatement`.
     ///
     /// The response is rejected when a `NameFormat` is not an absolute URI
-    /// reference, when an [`crate::AttributeNameFormat::Basic`] name is not an
-    /// XML name, or when
-    /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template)
-    /// is set.
+    /// reference, or when an [`crate::AttributeNameFormat::Basic`] name is not an
+    /// XML name.
     pub fn with_attributes(mut self, attributes: Attributes) -> Self {
         self.attributes = attributes;
         self
@@ -56,13 +54,7 @@ impl SsoAssertion {
     /// Set the authentication context of the assertion's `AuthnStatement`.
     ///
     /// Pass the context in which the subject was actually authenticated.
-    /// The `AuthnStatement` is written by
-    /// [`IdentityProvider::respond_paos_sso`](crate::IdentityProvider::respond_paos_sso), and by
-    /// browser SSO when
-    /// [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules)
-    /// is selected. Omitting the context then writes the unspecified class.
-    /// Browser SSO without those rules writes no `AuthnStatement` and rejects
-    /// a response with a context.
+    /// Omitting the context writes the unspecified class.
     ///
     /// Where the statement is written and the request's
     /// [`crate::RequestedAuthnContext`] uses
@@ -81,13 +73,8 @@ impl SsoAssertion {
     ///
     /// Pass the time at which the subject actually authenticated, such as the
     /// start of a reused identity provider session. It is written in UTC,
-    /// rounded down to the second. The `AuthnStatement` is written by
-    /// [`IdentityProvider::respond_paos_sso`](crate::IdentityProvider::respond_paos_sso), and by
-    /// browser SSO when
-    /// [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules)
-    /// is selected. Omitting the instant then writes the assertion
-    /// `IssueInstant`. Browser SSO without those rules writes no
-    /// `AuthnStatement` and rejects a response with an instant.
+    /// rounded down to the second. Omitting the instant writes the assertion
+    /// `IssueInstant`.
     ///
     /// The response is rejected when the written instant is later than the
     /// response `IssueInstant` or before year 1.

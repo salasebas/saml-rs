@@ -1,5 +1,4 @@
 use crate::entity::EntitySetting;
-use crate::template::LoginResponseTemplate;
 
 use super::algorithms::{name_id_format_uris, transform_algorithm_uris, NameIdFormat};
 use super::builders::{IdpConfigBuilder, SpConfigBuilder};
@@ -23,7 +22,6 @@ impl SpConfigBuilder {
             &self.xml,
             &self.templates,
         );
-        setting.login_request_template = self.authn_request_template.clone();
         let validation = &self.validation;
         setting.allow_create = name_id_creation_allowed(validation.name_id_creation);
         setting.authn_requests_signed = authn_request_signing_enabled(validation.authn_requests);
@@ -51,11 +49,6 @@ impl IdpConfigBuilder {
             &self.xml,
             &self.templates,
         );
-        let template = self.sso_response_template.clone();
-        setting.login_response_template = template.map(|context| LoginResponseTemplate {
-            context: Some(context),
-            attributes: Vec::new(),
-        });
         let validation = &self.validation;
         setting.want_authn_requests_signed =
             authn_request_signature_required(validation.authn_requests);

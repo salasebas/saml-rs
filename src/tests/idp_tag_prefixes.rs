@@ -179,7 +179,7 @@ fn caller_login_response_template_is_rewritten_with_configured_prefixes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = prefixed_setting("samlp2", "saml2");
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let (idp, sp, ctx, xml) = login_response_xml(setting)?;
@@ -200,7 +200,7 @@ fn caller_login_response_template_rewrites_each_prefix_once(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = prefixed_setting("saml", "a");
     setting.login_response_template = Some(LoginResponseTemplate {
-        context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
+        context: Some(saml_rs::template::LOGIN_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
     let (idp, sp, ctx, xml) = login_response_xml(setting)?;
