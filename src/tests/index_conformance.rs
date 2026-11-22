@@ -10,7 +10,7 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
-use saml_rs::constants::{elements_order, signature_algorithm::RSA_SHA256, Binding, CertUse};
+use saml_rs::constants::{signature_algorithm::RSA_SHA256, Binding, CertUse};
 use saml_rs::entity::{iso8601_offset, EntitySetting};
 use saml_rs::idp;
 use saml_rs::metadata::{
@@ -95,85 +95,6 @@ fn get_acs_with_two_bindings() -> Result<(), Box<dyn std::error::Error>> {
         sp.assertion_consumer_location(Binding::Artifact).as_deref(),
         Some(artifact)
     );
-    Ok(())
-}
-
-fn order_base_config() -> SpMetadataInput {
-    SpMetadataInput {
-        entity_id: "http://sp".into(),
-        signing_certs: vec![SP_CERT.into()],
-        name_id_format: vec!["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into()],
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "http://sp/acs")],
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "http://sp/slo")],
-        ..Default::default()
-    }
-}
-
-#[test]
-fn sp_metadata_with_default_elements_order() -> Result<(), Box<dyn std::error::Error>> {
-    let xml = generate_sp_metadata(&order_base_config())?;
-    let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
-    let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
-    let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
-    let acs = xml.find("AssertionConsumerService").unwrap_or(0);
-    assert!(key < slo && slo < nid && nid < acs);
-    Ok(())
-}
-
-#[test]
-fn sp_metadata_with_onelogin_elements_order() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = SpMetadataInput {
-        manage_name_id_service: vec![Endpoint::new(Binding::Redirect, "https://sp/nameid")],
-        elements_order: Some(
-            elements_order::ONELOGIN
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
-        ),
-        ..order_base_config()
-    };
-    let xml = generate_sp_metadata(&cfg)?;
-    let doc = roxmltree::Document::parse(&xml)?;
-    let groups: Vec<_> = doc
-        .descendants()
-        .find(|node| {
-            node.has_tag_name((saml_rs::constants::namespace::METADATA, "SPSSODescriptor"))
-        })
-        .ok_or("missing SPSSODescriptor")?
-        .children()
-        .filter(roxmltree::Node::is_element)
-        .map(|node| node.tag_name().name())
-        .collect();
-    assert_eq!(
-        groups,
-        [
-            "KeyDescriptor",
-            "ManageNameIDService",
-            "NameIDFormat",
-            "SingleLogoutService",
-            "AssertionConsumerService"
-        ]
-    );
-    Ok(())
-}
-
-#[test]
-fn sp_metadata_with_shibboleth_elements_order() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = SpMetadataInput {
-        elements_order: Some(
-            elements_order::SHIBBOLETH
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
-        ),
-        ..order_base_config()
-    };
-    let xml = generate_sp_metadata(&cfg)?;
-    let key = xml.find("KeyDescriptor").unwrap_or(usize::MAX);
-    let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
-    let nid = xml.find("NameIDFormat").unwrap_or(usize::MAX);
-    let acs = xml.find("AssertionConsumerService").unwrap_or(0);
-    assert!(key < slo && slo < nid && nid < acs);
     Ok(())
 }
 

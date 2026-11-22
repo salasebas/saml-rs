@@ -363,65 +363,6 @@ impl ParserType {
     }
 }
 
-/// Metadata element ordering profiles (`elementsOrder`).
-///
-/// Some IdPs restrict the order of elements in entity descriptors.
-pub mod elements_order {
-    /// Default order: the `SPSSODescriptor` sequence of the metadata schema.
-    pub const DEFAULT: &[&str] = &[
-        "KeyDescriptor",
-        "SingleLogoutService",
-        "NameIDFormat",
-        "AssertionConsumerService",
-    ];
-    /// OneLogin order, which puts `NameIDFormat` before `SingleLogoutService`.
-    ///
-    /// This is not the schema sequence. It was the default before the default
-    /// followed the schema.
-    pub const ONELOGIN: &[&str] = &[
-        "KeyDescriptor",
-        "NameIDFormat",
-        "SingleLogoutService",
-        "AssertionConsumerService",
-    ];
-    /// Shibboleth order.
-    pub const SHIBBOLETH: &[&str] = &[
-        "KeyDescriptor",
-        "SingleLogoutService",
-        "NameIDFormat",
-        "AssertionConsumerService",
-        "AttributeConsumingService",
-    ];
-
-    /// IdP metadata element ordering profiles.
-    pub mod idp {
-        /// Default IdP order: the `IDPSSODescriptor` sequence of the metadata
-        /// schema.
-        pub const DEFAULT: &[&str] = &[
-            "KeyDescriptor",
-            "ArtifactResolutionService",
-            "SingleLogoutService",
-            "ManageNameIDService",
-            "NameIDFormat",
-            "SingleSignOnService",
-        ];
-        /// OneLogin IdP order.
-        pub const ONELOGIN: &[&str] = &[
-            "KeyDescriptor",
-            "NameIDFormat",
-            "SingleLogoutService",
-            "SingleSignOnService",
-        ];
-        /// Shibboleth IdP order.
-        pub const SHIBBOLETH: &[&str] = &[
-            "KeyDescriptor",
-            "SingleLogoutService",
-            "NameIDFormat",
-            "SingleSignOnService",
-        ];
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,12 +446,5 @@ mod tests {
             status_code::SUCCESS,
             "urn:oasis:names:tc:SAML:2.0:status:Success"
         );
-    }
-
-    #[test]
-    fn elements_order_profiles() {
-        assert_eq!(elements_order::DEFAULT, &elements_order::SHIBBOLETH[..4]);
-        assert_eq!(elements_order::ONELOGIN[1], "NameIDFormat");
-        assert_eq!(elements_order::SHIBBOLETH[1], "SingleLogoutService");
     }
 }

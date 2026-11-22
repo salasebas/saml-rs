@@ -7,41 +7,6 @@ use crate::sp;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
-fn metadata_rejects_unknown_and_duplicate_order_groups() {
-    for (order, expected) in [
-        (
-            vec!["KeyDescriptr"],
-            "unknown metadata element order group KeyDescriptr",
-        ),
-        (
-            vec!["KeyDescriptor", "KeyDescriptor"],
-            "duplicate metadata element order group KeyDescriptor",
-        ),
-        (
-            vec!["Organization"],
-            "unknown metadata element order group Organization",
-        ),
-    ] {
-        let order: Vec<String> = order.into_iter().map(str::to_string).collect();
-        let sp = generate_sp_metadata(&SpMetadataInput {
-            entity_id: "https://sp.example.com/metadata".into(),
-            assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-            elements_order: Some(order.clone()),
-            ..Default::default()
-        });
-        let idp = generate_idp_metadata(&IdpMetadataInput {
-            entity_id: "https://idp.example.com/metadata".into(),
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
-            elements_order: Some(order),
-            ..Default::default()
-        });
-        for result in [sp, idp] {
-            assert!(matches!(result, Err(SamlError::Invalid(message)) if message == expected));
-        }
-    }
-}
-
-#[test]
 fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
@@ -64,7 +29,6 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
             Endpoint::new(Binding::Redirect, "https://sp.example.com/acs-redirect"),
         ],
         manage_name_id_service: Vec::new(),
-        elements_order: None,
         lifetime: None,
         organization: None,
         contacts: Vec::new(),
@@ -272,22 +236,6 @@ fn metadata_writes_is_default_only_on_indexed_endpoints() -> TestResult {
 }
 
 #[test]
-fn sp_elements_order_respected() -> TestResult {
-    let cfg = SpMetadataInput {
-        entity_id: "https://sp.example.com/metadata".into(),
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-        ..Default::default()
-    };
-    let xml = generate_sp_metadata(&cfg)?;
-    let slo = xml.find("SingleLogoutService").unwrap_or(usize::MAX);
-    let acs = xml.find("AssertionConsumerService").unwrap_or(0);
-    // default order places SingleLogoutService before AssertionConsumerService
-    assert!(slo < acs);
-    Ok(())
-}
-
-#[test]
 fn idp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
@@ -393,10 +341,6 @@ fn sp_metadata_escapes_certificate_text_markup() -> TestResult {
         entity_id: "https://sp.example.com/metadata".into(),
         signing_certs: vec![injected_cert.into()],
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-        elements_order: Some(vec![
-            "KeyDescriptor".into(),
-            "AssertionConsumerService".into(),
-        ]),
         ..Default::default()
     };
 
@@ -415,42 +359,6 @@ fn sp_metadata_escapes_certificate_text_markup() -> TestResult {
             .len(),
         1
     );
-    Ok(())
-}
-
-#[test]
-fn sp_custom_elements_order_preserves_omitted_groups() -> TestResult {
-    let mut cfg = SpMetadataInput {
-        entity_id: "https://sp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
-        name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
-        ..Default::default()
-    };
-
-    for order in [vec!["KeyDescriptor".into()], vec![]] {
-        cfg.elements_order = Some(order);
-        let xml = generate_sp_metadata(&cfg)?;
-        let doc = roxmltree::Document::parse(&xml)?;
-        let groups: Vec<_> = doc
-            .descendants()
-            .find(|node| node.has_tag_name((namespace::METADATA, "SPSSODescriptor")))
-            .ok_or("missing SPSSODescriptor")?
-            .children()
-            .filter(roxmltree::Node::is_element)
-            .map(|node| node.tag_name().name())
-            .collect();
-        assert_eq!(
-            groups,
-            [
-                "KeyDescriptor",
-                "SingleLogoutService",
-                "NameIDFormat",
-                "AssertionConsumerService"
-            ]
-        );
-    }
     Ok(())
 }
 
@@ -482,46 +390,11 @@ fn idp_metadata_escapes_endpoint_location_attribute_markup() -> TestResult {
 }
 
 #[test]
-fn idp_custom_elements_order_can_place_sso_before_key_descriptor() -> TestResult {
-    let cfg = IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
-        name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-        elements_order: Some(vec![
-            "SingleSignOnService".into(),
-            "KeyDescriptor".into(),
-            "NameIDFormat".into(),
-            "SingleLogoutService".into(),
-        ]),
-        ..Default::default()
-    };
-
-    let xml = generate_idp_metadata(&cfg)?;
-    let sso = xml.find("<SingleSignOnService").unwrap_or(usize::MAX);
-    let key = xml.find("<KeyDescriptor").unwrap_or(usize::MAX);
-    let name_id = xml.find("<NameIDFormat").unwrap_or(usize::MAX);
-    let slo = xml.find("<SingleLogoutService").unwrap_or(usize::MAX);
-
-    assert!(sso < key);
-    assert!(key < name_id);
-    assert!(name_id < slo);
-    Ok(())
-}
-
-#[test]
-fn idp_elements_order_filters_empty_groups() -> TestResult {
+fn idp_metadata_omits_empty_groups() -> TestResult {
     let cfg = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-        elements_order: Some(vec![
-            "KeyDescriptor".into(),
-            "NameIDFormat".into(),
-            "SingleSignOnService".into(),
-            "SingleLogoutService".into(),
-        ]),
         ..Default::default()
     };
 
@@ -535,138 +408,15 @@ fn idp_elements_order_filters_empty_groups() -> TestResult {
 }
 
 #[test]
-fn idp_custom_elements_order_preserves_unlisted_optional_groups() -> TestResult {
-    let cfg = IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
-        name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-        elements_order: Some(vec!["SingleSignOnService".into()]),
-        ..Default::default()
-    };
-
-    let xml = generate_idp_metadata(&cfg)?;
-
-    let doc = roxmltree::Document::parse(&xml)?;
-    let groups: Vec<_> = doc
-        .descendants()
-        .find(|node| node.has_tag_name((namespace::METADATA, "IDPSSODescriptor")))
-        .ok_or("missing IDPSSODescriptor")?
-        .children()
-        .filter(roxmltree::Node::is_element)
-        .map(|node| node.tag_name().name())
-        .collect();
-    assert_eq!(
-        groups,
-        [
-            "KeyDescriptor",
-            "SingleLogoutService",
-            "NameIDFormat",
-            "SingleSignOnService"
-        ]
-    );
-    Ok(())
-}
-
-#[test]
-fn idp_custom_elements_order_preserves_omitted_populated_sso() -> TestResult {
-    let cfg = IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-        elements_order: Some(vec!["KeyDescriptor".into()]),
-        ..Default::default()
-    };
-
-    let xml = generate_idp_metadata(&cfg)?;
-    let key = xml.find("<KeyDescriptor").unwrap_or(usize::MAX);
-    let sso = xml.find("<SingleSignOnService").unwrap_or(usize::MAX);
-
-    assert_eq!(xml.matches("<SingleSignOnService").count(), 1);
-    assert!(key < sso);
-    Ok(())
-}
-
-#[test]
-fn idp_custom_elements_order_writes_omitted_manage_name_id_service_after_logout() -> TestResult {
-    let cfg = IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        name_id_format: vec![name_id_format::PERSISTENT.to_string()],
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-        manage_name_id_service: vec![Endpoint::new(Binding::Soap, "https://idp/nameid")],
-        elements_order: Some(
-            elements_order::idp::SHIBBOLETH
-                .iter()
-                .map(|name| (*name).to_string())
-                .collect(),
-        ),
-        ..Default::default()
-    };
-
-    let xml = generate_idp_metadata(&cfg)?;
-    let positions = [
-        "<SingleLogoutService",
-        "<ManageNameIDService",
-        "<NameIDFormat",
-        "<SingleSignOnService",
-    ]
-    .map(|element| xml.find(element));
-
-    assert!(xml.contains(
-        r#"<ManageNameIDService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp/nameid"/>"#
-    ));
-    assert_eq!(xml.matches("<ManageNameIDService").count(), 1);
-    assert!(positions.iter().all(Option::is_some));
-    assert!(positions.is_sorted());
-    Ok(())
-}
-
-#[test]
-fn idp_custom_elements_order_writes_omitted_artifact_resolution_after_keys() -> TestResult {
-    let cfg = IdpMetadataInput {
-        entity_id: "https://idp.example.com/metadata".into(),
-        signing_certs: vec!["MIIBsigning".into()],
-        name_id_format: vec![name_id_format::EMAIL_ADDRESS.to_string()],
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
-        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
-        artifact_resolution_service: vec![crate::ArtifactResolutionService::new(
-            0,
-            crate::EndpointUrl::try_new("https://idp/artifact")?,
-        )],
-        elements_order: Some(
-            elements_order::idp::SHIBBOLETH
-                .iter()
-                .map(|name| (*name).to_string())
-                .collect(),
-        ),
-        ..Default::default()
-    };
-
-    let xml = generate_idp_metadata(&cfg)?;
-    let positions = [
-        "<KeyDescriptor",
-        "<ArtifactResolutionService",
-        "<SingleLogoutService",
-        "<NameIDFormat",
-        "<SingleSignOnService",
-    ]
-    .map(|element| xml.find(element));
-
-    assert_eq!(xml.matches("<ArtifactResolutionService").count(), 1);
-    assert!(positions.iter().all(Option::is_some));
-    assert!(positions.is_sorted());
-    Ok(())
-}
-
-#[test]
-fn default_orders_follow_the_metadata_schema_sequence() -> TestResult {
+fn role_children_follow_schema_order_and_keep_endpoint_order() -> TestResult {
     let idp = generate_idp_metadata(&IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],
-        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+        single_sign_on_service: vec![
+            Endpoint::new(Binding::Redirect, "https://idp/z"),
+            Endpoint::new(Binding::Post, "https://idp/a"),
+        ],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://idp/slo")],
         artifact_resolution_service: vec![crate::ArtifactResolutionService::new(
             0,
@@ -680,63 +430,51 @@ fn default_orders_follow_the_metadata_schema_sequence() -> TestResult {
         signing_certs: vec!["MIIBsigning".into()],
         name_id_format: vec![name_id_format::PERSISTENT.to_string()],
         single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
-        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        manage_name_id_service: vec![Endpoint::new(Binding::Redirect, "https://sp/nameid")],
+        assertion_consumer_service: vec![
+            Endpoint::new(Binding::Post, "https://sp/z"),
+            Endpoint::new(Binding::Post, "https://sp/a"),
+        ],
         ..Default::default()
     })?;
 
-    let idp_positions = [
-        "<KeyDescriptor",
-        "<ArtifactResolutionService",
-        "<SingleLogoutService",
-        "<ManageNameIDService",
-        "<NameIDFormat",
-        "<SingleSignOnService",
-    ]
-    .map(|element| idp.find(element));
-    let sp_positions = [
-        "<KeyDescriptor",
-        "<SingleLogoutService",
-        "<NameIDFormat",
-        "<AssertionConsumerService",
-    ]
-    .map(|element| sp.find(element));
-
-    for positions in [&idp_positions[..], &sp_positions[..]] {
-        assert!(positions.iter().all(Option::is_some));
-        assert!(positions.is_sorted());
+    for (xml, role, expected) in [
+        (
+            &idp,
+            "IDPSSODescriptor",
+            &[
+                ("KeyDescriptor", None),
+                ("ArtifactResolutionService", Some("https://idp/artifact")),
+                ("SingleLogoutService", Some("https://idp/slo")),
+                ("ManageNameIDService", Some("https://idp/nameid")),
+                ("NameIDFormat", None),
+                ("SingleSignOnService", Some("https://idp/z")),
+                ("SingleSignOnService", Some("https://idp/a")),
+            ][..],
+        ),
+        (
+            &sp,
+            "SPSSODescriptor",
+            &[
+                ("KeyDescriptor", None),
+                ("SingleLogoutService", Some("https://sp/slo")),
+                ("ManageNameIDService", Some("https://sp/nameid")),
+                ("NameIDFormat", None),
+                ("AssertionConsumerService", Some("https://sp/z")),
+                ("AssertionConsumerService", Some("https://sp/a")),
+            ][..],
+        ),
+    ] {
+        let doc = roxmltree::Document::parse(xml)?;
+        let children: Vec<_> = doc
+            .descendants()
+            .find(|node| node.has_tag_name((namespace::METADATA, role)))
+            .ok_or("missing role descriptor")?
+            .children()
+            .filter(roxmltree::Node::is_element)
+            .map(|node| (node.tag_name().name(), node.attribute("Location")))
+            .collect();
+        assert_eq!(children, expected, "{role}");
     }
     Ok(())
-}
-
-#[test]
-fn idp_elements_order_profiles_match_upstream() {
-    assert_eq!(
-        elements_order::idp::DEFAULT,
-        [
-            "KeyDescriptor",
-            "ArtifactResolutionService",
-            "SingleLogoutService",
-            "ManageNameIDService",
-            "NameIDFormat",
-            "SingleSignOnService",
-        ]
-    );
-    assert_eq!(
-        elements_order::idp::ONELOGIN,
-        [
-            "KeyDescriptor",
-            "NameIDFormat",
-            "SingleLogoutService",
-            "SingleSignOnService",
-        ]
-    );
-    assert_eq!(
-        elements_order::idp::SHIBBOLETH,
-        [
-            "KeyDescriptor",
-            "SingleLogoutService",
-            "NameIDFormat",
-            "SingleSignOnService",
-        ]
-    );
 }

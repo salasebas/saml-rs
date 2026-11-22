@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use crate::config::validate_entity_id_syntax;
-use crate::constants::{elements_order, name_id_format, namespace, Binding};
+use crate::constants::{name_id_format, namespace, Binding};
 use crate::error::SamlError;
 use crate::metadata::description::{validate_description, write_description};
 use crate::metadata::lifetime::{LifetimeAttributes, MetadataLifetime};
@@ -68,10 +68,6 @@ pub struct SpMetadataInput {
     pub assertion_consumer_service: Vec<Endpoint>,
     /// `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<Endpoint>,
-    /// Element ordering profile (defaults to [`elements_order::DEFAULT`]).
-    /// Missing groups are inserted in schema-relative positions. Unknown or
-    /// repeated names are invalid. Explicit names retain their relative order.
-    pub elements_order: Option<Vec<String>>,
     /// Lifetime on the root `EntityDescriptor`. `None` writes `cacheDuration="PT86400S"`.
     pub lifetime: Option<MetadataLifetime>,
     /// Entity-level organization. `None` writes no `Organization`.
@@ -106,10 +102,6 @@ pub struct IdpMetadataInput {
     pub artifact_resolution_service: Vec<crate::ArtifactResolutionService>,
     /// `ManageNameIDService` endpoints.
     pub manage_name_id_service: Vec<Endpoint>,
-    /// Element ordering profile (defaults to [`elements_order::idp::DEFAULT`]).
-    /// Missing groups are inserted in schema-relative positions. Unknown or
-    /// repeated names are invalid. Explicit names retain their relative order.
-    pub elements_order: Option<Vec<String>>,
     /// Lifetime on the root `EntityDescriptor`. `None` writes `cacheDuration="PT86400S"`.
     pub lifetime: Option<MetadataLifetime>,
     /// Entity-level organization. `None` writes no `Organization`.
@@ -173,19 +165,15 @@ fn write_name_id_formats(
     Ok(())
 }
 
-fn write_endpoint(w: &mut MetadataWriter, name: &str, e: &Endpoint) {
-    w.empty(
-        name,
-        &[
-            ("Binding", e.binding.urn()),
-            ("Location", e.location.as_str()),
-        ],
-    );
-}
-
-fn write_single_logout(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
+fn write_endpoints(w: &mut MetadataWriter, name: &str, endpoints: &[Endpoint]) {
     for endpoint in endpoints {
-        write_endpoint(w, "SingleLogoutService", endpoint);
+        w.empty(
+            name,
+            &[
+                ("Binding", endpoint.binding.urn()),
+                ("Location", endpoint.location.as_str()),
+            ],
+        );
     }
 }
 
@@ -239,12 +227,6 @@ fn write_assertion_consumer_service(
     Ok(())
 }
 
-fn write_single_sign_on_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
-    for endpoint in endpoints {
-        write_endpoint(w, "SingleSignOnService", endpoint);
-    }
-}
-
 fn write_artifact_resolution_service(
     w: &mut MetadataWriter,
     endpoints: &[crate::ArtifactResolutionService],
@@ -262,86 +244,6 @@ fn write_artifact_resolution_service(
     }
 }
 
-fn write_manage_name_id_service(w: &mut MetadataWriter, endpoints: &[Endpoint]) {
-    for endpoint in endpoints {
-        write_endpoint(w, "ManageNameIDService", endpoint);
-    }
-}
-
-fn write_sp_group(
-    w: &mut MetadataWriter,
-    cfg: &SpMetadataInput,
-    name: &str,
-) -> Result<(), SamlError> {
-    match name {
-        "KeyDescriptor" => write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs),
-        "NameIDFormat" => write_name_id_formats(w, &cfg.name_id_format, true)?,
-        "SingleLogoutService" => write_single_logout(w, &cfg.single_logout_service),
-        "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
-        "AssertionConsumerService" => {
-            write_assertion_consumer_service(w, &cfg.assertion_consumer_service)?
-        }
-        "AttributeConsumingService" => {}
-        _ => {
-            return Err(SamlError::Invalid(format!(
-                "unknown metadata element order group {name}"
-            )))
-        }
-    }
-    Ok(())
-}
-
-fn write_idp_group(
-    w: &mut MetadataWriter,
-    cfg: &IdpMetadataInput,
-    name: &str,
-) -> Result<(), SamlError> {
-    match name {
-        "KeyDescriptor" => write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs),
-        "NameIDFormat" => write_name_id_formats(w, &cfg.name_id_format, false)?,
-        "SingleSignOnService" => write_single_sign_on_service(w, &cfg.single_sign_on_service),
-        "SingleLogoutService" => write_single_logout(w, &cfg.single_logout_service),
-        "ArtifactResolutionService" => {
-            write_artifact_resolution_service(w, &cfg.artifact_resolution_service)
-        }
-        "ManageNameIDService" => write_manage_name_id_service(w, &cfg.manage_name_id_service),
-        _ => {
-            return Err(SamlError::Invalid(format!(
-                "unknown metadata element order group {name}"
-            )))
-        }
-    }
-    Ok(())
-}
-
-fn complete_elements_order<'a>(
-    order: Option<&'a [String]>,
-    groups: &[&'a str],
-) -> Result<Vec<&'a str>, SamlError> {
-    let mut completed = Vec::new();
-    if let Some(order) = order {
-        for name in order {
-            let name = name.as_str();
-            if completed.contains(&name) {
-                return Err(SamlError::Invalid(format!(
-                    "duplicate metadata element order group {name}"
-                )));
-            }
-            completed.push(name);
-        }
-    }
-    for (index, name) in groups.iter().enumerate() {
-        if !completed.contains(name) {
-            let position = completed
-                .iter()
-                .position(|ordered| groups[index + 1..].contains(ordered))
-                .unwrap_or(completed.len());
-            completed.insert(position, name);
-        }
-    }
-    Ok(completed)
-}
-
 fn bool_str(value: bool) -> &'static str {
     if value {
         "true"
@@ -350,7 +252,9 @@ fn bool_str(value: bool) -> &'static str {
     }
 }
 
-/// Generate SP metadata XML.
+/// Generate SP metadata XML with role children in schema order.
+///
+/// Endpoints within each group appear in input order.
 ///
 /// # Errors
 ///
@@ -363,7 +267,6 @@ fn bool_str(value: bool) -> &'static str {
 /// than `unsignedShort` indexes. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
-/// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
 pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> {
     if cfg.assertion_consumer_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -376,17 +279,6 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
         &cfg.contacts,
         cfg.error_url.as_deref(),
     )?;
-    let order = complete_elements_order(
-        cfg.elements_order.as_deref(),
-        &[
-            "KeyDescriptor",
-            "SingleLogoutService",
-            "ManageNameIDService",
-            "NameIDFormat",
-            "AssertionConsumerService",
-            "AttributeConsumingService",
-        ],
-    )?;
     let mut w = MetadataWriter::new();
     write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
     let mut role_attributes = vec![
@@ -398,16 +290,20 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
         role_attributes.push(("errorURL", error_url));
     }
     w.start("SPSSODescriptor", &role_attributes);
-    for name in &order {
-        write_sp_group(&mut w, cfg, name)?;
-    }
+    write_key_descriptors(&mut w, &cfg.signing_certs, &cfg.encrypt_certs);
+    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service);
+    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service);
+    write_name_id_formats(&mut w, &cfg.name_id_format, true)?;
+    write_assertion_consumer_service(&mut w, &cfg.assertion_consumer_service)?;
     w.end("SPSSODescriptor");
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
     w.end("EntityDescriptor");
     Ok(w.finish())
 }
 
-/// Generate IdP metadata XML.
+/// Generate IdP metadata XML with role children in schema order.
+///
+/// Endpoints within each group appear in input order.
 ///
 /// # Errors
 ///
@@ -418,7 +314,6 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
 /// is not an absolute URI reference. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry.
-/// An unknown or repeated element ordering group also returns [`SamlError::Invalid`].
 pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -431,8 +326,6 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError
         &cfg.contacts,
         cfg.error_url.as_deref(),
     )?;
-    let order =
-        complete_elements_order(cfg.elements_order.as_deref(), elements_order::idp::DEFAULT)?;
     let mut w = MetadataWriter::new();
     write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
     let mut role_attributes = vec![
@@ -446,9 +339,12 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError
         role_attributes.push(("errorURL", error_url));
     }
     w.start("IDPSSODescriptor", &role_attributes);
-    for name in &order {
-        write_idp_group(&mut w, cfg, name)?;
-    }
+    write_key_descriptors(&mut w, &cfg.signing_certs, &cfg.encrypt_certs);
+    write_artifact_resolution_service(&mut w, &cfg.artifact_resolution_service);
+    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service);
+    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service);
+    write_name_id_formats(&mut w, &cfg.name_id_format, false)?;
+    write_endpoints(&mut w, "SingleSignOnService", &cfg.single_sign_on_service);
     w.end("IDPSSODescriptor");
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
     w.end("EntityDescriptor");

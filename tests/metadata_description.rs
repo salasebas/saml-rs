@@ -5,8 +5,8 @@ use policies_without_crypto::{idp_validation_without_crypto, sp_validation_witho
 
 use std::time::Duration;
 
+use saml_rs::constants::name_id_format;
 use saml_rs::constants::Binding;
-use saml_rs::constants::{elements_order, name_id_format};
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, Metadata,
     SpMetadata, SpMetadataInput,
@@ -88,39 +88,19 @@ fn raw_idp() -> IdpMetadataInput {
 }
 
 #[test]
-fn raw_metadata_writes_descriptions_after_roles_with_every_order_profile() -> TestResult {
-    for profile in [
-        None,
-        Some(elements_order::DEFAULT),
-        Some(elements_order::ONELOGIN),
-        Some(elements_order::SHIBBOLETH),
-        Some(&["NameIDFormat", "AssertionConsumerService"]),
-    ] {
-        let mut cfg = raw_sp();
-        cfg.elements_order =
-            profile.map(|names| names.iter().map(|name| name.to_string()).collect());
-        let xml = generate_sp_metadata(&cfg)?;
-        assert_eq!(xml, SP_XML.trim_end());
-        let parsed = SpMetadata::from_xml(&xml)?;
-        assert_eq!(parsed.as_metadata().organization()?, Some(organization()));
-        assert_eq!(parsed.as_metadata().contacts()?, contacts());
-    }
-    for profile in [
-        None,
-        Some(elements_order::idp::DEFAULT),
-        Some(elements_order::idp::ONELOGIN),
-        Some(elements_order::idp::SHIBBOLETH),
-        Some(&["NameIDFormat", "SingleSignOnService"]),
-    ] {
-        let mut cfg = raw_idp();
-        cfg.elements_order =
-            profile.map(|names| names.iter().map(|name| name.to_string()).collect());
-        let xml = generate_idp_metadata(&cfg)?;
-        assert_eq!(xml, IDP_XML.trim_end());
-        let parsed = IdpMetadata::from_xml(&xml)?;
-        assert_eq!(parsed.as_metadata().organization()?, Some(organization()));
-        assert_eq!(parsed.as_metadata().contacts()?, contacts());
-    }
+fn raw_metadata_writes_descriptions_after_roles() -> TestResult {
+    let xml = generate_sp_metadata(&raw_sp())?;
+    assert_eq!(xml, SP_XML.trim_end());
+    let parsed = SpMetadata::from_xml(&xml)?;
+    assert_eq!(parsed.as_metadata().organization()?, Some(organization()));
+    assert_eq!(parsed.as_metadata().contacts()?, contacts());
+
+    let xml = generate_idp_metadata(&raw_idp())?;
+    assert_eq!(xml, IDP_XML.trim_end());
+    let parsed = IdpMetadata::from_xml(&xml)?;
+    assert_eq!(parsed.as_metadata().organization()?, Some(organization()));
+    assert_eq!(parsed.as_metadata().contacts()?, contacts());
+
     Ok(())
 }
 
