@@ -95,17 +95,17 @@ pub enum OutboundDelivery<'a> {
 /// ```
 /// use saml_rs::{AuthnRequest, Outbound, StartSso};
 /// # use saml_rs::{
-/// #     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-/// #     MetadataTrustPolicy, ServiceProvider, SpConfig, SpValidationPolicy, SsoEndpoint,
+/// #     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, MetadataTrustPolicy,
+/// #     ServiceProvider, SpConfig, SsoEndpoint,
 /// # };
 /// #
 /// # fn main() -> Result<(), saml_rs::SamlError> {
+/// # if cfg!(not(crypto)) { return Ok(()); }
 /// # let sp = ServiceProvider::new(
 /// #     SpConfig::builder(
 /// #         EntityId::try_new("https://sp.example.com/metadata")?,
 /// #         AcsEndpoint::post("https://sp.example.com/acs")?,
 /// #     )
-/// #     .validation(SpValidationPolicy::compatibility())
 /// #     .build()?,
 /// # );
 /// # let idp = IdentityProvider::new(
@@ -114,7 +114,6 @@ pub enum OutboundDelivery<'a> {
 /// #         SsoEndpoint::redirect("https://idp.example.com/sso/redirect")?,
 /// #     )
 /// #     .sso_endpoint(SsoEndpoint::post("https://idp.example.com/sso/post")?)
-/// #     .validation(IdpValidationPolicy::compatibility())
 /// #     .build()?,
 /// # );
 /// # let idp = IdpDescriptor::from_metadata_xml(

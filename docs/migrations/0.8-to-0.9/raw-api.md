@@ -81,23 +81,24 @@ fn send<Message>(outbound: &Outbound<Message>) {
 operations check what the raw functions left to the caller, such as
 `InResponseTo` correlation, RelayState, and the receiving endpoint.
 
-`SpValidationPolicy::compatibility` is the closest typed preset to the raw
-service provider, but it is more permissive than the raw defaults in two
-places. It skips audience validation, and it accepts unsigned logout messages.
-To keep what the raw defaults checked, start from it and set those fields
-back:
+The raw service provider's defaults differ from `SpValidationPolicy::recommended`
+in three fields. To keep what they checked, set those fields:
 
 ```rust
-use saml_rs::{AudienceValidationPolicy, LogoutSignaturePolicy, SpValidationPolicy};
+use saml_rs::{
+    AudienceValidationPolicy, ResponseSignaturePolicy, SpValidationPolicy, XmlSignatureProfile,
+};
 
-let mut validation = SpValidationPolicy::compatibility();
+let mut validation = SpValidationPolicy::recommended();
+validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
 validation.audience = AudienceValidationPolicy::RequireRestriction;
-validation.logout.requests = LogoutSignaturePolicy::RequireSigned;
-validation.logout.responses = LogoutSignaturePolicy::RequireSigned;
 ```
 
-`IdpValidationPolicy::compatibility` also accepts unsigned logout messages, so
-set its `logout` the same way.
+The raw identity provider's defaults differ from
+`IdpValidationPolicy::recommended` in `authn_requests`, which was
+`AuthnRequestValidationPolicy::AllowUnsigned`, and in `xml_signatures`, which
+was `XmlSignatureProfile::AllowWeakAlgorithms`.
 
 `accept_unsolicited_sso` rejects an unsolicited response that carries an empty
 `InResponseTo=""`. `parse_unsolicited_login_response` read an empty value as

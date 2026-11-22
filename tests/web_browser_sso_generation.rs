@@ -1,5 +1,4 @@
-//! Compatibility is the legacy permissive preset.
-//! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 and is not that preset.
+//! `RespondSso::allow_unsigned_encrypted_cbc` relaxes Errata 05 E93 alone.
 #![cfg(crypto)]
 
 mod common;
@@ -18,9 +17,9 @@ use saml_rs::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
     NameId, NameIdCreationPolicy, NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy,
-    RespondSso, SamlError, SamlInstant, SamlValidationContext, ServiceProvider, SloEndpoint,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse,
-    StartSso, Status, SubordinateStatusCode, TemplatePolicy,
+    RespondSso, ResponseSignaturePolicy, SamlError, SamlInstant, SamlValidationContext,
+    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, SsoOutcome, SsoResponse, StartSso, Status, SubordinateStatusCode, TemplatePolicy,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, XmlPolicy};
@@ -645,7 +644,7 @@ fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
 #[test]
 fn typed_transient_name_id_omits_allow_create_under_producer_rules(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = SpValidationPolicy::compatibility();
+    let mut validation = SpValidationPolicy::default();
     validation.name_id_creation = NameIdCreationPolicy::AllowCreate;
     let sp = ServiceProvider::new(
         SpConfig::builder(
@@ -657,7 +656,7 @@ fn typed_transient_name_id_omits_allow_create_under_producer_rules(
         .validation(validation)
         .build()?,
     );
-    let idp = idp_with(IdpValidationPolicy::compatibility(), false)?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let compatibility = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
@@ -850,13 +849,15 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
     }
 
+    let mut unsigned_cbc = SpValidationPolicy::recommended();
+    unsigned_cbc.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
     let permissive = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(encrypted_credentials)
-        .validation(SpValidationPolicy::compatibility())
+        .validation(unsigned_cbc)
         .xml(encryption)
         .build()?,
     );
@@ -877,11 +878,11 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
         AcsEndpoint::post(SP_ACS)?.with_default(),
     )
     .credentials(signing_credentials())
-    .validation(SpValidationPolicy::compatibility())
+    .validation(SpValidationPolicy::default())
     .authn_request_template("<samlp:AuthnRequest/>")
     .build()?;
     let sp = ServiceProvider::new(config);
-    let idp = idp_with(IdpValidationPolicy::compatibility(), false)?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     match sp.start_sso(&idp_descriptor, StartSso::redirect().apply_producer_rules()) {
         Err(SamlError::Invalid(message)) if message.contains("built-in AuthnRequest renderer") => {}

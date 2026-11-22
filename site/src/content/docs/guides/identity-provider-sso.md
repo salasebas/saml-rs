@@ -77,7 +77,7 @@ let response = idp.respond_sso(
 )?;
 ```
 
-`allow_unsigned_encrypted_cbc()` relaxes that recommendation only. It is not the Compatibility preset. A service provider that already requires the signature still rejects the relaxed response.
+`allow_unsigned_encrypted_cbc()` relaxes that recommendation only. A service provider that already requires the signature still rejects the relaxed response.
 
 Assertion encryption stays off until you set `XmlEncryptionPolicy::assertions` to `AssertionEncryptionPolicy::EncryptAssertions`.
 

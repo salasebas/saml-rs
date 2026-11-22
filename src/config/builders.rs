@@ -69,15 +69,15 @@ use crate::model::EndpointUrl;
 /// ```
 /// use saml_rs::{AcsEndpoint, EntityId, SpConfig, SpValidationPolicy};
 ///
+/// # if cfg!(not(crypto)) { return Ok(()); }
 /// let config = SpConfig::builder(
 ///     EntityId::try_new("https://sp.example.com/metadata")?,
 ///     AcsEndpoint::post("https://sp.example.com/acs")?,
 /// )
-/// .validation(SpValidationPolicy::compatibility())
 /// .build()?;
 ///
 /// assert_eq!(config.entity_id().as_str(), "https://sp.example.com/metadata");
-/// assert_eq!(config.validation(), &SpValidationPolicy::compatibility());
+/// assert_eq!(config.validation(), &SpValidationPolicy::recommended());
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
 #[derive(Clone)]
@@ -111,9 +111,6 @@ impl fmt::Debug for SpConfig {
 impl SpConfig {
     /// Start an SP config builder with its entity ID and first
     /// `AssertionConsumerService` endpoint, on [`SpValidationPolicy::recommended`].
-    ///
-    /// [`SpValidationPolicy::compatibility`] remains the legacy permissive
-    /// preset.
     pub fn builder(entity_id: EntityId, acs: AcsEndpoint) -> SpConfigBuilder {
         SpConfigBuilder {
             entity_id,
@@ -368,19 +365,17 @@ impl SpConfigBuilder {
 /// # Examples
 ///
 /// The builder starts on [`IdpValidationPolicy::recommended`].
-/// Use [`IdpValidationPolicy::compatibility`] for the legacy permissive preset,
-/// including when compiling or testing without the default crypto feature.
 ///
 /// ```
-/// use saml_rs::{EntityId, IdpConfig, IdpValidationPolicy, SsoEndpoint};
+/// use saml_rs::{EntityId, IdpConfig, SsoEndpoint};
 /// use std::time::Duration;
 ///
+/// # if cfg!(not(crypto)) { return Ok(()); }
 /// let config = IdpConfig::builder(
 ///     EntityId::try_new("https://idp.example.com/metadata")?,
 ///     SsoEndpoint::post("https://idp.example.com/sso")?,
 /// )
 /// .issuance_lifetime(Duration::from_secs(10 * 60))
-/// .validation(IdpValidationPolicy::compatibility())
 /// .build()?;
 ///
 /// assert_eq!(config.entity_id().as_str(), "https://idp.example.com/metadata");
@@ -829,10 +824,13 @@ fn logout_policy_requires_crypto(policy: LogoutPolicy) -> bool {
 
 #[cfg(all(test, not(crypto)))]
 mod no_crypto_tests {
-    use super::{IdpConfig, IdpValidationPolicy, SpConfig, SpValidationPolicy};
+    use super::{IdpConfig, SpConfig};
     use crate::browser::{AcsEndpoint, SsoEndpoint};
     use crate::config::descriptors::EntityId;
     use crate::error::SamlError;
+    use crate::tests::policies_without_crypto::{
+        idp_validation_without_crypto, sp_validation_without_crypto,
+    };
 
     #[test]
     fn recommended_builders_need_a_crypto_provider() -> Result<(), SamlError> {
@@ -854,13 +852,13 @@ mod no_crypto_tests {
             EntityId::try_new("https://sp.example.com/metadata")?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
-        .validation(SpValidationPolicy::compatibility())
+        .validation(sp_validation_without_crypto())
         .build()?;
         IdpConfig::builder(
             EntityId::try_new("https://idp.example.com/metadata")?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .build()?;
         Ok(())
     }

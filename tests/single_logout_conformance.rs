@@ -1,4 +1,3 @@
-//! Compatibility is the legacy permissive preset.
 #![cfg(crypto)]
 
 mod common;
@@ -38,7 +37,21 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn sp(slo: &str, policy: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+fn unsigned_logout_sp_validation() -> SpValidationPolicy {
+    let mut policy = SpValidationPolicy::recommended();
+    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+    policy
+}
+
+fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
+    let mut policy = IdpValidationPolicy::recommended();
+    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+    policy
+}
+
+fn sp(slo: &str, policy: SpValidationPolicy) -> Result<ServiceProvider, SamlError> {
     Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .slo_endpoint(SloEndpoint::post(slo)?)
@@ -130,7 +143,7 @@ fn unsigned_response_fields(
 #[test]
 fn session_participant_generation_rules_sign_and_require_session_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::compatibility())?;
+    let sp = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
     let idp = idp(IDP_SLO_HTTPS, idp_with_slo_accept())?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(
@@ -157,10 +170,10 @@ fn session_participant_generation_rules_sign_and_require_session_index(
 }
 
 #[test]
-fn compatibility_session_participant_logout_stays_unsigned_without_session_index(
+fn session_participant_logout_stays_unsigned_without_session_index_under_unsigned_logout(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = sp(SP_SLO_HTTPS, SpValidationPolicy::compatibility())?;
-    let identity_provider = idp(IDP_SLO_HTTP, IdpValidationPolicy::compatibility())?;
+    let service_provider = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
+    let identity_provider = idp(IDP_SLO_HTTP, unsigned_logout_idp_validation())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&service_provider, &identity_provider)?;
     let started = service_provider.start_slo(
         &idp_descriptor,
@@ -190,7 +203,7 @@ fn compatibility_session_participant_logout_stays_unsigned_without_session_index
 #[test]
 fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::compatibility())?;
+    let sp = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
     let idp = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
@@ -260,7 +273,7 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
 fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(SP_SLO_HTTP, sp_with_slo_accept())?;
-    let idp = idp(IDP_SLO_HTTPS, IdpValidationPolicy::compatibility())?;
+    let idp = idp(IDP_SLO_HTTPS, unsigned_logout_idp_validation())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let started = idp.start_slo(
@@ -430,16 +443,16 @@ fn finish_rejects_unsigned_response(role: LocalRole) -> Result<(), Box<dyn std::
         }
     }
 
-    let compatible_sp = sp(SP_SLO_HTTPS, SpValidationPolicy::compatibility())?;
-    let compatible_idp = idp(IDP_SLO_HTTPS, IdpValidationPolicy::compatibility())?;
+    let unsigned_sp = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
+    let unsigned_idp = idp(IDP_SLO_HTTPS, unsigned_logout_idp_validation())?;
     let completed = match role {
-        LocalRole::Sp => compatible_sp.finish_slo(
+        LocalRole::Sp => unsigned_sp.finish_slo(
             &idp_descriptor,
             &pending,
             Inbound::post(unsigned),
             validation(),
         )?,
-        LocalRole::Idp => compatible_idp.finish_slo(
+        LocalRole::Idp => unsigned_idp.finish_slo(
             &sp_descriptor,
             &pending,
             Inbound::post(unsigned),
@@ -536,13 +549,5 @@ fn logout_policy_defaults_follow_recommended() {
     assert_eq!(
         LogoutPolicy::recommended().responses,
         LogoutSignaturePolicy::RequireSigned
-    );
-    assert_eq!(
-        LogoutPolicy::compatibility().requests,
-        LogoutSignaturePolicy::AllowUnsigned
-    );
-    assert_eq!(
-        LogoutPolicy::compatibility().responses,
-        LogoutSignaturePolicy::AllowUnsigned
     );
 }

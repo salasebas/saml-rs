@@ -10,8 +10,8 @@
 //! that callers can store with browser session state.
 //!
 //! [`SpValidationPolicy::recommended`] is the preset for claimed features.
-//! [`SpValidationPolicy::compatibility`] keeps the samlify-port behavior.
-//! `Default` and the config builders start on Recommended.
+//! `Default` and the config builders start on it. To relax one rule, assign
+//! the field that names it.
 //!
 //! Where the compact flow examples below use
 //! [`ReplayPolicy::Disabled`] or unsigned metadata, treat those
@@ -21,11 +21,11 @@
 //! [`SamlValidationContext::with_replay_retention`].
 //!
 //! ```
-//! use saml_rs::{AcsEndpoint, EntityId, SpConfig, SpValidationPolicy};
+//! use saml_rs::{AcsEndpoint, EntityId, SpConfig};
 //!
 //! # fn main() -> Result<(), saml_rs::SamlError> {
+//! # if cfg!(not(crypto)) { return Ok(()); }
 //! let config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-//!     .validation(SpValidationPolicy::compatibility())
 //!     .build()?;
 //!
 //! assert_eq!(config.entity_id().as_str(), "https://sp.example.com/metadata");
@@ -40,8 +40,9 @@
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     AcsEndpoint, EntityId, FormField, IdpDescriptor, Inbound, MetadataTrustPolicy, ReplayPolicy,
-//!     SamlValidationContext, ServiceProvider, SpConfig, SpValidationPolicy, StartSso,
+//!     AcsEndpoint, EntityId, FormField, IdentityProvider, IdpDescriptor, Inbound,
+//!     MetadataTrustPolicy, ReplayPolicy, SamlValidationContext, ServiceProvider, SpConfig,
+//!     StartSso,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -51,7 +52,6 @@
 //! # ) -> Result<(), saml_rs::SamlError> {
 //! let sp = ServiceProvider::new(
 //!     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-//!         .validation(SpValidationPolicy::compatibility())
 //!         .build()?,
 //! );
 //! let idp = IdpDescriptor::from_metadata_xml(

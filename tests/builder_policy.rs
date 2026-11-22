@@ -1,15 +1,18 @@
-//! Compatibility is the legacy permissive preset: the samlify-port behavior.
+#[path = "common/policies_without_crypto.rs"]
+mod policies_without_crypto;
+
+use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
 
 use std::{str::FromStr, time::Duration};
 
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AssertionEncryptionPolicy, AssertionSignaturePolicy,
-    AudienceValidationPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId, IdpConfig,
-    IdpValidationPolicy, KeyEncryptionAlgorithm, LogoutPolicy, LogoutSignaturePolicy,
-    MaskGenerationFunction, NameIdCreationPolicy, PrivateKeyPem, ResponseSignaturePolicy,
-    SamlError, SignatureAlgorithm, SignatureConfig, SpConfig, SpValidationPolicy, SsoEndpoint,
-    TemplatePolicy, TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
+    AuthnRequestSigningPolicy, CertificatePem, Credentials, DataEncryptionAlgorithm,
+    DigestAlgorithm, EntityId, IdpConfig, IdpValidationPolicy, KeyEncryptionAlgorithm,
+    LogoutPolicy, LogoutSignaturePolicy, MaskGenerationFunction, NameIdCreationPolicy,
+    PrivateKeyPem, SamlError, SignatureAlgorithm, SignatureConfig, SpConfig, SpValidationPolicy,
+    SsoEndpoint, TemplatePolicy, TransformAlgorithm, X509Credential, XmlPolicy,
+    XmlSignatureProfile,
 };
 
 #[test]
@@ -42,14 +45,14 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
             EntityId::try_new("https://sp.example.com/metadata")?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
-        .validation(SpValidationPolicy::compatibility())
+        .validation(sp_validation_without_crypto())
         .algorithms(algorithms.clone())
         .build();
         let idp = IdpConfig::builder(
             EntityId::try_new("https://idp.example.com/metadata")?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .algorithms(algorithms)
         .build();
         assert!(matches!(sp, Err(SamlError::Unsupported(_))), "{sp:?}");
@@ -80,7 +83,7 @@ fn idp_config_defaults_issuance_lifetime_to_five_minutes() -> Result<(), Box<dyn
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(idp_validation_without_crypto())
     .build()?;
 
     assert_eq!(config.issuance_lifetime(), Duration::from_secs(300));
@@ -139,6 +142,10 @@ fn idp_config_rejects_unrepresentable_issuance_lifetime() -> Result<(), Box<dyn 
 #[cfg(crypto)]
 #[test]
 fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
+    use saml_rs::{
+        AudienceValidationPolicy, AuthnRequestValidationPolicy, ResponseSignaturePolicy,
+    };
+
     let sp = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -178,28 +185,6 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
         XmlSignatureProfile::ExcludeWeakAlgorithms
     );
     Ok(())
-}
-
-#[test]
-fn compatibility_policy_names_unsigned_choices_explicitly() {
-    let sp = SpValidationPolicy::compatibility();
-    let idp = IdpValidationPolicy::compatibility();
-
-    assert_eq!(sp.assertions, AssertionSignaturePolicy::AllowUnsigned);
-    assert_eq!(
-        sp.responses,
-        ResponseSignaturePolicy::AllowUnsignedEncryptedCbc
-    );
-    assert_eq!(sp.authn_requests, AuthnRequestSigningPolicy::DoNotSign);
-    assert_eq!(sp.audience, AudienceValidationPolicy::Skip);
-    assert_eq!(sp.logout, LogoutPolicy::compatibility());
-    assert_eq!(sp.xml_signatures, XmlSignatureProfile::AllowWeakAlgorithms);
-    assert_eq!(
-        idp.authn_requests,
-        AuthnRequestValidationPolicy::AllowUnsigned
-    );
-    assert_eq!(idp.xml_signatures, XmlSignatureProfile::AllowWeakAlgorithms);
-    assert_eq!(idp.logout.requests, LogoutSignaturePolicy::AllowUnsigned);
 }
 
 #[test]
@@ -390,7 +375,7 @@ fn sp_builder_rejects_two_acs_endpoints_with_the_same_index(
         AcsEndpoint::post("https://sp.example.com/acs")?.with_index(1),
     )
     .acs_endpoint(AcsEndpoint::post("https://sp.example.com/acs-2")?.with_index(1))
-    .validation(SpValidationPolicy::compatibility())
+    .validation(sp_validation_without_crypto())
     .build();
 
     assert!(matches!(
@@ -420,14 +405,14 @@ fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
             EntityId::try_new("https://sp.example.com/metadata")?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
-        .validation(SpValidationPolicy::compatibility())
+        .validation(sp_validation_without_crypto())
         .templates(templates.clone())
         .build();
         let idp = IdpConfig::builder(
             EntityId::try_new("https://idp.example.com/metadata")?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .templates(templates)
         .build();
 
@@ -461,16 +446,16 @@ fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
 }
 
 #[test]
-fn sp_builder_allows_protocol_only_compatibility_without_credentials(
+fn sp_builder_without_signature_requirements_needs_no_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy::compatibility())
+    .validation(sp_validation_without_crypto())
     .build()?;
 
-    assert_eq!(config.validation(), &SpValidationPolicy::compatibility());
+    assert_eq!(config.validation(), &sp_validation_without_crypto());
     assert_eq!(config.credentials(), &Credentials::default());
     Ok(())
 }
@@ -485,7 +470,7 @@ fn sp_builder_requires_decryption_key_when_encrypted_assertions_are_selected(
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy::compatibility())
+    .validation(sp_validation_without_crypto())
     .xml(xml)
     .build();
 

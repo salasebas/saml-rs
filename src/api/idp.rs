@@ -438,13 +438,13 @@ impl IdentityProvider {
     ///
     /// ```
     /// use saml_rs::{
-    ///     CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig, IdpValidationPolicy,
-    ///     RememberIdentityProvider, SsoEndpoint,
+    ///     CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig,
+    ///     RememberIdentityProvider, ServiceProvider, SsoEndpoint,
     /// };
     ///
+    /// # if cfg!(not(crypto)) { return Ok::<(), saml_rs::SamlError>(()); }
     /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::post("https://idp.example.com/sso")?)
-    ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let cookie = idp.common_domain_cookie(RememberIdentityProvider::new(

@@ -44,7 +44,7 @@ fn sp(lifetime: Option<MetadataLifetime>) -> Result<saml_rs::ServiceProvider, Sa
         EntityId::try_new(SP_ENTITY_ID)?,
         AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
     )
-    .validation(SpValidationPolicy::compatibility());
+    .validation(SpValidationPolicy::default());
     let builder = match lifetime {
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,
@@ -65,7 +65,7 @@ fn idp(lifetime: Option<MetadataLifetime>) -> Result<saml_rs::IdentityProvider, 
         IDP_NIM_URL,
     )?))
     .name_id_format(NameIdFormat::Persistent)
-    .validation(IdpValidationPolicy::compatibility());
+    .validation(IdpValidationPolicy::default());
     let builder = match lifetime {
         Some(lifetime) => builder.metadata_lifetime(lifetime),
         None => builder,

@@ -37,6 +37,7 @@
 | A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
 | `Saml`, `Sp`, `Idp`, or `Unknown` | Removed; use `ServiceProvider` and `IdentityProvider` | [1.25](#125-replace-samlsp-and-samlidp-with-serviceprovider-and-identityprovider) |
+| `SpValidationPolicy::compatibility`, `IdpValidationPolicy::compatibility`, or `LogoutPolicy::compatibility` | Removed; set the fields it relaxed | [1.26](#126-replace-compatibility-with-the-fields-it-relaxed) |
 | `Saml::sp(config)?` or `Saml::idp(config)?` | `ServiceProvider::new(config)` and `IdentityProvider::new(config)` return the provider, not a `Result` | [Typed config](config.md#call-serviceprovidernew-and-identityprovidernew-without-) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
 | `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
@@ -192,7 +193,8 @@ use saml_rs::{ServiceProvider, StartSso};
 `AuthnRequestValidationPolicy`, or `AudienceValidationPolicy`, and code that
 needs `Default` on one of them through a generic bound or a derived `Default`.
 Code that builds `SpValidationPolicy` or `IdpValidationPolicy` from
-`recommended()`, `compatibility()`, or `default()` does not change.
+`recommended()` or `default()` does not change. `compatibility()` is removed,
+as [1.26](#126-replace-compatibility-with-the-fields-it-relaxed) describes.
 
 **Before:** each enum had a `Default` that differed from its value in
 `recommended()`:
@@ -214,10 +216,10 @@ policy.xml_signatures = SpValidationPolicy::recommended().xml_signatures;
 ```
 
 To keep the 0.8 behavior, name the variant from the `Default` in 0.8 column
-instead. For the first three enums, that variant is the `compatibility()`
-value, which relaxes a recommended check. `AudienceValidationPolicy::Validate`
-is now `RequireRestriction`. It is stricter than Recommended: it also rejects
-a bearer assertion that omits `<AudienceRestriction>`.
+instead. For the first three enums, that variant relaxes a recommended check.
+`AudienceValidationPolicy::Validate` is now `RequireRestriction`. It is
+stricter than Recommended: it also rejects a bearer assertion that omits
+`<AudienceRestriction>`.
 
 ## 1.6 Match the `SamlError` variant the crate returns
 
@@ -343,8 +345,10 @@ and build again:
 
 ```rust
 let base = SpConfig::builder(entity_id, acs);
-let strict = base.clone().validation(SpValidationPolicy::recommended()).build()?;
-let relaxed = base.validation(SpValidationPolicy::compatibility()).build()?;
+let recommended = base.clone().build()?;
+let mut unsigned_logout = SpValidationPolicy::recommended();
+unsigned_logout.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+let relaxed = base.validation(unsigned_logout).build()?;
 ```
 
 ## 1.8 Read config fields through getters
@@ -874,3 +878,82 @@ fn providers(sp: SpConfig, idp: IdpConfig) -> (ServiceProvider, IdentityProvider
     (ServiceProvider::new(sp), IdentityProvider::new(idp))
 }
 ```
+
+## 1.26 Replace `compatibility()` with the fields it relaxed
+
+**Affects:** code that calls `SpValidationPolicy::compatibility`,
+`IdpValidationPolicy::compatibility`, or `LogoutPolicy::compatibility`.
+
+**Before:** each `compatibility()` returned the legacy permissive preset, the
+behaviour of the samlify port. One call relaxed several checks at once.
+
+**Now:** the three functions are removed. Recommended is the only preset. You
+relax a check by assigning the field that names it.
+
+**Upgrade:** start from `recommended()` or `default()` and set only the fields
+your deployment needs. These are the fields where `compatibility()` differed
+from `recommended()`. The table uses the 0.9 variant names;
+[1.16](#116-rename-the-relaxed-policy-and-algorithm-variants) maps them to the
+0.8 names:
+
+| Policy | Field | `compatibility()` | `recommended()` |
+| --- | --- | --- | --- |
+| `SpValidationPolicy` | `responses` | `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc` | `RequireForEncryptedCbc` |
+| `SpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
+| `SpValidationPolicy` | `audience` | `AudienceValidationPolicy::Skip` | `EvaluatePresentRestrictions` |
+| `SpValidationPolicy`, `IdpValidationPolicy` | `logout.requests`, `logout.responses` | `LogoutSignaturePolicy::AllowUnsigned` | `RequireSigned` |
+| `IdpValidationPolicy` | `authn_requests` | `AuthnRequestValidationPolicy::AllowUnsigned` | `AllowUnsignedVerifyIfPresent` |
+| `IdpValidationPolicy` | `xml_signatures` | `XmlSignatureProfile::AllowWeakAlgorithms` | `ExcludeWeakAlgorithms` |
+| `LogoutPolicy` | `requests`, `responses` | `LogoutSignaturePolicy::AllowUnsigned` | `RequireSigned` |
+
+The other fields had the same value in both presets.
+
+To keep exactly what `SpValidationPolicy::compatibility()` returned, set every
+row for the service provider. Then delete each line your deployment does not
+need:
+
+```rust
+use saml_rs::{
+    AudienceValidationPolicy, LogoutSignaturePolicy, ResponseSignaturePolicy, SpValidationPolicy,
+    XmlSignatureProfile,
+};
+
+// Before
+let validation = SpValidationPolicy::compatibility();
+
+// Now
+let mut validation = SpValidationPolicy::recommended();
+validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
+validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
+validation.audience = AudienceValidationPolicy::Skip;
+validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+```
+
+For the identity provider:
+
+```rust
+use saml_rs::{
+    AuthnRequestValidationPolicy, IdpValidationPolicy, LogoutSignaturePolicy, XmlSignatureProfile,
+};
+
+// Before
+let validation = IdpValidationPolicy::compatibility();
+
+// Now
+let mut validation = IdpValidationPolicy::recommended();
+validation.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
+validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
+validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+```
+
+If you built without a crypto provider feature, `compatibility()` was the
+preset that `build()` accepted. Without a provider, `build()` returns
+`SamlError::Unsupported` for a policy that requires a signature. Under
+Recommended, set these fields before you call `build()`:
+
+- `SpValidationPolicy`: set `responses` to `AllowUnsignedEncryptedCbc`, and
+  set `logout.requests` and `logout.responses` to `AllowUnsigned`.
+- `IdpValidationPolicy`: set `logout.requests` and `logout.responses` to
+  `AllowUnsigned`.

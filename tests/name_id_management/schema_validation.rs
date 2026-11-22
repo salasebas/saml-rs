@@ -15,7 +15,7 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
         .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
             IDP_NIM_URL,
         )?))
-        .validation(saml_rs::IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .xml(xml)
         .build()?,
     );

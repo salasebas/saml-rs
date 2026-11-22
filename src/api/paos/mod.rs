@@ -361,28 +361,21 @@ impl ServiceProvider {
     ///
     /// # Examples
     ///
-    /// The builders start on [`crate::SpValidationPolicy::recommended`] and
-    /// [`crate::IdpValidationPolicy::recommended`]. This example passes
-    /// [`crate::SpValidationPolicy::compatibility`] and
-    /// [`crate::IdpValidationPolicy::compatibility`] so it builds without a
-    /// crypto provider.
-    ///
     /// ```
     /// use saml_rs::{
     ///     check_paos_client_headers, AcsEndpoint, EndpointUrl, EntityId, IdentityProvider,
-    ///     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, ServiceProvider,
-    ///     SpConfig, SpValidationPolicy, SsoEndpoint, StartPaosSso,
+    ///     IdpConfig, IdpDescriptor, MetadataTrustPolicy, ServiceProvider, SpConfig, SsoEndpoint,
+    ///     StartPaosSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
+    /// # if cfg!(not(crypto)) { return Ok(()); }
     /// let sp = ServiceProvider::new(
     ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-    ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
-    ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
     /// let idp = IdpDescriptor::from_metadata_xml(

@@ -213,9 +213,8 @@ impl<Delivery> RespondSso<Delivery> {
     /// Allow an unsigned Response around a CBC-encrypted Assertion.
     ///
     /// This relaxes SAML V2.0 Approved Errata 05 E93, which recommends signing
-    /// the Response so the ciphertext is integrity protected. It is not the
-    /// legacy permissive preset. Typed identity providers sign such Responses
-    /// unless this is selected.
+    /// the Response so the ciphertext is integrity protected. Typed identity
+    /// providers sign such Responses unless this is selected.
     pub fn allow_unsigned_encrypted_cbc(mut self) -> Self {
         self.response_signing = ResponseSigning::AllowUnsignedEncryptedCbc;
         self

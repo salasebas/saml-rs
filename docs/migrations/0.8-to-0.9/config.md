@@ -161,7 +161,7 @@ another base:
 
 | Struct | Start from |
 | --- | --- |
-| `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `default()`, which is `recommended()`, or `compatibility()` |
+| `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `default()`, which is `recommended()` |
 | `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy` | `default()` |
 | `XmlLimits` | `default()` or `unbounded()` |
 | `SignatureConfig`, `Organization` | `default()` |

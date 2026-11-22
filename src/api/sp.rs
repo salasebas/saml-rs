@@ -166,17 +166,15 @@ impl ServiceProvider {
     ///
     /// ```
     /// use saml_rs::{
-    ///     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    ///     MetadataTrustPolicy, RelayState, ServiceProvider, SpConfig, SpValidationPolicy,
-    ///     SsoEndpoint, StartSso,
+    ///     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, MetadataTrustPolicy,
+    ///     RelayState, ServiceProvider, SpConfig, SsoEndpoint, StartSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
+    /// # if cfg!(not(crypto)) { return Ok(()); }
     /// let sp_config = SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
-    ///     .validation(SpValidationPolicy::compatibility())
     ///     .build()?;
     /// let idp_config = IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
-    ///     .validation(IdpValidationPolicy::compatibility())
     ///     .build()?;
     ///
     /// let sp = ServiceProvider::new(sp_config);

@@ -1,4 +1,3 @@
-//! Compatibility is the legacy permissive preset.
 #![cfg(crypto)]
 
 #[path = "typed_slo/schema_validation.rs"]
@@ -11,6 +10,7 @@ use saml_rs::tests::engine::LogoutUser;
 #[path = "typed_slo/peer_hmac.rs"]
 mod peer_hmac;
 
+use super::policies_without_crypto::UNSIGNED_LOGOUT;
 use super::replay_cache;
 
 use replay_cache::RecordingReplayCache;
@@ -79,8 +79,7 @@ const LOGOUT_BINDINGS_WITH_SOAP: [LogoutBinding; 4] = [
     LogoutBinding::SimpleSign,
     LogoutBinding::Soap,
 ];
-const UNSIGNED_COMPATIBILITY_BINDINGS: [LogoutBinding; 2] =
-    [LogoutBinding::Post, LogoutBinding::Redirect];
+const UNSIGNED_BINDINGS: [LogoutBinding; 2] = [LogoutBinding::Post, LogoutBinding::Redirect];
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -186,6 +185,20 @@ fn signing_sp_validation() -> SpValidationPolicy {
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        ..IdpValidationPolicy::recommended()
+    }
+}
+
+fn unsigned_logout_sp_validation() -> SpValidationPolicy {
+    SpValidationPolicy {
+        logout: UNSIGNED_LOGOUT,
+        ..SpValidationPolicy::recommended()
+    }
+}
+
+fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
+    IdpValidationPolicy {
+        logout: UNSIGNED_LOGOUT,
         ..IdpValidationPolicy::recommended()
     }
 }
@@ -509,7 +522,7 @@ fn start_unsigned_slo_for_binding(binding: LogoutBinding) -> Result<StartSlo, Sa
 #[derive(Debug, Clone, Copy)]
 enum RequestProtection {
     Signed,
-    UnsignedCompatibility,
+    Unsigned,
 }
 
 fn receive_custom_logout_request(
@@ -521,15 +534,15 @@ fn receive_custom_logout_request(
 ) -> Result<Received<LogoutRequest>, SamlError> {
     let start_options = match protection {
         RequestProtection::Signed => start_slo_for_binding(binding)?,
-        RequestProtection::UnsignedCompatibility => start_unsigned_slo_for_binding(binding)?,
+        RequestProtection::Unsigned => start_unsigned_slo_for_binding(binding)?,
     };
     match receiver_role {
         LocalSloRole::Idp => {
             let sp = ServiceProvider::new(sp_config_with_logout_request_template(template)?);
             let idp = IdentityProvider::new(match protection {
                 RequestProtection::Signed => idp_config()?,
-                RequestProtection::UnsignedCompatibility => {
-                    idp_config_with_validation(IdpValidationPolicy::compatibility())?
+                RequestProtection::Unsigned => {
+                    idp_config_with_validation(unsigned_logout_idp_validation())?
                 }
             });
             let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -543,8 +556,8 @@ fn receive_custom_logout_request(
         LocalSloRole::Sp => {
             let sp = ServiceProvider::new(match protection {
                 RequestProtection::Signed => sp_config()?,
-                RequestProtection::UnsignedCompatibility => {
-                    sp_config_with_validation(SpValidationPolicy::compatibility())?
+                RequestProtection::Unsigned => {
+                    sp_config_with_validation(unsigned_logout_sp_validation())?
                 }
             });
             let idp =
@@ -665,21 +678,21 @@ fn receive_crafted_logout_request(
     validation: SamlValidationContext<'_>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
     let sp = ServiceProvider::new(match (receiver_role, protection) {
-        (LocalSloRole::Sp, RequestProtection::UnsignedCompatibility) => {
-            sp_config_with_validation(SpValidationPolicy::compatibility())?
+        (LocalSloRole::Sp, RequestProtection::Unsigned) => {
+            sp_config_with_validation(unsigned_logout_sp_validation())?
         }
         _ => sp_config()?,
     });
     let idp = IdentityProvider::new(match (receiver_role, protection) {
-        (LocalSloRole::Idp, RequestProtection::UnsignedCompatibility) => {
-            idp_config_with_validation(IdpValidationPolicy::compatibility())?
+        (LocalSloRole::Idp, RequestProtection::Unsigned) => {
+            idp_config_with_validation(unsigned_logout_idp_validation())?
         }
         _ => idp_config()?,
     });
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let input = match protection {
         RequestProtection::Signed => signed_logout_request_input(xml, binding)?,
-        RequestProtection::UnsignedCompatibility => unsigned_logout_request_input(xml, binding)?,
+        RequestProtection::Unsigned => unsigned_logout_request_input(xml, binding)?,
     };
     match receiver_role {
         LocalSloRole::Idp => idp.receive_slo(&sp_descriptor, input, validation),
@@ -784,7 +797,7 @@ fn unsigned_logout_response_input(
 #[derive(Debug, Clone, Copy)]
 enum ResponseProtection {
     Signed,
-    UnsignedCompatibility,
+    Unsigned,
 }
 
 fn finish_custom_logout_response(
@@ -796,14 +809,12 @@ fn finish_custom_logout_response(
 ) -> Result<LogoutCompleted, SamlError> {
     let sp = ServiceProvider::new(match protection {
         ResponseProtection::Signed => sp_config()?,
-        ResponseProtection::UnsignedCompatibility => {
-            sp_config_with_validation(SpValidationPolicy::compatibility())?
-        }
+        ResponseProtection::Unsigned => sp_config_with_validation(unsigned_logout_sp_validation())?,
     });
     let idp = IdentityProvider::new(match protection {
         ResponseProtection::Signed => idp_config()?,
-        ResponseProtection::UnsignedCompatibility => {
-            idp_config_with_validation(IdpValidationPolicy::compatibility())?
+        ResponseProtection::Unsigned => {
+            idp_config_with_validation(unsigned_logout_idp_validation())?
         }
     });
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -821,9 +832,7 @@ fn finish_custom_logout_response(
             );
             let input = match protection {
                 ResponseProtection::Signed => signed_logout_response_input(&xml, binding)?,
-                ResponseProtection::UnsignedCompatibility => {
-                    unsigned_logout_response_input(&xml, binding)?
-                }
+                ResponseProtection::Unsigned => unsigned_logout_response_input(&xml, binding)?,
             };
             sp.finish_slo(&idp_descriptor, &started.pending, input, validation)
         }
@@ -838,9 +847,7 @@ fn finish_custom_logout_response(
             );
             let input = match protection {
                 ResponseProtection::Signed => signed_logout_response_input(&xml, binding)?,
-                ResponseProtection::UnsignedCompatibility => {
-                    unsigned_logout_response_input(&xml, binding)?
-                }
+                ResponseProtection::Unsigned => unsigned_logout_response_input(&xml, binding)?,
             };
             idp.finish_slo(&sp_descriptor, &started.pending, input, validation)
         }
@@ -910,7 +917,7 @@ fn start_idp_slo_with_template(template: String) -> Result<StartedSloResult, Sam
         Duration::from_secs(300),
         Some(template),
         Credentials::default(),
-        IdpValidationPolicy::compatibility(),
+        unsigned_logout_idp_validation(),
     )?);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     match idp.start_slo(
@@ -1111,12 +1118,10 @@ fn typed_slo_start_and_response_bindings_use_peer_endpoints(
 }
 
 #[test]
-fn typed_slo_signs_front_channel_responses_despite_compatibility_policy(
+fn typed_slo_signs_front_channel_responses_despite_unsigned_logout_policy(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_validation(
-        IdpValidationPolicy::compatibility(),
-    )?);
+    let idp = IdentityProvider::new(idp_config_with_validation(unsigned_logout_idp_validation())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
     let request_input = Inbound::post(post_fields(&started.outbound)?);
@@ -1556,9 +1561,9 @@ fn typed_facades_reject_mismatched_logout_request_destination_before_replay(
 }
 
 #[test]
-fn typed_facades_allow_unsigned_missing_destination_only_under_compatibility_policy(
+fn typed_facades_allow_unsigned_missing_destination_only_when_unsigned_logout_is_accepted(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in UNSIGNED_COMPATIBILITY_BINDINGS {
+    for binding in UNSIGNED_BINDINGS {
         for receiver_role in LOCAL_SLO_ROLES {
             let xml = logout_request_xml(
                 &format!("_unsigned_missing_{receiver_role:?}_{binding:?}"),
@@ -1569,7 +1574,7 @@ fn typed_facades_allow_unsigned_missing_destination_only_under_compatibility_pol
                 &xml,
                 binding,
                 receiver_role,
-                RequestProtection::UnsignedCompatibility,
+                RequestProtection::Unsigned,
                 validation(),
             )?;
             assert_eq!(received.message().destination(), None);
@@ -1744,11 +1749,11 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(sp_config_with_validation(SpValidationPolicy {
         logout: recommended_logout_accept(),
-        ..SpValidationPolicy::compatibility()
+        ..SpValidationPolicy::recommended()
     })?);
     let idp = IdentityProvider::new(idp_config_with_validation(IdpValidationPolicy {
         logout: recommended_logout_accept(),
-        ..IdpValidationPolicy::compatibility()
+        ..IdpValidationPolicy::recommended()
     })?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     assert!(!sp_descriptor.signed_metadata_xml().is_some());
@@ -1981,15 +1986,15 @@ fn typed_facades_reject_mismatched_logout_response_destination_before_replay(
 }
 
 #[test]
-fn typed_facades_allow_unsigned_logout_response_without_destination_in_compatibility_mode(
+fn typed_facades_allow_unsigned_logout_response_without_destination_when_unsigned_logout_is_accepted(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for binding in UNSIGNED_COMPATIBILITY_BINDINGS {
+    for binding in UNSIGNED_BINDINGS {
         for receiver_role in LOCAL_SLO_ROLES {
             let completed = finish_custom_logout_response(
                 receiver_role,
                 binding,
                 None,
-                ResponseProtection::UnsignedCompatibility,
+                ResponseProtection::Unsigned,
                 validation(),
             )?;
             assert_eq!(completed.response().destination(), None);
@@ -2371,7 +2376,7 @@ fn typed_session_authority_slo_reports_issuance_expiration_overflow_before_rende
         Duration::from_secs(i64::MAX as u64),
         Some(malformed_template),
         Credentials::default(),
-        IdpValidationPolicy::compatibility(),
+        unsigned_logout_idp_validation(),
     )?);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
@@ -2594,7 +2599,7 @@ fn typed_session_authority_custom_logout_template_requires_explicit_name_id_form
         .name_id_format(NameIdFormat::EmailAddress)
         .credentials(Credentials::default())
         .issuance_lifetime(Duration::from_secs(7 * 60))
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(unsigned_logout_idp_validation())
         .templates(TemplatePolicy {
             logout_request_template: Some(template),
             ..TemplatePolicy::default()
@@ -3005,7 +3010,7 @@ fn typed_facade_finish_slo_requires_signature_before_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    for binding in UNSIGNED_COMPATIBILITY_BINDINGS {
+    for binding in UNSIGNED_BINDINGS {
         let started = sp.start_slo(&idp_descriptor, subject()?, start_slo_for_binding(binding)?)?;
         let xml = logout_response_xml(
             &format!("_unsigned_refusal_{binding:?}"),
@@ -3211,9 +3216,7 @@ fn typed_facade_slo_rejects_received_relay_state_above_the_receive_limit(
 fn typed_facade_slo_rejects_a_repeated_relay_state_on_unsigned_redirect(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_validation(
-        IdpValidationPolicy::compatibility(),
-    )?);
+    let idp = IdentityProvider::new(idp_config_with_validation(unsigned_logout_idp_validation())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(
         &idp_descriptor,
@@ -3313,7 +3316,7 @@ fn typed_facade_rejects_custom_logout_response_profile_before_correlation(
 }
 
 #[test]
-fn typed_facade_allows_explicit_unsigned_logout_request_for_compatibility(
+fn typed_facade_starts_an_explicitly_unsigned_logout_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
     let (_sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -3772,7 +3775,7 @@ fn typed_session_authority_logout_request_without_subject_format_sends_configure
         .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
         .name_id_format(NameIdFormat::EmailAddress)
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(unsigned_logout_idp_validation())
         .build()?,
     );
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
@@ -3852,7 +3855,7 @@ fn typed_logout_request_keeps_whitespace_in_a_name_id_format_under_generation_ru
         Duration::from_secs(300),
         Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
         signing_credentials(),
-        IdpValidationPolicy::compatibility(),
+        unsigned_logout_idp_validation(),
     )?);
     for format in [
         "urn:example:a\tb",
@@ -3942,7 +3945,7 @@ fn typed_session_authority_logout_request_without_any_format_omits_format_like_t
         Duration::from_secs(300),
         Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
         signing_credentials(),
-        IdpValidationPolicy::compatibility(),
+        unsigned_logout_idp_validation(),
     )?);
     let started = template_idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
@@ -3958,7 +3961,7 @@ fn typed_slo_logout_request_template_renders_name_id_qualifiers(
         Duration::from_secs(300),
         Some(QUALIFIED_LOGOUT_REQUEST_TEMPLATE.to_string()),
         signing_credentials(),
-        IdpValidationPolicy::compatibility(),
+        unsigned_logout_idp_validation(),
     )?);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
@@ -3997,7 +4000,7 @@ fn typed_slo_logout_request_template_without_qualifier_placeholders_fails_closed
         Duration::from_secs(300),
         Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
         signing_credentials(),
-        IdpValidationPolicy::compatibility(),
+        unsigned_logout_idp_validation(),
     )?);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
 
@@ -4209,7 +4212,7 @@ fn soap_slo_round_trips_when_the_session_authority_starts_it(
 }
 
 #[test]
-fn soap_logout_requires_signatures_under_the_compatibility_policy(
+fn soap_logout_requires_signatures_when_unsigned_logout_is_accepted(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for receiver_role in LOCAL_SLO_ROLES {
         let xml = logout_request_xml(
@@ -4221,7 +4224,7 @@ fn soap_logout_requires_signatures_under_the_compatibility_policy(
             &xml,
             LogoutBinding::Soap,
             receiver_role,
-            RequestProtection::UnsignedCompatibility,
+            RequestProtection::Unsigned,
             validation(),
         ) {
             Err(SamlError::SignatureMissing) => {}
@@ -4236,7 +4239,7 @@ fn soap_logout_requires_signatures_under_the_compatibility_policy(
             receiver_role,
             LogoutBinding::Soap,
             None,
-            ResponseProtection::UnsignedCompatibility,
+            ResponseProtection::Unsigned,
             validation(),
         ) {
             Err(SamlError::SignatureMissing) => {}

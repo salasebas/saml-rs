@@ -15,13 +15,13 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::{
-    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
-    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
-    MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
-    OutboundDelivery, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
-    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status,
-    SubordinateStatusCode,
+    AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
+    AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId,
+    NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound, OutboundDelivery, Received,
+    ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status, SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -404,12 +404,11 @@ fn received_authn_request_keeps_base_id_and_encrypted_id_distinct_from_the_prese
 }
 
 #[test]
-fn received_authn_request_accepts_these_fields_under_recommended_and_compatibility(
+fn unsigned_authn_request_fields_are_accepted_under_both_unsigned_request_policies(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for validation_policy in [
-        IdpValidationPolicy::recommended(),
-        IdpValidationPolicy::compatibility(),
-    ] {
+    let mut unverified = IdpValidationPolicy::recommended();
+    unverified.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
+    for validation_policy in [IdpValidationPolicy::recommended(), unverified] {
         let receipt = receive(validation_policy, StartSso::post(), |xml| {
             let xml = insert_root_attribute(xml, "ForceAuthn", "true")?;
             let xml = insert_root_attribute(xml, "IsPassive", "true")?;

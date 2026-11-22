@@ -3,7 +3,7 @@
 The algorithms a typed identity provider and service provider sign, verify,
 encrypt, and decrypt with. `AlgorithmPolicy` selects what is generated. It is
 not a field of `SpValidationPolicy` or `IdpValidationPolicy`, so Recommended
-and Compatibility do not change it. `AlgorithmPolicy::default()` is what
+does not change it. `AlgorithmPolicy::default()` is what
 `Default` and the config builders use: RSA-SHA256 with a
 SHA-256 digest, the enveloped-signature and exclusive canonicalization
 transforms, AES-256-CBC, and RSA-OAEP. `AlgorithmPolicy` does not limit what
@@ -54,8 +54,7 @@ A verifier accepts the `SignatureMethod` and `DigestMethod` values that the
 selected provider implements, that the peer's key can verify, and that the
 `XmlSignatureProfile` allows. `XmlSignatureProfile` is the `xml_signatures`
 field of `SpValidationPolicy` and `IdpValidationPolicy`. Recommended uses
-`ExcludeWeakAlgorithms`. Compatibility uses
-`AllowWeakAlgorithms`. Accepting an algorithm outside the
+`ExcludeWeakAlgorithms`, and `AllowWeakAlgorithms` relaxes it. Accepting an algorithm outside the
 Conformance §4.1 set is the Errata 05 E50 `MAY`. No profile is an OASIS
 receiver rule.
 

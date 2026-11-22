@@ -11,9 +11,9 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
     EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy, RespondSlo, SamlError,
-    SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSlo, Status,
+    LogoutSignaturePolicy, LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
+    RespondSlo, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -32,7 +32,21 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn sp(validation_policy: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+fn unsigned_logout_sp_validation() -> SpValidationPolicy {
+    let mut policy = SpValidationPolicy::recommended();
+    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+    policy
+}
+
+fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
+    let mut policy = IdpValidationPolicy::recommended();
+    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+    policy
+}
+
+fn sp(validation_policy: SpValidationPolicy) -> Result<ServiceProvider, SamlError> {
     Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -122,8 +136,8 @@ fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
 #[test]
 fn logout_response_uses_response_location_and_request_uses_location(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = sp(SpValidationPolicy::compatibility())?;
-    let identity_provider = idp(IdpValidationPolicy::compatibility(), &[IDP_SLO])?;
+    let service_provider = sp(unsigned_logout_sp_validation())?;
+    let identity_provider = idp(unsigned_logout_idp_validation(), &[IDP_SLO])?;
     let idp_for_requests = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         &format!(
@@ -288,11 +302,8 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
 #[test]
 fn slo_destination_matches_the_actual_published_receiving_endpoint(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = sp(SpValidationPolicy::compatibility())?;
-    let identity_provider = idp(
-        IdpValidationPolicy::compatibility(),
-        &[IDP_SLO, IDP_SLO_SECOND],
-    )?;
+    let service_provider = sp(unsigned_logout_sp_validation())?;
+    let identity_provider = idp(unsigned_logout_idp_validation(), &[IDP_SLO, IDP_SLO_SECOND])?;
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         service_provider.metadata_xml(),

@@ -38,8 +38,8 @@ same principal and session is not accepted.
 _Avoid_: session store, revoked cookie
 
 **Validation preset**:
-A named bundle of validation choices. The presets are Compatibility and
-Recommended.
+A named bundle of validation choices. Recommended is the only preset. A
+caller relaxes one rule by assigning the field that names it.
 _Avoid_: profile, strict
 
 **Library hardening**:
@@ -78,12 +78,6 @@ requirements stay in force. Recommendations start enabled and can be relaxed
 only by an explicit named option. A producer recommendation does not by itself
 become a receiver rejection.
 _Avoid_: default, full SAML conformance, profile
-
-**Compatibility**:
-The legacy permissive preset. It is the samlify-port behaviour. It does not
-claim standards conformance, and it does not name a relaxation of an OASIS
-recommendation.
-_Avoid_: OASIS relaxation, recommended, default
 
 **Binding signature**:
 The signature that HTTP-Redirect or HTTP-POST-SimpleSign carries in the

@@ -1,10 +1,14 @@
+#[path = "common/policies_without_crypto.rs"]
+mod policies_without_crypto;
+
+use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+
 use std::time::SystemTime;
 
 use saml_rs::{
     AcsEndpoint, EndpointUrl, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, ReplayPolicy, SamlError,
-    SamlValidationContext, SchemaValidator, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartSso, XmlPolicy,
+    Inbound, MetadataTrustPolicy, ReplayPolicy, SamlError, SamlValidationContext, SchemaValidator,
+    ServiceProvider, SpConfig, SpDescriptor, SsoEndpoint, StartSso, XmlPolicy,
 };
 
 const SP: &str = "https://sp.example.com/metadata";
@@ -36,7 +40,7 @@ fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
             EntityId::try_new(SP)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
-        .validation(SpValidationPolicy::compatibility())
+        .validation(sp_validation_without_crypto())
         .build()?,
     ))
 }
@@ -47,7 +51,7 @@ fn idp(validator: Option<SchemaValidator>) -> Result<saml_rs::IdentityProvider, 
             EntityId::try_new(IDP)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .xml(policy(validator))
         .build()?,
     ))

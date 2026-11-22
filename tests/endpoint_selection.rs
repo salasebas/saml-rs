@@ -41,7 +41,7 @@ fn sp_with_default_acs() -> Result<saml_rs::ServiceProvider, SamlError> {
         )
         .acs_endpoint(AcsEndpoint::post(DEFAULT_ACS)?.with_index(1).with_default())
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::compatibility())
+        .validation(SpValidationPolicy::default())
         .build()?,
     ))
 }
@@ -56,7 +56,7 @@ fn idp_with_sso(first: &str, more: &[&str]) -> Result<saml_rs::IdentityProvider,
     Ok(IdentityProvider::new(
         builder
             .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::compatibility())
+            .validation(IdpValidationPolicy::default())
             .build()?,
     ))
 }
@@ -142,7 +142,7 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
                 .with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::compatibility())
+        .validation(SpValidationPolicy::default())
         .build()?,
     );
     let (cross_binding_descriptor, _) = descriptors(&cross_binding_sp, &idp)?;
@@ -272,7 +272,7 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
             EndpointUrl::try_new("https://idp.example.com/artifact")?,
         ))
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     );
     for binding in [
@@ -296,7 +296,7 @@ fn protocol_binding_alone_uses_the_binding_default() -> Result<(), Box<dyn std::
             )
             .acs_endpoint(AcsEndpoint::new(binding, EndpointUrl::try_new(FIRST_ACS)?).with_index(1))
             .credentials(signing_credentials())
-            .validation(SpValidationPolicy::compatibility())
+            .validation(SpValidationPolicy::default())
             .build()?,
         );
         let (sp_descriptor, _) = descriptors(&sp, &idp)?;

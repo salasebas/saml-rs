@@ -23,4 +23,4 @@ Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, a
 - [XML schema validation](conformance/xml-schema-validation.md) for the optional callback on each role and explicit metadata imports.
 - [Name identifier management](conformance/name-id-management.md) for `start_name_id_management`, `receive_name_id_management`, `respond_name_id_management`, and their `_redirect` counterparts with `finish_name_id_management_redirect`.
 
-Why Compatibility and Recommended are separate is in [Validation presets](../explanation/validation-presets.md).
+Why Recommended is the only preset is in [Validation presets](../explanation/validation-presets.md).

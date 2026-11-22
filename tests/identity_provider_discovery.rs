@@ -4,19 +4,22 @@ use std::time::Duration;
 
 use saml_rs::{
     CommonDomainCookie, CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig,
-    IdpValidationPolicy, RememberIdentityProvider, SamlError, SsoEndpoint,
+    IdpValidationPolicy, LogoutSignaturePolicy, RememberIdentityProvider, SamlError, SsoEndpoint,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 /// Standard base64 of `IDP_ENTITY_ID`, then percent-encoded (`=` is `%3D`).
 const IDP_ENTITY_COOKIE_VALUE: &str = "aHR0cHM6Ly9pZHAuZXhhbXBsZS5jb20vbWV0YWRhdGE%3D";
 
-fn identity_provider(entity_id: &str) -> Result<saml_rs::IdentityProvider, SamlError> {
+fn identity_provider(entity_id: &str) -> Result<IdentityProvider, SamlError> {
+    let mut validation = IdpValidationPolicy::recommended();
+    validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+    validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
     let config = IdpConfig::builder(
         EntityId::try_new(entity_id)?,
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(validation)
     .build()?;
     Ok(IdentityProvider::new(config))
 }

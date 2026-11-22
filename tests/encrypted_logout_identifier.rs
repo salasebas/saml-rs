@@ -18,13 +18,13 @@ use saml_rs::constants::status_code;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
-    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
-    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, OutstandingLogout,
-    PrivateKeyPem, Received, ReplayPolicy, RespondSlo, RespondSso, SamlError,
-    SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel,
-    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
-    StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy,
-    XmlPolicy,
+    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSignaturePolicy,
+    LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
+    OutboundDelivery, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy, RespondSlo,
+    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
+    SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
+    XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
 
@@ -100,6 +100,13 @@ fn sp_with(
         .xml(xml(encryption))
         .build()?,
     ))
+}
+
+fn unsigned_logout() -> LogoutPolicy {
+    let mut logout = LogoutPolicy::recommended();
+    logout.requests = LogoutSignaturePolicy::AllowUnsigned;
+    logout.responses = LogoutSignaturePolicy::AllowUnsigned;
+    logout
 }
 
 fn idp_with(
@@ -574,14 +581,8 @@ fn encrypted_id_requires_the_peer_encryption_key() -> Result<(), Box<dyn std::er
 #[test]
 fn unsigned_encrypted_id_stays_unread() -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties_with(
-        sp_with(
-            LogoutPolicy::compatibility(),
-            XmlEncryptionPolicy::default(),
-        )?,
-        idp_with(
-            LogoutPolicy::compatibility(),
-            XmlEncryptionPolicy::default(),
-        )?,
+        sp_with(unsigned_logout(), XmlEncryptionPolicy::default())?,
+        idp_with(unsigned_logout(), XmlEncryptionPolicy::default())?,
     )?;
     for initiator in INITIATORS {
         for binding in [LogoutBinding::Post, LogoutBinding::Redirect] {

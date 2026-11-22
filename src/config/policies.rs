@@ -33,7 +33,7 @@ pub enum AssertionSignaturePolicy {
 ///
 /// [`Self::RequireForEncryptedCbc`] follows the recommendation for a
 /// CBC-encrypted assertion. [`Self::AllowUnsignedEncryptedCbc`] relaxes that
-/// recommendation alone and is not the legacy permissive preset.
+/// recommendation alone.
 /// [`Self::RequireSigned`] requires a signature on every response and is
 /// library hardening. The accept combination is classified in
 /// `docs/conformance/web-browser-sso-acceptance.md`.
@@ -226,9 +226,8 @@ pub enum NameIdCreationPolicy {
 /// SP-side validation and outbound signing policy.
 ///
 /// [`Self::recommended`] is the preset for claimed Web Browser SSO and Single
-/// Logout features. [`Self::compatibility`] is the legacy permissive preset.
-/// [`Default`](Default::default) is [`Self::recommended`]. Field classification
-/// is in `docs/conformance/`.
+/// Logout features. [`Default`](Default::default) is [`Self::recommended`].
+/// Field classification is in `docs/conformance/`.
 ///
 /// Start from `default()` or a preset and assign the fields you change. A
 /// struct literal does not compile outside the crate:
@@ -291,19 +290,6 @@ impl SpValidationPolicy {
             logout: LogoutPolicy::recommended(),
         }
     }
-
-    /// Legacy permissive preset: samlify-port behavior.
-    pub fn compatibility() -> Self {
-        Self {
-            assertions: AssertionSignaturePolicy::AllowUnsigned,
-            responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
-            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
-            authn_requests: AuthnRequestSigningPolicy::DoNotSign,
-            audience: AudienceValidationPolicy::Skip,
-            name_id_creation: NameIdCreationPolicy::DoNotAllowCreate,
-            logout: LogoutPolicy::compatibility(),
-        }
-    }
 }
 
 impl Default for SpValidationPolicy {
@@ -315,9 +301,8 @@ impl Default for SpValidationPolicy {
 /// IdP-side validation policy.
 ///
 /// [`Self::recommended`] is the preset for claimed Web Browser SSO and Single
-/// Logout features. [`Self::compatibility`] is the legacy permissive preset.
-/// [`Default`](Default::default) is [`Self::recommended`]. Field classification
-/// is in `docs/conformance/`.
+/// Logout features. [`Default`](Default::default) is [`Self::recommended`].
+/// Field classification is in `docs/conformance/`.
 ///
 /// Start from `default()` or a preset and assign the fields you change. A
 /// struct literal does not compile outside the crate:
@@ -355,18 +340,6 @@ impl IdpValidationPolicy {
             logout: LogoutPolicy::recommended(),
         }
     }
-
-    /// Legacy permissive preset.
-    ///
-    /// Samlify-port behavior. A signature present on an `AuthnRequest` is not
-    /// verified.
-    pub fn compatibility() -> Self {
-        Self {
-            authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
-            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
-            logout: LogoutPolicy::compatibility(),
-        }
-    }
 }
 
 impl Default for IdpValidationPolicy {
@@ -378,8 +351,7 @@ impl Default for IdpValidationPolicy {
 /// Logout request and response signature policy.
 ///
 /// [`Self::recommended`] requires a signature on requests and responses.
-/// [`Default`](Default::default) is that preset. [`Self::compatibility`] is
-/// the legacy permissive preset.
+/// [`Default`](Default::default) is that preset.
 ///
 /// `finish_slo` reads `responses`. `receive_slo` reads `requests`. With
 /// [`crate::LogoutSigning::FollowLocalPolicy`], `requests` also decides
@@ -412,17 +384,6 @@ impl LogoutPolicy {
         Self {
             requests: LogoutSignaturePolicy::RequireSigned,
             responses: LogoutSignaturePolicy::RequireSigned,
-        }
-    }
-
-    /// Legacy permissive preset.
-    ///
-    /// Unsigned logout requests and responses are accepted. This is the
-    /// samlify-port hatch.
-    pub fn compatibility() -> Self {
-        Self {
-            requests: LogoutSignaturePolicy::AllowUnsigned,
-            responses: LogoutSignaturePolicy::AllowUnsigned,
         }
     }
 }

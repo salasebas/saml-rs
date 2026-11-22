@@ -1,3 +1,8 @@
+#[path = "common/policies_without_crypto.rs"]
+mod policies_without_crypto;
+
+use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+
 use std::time::Duration;
 
 use saml_rs::constants::Binding;
@@ -8,8 +13,8 @@ use saml_rs::metadata::{
 };
 use saml_rs::{
     AcsEndpoint, ContactPerson, ContactType, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, LocalizedValue, MetadataLifetime, MetadataTrustPolicy, Organization,
-    SamlError, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    LocalizedValue, MetadataLifetime, MetadataTrustPolicy, Organization, SamlError,
+    ServiceProvider, SpConfig, SpDescriptor, SsoEndpoint,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -129,7 +134,7 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
     .error_url(ERROR_URL)
     .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
     .contacts(contacts())
-    .validation(SpValidationPolicy::compatibility());
+    .validation(sp_validation_without_crypto());
     let idp = IdpConfig::builder(
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::post("https://idp.example.com/sso")?,
@@ -139,7 +144,7 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
     .error_url(ERROR_URL)
     .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
     .contacts(contacts())
-    .validation(IdpValidationPolicy::compatibility());
+    .validation(idp_validation_without_crypto());
     let sp = ServiceProvider::new(sp.build()?);
     let idp = IdentityProvider::new(idp.build()?);
     assert_eq!(sp.metadata_xml(), SP_XML.trim_end());
@@ -279,7 +284,7 @@ fn generation_validates_localized_values_contacts_and_error_uris() -> TestResult
         EntityId::try_new("https://sp.example.com/metadata")?,
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
-    .validation(SpValidationPolicy::compatibility())
+    .validation(sp_validation_without_crypto())
     .contact(invalid_email)
     .build();
     assert!(matches!(config, Err(SamlError::Invalid(_))));

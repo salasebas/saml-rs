@@ -4,12 +4,15 @@ use saml_rs::constants::{
 };
 use saml_rs::entity::EntitySetting;
 use saml_rs::flow::FlowOptions;
+use saml_rs::tests::policies_without_crypto::{
+    idp_validation_without_crypto, sp_validation_without_crypto,
+};
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId,
-    HmacSecret, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    KeyEncryptionAlgorithm, MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase,
-    PrivateKeyPem, SamlError, ServiceProvider, SignatureAlgorithm, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, TransformAlgorithm, X509Credential,
+    HmacSecret, IdentityProvider, IdpConfig, IdpDescriptor, KeyEncryptionAlgorithm,
+    MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
+    SamlError, ServiceProvider, SignatureAlgorithm, SpConfig, SpDescriptor, SsoEndpoint,
+    TransformAlgorithm, X509Credential,
 };
 
 const IDP_METADATA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
@@ -96,14 +99,14 @@ fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
     .credentials(credentials.clone())
-    .validation(SpValidationPolicy::compatibility())
+    .validation(sp_validation_without_crypto())
     .build()?;
     let idp = IdpConfig::builder(
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
     .credentials(credentials.clone())
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(idp_validation_without_crypto())
     .build()?;
 
     let service_provider = ServiceProvider::new(sp.clone());

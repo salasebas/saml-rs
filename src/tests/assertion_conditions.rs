@@ -21,11 +21,12 @@ use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, EntityId, FormField, IdentityProvider, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
-    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
-    SsoSession, StartSso, VerifiedXmlSignatureCoverage,
+    AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, EntityId, FormField,
+    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
+    NameId, Outbound, PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoSession, StartSso, VerifiedXmlSignatureCoverage,
+    XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -476,8 +477,16 @@ fn accept_unsolicited_sso_rejects_an_unknown_condition() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn compatibility_still_rejects_an_unknown_condition() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::compatibility(), false)?;
+fn weak_algorithms_and_skipped_audience_still_reject_an_unknown_condition(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(
+        SpValidationPolicy {
+            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
+            audience: AudienceValidationPolicy::Skip,
+            ..SpValidationPolicy::recommended()
+        },
+        false,
+    )?;
     let xml = resigned(&insert_after_audience_restriction(
         &response_xml(&exchange.response_fields)?,
         "<saml:Condition/>",
@@ -1015,9 +1024,15 @@ fn an_assertion_signature_that_does_not_verify_rejects_a_signed_response(
 }
 
 #[test]
-fn compatibility_accepts_an_assertion_signature_that_does_not_verify_beside_a_signed_response(
+fn weak_algorithms_accept_an_assertion_signature_that_does_not_verify_beside_a_signed_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::compatibility(), false)?;
+    let exchange = exchange_for(
+        SpValidationPolicy {
+            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
+            ..SpValidationPolicy::recommended()
+        },
+        false,
+    )?;
     let altered = with_name_id_changed(&assertion_signed(&exchange)?)?;
     let session = accept(&exchange, &sign_response(&altered)?)?;
     assert_eq!(session.name_id().value(), "mallory@example.com");

@@ -11,10 +11,11 @@ use common::signing_credentials;
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdentityProvider,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound,
-    ReplayPolicy, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
+    EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, MetadataTrustPolicy, Outbound, ReplayPolicy, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
+    StartSso,
 };
 use url::Url;
 
@@ -137,8 +138,9 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         assert_eq!(received.message().id(), started.pending.request_id());
     }
 
-    let compatibility = self::idp(IdpValidationPolicy::compatibility())?;
-    let received = compatibility.receive_sso(
+    let mut unverified = IdpValidationPolicy::recommended();
+    unverified.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
+    let received = self::idp(unverified)?.receive_sso(
         &signing_descriptor,
         post_input(&unsigned_post.outbound)?,
         validation(),

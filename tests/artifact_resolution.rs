@@ -5,11 +5,16 @@
 //! The service provider sends that request and reads the message from
 //! `ArtifactResponse`. The deployment still performs HTTP and TLS.
 //!
-//! Config helpers select `compatibility()` so they build without a crypto
-//! provider. Artifact resolution does not read that preset.
+//! Config helpers relax the policy fields that need a crypto provider, so they
+//! build without one. Artifact resolution does not read those fields.
 
 #[path = "artifact_resolution/schema_validation.rs"]
 mod schema_validation;
+
+#[path = "common/policies_without_crypto.rs"]
+mod policies_without_crypto;
+
+use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
 
 use std::time::{Duration, SystemTime};
 
@@ -19,10 +24,10 @@ use saml_rs::XmlLimits;
 use saml_rs::{
     AcsEndpoint, Artifact, ArtifactRelease, ArtifactResolutionService, ArtifactWithheld,
     EndpointUrl, EntityId, HttpHeader, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, InMemoryReplayCache, IssuedArtifacts, MessageConfidentiality,
-    MessageIntegrity, MetadataTrustPolicy, PartyAuthentication, ReplayKey, ReplayPolicy, SamlError,
-    SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, TimeWindowField, XmlPolicy,
+    InMemoryReplayCache, IssuedArtifacts, MessageConfidentiality, MessageIntegrity,
+    MetadataTrustPolicy, PartyAuthentication, ReplayKey, ReplayPolicy, SamlError,
+    SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor, SsoEndpoint,
+    TimeWindowField, XmlPolicy,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -66,7 +71,7 @@ fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
             EndpointUrl::try_new(RESOLUTION_URL)?,
         ))
         .xml(xml)
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .build()?,
     );
     let sp = service_provider(SP_ENTITY_ID, "https://sp.example.com/acs", xml)?;
@@ -104,7 +109,7 @@ fn service_provider(
     Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(entity_id)?, AcsEndpoint::post(acs)?)
             .xml(xml)
-            .validation(SpValidationPolicy::compatibility())
+            .validation(sp_validation_without_crypto())
             .build()?,
     ))
 }
@@ -392,7 +397,7 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,
         )
-        .validation(IdpValidationPolicy::compatibility())
+        .validation(idp_validation_without_crypto())
         .build()?,
     );
     assert!(!without.metadata_xml().contains("ArtifactResolutionService"));
@@ -420,7 +425,7 @@ fn duplicate_resolution_indexes_are_rejected() -> Result<(), Box<dyn std::error:
     )
     .artifact_resolution_service(ArtifactResolutionService::new(0, location))
     .artifact_resolution_service(ArtifactResolutionService::new(0, other))
-    .validation(IdpValidationPolicy::compatibility())
+    .validation(idp_validation_without_crypto())
     .build();
     assert!(matches!(built, Err(SamlError::Invalid(detail)) if detail.contains("duplicate")));
     Ok(())
