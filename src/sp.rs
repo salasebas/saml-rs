@@ -368,7 +368,7 @@ impl Engine {
                 signing_certs,
                 hmac_secret: idp.setting.hmac_secret.as_ref(),
                 decrypt_key: self.setting.enc_private_key.as_deref(),
-                require_encrypted_assertion: self.setting.is_assertion_encrypted,
+                require_encrypted_assertions: self.setting.is_assertion_encrypted,
                 decrypt_key_pass: self.setting.enc_private_key_pass.as_deref(),
                 additional_decrypt_keys: &self.setting.additional_decryption_keys,
                 assertion_elements: self.setting.assertion_element_encryption,

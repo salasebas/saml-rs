@@ -294,18 +294,19 @@ impl Default for IdpValidationPolicy {
     }
 }
 
-/// Whether assertions are encrypted in generated responses.
+/// Assertion encryption for generated and received login responses.
 ///
 /// A service provider with a decryption key decrypts an
 /// `<EncryptedAssertion>` it receives under either value.
-/// [`Self::EncryptAssertions`] also makes it reject a plaintext `<Assertion>`.
+/// With [`Self::EncryptAssertions`], the service provider rejects a response
+/// if any direct `<Assertion>` child is in plaintext, even when others are encrypted.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AssertionEncryptionPolicy {
-    /// Do not encrypt assertions.
+    /// Generate plaintext assertions and allow both forms in received responses.
     #[default]
     PlaintextAssertions,
-    /// Encrypt assertions.
+    /// Encrypt every generated assertion and require every received assertion to be encrypted.
     EncryptAssertions,
 }
 

@@ -321,6 +321,13 @@ encryption.rsa15_key_transport = Rsa15KeyTransportPolicy::AllowDecryption;
 encryption.max_decryption_work = 64;
 ```
 
+A service provider configured with `EncryptAssertions` now returns
+`SamlError::EncryptionRequired` if a response contains both plaintext and
+encrypted assertions. If your identity provider sends mixed responses,
+configure it to encrypt every assertion. If your service provider accepts
+plaintext assertions, select `PlaintextAssertions` (the default) and keep its
+decryption credential to process the encrypted assertions.
+
 ## Rename `AudienceValidationPolicy::Validate` to `RequireRestriction`
 
 **Affects:** code that names `AudienceValidationPolicy::Validate`.
