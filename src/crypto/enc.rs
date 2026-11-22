@@ -80,7 +80,7 @@ const LOGOUT_REQUEST_ENCRYPTED_ID: EncryptedElementKind = EncryptedElementKind {
     parent: "LogoutRequest",
     plaintext: "NameID",
     encrypted: "EncryptedID",
-    unsupported_plaintext: &["BaseID"],
+    unsupported_plaintext: &[],
 };
 
 /// SAML Core §3.6.1: the identifier a `<ManageNameIDRequest>` names.

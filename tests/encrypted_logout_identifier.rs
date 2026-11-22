@@ -19,16 +19,18 @@ use std::time::{Duration, SystemTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use bergshamra::{encrypt, EncContext, KeysManager};
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::status_code;
+use saml_rs::crypto::keys::load_certificate;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
     IdentityProvider, IdpConfig, IdpDescriptor, InMemoryReplayCache, Inbound, LogoutBinding,
     LogoutRequest, LogoutResponse, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat,
     Outbound, OutboundDelivery, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy,
     RespondSlo, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex,
-    SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor, SsoAssertion,
-    SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
+    SloEndpoint, SoapChannel, SoapProtocolMessage, SoapRequest, SpConfig, SpDescriptor,
+    SsoAssertion, SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
     XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
@@ -38,6 +40,9 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO: &str = "https://idp.example.com/sso";
 const PRINCIPAL: &str = "alice-persistent-id";
+const BASE_ID: &str = r#"<saml:BaseID xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:example="urn:example:identifiers"
+    xsi:type="example:AccountID">opaque</saml:BaseID>"#;
 
 const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
@@ -480,6 +485,122 @@ fn identity_provider_answers_an_encrypted_id_that_no_decryption_key_decrypts(
                 );
             }
             other => return Err(format!("{binding:?}: unexpected {other:?}").into()),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_provider_answers_a_plaintext_base_id() -> Result<(), Box<dyn std::error::Error>> {
+    assert_answers_without_name_id(BASE_ID)
+}
+
+#[test]
+fn identity_provider_answers_an_encrypted_base_id() -> Result<(), Box<dyn std::error::Error>> {
+    assert_answers_without_name_id(&encrypted_id(BASE_ID)?)
+}
+
+#[test]
+fn logout_encrypted_id_rejects_other_saml_elements() -> Result<(), Box<dyn std::error::Error>> {
+    assert_rejects_encrypted_identifier(
+        r#"<saml:Attribute xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" Name="account"/>"#,
+    )
+}
+
+#[test]
+fn logout_encrypted_id_rejects_base_id_from_another_namespace(
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert_rejects_encrypted_identifier(
+        r#"<example:BaseID xmlns:example="urn:example:identifiers"/>"#,
+    )
+}
+
+fn encrypted_id(plaintext: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let template = r#"<xenc:EncryptedData xmlns:xenc="http://www.w3.org/2001/04/xmlenc#"
+        Type="http://www.w3.org/2001/04/xmlenc#Element">
+        <xenc:EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes128-gcm"/>
+        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+            <xenc:EncryptedKey>
+                <xenc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"/>
+                <xenc:CipherData><xenc:CipherValue/></xenc:CipherData>
+            </xenc:EncryptedKey>
+        </ds:KeyInfo>
+        <xenc:CipherData><xenc:CipherValue/></xenc:CipherData>
+    </xenc:EncryptedData>"#;
+    let mut keys = KeysManager::new();
+    keys.add_key(load_certificate(CERT)?);
+    let encrypted = encrypt(&EncContext::new(keys), template, plaintext.as_bytes())?;
+    Ok(format!("<saml:EncryptedID>{encrypted}</saml:EncryptedID>"))
+}
+
+fn soap_request_with_identifier(
+    sent: &Sent,
+    identifier: &str,
+) -> Result<Inbound<LogoutRequest>, SamlError> {
+    let endpoint = sent.outbound.soap_request()?.endpoint();
+    let request_id = sent.outbound.id().as_str();
+    let xml = format!(
+        r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+            xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{request_id}" Version="2.0"
+            IssueInstant="2026-01-01T00:00:00Z" Destination="{destination}">
+            <saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>
+            {identifier}
+            <samlp:SessionIndex>_session</samlp:SessionIndex>
+        </samlp:LogoutRequest>"#,
+        destination = endpoint.as_str(),
+    );
+    let request = SoapRequest::try_new(endpoint.clone(), &xml)?;
+    Ok(Inbound::soap(
+        request.envelope(),
+        SoapChannel::mutually_authenticated_confidential(),
+    ))
+}
+
+fn assert_rejects_encrypted_identifier(plaintext: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let sent = start(&parties, Initiator::Sp, StartSlo::soap())?;
+    let input = soap_request_with_identifier(&sent, &encrypted_id(plaintext)?)?;
+    match receive(&parties, Initiator::Sp, input) {
+        Err(SamlError::ProtocolProfile(_)) => Ok(()),
+        other => Err(format!(
+            "expected ProtocolProfile for {plaintext}, got {:?}",
+            other.err()
+        )
+        .into()),
+    }
+}
+
+fn assert_answers_without_name_id(identifier: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let sent = start(&parties, Initiator::Sp, StartSlo::soap())?;
+    let received = receive(
+        &parties,
+        Initiator::Sp,
+        soap_request_with_identifier(&sent, identifier)?,
+    )?;
+    assert_eq!(received.message().name_id(), None);
+    assert_eq!(
+        received.message().session_indexes(),
+        &[SessionIndex::try_new("_session")?]
+    );
+
+    let unknown_principal =
+        Status::requester().with_subordinate(SubordinateStatusCode::unknown_principal());
+    let response = parties.idp.respond_slo(
+        &parties.sp_descriptor,
+        &received,
+        &unknown_principal,
+        RespondSlo::soap(),
+    )?;
+    match parties.sp.finish_slo(
+        &parties.idp_descriptor,
+        &sent.pending,
+        response_input(&response, LogoutBinding::Soap)?,
+        validation(),
+    ) {
+        Err(SamlError::StatusNotSuccess { status, .. }) => assert_eq!(status, unknown_principal),
+        other => {
+            return Err(format!("expected an UnknownPrincipal response, got {other:?}").into())
         }
     }
     Ok(())

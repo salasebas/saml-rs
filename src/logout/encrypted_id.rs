@@ -50,7 +50,8 @@ fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<S
 /// the `<NameID>` it carries, decrypted with the local decryption key.
 ///
 /// Call after authenticating the request. If the request has no encrypted
-/// identifier or no configured key can decrypt it, return the original request.
+/// identifier, no configured key can decrypt it, or it decrypts to a
+/// `<BaseID>`, return the original request.
 pub(crate) fn decrypt_encrypted_id(
     request: LogoutRequest,
     setting: &EntitySetting,
@@ -82,6 +83,9 @@ pub(crate) fn decrypt_encrypted_id(
         &crate::xml::fields::logout_request_fields(),
         setting.xml_limits,
     )?;
+    if extract.get_str("nameID").is_none() {
+        return Ok(request);
+    }
     LogoutRequest::from_flow(FlowResult {
         saml_content,
         extract,

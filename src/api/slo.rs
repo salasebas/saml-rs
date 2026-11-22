@@ -85,10 +85,10 @@ impl ServiceProvider {
     /// explicit receiving URL, or replay
     /// validation detects a duplicate or unusable expiration.
     ///
-    /// An `<EncryptedID>` is decrypted with the configured decryption key and
-    /// returned as the request `NameID`. It stays unread, and the request has
-    /// no `NameID`, when no decryption key is configured, or when no configured
-    /// decryption key decrypts it.
+    /// A decrypted `<NameID>` is available through [`LogoutRequest::name_id`].
+    /// If no configured key decrypts the `<EncryptedID>`, or it contains a
+    /// `<BaseID>`, the request has no `NameID`. You can still answer it with
+    /// [`Self::respond_slo`].
     pub fn receive_slo(
         &self,
         idp: &IdpDescriptor,
@@ -295,8 +295,8 @@ impl IdentityProvider {
     /// receiving `SingleLogoutService` location, the receiving URL is
     /// unpublished, multiple local endpoints have
     /// no explicit receiving URL, or replay validation detects
-    /// a duplicate or unusable expiration. An `<EncryptedID>` is processed as
-    /// on the service provider `receive_slo`.
+    /// a duplicate or unusable expiration. The identity provider processes an
+    /// `<EncryptedID>` as described in [`ServiceProvider::receive_slo`].
     ///
     /// # Examples
     ///
