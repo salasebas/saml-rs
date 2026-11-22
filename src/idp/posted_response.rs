@@ -28,8 +28,6 @@ impl IdentityProvider {
             &LoginResponseOptions {
                 in_response_to,
                 relay_state: None,
-                encrypt_then_sign: false,
-                custom: None,
             },
             overrides,
         )?;

@@ -1,6 +1,6 @@
 use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{Binding, ParserType};
-use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, User};
+use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
 use crate::error::{utf8_err, SamlError};
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
@@ -17,108 +17,6 @@ use super::rendering::{
     LogoutRequestTimeAttributes,
 };
 use super::signing::sign_browser_message;
-
-/// Build a `<LogoutRequest>` from `init` to `target`.
-///
-/// `user` supplies the `<NameID>` and optional `<samlp:SessionIndex>`.
-///
-/// # Errors
-///
-/// Returns an error if `target_meta` has no SLO endpoint for `binding`,
-/// `binding` is unsupported, the first NameID format configured in
-/// `init_setting` is not an absolute URI reference, the configured logout
-/// template cannot represent the supplied subject, configured XML tag prefixes
-/// are invalid, default XML rendering fails, or Redirect DEFLATE encoding
-/// fails. When `want_signed` is true, missing or invalid signing
-/// keys/certificates, unavailable crypto support, XML signature construction,
-/// and detached-signature construction errors are propagated.
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::start_slo` or `Saml::<Idp>::start_slo`"
-)]
-pub fn create_logout_request(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    user: &User,
-    relay_state: Option<&str>,
-    want_signed: bool,
-) -> Result<BindingContext, SamlError> {
-    compatibility_logout_request(
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        user,
-        relay_state,
-        want_signed,
-        None,
-    )
-}
-
-/// Like [`create_logout_request`] but uses `message_id` when provided.
-///
-/// # Errors
-///
-/// Returns the same errors as [`create_logout_request`]. Empty `message_id`
-/// values are ignored and replaced with a generated ID.
-#[allow(clippy::too_many_arguments)] // public API adds optional `message_id`
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::start_slo` or `Saml::<Idp>::start_slo`"
-)]
-pub fn create_logout_request_with_id(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    user: &User,
-    relay_state: Option<&str>,
-    want_signed: bool,
-    message_id: Option<&str>,
-) -> Result<BindingContext, SamlError> {
-    compatibility_logout_request(
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        user,
-        relay_state,
-        want_signed,
-        message_id,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn compatibility_logout_request(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    user: &User,
-    relay_state: Option<&str>,
-    want_signed: bool,
-    message_id: Option<&str>,
-) -> Result<BindingContext, SamlError> {
-    reject_raw_soap(binding)?;
-    let issue_instant = now_iso8601();
-    let subject = LogoutRequestSubject::from_user(user);
-    Ok(create_logout_request_for_subject_inner(LogoutRequestInput {
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        subject: &subject,
-        relay_state,
-        want_signed,
-        message_id,
-        name_id_format: init_setting.default_name_id_format(),
-        issue_instant: &issue_instant,
-        not_on_or_after: None,
-        validation: LogoutRequestValidation::Compatibility,
-        name_id_encryption: IdentifierEncryptionPolicy::PlaintextIdentifiers,
-    })?
-    .context)
-}
 
 pub(crate) struct CreatedLogoutRequest {
     pub(crate) context: BindingContext,
@@ -328,46 +226,6 @@ pub(crate) fn create_logout_request_for_subject_inner(
     })
 }
 
-/// Build a `<LogoutResponse>` from `init` to `target`.
-///
-/// `Destination` is the peer `SingleLogoutService` `ResponseLocation` for
-/// `binding` when that attribute is present, and `Location` otherwise.
-///
-/// # Errors
-///
-/// Returns an error if `binding` is unsupported, `target_meta` has no SLO
-/// endpoint for `binding`, configured XML tag prefixes are invalid, the final
-/// outbound XML violates the enforced LogoutResponse schema structure,
-/// correlation, or SLO-profile requirements, default XML rendering fails, or
-/// Redirect DEFLATE encoding fails. A custom template must not contain a root
-/// XML signature before library signing. When `want_signed` is true, missing
-/// or invalid signing keys/certificates, unavailable crypto support, XML
-/// signature construction, detached-signature construction, and invalid
-/// post-signing placement errors are propagated.
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::respond_slo` or `Saml::<Idp>::respond_slo`"
-)]
-pub fn create_logout_response(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    in_response_to: Option<&str>,
-    relay_state: Option<&str>,
-    want_signed: bool,
-) -> Result<BindingContext, SamlError> {
-    compatibility_logout_response(
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        in_response_to,
-        relay_state,
-        want_signed,
-        None,
-    )
-}
-
 pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) init_setting: &'a EntitySetting,
     pub(crate) init_meta: &'a Metadata,
@@ -378,63 +236,6 @@ pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) want_signed: bool,
     pub(crate) message_id: Option<&'a str>,
     pub(crate) status: &'a Status,
-}
-
-/// Like [`create_logout_response`] but uses `message_id` when provided.
-///
-/// # Errors
-///
-/// Returns the same errors as [`create_logout_response`]. Empty `message_id`
-/// values are ignored and replaced with a generated ID.
-#[allow(clippy::too_many_arguments)] // public API adds optional `message_id`
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::respond_slo` or `Saml::<Idp>::respond_slo`"
-)]
-pub fn create_logout_response_with_id(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    in_response_to: Option<&str>,
-    relay_state: Option<&str>,
-    want_signed: bool,
-    message_id: Option<&str>,
-) -> Result<BindingContext, SamlError> {
-    compatibility_logout_response(
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        in_response_to,
-        relay_state,
-        want_signed,
-        message_id,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn compatibility_logout_response(
-    init_setting: &EntitySetting,
-    init_meta: &Metadata,
-    target_meta: &Metadata,
-    binding: Binding,
-    in_response_to: Option<&str>,
-    relay_state: Option<&str>,
-    want_signed: bool,
-    message_id: Option<&str>,
-) -> Result<BindingContext, SamlError> {
-    reject_raw_soap(binding)?;
-    create_logout_response_inner(LogoutResponseInput {
-        init_setting,
-        init_meta,
-        target_meta,
-        binding,
-        in_response_to,
-        relay_state,
-        want_signed,
-        message_id,
-        status: &Status::success(),
-    })
 }
 
 pub(crate) fn create_logout_response_inner(
@@ -590,13 +391,6 @@ pub(crate) fn reject_soap_relay_state(
         return Err(SamlError::ProtocolProfile(
             "the SOAP binding does not carry RelayState".into(),
         ));
-    }
-    Ok(())
-}
-
-fn reject_raw_soap(binding: Binding) -> Result<(), SamlError> {
-    if binding == Binding::Soap {
-        return Err(SamlError::UnsupportedBinding { binding });
     }
     Ok(())
 }

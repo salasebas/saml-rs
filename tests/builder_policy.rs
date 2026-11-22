@@ -1,5 +1,4 @@
-//! Compatibility is the legacy permissive preset: the samlify-port behavior kept
-//! for a caller leaving the raw API.
+//! Compatibility is the legacy permissive preset: the samlify-port behavior.
 
 use std::{str::FromStr, time::Duration};
 
@@ -12,8 +11,6 @@ use saml_rs::{
     SamlError, SignatureAlgorithm, SignatureConfig, SpConfig, SpValidationPolicy, SsoEndpoint,
     TemplatePolicy, TransformAlgorithm, X509Credential, XmlPolicy, XmlSignatureProfile,
 };
-
-use saml_rs::raw::EntitySetting;
 
 #[test]
 fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
@@ -220,7 +217,6 @@ fn recommended_hardenings_stay_independent() {
 
 #[test]
 fn policy_defaults_are_the_recommended_presets() {
-    assert!(!EntitySetting::default().want_message_signed);
     let sp = SpValidationPolicy::recommended();
     let logout = LogoutPolicy::recommended();
     assert_eq!(SpValidationPolicy::default(), sp);

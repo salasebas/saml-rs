@@ -13,7 +13,6 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::status_code;
-use saml_rs::raw::{Binding, HttpRequest};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField,
@@ -363,7 +362,6 @@ fn typed_unsolicited_sso_omits_in_response_to_under_producer_rules(
 }
 
 #[test]
-#[allow(deprecated)]
 fn typed_sso_compatibility_generation_keeps_todays_response_shape(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
@@ -382,17 +380,6 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
     assert_eq!(response.session_index(), None);
 
     let fields = response.post_form()?.fields().to_vec();
-    let raw_request = HttpRequest::post(
-        fields
-            .iter()
-            .map(|field| (field.name().to_string(), field.value().to_string()))
-            .collect(),
-    );
-    sp.raw_service_provider().parse_unsolicited_login_response(
-        idp.raw_identity_provider(),
-        Binding::Post,
-        &raw_request,
-    )?;
     let session =
         sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation())?;
     assert_eq!(session.in_response_to(), None);
@@ -400,7 +387,6 @@ fn typed_sso_compatibility_generation_keeps_todays_response_shape(
 }
 
 #[test]
-#[allow(deprecated)]
 fn login_response_template_writes_in_response_to_only_for_a_request(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
@@ -426,17 +412,6 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
         "{unsolicited_xml}"
     );
     let fields = unsolicited.post_form()?.fields().to_vec();
-    let raw_request = HttpRequest::post(
-        fields
-            .iter()
-            .map(|field| (field.name().to_string(), field.value().to_string()))
-            .collect(),
-    );
-    sp.raw_service_provider().parse_unsolicited_login_response(
-        idp.raw_identity_provider(),
-        Binding::Post,
-        &raw_request,
-    )?;
     let session =
         sp.accept_unsolicited_sso(&idp_descriptor, Inbound::post(fields), validation())?;
     assert_eq!(session.in_response_to(), None);

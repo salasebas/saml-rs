@@ -26,11 +26,10 @@ pub(super) enum ResponseTransport<'a> {
 impl Saml<Idp> {
     /// Local IdP metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.raw_identity_provider().metadata_xml()
+        self.identity_provider().metadata_xml()
     }
 
-    /// Raw compatibility Identity Provider.
-    pub fn raw_identity_provider(&self) -> &IdentityProvider {
+    pub(crate) fn identity_provider(&self) -> &IdentityProvider {
         &self.0.identity_provider
     }
 
@@ -87,8 +86,8 @@ impl Saml<Idp> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoRequestBinding::try_from(input.binding())?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
-        let request = input.into_http_request(self.raw_identity_provider().setting.xml_limits)?;
-        let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
+        let request = input.into_http_request(self.identity_provider().setting.xml_limits)?;
+        let (flow, message_authenticated) = self.identity_provider().parse_login_request_at(
             raw_sp,
             Binding::from(binding),
             &request,
@@ -97,13 +96,13 @@ impl Saml<Idp> {
         )?;
         let flow = decrypt_requested_subject(
             flow,
-            &self.raw_identity_provider().setting,
+            &self.identity_provider().setting,
             message_authenticated,
         )?;
-        let authn = AuthnRequest::try_from(flow)?;
+        let authn = AuthnRequest::from_flow(flow)?;
         if authn.destination().is_some() || message_authenticated {
             let locations = self
-                .raw_identity_provider()
+                .identity_provider()
                 .metadata
                 .single_sign_on_service_locations(Binding::from(binding));
             if locations.is_empty() {
@@ -313,7 +312,7 @@ impl Saml<Idp> {
         if let Some(request) = request {
             ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         }
-        let idp_setting = &self.raw_identity_provider().setting;
+        let idp_setting = &self.identity_provider().setting;
         let sign_response = options.should_sign_response(
             idp_setting.is_assertion_encrypted,
             &idp_setting.data_encryption_algorithm,
@@ -364,7 +363,7 @@ impl Saml<Idp> {
         let (delivery, issued) = match options.delivery {
             ResponseTransport::Browser => {
                 let issued = self
-                    .raw_identity_provider()
+                    .identity_provider()
                     .create_login_response_with_overrides(
                         raw_sp,
                         Binding::from(binding),
@@ -372,8 +371,6 @@ impl Saml<Idp> {
                         &LoginResponseOptions {
                             in_response_to,
                             relay_state: relay_state.as_ref().map(RelayState::as_str),
-                            encrypt_then_sign: false,
-                            custom: None,
                         },
                         overrides,
                     )?;
@@ -382,14 +379,14 @@ impl Saml<Idp> {
             }
             ResponseTransport::Artifact(delivery, issued) => (delivery, issued),
         };
-        let rendered = self.raw_identity_provider().render_posted_sso_response(
+        let rendered = self.identity_provider().render_posted_sso_response(
             raw_sp,
             &user,
             in_response_to,
             overrides,
         )?;
         let artifact = artifact::issue_sso_response(
-            &self.raw_identity_provider().metadata,
+            &self.identity_provider().metadata,
             sp,
             &rendered.xml,
             delivery.endpoint_index(),
@@ -452,6 +449,6 @@ impl Saml<Idp> {
         &self,
         options: RememberIdentityProvider<'_>,
     ) -> Result<CommonDomainCookie, SamlError> {
-        discovery::common_domain_cookie(&self.raw_identity_provider().entity_id(), options)
+        discovery::common_domain_cookie(&self.identity_provider().entity_id(), options)
     }
 }

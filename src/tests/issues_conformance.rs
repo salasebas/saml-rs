@@ -5,8 +5,12 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
+use saml_rs::idp::IdentityProvider;
 use saml_rs::metadata::{generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider, Value};
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::SpMessages;
+use saml_rs::util::Value;
 use saml_rs::xml::{extract, ExtractorField};
 
 const DUMPES_ISSUER: &str = include_str!("../../tests/fixtures/misc/dumpes_issuer_response.xml");
@@ -196,7 +200,6 @@ fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std
 }
 
 #[test]
-#[allow(deprecated)]
 fn issue_98_undefined_acs_url_with_redirect() -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::from_metadata(SP_META_98, EntitySetting::default())?;
     let idp = IdentityProvider::from_config(

@@ -1,16 +1,20 @@
-#![allow(deprecated)]
 use super::*;
 use crate::binding::{
     decode_base64, deflate_raw_decode, encode_base64, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
 use crate::browser::Inbound;
 use crate::constants::Binding;
-use crate::entity::{BindingContext, EntitySetting, User};
+use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::flow::HttpRequest;
+use crate::idp::IdentityProvider;
 use crate::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use crate::model::ClockSkew;
-use crate::raw::{IdentityProvider, ServiceProvider};
+use crate::sp::ServiceProvider;
+use crate::tests::engine::{
+    create_logout_request, create_logout_response, create_logout_response_with_id,
+    parse_logout_request, parse_logout_response, redirect_query, LogoutUser,
+};
 use std::time::{Duration, SystemTime};
 use url::Url;
 
@@ -294,7 +298,7 @@ fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error
         sp.metadata.as_metadata(),
         idp.metadata.as_metadata(),
         Binding::Redirect,
-        &User::new("user@example.com"),
+        &LogoutUser::new("user@example.com"),
         None,
         false,
     )?;
@@ -312,7 +316,7 @@ fn logout_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error
     assert!(xml.contains("user@example.com"));
 
     // IdP parses it (unsigned)
-    let request = HttpRequest::redirect(vec![("SAMLRequest".into(), value.into_owned())]);
+    let request = redirect_query(vec![("SAMLRequest".into(), value.into_owned())]);
     let result = parse_logout_request(
         &idp.setting,
         sp.metadata.as_metadata(),
@@ -343,7 +347,7 @@ fn unsigned_logout_request_rejects_unexpected_issuer_when_explicitly_allowed(
         attacker_sp.metadata.as_metadata(),
         idp.metadata.as_metadata(),
         Binding::Post,
-        &User::new("victim@example.com"),
+        &LogoutUser::new("victim@example.com"),
         None,
         false,
     )?;
@@ -371,7 +375,7 @@ fn raw_logout_request_parser_does_not_infer_actual_recipient(
         sender.metadata.as_metadata(),
         receiver.metadata.as_metadata(),
         Binding::Post,
-        &User::new("victim@example.com"),
+        &LogoutUser::new("victim@example.com"),
         None,
         false,
     )?;
@@ -436,7 +440,7 @@ mod signed_tests {
             attacker_sp.metadata.as_metadata(),
             idp.metadata.as_metadata(),
             Binding::Post,
-            &User::new("victim@example.com"),
+            &LogoutUser::new("victim@example.com"),
             None,
             true,
         )?;
@@ -565,7 +569,7 @@ mod signed_tests {
             idp.metadata.as_metadata(),
             service_provider.metadata.as_metadata(),
             Binding::Post,
-            &User::new("user@example.com"),
+            &LogoutUser::new("user@example.com"),
             None,
             true,
         )?;
@@ -621,7 +625,7 @@ mod signed_tests {
             idp.metadata.as_metadata(),
             strict.metadata.as_metadata(),
             Binding::Post,
-            &User::new("user@example.com"),
+            &LogoutUser::new("user@example.com"),
             None,
             true,
         )?;
@@ -697,7 +701,7 @@ mod signed_tests {
             idp.metadata.as_metadata(),
             strict.metadata.as_metadata(),
             Binding::Post,
-            &User::new("user@example.com"),
+            &LogoutUser::new("user@example.com"),
             None,
             true,
         )?;
@@ -1216,7 +1220,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
         sender.metadata.as_metadata(),
         target.metadata.as_metadata(),
         Binding::Post,
-        &User::new("alice"),
+        &LogoutUser::new("alice"),
         None,
         false,
     )?;
@@ -1224,42 +1228,5 @@ fn logout_response_uses_response_location_and_request_uses_location(
         request.entity_endpoint,
         "https://sp.example.com/slo/request"
     );
-    Ok(())
-}
-
-#[test]
-fn raw_logout_generation_rejects_soap() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp()?;
-    let idp = idp()?;
-    let request = create_logout_request(
-        &sp.setting,
-        sp.metadata.as_metadata(),
-        idp.metadata.as_metadata(),
-        Binding::Soap,
-        &User::new("alice@example.com"),
-        None,
-        false,
-    );
-    assert!(matches!(
-        request,
-        Err(SamlError::UnsupportedBinding {
-            binding: Binding::Soap
-        })
-    ));
-    let response = create_logout_response(
-        &idp.setting,
-        idp.metadata.as_metadata(),
-        sp.metadata.as_metadata(),
-        Binding::Soap,
-        Some("_request"),
-        None,
-        false,
-    );
-    assert!(matches!(
-        response,
-        Err(SamlError::UnsupportedBinding {
-            binding: Binding::Soap
-        })
-    ));
     Ok(())
 }

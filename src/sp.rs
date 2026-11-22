@@ -1,18 +1,14 @@
 //! SAML Service Provider entity.
 
-use crate::assertion_acceptance::{
-    reject_unsolicited_bearer_in_response_to, UnsolicitedInResponseTo,
-};
+use crate::assertion_acceptance::reject_unsolicited_bearer_in_response_to;
 use crate::binding::{build_redirect_url, encode_base64};
 use crate::constants::{Binding, CertUse, ParserType};
-use crate::entity::{
-    generate_id, now_iso8601, BindingContext, CustomTagReplacement, EntitySetting,
-};
+use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::flow::{
     flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
-    FlowOptions, FlowResult, FlowResultWithSignatureEvidence, HttpRequest,
-    ResponseSignatureRequirement, SignatureCheck, SignedMessageDestination,
+    FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, ResponseSignatureRequirement,
+    SignatureCheck, SignedMessageDestination,
 };
 use crate::idp::IdentityProvider;
 use crate::metadata::{generate_sp_metadata, SpMetadata, SpMetadataInput};
@@ -37,13 +33,11 @@ pub struct ServiceProvider {
     pub metadata: SpMetadata,
 }
 
-/// Per-call options for [`ServiceProvider::create_login_request`].
+/// Per-call options for an `<AuthnRequest>` the service provider builds.
 #[derive(Default)]
 pub struct LoginRequestOptions<'a> {
     /// RelayState for this request. `Some("")` is preserved as an empty RelayState.
     pub relay_state: Option<&'a str>,
-    /// Custom request renderer.
-    pub custom: Option<CustomTagReplacement<'a>>,
     /// Optional `ForceAuthn` attribute.
     pub force_authn: Option<bool>,
     /// Optional `AssertionConsumerServiceIndex`; when present, ACS URL and
@@ -55,8 +49,7 @@ pub struct LoginRequestOptions<'a> {
 
 /// Whether typed Web Browser SSO generation follows producer rules.
 ///
-/// [`Self::Compatibility`] is the samlify-port output kept for a caller
-/// leaving the raw API. [`Self::Follow`] applies the producer obligations
+/// [`Self::Compatibility`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
 /// recorded for this flow. It is not a validation preset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum WebBrowserSsoProducer {
@@ -75,7 +68,7 @@ impl WebBrowserSsoProducer {
 
 #[derive(Debug, Clone, Copy)]
 enum LoginResponseCorrelation<'a> {
-    Unsolicited(UnsolicitedInResponseTo),
+    Unsolicited,
     MessageId(&'a str),
 }
 
@@ -87,15 +80,6 @@ pub(crate) struct LoginResponseParseOptions<'a> {
 }
 
 impl<'a> LoginResponseParseOptions<'a> {
-    fn compatibility(clock_skew: ClockSkew) -> Self {
-        Self {
-            expected_recipient: None,
-            now: None,
-            clock_skew,
-            signed_destination: SignedMessageDestination::Required,
-        }
-    }
-
     pub(crate) fn at(now: SystemTime, clock_skew: ClockSkew) -> Self {
         Self {
             expected_recipient: None,
@@ -183,41 +167,6 @@ impl ServiceProvider {
             .unwrap_or_default()
     }
 
-    /// Build a login `<AuthnRequest>` for `idp` over `binding` with per-call options.
-    ///
-    /// When both sides require signing, the request is signed (requires a
-    /// crypto provider feature and the SP's `private_key`/`signing_cert`).
-    /// `options.custom` overrides template rendering, receiving the resolved
-    /// template and returning `(id, xml)`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if SP and IdP signing requirements conflict, the IdP
-    /// metadata has no SSO endpoint for `binding`, the SP metadata has no ACS
-    /// endpoint for `options.response_binding` when ACS index mode is not used,
-    /// `binding` is unsupported, or the first configured NameID format is not
-    /// an absolute URI reference and `options.custom` is not set. When signing is required, key loading,
-    /// missing `private_key`/`signing_cert`, unsupported crypto features, XML
-    /// signature construction, and detached-signature construction errors are
-    /// propagated.
-    #[deprecated(
-        note = "the raw API is removed in the next minor release; use `Saml::<Sp>::start_sso`"
-    )]
-    pub fn create_login_request(
-        &self,
-        idp: &IdentityProvider,
-        binding: Binding,
-        options: &LoginRequestOptions<'_>,
-    ) -> Result<BindingContext, SamlError> {
-        self.create_login_request_inner(
-            idp,
-            binding,
-            options,
-            WebBrowserSsoProducer::Compatibility,
-            &AuthnRequestPreferences::default(),
-        )
-    }
-
     pub(crate) fn create_typed_login_request(
         &self,
         idp: &IdentityProvider,
@@ -246,7 +195,7 @@ impl ServiceProvider {
             .single_sign_on_location(binding)
             .ok_or_else(|| SamlError::MissingMetadata("SingleSignOnService".into()))?;
         let custom_template = self.setting.login_request_template.as_deref();
-        if producer.follows() && (options.custom.is_some() || custom_template.is_some()) {
+        if producer.follows() && custom_template.is_some() {
             return Err(SamlError::Invalid(
                 "Web Browser SSO generation rules require the built-in AuthnRequest renderer"
                     .into(),
@@ -262,79 +211,75 @@ impl ServiceProvider {
             ));
         }
         let template = custom_template.unwrap_or(LOGIN_REQUEST_TEMPLATE);
-        let (id, xml) = match (options.custom, custom_template) {
-            (Some(f), _) => f(template),
-            (None, _) => {
-                let uses_acs_index = options.assertion_consumer_service_index.is_some();
-                let response_binding = options.response_binding.unwrap_or(Binding::Post);
-                let acs_url = if uses_acs_index {
-                    None
-                } else {
-                    Some(
-                        self.metadata
-                            .assertion_consumer_location(response_binding)
-                            .ok_or_else(|| {
-                                SamlError::MissingMetadata("AssertionConsumerService".into())
-                            })?,
-                    )
-                };
-                let protocol_binding =
-                    (!uses_acs_index).then(|| response_binding.urn().to_string());
-                let acs_index = options
-                    .assertion_consumer_service_index
-                    .map(|index| index.to_string());
-                let name_id_format = self.setting.default_name_id_format();
-                validate_name_id_format(name_id_format)?;
-                let allow_create = if producer.follows()
-                    && name_id_format == Some(crate::constants::name_id_format::TRANSIENT)
-                {
-                    AllowCreateAttribute::Omit
-                } else {
-                    AllowCreateAttribute::Include(self.setting.allow_create)
-                };
-                let id = generate_id();
-                let xml = if custom_template.is_none() {
-                    let issue_instant = now_iso8601();
-                    let issuer = self.entity_id();
-                    render_default_authn_request_xml(&AuthnRequestXml {
-                        id: &id,
-                        issue_instant: &issue_instant,
-                        destination: &destination,
-                        force_authn: options.force_authn,
-                        protocol_binding: protocol_binding.as_deref(),
-                        assertion_consumer_service_url: acs_url.as_deref(),
-                        assertion_consumer_service_index: options.assertion_consumer_service_index,
-                        is_passive: preferences.is_passive,
-                        provider_name: preferences.provider_name,
-                        requested_authn_context: preferences.requested_authn_context,
-                        issuer: &issuer,
-                        name_id_format,
-                        allow_create,
-                    })
-                } else {
-                    replace_tags_by_optional_value(
-                        template,
-                        &[
-                            ("ID", Some(id.clone())),
-                            ("IssueInstant", Some(now_iso8601())),
-                            ("Destination", Some(destination.clone())),
-                            (
-                                "ForceAuthn",
-                                options
-                                    .force_authn
-                                    .map(|force_authn| force_authn.to_string()),
-                            ),
-                            ("ProtocolBinding", protocol_binding),
-                            ("AssertionConsumerServiceURL", acs_url),
-                            ("AssertionConsumerServiceIndex", acs_index),
-                            ("Issuer", Some(self.entity_id())),
-                            ("NameIDFormat", name_id_format.map(str::to_string)),
-                            ("AllowCreate", Some(self.setting.allow_create.to_string())),
-                        ],
-                    )
-                };
-                (id, xml)
-            }
+        let (id, xml) = {
+            let uses_acs_index = options.assertion_consumer_service_index.is_some();
+            let response_binding = options.response_binding.unwrap_or(Binding::Post);
+            let acs_url = if uses_acs_index {
+                None
+            } else {
+                Some(
+                    self.metadata
+                        .assertion_consumer_location(response_binding)
+                        .ok_or_else(|| {
+                            SamlError::MissingMetadata("AssertionConsumerService".into())
+                        })?,
+                )
+            };
+            let protocol_binding = (!uses_acs_index).then(|| response_binding.urn().to_string());
+            let acs_index = options
+                .assertion_consumer_service_index
+                .map(|index| index.to_string());
+            let name_id_format = self.setting.default_name_id_format();
+            validate_name_id_format(name_id_format)?;
+            let allow_create = if producer.follows()
+                && name_id_format == Some(crate::constants::name_id_format::TRANSIENT)
+            {
+                AllowCreateAttribute::Omit
+            } else {
+                AllowCreateAttribute::Include(self.setting.allow_create)
+            };
+            let id = generate_id();
+            let xml = if custom_template.is_none() {
+                let issue_instant = now_iso8601();
+                let issuer = self.entity_id();
+                render_default_authn_request_xml(&AuthnRequestXml {
+                    id: &id,
+                    issue_instant: &issue_instant,
+                    destination: &destination,
+                    force_authn: options.force_authn,
+                    protocol_binding: protocol_binding.as_deref(),
+                    assertion_consumer_service_url: acs_url.as_deref(),
+                    assertion_consumer_service_index: options.assertion_consumer_service_index,
+                    is_passive: preferences.is_passive,
+                    provider_name: preferences.provider_name,
+                    requested_authn_context: preferences.requested_authn_context,
+                    issuer: &issuer,
+                    name_id_format,
+                    allow_create,
+                })
+            } else {
+                replace_tags_by_optional_value(
+                    template,
+                    &[
+                        ("ID", Some(id.clone())),
+                        ("IssueInstant", Some(now_iso8601())),
+                        ("Destination", Some(destination.clone())),
+                        (
+                            "ForceAuthn",
+                            options
+                                .force_authn
+                                .map(|force_authn| force_authn.to_string()),
+                        ),
+                        ("ProtocolBinding", protocol_binding),
+                        ("AssertionConsumerServiceURL", acs_url),
+                        ("AssertionConsumerServiceIndex", acs_index),
+                        ("Issuer", Some(self.entity_id())),
+                        ("NameIDFormat", name_id_format.map(str::to_string)),
+                        ("AllowCreate", Some(self.setting.allow_create.to_string())),
+                    ],
+                )
+            };
+            (id, xml)
         };
         let relay_state = match options.relay_state {
             Some(value) => Some(value.to_string()),
@@ -437,37 +382,6 @@ impl ServiceProvider {
         ))
     }
 
-    /// Parse and validate an IdP-initiated login `<Response>` that is not bound
-    /// to an outbound AuthnRequest.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the SP metadata has no ACS endpoint for `binding`,
-    /// `binding` is unsupported, the request is missing required binding
-    /// parameters, the SAML payload cannot be base64/DEFLATE decoded, XML
-    /// parsing or extraction fails, the status is not success, the required
-    /// signature is missing or invalid, no trusted IdP signing key is available,
-    /// or issuer, destination, bearer recipient, audience, subject-confirmation,
-    /// or time-window validation fails. Because this path is unsolicited, any
-    /// non-empty response or bearer `InResponseTo` also returns an error.
-    #[deprecated(
-        note = "the raw API is removed in the next minor release; use `Saml::<Sp>::accept_unsolicited_sso`"
-    )]
-    pub fn parse_unsolicited_login_response(
-        &self,
-        idp: &IdentityProvider,
-        binding: Binding,
-        request: &HttpRequest,
-    ) -> Result<FlowResult, SamlError> {
-        self.parse_login_response_inner(
-            idp,
-            binding,
-            request,
-            LoginResponseCorrelation::Unsolicited(UnsolicitedInResponseTo::RejectNonEmpty),
-            LoginResponseParseOptions::compatibility(self.setting.clock_skew()),
-        )
-    }
-
     pub(crate) fn parse_unsolicited_login_response_at(
         &self,
         idp: &IdentityProvider,
@@ -479,46 +393,8 @@ impl ServiceProvider {
             idp,
             binding,
             request,
-            LoginResponseCorrelation::Unsolicited(UnsolicitedInResponseTo::RejectPresent),
+            LoginResponseCorrelation::Unsolicited,
             options,
-        )
-    }
-
-    /// Parse and validate a login `<Response>` and require `InResponseTo` to
-    /// equal `request_id` (anti-replay: bind the response to a request you sent).
-    ///
-    /// An empty caller-provided `request_id` is rejected as
-    /// [`SamlError::InvalidInResponseTo`]. A non-empty `request_id` that does
-    /// not match the SAML response returns [`SamlError::InResponseToMismatch`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `request_id` is empty, the SP metadata has no ACS
-    /// endpoint for `binding`, `binding` is unsupported, the request is missing
-    /// required binding parameters, the SAML payload cannot be base64/DEFLATE
-    /// decoded, XML parsing or extraction fails, the status is not success, the
-    /// required signature is missing or invalid, no trusted IdP signing key is
-    /// available, or issuer, destination, bearer recipient, audience,
-    /// `InResponseTo`, subject-confirmation, or time-window validation fails.
-    #[deprecated(
-        note = "the raw API is removed in the next minor release; use `Saml::<Sp>::finish_sso`"
-    )]
-    pub fn parse_login_response_with_request_id(
-        &self,
-        idp: &IdentityProvider,
-        binding: Binding,
-        request: &HttpRequest,
-        request_id: &str,
-    ) -> Result<FlowResult, SamlError> {
-        if request_id.is_empty() {
-            return Err(SamlError::InvalidInResponseTo);
-        }
-        self.parse_login_response_inner(
-            idp,
-            binding,
-            request,
-            LoginResponseCorrelation::MessageId(request_id),
-            LoginResponseParseOptions::compatibility(self.setting.clock_skew()),
         )
     }
 
@@ -542,24 +418,6 @@ impl ServiceProvider {
         )
     }
 
-    fn parse_login_response_inner(
-        &self,
-        idp: &IdentityProvider,
-        binding: Binding,
-        request: &HttpRequest,
-        correlation: LoginResponseCorrelation<'_>,
-        options: LoginResponseParseOptions<'_>,
-    ) -> Result<FlowResult, SamlError> {
-        let result = self.parse_login_response_inner_with_signature_evidence(
-            idp,
-            binding,
-            request,
-            correlation,
-            options,
-        )?;
-        Ok(result.into_parts().0)
-    }
-
     fn parse_login_response_inner_with_signature_evidence(
         &self,
         idp: &IdentityProvider,
@@ -580,7 +438,7 @@ impl ServiceProvider {
         let audience = self.entity_id();
         let expected_in_response_to = match correlation {
             LoginResponseCorrelation::MessageId(request_id) => Some(request_id),
-            LoginResponseCorrelation::Unsolicited(_) => None,
+            LoginResponseCorrelation::Unsolicited => None,
         };
         let recipient = match options.expected_recipient {
             Some(recipient) => recipient.to_string(),
@@ -633,15 +491,14 @@ impl ServiceProvider {
             },
             options.signed_destination,
         )?;
-        if let LoginResponseCorrelation::Unsolicited(rule) = correlation {
+        if let LoginResponseCorrelation::Unsolicited = correlation {
             let in_response_to = result.extract().get_str("response.inResponseTo");
-            if in_response_to.is_some_and(|actual| rule.rejects(actual)) {
+            if in_response_to.is_some() {
                 return Err(SamlError::in_response_to_mismatch(None, in_response_to));
             }
             reject_unsolicited_bearer_in_response_to(
                 result.saml_content(),
                 self.setting.xml_limits,
-                rule,
             )?;
         }
         Ok(result)
@@ -653,6 +510,7 @@ mod tests {
     use super::*;
     use crate::binding::{decode_base64, deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
     use crate::metadata::{Endpoint, IdpMetadataInput};
+    use crate::tests::engine::SpMessages;
     use url::Url;
 
     fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
@@ -684,7 +542,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn create_unsigned_login_request_redirect_round_trips() -> Result<(), Box<dyn std::error::Error>>
     {
         let ctx = unsigned_sp()?.create_login_request(
@@ -707,7 +564,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn create_unsigned_login_request_post_is_base64() -> Result<(), Box<dyn std::error::Error>> {
         let ctx = unsigned_sp()?.create_login_request(
             &unsigned_idp()?,
@@ -716,29 +572,6 @@ mod tests {
         )?;
         let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
         assert!(xml.starts_with("<samlp:AuthnRequest"));
-        Ok(())
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn custom_tag_replacement_overrides_request() -> Result<(), Box<dyn std::error::Error>> {
-        let replace = |_t: &str| {
-            (
-                "_custom".to_string(),
-                "<samlp:AuthnRequest ID=\"_custom\"/>".to_string(),
-            )
-        };
-        let ctx = unsigned_sp()?.create_login_request(
-            &unsigned_idp()?,
-            Binding::Post,
-            &LoginRequestOptions {
-                custom: Some(&replace as &dyn Fn(&str) -> (String, String)),
-                ..Default::default()
-            },
-        )?;
-        assert_eq!(ctx.id, "_custom");
-        let xml = String::from_utf8(decode_base64(&ctx.context)?)?;
-        assert!(xml.contains("ID=\"_custom\""));
         Ok(())
     }
 }
@@ -753,6 +586,7 @@ mod crypto_tests {
     use crate::entity::User;
     use crate::idp::LoginResponseOptions;
     use crate::metadata::{Endpoint, IdpMetadataInput};
+    use crate::tests::engine::{IdpMessages, SpMessages};
 
     const IDP_CERT: &str = include_str!("../tests/fixtures/key/idp/cert.cer");
     const SP_PRIVKEY: &str = include_str!("../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -776,7 +610,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn parse_signed_response_extracts_name_id() -> Result<(), Box<dyn std::error::Error>> {
         let idp = IdentityProvider::from_config(
             &IdpMetadataInput {
@@ -853,7 +686,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn create_signed_redirect_request_has_signature() -> Result<(), Box<dyn std::error::Error>> {
         let sp = ServiceProvider::from_config(
             &SpMetadataInput {

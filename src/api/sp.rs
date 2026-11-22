@@ -127,11 +127,10 @@ pub(super) fn finish_validated_session(
 impl Saml<Sp> {
     /// Local SP metadata XML.
     pub fn metadata_xml(&self) -> &str {
-        self.raw_service_provider().metadata_xml()
+        self.service_provider().metadata_xml()
     }
 
-    /// Raw compatibility Service Provider.
-    pub fn raw_service_provider(&self) -> &ServiceProvider {
+    pub(crate) fn service_provider(&self) -> &ServiceProvider {
         &self.0.service_provider
     }
 
@@ -188,7 +187,7 @@ impl Saml<Sp> {
         }
         let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
         let acs = selected_acs(
-            self.raw_service_provider(),
+            self.service_provider(),
             options.response_binding,
             options.acs_index,
         )?;
@@ -198,9 +197,8 @@ impl Saml<Sp> {
             force_authn: options.force_authn.map(ForceAuthn::as_bool),
             assertion_consumer_service_index: options.acs_index,
             response_binding: Some(Binding::from(response_binding)),
-            ..Default::default()
         };
-        let context = self.raw_service_provider().create_typed_login_request(
+        let context = self.service_provider().create_typed_login_request(
             raw_idp,
             Binding::from(options.binding),
             &raw_options,
@@ -211,7 +209,7 @@ impl Saml<Sp> {
                 requested_authn_context: options.requested_authn_context.as_ref(),
             },
         )?;
-        let outbound = Outbound::<AuthnRequest>::try_from(context)?;
+        let outbound = Outbound::<AuthnRequest>::from_context(context)?;
         let pending = PendingAuthnRequest::new(
             outbound.id().clone(),
             outbound.relay_state().cloned(),
@@ -374,13 +372,10 @@ impl Saml<Sp> {
         let relay_state = relay_state_from_input(&input)?;
         ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        let parse = ResponseParseInput::try_new(
-            idp,
-            input,
-            self.raw_service_provider().setting.xml_limits,
-        )?;
+        let parse =
+            ResponseParseInput::try_new(idp, input, self.service_provider().setting.xml_limits)?;
         let flow = self
-            .raw_service_provider()
+            .service_provider()
             .parse_login_response_with_request_id_at(
                 raw_idp,
                 parse.binding,
@@ -400,7 +395,7 @@ impl Saml<Sp> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input.binding())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        let metadata = &self.raw_service_provider().metadata;
+        let metadata = &self.service_provider().metadata;
         let expected_recipient = match validation.recipient_endpoint() {
             Some(_) => validation.resolve_recipient_endpoint(
                 &metadata.assertion_consumer_service_locations(Binding::from(binding)),
@@ -409,13 +404,10 @@ impl Saml<Sp> {
                 .assertion_consumer_location(Binding::from(binding))
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
-        let parse = ResponseParseInput::try_new(
-            idp,
-            input,
-            self.raw_service_provider().setting.xml_limits,
-        )?;
+        let parse =
+            ResponseParseInput::try_new(idp, input, self.service_provider().setting.xml_limits)?;
         let flow = self
-            .raw_service_provider()
+            .service_provider()
             .parse_unsolicited_login_response_at(
                 raw_idp,
                 parse.binding,

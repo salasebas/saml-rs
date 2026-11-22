@@ -6,22 +6,23 @@
 `binding`, `context`, `crypto`, `entity`, `flow`, `idp`, `logout`, `sp`,
 `template`, `util`, `validator`, or `xml`.
 
-**Now:** the items in the table below have a documented path. Their old paths
-still compile, and the deprecated functions warn. The helpers in
+**Now:** `entity`, `flow`, `idp`, `logout`, and `sp` are no longer public.
+They held the raw API, which [section 3](raw-api.md) replaces. The items in the
+table below have a documented path. Their old paths in the other modules still
+compile, and the deprecated functions warn. The helpers in
 [2.5](#25-replace-the-helpers-that-are-no-longer-public) do not compile at
-their old paths. The modules become crate-private in the next minor release, so
-move every import in this table now. A moved type does not warn, because Rust
-ignores `#[deprecated]` on a re-export.
+their old paths. The other modules become crate-private in the next minor
+release, so move every import in this table now. A moved type does not warn,
+because Rust ignores `#[deprecated]` on a re-export.
 
 | Old path | Documented path |
 | --- | --- |
 | `xml::XmlLimits`, `xml::dom::XmlLimits` | `saml_rs::XmlLimits` |
-| `template::LoginResponseTemplate`, `template::LoginResponseAttribute` | `saml_rs::raw::LoginResponseTemplate`, `saml_rs::raw::LoginResponseAttribute` |
+| `template::LoginResponseTemplate`, `template::LoginResponseAttribute` | None. Only the raw API read them. Pass attributes with `SsoAssertion::with_attributes` and the built-in renderer, or write them into your own template text for `IdpConfigBuilder::sso_response_template`. The two do not combine |
 | `entity::SignatureConfig`, `entity::SignatureAction` | `saml_rs::SignatureConfig`, `saml_rs::SignatureAction` |
 | `template::LOGIN_REQUEST_TEMPLATE`, `template::LOGIN_RESPONSE_TEMPLATE` | `saml_rs::config::AUTHN_REQUEST_TEMPLATE`, `saml_rs::config::SSO_RESPONSE_TEMPLATE` |
 | `template::LOGOUT_REQUEST_TEMPLATE`, `template::LOGOUT_RESPONSE_TEMPLATE` | The same names under `saml_rs::config` |
-| `xml::ExtractorField`, `xml::LocalPath` | `saml_rs::raw::ExtractorField`, `saml_rs::raw::LocalPath` |
-| `util::Value` | `saml_rs::raw::Value` |
+| `xml::ExtractorField`, `xml::LocalPath`, `util::Value` | None. They describe the raw `FlowResult::extract`, which the typed API does not expose |
 | `binding::base64_encode`, `binding::base64_decode` (deprecated) | The `base64` crate. See [2.1](#21-use-the-base64-crate) |
 | `template::attribute_statement_builder` (deprecated) | `SsoAssertion::with_attributes`. See [2.2](#22-pass-attributes-to-the-response) |
 | `crypto::keys::load_private_key`, `crypto::construct_saml_signature`, `crypto::construct_message_signature`, `crypto::verify_signature`, `crypto::verify_signature_with_limits`, `crypto::verify_message_signature`, `crypto::decrypt_assertion` (deprecated) | The typed API, or `bergshamra`. See [2.3](#23-sign-verify-and-decrypt-through-the-typed-api) |
@@ -35,7 +36,6 @@ the code that uses them does not change:
 
 ```rust
 use saml_rs::config::SSO_RESPONSE_TEMPLATE;
-use saml_rs::raw::{LoginResponseTemplate, Value};
 use saml_rs::{TemplatePolicy, XmlLimits, XmlPolicy};
 ```
 
@@ -170,14 +170,17 @@ takes its limit as an argument. A call to it no longer compiles.
 | `util::uniq`, `util::camel_case`, `util::zip_object` | Your own code. They served the internal field extractor |
 | `entity::generate_id` | The typed operations, which write the `ID` of every message and assertion they generate |
 | `entity::now_iso8601` | `time::OffsetDateTime::now_utc()`, written as `YYYY-MM-DDTHH:MM:SSZ` |
+| `template::replace_tags_by_value` | `template::replace_tags_by_optional_value`, with each value wrapped in `Some`. It fills the same placeholders |
 | `template::attr_tag` | The key `attr<Tag>`: `attr` and the `value_tag` in camel case with a capital first letter, such as `attrEmail` for `email`. A template names the key in braces, as `{attrEmail}` |
 | `xml::fields` | The typed results, such as `SsoSession` and `LogoutRequest` |
 | `xml::dom::DEFAULT_XML_MAX_*` | The fields of `XmlLimits::default()`, such as `XmlLimits::default().max_bytes`. Each field's documentation states its default. In a constant, write that number, because `XmlLimits::default()` is not a `const fn` |
 | `validator::verify_time` | The typed receive operations, which check time windows with the `ClockSkew` of `SamlValidationContext` |
 | `validator::check_status_with_limits` | `validator::check_status(content, parser_type, limits)`. The two-argument `check_status` is removed. Pass `XmlLimits::default()` to keep its limits |
 
-`binding::deflate_raw_decode` and `validator::check_status` are in hidden
-modules, so they also become crate-private in the next minor release. After
+`binding::deflate_raw_decode`, `validator::check_status`, and
+`template::replace_tags_by_optional_value` are in hidden modules, so they also
+become crate-private in the next minor release. After
 that, inflate with `flate2::read::DeflateDecoder` and `std::io::Read::take`,
-and read a response status from the `SamlError::StatusNotSuccess` that the
-typed finish operations return.
+read a response status from the `SamlError::StatusNotSuccess` that the
+typed finish operations return, and fill template placeholders with your own
+string replacement.

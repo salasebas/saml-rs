@@ -35,7 +35,7 @@ impl Saml<Idp> {
     ) -> Result<Artifact, SamlError> {
         service_provider.ensure_valid_at(SystemTime::now())?;
         artifact::issue(
-            &self.raw_identity_provider().metadata,
+            &self.identity_provider().metadata,
             service_provider,
             protocol_xml,
             endpoint_index,
@@ -220,13 +220,13 @@ impl Saml<Idp> {
     ) -> Result<AnsweredArtifact, SamlError> {
         presenter.ensure_valid_at(SystemTime::now())?;
         artifact::answer(
-            &self.raw_identity_provider().metadata,
+            &self.identity_provider().metadata,
             presenter,
             request_envelope,
             issued,
             channel,
-            self.raw_identity_provider().setting.xml_limits,
-            self.raw_identity_provider().setting.schema_validator,
+            self.identity_provider().setting.xml_limits,
+            self.identity_provider().setting.schema_validator,
         )
     }
 }
@@ -276,7 +276,7 @@ impl Saml<Sp> {
     ) -> Result<ArtifactResolution, SamlError> {
         identity_provider.ensure_valid_at(validation.now())?;
         let entity_id = self
-            .raw_service_provider()
+            .service_provider()
             .metadata
             .as_metadata()
             .entity_id()
@@ -287,8 +287,8 @@ impl Saml<Sp> {
             artifact,
             channel,
             &mut validation,
-            self.raw_service_provider().setting.xml_limits,
-            self.raw_service_provider().setting.schema_validator,
+            self.service_provider().setting.xml_limits,
+            self.service_provider().setting.schema_validator,
         )
     }
 }

@@ -312,10 +312,10 @@ the value came from:
   result returned `SamlError::ReplayDetected`, because the keys were already
   stored. Delete the call.
 - **`TryFrom<FlowResult>`.** For an `SsoSession` or `AuthnRequest` converted
-  from a raw flow, that call was the only replay check. Deleting it alone
-  accepts a replayed message. In this upgrade, receive the message with
-  `finish_sso`, `accept_unsolicited_sso`, or `receive_sso` instead, as
-  [Move off the deprecated raw API](raw-api.md) shows.
+  from a raw flow, that call was the only replay check. The conversion is
+  removed with the raw API: receive the message with `finish_sso`,
+  `accept_unsolicited_sso`, or `receive_sso` instead, as
+  [Move off the raw API](raw-api.md) shows.
 
 ## Stop building values that only a received message carries
 

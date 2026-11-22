@@ -134,7 +134,6 @@ pub struct Outbound<Message> {
     id: MessageId,
     relay_state: Option<RelayState>,
     action: OutboundAction,
-    raw_context: BindingContext,
     session_index: Option<SessionIndex>,
     _message: PhantomData<Message>,
 }
@@ -212,16 +211,6 @@ impl<Message> Outbound<Message> {
             OutboundAction::SoapResponse(response) => response.headers(),
         }
     }
-
-    /// Raw compatibility context used to build this typed action.
-    pub fn raw_context(&self) -> &BindingContext {
-        &self.raw_context
-    }
-
-    /// Consume the typed action and return the raw compatibility context.
-    pub fn into_raw_context(self) -> BindingContext {
-        self.raw_context
-    }
 }
 
 impl Outbound<LogoutRequest> {
@@ -271,8 +260,7 @@ impl Outbound<SsoResponse> {
     /// Record it with the user's session to match the `SessionIndex` of a
     /// later `LogoutRequest`. It is available when the assertion is encrypted
     /// or delivered by artifact. `None` when this library wrote no
-    /// `SessionIndex`, and for an outbound built from a [`BindingContext`]. A
-    /// `SessionIndex` written by
+    /// `SessionIndex`. A `SessionIndex` written by
     /// [`IdpConfigBuilder::sso_response_template`](crate::IdpConfigBuilder::sso_response_template)
     /// is not reported.
     pub fn session_index(&self) -> Option<&SessionIndex> {
@@ -326,34 +314,18 @@ impl Outbound<SsoResponse> {
             id,
             relay_state,
             action,
-            raw_context,
             session_index: None,
             _message: PhantomData,
         })
     }
 }
 
-impl TryFrom<BindingContext> for Outbound<AuthnRequest> {
-    type Error = SamlError;
-
-    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+impl Outbound<AuthnRequest> {
+    pub(crate) fn from_context(raw_context: BindingContext) -> Result<Self, SamlError> {
         outbound_from_context(
             raw_context,
             true,
             MessageField::Request,
-            RelayState::try_new,
-        )
-    }
-}
-
-impl TryFrom<BindingContext> for Outbound<SsoResponse> {
-    type Error = SamlError;
-
-    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
-        outbound_from_context(
-            raw_context,
-            false,
-            MessageField::Response,
             RelayState::try_new,
         )
     }
@@ -372,10 +344,8 @@ impl Outbound<SsoResponse> {
     }
 }
 
-impl TryFrom<BindingContext> for Outbound<LogoutRequest> {
-    type Error = SamlError;
-
-    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+impl Outbound<LogoutRequest> {
+    pub(crate) fn from_context(raw_context: BindingContext) -> Result<Self, SamlError> {
         if raw_context.binding == Binding::Soap {
             validate_context_message_kind(&raw_context, MessageField::Request)?;
             let endpoint = EndpointUrl::try_new(raw_context.entity_endpoint.clone())?;
@@ -388,14 +358,6 @@ impl TryFrom<BindingContext> for Outbound<LogoutRequest> {
             MessageField::Request,
             RelayState::try_new,
         )
-    }
-}
-
-impl TryFrom<BindingContext> for Outbound<LogoutResponse> {
-    type Error = SamlError;
-
-    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
-        Self::logout_response(raw_context, RelayState::try_new)
     }
 }
 
@@ -433,33 +395,17 @@ fn soap_outbound<Message>(
         id: MessageId::try_new(raw_context.id.clone())?,
         relay_state: None,
         action,
-        raw_context,
         session_index: None,
         _message: PhantomData,
     })
 }
 
-impl TryFrom<BindingContext> for Outbound<ManageNameIdRequest> {
-    type Error = SamlError;
-
-    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
+impl Outbound<ManageNameIdRequest> {
+    pub(crate) fn from_context(raw_context: BindingContext) -> Result<Self, SamlError> {
         outbound_from_context(
             raw_context,
             true,
             MessageField::Request,
-            RelayState::try_new,
-        )
-    }
-}
-
-impl TryFrom<BindingContext> for Outbound<ManageNameIdResponse> {
-    type Error = SamlError;
-
-    fn try_from(raw_context: BindingContext) -> Result<Self, Self::Error> {
-        outbound_from_context(
-            raw_context,
-            true,
-            MessageField::Response,
             RelayState::try_new,
         )
     }
@@ -506,7 +452,6 @@ fn outbound_from_context<Message>(
                 id,
                 relay_state,
                 action: OutboundAction::Redirect(raw_context.context.clone()),
-                raw_context,
                 session_index: None,
                 _message: PhantomData,
             })
@@ -518,7 +463,6 @@ fn outbound_from_context<Message>(
                 id,
                 relay_state,
                 action: OutboundAction::Post(form),
-                raw_context,
                 session_index: None,
                 _message: PhantomData,
             })
@@ -530,7 +474,6 @@ fn outbound_from_context<Message>(
                 id,
                 relay_state,
                 action: OutboundAction::SimpleSignPost(form),
-                raw_context,
                 session_index: None,
                 _message: PhantomData,
             })

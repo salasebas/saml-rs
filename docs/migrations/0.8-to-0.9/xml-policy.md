@@ -29,9 +29,7 @@ and extension schemas. Load schemas from trusted local resources and disable
 network resolution in your validator.
 
 `context::is_valid_xml_with_limits` now performs baseline parsing checks only.
-Raw `EntitySetting` and `FlowOptions` expose their own `schema_validator` field.
-Both types were already non-exhaustive, so adding that field does not break
-external construction. `XmlPolicy` is non-exhaustive now too. Replace a full
+`XmlPolicy` is non-exhaustive now. Replace a full
 `XmlPolicy` literal as
 [Assign fields instead of writing a struct literal](config.md#assign-fields-instead-of-writing-a-struct-literal)
 describes.

@@ -107,19 +107,13 @@ impl LogoutRequest {
         self.destination.as_ref()
     }
 
-    /// Underlying raw compatibility flow result.
-    ///
-    /// When this model is built directly with [`TryFrom<FlowResult>`], no typed
-    /// receiver endpoint validation is implied.
-    pub fn raw_flow(&self) -> &FlowResult {
+    pub(crate) fn raw_flow(&self) -> &FlowResult {
         &self.raw_flow
     }
 }
 
-impl TryFrom<FlowResult> for LogoutRequest {
-    type Error = SamlError;
-
-    fn try_from(raw_flow: FlowResult) -> Result<Self, Self::Error> {
+impl LogoutRequest {
+    pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, "request.id")?)?;
         let issue_instant = logout_request_instant_from_extract(
             &raw_flow.extract,
@@ -199,7 +193,6 @@ pub struct LogoutResponse {
     in_response_to: Option<MessageId>,
     destination: Option<EndpointUrl>,
     status: Status,
-    raw_flow: FlowResult,
 }
 
 impl LogoutResponse {
@@ -236,20 +229,10 @@ impl LogoutResponse {
     pub fn status(&self) -> &Status {
         &self.status
     }
-
-    /// Underlying raw compatibility flow result.
-    ///
-    /// When this model is built directly with [`TryFrom<FlowResult>`], no typed
-    /// receiver endpoint validation is implied.
-    pub fn raw_flow(&self) -> &FlowResult {
-        &self.raw_flow
-    }
 }
 
-impl TryFrom<FlowResult> for LogoutResponse {
-    type Error = SamlError;
-
-    fn try_from(raw_flow: FlowResult) -> Result<Self, Self::Error> {
+impl LogoutResponse {
+    pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, "response.id")?)?;
         let issue_instant = issue_instant_from_extract(&raw_flow.extract)?;
         let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
@@ -263,7 +246,6 @@ impl TryFrom<FlowResult> for LogoutResponse {
             in_response_to,
             destination,
             status,
-            raw_flow,
         })
     }
 }
@@ -322,10 +304,5 @@ impl LogoutCompleted {
     /// interprets by prior agreement.
     pub fn relay_state(&self) -> Option<&RelayState> {
         self.relay_state.as_ref()
-    }
-
-    /// Underlying raw compatibility flow result for the LogoutResponse.
-    pub fn raw_flow(&self) -> &FlowResult {
-        self.response.raw_flow()
     }
 }

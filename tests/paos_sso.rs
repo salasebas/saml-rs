@@ -908,14 +908,6 @@ fn protocol_binding_naming_paos_is_received() -> Result<(), Box<dyn std::error::
         validation(),
     )?;
     assert_eq!(received.message().protocol_binding(), None);
-    assert_eq!(
-        received
-            .message()
-            .raw_flow()
-            .extract
-            .get_str("request.protocolBinding"),
-        Some("urn:oasis:names:tc:SAML:2.0:bindings:PAOS")
-    );
     let answered =
         idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
     assert_eq!(answered.http_status(), 200);

@@ -18,14 +18,6 @@ fn typed_api_contract_exposes_role_markers() {
 }
 
 #[test]
-fn typed_api_contract_reexports_raw_flow_types() {
-    let _ = std::any::type_name::<saml_rs::raw::Binding>();
-    let _ = std::any::type_name::<saml_rs::raw::FlowResult>();
-    let _ = std::any::type_name::<saml_rs::raw::BindingContext>();
-    let _ = std::any::type_name::<saml_rs::raw::HttpRequest>();
-}
-
-#[test]
 fn typed_api_contract_reexports_config_builders() {
     let _ = std::any::type_name::<saml_rs::SpConfigBuilder>();
     let _ = std::any::type_name::<saml_rs::IdpConfigBuilder>();

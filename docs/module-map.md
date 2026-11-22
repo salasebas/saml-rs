@@ -15,7 +15,7 @@ This map lists the behaviour whose file name does not give it away.
 | Response rendering for HTTP-Artifact and PAOS | `src/idp/posted_response.rs` |
 | A binding parameter that may occur once | `src/binding/parameters.rs` |
 | Protocol elements read with their namespaces, and their `Status` | `src/xml/protocol_element.rs` |
-| Typed config to raw `EntitySetting` | `src/config/entity_setting.rs` |
+| Typed config to the internal `EntitySetting` | `src/config/entity_setting.rs` |
 | Typed config to the metadata generator input and the internal provider | `src/config/provider.rs` |
 | `EncryptedID` in the requested `Subject` of a received `AuthnRequest` | `src/api/requested_subject.rs` |
 

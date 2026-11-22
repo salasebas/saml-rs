@@ -4,7 +4,6 @@ use crate::browser::{
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::constants::Binding;
 use crate::entity::{generate_id, EntitySetting};
-use crate::flow::HttpRequest;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
     MessageId, NameId, Received, RelayState, ReplayKey, SamlValidationContext, Status,
@@ -184,7 +183,7 @@ impl Saml<Sp> {
     }
 
     fn local(&self) -> Local<'_> {
-        let sp = self.raw_service_provider();
+        let sp = self.service_provider();
         Local {
             setting: &sp.setting,
             metadata: sp.metadata.as_metadata(),
@@ -380,7 +379,7 @@ impl Saml<Idp> {
     }
 
     fn local(&self) -> Local<'_> {
-        let idp = self.raw_identity_provider();
+        let idp = self.identity_provider();
         Local {
             setting: &idp.setting,
             metadata: idp.metadata.as_metadata(),
@@ -448,7 +447,7 @@ fn start(
         options.identifier_encryption,
         options.relay_state.as_ref().map(RelayState::as_str),
     )?;
-    let outbound = Outbound::<ManageNameIdRequest>::try_from(context)?;
+    let outbound = Outbound::<ManageNameIdRequest>::from_context(context)?;
     let pending = PendingManageNameIdRequest::new(
         outbound.id().clone(),
         outbound.relay_state().cloned(),
@@ -468,7 +467,7 @@ fn receive(
     let relay_state = relay_state_from_input(&input)?;
     let locations = local_locations(local.metadata, EndpointDirection::Request)?;
     let expected_recipient = validation.resolve_recipient_endpoint(&locations)?;
-    let request = HttpRequest::try_from(input)?;
+    let request = input.into_http_request()?;
     let flow = parse_request(
         local.setting,
         peer.metadata,
@@ -588,7 +587,7 @@ fn finish(
     ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
     let locations = local_locations(local.metadata, EndpointDirection::Response)?;
     let expected_recipient = validation.resolve_recipient_endpoint(&locations)?;
-    let request = HttpRequest::try_from(input)?;
+    let request = input.into_http_request()?;
     let flow = parse_response(
         local.setting,
         peer.metadata,

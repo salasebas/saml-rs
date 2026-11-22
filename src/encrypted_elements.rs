@@ -167,7 +167,8 @@ pub(crate) fn encrypted_assertion_key<'a>(
 
 /// `xml`, whose detached signature verified, with each `<EncryptedAssertion>`
 /// decrypted for a typed service provider, and the decrypted assertions.
-/// `None` when no key applies, and for the raw service provider.
+/// `None` when no key applies, and under
+/// [`ReceivedEncryptedElements::DecryptSelected`].
 #[cfg(crypto)]
 pub(crate) fn decrypt_detached_signed_assertions(
     xml: &str,

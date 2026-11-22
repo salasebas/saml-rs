@@ -423,21 +423,21 @@ impl Saml<Sp> {
         }
         let assertion_consumer = assertion_consumer_url(self, options.acs_url)?;
         let issuer = self
-            .raw_service_provider()
+            .service_provider()
             .metadata
             .as_metadata()
             .entity_id()
             .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
             .to_string();
-        let (request_id, authn_request_xml) = self
-            .raw_service_provider()
-            .render_paos_authn_request(&PaosAuthnRequestInput {
-                destination: options.soap_endpoint.as_str(),
-                assertion_consumer_service_url: assertion_consumer.as_str(),
-                force_authn: options.force_authn.map(ForceAuthn::as_bool),
-                is_passive: options.passive.map(IsPassive::as_bool),
-                sign: options.sign_authn_request,
-            })?;
+        let (request_id, authn_request_xml) =
+            self.service_provider()
+                .render_paos_authn_request(&PaosAuthnRequestInput {
+                    destination: options.soap_endpoint.as_str(),
+                    assertion_consumer_service_url: assertion_consumer.as_str(),
+                    force_authn: options.force_authn.map(ForceAuthn::as_bool),
+                    is_passive: options.passive.map(IsPassive::as_bool),
+                    sign: options.sign_authn_request,
+                })?;
         let envelope = sp_to_ecp_envelope(&SpToEcp {
             response_consumer_url: assertion_consumer.as_str(),
             provider_name: options.provider_name.as_deref(),
@@ -516,11 +516,11 @@ impl Saml<Sp> {
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
-        let limits = self.raw_service_provider().setting.xml_limits;
+        let limits = self.service_provider().setting.xml_limits;
         let body = read_soap_body(response_envelope, "Response", limits, SP_UNDERSTOOD_HEADERS)?;
         crate::schema::validate(
             response_envelope,
-            self.raw_service_provider().setting.schema_validator,
+            self.service_provider().setting.schema_validator,
         )?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let request = HttpRequest::post(vec![(
@@ -528,7 +528,7 @@ impl Saml<Sp> {
             crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
         let parsed = self
-            .raw_service_provider()
+            .service_provider()
             .parse_login_response_with_request_id_at(
                 raw_idp,
                 crate::constants::Binding::Post,
@@ -550,8 +550,7 @@ impl Saml<Idp> {
     /// URL that received this POST. A `Destination` on the AuthnRequest, when
     /// that attribute is present, must match it. A `ProtocolBinding` that
     /// names the PAOS binding is accepted, and
-    /// [`AuthnRequest::protocol_binding`] then reports none. The raw flow
-    /// keeps the attribute.
+    /// [`AuthnRequest::protocol_binding`] then reports none.
     ///
     /// # Errors
     ///
@@ -571,18 +570,18 @@ impl Saml<Idp> {
         soap_endpoint: &EndpointUrl,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<AuthnRequest>, SamlError> {
-        let limits = self.raw_identity_provider().setting.xml_limits;
+        let limits = self.identity_provider().setting.xml_limits;
         let body = read_soap_body(request_envelope, "AuthnRequest", limits, &[])?;
         crate::schema::validate(
             request_envelope,
-            self.raw_identity_provider().setting.schema_validator,
+            self.identity_provider().setting.schema_validator,
         )?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let http = HttpRequest::post(vec![(
             "SAMLRequest".into(),
             crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
-        let (flow, message_authenticated) = self.raw_identity_provider().parse_login_request_at(
+        let (flow, message_authenticated) = self.identity_provider().parse_login_request_at(
             raw_sp,
             crate::constants::Binding::Post,
             &http,
@@ -591,7 +590,7 @@ impl Saml<Idp> {
         )?;
         let flow = super::requested_subject::decrypt_requested_subject(
             flow,
-            &self.raw_identity_provider().setting,
+            &self.identity_provider().setting,
             message_authenticated,
         )?;
         let authn = AuthnRequest::try_from_paos_flow(flow)?;
@@ -676,7 +675,7 @@ impl Saml<Idp> {
         )?)?;
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let sign_encrypted_cbc = {
-            let setting = &self.raw_identity_provider().setting;
+            let setting = &self.identity_provider().setting;
             super::options::RespondSso::post().should_sign_response(
                 setting.is_assertion_encrypted,
                 &setting.data_encryption_algorithm,
@@ -698,7 +697,7 @@ impl Saml<Idp> {
             want_message_signed: Some(sign_encrypted_cbc),
             transformation_algorithms: None,
         };
-        let issued = self.raw_identity_provider().render_posted_sso_response(
+        let issued = self.identity_provider().render_posted_sso_response(
             raw_sp,
             &user,
             Some(request.message().id().as_str()),
@@ -718,7 +717,7 @@ fn assertion_consumer_url(
     sp: &Saml<Sp>,
     selected: Option<EndpointUrl>,
 ) -> Result<EndpointUrl, SamlError> {
-    let metadata = &sp.raw_service_provider().metadata;
+    let metadata = &sp.service_provider().metadata;
     let locations = metadata.assertion_consumer_locations();
     if let Some(selected) = selected {
         if locations

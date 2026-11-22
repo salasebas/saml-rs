@@ -15,7 +15,7 @@ Check the topics that affect your integration.
 
 - [Fix compile errors](compile-errors.md)
 - [Move off the hidden modules](public-imports.md)
-- [Move off the deprecated raw API](raw-api.md)
+- [Move off the raw API](raw-api.md)
 - [Update SSO attributes](sso-attributes.md)
 - [Update SSO results and identities](sso-results-and-identities.md)
 - [Update metadata configuration and trust](metadata.md)

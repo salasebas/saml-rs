@@ -127,7 +127,7 @@ Known URIs become their named variants. Other values remain
 `NameIdFormat::Custom`, in the same document order, including repeats. XML Schema
 whitespace collapse applies before mapping: leading and trailing XML whitespace
 is removed, and internal runs become one space. This also changes the formats
-used by raw provider settings and generated protocol messages. Use
+used by generated protocol messages. Use
 `format.as_uri()` when you need the normalized URI string.
 
 `single_logout_bindings()` lists bindings with non-empty logout request
@@ -251,8 +251,8 @@ This is a borrowed view and does not reparse or clone the metadata.
 
 The raw `metadata::SpMetadataConfig` and `metadata::IdpMetadataConfig` types
 are renamed to `metadata::SpMetadataInput` and `metadata::IdpMetadataInput`.
-They are the records passed to `generate_sp_metadata`, `generate_idp_metadata`,
-and the raw providers' `from_config` constructors. Their fields keep their
+They are the records passed to `generate_sp_metadata` and
+`generate_idp_metadata`. Their fields keep their
 names and meanings. Both are now non-exhaustive, so start from `default()` and
 assign the fields you set. The crate-root typed `SpMetadataConfig` and
 `IdpMetadataConfig` readers keep their names.

@@ -1,29 +1,35 @@
 #![cfg(crypto)]
 
 use saml_rs::constants::Binding;
-use saml_rs::entity::{EntitySetting, User};
-#[allow(deprecated)]
-use saml_rs::logout::create_logout_request;
+use saml_rs::entity::EntitySetting;
+use saml_rs::idp::IdentityProvider;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::tests::engine::create_logout_request;
+use saml_rs::tests::engine::LogoutUser;
+use saml_rs::tests::engine::SpMessages;
 use saml_rs::SamlError;
 
-const PRIVATE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERTIFICATE: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVATE_KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERTIFICATE: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 #[test]
-#[allow(deprecated)]
 fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for binding in [Binding::Soap, Binding::Artifact] {
-        let mut idp_config = IdpMetadataInput::default();
-        idp_config.entity_id = "https://idp.example.com/metadata".into();
+        let mut idp_config = IdpMetadataInput {
+            entity_id: "https://idp.example.com/metadata".into(),
+            ..IdpMetadataInput::default()
+        };
         idp_config.single_sign_on_service =
             vec![Endpoint::new(binding, "https://idp.example.com/sso")];
         let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
-        let mut sp_config = SpMetadataInput::default();
-        sp_config.entity_id = "https://sp.example.com/metadata".into();
-        sp_config.authn_requests_signed = true;
+        let mut sp_config = SpMetadataInput {
+            entity_id: "https://sp.example.com/metadata".into(),
+            authn_requests_signed: true,
+            ..SpMetadataInput::default()
+        };
         sp_config.assertion_consumer_service =
             vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
         let mut sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
@@ -47,11 +53,12 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
 }
 
 #[test]
-#[allow(deprecated)]
 fn signed_logout_artifact_rejects_binding_before_credentials(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp_config = IdpMetadataInput::default();
-    idp_config.entity_id = "https://idp.example.com/metadata".into();
+    let mut idp_config = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        ..IdpMetadataInput::default()
+    };
     idp_config.single_sign_on_service =
         vec![Endpoint::new(Binding::Post, "https://idp.example.com/sso")];
     idp_config.single_logout_service = vec![Endpoint::new(
@@ -59,21 +66,25 @@ fn signed_logout_artifact_rejects_binding_before_credentials(
         "https://idp.example.com/slo",
     )];
     let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
-    let mut sp_config = SpMetadataInput::default();
-    sp_config.entity_id = "https://sp.example.com/metadata".into();
+    let mut sp_config = SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        ..SpMetadataInput::default()
+    };
     sp_config.assertion_consumer_service =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
     let sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
     for private_key in [None, Some("invalid private key".into())] {
-        let mut setting = EntitySetting::default();
-        setting.private_key = private_key;
+        let setting = EntitySetting {
+            private_key,
+            ..EntitySetting::default()
+        };
         assert!(matches!(
             create_logout_request(
                 &setting,
                 sp.metadata.as_metadata(),
                 idp.metadata.as_metadata(),
                 Binding::Artifact,
-                &User::new("alice@example.com"),
+                &LogoutUser::new("alice@example.com"),
                 None,
                 true,
             ),

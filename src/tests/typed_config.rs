@@ -2,8 +2,8 @@ use saml_rs::constants::{
     data_encryption_algorithm, digest_algorithm, key_encryption_algorithm, name_id_format,
     signature_algorithm, transform_algorithm,
 };
+use saml_rs::entity::EntitySetting;
 use saml_rs::flow::FlowOptions;
-use saml_rs::raw::EntitySetting;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId,
     HmacSecret, IdpConfig, IdpDescriptor, IdpValidationPolicy, KeyEncryptionAlgorithm,
@@ -12,8 +12,8 @@ use saml_rs::{
     TransformAlgorithm, X509Credential,
 };
 
-const IDP_METADATA: &str = include_str!("fixtures/misc/idpmeta.xml");
-const SP_METADATA: &str = include_str!("fixtures/misc/spmeta.xml");
+const IDP_METADATA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
+const SP_METADATA: &str = include_str!("../../tests/fixtures/misc/spmeta.xml");
 
 #[test]
 fn typed_config_private_key_debug_is_redacted() {
@@ -39,10 +39,14 @@ fn typed_config_passphrase_debug_is_redacted() {
 fn hmac_secret_debug_is_redacted_where_it_is_carried() -> Result<(), SamlError> {
     const SECRET: &[u8] = b"dummy-hmac-secret-for-debug-test";
     let secret = HmacSecret::try_new(SECRET)?;
-    let mut setting = EntitySetting::default();
-    setting.hmac_secret = Some(secret.clone());
-    let mut flow = FlowOptions::default();
-    flow.hmac_secret = Some(&secret);
+    let setting = EntitySetting {
+        hmac_secret: Some(secret.clone()),
+        ..EntitySetting::default()
+    };
+    let flow = FlowOptions {
+        hmac_secret: Some(&secret),
+        ..FlowOptions::default()
+    };
 
     for debug in [
         format!("{secret:?}"),
@@ -125,13 +129,15 @@ fn typed_config_certificate_debug_does_not_dump_pem() {
 
 #[test]
 fn typed_config_entity_setting_debug_redacts_credential_material() {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some("dummy-private-key-for-entity-debug-test".to_string());
-    setting.private_key_pass = Some("dummy-private-key-pass-for-entity-debug-test".to_string());
-    setting.signing_cert = Some("dummy-signing-cert-for-entity-debug-test".to_string());
-    setting.encrypt_cert = Some("dummy-encrypt-cert-for-entity-debug-test".to_string());
-    setting.enc_private_key = Some("dummy-enc-private-key-for-entity-debug-test".to_string());
-    setting.enc_private_key_pass = Some("dummy-enc-pass-for-entity-debug-test".to_string());
+    let setting = EntitySetting {
+        private_key: Some("dummy-private-key-for-entity-debug-test".to_string()),
+        private_key_pass: Some("dummy-private-key-pass-for-entity-debug-test".to_string()),
+        signing_cert: Some("dummy-signing-cert-for-entity-debug-test".to_string()),
+        encrypt_cert: Some("dummy-encrypt-cert-for-entity-debug-test".to_string()),
+        enc_private_key: Some("dummy-enc-private-key-for-entity-debug-test".to_string()),
+        enc_private_key_pass: Some("dummy-enc-pass-for-entity-debug-test".to_string()),
+        ..EntitySetting::default()
+    };
 
     let debug = format!("{setting:?}");
 

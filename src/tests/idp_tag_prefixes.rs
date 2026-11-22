@@ -1,58 +1,64 @@
 #![cfg(crypto)]
-#![allow(deprecated)]
 
-use std::cell::RefCell;
+use saml_rs::tests::engine::LogoutUser;
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::constants::Binding;
-use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
+use saml_rs::entity::{BindingContext, EntitySetting, User};
 use saml_rs::flow::HttpRequest;
+use saml_rs::idp::IdentityProvider;
 use saml_rs::idp::LoginResponseOptions;
-use saml_rs::logout::{create_logout_request, create_logout_response};
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{IdentityProvider, LoginResponseTemplate, ServiceProvider};
-use saml_rs::template::replace_tags_by_value;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::template::LoginResponseTemplate;
+use saml_rs::tests::engine::{create_logout_request, create_logout_response};
 use saml_rs::SamlError;
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 const REQUEST_ID: &str = "_prefix_req";
 
 fn signing() -> EntitySetting {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some(PRIVKEY.into());
-    setting.signing_cert = Some(CERT.into());
-    setting.request_signature_algorithm = RSA_SHA256.into();
-    setting
+    EntitySetting {
+        private_key: Some(PRIVKEY.into()),
+        signing_cert: Some(CERT.into()),
+        request_signature_algorithm: RSA_SHA256.into(),
+        ..EntitySetting::default()
+    }
 }
 
 fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = "https://idp.example.com/metadata".into();
-    config.signing_certs = vec![CERT.into()];
-    config.single_sign_on_service = vec![Endpoint::new(Binding::Post, "https://idp/sso")];
-    config.single_logout_service = vec![
-        Endpoint::new(Binding::Post, "https://idp/slo"),
-        Endpoint::new(Binding::Redirect, "https://idp/slo"),
-        Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
-    ];
+    let config = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        signing_certs: vec![CERT.into()],
+        single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
+        single_logout_service: vec![
+            Endpoint::new(Binding::Post, "https://idp/slo"),
+            Endpoint::new(Binding::Redirect, "https://idp/slo"),
+            Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
+        ],
+        ..IdpMetadataInput::default()
+    };
     IdentityProvider::from_config(&config, setting)
 }
 
 fn sp(want_assertions_signed: bool) -> Result<ServiceProvider, SamlError> {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = "https://sp.example.com/metadata".into();
-    config.want_assertions_signed = want_assertions_signed;
-    config.signing_certs = vec![CERT.into()];
-    config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
-    config.single_logout_service = vec![
-        Endpoint::new(Binding::Post, "https://sp/slo"),
-        Endpoint::new(Binding::Redirect, "https://sp/slo"),
-        Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
-    ];
+    let config = SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        want_assertions_signed,
+        signing_certs: vec![CERT.into()],
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        single_logout_service: vec![
+            Endpoint::new(Binding::Post, "https://sp/slo"),
+            Endpoint::new(Binding::Redirect, "https://sp/slo"),
+            Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
+        ],
+        ..SpMetadataInput::default()
+    };
     ServiceProvider::from_config(&config, signing())
 }
 
@@ -105,40 +111,6 @@ fn login_response_xml(
     Ok((idp, sp, ctx, xml))
 }
 
-fn fill_login_response(template: &str, name_id: &str) -> (String, String) {
-    let id = "_custom_prefix_response".to_string();
-    let now = iso8601_offset(-60);
-    let later = iso8601_offset(300);
-    let xml = replace_tags_by_value(
-        template,
-        &[
-            ("ID", id.clone()),
-            ("AssertionID", "_custom_prefix_assertion".into()),
-            ("Destination", "https://sp/acs".into()),
-            ("SubjectRecipient", "https://sp/acs".into()),
-            ("AssertionConsumerServiceURL", "https://sp/acs".into()),
-            ("Audience", "https://sp.example.com/metadata".into()),
-            ("Issuer", "https://idp.example.com/metadata".into()),
-            ("IssueInstant", now.clone()),
-            (
-                "StatusCode",
-                "urn:oasis:names:tc:SAML:2.0:status:Success".into(),
-            ),
-            ("ConditionsNotBefore", now),
-            ("ConditionsNotOnOrAfter", later.clone()),
-            ("SubjectConfirmationDataNotOnOrAfter", later),
-            (
-                "NameIDFormat",
-                "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into(),
-            ),
-            ("NameID", name_id.to_string()),
-            ("InResponseTo", "_custom_prefix_req".into()),
-            ("AuthnStatement", String::new()),
-        ],
-    );
-    (id, xml)
-}
-
 fn prefixed_setting(protocol: &str, assertion: &str) -> EntitySetting {
     let mut setting = signing();
     setting.tag_prefix_protocol = protocol.to_string();
@@ -146,8 +118,8 @@ fn prefixed_setting(protocol: &str, assertion: &str) -> EntitySetting {
     setting
 }
 
-fn logout_user() -> User {
-    let mut user = User::new("logout@example.com");
+fn logout_user() -> LogoutUser {
+    let mut user = LogoutUser::new("logout@example.com");
     user.session_index = Some("_session".into());
     user
 }
@@ -204,51 +176,23 @@ fn login_response_both_prefixes_can_be_overridden_and_signed_post_parses(
 }
 
 #[test]
-fn caller_login_response_template_is_rewritten_before_custom_callback(
+fn caller_login_response_template_is_rewritten_with_configured_prefixes(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut setting = prefixed_setting("samlp2", "saml2");
     setting.login_response_template = Some(LoginResponseTemplate {
         context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
-    let idp = idp_with_setting(setting)?;
-    let sp = sp(true)?;
-    let seen_template = RefCell::new(None);
-    let callback = |template: &str| {
-        seen_template.replace(Some(template.to_string()));
-        fill_login_response(template, "callback@example.com")
-    };
+    let (idp, sp, ctx, xml) = login_response_xml(setting)?;
 
-    let ctx = idp.create_login_response(
-        &sp,
-        Binding::Post,
-        &User::new("callback@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_ignored_by_callback"),
-            custom: Some(&callback as &dyn Fn(&str) -> (String, String)),
-            ..Default::default()
-        },
-    )?;
-
-    let captured = seen_template
-        .into_inner()
-        .ok_or("custom callback did not receive a template")?;
-    assert!(captured.contains("<samlp2:Response"));
-    assert!(captured.contains("<saml2:Assertion"));
-    assert!(!captured.contains("<samlp:Response"));
-    assert!(!captured.contains("<saml:Assertion"));
-
+    assert!(xml.contains("<samlp2:Response"), "{xml}");
+    assert!(xml.contains("<saml2:Assertion"), "{xml}");
+    assert!(!xml.contains("<samlp:Response"), "{xml}");
+    assert!(!xml.contains("<saml:Assertion"), "{xml}");
     let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let parsed = sp.parse_login_response_with_request_id(
-        &idp,
-        Binding::Post,
-        &request,
-        "_custom_prefix_req",
-    )?;
-    assert_eq!(
-        parsed.extract.get_str("nameID"),
-        Some("callback@example.com")
-    );
+    let parsed =
+        sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, REQUEST_ID)?;
+    assert_eq!(parsed.extract.get_str("nameID"), Some("prefix@example.com"));
     Ok(())
 }
 
@@ -260,44 +204,20 @@ fn caller_login_response_template_rewrites_each_prefix_once(
         context: Some(saml_rs::config::SSO_RESPONSE_TEMPLATE.into()),
         attributes: Vec::new(),
     });
-    let idp = idp_with_setting(setting)?;
-    let sp = sp(true)?;
-    let seen_template = RefCell::new(None);
-    let callback = |template: &str| {
-        seen_template.replace(Some(template.to_string()));
-        fill_login_response(template, "callback@example.com")
-    };
+    let (idp, sp, ctx, xml) = login_response_xml(setting)?;
 
-    let ctx = idp.create_login_response(
-        &sp,
-        Binding::Post,
-        &User::new("callback@example.com"),
-        &LoginResponseOptions {
-            custom: Some(&callback as &dyn Fn(&str) -> (String, String)),
-            ..Default::default()
-        },
-    )?;
-
-    let captured = seen_template
-        .into_inner()
-        .ok_or("custom callback did not receive a template")?;
-    assert!(captured.starts_with(concat!(
-        r#"<saml:Response xmlns:saml="urn:oasis:names:tc:SAML:2.0:protocol" "#,
-        r#"xmlns:a="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}""#,
-    )));
-    assert!(captured.contains("<a:Issuer>{Issuer}</a:Issuer><saml:Status>"));
-
-    let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
-    let parsed = sp.parse_login_response_with_request_id(
-        &idp,
-        Binding::Post,
-        &request,
-        "_custom_prefix_req",
-    )?;
-    assert_eq!(
-        parsed.extract.get_str("nameID"),
-        Some("callback@example.com")
+    assert!(
+        xml.starts_with(concat!(
+            r#"<saml:Response xmlns:saml="urn:oasis:names:tc:SAML:2.0:protocol" "#,
+            r#"xmlns:a="urn:oasis:names:tc:SAML:2.0:assertion" ID=""#,
+        )),
+        "{xml}"
     );
+    assert!(xml.contains("</a:Issuer><saml:Status>"), "{xml}");
+    let request = HttpRequest::post(vec![("SAMLResponse".into(), ctx.context)]);
+    let parsed =
+        sp.parse_login_response_with_request_id(&idp, Binding::Post, &request, REQUEST_ID)?;
+    assert_eq!(parsed.extract.get_str("nameID"), Some("prefix@example.com"));
     Ok(())
 }
 

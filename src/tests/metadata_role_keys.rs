@@ -2,6 +2,7 @@
 //! metadata role descriptor of the role a message is from.
 #![cfg(crypto)]
 
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use std::time::SystemTime;
 
 use saml_rs::error::SignatureVerificationReason;
@@ -17,10 +18,11 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO: &str = "https://idp.example.com/sso";
 
-const SP_ROLE_KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const SP_ROLE_CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const IDP_ROLE_KEY: &str = include_str!("fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
-const IDP_ROLE_CERT: &str = include_str!("fixtures/key/idp/cert.cer");
+const SP_ROLE_KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const SP_ROLE_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const IDP_ROLE_KEY: &str =
+    include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+const IDP_ROLE_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 
 fn certificate_base64(pem: &str) -> String {
     pem.lines()
@@ -571,7 +573,6 @@ fn a_saml2_role_is_found_through_namespace_references_and_raised_limits(
 }
 
 #[test]
-#[allow(deprecated)]
 fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use base64::engine::general_purpose::STANDARD;
@@ -579,9 +580,11 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
     use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
     use saml_rs::constants::Binding;
     use saml_rs::entity::{EntitySetting, User};
+    use saml_rs::idp::IdentityProvider;
     use saml_rs::idp::LoginResponseOptions;
     use saml_rs::metadata::{IdpMetadata, SpMetadata};
-    use saml_rs::raw::{IdentityProvider, LoginRequestOptions, ServiceProvider};
+    use saml_rs::sp::LoginRequestOptions;
+    use saml_rs::sp::ServiceProvider;
 
     let sp_role = format!(
         r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>&#x9; {TRANSIENT} &#xD;&#xA;</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
@@ -609,9 +612,11 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
             )
         );
 
-        let mut signing = EntitySetting::default();
-        signing.private_key = Some(IDP_ROLE_KEY.into());
-        signing.signing_cert = Some(IDP_ROLE_CERT.into());
+        let signing = EntitySetting {
+            private_key: Some(IDP_ROLE_KEY.into()),
+            signing_cert: Some(IDP_ROLE_CERT.into()),
+            ..EntitySetting::default()
+        };
         let idp = IdentityProvider::from_metadata(&metadata, signing)?;
         let sp = ServiceProvider::from_metadata(&metadata, EntitySetting::default())?;
         let response = idp.create_login_response(

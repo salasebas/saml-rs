@@ -19,8 +19,8 @@ use super::policies::XmlSignatureProfile;
 ///
 /// SAML metadata trust is caller-pinned or federation-driven; this type does
 /// not use a public web PKI CA store by default.
-/// [`AllowUnsigned`](Self::AllowUnsigned) preserves an
-/// unsigned samlify-port or raw metadata import. It is not the preferred
+/// [`AllowUnsigned`](Self::AllowUnsigned) accepts unsigned metadata, as the
+/// samlify port did. It is not the preferred
 /// production trust model.
 ///
 /// # Examples
@@ -46,7 +46,7 @@ use super::policies::XmlSignatureProfile;
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum MetadataTrustPolicy<'a> {
-    /// Accept unsigned metadata to preserve a samlify-port or raw import.
+    /// Accept unsigned metadata, as the samlify port did.
     ///
     /// A signature on the document is not treated as verified.
     AllowUnsigned,

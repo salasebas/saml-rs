@@ -41,17 +41,6 @@ pub struct HttpRequest {
 }
 
 impl HttpRequest {
-    /// HTTP-Redirect request from query pairs.
-    #[deprecated(
-        note = "the raw API is removed in the next minor release; use `Inbound::redirect` with the raw query string"
-    )]
-    pub fn redirect(query: Vec<(String, String)>) -> Self {
-        Self {
-            query,
-            ..Default::default()
-        }
-    }
-
     /// HTTP-POST/SimpleSign request from body pairs.
     pub fn post(body: Vec<(String, String)>) -> Self {
         Self {
@@ -107,6 +96,7 @@ pub enum SignatureCheck {
 /// Inputs controlling a flow run.
 #[non_exhaustive]
 #[derive(Debug, Clone)]
+#[cfg_attr(not(crypto), allow(dead_code))]
 pub struct FlowOptions<'a> {
     /// Protocol binding.
     pub binding: Option<Binding>,
@@ -159,8 +149,7 @@ pub struct FlowOptions<'a> {
     pub max_decryption_work: usize,
     /// Clock skew applied to the message's time windows.
     pub clock_skew: ClockSkew,
-    /// Validation instant. `None` keeps raw compatibility behavior by reading
-    /// the process clock during validation.
+    /// Validation instant. `None` reads the process clock during validation.
     pub now: Option<SystemTime>,
     /// Expected `<Audience>` (this SP's entity ID); `None` skips the check.
     pub expected_audience: Option<&'a str>,
@@ -274,10 +263,10 @@ struct EmbeddedSignatureEvidence {
 
 /// Result of a successful low-level flow.
 ///
-/// This records only validation supported by the supplied flow context. The
-/// public raw flow has no actual receiving endpoint, so success does not imply
-/// that a message `Destination` was compared with that endpoint. Typed
-/// receivers supply the additional context before exposing this result.
+/// This records only validation supported by the supplied flow context. A run
+/// without an expected recipient does not compare a message `Destination` with
+/// the receiving endpoint. Typed receivers supply that context before exposing
+/// this result.
 #[derive(Debug, Clone)]
 pub struct FlowResult {
     /// The decoded (and, when verified, authenticated) SAML XML.
@@ -987,21 +976,6 @@ pub(crate) fn flow_with_authentication(
     )?;
     let message_authenticated = result.message_authenticated();
     Ok((result.into_flow_result(), message_authenticated))
-}
-
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use the typed receive operations, such as `Saml::<Sp>::finish_sso` or `Saml::<Idp>::receive_slo`"
-)]
-pub fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult, SamlError> {
-    Ok(flow_inner(
-        opts,
-        request,
-        None,
-        AssertionSignatureRequirement::Compatible,
-        ResponseSignatureRequirement::Optional,
-        SignedMessageDestination::Required,
-    )?
-    .into_flow_result())
 }
 
 pub(crate) fn flow_with_expected_recipient_and_signature_evidence(

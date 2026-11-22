@@ -12,10 +12,10 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{elements_order, signature_algorithm::RSA_SHA256, Binding, CertUse};
 use saml_rs::entity::{iso8601_offset, EntitySetting};
+use saml_rs::idp::IdentityProvider;
 use saml_rs::metadata::{
     generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, SpMetadata, SpMetadataInput,
 };
-use saml_rs::raw::IdentityProvider;
 use saml_rs::util::normalize_cert_string;
 use saml_rs::validator::TimeWindow;
 use saml_rs::ClockSkew;

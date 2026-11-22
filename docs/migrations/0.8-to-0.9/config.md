@@ -383,7 +383,7 @@ assertion namespace.
 
 **Now:** the field is removed. A typed identity provider writes
 `<EncryptedAssertion>` with `tag_prefix_assertion`, which defaults to `saml`,
-as the old field did. The raw `EntitySetting` keeps its field.
+as the old field did.
 
 **Upgrade:** delete the field. If you set it to a value other than
 `tag_prefix_assertion`, an encrypted response now uses the assertion prefix.
@@ -412,9 +412,7 @@ takes the template text, and `SpConfig::authn_request_template()` and
 `IdpConfig::sso_response_template()` return it. A config that sets the other
 role's template no longer compiles. The default templates to start from are
 `saml_rs::config::AUTHN_REQUEST_TEMPLATE` and
-`saml_rs::config::SSO_RESPONSE_TEMPLATE`. `LoginResponseTemplate` and
-`LoginResponseAttribute` remain for the raw
-`EntitySetting::login_response_template`, under `saml_rs::raw`.
+`saml_rs::config::SSO_RESPONSE_TEMPLATE`.
 
 **Upgrade:**
 

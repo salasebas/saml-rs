@@ -289,8 +289,7 @@ pub enum LogoutSigning {
 
 /// Whether typed Single Logout generation follows producer rules.
 ///
-/// [`Self::Compatibility`] is the samlify-port output kept for a caller
-/// leaving the raw API. [`Self::Follow`] applies the producer obligations
+/// [`Self::Compatibility`] is the samlify-port output. [`Self::Follow`] applies the producer obligations
 /// recorded for this flow. It is not a validation preset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum SingleLogoutGeneration {

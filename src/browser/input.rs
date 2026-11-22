@@ -302,44 +302,10 @@ impl Inbound<LogoutResponse> {
     }
 }
 
-impl TryFrom<Inbound<AuthnRequest>> for HttpRequest {
-    type Error = SamlError;
-
-    fn try_from(value: Inbound<AuthnRequest>) -> Result<Self, Self::Error> {
-        value.into_http_request(XmlLimits::default())
-    }
-}
-
-impl TryFrom<Inbound<SsoResponse>> for HttpRequest {
-    type Error = SamlError;
-
-    fn try_from(value: Inbound<SsoResponse>) -> Result<Self, Self::Error> {
-        value.into_http_request(XmlLimits::default())
-    }
-}
-
-impl TryFrom<Inbound<LogoutRequest>> for HttpRequest {
-    type Error = SamlError;
-
-    fn try_from(value: Inbound<LogoutRequest>) -> Result<Self, Self::Error> {
-        value.into_http_request(XmlLimits::default(), None)
-    }
-}
-
-impl TryFrom<Inbound<LogoutResponse>> for HttpRequest {
-    type Error = SamlError;
-
-    fn try_from(value: Inbound<LogoutResponse>) -> Result<Self, Self::Error> {
-        value.into_http_request(XmlLimits::default(), None)
-    }
-}
-
-impl TryFrom<Inbound<ManageNameIdRequest>> for HttpRequest {
-    type Error = SamlError;
-
-    fn try_from(value: Inbound<ManageNameIdRequest>) -> Result<Self, Self::Error> {
+impl Inbound<ManageNameIdRequest> {
+    pub(crate) fn into_http_request(self) -> Result<HttpRequest, SamlError> {
         http_request_from_transport(
-            value.transport,
+            self.transport,
             true,
             MessageField::Request,
             XmlLimits::default(),
@@ -347,12 +313,10 @@ impl TryFrom<Inbound<ManageNameIdRequest>> for HttpRequest {
     }
 }
 
-impl TryFrom<Inbound<ManageNameIdResponse>> for HttpRequest {
-    type Error = SamlError;
-
-    fn try_from(value: Inbound<ManageNameIdResponse>) -> Result<Self, Self::Error> {
+impl Inbound<ManageNameIdResponse> {
+    pub(crate) fn into_http_request(self) -> Result<HttpRequest, SamlError> {
         http_request_from_transport(
-            value.transport,
+            self.transport,
             true,
             MessageField::Response,
             XmlLimits::default(),

@@ -314,7 +314,14 @@ fn repeated_statements_keep_their_context_locality_and_session_values(
         SsoAssertion::new(principal()),
         RespondSso::post().apply_producer_rules().sign_response(),
     )?;
-    let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
+    let xml = String::from_utf8(
+        STANDARD.decode(
+            response
+                .post_form()?
+                .value("SAMLResponse")
+                .ok_or("missing SAMLResponse")?,
+        )?,
+    )?;
     let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
     let assertion = document
         .root
@@ -500,7 +507,14 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
         SsoAssertion::new(principal()).with_authn_context(AuthnContextReference::class(MFA)?),
         RespondSso::post().apply_producer_rules(),
     )?;
-    let xml = String::from_utf8(STANDARD.decode(&response.raw_context().context)?)?;
+    let xml = String::from_utf8(
+        STANDARD.decode(
+            response
+                .post_form()?
+                .value("SAMLResponse")
+                .ok_or("missing SAMLResponse")?,
+        )?,
+    )?;
     assert!(xml.contains("EncryptedAssertion"));
     assert!(!xml.contains(MFA));
     let session = sp.finish_sso(

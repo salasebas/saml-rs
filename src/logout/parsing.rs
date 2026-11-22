@@ -39,15 +39,6 @@ impl<'a> LogoutFlowValidation<'a> {
             peer_hmac_secret,
         }
     }
-
-    fn raw(clock_skew: ClockSkew) -> Self {
-        Self {
-            expected_recipient: None,
-            now: None,
-            clock_skew,
-            peer_hmac_secret: None,
-        }
-    }
 }
 
 /// How the flow reads a logout message from one typed input.
@@ -67,7 +58,7 @@ enum LogoutReceiptSignature {
 }
 
 impl LogoutReceipt {
-    fn raw(binding: Binding) -> Self {
+    pub(crate) fn of_binding(binding: Binding) -> Self {
         Self {
             decode_as: binding,
             signature: LogoutReceiptSignature::FollowLocalPolicy,
@@ -79,9 +70,9 @@ impl LogoutReceipt {
     /// XML signature unless `channel` authenticated the peer.
     pub(crate) fn of_input<Message>(input: &Inbound<Message>) -> Result<Self, SamlError> {
         match &input.transport {
-            Transport::Redirect { .. } => Ok(Self::raw(Binding::Redirect)),
-            Transport::Post { .. } => Ok(Self::raw(Binding::Post)),
-            Transport::SimpleSign { .. } => Ok(Self::raw(Binding::SimpleSign)),
+            Transport::Redirect { .. } => Ok(Self::of_binding(Binding::Redirect)),
+            Transport::Post { .. } => Ok(Self::of_binding(Binding::Post)),
+            Transport::SimpleSign { .. } => Ok(Self::of_binding(Binding::SimpleSign)),
             Transport::Soap { channel, .. } => Ok(Self {
                 decode_as: Binding::Post,
                 signature: if channel.authenticates_peer() {
@@ -130,49 +121,6 @@ impl LogoutReceipt {
             ) => LogoutRequestAuthentication::Unauthenticated,
         }
     }
-}
-
-/// Parse a `<LogoutRequest>` from `from`.
-///
-/// `IssueInstant` is required and must use the SAML UTC `xs:dateTime` lexical
-/// form. No maximum request age is inferred from `IssueInstant`. An optional
-/// `NotOnOrAfter` uses the same UTC form; saml-rs rejects the request at or
-/// after that instant, widened by the configured `NotOnOrAfter` clock drift.
-/// This fail-closed expiration check is library policy: SAML permits, but does
-/// not require, a recipient to discard an expired request.
-///
-/// # Errors
-///
-/// Returns an error if `binding` is unsupported, required binding parameters
-/// are missing, the SAML payload cannot be base64/DEFLATE decoded, XML parsing
-/// or extraction fails, `IssueInstant` or `NotOnOrAfter` is not conformant,
-/// `NotOnOrAfter` has expired, the peer issuer does not match `from_meta`, or
-/// logout request signature validation fails when `self_setting` requires
-/// signed requests. Signature failures include missing signatures, untrusted
-/// signing certificates, invalid detached signatures, RelayState/signed-octet
-/// correlation failures, and XML signature validation errors.
-///
-/// This raw compatibility parser has no actual receiving endpoint and
-/// therefore does not compare `Destination`. Callers that operate an endpoint
-/// directly own that check. Prefer [`crate::Saml`] for a binding-aware typed
-/// SLO receiver.
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::receive_slo` or `Saml::<Idp>::receive_slo`"
-)]
-pub fn parse_logout_request(
-    self_setting: &EntitySetting,
-    from_meta: &Metadata,
-    binding: Binding,
-    request: &HttpRequest,
-) -> Result<FlowResult, SamlError> {
-    Ok(parse_logout_request_inner(
-        self_setting,
-        from_meta,
-        LogoutReceipt::raw(binding),
-        request,
-        LogoutFlowValidation::raw(self_setting.clock_skew()),
-    )?
-    .0)
 }
 
 /// Typed `LogoutRequest` parsing. The returned authentication selects
@@ -272,59 +220,6 @@ fn parse_logout_response_inner(
     .0)
 }
 
-/// Parse a `<LogoutResponse>` from `from` and require it to answer `request_id`.
-///
-/// Single Logout responses are state-machine messages. The caller must pass the
-/// ID of the `LogoutRequest` it issued so stale or unrelated responses cannot be
-/// accepted as completion for the current logout transaction.
-///
-/// An empty caller-provided `request_id` is rejected as
-/// [`SamlError::InvalidInResponseTo`]. A non-empty `request_id` that does not
-/// match the SAML response returns [`SamlError::InResponseToMismatch`].
-///
-/// `IssueInstant` validation establishes only that the required attribute is
-/// present and uses the SAML UTC lexical form. This parser applies no maximum
-/// message age; callers own any additional freshness policy.
-///
-/// # Errors
-///
-/// Returns an error if `request_id` is empty, `binding` is unsupported,
-/// required binding parameters are missing, the SAML payload cannot be
-/// base64/DEFLATE decoded, XML parsing or extraction fails, `IssueInstant` is
-/// missing or is not a UTC SAML timestamp, the peer issuer does not match
-/// `from_meta`, `InResponseTo` does not match `request_id`, or logout response
-/// signature validation fails when `self_setting` requires signed responses.
-/// Signature failures include missing signatures, untrusted signing
-/// certificates, invalid detached signatures, RelayState/signed-octet
-/// correlation failures, and XML signature validation errors.
-///
-/// This raw compatibility parser has no actual receiving endpoint and
-/// therefore does not compare `Destination`. Callers that operate an endpoint
-/// directly own that check. Prefer [`crate::Saml`] for a binding-aware typed
-/// SLO receiver.
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::finish_slo` or `Saml::<Idp>::finish_slo`"
-)]
-pub fn parse_logout_response(
-    self_setting: &EntitySetting,
-    from_meta: &Metadata,
-    binding: Binding,
-    request: &HttpRequest,
-    request_id: &str,
-) -> Result<FlowResult, SamlError> {
-    if request_id.is_empty() {
-        return Err(SamlError::InvalidInResponseTo);
-    }
-    parse_logout_response_inner(
-        self_setting,
-        from_meta,
-        LogoutReceipt::raw(binding),
-        request,
-        Some(request_id),
-        LogoutFlowValidation::raw(self_setting.clock_skew()),
-    )
-}
-
 pub(crate) fn parse_logout_response_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
@@ -343,46 +238,6 @@ pub(crate) fn parse_logout_response_at(
         request,
         Some(request_id),
         validation,
-    )
-}
-
-/// Parse a `<LogoutResponse>` without binding it to a `LogoutRequest` ID.
-///
-/// Prefer [`parse_logout_response`] for normal SLO handling. This exists for
-/// legacy interop and custom state machines that perform request correlation
-/// outside this crate.
-///
-/// Callers using this raw function own request correlation, replay protection,
-/// comparison of `Destination` with the actual receiving endpoint, and any
-/// optional message-freshness policy.
-///
-/// # Errors
-///
-/// Returns an error if `binding` is unsupported, required binding parameters
-/// are missing, the SAML payload cannot be base64/DEFLATE decoded, XML parsing
-/// or extraction fails, `IssueInstant` is missing or is not a UTC SAML
-/// timestamp, the peer issuer does not match `from_meta`, or logout response
-/// signature validation fails when `self_setting` requires signed responses.
-/// Signature failures include missing signatures, untrusted signing
-/// certificates, invalid detached signatures, RelayState/signed-octet
-/// correlation failures, and XML signature validation errors. This function
-/// deliberately does not enforce `InResponseTo` correlation.
-#[deprecated(
-    note = "the raw API is removed in the next minor release; use `Saml::<Sp>::finish_slo` or `Saml::<Idp>::finish_slo`"
-)]
-pub fn parse_logout_response_without_request_id(
-    self_setting: &EntitySetting,
-    from_meta: &Metadata,
-    binding: Binding,
-    request: &HttpRequest,
-) -> Result<FlowResult, SamlError> {
-    parse_logout_response_inner(
-        self_setting,
-        from_meta,
-        LogoutReceipt::raw(binding),
-        request,
-        None,
-        LogoutFlowValidation::raw(self_setting.clock_skew()),
     )
 }
 

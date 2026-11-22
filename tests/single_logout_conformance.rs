@@ -88,9 +88,12 @@ fn subject_without_session() -> LogoutSubject {
 }
 
 fn post_xml<Message>(outbound: &Outbound<Message>) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(String::from_utf8(
-        STANDARD.decode(&outbound.raw_context().context)?,
-    )?)
+    let form = outbound.post_form()?;
+    let message = form
+        .value("SAMLRequest")
+        .or_else(|| form.value("SAMLResponse"))
+        .ok_or("missing SAML message")?;
+    Ok(String::from_utf8(STANDARD.decode(message)?)?)
 }
 
 fn post_input<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, SamlError> {

@@ -12,33 +12,15 @@ such as `{attrEmail}`, and the identity provider signed the response with that
 text as the attribute value. Without a custom `context`, the built-in renderer
 already returned an error for the same configuration.
 
-**Now:** both renderers of the raw `IdentityProvider::create_login_response`
-return
-``SamlError::Invalid("missing login response attribute value for `email`")``,
-naming the attribute's `value_tag`. A typed identity provider has no template
-attributes. `IdpConfigBuilder::sso_response_template` takes the template text
-alone, as
+**Now:** the raw API that read `LoginResponseTemplate::attributes` is removed.
+A typed identity provider has no template attributes.
+`IdpConfigBuilder::sso_response_template` takes the template text alone, as
 [Set SSO templates on the role's builder](config.md#set-sso-templates-on-the-roles-builder)
 describes.
 
-**Upgrade:** with the raw `IdentityProvider::create_login_response`, put a
-value for each attribute's `value_tag` in `User::attributes`. A
-`LoginResponseOptions::custom` callback fills the template itself and is not
-checked:
-
-```rust
-use saml_rs::entity::User;
-
-let user = User {
-    name_id: "alice@example.com".into(),
-    attributes: vec![("email".into(), "alice@example.com".into())],
-    session_index: None,
-};
-```
-
-With the typed API, pass the attributes with `SsoAssertion::with_attributes`,
-as [2.2](public-imports.md#22-pass-attributes-to-the-response) shows. A
-response with attributes needs the built-in renderer, so leave
+**Upgrade:** pass the attributes with `SsoAssertion::with_attributes`, as
+[2.2](public-imports.md#22-pass-attributes-to-the-response) shows. A response
+with attributes needs the built-in renderer, so leave
 `IdpConfigBuilder::sso_response_template` unset.
 
 ## 5. Send a `Name` on every attribute
@@ -59,5 +41,4 @@ schema requires `Name` on `<Attribute>`. An `<Attribute Name="">` is still
 accepted as the attribute `""`.
 
 **Upgrade:** configure the identity provider to write a `Name` on each
-attribute it releases. The deprecated raw `parse_login_response_with_request_id`
-and `parse_unsolicited_login_response` do not reject the response.
+attribute it releases.

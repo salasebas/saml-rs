@@ -6,7 +6,6 @@
 //! signed octet string the way the bindings produce it.
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
-#![allow(deprecated)]
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -16,67 +15,74 @@ use saml_rs::constants::Binding;
 use saml_rs::entity::{iso8601_offset, BindingContext, EntitySetting, User};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::flow::{FlowResult, HttpRequest};
+use saml_rs::idp::IdentityProvider;
 use saml_rs::idp::LoginResponseOptions;
-use saml_rs::logout::{
+use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp::LoginRequestOptions;
+use saml_rs::sp::ServiceProvider;
+use saml_rs::template::LoginResponseAttribute;
+use saml_rs::template::LoginResponseTemplate;
+use saml_rs::tests::engine::fill_template;
+use saml_rs::tests::engine::redirect_query;
+use saml_rs::tests::engine::LogoutUser;
+use saml_rs::tests::engine::{
     create_logout_request, create_logout_response, parse_logout_request, parse_logout_response,
 };
-use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::raw::{
-    IdentityProvider, LoginResponseAttribute, LoginResponseTemplate, ServiceProvider,
-};
-use saml_rs::sp::LoginRequestOptions;
-use saml_rs::template::replace_tags_by_value;
+use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::RelayState;
 use saml_rs::SamlError;
 
-const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
-const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
-const FAILED: &str = include_str!("fixtures/misc/failed_response.xml");
+const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+const FAILED: &str = include_str!("../../tests/fixtures/misc/failed_response.xml");
 
 fn signing() -> EntitySetting {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some(PRIVKEY.into());
-    setting.signing_cert = Some(CERT.into());
-    setting.request_signature_algorithm = RSA_SHA256.into();
-    setting
+    EntitySetting {
+        private_key: Some(PRIVKEY.into()),
+        signing_cert: Some(CERT.into()),
+        request_signature_algorithm: RSA_SHA256.into(),
+        ..EntitySetting::default()
+    }
 }
 
 fn idp_config(want_authn_signed: bool) -> IdpMetadataInput {
-    let mut config = IdpMetadataInput::default();
-    config.entity_id = "https://idp.example.com/metadata".into();
-    config.signing_certs = vec![CERT.into()];
-    config.want_authn_requests_signed = want_authn_signed;
-    config.single_sign_on_service = vec![
-        Endpoint::new(Binding::Post, "https://idp/sso"),
-        Endpoint::new(Binding::Redirect, "https://idp/sso"),
-        Endpoint::new(Binding::SimpleSign, "https://idp/sso"),
-    ];
-    config.single_logout_service = vec![
-        Endpoint::new(Binding::Post, "https://idp/slo"),
-        Endpoint::new(Binding::Redirect, "https://idp/slo"),
-        Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
-    ];
-    config
+    IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        signing_certs: vec![CERT.into()],
+        want_authn_requests_signed: want_authn_signed,
+        single_sign_on_service: vec![
+            Endpoint::new(Binding::Post, "https://idp/sso"),
+            Endpoint::new(Binding::Redirect, "https://idp/sso"),
+            Endpoint::new(Binding::SimpleSign, "https://idp/sso"),
+        ],
+        single_logout_service: vec![
+            Endpoint::new(Binding::Post, "https://idp/slo"),
+            Endpoint::new(Binding::Redirect, "https://idp/slo"),
+            Endpoint::new(Binding::SimpleSign, "https://idp/slo"),
+        ],
+        ..IdpMetadataInput::default()
+    }
 }
 
 fn sp_config(authn_signed: bool, want_assertions_signed: bool, enc: bool) -> SpMetadataInput {
-    let mut config = SpMetadataInput::default();
-    config.entity_id = "https://sp.example.com/metadata".into();
-    config.authn_requests_signed = authn_signed;
-    config.want_assertions_signed = want_assertions_signed;
-    config.signing_certs = vec![CERT.into()];
-    config.encrypt_certs = if enc { vec![CERT.into()] } else { Vec::new() };
-    config.single_logout_service = vec![
-        Endpoint::new(Binding::Post, "https://sp/slo"),
-        Endpoint::new(Binding::Redirect, "https://sp/slo"),
-        Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
-    ];
-    config.assertion_consumer_service = vec![
-        Endpoint::new(Binding::Post, "https://sp/acs"),
-        Endpoint::new(Binding::Redirect, "https://sp/acs"),
-        Endpoint::new(Binding::SimpleSign, "https://sp/acs"),
-    ];
-    config
+    SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        authn_requests_signed: authn_signed,
+        want_assertions_signed,
+        signing_certs: vec![CERT.into()],
+        encrypt_certs: if enc { vec![CERT.into()] } else { Vec::new() },
+        single_logout_service: vec![
+            Endpoint::new(Binding::Post, "https://sp/slo"),
+            Endpoint::new(Binding::Redirect, "https://sp/slo"),
+            Endpoint::new(Binding::SimpleSign, "https://sp/slo"),
+        ],
+        assertion_consumer_service: vec![
+            Endpoint::new(Binding::Post, "https://sp/acs"),
+            Endpoint::new(Binding::Redirect, "https://sp/acs"),
+            Endpoint::new(Binding::SimpleSign, "https://sp/acs"),
+        ],
+        ..SpMetadataInput::default()
+    }
 }
 
 fn idp(want_authn_signed: bool) -> IdentityProvider {
@@ -204,7 +210,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
     let id = "_8e8dc5f69a98cc4c1ff3427e5ce34606fd672f91e6".to_string();
     let now = iso8601_offset(-60);
     let later = iso8601_offset(300);
-    let xml = replace_tags_by_value(
+    let xml = fill_template(
         template,
         &[
             ("ID", id.clone()),
@@ -365,13 +371,13 @@ fn login_request_custom(binding: Binding) -> Result<(), Box<dyn std::error::Erro
             "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"_custom_req\"><saml:Issuer>https://sp.example.com/metadata</saml:Issuer></samlp:AuthnRequest>".to_string(),
         )
     };
-    let ctx = sp.create_login_request(
+    let ctx = sp.create_rendered_login_request(
         &idp,
         binding,
         &LoginRequestOptions {
-            custom: Some(&cb as &dyn Fn(&str) -> (String, String)),
             ..Default::default()
         },
+        &cb,
     )?;
     assert_eq!(ctx.id, "_custom_req");
     Ok(())
@@ -490,11 +496,13 @@ fn signed_request_with_key(
     key: &str,
     pass: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut setting = EntitySetting::default();
-    setting.private_key = Some(key.into());
-    setting.private_key_pass = pass.map(str::to_string);
-    setting.signing_cert = Some(CERT.into());
-    setting.request_signature_algorithm = RSA_SHA256.into();
+    let setting = EntitySetting {
+        private_key: Some(key.into()),
+        private_key_pass: pass.map(str::to_string),
+        signing_cert: Some(CERT.into()),
+        request_signature_algorithm: RSA_SHA256.into(),
+        ..EntitySetting::default()
+    };
     let sp = ServiceProvider::from_config(&sp_config(true, false, false), setting)?;
     let idp = idp(true);
     let ctx = sp.create_login_request(&idp, Binding::Redirect, &LoginRequestOptions::default())?;
@@ -506,7 +514,7 @@ fn signed_request_with_key(
 fn flow_conformance_login_request_redirect_signed_unencrypted_pkcs8(
 ) -> Result<(), Box<dyn std::error::Error>> {
     signed_request_with_key(
-        include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem"),
+        include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem"),
         None,
     )
 }
@@ -515,7 +523,7 @@ fn flow_conformance_login_request_redirect_signed_unencrypted_pkcs8(
 fn flow_conformance_login_request_redirect_signed_encrypted_pkcs8(
 ) -> Result<(), Box<dyn std::error::Error>> {
     signed_request_with_key(
-        include_str!("fixtures/key/sp/privkey.encrypted.pkcs8.pem"),
+        include_str!("../../tests/fixtures/key/sp/privkey.encrypted.pkcs8.pem"),
         Some("VHOSp5RUiBcrsjrcAuXFwU1NKCkGA8px"),
     )
 }
@@ -568,7 +576,6 @@ fn flow_conformance_simplesign_login_response_post_form_round_trips_to_parser(
         &LoginResponseOptions {
             in_response_to: Some("_r"),
             relay_state: Some("relay-123"),
-            ..Default::default()
         },
     )?;
 
@@ -599,7 +606,7 @@ fn logout_request(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         binding,
-        &User::new("a@e.com"),
+        &LogoutUser::new("a@e.com"),
         None,
         false,
     )?;
@@ -619,17 +626,19 @@ fn flow_conformance_logout_request_post() -> Result<(), Box<dyn std::error::Erro
 fn flow_conformance_logout_request_one_binding() -> Result<(), Box<dyn std::error::Error>> {
     // IdP target exposes a single SLO binding.
     let idp = idp(false);
-    let mut sp_config = SpMetadataInput::default();
-    sp_config.entity_id = "https://sp.example.com/metadata".into();
-    sp_config.single_logout_service = vec![Endpoint::new(Binding::Redirect, "https://sp/slo")];
-    sp_config.assertion_consumer_service = vec![Endpoint::new(Binding::Post, "https://sp/acs")];
+    let sp_config = SpMetadataInput {
+        entity_id: "https://sp.example.com/metadata".into(),
+        single_logout_service: vec![Endpoint::new(Binding::Redirect, "https://sp/slo")],
+        assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
+        ..SpMetadataInput::default()
+    };
     let sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
     let ctx = create_logout_request(
         &idp.setting,
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         Binding::Redirect,
-        &User::new("a@e.com"),
+        &LogoutUser::new("a@e.com"),
         None,
         false,
     )?;
@@ -772,15 +781,15 @@ fn send_custom_signed_assertion(binding: Binding) -> Result<(), Box<dyn std::err
     let sp = sp(true, false);
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "custom@example.com");
-    let ctx = idp.create_login_response(
+    let ctx = idp.create_rendered_login_response(
         &sp,
         binding,
         &User::new("custom@example.com"),
         &LoginResponseOptions {
             in_response_to: Some("_r"),
-            custom: Some(&cb as &dyn Fn(&str) -> (String, String)),
             ..Default::default()
         },
+        &cb,
     )?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("custom@example.com"));
@@ -906,15 +915,15 @@ fn signed_response_without_destination_is_rejected(
             "missing-destination@example.com",
         )
     };
-    let context = idp.create_login_response(
+    let context = idp.create_rendered_login_response(
         &sp,
         binding,
         &User::new("missing-destination@example.com"),
         &LoginResponseOptions {
             in_response_to: Some("_r"),
-            custom: Some(&callback as &dyn Fn(&str) -> (String, String)),
             ..Default::default()
         },
+        &callback,
     )?;
 
     match parse_response_with_request_id(&sp, &idp, binding, &context, "_req") {
@@ -962,15 +971,15 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
             "assertion-only@example.com",
         )
     };
-    let context = idp.create_login_response(
+    let context = idp.create_rendered_login_response(
         &sp,
         Binding::Post,
         &User::new("assertion-only@example.com"),
         &LoginResponseOptions {
             in_response_to: Some("_r"),
-            custom: Some(&callback as &dyn Fn(&str) -> (String, String)),
             ..Default::default()
         },
+        &callback,
     )?;
     let parsed = parse_response_with_request_id(&sp, &idp, Binding::Post, &context, "_req")?;
 
@@ -1045,15 +1054,15 @@ fn send_custom_signed_message(binding: Binding) -> Result<(), Box<dyn std::error
     let sp = sp(false, false);
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "cm@example.com");
-    let ctx = idp.create_login_response(
+    let ctx = idp.create_rendered_login_response(
         &sp,
         binding,
         &User::new("cm@example.com"),
         &LoginResponseOptions {
             in_response_to: Some("_r"),
-            custom: Some(&cb as &dyn Fn(&str) -> (String, String)),
             ..Default::default()
         },
+        &cb,
     )?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("cm@example.com"));
@@ -1112,15 +1121,15 @@ fn send_custom_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std
     let sp = ServiceProvider::from_config(&sp_config(false, true, false), sp_setting)?;
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "cam@example.com");
-    let ctx = idp.create_login_response(
+    let ctx = idp.create_rendered_login_response(
         &sp,
         binding,
         &User::new("cam@example.com"),
         &LoginResponseOptions {
             in_response_to: Some("_r"),
-            custom: Some(&cb as &dyn Fn(&str) -> (String, String)),
             ..Default::default()
         },
+        &cb,
     )?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("cam@example.com"));
@@ -1163,20 +1172,16 @@ fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std:
     let sp = ServiceProvider::from_config(&sp_config(false, true, true), sp_setting)?;
     let idp_id = "https://idp.example.com/metadata";
     let cb = |t: &str| fill_response(t, idp_id, "es@example.com");
-    // A signed message combined with encryption uses encrypt-then-sign so the
-    // message signature covers (and survives) the encrypted assertion.
     let options = LoginResponseOptions {
         in_response_to: Some("_r"),
-        encrypt_then_sign: with_message,
-        custom: if custom {
-            Some(&cb as &dyn Fn(&str) -> (String, String))
-        } else {
-            None
-        },
         ..Default::default()
     };
-    let ctx =
-        idp.create_login_response(&sp, Binding::Post, &User::new("es@example.com"), &options)?;
+    let user = User::new("es@example.com");
+    let ctx = if custom {
+        idp.create_rendered_login_response(&sp, Binding::Post, &user, &options, &cb)?
+    } else {
+        idp.create_login_response(&sp, Binding::Post, &user, &options)?
+    };
     let request_id = if custom { "_req" } else { "_r" };
     let parsed = parse_response_with_request_id(&sp, &idp, Binding::Post, &ctx, request_id)?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("es@example.com"));
@@ -1233,29 +1238,6 @@ fn flow_conformance_encrypted_custom_signed_assertion_and_message(
     encrypted_signed(true, true)
 }
 
-#[cfg(not(feature = "crypto-fips"))]
-#[test]
-fn flow_conformance_encrypted_nonsigned_assertion_encrypt_then_sign(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut idp_setting = signing();
-    idp_setting.is_assertion_encrypted = true;
-    let idp = IdentityProvider::from_config(&idp_config(false), idp_setting)?;
-    let sp = sp(false, true);
-    let ctx = idp.create_login_response(
-        &sp,
-        Binding::Post,
-        &User::new("ets@example.com"),
-        &LoginResponseOptions {
-            in_response_to: Some("_r"),
-            encrypt_then_sign: true,
-            ..Default::default()
-        },
-    )?;
-    let parsed = parse_response_with_request_id(&sp, &idp, Binding::Post, &ctx, "_r")?;
-    assert_eq!(parsed.extract.get_str("nameID"), Some("ets@example.com"));
-    Ok(())
-}
-
 // ----- logout request/response with & without signature (48-53) -----
 
 fn logout_request_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -1267,7 +1249,7 @@ fn logout_request_flow(binding: Binding, signed: bool) -> Result<(), Box<dyn std
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         binding,
-        &User::new("a@e.com"),
+        &LogoutUser::new("a@e.com"),
         None,
         signed,
     )?;
@@ -1369,7 +1351,7 @@ fn flow_conformance_signed_simplesign_logout_request_returns_detached_signature_
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         Binding::SimpleSign,
-        &User::new("a@e.com"),
+        &LogoutUser::new("a@e.com"),
         None,
         true,
     )?;
@@ -1391,7 +1373,7 @@ fn flow_conformance_signed_simplesign_logout_request_parses_when_required(
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         Binding::SimpleSign,
-        &User::new("a@e.com"),
+        &LogoutUser::new("a@e.com"),
         None,
         true,
     )?;
@@ -1420,7 +1402,7 @@ fn flow_conformance_tampered_simplesign_logout_request_body_fails_signature_veri
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         Binding::SimpleSign,
-        &User::new("a@e.com"),
+        &LogoutUser::new("a@e.com"),
         None,
         true,
     )?;
@@ -1449,7 +1431,7 @@ fn flow_conformance_signed_simplesign_logout_request_with_relay_state_includes_b
         idp.metadata.as_metadata(),
         sp.metadata.as_metadata(),
         Binding::SimpleSign,
-        &User::new("a@e.com"),
+        &LogoutUser::new("a@e.com"),
         Some("relay-123"),
         true,
     )?;
@@ -1687,7 +1669,7 @@ fn malformed(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp(true, false);
     let bad = STANDARD.encode(b"<<<not-xml");
     let request = match binding {
-        Binding::Redirect => HttpRequest::redirect(vec![("SAMLResponse".into(), bad)]),
+        Binding::Redirect => redirect_query(vec![("SAMLResponse".into(), bad)]),
         _ => HttpRequest::post(vec![("SAMLResponse".into(), bad)]),
     };
     assert!(sp
@@ -1711,7 +1693,7 @@ fn flow_conformance_malformed_response_simplesign() -> Result<(), Box<dyn std::e
 
 // ----- signature wrapping (60-61) -----
 
-const ATTACK: &str = include_str!("fixtures/misc/attack_response_signed.xml");
+const ATTACK: &str = include_str!("../../tests/fixtures/misc/attack_response_signed.xml");
 
 #[test]
 fn flow_conformance_reject_signature_wrapped_response_case_1(
@@ -1763,7 +1745,7 @@ fn two_tier_status(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
         Binding::Redirect => {
             use saml_rs::binding::deflate_raw_encode;
             let enc = STANDARD.encode(&deflate_raw_encode(failed.as_bytes())?);
-            HttpRequest::redirect(vec![("SAMLResponse".into(), enc)])
+            redirect_query(vec![("SAMLResponse".into(), enc)])
         }
         _ => HttpRequest::post(vec![(
             "SAMLResponse".into(),

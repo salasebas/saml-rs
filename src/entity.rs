@@ -10,7 +10,6 @@ use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
 };
 use crate::error::{SamlError, TimeWindowField};
-use crate::model::ClockSkew;
 use crate::xml::XmlLimits;
 
 /// Runtime configuration for an entity (keys, algorithms, flags).
@@ -56,8 +55,8 @@ pub struct EntitySetting {
     pub validate_audience: bool,
     /// SP: reject a bearer assertion that omits `<AudienceRestriction>`.
     ///
-    /// Applies only when `validate_audience` is set. Default `true` preserves
-    /// raw audience checking. Typed Web Browser SSO acceptance can evaluate
+    /// Applies only when `validate_audience` is set. Default `true` requires
+    /// the element. Typed Web Browser SSO acceptance can evaluate
     /// restrictions that are present without requiring the element.
     pub(crate) require_audience_restriction: bool,
     /// SP: requires signed messages.
@@ -133,14 +132,14 @@ pub struct EntitySetting {
     /// Custom `<LogoutRequest>` template (`None` uses the default).
     ///
     /// Typed Session Authority generation requires a complete unqualified
-    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Raw compatibility
-    /// generation keeps that optional placeholder omitted.
+    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Compatibility generation
+    /// keeps that optional placeholder omitted.
     ///
     /// Typed generation fills `{NameQualifier}`, `{SPNameQualifier}`, and
     /// `{SPProvidedID}` from the logout subject's `NameID`, and
     /// `{NameIDFormat}` with the `Format` sent for it. An attribute whose
     /// complete value is one of these placeholders is omitted when there is
-    /// no value for it. Raw compatibility generation fills `{NameIDFormat}`
+    /// no value for it. Compatibility generation fills `{NameIDFormat}`
     /// from `name_id_format` and omits the qualifier attributes.
     ///
     /// Typed Session Authority generation, and typed SP generation with
@@ -261,10 +260,6 @@ impl fmt::Debug for EntitySetting {
     }
 }
 
-/// Custom message rendering hook: given the resolved template, returns
-/// `(id, rendered_xml)`.
-pub type CustomTagReplacement<'a> = &'a dyn Fn(&str) -> (String, String);
-
 /// Where to place the `<Signature>` relative to the reference element.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SignatureAction {
@@ -311,11 +306,6 @@ impl EntitySetting {
     /// configured.
     pub(crate) fn default_name_id_format(&self) -> Option<&str> {
         self.name_id_format.first().map(String::as_str)
-    }
-
-    pub(crate) fn clock_skew(&self) -> ClockSkew {
-        let (not_before_ms, not_on_or_after_ms) = self.clock_drifts;
-        ClockSkew::from_millis(not_before_ms, not_on_or_after_ms)
     }
 }
 
@@ -411,8 +401,6 @@ pub struct User {
     /// Attribute values keyed by their `LoginResponseAttribute.value_tag`;
     /// each fills the `{attr<Tag>}` placeholder produced for that attribute.
     pub attributes: Vec<(String, String)>,
-    /// `SessionIndex` for Single Logout requests.
-    pub session_index: Option<String>,
 }
 
 impl User {

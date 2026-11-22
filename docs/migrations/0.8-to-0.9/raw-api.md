@@ -1,17 +1,18 @@
-# 3. Move off the deprecated raw API
+# 3. Move off the raw API
 
 [How to upgrade from 0.8 to 0.9](README.md)
 
-**Affects:** code that calls the raw message functions under `saml_rs::raw`,
-`saml_rs::flow`, or `saml_rs::logout`.
+**Affects:** code that imports `saml_rs::raw`, or calls the message functions
+of the hidden `saml_rs::sp`, `saml_rs::idp`, `saml_rs::flow`, or
+`saml_rs::logout` modules.
 
-**Now:** these functions are deprecated, and a build that calls one warns with
-its replacement. The next minor release removes the raw API, including
-`raw`, `FlowResult`, `BindingContext`, `HttpRequest`, `EntitySetting`, and the
-`raw_*` accessors on typed values. Move each call to the typed `Saml` API
-before that upgrade:
+**Now:** the raw API is removed. `raw`, `sp`, `idp`, `entity`, `flow`, and
+`logout` are no longer public, and so are `ServiceProvider`,
+`IdentityProvider`, `EntitySetting`, `User`, `LoginRequestOptions`,
+`LoginResponseOptions`, `FlowOptions`, `FlowResult`, `BindingContext`, and
+`HttpRequest`. Move each call to the typed `Saml` API:
 
-| Deprecated | Replacement |
+| Removed | Replacement |
 | --- | --- |
 | `ServiceProvider::create_login_request` | `Saml::<Sp>::start_sso` |
 | `ServiceProvider::parse_login_response_with_request_id` | `Saml::<Sp>::finish_sso` |
@@ -23,7 +24,18 @@ before that upgrade:
 | `logout::create_logout_response`, `create_logout_response_with_id` | `respond_slo`, with `&Status::success()` for the `Success` they write |
 | `logout::parse_logout_response`, `parse_logout_response_without_request_id` | `finish_slo` |
 | `flow::flow` | The typed receive operation for the message |
-| `HttpRequest::redirect` | `Inbound::redirect` with the raw query string |
+| `HttpRequest::redirect`, `HttpRequest::post` | `Inbound::redirect` with the raw query string, `Inbound::post` with the form fields |
+| `ServiceProvider::from_metadata`, `IdentityProvider::from_metadata` | For your own role, `Saml::sp` with an `SpConfig` or `Saml::idp` with an `IdpConfig`. For the peer, `SpDescriptor::from_metadata_xml` or `IdpDescriptor::from_metadata_xml` |
+| `EntitySetting` | `SpConfig` and `IdpConfig`, with their builders |
+| `LoginRequestOptions::custom`, `LoginResponseOptions::custom` | `SpConfigBuilder::authn_request_template`, `IdpConfigBuilder::sso_response_template` |
+| `LoginResponseOptions::encrypt_then_sign` | Nothing. It was never read: an encrypted, message-signed response is always signed after the assertion is encrypted |
+| `Outbound::raw_context().binding` | `Outbound::delivery()` |
+| `Outbound::raw_context().context`, `into_raw_context` | `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` |
+| `raw_flow()` on `SsoSession`, `AuthnRequest`, `LogoutRequest`, `LogoutResponse`, and `LogoutCompleted` | The typed accessors of the message |
+| `Saml::<Sp>::raw_service_provider`, `Saml::<Idp>::raw_identity_provider` | Nothing. Configure the facade with `SpConfig` or `IdpConfig` |
+| `TryFrom<FlowResult>` for `SsoSession`, `AuthnRequest`, `LogoutRequest`, and `LogoutResponse` | The typed receive operation, which also runs the receiver checks those conversions skipped |
+| `TryFrom<BindingContext>` for `Outbound<_>`, `TryFrom<Inbound<_>>` for `HttpRequest` | Nothing. Typed operations return an `Outbound` and take an `Inbound` |
+| `raw::Binding` | `saml_rs::constants::Binding` |
 
 A service-provider login moves from a raw request and response to a pending
 request that `finish_sso` checks the response against:
@@ -47,47 +59,44 @@ let session = sp.finish_sso(
 let name_id = session.name_id().value();
 ```
 
-`examples/sso.rs` and `examples/slo.rs` show the full typed flows. Typed
-operations check what the raw functions left to the caller, such as
-`InResponseTo` correlation, RelayState, and the receiving endpoint. The typed
-`SpValidationPolicy::compatibility` preset keeps the raw service-provider
-acceptance behaviour while you migrate.
-
-## 3.1 Set the signature check and clock skew on `FlowOptions`
-
-**Affects:** code that sets `check_signature`, `verify_signature_if_present`,
-or `clock_drifts` on `saml_rs::raw::FlowOptions`.
-
-**Now:** one `signature_check: SignatureCheck` field replaces the two `bool`
-fields, and `clock_skew: ClockSkew` replaces `clock_drifts: (i64, i64)`. The
-defaults are unchanged: `SignatureCheck::Skip` and `ClockSkew::strict()`.
-
-Map the two `bool` fields to one variant:
-
-| `check_signature` | `verify_signature_if_present` | `signature_check` |
-| --- | --- | --- |
-| `true` | `true` or `false` | `SignatureCheck::Require` |
-| `false` | `true` | `SignatureCheck::VerifyIfPresent` |
-| `false` | `false` | `SignatureCheck::Skip` |
-
-Pass the drift tuple to `ClockSkew::from_millis` in the same order,
-`(not_before_ms, not_on_or_after_ms)`:
+Code that sends any outbound message the same way matches on its delivery:
 
 ```rust
-// Before
-let mut options = FlowOptions::default();
-options.check_signature = true;
-options.clock_drifts = (-120_000, 180_000);
+use saml_rs::{Outbound, OutboundDelivery};
 
-// Now
-use saml_rs::raw::{FlowOptions, SignatureCheck};
-use saml_rs::ClockSkew;
-
-let mut options = FlowOptions::default();
-options.signature_check = SignatureCheck::Require;
-options.clock_skew = ClockSkew::from_millis(-120_000, 180_000);
+fn send<Message>(outbound: &Outbound<Message>) {
+    match outbound.delivery() {
+        OutboundDelivery::Redirect(url) => { /* 303 to url */ }
+        OutboundDelivery::PostForm(form) => { /* render the auto-submitted form */ }
+        OutboundDelivery::SoapRequest(request) => { /* POST request.envelope() */ }
+        OutboundDelivery::SoapResponse(response) => { /* reply with response.envelope() */ }
+        _ => {}
+    }
+}
 ```
 
-`EntitySetting::clock_drifts` stays a tuple. These fields keep a raw call
-compiling until you move it to the typed API, which takes its clock skew from
-`SamlValidationContext`.
+`examples/sso.rs` and `examples/slo.rs` show the full typed flows. Typed
+operations check what the raw functions left to the caller, such as
+`InResponseTo` correlation, RelayState, and the receiving endpoint.
+
+`SpValidationPolicy::compatibility` is the closest typed preset to the raw
+service provider, but it is more permissive than the raw defaults in two
+places. It skips audience validation, and it accepts unsigned logout messages.
+To keep what the raw defaults checked, start from it and set those fields
+back:
+
+```rust
+use saml_rs::{AudienceValidationPolicy, LogoutSignaturePolicy, SpValidationPolicy};
+
+let mut validation = SpValidationPolicy::compatibility();
+validation.audience = AudienceValidationPolicy::RequireRestriction;
+validation.logout.requests = LogoutSignaturePolicy::RequireSigned;
+validation.logout.responses = LogoutSignaturePolicy::RequireSigned;
+```
+
+`IdpValidationPolicy::compatibility` also accepts unsigned logout messages, so
+set its `logout` the same way.
+
+`accept_unsolicited_sso` rejects an unsolicited response that carries an empty
+`InResponseTo=""`. `parse_unsolicited_login_response` read an empty value as
+absent.
