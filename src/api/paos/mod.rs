@@ -485,7 +485,7 @@ impl ServiceProvider {
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_paos_session(idp, pending, response_envelope, &validation)?;
-        super::sp::finish_validated_session(session, &mut validation, None)
+        self.finish_validated_session(session, &mut validation, None)
     }
 
     /// Finish Enhanced Client/Proxy login and apply an [`OutstandingLogout`].
@@ -506,7 +506,7 @@ impl ServiceProvider {
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_paos_session(idp, pending, response_envelope, &validation)?;
-        super::sp::finish_validated_session(session, &mut validation, Some(outstanding_logout))
+        self.finish_validated_session(session, &mut validation, Some(outstanding_logout))
     }
 
     fn parsed_paos_session(

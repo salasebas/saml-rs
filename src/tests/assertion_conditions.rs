@@ -1,6 +1,8 @@
 //! Typed SSO acceptance of assertion conditions and every assertion in a response.
 #![cfg(crypto)]
 
+mod replay;
+
 use super::common;
 use super::post_validation::post_validation;
 

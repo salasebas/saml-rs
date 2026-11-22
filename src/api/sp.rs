@@ -106,22 +106,6 @@ impl ResponseParseInput {
     }
 }
 
-pub(super) fn finish_validated_session(
-    session: SsoSession,
-    validation: &mut SamlValidationContext<'_>,
-    outstanding_logout: Option<&OutstandingLogout>,
-) -> Result<SsoSession, SamlError> {
-    let matches_outstanding_logout = match outstanding_logout {
-        Some(logout) => logout.matches_unexpired(&session, validation)?,
-        None => false,
-    };
-    session.check_and_store_replay(validation)?;
-    if matches_outstanding_logout {
-        return Err(SamlError::AssertionMatchesOutstandingLogout);
-    }
-    Ok(session)
-}
-
 /// A SAML service provider built from an [`SpConfig`].
 ///
 /// It starts and finishes Web Browser SSO, single logout, artifact
@@ -297,7 +281,7 @@ impl ServiceProvider {
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_sso_session(idp, pending, input, &validation)?;
-        finish_validated_session(session, &mut validation, None)
+        self.finish_validated_session(session, &mut validation, None)
     }
 
     /// Finish SP-initiated SSO and apply an [`OutstandingLogout`].
@@ -318,7 +302,7 @@ impl ServiceProvider {
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_sso_session(idp, pending, input, &validation)?;
-        finish_validated_session(session, &mut validation, Some(outstanding_logout))
+        self.finish_validated_session(session, &mut validation, Some(outstanding_logout))
     }
 
     /// Accept an IdP-initiated SSO response explicitly.
@@ -362,7 +346,7 @@ impl ServiceProvider {
         mut validation: SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_unsolicited_session(idp, input, &validation)?;
-        finish_validated_session(session, &mut validation, None)
+        self.finish_validated_session(session, &mut validation, None)
     }
 
     /// Accept an IdP-initiated SSO response and apply an [`OutstandingLogout`].
@@ -379,7 +363,24 @@ impl ServiceProvider {
         outstanding_logout: &OutstandingLogout,
     ) -> Result<SsoSession, SamlError> {
         let session = self.parsed_unsolicited_session(idp, input, &validation)?;
-        finish_validated_session(session, &mut validation, Some(outstanding_logout))
+        self.finish_validated_session(session, &mut validation, Some(outstanding_logout))
+    }
+
+    pub(super) fn finish_validated_session(
+        &self,
+        session: SsoSession,
+        validation: &mut SamlValidationContext<'_>,
+        outstanding_logout: Option<&OutstandingLogout>,
+    ) -> Result<SsoSession, SamlError> {
+        let matches_outstanding_logout = match outstanding_logout {
+            Some(logout) => logout.matches_unexpired(&session, validation)?,
+            None => false,
+        };
+        session.check_and_store_replay(validation, self.engine().setting.xml_limits)?;
+        if matches_outstanding_logout {
+            return Err(SamlError::AssertionMatchesOutstandingLogout);
+        }
+        Ok(session)
     }
 
     fn parsed_sso_session(

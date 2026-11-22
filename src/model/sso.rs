@@ -12,7 +12,7 @@ use super::{
     earliest_authn_session_expiration, LogoutSubject, RelayState, ReplayKey, ReplayPolicy,
     SamlValidationContext,
 };
-use crate::assertion_acceptance::latest_bearer_not_on_or_after;
+use crate::assertion_acceptance::{assertion_replays, latest_bearer_not_on_or_after};
 use crate::config::{EntityId, NameIdFormat};
 use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
@@ -282,21 +282,23 @@ impl SsoSession {
     pub(crate) fn check_and_store_replay(
         &self,
         validation: &mut SamlValidationContext<'_>,
+        limits: XmlLimits,
     ) -> Result<(), SamlError> {
         let validation_now = validation.now_offset()?;
         let not_on_or_after_skew_ms = validation.clock_skew().not_on_or_after_millis();
         match validation.replay_policy() {
             ReplayPolicy::Disabled => Ok(()),
             ReplayPolicy::RequireCache(cache) => {
-                let replays =
-                    crate::assertion_acceptance::assertion_replays(&self.raw_flow.saml_content)?;
+                let replays = assertion_replays(&self.raw_flow.saml_content, limits)?;
+                let bearer_expires = self.bearer_subject_confirmation_expires_at(limits)?;
+                let earliest = self.earliest_replay_instant(bearer_expires)?;
                 let response_expires = system_time_from_offset_datetime(replay_deadline(
-                    self.earliest_replay_instant()?,
+                    earliest,
                     validation_now,
                     not_on_or_after_skew_ms,
                 )?)?;
                 let assertion_expires = system_time_from_offset_datetime(replay_deadline(
-                    self.assertion_replay_instant()?,
+                    bearer_expires.unwrap_or(earliest),
                     validation_now,
                     not_on_or_after_skew_ms,
                 )?)?;
@@ -330,7 +332,10 @@ impl SsoSession {
         }
     }
 
-    fn earliest_replay_instant(&self) -> Result<OffsetDateTime, SamlError> {
+    fn earliest_replay_instant(
+        &self,
+        bearer_expires: Option<OffsetDateTime>,
+    ) -> Result<OffsetDateTime, SamlError> {
         let mut candidates = Vec::with_capacity(3);
         if let Some(instant) = self.not_on_or_after() {
             candidates.push(parse_replay_expiration(instant.as_str())?);
@@ -344,7 +349,7 @@ impl SsoSession {
         )? {
             candidates.push(instant);
         }
-        if let Some(instant) = self.bearer_subject_confirmation_expires_at()? {
+        if let Some(instant) = bearer_expires {
             candidates.push(instant);
         }
         candidates
@@ -355,20 +360,14 @@ impl SsoSession {
             })
     }
 
-    fn assertion_replay_instant(&self) -> Result<OffsetDateTime, SamlError> {
-        if let Some(instant) = self.bearer_subject_confirmation_expires_at()? {
-            return Ok(instant);
-        }
-        self.earliest_replay_instant()
-    }
-
-    fn bearer_subject_confirmation_expires_at(&self) -> Result<Option<OffsetDateTime>, SamlError> {
+    fn bearer_subject_confirmation_expires_at(
+        &self,
+        limits: XmlLimits,
+    ) -> Result<Option<OffsetDateTime>, SamlError> {
         let confirmations = self
             .subject_confirmations
             .iter()
-            .map(|confirmation| {
-                dom::parse_fragment_with_limits(confirmation.raw_xml(), XmlLimits::default())
-            })
+            .map(|confirmation| dom::parse_fragment_with_limits(confirmation.raw_xml(), limits))
             .collect::<Result<Vec<_>, _>>()?;
         latest_bearer_not_on_or_after(confirmations.iter().map(|document| &document.root))
             .as_deref()
