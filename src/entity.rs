@@ -108,13 +108,13 @@ pub struct EntitySetting {
     pub xml_limits: XmlLimits,
     /// Optional schema validator for received and decrypted XML.
     pub schema_validator: Option<crate::SchemaValidator>,
-    /// IdP: protocol tag prefix for generated IdP messages (default `samlp`).
+    /// Protocol tag prefix for generated SAML messages (default `samlp`).
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ
     /// from `tag_prefix_assertion`.
     pub tag_prefix_protocol: String,
-    /// IdP: assertion tag prefix for generated IdP messages (default `saml`).
+    /// Assertion tag prefix for generated SAML messages (default `saml`).
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ

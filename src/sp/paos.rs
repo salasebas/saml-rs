@@ -5,8 +5,10 @@ use crate::constants::Binding;
 use crate::entity::{generate_id, now_iso8601};
 use crate::error::{utf8_err, SamlError};
 use crate::model::validate_name_id_format;
+use crate::xml::write::Prefixes;
 
 pub(crate) struct PaosAuthnRequestInput<'a> {
+    pub(crate) prefixes: Prefixes<'a>,
     pub(crate) destination: &'a str,
     pub(crate) assertion_consumer_service_url: &'a str,
     pub(crate) force_authn: Option<bool>,
@@ -29,21 +31,24 @@ impl Engine {
         let id = generate_id();
         let issue_instant = now_iso8601();
         let issuer = self.entity_id();
-        let xml = render_default_authn_request_xml(&AuthnRequestXml {
-            id: &id,
-            issue_instant: &issue_instant,
-            destination: input.destination,
-            force_authn: input.force_authn,
-            protocol_binding: None,
-            assertion_consumer_service_url: Some(input.assertion_consumer_service_url),
-            assertion_consumer_service_index: None,
-            is_passive: input.is_passive,
-            provider_name: None,
-            requested_authn_context: None,
-            issuer: &issuer,
-            name_id_format,
-            allow_create: self.setting.allow_create,
-        });
+        let xml = render_default_authn_request_xml(
+            input.prefixes,
+            &AuthnRequestXml {
+                id: &id,
+                issue_instant: &issue_instant,
+                destination: input.destination,
+                force_authn: input.force_authn,
+                protocol_binding: None,
+                assertion_consumer_service_url: Some(input.assertion_consumer_service_url),
+                assertion_consumer_service_index: None,
+                is_passive: input.is_passive,
+                provider_name: None,
+                requested_authn_context: None,
+                issuer: &issuer,
+                name_id_format,
+                allow_create: self.setting.allow_create,
+            },
+        );
         if !input.sign {
             return Ok((id, xml));
         }

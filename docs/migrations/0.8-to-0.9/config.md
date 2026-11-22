@@ -443,3 +443,16 @@ XML NCName` in place of `contains an invalid character`. A prefix such as
 
 **Upgrade:** choose an NCName that does not begin with `xml`, such as `ds` or
 `saml2`, and update a check that compares the old message.
+
+## Update consumers that match literal SAML prefixes
+
+If you set `TemplatePolicy::tag_prefix_protocol` or `tag_prefix_assertion`,
+the sending entity now uses those prefixes in `AuthnRequest`, `ArtifactResolve`,
+`ArtifactResponse`, and both SOAP name identifier management messages.
+The SAML elements inside the ECP request header also use them.
+Previously those paths always emitted `samlp` and `saml`.
+
+Update peers and XML snapshots that expect the old spellings. In a
+namespace-aware consumer, match the namespace URI and local name. To emit
+`samlp` and `saml` throughout, use the default prefix settings. The artifact
+response embeds the stored protocol message with its original prefixes.

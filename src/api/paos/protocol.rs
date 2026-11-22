@@ -3,7 +3,7 @@
 use crate::error::SamlError;
 use crate::model::RelayState;
 use crate::soap::{self, HeaderEntry, UnderstoodHeader};
-use crate::xml::write::XmlWriter;
+use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::XmlLimits;
 
 pub(super) const PAOS_VERSION: &str = "urn:liberty:paos:2003-08";
@@ -66,6 +66,7 @@ pub fn check_paos_client_headers(accept: &str, paos: &str) -> Result<(), SamlErr
 }
 
 pub(super) struct SpToEcp<'a> {
+    pub(super) prefixes: Prefixes<'a>,
     pub(super) response_consumer_url: &'a str,
     pub(super) provider_name: Option<&'a str>,
     pub(super) is_passive: Option<bool>,
@@ -103,16 +104,24 @@ pub(super) fn sp_to_ecp_envelope(input: &SpToEcp<'_>) -> String {
     };
     ecp_attrs.push(("IsPassive", is_passive));
     header.start("ecp:Request", &ecp_attrs);
-    header.text_element("saml:Issuer", &[("xmlns:saml", ASSERTION_NS)], input.issuer);
-    header.start("samlp:IDPList", &[("xmlns:samlp", PROTOCOL_NS)]);
+    let prefixes = input.prefixes;
+    header.text_element(
+        &prefixes.assertion("Issuer"),
+        &[(&prefixes.xmlns_assertion(), ASSERTION_NS)],
+        input.issuer,
+    );
+    header.start(
+        &prefixes.protocol("IDPList"),
+        &[(&prefixes.xmlns_protocol(), PROTOCOL_NS)],
+    );
     header.empty(
-        "samlp:IDPEntry",
+        &prefixes.protocol("IDPEntry"),
         &[
             ("ProviderID", input.identity_provider_id),
             ("Loc", input.identity_provider_loc),
         ],
     );
-    header.end("samlp:IDPList");
+    header.end(&prefixes.protocol("IDPList"));
     header.end("ecp:Request");
     if let Some(relay_state) = input.relay_state {
         header.text_element(
@@ -329,6 +338,7 @@ mod tests {
             "<samlp:AuthnRequest xmlns:samlp=\"{PROTOCOL_NS}\" ID=\"_1\"></samlp:AuthnRequest>"
         );
         let envelope = sp_to_ecp_envelope(&SpToEcp {
+            prefixes: Prefixes::of(&crate::entity::EntitySetting::default())?,
             response_consumer_url: "https://sp.example.com/acs",
             provider_name: Some("Example SP"),
             is_passive: Some(false),
@@ -426,8 +436,9 @@ mod tests {
     }
 
     #[test]
-    fn omitted_is_passive_is_false_on_the_ecp_request() {
+    fn omitted_is_passive_is_false_on_the_ecp_request() -> Result<(), SamlError> {
         let envelope = sp_to_ecp_envelope(&SpToEcp {
+            prefixes: Prefixes::of(&crate::entity::EntitySetting::default())?,
             response_consumer_url: "https://sp.example.com/acs?a=1&b=2",
             provider_name: Some("A\"B&C"),
             is_passive: None,
@@ -440,6 +451,7 @@ mod tests {
         assert!(envelope.contains("IsPassive=\"false\""));
         assert!(envelope.contains("ProviderName=\"A&quot;B&amp;C\""));
         assert!(envelope.contains("responseConsumerURL=\"https://sp.example.com/acs?a=1&amp;b=2\""));
+        Ok(())
     }
 
     #[test]
@@ -597,8 +609,9 @@ mod tests {
     }
 
     #[test]
-    fn requested_is_passive_true_is_carried() {
+    fn requested_is_passive_true_is_carried() -> Result<(), SamlError> {
         let envelope = sp_to_ecp_envelope(&SpToEcp {
+            prefixes: Prefixes::of(&crate::entity::EntitySetting::default())?,
             response_consumer_url: "https://sp.example.com/acs",
             provider_name: None,
             is_passive: Some(true),
@@ -609,5 +622,6 @@ mod tests {
             authn_request_xml: "<samlp:AuthnRequest ID=\"_1\"></samlp:AuthnRequest>",
         });
         assert!(envelope.contains("IsPassive=\"true\""));
+        Ok(())
     }
 }

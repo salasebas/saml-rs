@@ -18,9 +18,10 @@ use crate::logout::sign_browser_message;
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, MessageId, SamlInstant};
 use crate::xml::protocol_element::{issuer, parse_saml_with_limits};
+use crate::xml::write::Prefixes;
 use crate::xml::XmlLimits;
 
-use super::xml::{render_request, render_response, Prefixes, RequestXml, ResponseXml};
+use super::xml::{render_request, render_response, RequestXml, ResponseXml};
 use super::{
     identifier_and_change, plaintext_content, protect_request, require_one_status_code,
     require_utc_instant, Change, Identifier, ManageNameIdRequest, NameIdManagementRefusal,

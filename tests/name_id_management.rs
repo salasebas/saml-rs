@@ -17,6 +17,9 @@ mod replay_cache;
 #[path = "common/policies_without_crypto.rs"]
 mod policies_without_crypto;
 
+#[path = "common/tag_prefixes.rs"]
+mod tag_prefixes;
+
 use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
 
 use replay_cache::RecordingReplayCache;
@@ -56,10 +59,18 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn identity_provider(
     service: Option<&str>,
 ) -> Result<IdentityProvider, Box<dyn std::error::Error>> {
+    identity_provider_with_templates(service, Default::default())
+}
+
+fn identity_provider_with_templates(
+    service: Option<&str>,
+    templates: saml_rs::TemplatePolicy,
+) -> Result<IdentityProvider, Box<dyn std::error::Error>> {
     let mut builder = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
+    .templates(templates)
     .name_id_format(NameIdFormat::Persistent)
     .validation(idp_validation_without_crypto());
     if let Some(location) = service {
@@ -194,7 +205,8 @@ fn identity_provider_metadata_publishes_the_soap_manage_name_id_service() -> Tes
 
 #[test]
 fn idp_initiated_new_id_reaches_the_service_provider_and_completes() -> TestResult {
-    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let idp =
+        identity_provider_with_templates(Some(IDP_NIM_URL), tag_prefixes::templates("p", "a"))?;
     let sp = soap_service_provider()?;
     let current = NameId::new("current-value");
     let started = idp.start_name_id_management(
@@ -211,13 +223,13 @@ fn idp_initiated_new_id_reaches_the_service_provider_and_completes() -> TestResu
         |header| header.name() == "Content-Type" && header.value() == "text/xml; charset=utf-8"
     ));
     let xml = body(request.envelope())?;
-    assert!(xml.starts_with("<samlp:ManageNameIDRequest "));
+    assert!(xml.starts_with("<p:ManageNameIDRequest "));
     assert_eq!(attribute(&xml, "Version"), Some("2.0"));
     assert_eq!(attribute(&xml, "Destination"), Some(SP_NIM_URL));
-    assert!(xml.contains(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")));
+    assert!(xml.contains(&format!("<a:Issuer>{IDP_ENTITY_ID}</a:Issuer>")));
     assert!(xml.contains(&format!(
-        "{}<samlp:NewID>new-value</samlp:NewID></samlp:ManageNameIDRequest>",
-        current_name_id_xml()
+        "{}<p:NewID>new-value</p:NewID></p:ManageNameIDRequest>",
+        current_name_id_xml().replace("saml:", "a:")
     )));
 
     let request_id = attribute(&xml, "ID").ok_or("request ID is missing")?;
@@ -515,7 +527,8 @@ fn sp_initiated_new_id_is_received_and_answered() -> TestResult {
 
 #[test]
 fn sp_initiated_termination_is_received_and_answered() -> TestResult {
-    let idp = identity_provider(Some(IDP_NIM_URL))?;
+    let idp =
+        identity_provider_with_templates(Some(IDP_NIM_URL), tag_prefixes::templates("p", "a"))?;
     let sp = soap_service_provider()?;
     let envelope = sp_request(&format!("{}<samlp:Terminate/>", current_name_id_xml()))?;
 
@@ -533,7 +546,7 @@ fn sp_initiated_termination_is_received_and_answered() -> TestResult {
             .envelope(),
     )?;
     assert!(xml.contains(&format!(
-        r#"<samlp:StatusCode Value="{REQUESTER}"><samlp:StatusCode Value="{UNKNOWN_PRINCIPAL}"/></samlp:StatusCode>"#
+        r#"<p:StatusCode Value="{REQUESTER}"><p:StatusCode Value="{UNKNOWN_PRINCIPAL}"/></p:StatusCode>"#
     )));
     Ok(())
 }

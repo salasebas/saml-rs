@@ -667,13 +667,10 @@ pub struct TemplatePolicy {
     /// Prefix of the generated protocol-namespace elements, `samlp` by
     /// default.
     ///
-    /// It applies to the SSO `<Response>`, `<LogoutRequest>`,
-    /// `<LogoutResponse>`, and the `<ManageNameIDRequest>` and
-    /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `samlp` prefix
-    /// of a logout template is rewritten to it.
-    /// The built-in `<AuthnRequest>`, `<ArtifactResolve>`,
-    /// `<ArtifactResponse>`, name identifier management messages over SOAP,
-    /// and the ECP `<Request>` header of PAOS SSO keep `samlp`.
+    /// Applies to protocol elements the entity generates across bindings,
+    /// including the IDP list in the ECP request header. Logout templates use
+    /// this prefix for elements written with `samlp`. Artifact resolution
+    /// preserves the prefixes in the stored message.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_assertion`.
@@ -681,14 +678,10 @@ pub struct TemplatePolicy {
     /// Prefix of the generated assertion-namespace elements, `saml` by
     /// default.
     ///
-    /// It applies to the SSO `<Response>`, including its assertion and a
-    /// generated `<EncryptedAssertion>`, to `<LogoutRequest>` and
-    /// `<LogoutResponse>`, and to the `<ManageNameIDRequest>` and
-    /// `<ManageNameIDResponse>` sent over HTTP-Redirect. The `saml` prefix of
-    /// a logout template is rewritten to it. The
-    /// built-in `<AuthnRequest>`, `<ArtifactResolve>`, `<ArtifactResponse>`,
-    /// name identifier management messages over SOAP, and the ECP `<Request>`
-    /// header of PAOS SSO keep `saml`.
+    /// Applies to assertion elements the entity generates across bindings,
+    /// including the ECP request issuer and the encrypted assertion wrapper.
+    /// Logout templates use this prefix for elements written with `saml`.
+    /// Artifact resolution preserves the prefixes in the stored message.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_protocol`.

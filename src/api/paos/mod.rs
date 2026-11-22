@@ -16,6 +16,7 @@ use crate::model::{
 };
 use crate::sp::{validate_provider_name, LoginResponseParseOptions, PaosAuthnRequestInput};
 use crate::xml::is_xml_char;
+use crate::xml::write::Prefixes;
 
 use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
@@ -420,9 +421,11 @@ impl ServiceProvider {
             .entity_id()
             .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
             .to_string();
+        let prefixes = Prefixes::of(&self.engine().setting)?;
         let (request_id, authn_request_xml) =
             self.engine()
                 .render_paos_authn_request(&PaosAuthnRequestInput {
+                    prefixes,
                     destination: options.soap_endpoint.as_str(),
                     assertion_consumer_service_url: assertion_consumer.as_str(),
                     force_authn: options.force_authn.map(ForceAuthn::as_bool),
@@ -430,6 +433,7 @@ impl ServiceProvider {
                     sign: options.sign_authn_request,
                 })?;
         let envelope = sp_to_ecp_envelope(&SpToEcp {
+            prefixes,
             response_consumer_url: assertion_consumer.as_str(),
             provider_name: options.provider_name.as_deref(),
             is_passive: options.passive.map(IsPassive::as_bool),

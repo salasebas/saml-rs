@@ -14,6 +14,9 @@ mod schema_validation;
 #[path = "common/policies_without_crypto.rs"]
 mod policies_without_crypto;
 
+#[path = "common/tag_prefixes.rs"]
+mod tag_prefixes;
+
 use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
 
 use std::time::{Duration, SystemTime};
@@ -61,6 +64,14 @@ fn parties() -> Result<Parties, Box<dyn std::error::Error>> {
 }
 
 fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
+    parties_with_templates(xml, Default::default(), Default::default())
+}
+
+fn parties_with_templates(
+    xml: XmlPolicy,
+    idp_templates: saml_rs::TemplatePolicy,
+    sp_templates: saml_rs::TemplatePolicy,
+) -> Result<Parties, Box<dyn std::error::Error>> {
     let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
@@ -70,12 +81,23 @@ fn parties_with(xml: XmlPolicy) -> Result<Parties, Box<dyn std::error::Error>> {
             0,
             EndpointUrl::try_new(RESOLUTION_URL)?,
         ))
+        .templates(idp_templates)
         .xml(xml)
         .validation(idp_validation_without_crypto())
         .build()?,
     );
-    let sp = service_provider(SP_ENTITY_ID, "https://sp.example.com/acs", xml)?;
-    let other = service_provider(OTHER_ENTITY_ID, "https://other.example.com/acs", xml)?;
+    let sp = service_provider(
+        SP_ENTITY_ID,
+        "https://sp.example.com/acs",
+        xml,
+        sp_templates,
+    )?;
+    let other = service_provider(
+        OTHER_ENTITY_ID,
+        "https://other.example.com/acs",
+        xml,
+        Default::default(),
+    )?;
     let idp_metadata = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
@@ -105,9 +127,11 @@ fn service_provider(
     entity_id: &str,
     acs: &str,
     xml: XmlPolicy,
+    templates: saml_rs::TemplatePolicy,
 ) -> Result<ServiceProvider, Box<dyn std::error::Error>> {
     Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(entity_id)?, AcsEndpoint::post(acs)?)
+            .templates(templates)
             .xml(xml)
             .validation(sp_validation_without_crypto())
             .build()?,
@@ -208,7 +232,11 @@ fn hex(bytes: &[u8]) -> String {
 #[test]
 fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dyn std::error::Error>>
 {
-    let parties = parties()?;
+    let parties = parties_with_templates(
+        XmlPolicy::default(),
+        tag_prefixes::templates("i", "ia"),
+        tag_prefixes::templates("p", "a"),
+    )?;
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let artifact = issue(&parties, &web_sso_response(), &mut issued)?;
     let channel = confidential();
@@ -232,11 +260,11 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
             ("Pragma", "no-cache"),
         ]
     );
-    assert!(request.envelope().contains("ArtifactResolve"));
+    assert!(request.envelope().contains("<p:ArtifactResolve "));
     assert!(request.envelope().contains(artifact.as_str()));
     assert!(request
         .envelope()
-        .contains(&format!("<saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>")));
+        .contains(&format!("<a:Issuer>{SP_ENTITY_ID}</a:Issuer>")));
     assert!(request
         .envelope()
         .contains(&format!("Destination=\"{RESOLUTION_URL}\"")));
@@ -260,9 +288,13 @@ fn web_browser_sso_round_trip_returns_the_stored_response() -> Result<(), Box<dy
             ("Pragma", "no-cache"),
         ]
     );
-    assert!(answer.response().envelope().contains("ArtifactResponse"));
+    assert!(answer
+        .response()
+        .envelope()
+        .contains("<i:ArtifactResponse "));
     assert!(answer.response().envelope().contains(SUCCESS));
-    assert!(answer.response().envelope().contains(WEB_SSO_MARKER));
+    assert!(answer.response().envelope().contains("<ia:Issuer>"));
+    assert!(answer.response().envelope().contains(&web_sso_response()));
 
     let resolved = resolution.finish(answer.response().envelope())?;
     assert_eq!(resolved.local_name(), "Response");

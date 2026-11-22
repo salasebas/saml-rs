@@ -1,6 +1,6 @@
 use crate::constants::namespace;
 use crate::model::{AuthnContextReferenceKind, RequestedAuthnContext};
-use crate::xml::write::XmlWriter;
+use crate::xml::write::{Prefixes, XmlWriter};
 
 #[derive(Default)]
 pub(crate) struct AuthnRequestPreferences<'a> {
@@ -50,7 +50,10 @@ pub(super) struct AuthnRequestXml<'a> {
     pub(super) allow_create: bool,
 }
 
-pub(super) fn render_default_authn_request_xml(input: &AuthnRequestXml<'_>) -> String {
+pub(super) fn render_default_authn_request_xml(
+    prefixes: Prefixes<'_>,
+    input: &AuthnRequestXml<'_>,
+) -> String {
     let force_authn = input.force_authn.map(|value| value.to_string());
     let is_passive = input
         .is_passive
@@ -72,9 +75,11 @@ pub(super) fn render_default_authn_request_xml(input: &AuthnRequestXml<'_>) -> S
         name_id_policy_attrs.push(("AllowCreate", allow_create));
     }
 
+    let xmlns_protocol = prefixes.xmlns_protocol();
+    let xmlns_assertion = prefixes.xmlns_assertion();
     let mut attrs = Vec::with_capacity(8);
-    attrs.push(("xmlns:samlp", namespace::PROTOCOL));
-    attrs.push(("xmlns:saml", namespace::ASSERTION));
+    attrs.push((xmlns_protocol.as_str(), namespace::PROTOCOL));
+    attrs.push((xmlns_assertion.as_str(), namespace::ASSERTION));
     attrs.push(("ID", input.id));
     attrs.push(("Version", "2.0"));
     attrs.push(("IssueInstant", input.issue_instant));
@@ -105,23 +110,23 @@ pub(super) fn render_default_authn_request_xml(input: &AuthnRequestXml<'_>) -> S
     }
 
     let mut writer = XmlWriter::new();
-    writer.start("samlp:AuthnRequest", &attrs);
-    writer.text_element("saml:Issuer", &[], input.issuer);
-    writer.empty("samlp:NameIDPolicy", &name_id_policy_attrs);
+    writer.start(&prefixes.protocol("AuthnRequest"), &attrs);
+    writer.text_element(&prefixes.assertion("Issuer"), &[], input.issuer);
+    writer.empty(&prefixes.protocol("NameIDPolicy"), &name_id_policy_attrs);
     if let Some(context) = input.requested_authn_context {
         writer.start(
-            "samlp:RequestedAuthnContext",
+            &prefixes.protocol("RequestedAuthnContext"),
             &[("Comparison", context.comparison().as_str())],
         );
         for reference in context.references() {
             let name = match reference.kind() {
-                AuthnContextReferenceKind::Class => "saml:AuthnContextClassRef",
-                AuthnContextReferenceKind::Declaration => "saml:AuthnContextDeclRef",
+                AuthnContextReferenceKind::Class => "AuthnContextClassRef",
+                AuthnContextReferenceKind::Declaration => "AuthnContextDeclRef",
             };
-            writer.text_element(name, &[], reference.uri());
+            writer.text_element(&prefixes.assertion(name), &[], reference.uri());
         }
-        writer.end("samlp:RequestedAuthnContext");
+        writer.end(&prefixes.protocol("RequestedAuthnContext"));
     }
-    writer.end("samlp:AuthnRequest");
+    writer.end(&prefixes.protocol("AuthnRequest"));
     writer.finish()
 }
