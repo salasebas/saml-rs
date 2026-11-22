@@ -81,20 +81,21 @@ impl SubordinateStatusCode {
 
     /// Wrap an absolute status-code URI.
     ///
+    /// Pass the URI as written, including any literal `&` or `'`. The XML
+    /// writer escapes the attribute value when it generates the response.
+    ///
     /// # Errors
     ///
-    /// Returns [`SamlError::Invalid`] when `uri` has whitespace, contains `&`,
-    /// `"`, `'`, `<`, or `>`, or is not an absolute URI reference.
+    /// Returns [`SamlError::Invalid`] when `uri` has whitespace, contains
+    /// `"`, `<`, or `>`, or is not an absolute URI reference.
     pub fn try_new(uri: impl Into<String>) -> Result<Self, SamlError> {
         let uri = uri.into();
         if uri.chars().any(char::is_whitespace)
-            || uri
-                .chars()
-                .any(|character| matches!(character, '&' | '"' | '\'' | '<' | '>'))
+            || uri.contains(['"', '<', '>'])
             || !is_absolute_uri_reference(&uri)
         {
             return Err(SamlError::Invalid(
-                "subordinate status code must be a non-empty absolute URI without whitespace or XML attribute markup"
+                "subordinate status code must be an absolute URI without whitespace, double quotes, or angle brackets"
                     .into(),
             ));
         }

@@ -3347,6 +3347,7 @@ fn typed_logout_response_carries_caller_defined_subordinate_status(
     for subordinate in [
         "urn:example:logout:local-failure",
         "https://idp.example:70000/logout/local-failure",
+        "https://idp.example/status?a=1&reason=can't-logout",
     ] {
         let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
         let received = sp.receive_slo(
@@ -3361,39 +3362,45 @@ fn typed_logout_response_carries_caller_defined_subordinate_status(
             RespondSlo::post(),
         )?;
 
-        assert_eq!(
-            status_element(&outbound_xml(&response, "SAMLResponse")?)?,
-            format!(
-                concat!(
-                    "<samlp:Status>",
-                    "<samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Requester\">",
-                    "<samlp:StatusCode Value=\"{}\"/>",
-                    "</samlp:StatusCode>",
-                    "</samlp:Status>"
-                ),
-                subordinate
-            )
-        );
+        match idp.finish_slo(
+            &sp_descriptor,
+            &started.pending,
+            Inbound::post(post_fields(&response)?),
+            validation(),
+        ) {
+            Err(SamlError::StatusNotSuccess { status }) => {
+                assert_eq!(
+                    status.top_level().as_uri(),
+                    saml_rs::constants::status_code::REQUESTER
+                );
+                assert_eq!(
+                    status.subordinate().map(SubordinateStatusCode::as_uri),
+                    Some(subordinate)
+                );
+            }
+            other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+        }
     }
     Ok(())
 }
 
 #[test]
-fn typed_logout_response_rejects_a_subordinate_status_that_is_not_an_absolute_uri(
+fn typed_logout_response_rejects_invalid_subordinate_status_uris(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for uri in [
         "",
         "relative",
         "urn:example:has space",
-        "https://idp.example/status?a=1&b=2",
+        "urn:example:a\"b",
+        "urn:example:a<b",
+        "urn:example:a>b",
         "urn:",
         "urn:example:%zz",
         "urn:example:a#b#c",
         "urn:example:\u{1}",
     ] {
         match SubordinateStatusCode::try_new(uri) {
-            Err(SamlError::Invalid(message))
-                if message.contains("absolute URI without whitespace or XML attribute markup") => {}
+            Err(SamlError::Invalid(_)) => {}
             other => {
                 return Err(format!(
                     "expected invalid subordinate status for {uri}, got {other:?}"
