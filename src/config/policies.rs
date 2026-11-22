@@ -230,15 +230,15 @@ pub enum NameIdCreationPolicy {
 /// [`Default`](Default::default) is [`Self::recommended`]. Field classification
 /// is in `docs/conformance/`.
 ///
-/// Start from a preset and assign the fields you change. A struct literal
-/// does not compile outside the crate:
+/// Start from `default()` or a preset and assign the fields you change. A
+/// struct literal does not compile outside the crate:
 ///
 /// ```compile_fail,E0639
 /// use saml_rs::{AudienceValidationPolicy, SpValidationPolicy};
 ///
 /// let policy = SpValidationPolicy {
 ///     audience: AudienceValidationPolicy::RequireRestriction,
-///     ..SpValidationPolicy::recommended()
+///     ..SpValidationPolicy::default()
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,15 +320,15 @@ impl Default for SpValidationPolicy {
 /// [`Default`](Default::default) is [`Self::recommended`]. Field classification
 /// is in `docs/conformance/`.
 ///
-/// Start from a preset and assign the fields you change. A struct literal
-/// does not compile outside the crate:
+/// Start from `default()` or a preset and assign the fields you change. A
+/// struct literal does not compile outside the crate:
 ///
 /// ```compile_fail,E0639
 /// use saml_rs::{AuthnRequestValidationPolicy, IdpValidationPolicy};
 ///
 /// let policy = IdpValidationPolicy {
 ///     authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-///     ..IdpValidationPolicy::recommended()
+///     ..IdpValidationPolicy::default()
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -387,15 +387,15 @@ impl Default for IdpValidationPolicy {
 /// whether an outbound `LogoutRequest` is signed. See
 /// `docs/conformance/single-logout.md`.
 ///
-/// Start from a preset and assign the fields you change. A struct literal
-/// does not compile outside the crate:
+/// Start from `default()` or a preset and assign the fields you change. A
+/// struct literal does not compile outside the crate:
 ///
 /// ```compile_fail,E0639
 /// use saml_rs::{LogoutPolicy, LogoutSignaturePolicy};
 ///
 /// let policy = LogoutPolicy {
 ///     responses: LogoutSignaturePolicy::AllowUnsigned,
-///     ..LogoutPolicy::recommended()
+///     ..LogoutPolicy::default()
 /// };
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

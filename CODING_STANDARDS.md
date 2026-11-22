@@ -43,8 +43,9 @@ crate builds. A caller takes the value from a preset, `Default`, or a
 constructor and assigns the fields it changes, so a later field is not a
 breaking change. A result comes from the operation that returns it.
 
-Each such struct has a public way to get a value: the named presets for a
-validation policy, and `Default` or a constructor for the others.
+Each such struct has a public way to get a value: `Default` or a constructor.
+A validation policy also has named presets, and its `Default` is the
+recommended one.
 
 Fields stay public while the struct guarantees nothing about their values. The
 operation that consumes the struct, such as `build()`, checks them. A struct

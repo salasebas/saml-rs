@@ -151,12 +151,12 @@ to fill `Credentials` with `X509Credential`, which replaces
 ## Assign fields instead of writing a struct literal
 
 **Affects:** code that builds one of these structs with a struct literal,
-including a literal that ends in `..SpValidationPolicy::recommended()` or
+including a literal that ends in `..SpValidationPolicy::default()` or
 another base:
 
 | Struct | Start from |
 | --- | --- |
-| `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `recommended()`, `compatibility()`, or `default()` |
+| `SpValidationPolicy`, `IdpValidationPolicy`, `LogoutPolicy` | `default()`, which is `recommended()`, or `compatibility()` |
 | `XmlPolicy`, `AlgorithmPolicy`, `TemplatePolicy` | `default()` |
 | `XmlLimits` | `default()` or `unbounded()` |
 | `SignatureConfig`, `Organization` | `default()` |
@@ -175,7 +175,7 @@ shows. So do `SpMetadataInput` and `IdpMetadataInput`, the renamed 0.8
 [Distinguish raw generation inputs from typed configs](metadata-api.md#distinguish-raw-generation-inputs-from-typed-configs)
 shows.
 
-**Upgrade:** take a value from the preset, `Default`, or constructor that the
+**Upgrade:** take a value from the `Default`, preset, or constructor that the
 table names, and assign each field you set. Assign a nested field through its
 parent:
 
@@ -183,7 +183,7 @@ parent:
 // Before
 let validation = SpValidationPolicy {
     assertions: AssertionSignaturePolicy::RequireSigned,
-    ..SpValidationPolicy::recommended()
+    ..SpValidationPolicy::default()
 };
 let xml = XmlPolicy {
     limits: XmlLimits {
@@ -198,7 +198,7 @@ let contact = ContactPerson {
 };
 
 // Now
-let mut validation = SpValidationPolicy::recommended();
+let mut validation = SpValidationPolicy::default();
 validation.assertions = AssertionSignaturePolicy::RequireSigned;
 let mut xml = XmlPolicy::default();
 xml.limits.max_depth = 64;
@@ -332,7 +332,7 @@ assertion without `<AudienceRestriction>`, which the recommended
 **Upgrade:** rename each use:
 
 ```rust
-let mut validation = SpValidationPolicy::recommended();
+let mut validation = SpValidationPolicy::default();
 // Before: AudienceValidationPolicy::Validate
 validation.audience = AudienceValidationPolicy::RequireRestriction;
 ```
