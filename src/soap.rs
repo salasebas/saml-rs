@@ -15,6 +15,7 @@ use crate::xml::write::XmlWriter;
 use crate::xml::XmlLimits;
 
 const SOAP_NAMESPACE: &str = "http://schemas.xmlsoap.org/soap/envelope/";
+pub(crate) const SOAP_ACTOR_NEXT: &str = "http://schemas.xmlsoap.org/soap/actor/next";
 const CONTENT_TYPE: HttpHeader = HttpHeader::new("Content-Type", "text/xml; charset=utf-8");
 pub(crate) const RESPONSE_CACHE_CONTROL: HttpHeader = HttpHeader::new(
     "Cache-Control",
@@ -238,7 +239,7 @@ pub(crate) struct SoapBody {
     pub(crate) local_name: String,
     pub(crate) namespace: String,
     pub(crate) xml: String,
-    /// Children of the SOAP `Header`, in document order.
+    /// Header entries addressed to this receiver, in document order.
     pub(crate) header: Vec<HeaderEntry>,
 }
 
@@ -257,7 +258,7 @@ pub(crate) struct UnderstoodHeader {
 
 /// Read the single SAML element of a SOAP 1.1 body.
 ///
-/// A header entry with SOAP `mustUnderstand` set is refused unless it is
+/// A locally addressed header entry with SOAP `mustUnderstand` set is refused unless it is
 /// listed in `understood`.
 pub(crate) fn read_soap_body(
     envelope: &str,
@@ -277,18 +278,20 @@ pub(crate) fn read_soap_body(
         ));
     }
     let header_children = parts.header.map_or(&[][..], |header| &header.children);
-    if header_children.len() != scan.header_namespaces.len() {
+    if header_children.len() != scan.local_header_namespaces.len() {
         return Err(SamlError::xml(
             "SOAP header entries do not match their namespace declarations",
         ));
     }
     let header = scan
-        .header_namespaces
+        .local_header_namespaces
         .into_iter()
         .zip(header_children)
-        .map(|(namespace, node)| HeaderEntry {
-            namespace,
-            node: node.clone(),
+        .filter_map(|(namespace, node)| {
+            namespace.map(|namespace| HeaderEntry {
+                namespace,
+                node: node.clone(),
+            })
         })
         .collect();
     Ok(SoapBody {
@@ -406,7 +409,7 @@ struct SoapScan {
     body_depth: usize,
     body_children: usize,
     child: Option<NamedNamespace>,
-    header_namespaces: Vec<String>,
+    local_header_namespaces: Vec<Option<String>>,
 }
 
 fn observe_start(
@@ -457,13 +460,20 @@ fn observe_start(
 
     if scan.in_header && depth == scan.header_depth + 1 {
         let namespace = namespace.unwrap_or("");
-        let is_understood = understood
-            .iter()
-            .any(|header| header.namespace == namespace && header.local_name == local_name);
-        if !is_understood {
-            reject_must_understand(reader, element)?;
+        let processing = header_processing(reader, element)?;
+        if matches!(processing, HeaderProcessing::Mandatory)
+            && !understood
+                .iter()
+                .any(|header| header.namespace == namespace && header.local_name == local_name)
+        {
+            return Err(SamlError::xml(
+                "SOAP header requires processing this responder does not provide",
+            ));
         }
-        scan.header_namespaces.push(namespace.to_string());
+        scan.local_header_namespaces.push(match processing {
+            HeaderProcessing::OtherActor => None,
+            HeaderProcessing::Optional | HeaderProcessing::Mandatory => Some(namespace.to_owned()),
+        });
     }
 
     if scan.in_body && depth == scan.body_depth + 1 {
@@ -481,30 +491,48 @@ fn observe_start(
     Ok(())
 }
 
-fn reject_must_understand(
+enum HeaderProcessing {
+    OtherActor,
+    Optional,
+    Mandatory,
+}
+
+fn header_processing(
     reader: &NsReader<&[u8]>,
     element: &BytesStart<'_>,
-) -> Result<(), SamlError> {
+) -> Result<HeaderProcessing, SamlError> {
+    let mut processing = HeaderProcessing::Optional;
     for attribute in element.attributes() {
         let attribute = attribute.map_err(xml_err)?;
         let (namespace, local_name) = reader.resolver().resolve_attribute(attribute.key);
-        if local_name.as_ref() != "mustUnderstand" {
+        if !matches!(local_name.as_ref(), "actor" | "mustUnderstand") {
             continue;
         }
-        let in_soap = matches!(bound_namespace(namespace), Some(SOAP_NAMESPACE) | None);
-        if !in_soap {
+        let Some(uri) = bound_namespace(namespace) else {
+            continue;
+        };
+        if quick_xml::escape::unescape(uri).map_err(xml_err)? != SOAP_NAMESPACE {
             continue;
         }
         let value = attribute
             .normalized_value(quick_xml::XmlVersion::Implicit1_0)
             .map_err(xml_err)?;
-        if matches!(value.trim(), "1" | "true") {
-            return Err(SamlError::xml(
-                "SOAP header requires processing this responder does not provide",
-            ));
+        match local_name.as_ref() {
+            "actor"
+                if !matches!(
+                    value.trim_matches([' ', '\t', '\r', '\n']),
+                    "" | SOAP_ACTOR_NEXT
+                ) =>
+            {
+                return Ok(HeaderProcessing::OtherActor);
+            }
+            "mustUnderstand" if matches!(value.trim(), "1" | "true") => {
+                processing = HeaderProcessing::Mandatory;
+            }
+            _ => {}
         }
     }
-    Ok(())
+    Ok(processing)
 }
 
 fn bound_namespace(result: ResolveResult<'_>) -> Option<&str> {
@@ -587,11 +615,39 @@ mod tests {
     }
 
     #[test]
-    fn soap_header_unprefixed_must_understand_is_rejected() {
-        let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><extra mustUnderstand="1">note</extra></soap:Header><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
-        assert!(matches!(
-            SoapProtocolMessage::from_envelope(envelope),
-            Err(SamlError::Xml { .. })
-        ));
+    fn soap_header_obligations_use_the_qualified_actor_and_must_understand() -> Result<(), SamlError>
+    {
+        for (attributes, mandatory_here) in [
+            (r#"mustUnderstand="1""#, false),
+            (r#"ext:mustUnderstand="1""#, false),
+            (r#"s:actor="" s:mustUnderstand="1""#, true),
+            (
+                r#"xmlns:e="http://schemas.xmlsoap.org/soap/envelope&#47;" e:mustUnderstand="1""#,
+                true,
+            ),
+            (
+                r#"s:mustUnderstand="1" s:actor="urn:example:router""#,
+                false,
+            ),
+            (
+                r#"actor="urn:example:router" s:mustUnderstand="true""#,
+                true,
+            ),
+            (
+                r#"s:actor=" http://schemas.xmlsoap.org/soap/actor/next " s:mustUnderstand="1""#,
+                true,
+            ),
+        ] {
+            let envelope = format!(
+                r#"<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ext="urn:example:headers"><Header><ext:Trace {attributes}/></Header><Body><LogoutRequest xmlns="urn:oasis:names:tc:SAML:2.0:protocol"/></Body></Envelope>"#
+            );
+            let result = SoapProtocolMessage::from_envelope(&envelope);
+            if mandatory_here {
+                assert!(matches!(result, Err(SamlError::Xml { .. })), "{attributes}");
+            } else {
+                assert_eq!(result?.local_name(), "LogoutRequest", "{attributes}");
+            }
+        }
+        Ok(())
     }
 }

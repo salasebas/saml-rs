@@ -1224,7 +1224,13 @@ fn service_provider_processes_relay_state_and_paos_response_headers(
     let document = Document::parse(answered.envelope())?;
     let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let paos_response = "<paos:Response xmlns:paos=\"urn:liberty:paos:2003-08\" SOAP-ENV:mustUnderstand=\"1\" SOAP-ENV:actor=\"http://schemas.xmlsoap.org/soap/actor/next\"/>";
-    let headers = format!("{paos_response}{}", relay_state_header("state"));
+    let other_actor_state = format!(
+        r#"<ecp:RelayState xmlns:ecp="{ECP_PROFILE}" SOAP-ENV:actor="urn:example:router">router state</ecp:RelayState>"#
+    );
+    let headers = format!(
+        "{other_actor_state}{paos_response}{}",
+        relay_state_header("state")
+    );
     let session = sp.finish_paos_sso(
         &idp_descriptor,
         &started.pending,
