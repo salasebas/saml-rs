@@ -126,7 +126,7 @@
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     FormField, IdentityProvider, Inbound, NameId, ReplayPolicy, RespondSso,
+//!     FormField, IdentityProvider, Inbound, NameId, NameIdFormat, ReplayPolicy, RespondSso,
 //!     SamlValidationContext, SpDescriptor, SsoAssertion,
 //! };
 //! use std::time::SystemTime;
@@ -148,7 +148,7 @@
 //! let response = idp.respond_sso(
 //!     sp,
 //!     &request,
-//!     SsoAssertion::new(NameId::new("alice@example.com")),
+//!     SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
 //!     RespondSso::post(),
 //! )?;
 //! let form = response.post_form()?;

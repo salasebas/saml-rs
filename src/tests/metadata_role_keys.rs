@@ -8,9 +8,9 @@ use std::time::SystemTime;
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
-    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem,
+    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -69,7 +69,7 @@ fn sso_response_from(
     let response = responder.respond_sso(
         sp_descriptor,
         &received,
-        SsoAssertion::new(NameId::new("alice@example.com")),
+        SsoAssertion::new(NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress)),
         RespondSso::post(),
     )?;
     Ok(sp.finish_sso(

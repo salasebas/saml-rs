@@ -625,6 +625,9 @@ impl IdentityProvider {
     /// with a SAML-defined format other than `unspecified` or `encrypted`, or
     /// the `NameId` does not strongly match the request's `Subject` (see
     /// [`RequestedSubject`](crate::RequestedSubject)).
+    /// Returns [`SamlError::NameIdPolicyFormatMismatch`] or
+    /// [`SamlError::NameIdPolicyRequiresEncryptedId`] under the same conditions
+    /// as [`Self::respond_sso`].
     pub fn respond_paos_sso(
         &self,
         sp: &SpDescriptor,

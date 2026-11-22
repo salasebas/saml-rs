@@ -21,7 +21,7 @@ use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactRelease, ArtifactResolutionService,
     ArtifactWithheld, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField,
     IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MessageConfidentiality,
-    MessageIntegrity, MetadataTrustPolicy, NameId, Outbound, PartyAuthentication,
+    MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PartyAuthentication,
     PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage, RespondSso,
     SamlError, SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
     SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
@@ -123,7 +123,7 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn principal() -> NameId {
-    NameId::new(USER)
+    NameId::new(USER).with_format(NameIdFormat::EmailAddress)
 }
 
 fn confidential() -> SoapChannel {
@@ -181,6 +181,21 @@ fn a_response_delivered_as_an_artifact_establishes_the_session(
     assert_eq!(pending.acs().location().as_str(), SP_ACS_ARTIFACT);
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let mismatched = parties.idp.respond_sso_artifact(
+        &parties.sp_metadata,
+        &request,
+        SsoAssertion::new(NameId::new(USER)),
+        RespondSso::artifact(ArtifactDelivery::redirect(0)),
+        &mut issued,
+    );
+    assert!(matches!(
+        mismatched,
+        Err(SamlError::NameIdPolicyFormatMismatch {
+            requested: NameIdFormat::EmailAddress,
+            issued: None,
+            ..
+        })
+    ));
     let response = parties.idp.respond_sso_artifact(
         &parties.sp_metadata,
         &request,

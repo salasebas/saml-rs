@@ -19,9 +19,9 @@ use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeValue, Attributes,
     AudienceValidationPolicy, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PendingAuthnRequest, ReplayPolicy,
-    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PendingAuthnRequest,
+    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -56,6 +56,7 @@ impl SignedExchange {
                 AcsEndpoint::post(SP_ACS)?.with_default(),
             )
             .credentials(signing_credentials())
+            .name_id_format(NameIdFormat::Unspecified)
             .validation(SpValidationPolicy {
                 assertions: AssertionSignaturePolicy::RequireSigned,
                 audience: AudienceValidationPolicy::RequireRestriction,

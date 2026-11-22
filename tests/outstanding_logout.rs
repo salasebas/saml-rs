@@ -46,6 +46,7 @@ fn issued_sso_for(name_id: NameId) -> Result<IssuedSso, Box<dyn std::error::Erro
         AcsEndpoint::post(SP_ACS)?.with_default(),
     )
     .credentials(signing_credentials())
+    .name_id_format(NameIdFormat::Unspecified)
     .validation(SpValidationPolicy::default())
     .build()?;
     let idp_config = IdpConfig::builder(

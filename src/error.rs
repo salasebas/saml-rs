@@ -3,6 +3,7 @@
 //! [`SamlError`] is non-exhaustive. Callers should include a fallback match arm
 //! so they can handle variants added in later releases.
 
+use crate::config::NameIdFormat;
 use crate::constants::Binding;
 use crate::model::{RelayState, ReplayKey, Status, SubordinateStatusCode};
 use std::fmt;
@@ -369,6 +370,22 @@ pub enum SamlError {
     /// `SPNameQualifier`. An omitted `Format` is unspecified.
     #[error("assertions do not refer to one principal")]
     PrincipalMismatch,
+    /// The assertion identifier differs from the standard format in the request's `NameIDPolicy`.
+    #[error(
+        "NameIDPolicy format mismatch: requested {}, issued {}",
+        requested.as_uri(),
+        issued.as_ref().map_or("no Format", NameIdFormat::as_uri)
+    )]
+    #[non_exhaustive]
+    NameIdPolicyFormatMismatch {
+        /// Standard identifier format the requester requires.
+        requested: NameIdFormat,
+        /// Format of the identifier that would be issued, or `None` if omitted.
+        issued: Option<NameIdFormat>,
+    },
+    /// The request requires an `EncryptedID` and identifier encryption is disabled.
+    #[error("NameIDPolicy requires EncryptedID but identifier encryption is disabled")]
+    NameIdPolicyRequiresEncryptedId,
     /// A `<Response>` with status `Success` carries no assertion to read: none
     /// at all, or only `<EncryptedAssertion>` elements that were not
     /// decrypted.

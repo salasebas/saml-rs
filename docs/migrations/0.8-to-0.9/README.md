@@ -23,6 +23,7 @@ Check the topics that affect your integration.
 - [Move off the raw API](raw-api.md)
 - [Update SSO attributes](sso-attributes.md)
 - [Update SSO results and identities](sso-results-and-identities.md)
+- [Honor the requested NameID format](name-id-policy.md)
 - [Update metadata configuration and trust](metadata.md)
 - [Update metadata imports and accessors](metadata-api.md)
 - [Move schema validation into XML policy](xml-policy.md)

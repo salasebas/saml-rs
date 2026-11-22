@@ -23,10 +23,11 @@ use saml_rs::{
     AttributeEncryptionPolicy, AttributeNameFormat, AttributeValue, Attributes,
     AudienceValidationPolicy, CertificatePem, Credentials, EntityId, FormField,
     IdentifierEncryptionPolicy, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, PrivateKeyPem, ReplayPolicy,
-    RespondSso, ResponseSignaturePolicy, SamlError, SamlValidationContext, ServiceProvider,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponse,
-    SsoResponseBinding, SsoSession, StartSso, X509Credential, XmlEncryptionPolicy, XmlPolicy,
+    Inbound, MetadataTrustPolicy, NameId, NameIdFormat, NameIdPolicy, Outbound, PrivateKeyPem,
+    ReplayPolicy, RespondSso, ResponseSignaturePolicy, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    SsoResponse, SsoResponseBinding, SsoSession, StartSso, X509Credential, XmlEncryptionPolicy,
+    XmlPolicy,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -94,6 +95,7 @@ fn sp_with_credentials(
         )
         .credentials(credentials)
         .validation(validation)
+        .name_id_format(NameIdFormat::Persistent)
         .xml(xml(encryption))
         .build()?,
     ))
@@ -238,6 +240,89 @@ fn encrypted_id_carries_the_name_id_to_the_service_provider(
     let session = exchange.session?;
     assert_eq!(session.name_id(), &alice());
     assert_eq!(session.attributes(), &attributes());
+    Ok(())
+}
+
+#[test]
+fn requested_encrypted_name_id_is_encrypted_in_the_assertion_subject(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = ServiceProvider::new(
+        SpConfig::builder(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            AcsEndpoint::post(SP_ACS)?.with_default(),
+        )
+        .credentials(credentials())
+        .validation(sp_validation())
+        .name_id_format(NameIdFormat::Custom(
+            "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted".into(),
+        ))
+        .build()?,
+    );
+    let idp_with_assertion_encryption = idp(XmlEncryptionPolicy {
+        assertions: AssertionEncryptionPolicy::EncryptAssertions,
+        identifiers: IdentifierEncryptionPolicy::PlaintextIdentifiers,
+        ..XmlEncryptionPolicy::default()
+    })?;
+    let idp = idp(XmlEncryptionPolicy {
+        identifiers: IdentifierEncryptionPolicy::EncryptIdentifiers,
+        ..XmlEncryptionPolicy::default()
+    })?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let encoded = started
+        .outbound
+        .post_form()?
+        .value("SAMLRequest")
+        .ok_or("missing SAMLRequest")?;
+    let request_xml = String::from_utf8(STANDARD.decode(encoded)?)?;
+    let affiliation = "https://affiliation.example.com";
+    let request_xml = request_xml.replace(
+        "<samlp:NameIDPolicy ",
+        &format!("<samlp:NameIDPolicy SPNameQualifier=\"{affiliation}\" "),
+    );
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::post(vec![FormField::new(
+            "SAMLRequest",
+            STANDARD.encode(request_xml.as_bytes()),
+        )]),
+        validation(),
+    )?;
+    assert_eq!(
+        received
+            .message()
+            .name_id_policy()
+            .and_then(NameIdPolicy::sp_name_qualifier),
+        Some(affiliation)
+    );
+    let refused = idp_with_assertion_encryption.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(alice()),
+        RespondSso::post(),
+    );
+    assert!(matches!(
+        refused,
+        Err(SamlError::NameIdPolicyRequiresEncryptedId)
+    ));
+
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(alice()),
+        RespondSso::post(),
+    )?;
+    let xml = response_xml(&response)?;
+    assert!(xml.contains("<saml:Subject><saml:EncryptedID>"));
+    assert!(!xml.contains("<saml:NameID"));
+
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        Inbound::post(response.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    assert_eq!(session.name_id(), &alice());
     Ok(())
 }
 
@@ -565,6 +650,7 @@ fn encrypted_assertion_is_decrypted_over_simple_sign() -> Result<(), Box<dyn std
                 AcsEndpoint::simple_sign(SP_ACS)?.with_default(),
             )
             .credentials(credentials())
+            .name_id_format(NameIdFormat::Persistent)
             .validation(SpValidationPolicy::default())
             .xml(xml(sp_encryption))
             .build()?,

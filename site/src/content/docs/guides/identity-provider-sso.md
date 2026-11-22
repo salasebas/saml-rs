@@ -36,10 +36,11 @@ let request = idp.receive_sso(
     validation,
 )?;
 
+let name_id = NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress);
 let response = idp.respond_sso(
     &sp,
     &request,
-    SsoAssertion::new(NameId::new("alice@example.com")),
+    SsoAssertion::new(name_id),
     RespondSso::post(),
 )?;
 ```
@@ -80,7 +81,13 @@ let response = idp.respond_sso(
 
 Assertion encryption stays off until you set `XmlEncryptionPolicy::assertions` to `AssertionEncryptionPolicy::EncryptAssertions`.
 
+When `NameIDPolicy` requests `encrypted`, set `XmlEncryptionPolicy::identifiers` to `IdentifierEncryptionPolicy::EncryptIdentifiers` and use SP metadata with an encryption certificate. Pass the identifier in its actual format. The assertion subject contains `EncryptedID`. If you cannot meet the policy, send `SsoOutcome::Failure` with an error status.
+
 ## Attributes and name identifiers
+
+Use `request.message().name_id_policy()` to read the requested format. If the request names a specific standard format, supply an identifier in that format for the authenticated principal. When a requested `SPNameQualifier` applies, pass it with `with_sp_name_qualifier`.
+
+If the request combines the `entity` format with `SPNameQualifier`, send a failure outcome. SAML requires entity identifiers to omit qualifiers.
 
 Pass the attributes with `SsoAssertion::with_attributes`. `with_name_format` sets an attribute's format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI. An attribute without it has no `NameFormat`, which SAML reads as `Unspecified`.
 
@@ -101,7 +108,7 @@ let attributes = Attributes::new([
 let response = idp.respond_sso(
     &sp,
     &request,
-    SsoAssertion::new(NameId::generate_transient()).with_attributes(attributes),
+    SsoAssertion::new(name_id).with_attributes(attributes),
     RespondSso::post(),
 )?;
 ```

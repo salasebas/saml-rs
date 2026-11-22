@@ -63,6 +63,7 @@ fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(signing_credentials())
+        .name_id_format(NameIdFormat::Unspecified)
         .validation(validation)
         .build()?,
     ))

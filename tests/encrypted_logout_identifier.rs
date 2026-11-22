@@ -98,6 +98,7 @@ fn sp_with(
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .slo_endpoints(slo_endpoints("sp.example.com")?)
+        .name_id_format(NameIdFormat::Persistent)
         .credentials(credentials())
         .validation(validation)
         .xml(xml(encryption))

@@ -206,7 +206,11 @@ impl Engine {
             requested.ensure_met_by(&authn_context)?;
         }
         if let Some(policy) = rendering.requested_name_id_policy {
-            policy.ensure_sp_name_qualifier_met_by(qualifiers.sp_name_qualifier)?;
+            policy.ensure_met_by(
+                name_id_format,
+                qualifiers.sp_name_qualifier,
+                self.setting.assertion_element_encryption.identifiers,
+            )?;
         }
         if let Some(requested) = rendering.requested_subject {
             requested.ensure_strongly_matched_by(

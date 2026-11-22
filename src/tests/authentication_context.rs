@@ -15,8 +15,8 @@ use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdentityProvider,
     IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId,
-    Outbound, OutboundDelivery, ReplayPolicy, RequestedAuthnContext, RespondSso, SamlError,
-    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy, RequestedAuthnContext, RespondSso,
+    SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
     SsoAssertion, SsoEndpoint, SsoResponse, StartSso,
 };
 
@@ -51,6 +51,7 @@ fn parties_with(
             AcsEndpoint::post(ACS)?.with_default(),
         )
         .credentials(credentials)
+        .name_id_format(NameIdFormat::Unspecified)
         .validation(SpValidationPolicy {
             authn_requests: AuthnRequestSigningPolicy::Sign,
             ..SpValidationPolicy::default()

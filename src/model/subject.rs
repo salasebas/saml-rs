@@ -1,4 +1,4 @@
-use crate::config::NameIdFormat;
+use crate::config::{IdentifierEncryptionPolicy, NameIdFormat};
 use crate::constants::name_id_format;
 use crate::entity::generate_id;
 use crate::error::SamlError;
@@ -8,6 +8,7 @@ use crate::xml::OutboundNameIdQualifiers;
 use super::extract::name_id_format_from_uri;
 
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
+const ENCRYPTED_NAME_ID_POLICY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
 
 /// Reject a NameID format that is written but is not an absolute URI
 /// reference. `None` is an omitted format and passes.
@@ -276,6 +277,10 @@ impl NameIdPolicy {
     }
 
     /// Requested NameID format.
+    ///
+    /// The value keeps its spelling from the request. The special
+    /// `urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted` URI is
+    /// represented as [`NameIdFormat::Custom`].
     pub fn format(&self) -> Option<&NameIdFormat> {
         self.format.as_ref()
     }
@@ -293,36 +298,48 @@ impl NameIdPolicy {
         self.creation_request
     }
 
-    /// Reject an issued `SPNameQualifier` that differs from the requested one
-    /// when the policy asks for a SAML-defined format other than
-    /// `unspecified` or `encrypted`.
-    pub(crate) fn ensure_sp_name_qualifier_met_by(
+    pub(crate) fn ensure_met_by(
         &self,
-        issued: Option<&str>,
+        issued_format: Option<&str>,
+        issued_sp_name_qualifier: Option<&str>,
+        identifier_encryption: IdentifierEncryptionPolicy,
     ) -> Result<(), SamlError> {
-        match self.sp_name_qualifier.as_deref() {
-            Some(requested) if self.requests_saml_defined_format() && issued != Some(requested) => {
-                Err(SamlError::Invalid(format!(
-                    "the NameIDPolicy requests SPNameQualifier {requested}, which the issued NameID must carry"
-                )))
-            }
-            Some(_) | None => Ok(()),
-        }
-    }
-
-    fn requests_saml_defined_format(&self) -> bool {
         let Some(format) = &self.format else {
-            return false;
+            return Ok(());
         };
-        match name_id_format_from_uri(&collapse_whitespace(format.as_uri())) {
+        let requested_uri = collapse_whitespace(format.as_uri());
+        if requested_uri == ENCRYPTED_NAME_ID_POLICY_FORMAT {
+            return match identifier_encryption {
+                IdentifierEncryptionPolicy::EncryptIdentifiers => Ok(()),
+                IdentifierEncryptionPolicy::PlaintextIdentifiers => {
+                    Err(SamlError::NameIdPolicyRequiresEncryptedId)
+                }
+            };
+        }
+        let requested = name_id_format_from_uri(&requested_uri);
+        match requested {
             NameIdFormat::EmailAddress
             | NameIdFormat::Persistent
             | NameIdFormat::Transient
             | NameIdFormat::Entity
             | NameIdFormat::Kerberos
             | NameIdFormat::WindowsDomainQualifiedName
-            | NameIdFormat::X509SubjectName => true,
-            NameIdFormat::Unspecified | NameIdFormat::Custom(_) => false,
+            | NameIdFormat::X509SubjectName => {}
+            NameIdFormat::Unspecified | NameIdFormat::Custom(_) => return Ok(()),
+        }
+        if !is_name_id_format(issued_format, &requested_uri) {
+            return Err(SamlError::NameIdPolicyFormatMismatch {
+                requested,
+                issued: issued_format.map(|uri| name_id_format_from_uri(&collapse_whitespace(uri))),
+            });
+        }
+        match self.sp_name_qualifier.as_deref() {
+            Some(requested) if issued_sp_name_qualifier != Some(requested) => {
+                Err(SamlError::Invalid(format!(
+                    "the NameIDPolicy requests SPNameQualifier {requested}, which the issued NameID must carry"
+                )))
+            }
+            Some(_) | None => Ok(()),
         }
     }
 }

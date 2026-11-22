@@ -51,6 +51,7 @@ fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(signing_credentials())
+        .name_id_format(NameIdFormat::Unspecified)
         .validation(SpValidationPolicy::default())
         .build()?,
     ))
@@ -856,6 +857,86 @@ fn respond_sso_writes_the_context_when_the_request_specifies_none(
 }
 
 #[test]
+fn respond_sso_enforces_the_requested_name_id_format() -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        replace_name_id_policy(
+            xml,
+            &format!("<samlp:NameIDPolicy Format=\"&#x9;{PERSISTENT_FORMAT}  \"/>"),
+        )
+    })?;
+    let respond = |name_id| {
+        receipt.idp.respond_sso(
+            &receipt.sp_descriptor,
+            &receipt.received,
+            SsoAssertion::new(name_id),
+            RespondSso::post(),
+        )
+    };
+
+    for issued in [None, Some(NameIdFormat::EmailAddress)] {
+        let name_id = NameId::new("alice@example.com");
+        let name_id = match issued.clone() {
+            Some(format) => name_id.with_format(format),
+            None => name_id,
+        };
+        let refused = respond(name_id);
+        assert!(matches!(
+            refused,
+            Err(SamlError::NameIdPolicyFormatMismatch {
+                requested: NameIdFormat::Persistent,
+                issued: actual,
+                ..
+            }) if actual == issued
+        ));
+    }
+
+    let issued_format = format!(" {PERSISTENT_FORMAT} ");
+    let response = respond(
+        NameId::new("alice-pairwise-id").with_format(NameIdFormat::Custom(issued_format.clone())),
+    )?;
+    assert!(response_xml(&response)?.contains(&format!(
+        "<saml:Subject><saml:NameID Format=\"{issued_format}\">alice-pairwise-id</saml:NameID>"
+    )));
+
+    let failure = receipt.idp.respond_sso(
+        &receipt.sp_descriptor,
+        &receipt.received,
+        SsoOutcome::Failure(
+            Status::responder()
+                .with_subordinate(SubordinateStatusCode::try_new(INVALID_NAME_ID_POLICY)?),
+        ),
+        RespondSso::post(),
+    )?;
+    let xml = response_xml(&failure)?;
+    assert!(xml.contains(INVALID_NAME_ID_POLICY), "{xml}");
+    assert!(!xml.contains("<saml:Assertion"), "{xml}");
+    assert!(!xml.contains("<saml:EncryptedAssertion"), "{xml}");
+    Ok(())
+}
+
+#[test]
+fn respond_sso_refuses_plaintext_for_an_encrypted_name_id_request(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = receive(IdpValidationPolicy::default(), StartSso::post(), |xml| {
+        replace_name_id_policy(
+            xml,
+            &format!("<samlp:NameIDPolicy Format=\" {ENCRYPTED_FORMAT} \"/>"),
+        )
+    })?;
+    let refused = receipt.idp.respond_sso(
+        &receipt.sp_descriptor,
+        &receipt.received,
+        SsoAssertion::new(NameId::new("alice@example.com")),
+        RespondSso::post(),
+    );
+    assert!(matches!(
+        refused,
+        Err(SamlError::NameIdPolicyRequiresEncryptedId)
+    ));
+    Ok(())
+}
+
+#[test]
 fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let receive_policy = |attributes: &str| {
@@ -913,7 +994,7 @@ fn respond_sso_refuses_an_identifier_outside_the_requested_sp_name_qualifier(
 
     for attributes in [
         format!(" Format=\"{UNSPECIFIED_FORMAT}\""),
-        format!(" Format=\"{ENCRYPTED_FORMAT}\""),
+        " Format=\"https://sp.example.com/custom-format\"".to_string(),
         String::new(),
     ] {
         let receipt = receive_policy(&attributes)?;
@@ -956,24 +1037,39 @@ fn respond_sso_issues_only_the_requested_subject() -> Result<(), Box<dyn std::er
         &format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>"),
         &format!("<samlp:NameIDPolicy Format=\"{EMAIL_FORMAT}\"/>"),
     )?;
+    let same_format = receive_subject(
+        &format!("<saml:NameID Format=\"{PERSISTENT_FORMAT}\">alice</saml:NameID>"),
+        &format!("<samlp:NameIDPolicy Format=\"{PERSISTENT_FORMAT}\"/>"),
+    )?;
     for issued in [
         persistent("bob"),
-        NameId::new("alice"),
         NameId::new("alice")
             .with_format(NameIdFormat::Persistent)
             .with_sp_name_qualifier(SP_ENTITY_ID),
     ] {
-        let refused = respond(&receipt, issued.clone(), RespondSso::post());
+        let refused = respond(&same_format, issued.clone(), RespondSso::post());
         assert!(is_refused(&refused), "{issued:?}: {refused:?}");
     }
-    let answered = respond(&receipt, persistent("alice"), RespondSso::post());
-    assert!(answered.is_ok(), "{answered:?}");
+    let matching_subject = respond(&same_format, persistent("alice"), RespondSso::post());
+    assert!(matching_subject.is_ok(), "{matching_subject:?}");
+
+    let refused = respond(&receipt, persistent("alice"), RespondSso::post());
+    assert!(matches!(
+        refused,
+        Err(SamlError::NameIdPolicyFormatMismatch {
+            requested: NameIdFormat::EmailAddress,
+            issued: Some(NameIdFormat::Persistent),
+            ..
+        })
+    ));
     let policy_format = respond(
         &receipt,
         NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
         RespondSso::post(),
     );
-    assert!(policy_format.is_ok(), "{policy_format:?}");
+    assert!(response_xml(&policy_format?)?.contains(&format!(
+        "<saml:Subject><saml:NameID Format=\"{EMAIL_FORMAT}\">alice@example.com</saml:NameID>"
+    )));
     let error = respond_failure(
         &receipt,
         Status::responder().with_subordinate(SubordinateStatusCode::try_new(
@@ -988,7 +1084,7 @@ fn respond_sso_issues_only_the_requested_subject() -> Result<(), Box<dyn std::er
     )?;
     let other_format = respond(
         &without_policy_format,
-        NameId::new("alice@example.com").with_format(NameIdFormat::EmailAddress),
+        NameId::new("alice"),
         RespondSso::post(),
     );
     assert!(is_refused(&other_format), "{other_format:?}");
