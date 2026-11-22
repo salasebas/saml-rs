@@ -270,9 +270,7 @@
 //! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms`]
 //! accepts them when the provider supports them.
 //!
-//! Visible docs.rs modules and crate-root re-exports are the supported public
-//! documentation surface. Hidden modules are lower-level implementation paths
-//! and should not be the first choice for new integrations.
+//! The documented modules and crate-root re-exports are the supported public API.
 //!
 //! # Artifact resolution
 //!
@@ -392,17 +390,13 @@ compile_error!(
 mod api;
 mod artifact;
 mod assertion_acceptance;
-#[doc(hidden)]
-pub mod binding;
+mod binding;
 pub mod browser;
 pub mod config;
 pub mod constants;
-#[doc(hidden)]
-pub mod context;
 mod schema;
 pub use schema::SchemaValidator;
-#[doc(hidden)]
-pub mod crypto;
+mod crypto;
 mod discovery;
 mod encrypted_elements;
 mod entity;
@@ -416,14 +410,10 @@ pub mod model;
 mod name_id_management;
 mod soap;
 mod sp;
-#[doc(hidden)]
-pub mod template;
-#[doc(hidden)]
-pub mod util;
-#[doc(hidden)]
-pub mod validator;
-#[doc(hidden)]
-pub mod xml;
+mod template;
+mod util;
+mod validator;
+mod xml;
 
 #[cfg(test)]
 mod tests;
@@ -471,9 +461,6 @@ pub use error::{
     SubjectConfirmationReason, TimeWindowField,
 };
 pub use http_header::HttpHeader;
-#[cfg(crypto)]
-#[allow(deprecated)]
-pub use metadata::MetadataSignatureVerification;
 pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};
 pub use model::{
     AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AudienceRestriction,

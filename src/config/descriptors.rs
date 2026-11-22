@@ -14,6 +14,7 @@ use crate::metadata::{IdpMetadata, Metadata, MetadataLifetime, MetadataValidity,
 use crate::model::EndpointUrl;
 use crate::sp;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
+use crate::xml::XmlLimits;
 
 const MAX_ENTITY_ID_CHARACTERS: usize = 1024;
 
@@ -337,9 +338,10 @@ impl ImportedMetadata {
         expected_entity_id: EntityId,
         metadata: &Metadata,
         trust: MetadataTrustPolicy<'_>,
+        limits: XmlLimits,
     ) -> Result<Self, SamlError> {
         ensure_expected_entity_id(&expected_entity_id, metadata_entity_id(metadata)?)?;
-        let trust = ensure_metadata_trust(metadata, trust)?;
+        let trust = ensure_metadata_trust(metadata, trust, limits)?;
         let validity = metadata.validity()?;
         Ok(Self {
             entity_id: expected_entity_id,
@@ -395,6 +397,7 @@ impl IdpDescriptor {
     }
 
     /// Parse peer metadata with explicit XML limits and an optional schema validator.
+    /// The same limits apply during signature verification.
     ///
     /// Encryption and Redirect limits in the policy do not affect metadata.
     ///
@@ -409,7 +412,12 @@ impl IdpDescriptor {
         xml_policy: &crate::XmlPolicy,
     ) -> Result<Self, SamlError> {
         let metadata = IdpMetadata::from_xml_with_policy(xml, xml_policy)?;
-        let imported = ImportedMetadata::check(expected_entity_id, metadata.as_metadata(), trust)?;
+        let imported = ImportedMetadata::check(
+            expected_entity_id,
+            metadata.as_metadata(),
+            trust,
+            xml_policy.limits,
+        )?;
         Ok(Self {
             imported,
             provider: idp::Engine::from_parsed_metadata(metadata, EntitySetting::default()),
@@ -569,6 +577,7 @@ impl SpDescriptor {
     }
 
     /// Parse peer metadata with explicit XML limits and an optional schema validator.
+    /// The same limits apply during signature verification.
     ///
     /// Encryption and Redirect limits in the policy do not affect metadata.
     ///
@@ -583,7 +592,12 @@ impl SpDescriptor {
         xml_policy: &crate::XmlPolicy,
     ) -> Result<Self, SamlError> {
         let metadata = SpMetadata::from_xml_with_policy(xml, xml_policy)?;
-        let imported = ImportedMetadata::check(expected_entity_id, metadata.as_metadata(), trust)?;
+        let imported = ImportedMetadata::check(
+            expected_entity_id,
+            metadata.as_metadata(),
+            trust,
+            xml_policy.limits,
+        )?;
         Ok(Self {
             imported,
             provider: sp::Engine::from_parsed_metadata(metadata, EntitySetting::default()),

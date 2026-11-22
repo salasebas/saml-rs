@@ -115,6 +115,7 @@ fn place_signature(
 /// placement; by default the `<Signature>` is inserted right after the target's
 /// `<Issuer>`. bergshamra then fills the digest and signature value. Returns
 /// the signed XML.
+#[cfg(test)]
 pub(crate) fn sign_saml_xml(
     xml: &str,
     sign_message: bool,
@@ -314,6 +315,7 @@ pub(crate) fn sign_octet_string(
 }
 
 /// Verify a detached octet-string signature against `cert`.
+#[cfg(test)]
 pub(crate) fn verify_octet_string_signature(
     octet_string: &str,
     signature_b64: &str,
@@ -368,57 +370,7 @@ fn verify_detached_with_key(
         .map_err(crypto_err)
 }
 
-/// Construct and embed an enveloped XML-DSig signature.
-///
-/// When `sign_message` the whole root is referenced; otherwise the contained
-/// `<Assertion>` is referenced. `config` customizes the element prefix and
-/// placement; by default the `<Signature>` is inserted right after the target's
-/// `<Issuer>`. bergshamra then fills the digest and signature value. Returns
-/// the signed XML.
-#[deprecated(
-    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed API signs the messages it creates. To sign other XML, use `bergshamra` directly"
-)]
-pub fn construct_saml_signature(
-    xml: &str,
-    sign_message: bool,
-    key: &Key,
-    cert: &str,
-    sig_alg: &str,
-    transforms: &[String],
-    config: Option<&SignatureConfig>,
-) -> Result<String, SamlError> {
-    sign_saml_xml(xml, sign_message, key, cert, sig_alg, transforms, config)
-}
-
-/// Sign a detached octet string (redirect/SimpleSign binding).
-///
-/// Returns the base64-encoded signature.
-#[deprecated(
-    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed API signs the messages it creates. To sign other XML, use `bergshamra` directly"
-)]
-pub fn construct_message_signature(
-    octet_string: &str,
-    key: &Key,
-    sig_alg: &str,
-) -> Result<String, SamlError> {
-    sign_octet_string(octet_string, key, sig_alg)
-}
-
-/// Verify a detached octet-string signature against `cert`.
-#[deprecated(
-    note = "`saml_rs::crypto` becomes crate-private in the next minor release; the typed receive operations verify detached message signatures. To verify other input, use `bergshamra` directly"
-)]
-pub fn verify_message_signature(
-    octet_string: &str,
-    signature_b64: &str,
-    cert: &str,
-    sig_alg: &str,
-) -> Result<bool, SamlError> {
-    verify_octet_string_signature(octet_string, signature_b64, cert, sig_alg)
-}
-
 #[cfg(test)]
-#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 mod tests {
     use super::*;
     #[cfg(feature = "crypto-rustcrypto")]
@@ -607,31 +559,6 @@ mod tests {
                 .collect();
             assert_eq!(extensions, ["Signature"], "{action:?}");
         }
-        Ok(())
-    }
-
-    #[test]
-    #[expect(
-        deprecated,
-        reason = "the deprecated public signing functions keep their behaviour until removal"
-    )]
-    fn deprecated_signing_functions_keep_their_behaviour() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let key = crate::crypto::keys::load_private_key(SP_PRIVKEY, None)?;
-        let signed =
-            construct_saml_signature(AUTHN_REQUEST, true, &key, SP_CERT, RSA_SHA256, &[], None)?;
-        assert!(verify_signature(&signed, &[SP_CERT.to_string()])?.0);
-        let octet = "SAMLRequest=abc&SigAlg=alg";
-        let signature = construct_message_signature(octet, &key, RSA_SHA256)?;
-        assert!(verify_message_signature(
-            octet, &signature, SP_CERT, RSA_SHA256
-        )?);
-        assert!(!verify_message_signature(
-            "SAMLRequest=abd&SigAlg=alg",
-            &signature,
-            SP_CERT,
-            RSA_SHA256
-        )?);
         Ok(())
     }
 

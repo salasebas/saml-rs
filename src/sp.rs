@@ -486,7 +486,6 @@ mod tests {
 }
 
 #[cfg(all(test, crypto))]
-#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 mod crypto_tests {
     use super::*;
     use crate::binding::decode_base64;
@@ -564,7 +563,6 @@ mod crypto_tests {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn create_signed_post_request_verifies() -> Result<(), Box<dyn std::error::Error>> {
         let sp = Engine::from_config(
             &SpMetadataInput {

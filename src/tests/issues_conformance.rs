@@ -13,7 +13,6 @@ use saml_rs::tests::engine::SpMessages;
 use saml_rs::util::Value;
 use saml_rs::xml::{extract, ExtractorField};
 
-const DUMPES_ISSUER: &str = include_str!("../../tests/fixtures/misc/dumpes_issuer_response.xml");
 #[cfg(crypto)]
 const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response.xml");
 const SP_META_98: &str = include_str!("../../tests/fixtures/misc/sp_metadata_98.xml");
@@ -157,28 +156,7 @@ fn issue_352_no_index_on_idp_slo() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[test]
-fn issue_86_duplicate_issuer_deduped() -> Result<(), Box<dyn std::error::Error>> {
-    let r = extract(
-        DUMPES_ISSUER,
-        &[ExtractorField::multi(
-            "issuer",
-            &[
-                &["Response", "Issuer"],
-                &["Response", "Assertion", "Issuer"],
-            ],
-        )],
-    )?;
-    let issuer = r.get("issuer").and_then(Value::as_array).unwrap_or(&[]);
-    assert_eq!(issuer.len(), 1);
-    assert!(issuer
-        .iter()
-        .all(|i| i.as_str() == Some("http://www.okta.com/dummyIssuer")));
-    Ok(())
-}
-
 #[cfg(crypto)]
-#[expect(deprecated, reason = "pins the deprecated signature verifiers")]
 #[test]
 fn issue_87_existence_check_for_signature() -> Result<(), Box<dyn std::error::Error>> {
     // An unsigned response verifies to false (no signature present).

@@ -21,23 +21,15 @@ mod encrypted_requested_subject;
 pub(crate) mod engine;
 mod error_taxonomy;
 mod external_slo_redirect;
+mod extractor_conformance;
 mod flow_conformance;
 mod hardening;
 mod identifier_formats;
 mod idp_tag_prefixes;
-#[cfg_attr(
-    crypto,
-    expect(deprecated, reason = "pins the deprecated signature verifiers")
-)]
 mod index_conformance;
 mod issues_conformance;
 mod logout_session_index;
 mod metadata_role_keys;
-#[cfg_attr(
-    crypto,
-    expect(deprecated, reason = "pins the deprecated signature verifiers")
-)]
-mod metadata_signature;
 mod metadata_trust;
 mod name_id_management_encryption;
 mod name_id_management_redirect;
@@ -46,12 +38,9 @@ mod no_default_features;
 mod paos_destination;
 pub(crate) mod policies_without_crypto;
 mod policy_presets;
-#[cfg_attr(
-    crypto,
-    expect(deprecated, reason = "pins the deprecated signature verifiers")
-)]
 mod provider_regression;
 mod redirect_inflate_limit;
+mod redirect_xml_limits;
 mod robustness;
 mod simplesign_xml_limits;
 mod sso_response_issuer;
@@ -63,13 +52,5 @@ mod typed_validation_context;
 mod xml_document;
 mod xml_injection;
 mod xml_line_endings;
-#[cfg_attr(
-    crypto,
-    expect(deprecated, reason = "pins the deprecated signature verifiers")
-)]
 mod xml_signature_processing;
-#[cfg_attr(
-    crypto,
-    expect(deprecated, reason = "pins the deprecated signature verifiers")
-)]
 mod xsw;

@@ -1,6 +1,6 @@
 //! The [`Value`] field tree that the XML extractor returns.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// A dynamically-typed value tree produced by the XML extractor.
 ///
@@ -42,7 +42,8 @@ impl Value {
     /// Look up a single key verbatim (no dotted-path splitting).
     ///
     /// Use this for maps whose keys may contain `.` (e.g. binding URNs).
-    pub fn get_key(&self, key: &str) -> Option<&Value> {
+    #[cfg(test)]
+    pub(crate) fn get_key(&self, key: &str) -> Option<&Value> {
         match self {
             Value::Object(entries) => entries.iter().find(|(k, _)| k == key).map(|(_, v)| v),
             _ => None,
@@ -58,7 +59,8 @@ impl Value {
     }
 
     /// Borrow the inner slice, if this is a [`Value::Array`].
-    pub fn as_array(&self) -> Option<&[Value]> {
+    #[cfg(test)]
+    pub(crate) fn as_array(&self) -> Option<&[Value]> {
         match self {
             Value::Array(items) => Some(items),
             _ => None,
@@ -66,7 +68,8 @@ impl Value {
     }
 
     /// True when this value is [`Value::Null`].
-    pub fn is_null(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_null(&self) -> bool {
         matches!(self, Value::Null)
     }
 
@@ -87,23 +90,6 @@ pub(crate) fn normalize_cert_string(cert: &str) -> String {
     cert.replace("-----BEGIN CERTIFICATE-----", "")
         .replace("-----END CERTIFICATE-----", "")
         .replace(['\n', '\r', ' ', '\t'], "")
-}
-
-/// De-duplicate strings, preserving first-seen order.
-pub(crate) fn uniq<I, S>(items: I) -> Vec<String>
-where
-    I: IntoIterator<Item = S>,
-    S: Into<String>,
-{
-    let mut seen = HashSet::new();
-    let mut unique = Vec::new();
-    for item in items {
-        let s = item.into();
-        if seen.insert(s.clone()) {
-            unique.push(s);
-        }
-    }
-    unique
 }
 
 /// camelCase an identifier, matching the npm `camelcase` defaults for the
@@ -202,11 +188,6 @@ mod tests {
         assert_eq!(v.get("request.missing"), None);
         // default fallback, lodash-style
         assert_eq!(v.get_str("nope.id").unwrap_or(""), "");
-    }
-
-    #[test]
-    fn uniq_preserves_first_seen_order() {
-        assert_eq!(uniq(["a", "b", "a", "c"]), vec!["a", "b", "c"]);
     }
 
     #[test]

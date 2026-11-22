@@ -2,7 +2,6 @@ use crate::error::SamlError;
 #[cfg(crypto)]
 use crate::error::SignatureVerificationReason;
 use crate::metadata::Metadata;
-#[cfg(crypto)]
 use crate::xml::XmlLimits;
 
 use super::credentials::CertificatePem;
@@ -110,6 +109,7 @@ pub(super) fn ensure_expected_entity_id(
 pub(super) fn ensure_metadata_trust(
     metadata: &Metadata,
     trust: MetadataTrustPolicy<'_>,
+    limits: XmlLimits,
 ) -> Result<AppliedMetadataTrust, SamlError> {
     match trust {
         MetadataTrustPolicy::AllowUnsigned => Ok(AppliedMetadataTrust::Unverified),
@@ -120,6 +120,7 @@ pub(super) fn ensure_metadata_trust(
             trusted_certificates,
             MetadataSignatureTransforms::Profile,
             XmlSignatureProfile::ExcludeWeakAlgorithms,
+            limits,
         ),
         MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization {
             trusted_certificates,
@@ -128,6 +129,7 @@ pub(super) fn ensure_metadata_trust(
             trusted_certificates,
             MetadataSignatureTransforms::AllowOtherCanonicalization,
             XmlSignatureProfile::ExcludeWeakAlgorithms,
+            limits,
         ),
         MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms {
             trusted_certificates,
@@ -136,6 +138,7 @@ pub(super) fn ensure_metadata_trust(
             trusted_certificates,
             MetadataSignatureTransforms::Profile,
             XmlSignatureProfile::AllowWeakAlgorithms,
+            limits,
         ),
     }
 }
@@ -146,8 +149,9 @@ fn verify_pinned_metadata_signature(
     trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
     algorithms: XmlSignatureProfile,
+    limits: XmlLimits,
 ) -> Result<AppliedMetadataTrust, SamlError> {
-    ensure_import_signature_shape(metadata.metadata_xml(), transforms)?;
+    ensure_import_signature_shape(metadata.metadata_xml(), transforms, limits)?;
     let trusted_certificates: Vec<String> = trusted_certificates
         .iter()
         .map(|certificate| certificate.as_str().to_string())
@@ -156,7 +160,7 @@ fn verify_pinned_metadata_signature(
         crate::crypto::verify::verify_metadata_signature_coverage_with_limits(
             metadata.metadata_xml(),
             &trusted_certificates,
-            XmlLimits::default(),
+            limits,
             algorithms,
         )?
         .ok_or(SamlError::SignatureVerification {
@@ -173,8 +177,9 @@ fn verify_pinned_metadata_signature(
     _trusted_certificates: &[CertificatePem],
     transforms: MetadataSignatureTransforms,
     _algorithms: XmlSignatureProfile,
+    limits: XmlLimits,
 ) -> Result<AppliedMetadataTrust, SamlError> {
-    ensure_import_signature_shape(metadata.metadata_xml(), transforms)?;
+    ensure_import_signature_shape(metadata.metadata_xml(), transforms, limits)?;
     Err(SamlError::Unsupported(
         "signed metadata verification requires a crypto provider feature".into(),
     ))

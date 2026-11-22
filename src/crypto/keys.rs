@@ -4,18 +4,10 @@
 use crate::config::{HmacSecret, X509Credential};
 use crate::error::{crypto_err, SamlError};
 use crate::util::normalize_cert_string;
+#[cfg(test)]
 use bergshamra::keys::keyinfo::build_x509_key_info;
 use bergshamra::keys::loader::{load_hmac_key, load_pem_auto, load_x509_cert_pem};
 use bergshamra::keys::Key;
-
-/// Load a private key from PEM using the formats supported by the selected
-/// crypto provider.
-#[deprecated(
-    note = "`saml_rs::crypto` becomes crate-private in the next minor release; typed configs take the key as `PrivateKeyPem`. To load a key for other use, call `initialize_crypto_provider` and `bergshamra::keys::loader::load_pem_auto`"
-)]
-pub fn load_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
-    read_private_key(pem, password)
-}
 
 pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
@@ -69,14 +61,15 @@ fn to_cert_pem(cert: &str) -> Result<String, SamlError> {
 }
 
 /// Load an X.509 certificate (PEM or bare base64) as a verification key.
-pub fn load_certificate(cert: &str) -> Result<Key, SamlError> {
+pub(crate) fn load_certificate(cert: &str) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     load_x509_cert_pem(to_cert_pem(cert)?.as_bytes()).map_err(crypto_err)
 }
 
 /// Build a `<ds:KeyInfo><ds:X509Data><ds:X509Certificate>` block from a
 /// certificate.
-pub fn build_key_info(cert: &str) -> String {
+#[cfg(test)]
+fn build_key_info(cert: &str) -> String {
     let b64 = normalize_cert_string(cert);
     build_x509_key_info(&[b64.as_str()])
 }

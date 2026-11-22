@@ -3,8 +3,8 @@
 use saml_rs::util::Value;
 use saml_rs::xml::{extract, ExtractorField};
 
-const RESPONSE: &str = include_str!("fixtures/misc/response_signed.xml");
-const SPMETA: &str = include_str!("fixtures/misc/spmeta.xml");
+const RESPONSE: &str = include_str!("../../tests/fixtures/misc/response_signed.xml");
+const SPMETA: &str = include_str!("../../tests/fixtures/misc/spmeta.xml");
 
 #[test]
 fn fetch_multiple_attributes() -> Result<(), Box<dyn std::error::Error>> {
@@ -88,26 +88,6 @@ fn fetch_entire_context_of_existing_node() -> Result<(), Box<dyn std::error::Err
         .get("messageSignature")
         .map(Value::is_null)
         .unwrap_or(true));
-    Ok(())
-}
-
-#[test]
-fn fetch_unique_inner_context_of_multiple_nodes() -> Result<(), Box<dyn std::error::Error>> {
-    let r = extract(
-        RESPONSE,
-        &[ExtractorField::multi(
-            "issuer",
-            &[
-                &["Response", "Issuer"],
-                &["Response", "Assertion", "Issuer"],
-            ],
-        )],
-    )?;
-    let issuer = r.get("issuer").and_then(Value::as_array).unwrap_or(&[]);
-    assert_eq!(issuer.len(), 1);
-    assert!(issuer
-        .iter()
-        .all(|i| i.as_str() == Some("https://idp.example.com/metadata")));
     Ok(())
 }
 

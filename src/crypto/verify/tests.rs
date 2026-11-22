@@ -18,35 +18,6 @@ fn external_reference_detection() {
 }
 
 #[test]
-fn metadata_signature_transform_allowlist_preserves_canonicalization_interoperability() {
-    const XPATH_TRANSFORM: &str = "http://www.w3.org/TR/1999/REC-xpath-19991116";
-    const XSLT_TRANSFORM: &str = "http://www.w3.org/TR/1999/REC-xslt-19991116";
-    const UNKNOWN_TRANSFORM: &str = "urn:example:unknown-transform";
-
-    for algorithm in [
-        transform_algorithm::ENVELOPED_SIGNATURE,
-        transform_algorithm::EXC_C14N,
-        transform_algorithm::EXC_C14N_WITH_COMMENTS,
-        XML_C14N_10,
-        XML_C14N_10_WITH_COMMENTS,
-        XML_C14N_11,
-        XML_C14N_11_WITH_COMMENTS,
-    ] {
-        assert!(
-            metadata_signature_transform_allowed(algorithm),
-            "{algorithm}"
-        );
-    }
-
-    for algorithm in [XPATH_TRANSFORM, XSLT_TRANSFORM, UNKNOWN_TRANSFORM] {
-        assert!(
-            !metadata_signature_transform_allowed(algorithm),
-            "{algorithm}"
-        );
-    }
-}
-
-#[test]
 fn same_document_reference_target_parsing() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(verified_target_from_uri("")?, VerifiedTarget::WholeDocument);
     assert_eq!(
@@ -772,7 +743,8 @@ fn excluding_weak_algorithms_rejects_md5_and_ripemd160_but_keeps_sha1(
 #[test]
 fn strict_profile_ignores_verified_signature_that_does_not_authenticate_the_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let signed = response_with_issuer_only_signature(XML_C14N_10)?;
+    let signed =
+        response_with_issuer_only_signature("http://www.w3.org/TR/2001/REC-xml-c14n-20010315")?;
     let result = verify_signatures_detailed_with_profile(
         &signed,
         &[SP_SIGNING_CERT.to_string()],

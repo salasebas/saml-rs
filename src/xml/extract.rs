@@ -3,21 +3,11 @@
 //! Operates directly on the [`super::dom`] tree, implementing the `local-name()`
 //! path subset used by the SAML field definitions: absolute element paths, `~`
 //! wildcard (substring match on local-name), attribute selection (0/1/N),
-//! whole-node context capture, `index`+`attributePath` aggregation, and
-//! multi-path union.
+//! whole-node context capture, and `index`+`attributePath` aggregation.
 
 use super::dom::{self, Node, XmlLimits};
 use crate::error::SamlError;
-use crate::util::{camel_case, uniq, zip_object, Value};
-
-/// Element path: a single chain, or several chains whose text is unioned.
-#[derive(Debug, Clone)]
-pub enum LocalPath {
-    /// One element chain.
-    Single(Vec<String>),
-    /// Several chains (text values unioned and de-duplicated).
-    Multi(Vec<Vec<String>>),
-}
+use crate::util::{camel_case, zip_object, Value};
 
 /// A single extraction directive.
 #[derive(Debug, Clone)]
@@ -25,7 +15,7 @@ pub struct ExtractorField {
     /// Result key.
     pub key: String,
     /// Element path.
-    pub local_path: LocalPath,
+    local_path: Vec<String>,
     /// Attribute names to read (0 → text, 1 → value, N → camelCased object).
     pub attributes: Vec<String>,
     /// Key attribute(s) for aggregation.
@@ -51,20 +41,7 @@ impl ExtractorField {
     pub fn new(key: &str, path: &[&str]) -> Self {
         Self {
             key: key.to_string(),
-            local_path: LocalPath::Single(to_vec(path)),
-            attributes: Vec::new(),
-            index: None,
-            attribute_path: None,
-            context: false,
-            shortcut: None,
-        }
-    }
-
-    /// Multi-path field (text union).
-    pub fn multi(key: &str, paths: &[&[&str]]) -> Self {
-        Self {
-            key: key.to_string(),
-            local_path: LocalPath::Multi(paths.iter().map(|p| to_vec(p)).collect()),
+            local_path: to_vec(path),
             attributes: Vec::new(),
             index: None,
             attribute_path: None,
@@ -185,20 +162,7 @@ fn aggregate(
 }
 
 fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
-    let path = match &field.local_path {
-        LocalPath::Multi(paths) => {
-            let mut texts = Vec::new();
-            for p in paths {
-                for n in select_path(root, p) {
-                    texts.push(n.text.clone());
-                }
-            }
-            return Value::Array(uniq(texts).into_iter().map(Value::Str).collect());
-        }
-        LocalPath::Single(p) => p,
-    };
-
-    let nodes = select_path(root, path);
+    let nodes = select_path(root, &field.local_path);
 
     if let (Some(index), Some(attribute_path)) = (&field.index, &field.attribute_path) {
         return aggregate(&nodes, index, attribute_path, &field.attributes);
@@ -264,7 +228,8 @@ fn extract_field(src: &str, root: &Node, field: &ExtractorField) -> Value {
 /// `xml` and each shortcut may be one element cut out of a larger document,
 /// such as an extracted `context` value: a namespace prefix it uses may be
 /// declared on an ancestor outside it.
-pub fn extract(xml: &str, fields: &[ExtractorField]) -> Result<Value, SamlError> {
+#[cfg(test)]
+pub(crate) fn extract(xml: &str, fields: &[ExtractorField]) -> Result<Value, SamlError> {
     extract_with_limits(xml, fields, XmlLimits::default())
 }
 
@@ -422,30 +387,6 @@ mod tests {
         )?;
 
         assert_eq!(result.get_str("assertion"), Some(expected));
-        Ok(())
-    }
-
-    #[test]
-    fn multi_path_union_is_unique() -> Result<(), Box<dyn std::error::Error>> {
-        let result = extract(
-            RESPONSE,
-            &[ExtractorField::multi(
-                "issuer",
-                &[
-                    &["Response", "Issuer"],
-                    &["Response", "Assertion", "Issuer"],
-                ],
-            )],
-        )?;
-        let arr = result
-            .get("issuer")
-            .and_then(Value::as_array)
-            .unwrap_or(&[]);
-        assert_eq!(arr.len(), 1);
-        assert_eq!(
-            arr[0],
-            Value::Str("https://idp.example.com/metadata".into())
-        );
         Ok(())
     }
 

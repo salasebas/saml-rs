@@ -8,26 +8,33 @@
 
 use crate::binding::xml_escape;
 use crate::error::SamlError;
+#[cfg(test)]
 use crate::util::camel_case;
 use crate::xml::name::validate_namespace_prefix;
 
 /// Raw `<AuthnRequest>` template for standalone tag substitution.
+#[cfg(test)]
 pub const LOGIN_REQUEST_TEMPLATE: &str = "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\" ForceAuthn=\"{ForceAuthn}\" ProtocolBinding=\"{ProtocolBinding}\" AssertionConsumerServiceURL=\"{AssertionConsumerServiceURL}\" AssertionConsumerServiceIndex=\"{AssertionConsumerServiceIndex}\"><saml:Issuer>{Issuer}</saml:Issuer><samlp:NameIDPolicy Format=\"{NameIDFormat}\" AllowCreate=\"{AllowCreate}\"/></samlp:AuthnRequest>";
 
 /// Default `<LogoutRequest>` template.
 pub const LOGOUT_REQUEST_TEMPLATE: &str = "<samlp:LogoutRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\"><saml:Issuer>{Issuer}</saml:Issuer><saml:NameID Format=\"{NameIDFormat}\">{NameID}</saml:NameID><samlp:SessionIndex>{SessionIndex}</samlp:SessionIndex></samlp:LogoutRequest>";
 
 /// Default `<AttributeStatement>` wrapper template.
+#[cfg(test)]
 pub const ATTRIBUTE_STATEMENT_TEMPLATE: &str =
     "<saml:AttributeStatement>{Attributes}</saml:AttributeStatement>";
 
 /// Default `<Attribute>` template.
+#[cfg(test)]
 pub const ATTRIBUTE_TEMPLATE: &str = "<saml:Attribute Name=\"{Name}\" NameFormat=\"{NameFormat}\"><saml:AttributeValue xmlns:xs=\"{ValueXmlnsXs}\" xmlns:xsi=\"{ValueXmlnsXsi}\" xsi:type=\"{ValueXsiType}\">{Value}</saml:AttributeValue></saml:Attribute>";
 
+#[cfg(test)]
 const DEFAULT_XS: &str = "http://www.w3.org/2001/XMLSchema";
+#[cfg(test)]
 const DEFAULT_XSI: &str = "http://www.w3.org/2001/XMLSchema-instance";
 
 /// Default login `<Response>` template.
+#[cfg(test)]
 pub const LOGIN_RESPONSE_TEMPLATE: &str = "<samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{ID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\" Destination=\"{Destination}\" InResponseTo=\"{InResponseTo}\"><saml:Issuer>{Issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value=\"{StatusCode}\"/></samlp:Status><saml:Assertion xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{AssertionID}\" Version=\"2.0\" IssueInstant=\"{IssueInstant}\"><saml:Issuer>{Issuer}</saml:Issuer><saml:Subject><saml:NameID Format=\"{NameIDFormat}\">{NameID}</saml:NameID><saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\"><saml:SubjectConfirmationData NotOnOrAfter=\"{SubjectConfirmationDataNotOnOrAfter}\" Recipient=\"{SubjectRecipient}\" InResponseTo=\"{InResponseTo}\"/></saml:SubjectConfirmation></saml:Subject><saml:Conditions NotBefore=\"{ConditionsNotBefore}\" NotOnOrAfter=\"{ConditionsNotOnOrAfter}\"><saml:AudienceRestriction><saml:Audience>{Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>{AuthnStatement}{AttributeStatement}</saml:Assertion></samlp:Response>";
 
 /// Default `<LogoutResponse>` template.
@@ -254,6 +261,7 @@ fn optional_element_range(
 
 /// A single `<Attribute>` to render in a login response.
 #[derive(Debug, Clone)]
+#[cfg(test)]
 pub struct LoginResponseAttribute {
     /// `Name` attribute.
     pub name: String,
@@ -269,6 +277,7 @@ pub struct LoginResponseAttribute {
     pub value_xmlns_xsi: Option<String>,
 }
 
+#[cfg(test)]
 fn tagging(prefix: &str, content: &str) -> String {
     let camel = camel_case(content);
     let mut chars = camel.chars();
@@ -283,34 +292,7 @@ fn tagging(prefix: &str, content: &str) -> String {
     }
 }
 
-/// Raw login response template data retained for consumers of this module.
-/// Typed IdP responses accept attributes through [`crate::SsoAssertion::with_attributes`].
-#[derive(Debug, Clone, Default)]
-pub struct LoginResponseTemplate {
-    /// Custom `<Response>` template; `None` uses
-    /// [`LOGIN_RESPONSE_TEMPLATE`].
-    pub context: Option<String>,
-    /// Attributes rendered into the assertion's `<AttributeStatement>`.
-    pub attributes: Vec<LoginResponseAttribute>,
-}
-
-/// Build an `<AttributeStatement>` from `attributes`.
-///
-/// Each attribute's value becomes a new `{attr<Tag>}` placeholder to be filled
-/// later by [`replace_tags_by_optional_value`]. The other attribute fields are
-/// XML-escaped, and each `{` in them is written as the character reference
-/// `&#123;`, so no placeholder pass substitutes inside them.
-#[deprecated(
-    note = "`saml_rs::template` becomes crate-private in the next minor release; pass attributes with `SsoAssertion::with_attributes`"
-)]
-pub fn attribute_statement_builder(
-    attributes: &[LoginResponseAttribute],
-    attribute_template: &str,
-    attribute_statement_template: &str,
-) -> String {
-    build_attribute_statement(attributes, attribute_template, attribute_statement_template)
-}
-
+#[cfg(test)]
 pub(crate) fn build_attribute_statement(
     attributes: &[LoginResponseAttribute],
     attribute_template: &str,
@@ -339,6 +321,7 @@ pub(crate) fn build_attribute_statement(
     attribute_statement_template.replacen("{Attributes}", &attrs, 1)
 }
 
+#[cfg(test)]
 fn escape_literal_template_text(value: &str) -> String {
     xml_escape(value).replace('{', "&#123;")
 }
@@ -465,10 +448,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        deprecated,
-        reason = "the deprecated public builder keeps its output until removal"
-    )]
     fn builds_attribute_statement_with_multiple_attributes() {
         let mk = |name: &str, tag: &str| LoginResponseAttribute {
             name: name.into(),
@@ -481,7 +460,7 @@ mod tests {
         let attrs = [mk("email", "user.email"), mk("firstname", "user.firstname")];
         let expected = "<saml:AttributeStatement><saml:Attribute Name=\"email\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserEmail}</saml:AttributeValue></saml:Attribute><saml:Attribute Name=\"firstname\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\"><saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{attrUserFirstname}</saml:AttributeValue></saml:Attribute></saml:AttributeStatement>";
         assert_eq!(
-            attribute_statement_builder(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
+            build_attribute_statement(&attrs, ATTRIBUTE_TEMPLATE, ATTRIBUTE_STATEMENT_TEMPLATE),
             expected
         );
     }

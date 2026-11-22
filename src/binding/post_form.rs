@@ -97,7 +97,8 @@ pub(crate) fn build_simplesign_octet(
 ///
 /// Returns [`SamlError::Invalid`] when `action` is not an absolute HTTP(S)
 /// URL.
-pub fn saml_post_binding_form(
+#[cfg(test)]
+pub(crate) fn saml_post_binding_form(
     action: &str,
     param_name: &str,
     b64_value: &str,

@@ -87,7 +87,8 @@ pub(super) fn encrypted_data_xml(
 ///
 /// `encrypt_cert` is the recipient's encryption certificate; `data_alg` /
 /// `key_alg` are the data and key encryption algorithm URIs.
-pub fn encrypt_assertion(
+#[cfg(test)]
+pub(crate) fn encrypt_assertion(
     xml: &str,
     encrypt_cert: &str,
     data_alg: &str,
