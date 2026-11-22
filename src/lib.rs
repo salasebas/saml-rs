@@ -317,8 +317,10 @@
 //!
 //! # Profile coverage
 //!
-//! [`ServiceProvider`] and [`IdentityProvider`] support browser Web SSO,
-//! metadata-driven setup, and name identifier management over HTTP-Redirect.
+//! [`ServiceProvider`] and [`IdentityProvider`] support browser Web SSO and
+//! metadata-driven setup. Both roles support Single Logout over HTTP-Redirect,
+//! HTTP-POST, and HTTP-POST-SimpleSign, and name identifier management over
+//! HTTP-Redirect.
 //!
 //! ## Supported SOAP exchanges
 //!
