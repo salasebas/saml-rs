@@ -354,9 +354,11 @@ let options = StartSso::post().requested_authn_context(RequestedAuthnContext::tr
 
 ## Send one authentication context per statement
 
-An identity provider that sends two SAML `AuthnContext` children in one
-`AuthnStatement` must send a single context for that statement. Previously
-the service provider reported the last context.
+**Affects:** service providers whose identity provider sends multiple SAML
+`AuthnContext` children in one `AuthnStatement`.
+
+Ask the identity provider to send one context per statement. Previously the
+service provider reported the last context.
 
 If a configured schema validator rejects the document, the service provider
 returns `SamlError::Invalid` from that callback. If the document reaches the

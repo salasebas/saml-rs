@@ -17,8 +17,6 @@ pub enum SignatureVerificationReason {
     /// The `Signature` that HTTP-Redirect or HTTP-POST-SimpleSign carries
     /// beside the message failed verification.
     BindingSignature,
-    /// Binding signature input could not be correlated with consumed RelayState.
-    RelayStateCorrelation,
     /// Signed reference digest verification failed.
     ReferenceDigest,
 }
@@ -28,7 +26,6 @@ impl fmt::Display for SignatureVerificationReason {
         match self {
             Self::XmlSignature => f.write_str("xml signature"),
             Self::BindingSignature => f.write_str("binding signature"),
-            Self::RelayStateCorrelation => f.write_str("relay state correlation"),
             Self::ReferenceDigest => f.write_str("reference digest"),
         }
     }
