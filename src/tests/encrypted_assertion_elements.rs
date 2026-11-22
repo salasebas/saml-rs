@@ -321,7 +321,7 @@ fn requested_encrypted_name_id_is_encrypted_in_the_assertion_subject(
         &idp_descriptor,
         &started.pending,
         Inbound::post(response.post_form()?.fields().to_vec()),
-        validation(),
+        post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.name_id(), &alice());
     Ok(())
