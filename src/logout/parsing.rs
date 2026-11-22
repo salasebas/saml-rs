@@ -1,6 +1,5 @@
 use crate::browser::{Inbound, Transport};
 use crate::config::HmacSecret;
-use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements};
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
@@ -101,14 +100,6 @@ pub(crate) fn parse_logout_request_at(
             from_issuer: from_meta.entity_id(),
             signing_certs,
             hmac_secret: validation.peer_hmac_secret,
-            decrypt_key: None,
-            decrypt_key_pass: None,
-            additional_decrypt_keys: &[],
-            assertion_elements: AssertionElementEncryption::default(),
-            element_decrypt_key: None,
-            received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
-            allow_rsa15_key_transport_decryption: false,
-            max_decryption_work: self_setting.max_decryption_work,
             clock_skew: validation.clock_skew,
             now: validation.now,
             redirect_inflate_max_bytes: self_setting.redirect_inflate_max_bytes,
@@ -116,6 +107,7 @@ pub(crate) fn parse_logout_request_at(
             schema_validator: self_setting.schema_validator,
             expected_audience: None,
             expected_in_response_to: None,
+            ..FlowOptions::default()
         },
         request,
         validation.expected_recipient,
@@ -145,14 +137,6 @@ pub(crate) fn parse_logout_response_at(
             from_issuer: from_meta.entity_id(),
             signing_certs,
             hmac_secret: validation.peer_hmac_secret,
-            decrypt_key: None,
-            decrypt_key_pass: None,
-            additional_decrypt_keys: &[],
-            assertion_elements: AssertionElementEncryption::default(),
-            element_decrypt_key: None,
-            received_encrypted_elements: ReceivedEncryptedElements::DecryptSelected,
-            allow_rsa15_key_transport_decryption: false,
-            max_decryption_work: self_setting.max_decryption_work,
             clock_skew: validation.clock_skew,
             now: validation.now,
             redirect_inflate_max_bytes: self_setting.redirect_inflate_max_bytes,
@@ -160,6 +144,7 @@ pub(crate) fn parse_logout_response_at(
             schema_validator: self_setting.schema_validator,
             expected_audience: None,
             expected_in_response_to: Some(request_id),
+            ..FlowOptions::default()
         },
         request,
         validation.expected_recipient,

@@ -62,7 +62,6 @@ fn verify_present_signature(
         Binding::Post | Binding::Artifact | Binding::Soap => {
             let signature_only = FlowOptions {
                 decrypt_key: None,
-                element_decrypt_key: None,
                 ..opts.clone()
             };
             Ok(verify_and_prepare(

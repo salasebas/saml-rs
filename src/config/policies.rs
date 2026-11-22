@@ -480,19 +480,6 @@ impl AssertionElementEncryption {
     }
 }
 
-/// Which encrypted elements of a received login response a service provider
-/// decrypts with its decryption key.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum ReceivedEncryptedElements {
-    /// Samlify port: only the `<EncryptedAssertion>` that
-    /// `is_assertion_encrypted` selects.
-    #[default]
-    DecryptSelected,
-    /// Typed configuration: every `<EncryptedAssertion>`, assertion
-    /// `<EncryptedID>`, and `<EncryptedAttribute>` received (Conformance §3.4).
-    DecryptReceived,
-}
-
 /// XML parser, redirect decompression, and XML encryption policy.
 ///
 /// Start from [`Default`](Default::default) and assign the fields you change,

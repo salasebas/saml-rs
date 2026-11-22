@@ -4,7 +4,7 @@
 use core::fmt;
 
 use crate::binding::MAX_DEFLATE_RAW_DECODE_BYTES;
-use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
+use crate::config::{AssertionElementEncryption, XmlSignatureProfile};
 use crate::config::{DigestAlgorithm, HmacSecret, MaskGenerationFunction, X509Credential};
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, signature_algorithm, transform_algorithm,
@@ -34,13 +34,7 @@ pub struct EntitySetting {
     /// Typed config: assertion `<NameID>` and attributes carried as
     /// `<EncryptedID>` and `<EncryptedAttribute>`.
     pub(crate) assertion_element_encryption: AssertionElementEncryption,
-    /// Encrypted elements of a received login response that are decrypted.
-    pub(crate) received_encrypted_elements: ReceivedEncryptedElements,
-    /// SP: decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport.
-    ///
-    /// Default `false`: an encrypted assertion, `<EncryptedID>`, or
-    /// `<EncryptedAttribute>` that names RSA-v1.5 is rejected with
-    /// `SamlError::Unsupported` before any key is decrypted.
+    /// Allow this entity to decrypt keys transported with RSA-v1.5.
     pub allow_rsa15_key_transport_decryption: bool,
     /// Maximum estimated decryption work per inbound message. Defaults to 16.
     /// See [`crate::config::XmlEncryptionPolicy::max_decryption_work`].
@@ -164,10 +158,6 @@ impl fmt::Debug for EntitySetting {
                 &self.assertion_element_encryption,
             )
             .field(
-                "received_encrypted_elements",
-                &self.received_encrypted_elements,
-            )
-            .field(
                 "allow_rsa15_key_transport_decryption",
                 &self.allow_rsa15_key_transport_decryption,
             )
@@ -285,7 +275,6 @@ impl Default for EntitySetting {
             allow_create: false,
             is_assertion_encrypted: false,
             assertion_element_encryption: AssertionElementEncryption::default(),
-            received_encrypted_elements: ReceivedEncryptedElements::default(),
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
             relay_state: String::new(),

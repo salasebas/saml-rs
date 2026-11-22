@@ -211,7 +211,6 @@ fn splice(xml: &str, mut replacements: Vec<(Range<usize>, String)>) -> String {
 mod tests {
     use super::encrypt::encrypted_data_xml;
     use super::*;
-    use crate::config::ReceivedEncryptedElements;
     use crate::constants::data_encryption_algorithm::AES_256;
     use crate::constants::key_encryption_algorithm::RSA_OAEP_MGF1P;
     use crate::crypto::keys::read_private_key;
@@ -376,7 +375,6 @@ mod tests {
                 AssertionDecryptionOptions::default(),
                 XmlLimits::default(),
                 encrypted_ids(),
-                ReceivedEncryptedElements::DecryptSelected,
             )
         };
 
@@ -432,7 +430,6 @@ mod tests {
             AssertionDecryptionOptions::default(),
             XmlLimits::default(),
             encrypted_ids(),
-            ReceivedEncryptedElements::DecryptSelected,
         );
         assert!(
             matches!(
@@ -490,7 +487,6 @@ mod tests {
             AssertionDecryptionOptions::default(),
             XmlLimits::default(),
             encrypted_ids(),
-            ReceivedEncryptedElements::DecryptSelected,
         )?;
         assert!(!decrypted.contains("EncryptedID"));
         assert!(decrypted.contains(">_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7</saml:NameID>"));

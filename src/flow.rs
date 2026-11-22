@@ -5,7 +5,7 @@ use crate::assertion_acceptance::first_login_assertion_xml;
 use crate::binding::{
     decode_base64_with_limit, deflate_raw_decode, single_parameter, MAX_DEFLATE_RAW_DECODE_BYTES,
 };
-use crate::config::{AssertionElementEncryption, ReceivedEncryptedElements, XmlSignatureProfile};
+use crate::config::{AssertionElementEncryption, XmlSignatureProfile};
 use crate::config::{HmacSecret, X509Credential};
 use crate::constants::{Binding, ParserType};
 #[cfg(crypto)]
@@ -125,21 +125,17 @@ pub struct FlowOptions<'a> {
     pub signing_certs: &'a [String],
     /// Peer HMAC secret for verifying an HMAC signature.
     pub hmac_secret: Option<&'a HmacSecret>,
-    /// Our decryption private key PEM (when assertions are encrypted).
+    /// SP private key for received assertions and their encrypted children.
     pub decrypt_key: Option<&'a str>,
-    /// Passphrase for `decrypt_key` and `element_decrypt_key`.
+    /// Passphrase for `decrypt_key`.
     pub decrypt_key_pass: Option<&'a str>,
     /// More decryption keys, tried in order after `decrypt_key`. Each one's
     /// passphrase is its own.
     pub additional_decrypt_keys: &'a [X509Credential],
-    /// Typed SP: assertion children that arrive encrypted. They are decrypted
-    /// with `element_decrypt_key` after a signature verifies.
+    /// Require an encrypted assertion when the SP receives a login response.
+    pub(crate) require_encrypted_assertion: bool,
+    /// Assertion children the SP requires in encrypted form.
     pub(crate) assertion_elements: AssertionElementEncryption,
-    /// Typed SP: decryption private key PEM for `assertion_elements`.
-    pub(crate) element_decrypt_key: Option<&'a str>,
-    /// Typed SP: encrypted elements decrypted with `element_decrypt_key`
-    /// whatever `decrypt_key` and `assertion_elements` select.
-    pub(crate) received_encrypted_elements: ReceivedEncryptedElements,
     /// Decrypt an `<EncryptedKey>` that uses RSA-v1.5 key transport. When
     /// `false`, decryption returns `SamlError::Unsupported` before any key is
     /// decrypted.
@@ -175,8 +171,7 @@ impl<'a> Default for FlowOptions<'a> {
             decrypt_key_pass: None,
             additional_decrypt_keys: &[],
             assertion_elements: AssertionElementEncryption::default(),
-            element_decrypt_key: None,
-            received_encrypted_elements: ReceivedEncryptedElements::default(),
+            require_encrypted_assertion: false,
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
             clock_skew: ClockSkew::strict(),
@@ -917,13 +912,12 @@ fn flow_inner(
     let decrypt_elements = parser_type == ParserType::SamlResponse
         && (opts.assertion_elements.is_selected()
             || (verify_signature
-                && opts.received_encrypted_elements == ReceivedEncryptedElements::DecryptReceived
-                && opts.element_decrypt_key.is_some()
+                && opts.decrypt_key.is_some()
                 && crate::encrypted_elements::carries_encrypted_elements(&saml_content)?));
     let (saml_content, assertion) = match (decrypt_elements, verify_signature) {
         (true, true) => {
             let key_pem = opts
-                .element_decrypt_key
+                .decrypt_key
                 .ok_or_else(|| SamlError::MissingKey("decryption_key".into()))?;
             crate::encrypted_elements::require_one_assertion_unless_message_authenticated(
                 &saml_content,
