@@ -28,7 +28,7 @@ use role::SsoDescriptorRole;
 use std::collections::HashSet;
 use std::ops::Range;
 
-use crate::constants::{Binding, CertUse};
+use crate::constants::{namespace, Binding, CertUse};
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::{dom, extract_with_limits, ExtractorField};
@@ -59,6 +59,7 @@ pub(crate) fn as_object_list(value: &Value) -> Vec<&Value> {
 fn entity_descriptor_xml<'n>(
     xml: &str,
     roots: &'n [dom::Node],
+    descriptor_starts: &HashSet<usize>,
 ) -> Result<(Range<usize>, Option<&'n dom::Node>), SamlError> {
     let [root] = roots else {
         return Ok((0..xml.len(), None));
@@ -70,7 +71,7 @@ fn entity_descriptor_xml<'n>(
         ));
     }
     let mut entities = Vec::new();
-    collect_entity_descriptors(root, &mut entities);
+    collect_entity_descriptors(root, descriptor_starts, &mut entities);
     match entities.as_slice() {
         [entity] => Ok((entity.start..entity.end, Some(*entity))),
         [] => Err(SamlError::MissingMetadata("EntityDescriptor".into())),
@@ -102,12 +103,20 @@ fn role_xml(
     role_xml
 }
 
-fn collect_entity_descriptors<'a>(node: &'a dom::Node, found: &mut Vec<&'a dom::Node>) {
+fn collect_entity_descriptors<'a>(
+    node: &'a dom::Node,
+    descriptor_starts: &HashSet<usize>,
+    found: &mut Vec<&'a dom::Node>,
+) {
+    if !descriptor_starts.contains(&node.start) {
+        return;
+    }
     if node.local_name == "EntityDescriptor" {
         found.push(node);
-    }
-    for child in &node.children {
-        collect_entity_descriptors(child, found);
+    } else {
+        for child in &node.children {
+            collect_entity_descriptors(child, descriptor_starts, found);
+        }
     }
 }
 
@@ -228,8 +237,9 @@ impl Metadata {
     /// Parse entity metadata without selecting an SSO role, with the default
     /// XML limits and no schema validator.
     ///
-    /// Rejects documents carrying more than one `<EntityDescriptor>`. A root
-    /// `<EntitiesDescriptor>` is accepted when it contains exactly one entity.
+    /// A root `<EntitiesDescriptor>` and its nested `<EntitiesDescriptor>` groups
+    /// must contain exactly one `<EntityDescriptor>` member in the SAML metadata
+    /// namespace. Content inside `<Extensions>` does not count.
     /// `KeyDescriptor` certificates and `SingleLogoutService` endpoints are
     /// read from every SSO role descriptor of the entity. [`SpMetadata`] and
     /// [`IdpMetadata`] read only their own role's SAML 2.0 descriptors.
@@ -260,7 +270,14 @@ impl Metadata {
         policy: &crate::XmlPolicy,
     ) -> Result<Self, SamlError> {
         let limits = policy.limits;
-        let roots = dom::parse_all_roots(xml, limits)?;
+        let mut descriptor_starts = HashSet::new();
+        let roots = dom::parse_roots_with_element_names(xml, limits, |start, ns, name| {
+            if ns == Some(namespace::METADATA)
+                && matches!(name, "EntitiesDescriptor" | "EntityDescriptor")
+            {
+                descriptor_starts.insert(start);
+            }
+        })?;
         crate::schema::validate(xml, policy.schema_validator)?;
         if roots
             .iter()
@@ -271,7 +288,7 @@ impl Metadata {
             return Err(SamlError::xml(MULTIPLE_ENTITY_DESCRIPTORS));
         }
 
-        let (extraction, entity) = entity_descriptor_xml(xml, &roots)?;
+        let (extraction, entity) = entity_descriptor_xml(xml, &roots, &descriptor_starts)?;
         let descriptors = role.descriptors(xml, entity, limits)?;
 
         let mut fields = base_fields();

@@ -1,4 +1,5 @@
 use saml_rs::constants::Binding;
+use saml_rs::metadata::Metadata;
 use saml_rs::{
     EndpointUrl, EntityId, IdpDescriptor, LogoutBinding, MetadataTrustPolicy, NameIdFormat,
     SamlError, SpDescriptor, SsoRequestBinding, SsoResponseBinding,
@@ -17,6 +18,40 @@ const XML: &str = r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metada
     <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://peer.example.com/acs/default" index="1" isDefault="true"/>
   </SPSSODescriptor>
 </EntityDescriptor>"#;
+
+#[test]
+fn aggregate_import_counts_only_members_of_metadata_groups(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let xml = format!(
+        r#"<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:catalog="urn:catalog" cacheDuration="PT1H">
+          <Extensions><catalog:EntityDescriptor>{XML}</catalog:EntityDescriptor></Extensions>
+          <EntitiesDescriptor>
+            <EntityDescriptor entityID="urn:example:member">
+              <Extensions><catalog:EntityDescriptor/></Extensions>
+              <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+                <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://example.org/sso"/>
+              </IDPSSODescriptor>
+            </EntityDescriptor>
+          </EntitiesDescriptor>
+        </EntitiesDescriptor>"#
+    );
+    assert_eq!(
+        Metadata::parse(&xml)?.entity_id(),
+        Some("urn:example:member")
+    );
+    Ok(())
+}
+
+#[test]
+fn foreign_names_do_not_supply_a_missing_aggregate_member() {
+    let xml = r#"<md:EntitiesDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns="urn:catalog">
+      <EntityDescriptor entityID="urn:catalog:entry"/>
+      <EntitiesDescriptor><md:EntityDescriptor entityID="urn:catalog:nested"/></EntitiesDescriptor>
+    </md:EntitiesDescriptor>"#;
+    assert!(
+        matches!(Metadata::parse(xml), Err(SamlError::MissingMetadata(name)) if name == "EntityDescriptor")
+    );
+}
 
 #[test]
 fn peer_endpoints_keep_their_role_direction_and_indexed_default(

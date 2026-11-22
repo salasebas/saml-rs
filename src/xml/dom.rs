@@ -303,6 +303,7 @@ fn read_element(
     resolver: &mut NamespaceResolver,
     limits: XmlLimits,
     mode: ParseMode,
+    on_name: impl FnOnce(Option<&str>, &str),
 ) -> Result<(String, Vec<(String, String)>), SamlError> {
     let level = resolver
         .level()
@@ -315,6 +316,11 @@ fn read_element(
 
     let (namespace, local_name) = resolver.resolve_element(e.name());
     check_prefix_declared(&namespace, mode)?;
+    let namespace_uri = match namespace {
+        ResolveResult::Bound(Namespace(uri)) => Some(uri),
+        ResolveResult::Unbound | ResolveResult::Unknown(_) => None,
+    };
+    on_name(namespace_uri, local_name.into_inner());
     let mut expanded_names = Vec::with_capacity(attrs.len());
     for (name, _) in &attrs {
         if name.as_namespace_binding().is_some() {
@@ -461,7 +467,7 @@ pub(crate) fn parse_fragment_with_limits(
 }
 
 fn parse_single_root(xml: &str, limits: XmlLimits, mode: ParseMode) -> Result<Document, SamlError> {
-    let mut roots = parse_roots_inner(xml, limits, mode)?;
+    let mut roots = parse_roots_inner(xml, limits, mode, |_, _, _| {})?;
     let root = match roots.len() {
         0 => return Err(SamlError::xml("no document element")),
         1 => roots
@@ -494,13 +500,22 @@ pub fn parse_roots_with_limits(xml: &str, limits: XmlLimits) -> Result<Vec<Node>
 /// Parse every top-level element within `limits`. Each element must be
 /// well-formed and declare every namespace prefix it uses.
 pub(crate) fn parse_all_roots(xml: &str, limits: XmlLimits) -> Result<Vec<Node>, SamlError> {
-    parse_roots_inner(xml, limits, ParseMode::Roots)
+    parse_roots_with_element_names(xml, limits, |_, _, _| {})
+}
+
+pub(crate) fn parse_roots_with_element_names(
+    xml: &str,
+    limits: XmlLimits,
+    on_name: impl FnMut(usize, Option<&str>, &str),
+) -> Result<Vec<Node>, SamlError> {
+    parse_roots_inner(xml, limits, ParseMode::Roots, on_name)
 }
 
 fn parse_roots_inner(
     xml: &str,
     limits: XmlLimits,
     mode: ParseMode,
+    mut on_name: impl FnMut(usize, Option<&str>, &str),
 ) -> Result<Vec<Node>, SamlError> {
     limits.check_input_bytes(xml.len())?;
     check_xml_chars(xml)?;
@@ -518,23 +533,13 @@ fn parse_roots_inner(
         let event = reader.read_event().map_err(xml_err)?;
         let after = bom_len + reader.buffer_position() as usize;
         match event {
-            Event::Start(e) => {
+            Event::Start(ref e) | Event::Empty(ref e) => {
                 limits.count_element(&mut node_count)?;
                 limits.check_depth(stack.len().saturating_add(1))?;
-                let (local_name, attrs) = read_element(&e, &mut resolver, limits, mode)?;
-                stack.push(Node {
-                    local_name,
-                    attrs,
-                    children: Vec::new(),
-                    text: String::new(),
-                    start: before,
-                    end: 0,
-                });
-            }
-            Event::Empty(e) => {
-                limits.count_element(&mut node_count)?;
-                limits.check_depth(stack.len().saturating_add(1))?;
-                let (local_name, attrs) = read_element(&e, &mut resolver, limits, mode)?;
+                let (local_name, attrs) =
+                    read_element(e, &mut resolver, limits, mode, |ns, name| {
+                        on_name(before, ns, name);
+                    })?;
                 let node = Node {
                     local_name,
                     attrs,
@@ -543,8 +548,12 @@ fn parse_roots_inner(
                     start: before,
                     end: after,
                 };
-                resolver.pop();
-                push_child(&mut stack, &mut roots, node);
+                if matches!(event, Event::Empty(_)) {
+                    resolver.pop();
+                    push_child(&mut stack, &mut roots, node);
+                } else {
+                    stack.push(node);
+                }
             }
             Event::End(_) => {
                 resolver.pop();
