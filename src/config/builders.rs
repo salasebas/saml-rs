@@ -221,6 +221,7 @@ impl SpConfigBuilder {
     }
 
     /// Set `validUntil`, `cacheDuration`, or both on generated metadata.
+    /// Without this setting, generation writes a one-day `cacheDuration`.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
         self.metadata.lifetime = Some(lifetime);
         self
@@ -508,6 +509,7 @@ impl IdpConfigBuilder {
     }
 
     /// Set `validUntil`, `cacheDuration`, or both on generated metadata.
+    /// Without this setting, generation writes a one-day `cacheDuration`.
     pub fn metadata_lifetime(mut self, lifetime: MetadataLifetime) -> Self {
         self.metadata.lifetime = Some(lifetime);
         self

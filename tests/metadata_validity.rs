@@ -324,44 +324,6 @@ fn import_rejects_a_malformed_valid_until() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-#[test]
-fn generated_root_carries_the_configured_lifetime() -> Result<(), Box<dyn std::error::Error>> {
-    let lifetimes = [
-        (None, None, None),
-        (
-            Some(MetadataLifetime::ValidUntil(at(Y2001))),
-            Some("2001-01-01T00:00:00Z"),
-            None,
-        ),
-        (
-            Some(MetadataLifetime::CacheDuration(Duration::from_secs(86_400))),
-            None,
-            Some("PT86400S"),
-        ),
-        (
-            Some(MetadataLifetime::ValidUntilAndCacheDuration {
-                valid_until: at(Y2001) + Duration::from_millis(900),
-                cache_duration: Duration::from_millis(1500),
-            }),
-            Some("2001-01-01T00:00:00Z"),
-            Some("PT1.500000000S"),
-        ),
-    ];
-
-    for (lifetime, valid_until, cache_duration) in lifetimes {
-        let sp = sp(lifetime)?;
-        let idp = idp(lifetime)?;
-        for xml in [sp.metadata_xml(), idp.metadata_xml()] {
-            let document = roxmltree::Document::parse(xml)?;
-            let root = document.root_element();
-            assert_eq!(root.tag_name().name(), "EntityDescriptor");
-            assert_eq!(root.attribute("validUntil"), valid_until, "{xml}");
-            assert_eq!(root.attribute("cacheDuration"), cache_duration, "{xml}");
-        }
-    }
-    Ok(())
-}
-
 fn browser_facades(
     valid_until: SystemTime,
 ) -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {

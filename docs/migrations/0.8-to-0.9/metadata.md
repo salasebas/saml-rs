@@ -179,3 +179,16 @@ separately curated document, generate it with a separate raw metadata config.
 Default profiles retain their output. Explicit non-schema compatibility
 orders, including ONELOGIN, retain their relative order and can still produce
 schema-invalid metadata. Use the default order for the schema sequence.
+
+## 10. Update expectations for the generated root
+
+SP and IdP metadata generated without a configured lifetime now includes
+`cacheDuration="PT86400S"` on the root `EntityDescriptor`. Consumers can
+use it to schedule a refresh after one day. It sets no expiration time.
+Explicitly configured `validUntil`, `cacheDuration`, or both take precedence.
+
+If your tests compare generated XML byte for byte, update the expected root
+attribute. The same generator and builder calls apply. To publish a different
+refresh interval, assign `Some(MetadataLifetime::CacheDuration(duration))`
+to the standalone input's `lifetime` field or call
+`.metadata_lifetime(MetadataLifetime::CacheDuration(duration))` on the builder.
