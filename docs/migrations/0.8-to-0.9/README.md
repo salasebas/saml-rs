@@ -31,6 +31,7 @@ Check the topics that affect your integration.
 - [Authenticate browser logout messages](logout-authentication.md)
 - [Upgrade logout, validation, and replay code](logout-validation-replay.md)
 - [Match typed `SamlError` variants](errors.md)
+- [Handle SSO error responses that omit `InResponseTo`](sso-error-correlation.md)
 - [Upgrade RelayState, pending state, and inbound message code](browser-transport.md)
 - [Upgrade typed config code](config.md)
 - [Upgrade SOAP, artifact resolution, and discovery cookie code](soap-artifact-discovery.md)

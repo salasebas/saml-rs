@@ -471,6 +471,8 @@ impl ServiceProvider {
     /// destination, recipient, or `InResponseTo`, when signature, audience,
     /// condition, time, or status checks fail, or when a SOAP header entry
     /// other than `ecp:RelayState` or `paos:Response` sets `mustUnderstand`.
+    /// An error response can omit `InResponseTo`. If present, it must match
+    /// the pending request ID, as in [`Self::finish_sso`].
     pub fn finish_paos_sso(
         &self,
         idp: &IdpDescriptor,
