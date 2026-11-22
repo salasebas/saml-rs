@@ -19,7 +19,7 @@ const PROTOCOL_NS: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
 ///
 /// Call it to decide whether the HTTP client that asked for a resource is an
 /// enhanced client, before calling
-/// [`Saml<Sp>::start_paos_sso`](crate::Saml::start_paos_sso), which does not
+/// [`ServiceProvider::start_paos_sso`](crate::ServiceProvider::start_paos_sso), which does not
 /// read HTTP headers. An enhanced client must send both headers. Checking
 /// them is the service provider's choice: a deployment may tell an enhanced
 /// client apart by other means.

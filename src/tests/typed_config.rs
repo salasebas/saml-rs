@@ -6,10 +6,10 @@ use saml_rs::entity::EntitySetting;
 use saml_rs::flow::FlowOptions;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, DataEncryptionAlgorithm, DigestAlgorithm, EntityId,
-    HmacSecret, IdpConfig, IdpDescriptor, IdpValidationPolicy, KeyEncryptionAlgorithm,
-    MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase, PrivateKeyPem,
-    SamlError, SignatureAlgorithm, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    TransformAlgorithm, X509Credential,
+    HmacSecret, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    KeyEncryptionAlgorithm, MaskGenerationFunction, MetadataTrustPolicy, NameIdFormat, Passphrase,
+    PrivateKeyPem, SamlError, ServiceProvider, SignatureAlgorithm, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, TransformAlgorithm, X509Credential,
 };
 
 const IDP_METADATA: &str = include_str!("../../tests/fixtures/misc/idpmeta.xml");
@@ -106,10 +106,15 @@ fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError
     .validation(IdpValidationPolicy::compatibility())
     .build()?;
 
+    let service_provider = ServiceProvider::new(sp.clone());
+    let identity_provider = IdentityProvider::new(idp.clone());
+
     for debug in [
         format!("{credentials:?}"),
         format!("{sp:?}"),
         format!("{idp:?}"),
+        format!("{service_provider:?}"),
+        format!("{identity_provider:?}"),
     ] {
         assert!(debug.contains("redacted"), "{debug}");
         assert!(!debug.contains("for-credentials-debug-test"), "{debug}");

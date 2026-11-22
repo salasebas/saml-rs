@@ -57,7 +57,7 @@ impl ArtifactDelivery {
 /// Artifact and RelayState a browser delivered to an assertion consumer.
 ///
 /// Resolve [`Self::artifact`] with
-/// [`Saml<Sp>::resolve_artifact`](crate::Saml::resolve_artifact), then pass
+/// [`ServiceProvider::resolve_artifact`](crate::ServiceProvider::resolve_artifact), then pass
 /// this value and the resolved message to
 /// [`Inbound::artifact`](crate::Inbound::artifact).
 #[derive(Debug, Clone, PartialEq, Eq)]

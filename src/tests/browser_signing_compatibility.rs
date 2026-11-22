@@ -2,10 +2,10 @@
 
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::sp::ServiceProvider;
 use saml_rs::tests::engine::create_logout_request;
 use saml_rs::tests::engine::LogoutUser;
 use saml_rs::tests::engine::SpMessages;
@@ -24,7 +24,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
         };
         idp_config.single_sign_on_service =
             vec![Endpoint::new(binding, "https://idp.example.com/sso")];
-        let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
+        let idp = idp::Engine::from_config(&idp_config, EntitySetting::default())?;
         let mut sp_config = SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             authn_requests_signed: true,
@@ -32,7 +32,7 @@ fn signed_login_request_rejects_soap_and_artifact_after_credentials(
         };
         sp_config.assertion_consumer_service =
             vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
-        let mut sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
+        let mut sp = sp::Engine::from_config(&sp_config, EntitySetting::default())?;
 
         assert!(matches!(
             sp.create_login_request(&idp, binding, &LoginRequestOptions::default()),
@@ -65,14 +65,14 @@ fn signed_logout_artifact_rejects_binding_before_credentials(
         Binding::Artifact,
         "https://idp.example.com/slo",
     )];
-    let idp = IdentityProvider::from_config(&idp_config, EntitySetting::default())?;
+    let idp = idp::Engine::from_config(&idp_config, EntitySetting::default())?;
     let mut sp_config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         ..SpMetadataInput::default()
     };
     sp_config.assertion_consumer_service =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
-    let sp = ServiceProvider::from_config(&sp_config, EntitySetting::default())?;
+    let sp = sp::Engine::from_config(&sp_config, EntitySetting::default())?;
     for private_key in [None, Some("invalid private key".into())] {
         let setting = EntitySetting {
             private_key,

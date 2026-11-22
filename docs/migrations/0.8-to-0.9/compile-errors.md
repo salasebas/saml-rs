@@ -17,7 +17,7 @@
 | A field of `SpConfig`, `IdpConfig`, `SpMetadataConfig`, or `IdpMetadataConfig`, read or assigned | Private; read it through the getter of the same name | [1.8](#18-read-config-fields-through-getters) |
 | A struct literal of `Credentials`, one of its fields, or `DecryptionCredential` | Private; set them with the `with_*` methods and `X509Credential`, and read them through getters | [1.9](#19-fill-credentials-with-the-with-methods) |
 | `EntitySetting::try_from(&SpConfig)` or `EntitySetting::try_from(&IdpConfig)` | Removed | [1.10](#110-stop-converting-typed-configs-to-entitysetting) |
-| `saml_rs::ServiceProvider`, `saml_rs::IdentityProvider`, `saml_rs::EntitySetting`, or a path under `saml_rs::raw` | Removed | [1.11](#111-move-the-raw-roles-to-the-typed-api) |
+| The raw `saml_rs::ServiceProvider` or `saml_rs::IdentityProvider` methods, `saml_rs::EntitySetting`, or a path under `saml_rs::raw` | Removed. The two names now belong to the typed providers | [1.11](#111-move-the-raw-roles-to-the-typed-api) |
 | `saml_rs::raw::metadata` | Removed | [1.12](#112-import-metadata-from-metadata) |
 | `ServiceProvider::create_login_request`, `create_login_request_with_options`, or `parse_login_response_with_request_id` | Removed | [1.13](#113-start-sso-instead-of-create_login_request) |
 | `ServiceProvider::parse_unsolicited_login_response` or `parse_login_response` | Removed | [1.14](#114-accept-unsolicited-sso-instead-of-parse_unsolicited_login_response) |
@@ -36,7 +36,8 @@
 | `FlowOptions` or any of its fields | Removed with the raw API; set signature rules on the typed validation policies and clock skew on `SamlValidationContext` | [3](raw-api.md) |
 | A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
-| `Saml::sp(config)?` or `Saml::idp(config)?` | Returns the facade, not a `Result` | [Typed config](config.md#remove-the--after-samlsp-and-samlidp) |
+| `Saml`, `Sp`, `Idp`, or `Unknown` | Removed; use `ServiceProvider` and `IdentityProvider` | [1.25](#125-replace-samlsp-and-samlidp-with-serviceprovider-and-identityprovider) |
+| `Saml::sp(config)?` or `Saml::idp(config)?` | `ServiceProvider::new(config)` and `IdentityProvider::new(config)` return the provider, not a `Result` | [Typed config](config.md#call-serviceprovidernew-and-identityprovidernew-without-) |
 | `SpConfigBuilder::manage_name_id_service(ManageNameIdService)` | Renamed `manage_name_id_redirect_service`. Takes the `EndpointUrl` of the HTTP-Redirect endpoint | [Typed config](config.md#publish-an-sp-name-identifier-management-endpoint-by-url) |
 | `elements_order` on a typed builder | Removed. Typed metadata always follows the schema sequence | [Typed config](config.md#remove-elements_order-from-typed-builders) |
 | `XmlEncryptionPolicy::encrypt_assertions`, `encrypt_ids`, `encrypt_attributes`, or a `with_` method | Removed; set the public fields | [Typed config](config.md#set-xmlencryptionpolicy-fields-directly) |
@@ -173,15 +174,15 @@ application needs it.
 ## 1.4 Import the typed API from the crate root
 
 **Affects:** code that names a path under `saml_rs::api`, `opensaml::api`, or
-`samlet::api`, such as `saml_rs::api::Saml`.
+`samlet::api`, such as `saml_rs::api::StartSso`.
 
 **Before:** `api` was a public module hidden from docs.rs. The crate root
 already exported every item in it.
 **Now:** `api` is private. Import the same items from the root of the crate
-you depend on, such as `opensaml::Saml` through `opensaml`:
+you depend on, such as `opensaml::StartSso` through `opensaml`:
 
 ```rust
-use saml_rs::{Saml, Sp, StartSso};
+use saml_rs::{ServiceProvider, StartSso};
 ```
 
 ## 1.5 Take security policy fields from a preset
@@ -289,8 +290,8 @@ tests that compare these strings.
 
 `builder(..).build()` is now the only way to make a config, and `build()`
 validates it once. A built config cannot change afterwards, and it keeps the
-provider `build()` made, so `Saml::sp` and `Saml::idp` return the facade
-without a `Result`. See
+provider `build()` made, so `ServiceProvider::new` and
+`IdentityProvider::new` return the provider without a `Result`. See
 [section 6](metadata.md#6-handle-metadata-errors-from-build).
 
 Before:
@@ -318,7 +319,7 @@ let config = SpConfig::builder(
 .name_id_format(NameIdFormat::EmailAddress)
 .xml(xml)
 .build()?;
-let sp = Saml::sp(config);
+let sp = ServiceProvider::new(config);
 ```
 
 `SpConfig::builder` takes the first ACS endpoint and `IdpConfig::builder` the
@@ -460,17 +461,21 @@ secret back. See [1.3](#13-keep-your-own-copy-of-credential-material).
 **Affects:** callers that converted a typed config into the raw
 `EntitySetting` with `TryFrom`.
 
-The conversion is now internal to `Saml::sp` and `Saml::idp`, and
-`EntitySetting` is no longer public. Keep the typed config and pass it to
-`Saml::sp` or `Saml::idp`.
+The conversion is now internal to `SpConfigBuilder::build` and
+`IdpConfigBuilder::build`, and `EntitySetting` is no longer public. Keep the
+typed config and pass it to `ServiceProvider::new` or `IdentityProvider::new`.
 
 ## 1.11 Move the raw roles to the typed API
 
-**Affects:** code that imports `ServiceProvider`, `IdentityProvider`, or
-`EntitySetting` from the crate root or from `saml_rs::raw`.
+**Affects:** code that calls the raw `ServiceProvider` or `IdentityProvider`
+methods, or imports `EntitySetting` from the crate root or from
+`saml_rs::raw`.
 
-**Now:** the raw API is removed. Configure `SpConfig` or `IdpConfig` and call
-the typed `Saml` operations, as [section 3](raw-api.md) shows.
+**Now:** the raw API is removed. `ServiceProvider` and `IdentityProvider` at
+the crate root are now the typed providers that replace `Saml<Sp>` and
+`Saml<Idp>`, so an old import still compiles and the raw method calls fail.
+Configure `SpConfig` or `IdpConfig` and call the typed operations, as
+[section 3](raw-api.md) shows.
 
 ## 1.12 Import metadata from `metadata`
 
@@ -489,7 +494,7 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 `create_login_request_with_options`, or `parse_login_response_with_request_id`.
 
 **Now:** these functions are removed with the raw API. Call
-`Saml::<Sp>::start_sso`, then `finish_sso` for the response, as
+`ServiceProvider::start_sso`, then `finish_sso` for the response, as
 [section 3](raw-api.md) shows.
 
 ## 1.14 Accept unsolicited SSO instead of `parse_unsolicited_login_response`
@@ -498,7 +503,7 @@ use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 or `parse_login_response`, which was another name for it.
 
 **Now:** both are removed with the raw API. Call
-`Saml::<Sp>::accept_unsolicited_sso`. It rejects an unsolicited response that
+`ServiceProvider::accept_unsolicited_sso`. It rejects an unsolicited response that
 carries `InResponseTo`, including an empty one.
 
 ## 1.15 Handle the POST form error
@@ -806,4 +811,60 @@ let code = saml_rs::constants::status_code::AUTH_FAILED;
 
 // Now
 let code = saml_rs::constants::status_code::AUTHN_FAILED;
+```
+
+## 1.25 Replace `Saml<Sp>` and `Saml<Idp>` with `ServiceProvider` and `IdentityProvider`
+
+**Affects:** every typed integration. It names `Saml`, `Sp`, or `Idp`.
+
+**Before:** `Saml::sp(config)` returned `Saml<Sp>` and `Saml::idp(config)`
+returned `Saml<Idp>`. `Sp`, `Idp`, and `Unknown` were the role parameters.
+
+**Now:** the two roles are two types. `Saml`, `Sp`, `Idp`, and `Unknown` are
+removed. Every method keeps its name and signature:
+
+| 0.8 | 0.9 |
+| --- | --- |
+| `Saml::sp(config)` | `ServiceProvider::new(config)` |
+| `Saml::idp(config)` | `IdentityProvider::new(config)` |
+| `Saml<Sp>`, `Saml::<Sp>::method` | `ServiceProvider`, `ServiceProvider::method` |
+| `Saml<Idp>`, `Saml::<Idp>::method` | `IdentityProvider`, `IdentityProvider::method` |
+| `use saml_rs::{Saml, Sp, Idp}` | `use saml_rs::{IdentityProvider, ServiceProvider}` |
+
+`ServiceProvider::new` and `IdentityProvider::new` return the provider, not a
+`Result`. [Typed config](config.md#call-serviceprovidernew-and-identityprovidernew-without-)
+explains why.
+
+**Upgrade:**
+
+1. Rewrite the constructors and types. The command works with GNU and BSD
+   `sed`, and leaves a `.bak` copy of each file it changes:
+
+   ```sh
+   rg -l --type rust 'Saml' . | xargs sed -i.bak -E \
+   	-e 's/Saml::sp\(/ServiceProvider::new(/g' \
+   	-e 's/Saml::idp\(/IdentityProvider::new(/g' \
+   	-e 's/Saml(::)?<([a-z_]+::)*Sp>/ServiceProvider/g' \
+   	-e 's/Saml(::)?<([a-z_]+::)*Idp>/IdentityProvider/g'
+   ```
+
+2. In each `use` list, replace `Saml`, `Sp`, and `Idp` with
+   `ServiceProvider`, `IdentityProvider`, or both. The compiler names each
+   import that is left.
+3. Delete the `.bak` files.
+
+```rust
+// Before
+use saml_rs::{Idp, Saml, Sp};
+
+fn providers(sp: SpConfig, idp: IdpConfig) -> Result<(Saml<Sp>, Saml<Idp>), SamlError> {
+    Ok((Saml::sp(sp)?, Saml::idp(idp)?))
+}
+
+// Now
+use saml_rs::{IdentityProvider, ServiceProvider};
+
+fn providers(sp: SpConfig, idp: IdpConfig) -> (ServiceProvider, IdentityProvider) {
+    (ServiceProvider::new(sp), IdentityProvider::new(idp))
+}
 ```

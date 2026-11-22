@@ -21,11 +21,11 @@ use saml_rs::constants::signature_algorithm::{RSA_SHA256, RSA_SHA384, RSA_SHA512
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string, sign_saml_xml};
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, AssertionSignaturePolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, Outbound, PendingAuthnRequest,
-    ReplayKey, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoSession, StartSso,
-    VerifiedXmlSignatureCoverage,
+    AcsEndpoint, AssertionSignaturePolicy, EntityId, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, Outbound,
+    PendingAuthnRequest, ReplayKey, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    SsoSession, StartSso, VerifiedXmlSignatureCoverage,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -38,7 +38,7 @@ const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencryp
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 struct Exchange {
-    sp: Saml<saml_rs::Sp>,
+    sp: saml_rs::ServiceProvider,
     idp_descriptor: IdpDescriptor,
     pending: Option<PendingAuthnRequest>,
     response_fields: Vec<FormField>,
@@ -57,8 +57,8 @@ fn post_fields<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, 
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -77,7 +77,7 @@ fn exchange_for(
     sp_validation: SpValidationPolicy,
     unsolicited: bool,
 ) -> Result<Exchange, Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?.with_default(),
@@ -86,7 +86,7 @@ fn exchange_for(
         .validation(sp_validation)
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -363,7 +363,7 @@ fn simple_sign_fields(
 }
 
 fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?,
@@ -373,7 +373,7 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
         .validation(SpValidationPolicy::recommended())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -1057,8 +1057,8 @@ mod encrypted_assertions {
     fn decrypting_sp(
         acs: AcsEndpoint,
         validation: SpValidationPolicy,
-    ) -> Result<Saml<saml_rs::Sp>, SamlError> {
-        Ok(Saml::sp(
+    ) -> Result<saml_rs::ServiceProvider, SamlError> {
+        Ok(ServiceProvider::new(
             SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs)
                 .credentials(signing_credentials().with_decryption_credential(
                     saml_rs::X509Credential::new(

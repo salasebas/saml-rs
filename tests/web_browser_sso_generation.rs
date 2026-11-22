@@ -16,11 +16,11 @@ use saml_rs::constants::status_code;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId,
-    NameIdCreationPolicy, NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy, RespondSso, Saml,
-    SamlError, SamlInstant, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse, StartSso, Status,
-    SubordinateStatusCode, TemplatePolicy,
+    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
+    NameId, NameIdCreationPolicy, NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy,
+    RespondSso, SamlError, SamlInstant, SamlValidationContext, ServiceProvider, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse,
+    StartSso, Status, SubordinateStatusCode, TemplatePolicy,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, XmlPolicy};
@@ -72,8 +72,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp_with(validation: SpValidationPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -87,7 +87,7 @@ fn sp_with(validation: SpValidationPolicy) -> Result<Saml<saml_rs::Sp>, SamlErro
 fn idp_with(
     validation: IdpValidationPolicy,
     single_logout: bool,
-) -> Result<Saml<saml_rs::Idp>, SamlError> {
+) -> Result<saml_rs::IdentityProvider, SamlError> {
     let mut builder = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::post(IDP_SSO_POST)?,
@@ -98,12 +98,12 @@ fn idp_with(
     if single_logout {
         builder = builder.slo_endpoint(SloEndpoint::redirect(IDP_SLO)?);
     }
-    Ok(Saml::idp(builder.build()?))
+    Ok(IdentityProvider::new(builder.build()?))
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -398,7 +398,7 @@ fn login_response_template_writes_in_response_to_only_for_a_request(
     .validation(signed_authn_request_idp_validation())
     .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
-    let idp = Saml::idp(idp_config);
+    let idp = IdentityProvider::new(idp_config);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let unsolicited = idp.initiate_sso(
@@ -488,7 +488,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
     .validation(signed_authn_request_idp_validation())
     .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
-    let template_idp = Saml::idp(template_config);
+    let template_idp = IdentityProvider::new(template_config);
     let (sp_descriptor, _) = descriptors(&sp, &template_idp)?;
     let response = template_idp.initiate_sso(
         &sp_descriptor,
@@ -503,7 +503,7 @@ fn typed_sso_assertion_name_id_omits_format_when_none_is_configured(
 fn typed_sso_assertion_name_id_keeps_the_configured_format(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -578,7 +578,7 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
     assert!(!xml.contains("SessionIndex="));
     assert_eq!(response.session_index(), None);
 
-    let soap_only_idp = Saml::idp(
+    let soap_only_idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -647,7 +647,7 @@ fn typed_transient_name_id_omits_allow_create_under_producer_rules(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut validation = SpValidationPolicy::compatibility();
     validation.name_id_creation = NameIdCreationPolicy::AllowCreate;
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -733,7 +733,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
     let encryption = encrypted_assertions();
     let mut templates = saml_rs::TemplatePolicy::default();
     templates.tag_prefix_assertion = "é".into();
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -744,7 +744,7 @@ fn typed_encrypted_assertion_takes_the_assertion_prefix() -> Result<(), Box<dyn 
         .validation(signing_sp_validation())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -783,7 +783,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
     let encrypted_credentials = signing_credentials().with_decryption_credential(
         saml_rs::X509Credential::new(CertificatePem::new(CERT), PrivateKeyPem::new(PRIVKEY)),
     );
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -793,7 +793,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         .xml(encryption)
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -850,7 +850,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
     }
 
-    let permissive = Saml::sp(
+    let permissive = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -880,7 +880,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
     .validation(SpValidationPolicy::compatibility())
     .authn_request_template("<samlp:AuthnRequest/>")
     .build()?;
-    let sp = Saml::sp(config);
+    let sp = ServiceProvider::new(config);
     let idp = idp_with(IdpValidationPolicy::compatibility(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     match sp.start_sso(&idp_descriptor, StartSso::redirect().apply_producer_rules()) {
@@ -897,7 +897,7 @@ fn typed_producer_rules_reject_custom_login_templates() -> Result<(), Box<dyn st
     .validation(signed_authn_request_idp_validation())
     .sso_response_template("<samlp:Response/>")
     .build()?;
-    let idp = Saml::idp(idp_config);
+    let idp = IdentityProvider::new(idp_config);
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
     match idp.initiate_sso(
         &sp_descriptor,
@@ -1152,7 +1152,7 @@ fn typed_error_response_is_written_next_to_a_login_response_template(
     .templates(templates)
     .sso_response_template(SSO_RESPONSE_TEMPLATE)
     .build()?;
-    let idp = Saml::idp(idp_config);
+    let idp = IdentityProvider::new(idp_config);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let no_passive = Status::responder()
         .with_subordinate(SubordinateStatusCode::try_new(status_code::NO_PASSIVE)?);
@@ -1198,7 +1198,7 @@ fn typed_error_response_is_written_next_to_a_login_response_template(
 #[test]
 fn typed_simplesign_error_response_keeps_the_detached_signature(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .acs_endpoint(
                 AcsEndpoint::simple_sign("https://sp.example.com/acs/simple-sign")?.with_default(),
@@ -1232,7 +1232,7 @@ fn typed_error_response_stays_plaintext_when_assertion_encryption_is_on(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let encryption = encrypted_assertions();
     let sp = sp_with(signing_sp_validation())?;
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,

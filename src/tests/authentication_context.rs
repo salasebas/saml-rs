@@ -13,11 +13,11 @@ use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId, Outbound,
-    OutboundDelivery, ReplayPolicy, RequestedAuthnContext, RespondSso, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
-    SsoResponse, StartSso,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, FormField, IdentityProvider,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive, MetadataTrustPolicy, NameId,
+    Outbound, OutboundDelivery, ReplayPolicy, RequestedAuthnContext, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoResponse, StartSso,
 };
 
 const SP: &str = "https://sp.example.com";
@@ -31,8 +31,8 @@ const KEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 type Parties = (
-    Saml<saml_rs::Sp>,
-    Saml<saml_rs::Idp>,
+    saml_rs::ServiceProvider,
+    saml_rs::IdentityProvider,
     SpDescriptor,
     IdpDescriptor,
 );
@@ -45,7 +45,7 @@ fn parties_with(
     xml: saml_rs::XmlPolicy,
     credentials: saml_rs::Credentials,
 ) -> Result<Parties, SamlError> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP)?,
             AcsEndpoint::post(ACS)?.with_default(),
@@ -57,7 +57,7 @@ fn parties_with(
         })
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(EntityId::try_new(IDP)?, SsoEndpoint::redirect(SSO)?)
             .sso_endpoint(SsoEndpoint::post(SSO)?)
             .sso_endpoint(SsoEndpoint::simple_sign(SSO)?)
@@ -539,7 +539,7 @@ fn encrypted_assertion_exposes_the_asserted_context() -> Result<(), Box<dyn std:
 fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dyn std::error::Error>>
 {
     let (_, _, _, idp_descriptor) = parties()?;
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP)?,
             AcsEndpoint::post(ACS)?.with_default(),

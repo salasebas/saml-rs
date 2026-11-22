@@ -32,9 +32,9 @@ version needs, build with resolver `"3"` or
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, CertificatePem, EntityId, FormField, IdpDescriptor, Inbound,
-    MetadataTrustPolicy, ReplayCache, ReplayPolicy, Saml, SamlError, SamlValidationContext,
-    SpConfig, StartSso,
+    AcsEndpoint, CertificatePem, EntityId, FormField, IdpDescriptor, Inbound, MetadataTrustPolicy,
+    ReplayCache, ReplayPolicy, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
+    StartSso,
 };
 
 fn sign_in(
@@ -43,7 +43,7 @@ fn sign_in(
     replay_cache: &mut dyn ReplayCache,
     posted_form: Vec<FormField>,
 ) -> Result<(), SamlError> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new("https://sp.example.com/metadata")?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -104,7 +104,7 @@ cargo run -p saml-rs --example sso
 
 ## What it covers
 
-| Area | Typed `Saml` API |
+| Area | Typed `ServiceProvider` and `IdentityProvider` API |
 | --- | --- |
 | Web SSO | `AuthnRequest` and `Response` over HTTP-POST, HTTP-Redirect, HTTP-POST-SimpleSign, and HTTP-Artifact responses |
 | Enhanced Client/Proxy | Service provider and identity provider over PAOS |

@@ -58,10 +58,10 @@ impl StartSso {
     /// Set the RelayState the AuthnRequest carries. The request carries none
     /// by default.
     ///
-    /// [`Saml<Sp>::finish_sso`](crate::Saml::finish_sso) requires the response
+    /// [`ServiceProvider::finish_sso`](crate::ServiceProvider::finish_sso) requires the response
     /// to return it unchanged. A value longer than
     /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES) fails
-    /// [`Saml<Sp>::start_sso`](crate::Saml::start_sso).
+    /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso).
     pub fn relay_state(mut self, relay_state: RelayState) -> Self {
         self.relay_state = Some(relay_state);
         self
@@ -85,7 +85,7 @@ impl StartSso {
     /// Set the requester's human-readable `ProviderName`. Omitted by default.
     ///
     /// The name may be empty and may contain any character XML 1.0 allows.
-    /// [`Saml<Sp>::start_sso`](crate::Saml::start_sso) returns
+    /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso) returns
     /// [`SamlError::Invalid`](crate::SamlError::Invalid) for a name with a
     /// character XML 1.0 forbids. Requires the built-in AuthnRequest renderer.
     pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
@@ -176,9 +176,9 @@ impl RespondSso {
 impl RespondSso<ArtifactDelivery> {
     /// Respond with HTTP-Artifact.
     ///
-    /// [`Saml<Idp>::respond_sso_artifact`](crate::Saml::respond_sso_artifact)
+    /// [`IdentityProvider::respond_sso_artifact`](crate::IdentityProvider::respond_sso_artifact)
     /// and
-    /// [`Saml<Idp>::initiate_sso_artifact`](crate::Saml::initiate_sso_artifact)
+    /// [`IdentityProvider::initiate_sso_artifact`](crate::IdentityProvider::initiate_sso_artifact)
     /// take these options. They store the response until the service
     /// provider resolves the artifact. The stored response is signed the way
     /// an HTTP-POST response is.
@@ -550,7 +550,7 @@ impl RespondSlo {
 
 /// Options for issuing a `<ManageNameIDRequest>`.
 ///
-/// [`Saml<Idp>::start_name_id_management`](crate::Saml::start_name_id_management)
+/// [`IdentityProvider::start_name_id_management`](crate::IdentityProvider::start_name_id_management)
 /// sends the request over SOAP, and `start_name_id_management_redirect` sends
 /// it over HTTP-Redirect. Over HTTP-Redirect the request is always signed and
 /// goes to an `https` peer `ManageNameIDService` unless [`Self::allow_http`]
@@ -575,7 +575,7 @@ impl StartNameIdManagement {
     /// The response must return it unchanged. A value longer than
     /// [`MAX_RELAY_STATE_BYTES`](crate::MAX_RELAY_STATE_BYTES) fails the start
     /// operation. A SOAP request carries no RelayState:
-    /// [`Saml<Idp>::start_name_id_management`](crate::Saml::start_name_id_management)
+    /// [`IdentityProvider::start_name_id_management`](crate::IdentityProvider::start_name_id_management)
     /// returns [`SamlError::ProtocolProfile`](crate::SamlError::ProtocolProfile)
     /// when one is set.
     pub fn relay_state(mut self, relay_state: RelayState) -> Self {

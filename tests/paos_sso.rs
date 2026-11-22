@@ -18,10 +18,10 @@ use saml_rs::config::SSO_RESPONSE_TEMPLATE;
 use saml_rs::constants::{status_code::AUTHN_FAILED, transform_algorithm};
 use saml_rs::{
     check_paos_client_headers, AcsEndpoint, AlgorithmPolicy, Attribute, AttributeNameFormat,
-    AttributeValue, Attributes, AuthnContextReference, EndpointUrl, EntityId, IdpConfig,
-    IdpConfigBuilder, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
-    NameIdFormat, PaosHttpResponse, RelayState, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
+    AttributeValue, Attributes, AuthnContextReference, EndpointUrl, EntityId, IdentityProvider,
+    IdpConfig, IdpConfigBuilder, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, NameId,
+    NameIdFormat, PaosHttpResponse, RelayState, ReplayPolicy, SamlError, SamlValidationContext,
+    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
     SsoEndpoint, SsoOutcome, StartPaosSso, Status, SubordinateStatusCode, TransformAlgorithm,
     X509Credential,
 };
@@ -52,8 +52,8 @@ fn credentials() -> saml_rs::Credentials {
 }
 
 type Parties = (
-    Saml<saml_rs::Sp>,
-    Saml<saml_rs::Idp>,
+    saml_rs::ServiceProvider,
+    saml_rs::IdentityProvider,
     SpDescriptor,
     IdpDescriptor,
 );
@@ -70,7 +70,7 @@ fn parties() -> Result<Parties, SamlError> {
 }
 
 fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -79,7 +79,7 @@ fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
         .validation(SpValidationPolicy::recommended())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         idp.credentials(credentials())
             .validation(IdpValidationPolicy::recommended())
             .build()?,
@@ -661,7 +661,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         ));
     let mut sp_validation = SpValidationPolicy::recommended();
     sp_validation.assertions = saml_rs::AssertionSignaturePolicy::RequireSigned;
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -671,7 +671,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
         .xml(encryption)
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post("https://idp.example.com/sso/post")?,

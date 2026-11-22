@@ -12,7 +12,7 @@ use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{elements_order, signature_algorithm::RSA_SHA256, Binding, CertUse};
 use saml_rs::entity::{iso8601_offset, EntitySetting};
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{
     generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, SpMetadata, SpMetadataInput,
 };
@@ -180,7 +180,7 @@ fn sp_metadata_with_shibboleth_elements_order() -> Result<(), Box<dyn std::error
 #[test]
 fn idp_with_multiple_signing_and_encryption_certificates() -> Result<(), Box<dyn std::error::Error>>
 {
-    let idp = IdentityProvider::from_config(
+    let idp = idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp".into(),
             signing_certs: vec![IDP_CERT.into(), IDP_CERT2.into()],

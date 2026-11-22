@@ -13,11 +13,11 @@ use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::XmlLimits;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequestSigningPolicy,
-    AuthnRequestValidationPolicy, EntityId, FormField, IdpConfig, IdpDescriptor,
+    AuthnRequestValidationPolicy, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, ReplayPolicy,
-    RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponseBinding, StartSlo,
-    StartSso, XmlPolicy,
+    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoResponseBinding,
+    StartSlo, StartSso, XmlPolicy,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -34,8 +34,8 @@ fn padding_above_default_limit() -> usize {
 }
 
 struct Parties {
-    sp: Saml<saml_rs::Sp>,
-    idp: Saml<saml_rs::Idp>,
+    sp: saml_rs::ServiceProvider,
+    idp: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     idp_descriptor: IdpDescriptor,
 }
@@ -52,7 +52,7 @@ fn raised_xml_policy() -> XmlPolicy {
 }
 
 fn parties() -> TestResult<Parties> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::simple_sign("https://sp.example.com/acs/simple")?,
@@ -70,7 +70,7 @@ fn parties() -> TestResult<Parties> {
         .xml(raised_xml_policy())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::simple_sign("https://idp.example.com/sso/simple")?,

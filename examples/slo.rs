@@ -6,10 +6,11 @@
 #[cfg(crypto)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
-        AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
-        IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
-        RespondSlo, RespondSso, Saml, SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor,
-        SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo, StartSso, Status, X509Credential,
+        AcsEndpoint, CertificatePem, Credentials, EntityId, IdentityProvider, IdpConfig,
+        IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem,
+        ReplayPolicy, RespondSlo, RespondSso, SamlValidationContext, ServiceProvider, SloEndpoint,
+        SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo, StartSso,
+        Status, X509Credential,
     };
     use std::time::SystemTime;
 
@@ -24,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A deployment passes a shared replay cache with ReplayPolicy::RequireCache.
     let validation = || SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled);
 
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new("https://sp.example.com/metadata")?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -34,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .validation(SpValidationPolicy::recommended())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new("https://idp.example.com/metadata")?,
             SsoEndpoint::post("https://idp.example.com/sso")?,

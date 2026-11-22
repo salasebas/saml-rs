@@ -67,8 +67,8 @@ let denied = idp.respond_sso(
 After the upgrade:
 
 ```rust
-# use saml_rs::{AuthnRequest, Attributes, NameId, Received, RespondSso, Saml, SamlError, SpDescriptor, SsoAssertion, SsoOutcome, Status};
-# fn respond(idp: &Saml<saml_rs::Idp>, sp: &SpDescriptor, request: &Received<AuthnRequest>, attributes: Attributes) -> Result<(), SamlError> {
+# use saml_rs::{AuthnRequest, Attributes, NameId, Received, RespondSso, SamlError, SpDescriptor, SsoAssertion, SsoOutcome, Status, IdentityProvider};
+# fn respond(idp: &IdentityProvider, sp: &SpDescriptor, request: &Received<AuthnRequest>, attributes: Attributes) -> Result<(), SamlError> {
 let response = idp.respond_sso(
 	sp,
 	request,

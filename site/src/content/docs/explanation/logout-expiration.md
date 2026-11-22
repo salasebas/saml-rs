@@ -1,9 +1,9 @@
 ---
 title: "Logout expiration"
-description: "`Saml<Idp>::start_slo` models a SAML session authority, so it emits `LogoutRequest@NotOnOrAfter`. The deadline uses the same identity-provider issuance lifetime as generated..."
+description: "`IdentityProvider::start_slo` models a SAML session authority, so it emits `LogoutRequest@NotOnOrAfter`. The deadline uses the same identity-provider issuance lifetime as generated..."
 ---
 
-`Saml<Idp>::start_slo` models a SAML session authority, so it emits `LogoutRequest@NotOnOrAfter`. The deadline uses the same identity-provider issuance lifetime as generated assertion time bounds. The default is five minutes. A later logout deadline is then no earlier than assertion bounds from that same `Saml<Idp>`.
+`IdentityProvider::start_slo` models a SAML session authority, so it emits `LogoutRequest@NotOnOrAfter`. The deadline uses the same identity-provider issuance lifetime as generated assertion time bounds. The default is five minutes. A later logout deadline is then no earlier than assertion bounds from that same `IdentityProvider`.
 
 The OASIS recommendation compares `NotOnOrAfter` with the assertion most recently issued for the session. This operation does not receive that assertion. The issuance lifetime does not claim an ordering against arbitrary historical, custom, or proxied assertions.
 

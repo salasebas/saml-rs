@@ -2,7 +2,7 @@
 //!
 //! The identity provider sends `ManageNameIDRequest` to a service provider and
 //! reads its `ManageNameIDResponse`, and answers a service provider's request.
-//! The service provider is a third-party peer: `Saml<Sp>` has no SOAP name
+//! The service provider is a third-party peer: `ServiceProvider` has no SOAP name
 //! identifier management, so its messages are written here.
 //!
 //! Config helpers select `compatibility()` so they build without a crypto
@@ -20,10 +20,10 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, EndpointUrl, EntityId, Idp, IdpConfig, ManageNameIdService,
+    AcsEndpoint, EndpointUrl, EntityId, IdentityProvider, IdpConfig, ManageNameIdService,
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
     NameIdFormat, NameIdManagementReceipt, NameIdManagementRefusal, PartyAuthentication,
-    RelayState, ReplayPolicy, RequestAgePolicy, Saml, SamlError, SamlValidationContext,
+    RelayState, ReplayPolicy, RequestAgePolicy, SamlError, SamlValidationContext, ServiceProvider,
     SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
 };
@@ -48,7 +48,9 @@ const TRANSIENT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient";
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-fn identity_provider(service: Option<&str>) -> Result<Saml<Idp>, Box<dyn std::error::Error>> {
+fn identity_provider(
+    service: Option<&str>,
+) -> Result<IdentityProvider, Box<dyn std::error::Error>> {
     let mut builder = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
@@ -59,7 +61,7 @@ fn identity_provider(service: Option<&str>) -> Result<Saml<Idp>, Box<dyn std::er
         builder = builder
             .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(location)?));
     }
-    Ok(Saml::idp(builder.build()?))
+    Ok(IdentityProvider::new(builder.build()?))
 }
 
 /// A service provider whose metadata publishes `services` as
@@ -68,7 +70,7 @@ fn service_provider(
     entity_id: &str,
     services: &[(&str, &str)],
 ) -> Result<SpDescriptor, Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(entity_id)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -366,7 +368,7 @@ fn a_response_for_another_request_or_from_another_issuer_is_rejected() -> TestRe
 #[test]
 fn a_transient_identifier_is_not_managed() -> TestResult {
     let sp = soap_service_provider()?;
-    let transient_default = Saml::idp(
+    let transient_default = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,
@@ -890,7 +892,7 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
     let mut xml = saml_rs::XmlPolicy::default();
     xml.limits.max_depth = 6;
     xml.limits.max_attribute_value_bytes = 64 * 1024;
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,

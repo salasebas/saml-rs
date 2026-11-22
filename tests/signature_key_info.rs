@@ -9,9 +9,10 @@ use base64::Engine;
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
     AcsEndpoint, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem,
-    Credentials, EntityId, FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    MetadataTrustPolicy, PrivateKeyPem, ReplayPolicy, Saml, SamlError, SamlValidationContext,
-    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso, X509Credential,
+    Credentials, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, PrivateKeyPem, ReplayPolicy, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -30,10 +31,10 @@ fn credentials(key: &str, cert: &str) -> Credentials {
     ))
 }
 
-fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::recommended();
     validation.authn_requests = AuthnRequestSigningPolicy::Sign;
-    Ok(Saml::sp(
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
@@ -44,10 +45,10 @@ fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>,
     ))
 }
 
-fn idp_requiring_signed_authn_requests() -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp_requiring_signed_authn_requests() -> Result<saml_rs::IdentityProvider, SamlError> {
     let mut validation = IdpValidationPolicy::recommended();
     validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
-    Ok(Saml::idp(
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
@@ -67,8 +68,8 @@ fn sp_descriptor_with_signing_cert(cert: &str) -> Result<SpDescriptor, SamlError
 }
 
 fn signed_authn_request_form(
-    signer: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    signer: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<Vec<FormField>, Box<dyn std::error::Error>> {
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -99,7 +100,7 @@ fn without_key_info(form: &[FormField]) -> Result<Vec<FormField>, Box<dyn std::e
 }
 
 fn receive(
-    idp: &Saml<saml_rs::Idp>,
+    idp: &saml_rs::IdentityProvider,
     sp_descriptor: &SpDescriptor,
     form: Vec<FormField>,
 ) -> Result<(), SamlError> {

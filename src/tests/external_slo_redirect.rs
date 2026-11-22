@@ -9,9 +9,10 @@ use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_D
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
-    AcsEndpoint, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutPolicy,
-    MetadataTrustPolicy, RelayState, ReplayCache, ReplayPolicy, Saml, SamlError,
-    SamlValidationContext, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    Inbound, LogoutPolicy, MetadataTrustPolicy, RelayState, ReplayCache, ReplayPolicy, SamlError,
+    SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -71,10 +72,10 @@ fn assert_redirect_wire(query: &str, relay_state: Option<&str>) {
     ));
 }
 
-fn sp_receiver() -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp_receiver() -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::compatibility();
     validation.logout = LogoutPolicy::recommended();
-    Ok(Saml::sp(
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS_POST)?,
@@ -93,10 +94,10 @@ fn shibboleth_idp_descriptor() -> Result<IdpDescriptor, SamlError> {
     )
 }
 
-fn idp_receiver() -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp_receiver() -> Result<saml_rs::IdentityProvider, SamlError> {
     let mut validation = IdpValidationPolicy::compatibility();
     validation.logout = LogoutPolicy::recommended();
-    Ok(Saml::idp(
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,

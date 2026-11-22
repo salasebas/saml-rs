@@ -1,8 +1,6 @@
 //! AuthnRequest rendering for the PAOS leg of Enhanced Client/Proxy SSO.
 
-use super::{
-    render_default_authn_request_xml, AllowCreateAttribute, AuthnRequestXml, ServiceProvider,
-};
+use super::{render_default_authn_request_xml, AllowCreateAttribute, AuthnRequestXml, Engine};
 use crate::constants::Binding;
 use crate::entity::{generate_id, now_iso8601};
 use crate::error::{utf8_err, SamlError};
@@ -16,7 +14,7 @@ pub(crate) struct PaosAuthnRequestInput<'a> {
     pub(crate) sign: bool,
 }
 
-impl ServiceProvider {
+impl Engine {
     /// AuthnRequest ID and XML for the PAOS leg of Enhanced Client/Proxy SSO.
     ///
     /// `ProtocolBinding` stays omitted. The assertion consumer URL is carried

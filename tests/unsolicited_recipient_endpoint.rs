@@ -15,9 +15,10 @@ use std::time::{Duration, SystemTime};
 
 use saml_rs::{
     AcsEndpoint, ArtifactDelivery, ArtifactResolutionService, DeliveredArtifact, EndpointUrl,
-    EntityId, Idp, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MetadataTrustPolicy, NameId,
-    ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SoapChannel, Sp, SpConfig,
-    SpDescriptor, SsoAssertion, SsoEndpoint, SsoResponseBinding, SsoSession,
+    EntityId, IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts,
+    MetadataTrustPolicy, NameId, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SoapChannel, SpConfig, SpDescriptor, SsoAssertion, SsoEndpoint,
+    SsoResponseBinding, SsoSession,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -47,7 +48,7 @@ fn other_binding(binding: SsoResponseBinding) -> Result<SsoResponseBinding, Saml
 
 /// A service provider with `/acs/a` and `/acs/b` for `binding`, the one at
 /// `default` marked default, and [`OTHER_BINDING`] for another binding.
-fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError> {
+fn sp(binding: SsoResponseBinding, default: &str) -> Result<ServiceProvider, SamlError> {
     let acs = |index, location| -> Result<AcsEndpoint, SamlError> {
         let endpoint = AcsEndpoint::new(binding, EndpointUrl::try_new(location)?).with_index(index);
         Ok(if location == default {
@@ -61,7 +62,7 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
         EndpointUrl::try_new(OTHER_BINDING)?,
     )
     .with_index(2);
-    Ok(Saml::sp(
+    Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, acs(0, ACS_A)?)
             .acs_endpoints([acs(1, ACS_B)?, other])
             .credentials(signing_credentials())
@@ -69,8 +70,8 @@ fn sp(binding: SsoResponseBinding, default: &str) -> Result<Saml<Sp>, SamlError>
     ))
 }
 
-fn idp() -> Result<Saml<Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp() -> Result<IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,

@@ -19,13 +19,13 @@ use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::error::SubjectConfirmationReason;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, ArtifactDelivery, ArtifactRelease, ArtifactResolutionService,
-    ArtifactWithheld, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField, Idp,
-    IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MessageConfidentiality, MessageIntegrity,
-    MetadataTrustPolicy, NameId, Outbound, PartyAuthentication, PendingAuthnRequest, Received,
-    RelayState, ReplayPolicy, ResolvedProtocolMessage, RespondSso, Saml, SamlError,
-    SamlValidationContext, SoapChannel, Sp, SpConfig, SpDescriptor, SsoAssertion, SsoEndpoint,
-    SsoOutcome, SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status,
-    SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
+    ArtifactWithheld, AuthnRequest, DeliveredArtifact, EndpointUrl, EntityId, FormField,
+    IdentityProvider, IdpConfig, IdpDescriptor, Inbound, IssuedArtifacts, MessageConfidentiality,
+    MessageIntegrity, MetadataTrustPolicy, NameId, Outbound, PartyAuthentication,
+    PendingAuthnRequest, Received, RelayState, ReplayPolicy, ResolvedProtocolMessage, RespondSso,
+    SamlError, SamlValidationContext, ServiceProvider, SoapChannel, SpConfig, SpDescriptor,
+    SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse, SsoResponseBinding, SsoSession, StartSso,
+    Status, SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -48,8 +48,8 @@ const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencryp
 const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 struct Parties {
-    idp: Saml<Idp>,
-    sp: Saml<Sp>,
+    idp: IdentityProvider,
+    sp: ServiceProvider,
     idp_metadata: IdpDescriptor,
     sp_metadata: SpDescriptor,
 }
@@ -81,7 +81,7 @@ fn parties_with_consumers(
     artifact: AcsEndpoint,
     algorithms: AlgorithmPolicy,
 ) -> Result<Parties, SamlError> {
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,
@@ -94,7 +94,7 @@ fn parties_with_consumers(
         .algorithms(algorithms)
         .build()?,
     );
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, post)
             .acs_endpoint(artifact)
             .credentials(signing_credentials())
@@ -774,7 +774,7 @@ fn an_unsigned_artifact_response_is_rejected() -> Result<(), Box<dyn std::error:
 fn a_response_resolved_from_another_identity_provider_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = unsolicited_parties()?;
-    let other = Saml::idp(
+    let other = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new("https://other-idp.example.com/metadata")?,
             SsoEndpoint::redirect("https://other-idp.example.com/sso")?,
@@ -902,7 +902,7 @@ fn an_unsolicited_artifact_is_not_sent_when_the_default_consumer_has_another_bin
 fn an_unsolicited_artifact_goes_to_the_default_artifact_consumer(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = parties()?;
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::artifact(SP_ACS_ARTIFACT)?.with_index(1),
@@ -1068,7 +1068,7 @@ fn encrypted_assertion_parties(
         },
         ..XmlPolicy::default()
     };
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         idp.artifact_resolution_service(ArtifactResolutionService::new(
             0,
             EndpointUrl::try_new(RESOLUTION_URL)?,
@@ -1077,7 +1077,7 @@ fn encrypted_assertion_parties(
         .xml(encryption())
         .build()?,
     );
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::artifact(SP_ACS_ARTIFACT)?,
@@ -1195,7 +1195,7 @@ fn a_login_response_template_with_another_root_is_not_stored_as_a_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let parties = unsolicited_parties()?;
     let template = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}"><saml:Issuer>{Issuer}</saml:Issuer></samlp:LogoutRequest>"#;
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect(IDP_SSO_REDIRECT)?,

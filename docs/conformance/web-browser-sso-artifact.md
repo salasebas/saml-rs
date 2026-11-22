@@ -25,7 +25,7 @@ the request at the assertion consumer. TLS for that exchange stays there.
 
 ## Identity provider delivery
 
-`Saml<Idp>::respond_sso_artifact` and `Saml<Idp>::initiate_sso_artifact` are
+`IdentityProvider::respond_sso_artifact` and `IdentityProvider::initiate_sso_artifact` are
 this actor.
 
 | Rule | Actor | Direction | Level |
@@ -53,8 +53,8 @@ only to the service provider it was issued to are in
 
 ## Service provider receipt
 
-`DeliveredArtifact`, `Saml<Sp>::finish_sso`, and
-`Saml<Sp>::accept_unsolicited_sso` are this actor.
+`DeliveredArtifact`, `ServiceProvider::finish_sso`, and
+`ServiceProvider::accept_unsolicited_sso` are this actor.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
@@ -66,7 +66,7 @@ only to the service provider it was issued to are in
 | A received `RelayState` longer than 80 bytes is accepted | Service provider | Inbound artifact | Bindings §3.6.3.1 forbids the entity creating the message from exceeding 80 bytes and has no receiver rule. `DeliveredArtifact::from_query` and `from_form` keep the value. Library policy for the bound: a value longer than `MAX_RECEIVED_RELAY_STATE_BYTES`, 4096 bytes, returns `SamlError::LimitExceeded`. It is a resource limit on unauthenticated input, not an OASIS rule |
 | `RelayState` is the value the service provider sent, when it sent one | Service provider | Inbound `finish_sso` | Library policy, as for HTTP-POST. Bindings §3.6.5.2 says nothing protects the pairing of an artifact and its `RelayState`, and requires the consumer to take care. It does not require this comparison. The looser rule cannot be applied because the pending login is the only value `finish_sso` can check the delivered one against. When the service provider sent none, Bindings §3.6.3.1 lets the identity provider include one, and `SsoSession::relay_state` reports it |
 | A URL taken from `RelayState` is sanitized | Service provider | Inbound artifact | Mandatory for the party that uses the value that way. Bindings §3.6.5.2 as amended by Errata 05 E90. saml-rs does not interpret `RelayState`. The caller sanitizes it |
-| Resolve the artifact on a synchronous binding that does not use the browser | Service provider | Resolve artifact | Mandatory. Bindings §3.6.5, Errata 05 E31. `Saml<Sp>::resolve_artifact` over SOAP |
+| Resolve the artifact on a synchronous binding that does not use the browser | Service provider | Resolve artifact | Mandatory. Bindings §3.6.5, Errata 05 E31. `ServiceProvider::resolve_artifact` over SOAP |
 | The dereference is mutually authenticated, integrity protected, and confidential | Both parties | Resolve artifact | Mandatory. Profiles §4.1.4.4. `Inbound::artifact` takes the message `ArtifactResolution::finish` returned. `resolve_artifact` builds that resolution only for a `SoapChannel` that attests all three, and `answer_artifact_resolve` releases a stored `<Response>` only on such a channel |
 | The message is the one resolved from the delivered artifact, by the identity provider being accepted | Service provider | Inbound `finish_sso` and `accept_unsolicited_sso` | Library policy. Profiles §4.1.3.5 has the service provider retrieve the `Response` for the artifact from the identity provider that issued it, and does not state a receiver rejection. The looser rule cannot be applied because `Inbound::artifact` pairs two caller values, and a mismatched pair would accept a message for another artifact or identity provider. Such a message is rejected |
 | Enforce single use of a received artifact, and do not retry one whose resolution did not complete | Service provider | Resolve artifact | Recommendation. Bindings §3.6.5.2. With `ReplayPolicy::RequireCache`, `resolve_artifact` stores `ReplayKey::Artifact` in the caller's `ReplayCache` when resolution starts, until the context time plus `SamlValidationContext::with_replay_retention`. The binding asks that period to exceed the time the issuer would resolve the artifact. `ReplayPolicy::Disabled` on that call relaxes it |

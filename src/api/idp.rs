@@ -1,9 +1,9 @@
 use crate::artifact::{self, IssuedArtifacts};
 use crate::browser::{ArtifactDelivery, Inbound, Outbound, SsoRequestBinding};
-use crate::config::SpDescriptor;
+use crate::config::{IdpConfig, SpDescriptor};
 use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
-use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
+use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
     AuthnRequest, Received, RelayState, ReplayKey, SamlValidationContext, SsoResponse,
 };
@@ -13,7 +13,7 @@ use super::raw_mapping::{ensure_entity_id, raw_sp_descriptor, relay_state_from_i
 use super::requested_subject::decrypt_requested_subject;
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
 use super::sso_outcome::OutcomeParts;
-use super::{Idp, RespondSso, Saml, SamlError, SsoOutcome};
+use super::{RespondSso, SamlError, SsoOutcome};
 
 /// Where an issued response goes.
 pub(super) enum ResponseTransport<'a> {
@@ -23,14 +23,36 @@ pub(super) enum ResponseTransport<'a> {
     Artifact(ArtifactDelivery, &'a mut IssuedArtifacts),
 }
 
-impl Saml<Idp> {
-    /// Local IdP metadata XML.
-    pub fn metadata_xml(&self) -> &str {
-        self.identity_provider().metadata_xml()
+/// A SAML identity provider built from an [`IdpConfig`].
+///
+/// It answers and initiates Web Browser SSO, single logout, artifact
+/// resolution, name identifier management, and ECP with the service
+/// providers it is given as [`SpDescriptor`]s.
+#[derive(Debug)]
+pub struct IdentityProvider {
+    config: IdpConfig,
+}
+
+impl IdentityProvider {
+    /// An identity provider that runs on `config`.
+    ///
+    /// [`IdpConfigBuilder::build`](crate::IdpConfigBuilder::build) has
+    /// already validated `config`, so this cannot fail.
+    pub fn new(config: IdpConfig) -> Self {
+        Self { config }
     }
 
-    pub(crate) fn identity_provider(&self) -> &IdentityProvider {
-        &self.0.identity_provider
+    /// Local IdP metadata XML.
+    pub fn metadata_xml(&self) -> &str {
+        self.engine().metadata_xml()
+    }
+
+    pub(crate) fn engine(&self) -> &idp::Engine {
+        &self.config.engine
+    }
+
+    pub(crate) fn issuance_lifetime(&self) -> time::Duration {
+        self.config.issuance_lifetime
     }
 
     /// Receive an SP AuthnRequest.
@@ -54,13 +76,13 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     FormField, Inbound, NameId, ReplayPolicy, RespondSso, Saml, SamlValidationContext,
-    ///     SpDescriptor, SsoAssertion,
+    ///     FormField, IdentityProvider, Inbound, NameId, ReplayPolicy, RespondSso,
+    ///     SamlValidationContext, SpDescriptor, SsoAssertion,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn respond(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     fields: Vec<FormField>,
     /// #     name_id: NameId,
@@ -86,23 +108,19 @@ impl Saml<Idp> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoRequestBinding::try_from(input.binding())?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
-        let request = input.into_http_request(self.identity_provider().setting.xml_limits)?;
-        let (flow, message_authenticated) = self.identity_provider().parse_login_request_at(
+        let request = input.into_http_request(self.engine().setting.xml_limits)?;
+        let (flow, message_authenticated) = self.engine().parse_login_request_at(
             raw_sp,
             Binding::from(binding),
             &request,
             validation.now(),
             validation.clock_skew(),
         )?;
-        let flow = decrypt_requested_subject(
-            flow,
-            &self.identity_provider().setting,
-            message_authenticated,
-        )?;
+        let flow = decrypt_requested_subject(flow, &self.engine().setting, message_authenticated)?;
         let authn = AuthnRequest::from_flow(flow)?;
         if authn.destination().is_some() || message_authenticated {
             let locations = self
-                .identity_provider()
+                .engine()
                 .metadata
                 .single_sign_on_service_locations(Binding::from(binding));
             if locations.is_empty() {
@@ -178,12 +196,12 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     AuthnRequest, NameId, Received, RespondSso, Saml, SpDescriptor, SsoAssertion,
-    ///     SsoOutcome, Status,
+    ///     AuthnRequest, IdentityProvider, NameId, Received, RespondSso, SpDescriptor,
+    ///     SsoAssertion, SsoOutcome, Status,
     /// };
     ///
     /// # fn respond(
-    /// #     idp: &Saml<saml_rs::Idp>,
+    /// #     idp: &IdentityProvider,
     /// #     sp: &SpDescriptor,
     /// #     request: &Received<AuthnRequest>,
     /// #     authenticated: Option<NameId>,
@@ -245,14 +263,14 @@ impl Saml<Idp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     FormField, IdpDescriptor, Inbound, NameId, ReplayPolicy, RespondSso, Saml,
-    ///     SamlValidationContext, SpDescriptor, SsoAssertion,
+    ///     FormField, IdentityProvider, IdpDescriptor, Inbound, NameId, ReplayPolicy, RespondSso,
+    ///     SamlValidationContext, ServiceProvider, SpDescriptor, SsoAssertion,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn initiate(
-    /// #     idp: &Saml<saml_rs::Idp>,
-    /// #     sp: &Saml<saml_rs::Sp>,
+    /// #     idp: &IdentityProvider,
+    /// #     sp: &ServiceProvider,
     /// #     sp_descriptor: &SpDescriptor,
     /// #     idp_descriptor: &IdpDescriptor,
     /// #     name_id: NameId,
@@ -312,7 +330,7 @@ impl Saml<Idp> {
         if let Some(request) = request {
             ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         }
-        let idp_setting = &self.identity_provider().setting;
+        let idp_setting = &self.engine().setting;
         let sign_response = options.should_sign_response(
             idp_setting.is_assertion_encrypted,
             &idp_setting.data_encryption_algorithm,
@@ -346,7 +364,7 @@ impl Saml<Idp> {
             acs: Some(&acs),
             name_id_format,
             name_id_qualifiers,
-            issuance_lifetime: Some(self.0.issuance_lifetime),
+            issuance_lifetime: Some(self.issuance_lifetime()),
             web_browser_sso_producer: options.web_browser_sso_producer,
             status,
             typed_attributes,
@@ -362,31 +380,26 @@ impl Saml<Idp> {
         };
         let (delivery, issued) = match options.delivery {
             ResponseTransport::Browser => {
-                let issued = self
-                    .identity_provider()
-                    .create_login_response_with_overrides(
-                        raw_sp,
-                        Binding::from(binding),
-                        &user,
-                        &LoginResponseOptions {
-                            in_response_to,
-                            relay_state: relay_state.as_ref().map(RelayState::as_str),
-                        },
-                        overrides,
-                    )?;
+                let issued = self.engine().create_login_response_with_overrides(
+                    raw_sp,
+                    Binding::from(binding),
+                    &user,
+                    &LoginResponseOptions {
+                        in_response_to,
+                        relay_state: relay_state.as_ref().map(RelayState::as_str),
+                    },
+                    overrides,
+                )?;
                 return Outbound::<SsoResponse>::echoing_received_relay_state(issued.context)
                     .map(|outbound| outbound.with_session_index(issued.session_index));
             }
             ResponseTransport::Artifact(delivery, issued) => (delivery, issued),
         };
-        let rendered = self.identity_provider().render_posted_sso_response(
-            raw_sp,
-            &user,
-            in_response_to,
-            overrides,
-        )?;
+        let rendered =
+            self.engine()
+                .render_posted_sso_response(raw_sp, &user, in_response_to, overrides)?;
         let artifact = artifact::issue_sso_response(
-            &self.identity_provider().metadata,
+            &self.engine().metadata,
             sp,
             &rendered.xml,
             delivery.endpoint_index(),
@@ -425,11 +438,11 @@ impl Saml<Idp> {
     ///
     /// ```
     /// use saml_rs::{
-    ///     CommonDomainCookieLifetime, EntityId, IdpConfig, IdpValidationPolicy,
-    ///     RememberIdentityProvider, Saml, SsoEndpoint,
+    ///     CommonDomainCookieLifetime, EntityId, IdentityProvider, IdpConfig, IdpValidationPolicy,
+    ///     RememberIdentityProvider, SsoEndpoint,
     /// };
     ///
-    /// let idp = Saml::idp(
+    /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::post("https://idp.example.com/sso")?)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
@@ -449,6 +462,6 @@ impl Saml<Idp> {
         &self,
         options: RememberIdentityProvider<'_>,
     ) -> Result<CommonDomainCookie, SamlError> {
-        discovery::common_domain_cookie(&self.identity_provider().entity_id(), options)
+        discovery::common_domain_cookie(&self.engine().entity_id(), options)
     }
 }

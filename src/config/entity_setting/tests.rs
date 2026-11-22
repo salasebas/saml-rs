@@ -23,7 +23,7 @@ fn compatibility_relaxes_audience_and_logout_defaults_of_raw_settings() -> Resul
     )
     .validation(SpValidationPolicy::compatibility())
     .build()?
-    .service_provider
+    .engine
     .setting;
     assert!(!sp.validate_audience);
     assert!(!sp.want_logout_request_signed);
@@ -35,7 +35,7 @@ fn compatibility_relaxes_audience_and_logout_defaults_of_raw_settings() -> Resul
     )
     .validation(IdpValidationPolicy::compatibility())
     .build()?
-    .identity_provider
+    .engine
     .setting;
     assert!(idp.validate_audience);
     assert!(!idp.want_logout_request_signed);
@@ -89,7 +89,7 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         signed_reference_transforms: vec![TransformAlgorithm::ExclusiveCanonicalization],
     })
     .build()?
-    .service_provider
+    .engine
     .setting;
 
     assert_eq!(
@@ -146,7 +146,7 @@ fn idp_config_converts_authn_request_policy() -> Result<(), SamlError> {
         ..IdpValidationPolicy::recommended()
     })
     .build()?
-    .identity_provider
+    .engine
     .setting;
 
     assert_eq!(

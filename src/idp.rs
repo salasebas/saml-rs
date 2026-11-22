@@ -14,7 +14,7 @@ use crate::model::{
     ClockSkew, NameIdPolicy, RequestedAuthnContext, RequestedSubject, SessionIndex, Status,
     TopLevelStatusCode,
 };
-use crate::sp::{ServiceProvider, WebBrowserSsoProducer};
+use crate::sp::{self, WebBrowserSsoProducer};
 use crate::template::{
     apply_tag_prefixes, attr_tag, build_attribute_statement, login_response_attribute_value,
     replace_tags_by_optional_value, validate_tag_prefixes, ATTRIBUTE_STATEMENT_TEMPLATE,
@@ -88,14 +88,14 @@ struct LoginResponseRendering<'a> {
 
 /// A SAML 2.0 Identity Provider: runtime [`EntitySetting`] plus parsed [`IdpMetadata`].
 #[derive(Debug, Clone)]
-pub struct IdentityProvider {
+pub struct Engine {
     /// Runtime configuration (keys, algorithms, flags).
     pub setting: EntitySetting,
     /// Parsed IdP metadata.
     pub metadata: IdpMetadata,
 }
 
-impl IdentityProvider {
+impl Engine {
     /// Build from IdP metadata XML, merging metadata-declared flags into `setting`.
     ///
     /// # Errors
@@ -167,7 +167,7 @@ impl IdentityProvider {
     /// rendering validation fails.
     fn render_login_response(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         in_response_to: Option<&str>,
         user: &User,
         acs: &str,
@@ -387,7 +387,7 @@ impl IdentityProvider {
 
     pub(crate) fn create_login_response_with_overrides(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         user: &User,
         options: &LoginResponseOptions<'_>,
@@ -504,7 +504,7 @@ impl IdentityProvider {
     #[cfg(crypto)]
     fn finalize_login_response(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         raw: &str,
         error_response: bool,
@@ -591,7 +591,7 @@ impl IdentityProvider {
     #[cfg(not(crypto))]
     fn finalize_login_response(
         &self,
-        _sp: &ServiceProvider,
+        _sp: &sp::Engine,
         _binding: Binding,
         _raw: &str,
         _error_response: bool,
@@ -605,7 +605,7 @@ impl IdentityProvider {
 
     pub(crate) fn parse_login_request_at(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         request: &HttpRequest,
         now: SystemTime,
@@ -616,7 +616,7 @@ impl IdentityProvider {
 
     fn parse_login_request_at_inner(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         request: &HttpRequest,
         now: Option<SystemTime>,
@@ -688,7 +688,7 @@ fn written_authn_instant(
 }
 
 #[cfg(crypto)]
-fn sp_encryption_certificate(sp: &ServiceProvider) -> Result<&str, SamlError> {
+fn sp_encryption_certificate(sp: &sp::Engine) -> Result<&str, SamlError> {
     sp.metadata
         .as_metadata()
         .x509_certificates(crate::constants::CertUse::Encryption)
@@ -707,8 +707,8 @@ mod tests {
 
     const IDPMETA: &str = include_str!("../tests/fixtures/misc/idpmeta.xml");
 
-    fn unsigned_idp() -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(
+    fn unsigned_idp() -> Result<Engine, SamlError> {
+        Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -718,8 +718,8 @@ mod tests {
         )
     }
 
-    fn unsigned_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
-        ServiceProvider::from_config(
+    fn unsigned_sp(entity_id: &str) -> Result<sp::Engine, SamlError> {
+        sp::Engine::from_config(
             &SpMetadataInput {
                 entity_id: entity_id.into(),
                 assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
@@ -731,7 +731,7 @@ mod tests {
 
     #[test]
     fn from_metadata_merges_flags() -> Result<(), Box<dyn std::error::Error>> {
-        let idp = IdentityProvider::from_metadata(IDPMETA, EntitySetting::default())?;
+        let idp = Engine::from_metadata(IDPMETA, EntitySetting::default())?;
         assert!(idp.setting.want_authn_requests_signed);
         assert_eq!(
             idp.metadata
@@ -749,7 +749,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = IdentityProvider::from_config(&cfg, EntitySetting::default());
+        let result = Engine::from_config(&cfg, EntitySetting::default());
 
         assert!(matches!(
             result,
@@ -814,8 +814,8 @@ mod crypto_tests {
         }
     }
 
-    fn idp_with_setting(setting: EntitySetting) -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(
+    fn idp_with_setting(setting: EntitySetting) -> Result<Engine, SamlError> {
+        Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
@@ -827,12 +827,12 @@ mod crypto_tests {
         )
     }
 
-    fn idp() -> Result<IdentityProvider, SamlError> {
+    fn idp() -> Result<Engine, SamlError> {
         idp_with_setting(signing_setting())
     }
 
-    fn signed_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
-        ServiceProvider::from_config(
+    fn signed_sp(entity_id: &str) -> Result<sp::Engine, SamlError> {
+        sp::Engine::from_config(
             &SpMetadataInput {
                 entity_id: entity_id.into(),
                 authn_requests_signed: true,
@@ -845,7 +845,7 @@ mod crypto_tests {
         )
     }
 
-    fn sp() -> Result<ServiceProvider, SamlError> {
+    fn sp() -> Result<sp::Engine, SamlError> {
         signed_sp("https://sp.example.com/metadata")
     }
 
@@ -997,7 +997,7 @@ mod crypto_tests {
                 value_xmlns_xsi: None,
             }],
         });
-        let idp = IdentityProvider::from_config(
+        let idp = Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
@@ -1048,7 +1048,7 @@ mod crypto_tests {
                 value_xmlns_xsi: None,
             }],
         });
-        let idp = IdentityProvider::from_config(
+        let idp = Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],

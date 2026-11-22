@@ -19,11 +19,11 @@ use saml_rs::crypto::{
 };
 use saml_rs::OutboundDelivery;
 use saml_rs::{
-    AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem,
-    ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, Saml, SamlError,
-    SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSso,
-    X509Credential,
+    AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat,
+    PrivateKeyPem, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier, SamlError,
+    SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -43,8 +43,8 @@ const NEXT_PRIVKEY: &str =
 const NEXT_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
 const UNKNOWN_CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.cer");
 
-fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -60,7 +60,7 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     ))
 }
 
-fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp() -> Result<saml_rs::IdentityProvider, SamlError> {
     idp_with_credentials(idp_credentials())
 }
 
@@ -76,8 +76,8 @@ fn idp_credentials() -> Credentials {
         ))
 }
 
-fn idp_with_credentials(credentials: Credentials) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp_with_credentials(credentials: Credentials) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -129,7 +129,7 @@ fn received_identifier(
 }
 
 fn received_by(
-    idp: &Saml<saml_rs::Idp>,
+    idp: &saml_rs::IdentityProvider,
     subject: &str,
     signing: Signing,
 ) -> Result<RequestedSubjectIdentifier, Box<dyn std::error::Error>> {

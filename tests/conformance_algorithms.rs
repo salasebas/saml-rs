@@ -11,12 +11,12 @@ use saml_rs::error::SignatureVerificationReason;
 use saml_rs::Rsa15KeyTransportPolicy;
 use saml_rs::{
     AcsEndpoint, AlgorithmPolicy, AuthnRequestSigningPolicy, AuthnRequestValidationPolicy,
-    CertificatePem, Credentials, EntityId, FormField, IdpConfig, IdpDescriptor,
+    CertificatePem, Credentials, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
-    PrivateKeyPem, ReplayPolicy, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
-    SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, SsoSession, StartSlo, StartSso, TransformAlgorithm, X509Credential, XmlPolicy,
-    XmlSignatureProfile,
+    PrivateKeyPem, ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
+    SessionIndex, SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoAssertion, SsoEndpoint, SsoSession, StartSlo, StartSso, TransformAlgorithm, X509Credential,
+    XmlPolicy, XmlSignatureProfile,
 };
 use saml_rs::{
     AssertionEncryptionPolicy, Attribute, AttributeEncryptionPolicy, AttributeValue, Attributes,
@@ -87,8 +87,8 @@ fn encrypted_assertions() -> XmlPolicy {
 }
 
 struct Peers {
-    sp: Saml<saml_rs::Sp>,
-    idp: Saml<saml_rs::Idp>,
+    sp: saml_rs::ServiceProvider,
+    idp: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     idp_descriptor: IdpDescriptor,
 }
@@ -139,8 +139,8 @@ fn peers_with_profiles(
     .algorithms(idp.algorithms)
     .xml(xml)
     .build()?;
-    let sp = Saml::sp(sp);
-    let idp = Saml::idp(idp);
+    let sp = ServiceProvider::new(sp);
+    let idp = IdentityProvider::new(idp);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),

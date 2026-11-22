@@ -12,7 +12,8 @@ use saml_rs::idp::LoginResponseOptions;
 use saml_rs::template::LoginResponseAttribute;
 use saml_rs::template::LoginResponseTemplate;
 use saml_rs::{
-    AcsEndpoint, EntityId, IdpConfig, Saml, SamlError, SpConfig, SpValidationPolicy, SsoEndpoint,
+    AcsEndpoint, EntityId, IdentityProvider, IdpConfig, SamlError, ServiceProvider, SpConfig,
+    SpValidationPolicy, SsoEndpoint,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -32,7 +33,7 @@ fn email_attribute() -> LoginResponseAttribute {
 #[test]
 fn login_response_template_rejects_an_attribute_without_a_value_for_both_renderers(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
@@ -41,7 +42,7 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
         .validation(SpValidationPolicy::recommended())
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
@@ -54,14 +55,14 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
         ("built-in", None),
         ("custom template", Some(SSO_RESPONSE_TEMPLATE.to_string())),
     ] {
-        let mut raw_idp = idp.identity_provider().clone();
+        let mut raw_idp = idp.engine().clone();
         raw_idp.setting.login_response_template = Some(LoginResponseTemplate {
             context,
             attributes: vec![email_attribute()],
         });
 
         match raw_idp.create_login_response(
-            sp.service_provider(),
+            sp.engine(),
             Binding::Post,
             &User::new("alice@example.com"),
             &LoginResponseOptions::default(),

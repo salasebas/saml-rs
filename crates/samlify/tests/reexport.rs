@@ -7,5 +7,5 @@ fn samlify_reexports_canonical_saml_error_type() {
         TypeId::of::<saml_rs::SamlError>()
     );
 
-    let _: Option<samlify::Saml<samlify::Sp>> = None;
+    let _: Option<samlify::ServiceProvider> = None;
 }

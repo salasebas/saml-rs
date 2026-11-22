@@ -4,11 +4,11 @@ mod common;
 
 use common::signing_credentials;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, EntityId, IdpConfig, IdpConfigBuilder, IdpDescriptor,
-    IdpValidationPolicy, LogoutRequest, LogoutSubject, MetadataTrustPolicy, NameId, Outbound,
-    PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
-    PendingLogoutRequestSnapshot, Saml, SamlError, SloEndpoint, SpConfig, SpConfigBuilder,
-    SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, Started,
+    AcsEndpoint, AuthnRequest, EntityId, IdentityProvider, IdpConfig, IdpConfigBuilder,
+    IdpDescriptor, IdpValidationPolicy, LogoutRequest, LogoutSubject, MetadataTrustPolicy, NameId,
+    Outbound, PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
+    PendingLogoutRequestSnapshot, SamlError, ServiceProvider, SloEndpoint, SpConfig,
+    SpConfigBuilder, SpValidationPolicy, SsoEndpoint, StartSlo, StartSso, Started,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -45,8 +45,8 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
 #[test]
 fn builder_entrypoints_construct_facades_without_raw_mutation(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(sp_config()?);
-    let idp = Saml::idp(idp_config()?);
+    let sp = ServiceProvider::new(sp_config()?);
+    let idp = IdentityProvider::new(idp_config()?);
     let idp_descriptor = IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
@@ -68,8 +68,8 @@ fn builder_entrypoints_construct_facades_without_raw_mutation(
 
 #[test]
 fn facade_builder_and_browser_values_are_send_sync() {
-    assert_send_sync::<Saml<saml_rs::Sp>>();
-    assert_send_sync::<Saml<saml_rs::Idp>>();
+    assert_send_sync::<saml_rs::ServiceProvider>();
+    assert_send_sync::<saml_rs::IdentityProvider>();
     assert_send_sync::<SpConfigBuilder>();
     assert_send_sync::<IdpConfigBuilder>();
     assert_send_sync::<PendingAuthnRequest>();

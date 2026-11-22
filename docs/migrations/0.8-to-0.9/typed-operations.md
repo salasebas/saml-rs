@@ -392,7 +392,7 @@ let denied = idp.respond_paos_sso(&sp, &request, SsoOutcome::Failure(Status::res
 **Affects:** identity providers that call `Saml<Idp>::paos_soap_fault`.
 
 **Before:** `idp.paos_soap_fault()` returned the fault and did not read the
-facade.
+identity provider.
 
 **Now:** the fault is built by the type that holds it:
 `PaosHttpResponse::soap_fault()`. It is the same HTTP 500 SOAP `Client` fault.
@@ -408,7 +408,7 @@ facade.
 **Before:** the method name said it remembered the identity provider, but it
 only built the cookie value.
 
-**Now:** the method is `Saml<Idp>::common_domain_cookie`, named for the
+**Now:** the method is `IdentityProvider::common_domain_cookie`, named for the
 `CommonDomainCookie` it returns. It takes the same `RememberIdentityProvider`
 options and returns the same errors. You still write the cookie.
 

@@ -230,10 +230,10 @@ impl SsoSession {
     /// # Examples
     ///
     /// ```no_run
-    /// use saml_rs::{IdpDescriptor, Saml, SamlError, SsoSession, StartSlo};
+    /// use saml_rs::{IdpDescriptor, SamlError, ServiceProvider, SsoSession, StartSlo};
     ///
     /// # fn logout(
-    /// #     sp: &Saml<saml_rs::Sp>,
+    /// #     sp: &ServiceProvider,
     /// #     idp: &IdpDescriptor,
     /// #     session: &SsoSession,
     /// # ) -> Result<(), SamlError> {

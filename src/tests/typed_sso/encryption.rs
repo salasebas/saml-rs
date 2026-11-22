@@ -4,14 +4,14 @@ use saml_rs::{AlgorithmPolicy, DataEncryptionAlgorithm, SsoAssertion, X509Creden
 fn encrypted_exchange(
     algorithm: DataEncryptionAlgorithm,
 ) -> Result<SsoExchange, Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         sp_with_validation_and_xml(SpValidationPolicy {
             assertions: AssertionSignaturePolicy::RequireSigned,
             ..recommended_sso_accept_validation()
         })?
         .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         idp_with_validation_and_xml(recommended_sso_accept_idp_validation())?
             .algorithms(AlgorithmPolicy {
                 data_encryption: algorithm,
@@ -77,9 +77,10 @@ fn typed_encrypted_cbc_response_is_signed_by_default() -> Result<(), Box<dyn std
 #[test]
 fn recommended_sso_accept_rejects_unsigned_cbc_response_unless_relaxed(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let accepting =
-        Saml::sp(sp_with_validation_and_xml(recommended_sso_accept_validation())?.build()?);
-    let relaxed = Saml::sp(
+    let accepting = ServiceProvider::new(
+        sp_with_validation_and_xml(recommended_sso_accept_validation())?.build()?,
+    );
+    let relaxed = ServiceProvider::new(
         sp_with_validation_and_xml(SpValidationPolicy {
             responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
             ..recommended_sso_accept_validation()
@@ -211,7 +212,7 @@ fn unsigned_gcm_acceptance_bounds_key_work_including_rollover(
                 ..encrypted_xml_policy()
             })
             .build()?;
-        let rollover = Saml::sp(configured);
+        let rollover = ServiceProvider::new(configured);
         let crowded = xml.replacen(candidate, &candidate.repeat(count), 1);
         for variant in [crowded.clone(), resign_response(&crowded)?] {
             let result = rollover.finish_sso(
@@ -260,13 +261,14 @@ fn passphrase_protected_keys_sign_requests_and_decrypt_assertions(
             X509Credential::new(CertificatePem::new(KEY_CERT), PrivateKeyPem::new(KEY))
                 .with_passphrase(Passphrase::new(PASSPHRASE)),
         );
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         sp_with_validation_and_xml(signing_sp_validation())?
             .credentials(credentials)
             .build()?,
     );
-    let idp =
-        Saml::idp(idp_with_validation_and_xml(signed_authn_request_idp_validation())?.build()?);
+    let idp = IdentityProvider::new(
+        idp_with_validation_and_xml(signed_authn_request_idp_validation())?.build()?,
+    );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
@@ -308,7 +310,7 @@ fn schema_validator_rejects_the_decrypted_response() -> Result<(), Box<dyn std::
     }
 
     let exchange = encrypted_exchange(DataEncryptionAlgorithm::Aes256Gcm)?;
-    let rejecting = Saml::sp(
+    let rejecting = ServiceProvider::new(
         sp_with_validation_and_xml(recommended_sso_accept_validation())?
             .xml(XmlPolicy {
                 schema_validator: Some(reject_plain_assertion),

@@ -17,13 +17,14 @@ use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::status_code;
 use saml_rs::{
     AcsEndpoint, CertificatePem, Credentials, EntityId, FormField, IdentifierEncryptionPolicy,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound, LogoutBinding,
-    LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject, MetadataTrustPolicy,
-    NameId, NameIdFormat, Outbound, OutboundDelivery, OutstandingLogout, PrivateKeyPem, Received,
-    ReplayPolicy, RespondSlo, RespondSso, Saml, SamlError, SamlValidationContext, SessionIndex,
-    SloEndpoint, SoapChannel, SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
-    XmlEncryptionPolicy, XmlPolicy,
+    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, InMemoryReplayCache, Inbound,
+    LogoutBinding, LogoutPolicy, LogoutRequest, LogoutResponse, LogoutSigning, LogoutSubject,
+    MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery, OutstandingLogout,
+    PrivateKeyPem, Received, ReplayPolicy, RespondSlo, RespondSso, SamlError,
+    SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel,
+    SoapProtocolMessage, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential, XmlEncryptionPolicy,
+    XmlPolicy,
 };
 use url::Url;
 
@@ -85,10 +86,10 @@ fn slo_endpoints(host: &str) -> Result<Vec<SloEndpoint>, SamlError> {
 fn sp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
-) -> Result<Saml<saml_rs::Sp>, SamlError> {
+) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::recommended();
     validation.logout = logout;
-    Ok(Saml::sp(
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -104,7 +105,7 @@ fn sp_with(
 fn idp_with(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
-) -> Result<Saml<saml_rs::Idp>, SamlError> {
+) -> Result<saml_rs::IdentityProvider, SamlError> {
     idp_with_credentials(logout, encryption, credentials())
 }
 
@@ -112,10 +113,10 @@ fn idp_with_credentials(
     logout: LogoutPolicy,
     encryption: XmlEncryptionPolicy,
     credentials: Credentials,
-) -> Result<Saml<saml_rs::Idp>, SamlError> {
+) -> Result<saml_rs::IdentityProvider, SamlError> {
     let mut validation = IdpValidationPolicy::recommended();
     validation.logout = logout;
-    Ok(Saml::idp(
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO)?,
@@ -129,15 +130,15 @@ fn idp_with_credentials(
 }
 
 struct Parties {
-    sp: Saml<saml_rs::Sp>,
-    idp: Saml<saml_rs::Idp>,
+    sp: saml_rs::ServiceProvider,
+    idp: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     idp_descriptor: IdpDescriptor,
 }
 
 fn parties_with(
-    sp: Saml<saml_rs::Sp>,
-    idp: Saml<saml_rs::Idp>,
+    sp: saml_rs::ServiceProvider,
+    idp: saml_rs::IdentityProvider,
 ) -> Result<Parties, Box<dyn std::error::Error>> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,

@@ -1,7 +1,7 @@
 # Artifact resolution over SOAP
 
-Rules for typed artifact resolution: `Saml<Idp>::issue_artifact`,
-`Saml<Idp>::answer_artifact_resolve`, and `Saml<Sp>::resolve_artifact`.
+Rules for typed artifact resolution: `IdentityProvider::issue_artifact`,
+`IdentityProvider::answer_artifact_resolve`, and `ServiceProvider::resolve_artifact`.
 `ArtifactResolution::finish` reads the protocol message from the SOAP
 response. It does not accept a Web SSO session.
 
@@ -25,7 +25,7 @@ provided. saml-rs does not open a socket or check a certificate.
 
 ## Issuing an artifact
 
-`Saml<Idp>::issue_artifact` is this actor. Bindings §3.6.4 and Profiles §5.5.
+`IdentityProvider::issue_artifact` is this actor. Bindings §3.6.4 and Profiles §5.5.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
@@ -43,7 +43,7 @@ provided. saml-rs does not open a socket or check a certificate.
 
 ## ArtifactResolve
 
-`Saml<Sp>::resolve_artifact` is this actor. Profiles §5.3.1 and §5.4.1.
+`ServiceProvider::resolve_artifact` is this actor. Profiles §5.3.1 and §5.4.1.
 Errata 05 E31 replaces "direct binding" with "synchronous binding" in
 Bindings §3.6.5.
 
@@ -70,7 +70,7 @@ returns `SamlError::SoapChannelProtection` before a request is built.
 
 ## ArtifactResponse
 
-`Saml<Idp>::answer_artifact_resolve` is this actor. Profiles §5.3.2 and
+`IdentityProvider::answer_artifact_resolve` is this actor. Profiles §5.3.2 and
 §5.4.2, Bindings §3.6.5.2 and §3.6.6, and Core §3.2.2.
 
 | Rule | Actor | Direction | Level |

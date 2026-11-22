@@ -213,11 +213,11 @@ let resolution = sp.resolve_artifact(
 ```rust
 # use std::time::{Duration, SystemTime};
 # use saml_rs::{
-# 	DeliveredArtifact, IdpDescriptor, InMemoryReplayCache, ReplayPolicy, Saml,
-# 	SamlError, SamlValidationContext, SoapChannel, Sp,
+# 	DeliveredArtifact, IdpDescriptor, InMemoryReplayCache, ReplayPolicy, SamlError,
+# 	SamlValidationContext, ServiceProvider, SoapChannel,
 # };
 # fn resolve(
-# 	sp: &Saml<Sp>,
+# 	sp: &ServiceProvider,
 # 	idp: &IdpDescriptor,
 # 	delivered: &DeliveredArtifact,
 # 	replay_cache: &mut InMemoryReplayCache,

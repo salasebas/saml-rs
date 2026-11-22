@@ -7,32 +7,34 @@ of the hidden `saml_rs::sp`, `saml_rs::idp`, `saml_rs::flow`, or
 `saml_rs::logout` modules.
 
 **Now:** the raw API is removed. `raw`, `sp`, `idp`, `entity`, `flow`, and
-`logout` are no longer public, and so are `ServiceProvider`,
-`IdentityProvider`, `EntitySetting`, `User`, `LoginRequestOptions`,
-`LoginResponseOptions`, `FlowOptions`, `FlowResult`, `BindingContext`, and
-`HttpRequest`. Move each call to the typed `Saml` API:
+`logout` are no longer public, and so are `EntitySetting`, `User`,
+`LoginRequestOptions`, `LoginResponseOptions`, `FlowOptions`, `FlowResult`,
+`BindingContext`, and `HttpRequest`. The raw `ServiceProvider` and
+`IdentityProvider` are removed too, and their names now belong to the typed
+providers that replace `Saml<Sp>` and `Saml<Idp>`. Move each call to the
+typed API:
 
 | Removed | Replacement |
 | --- | --- |
-| `ServiceProvider::create_login_request` | `Saml::<Sp>::start_sso` |
-| `ServiceProvider::parse_login_response_with_request_id` | `Saml::<Sp>::finish_sso` |
-| `ServiceProvider::parse_unsolicited_login_response` | `Saml::<Sp>::accept_unsolicited_sso` |
-| `IdentityProvider::parse_login_request` | `Saml::<Idp>::receive_sso` |
-| `IdentityProvider::create_login_response` | `Saml::<Idp>::respond_sso`, or `Saml::<Idp>::initiate_sso` for an unsolicited response |
-| `logout::create_logout_request`, `create_logout_request_with_id` | `start_slo` on `Saml<Sp>` or `Saml<Idp>` |
+| `ServiceProvider::create_login_request` | `ServiceProvider::start_sso` |
+| `ServiceProvider::parse_login_response_with_request_id` | `ServiceProvider::finish_sso` |
+| `ServiceProvider::parse_unsolicited_login_response` | `ServiceProvider::accept_unsolicited_sso` |
+| `IdentityProvider::parse_login_request` | `IdentityProvider::receive_sso` |
+| `IdentityProvider::create_login_response` | `IdentityProvider::respond_sso`, or `IdentityProvider::initiate_sso` for an unsolicited response |
+| `logout::create_logout_request`, `create_logout_request_with_id` | `start_slo` on `ServiceProvider` or `IdentityProvider` |
 | `logout::parse_logout_request` | `receive_slo` |
 | `logout::create_logout_response`, `create_logout_response_with_id` | `respond_slo`, with `&Status::success()` for the `Success` they write |
 | `logout::parse_logout_response`, `parse_logout_response_without_request_id` | `finish_slo` |
 | `flow::flow` | The typed receive operation for the message |
 | `HttpRequest::redirect`, `HttpRequest::post` | `Inbound::redirect` with the raw query string, `Inbound::post` with the form fields |
-| `ServiceProvider::from_metadata`, `IdentityProvider::from_metadata` | For your own role, `Saml::sp` with an `SpConfig` or `Saml::idp` with an `IdpConfig`. For the peer, `SpDescriptor::from_metadata_xml` or `IdpDescriptor::from_metadata_xml` |
+| `ServiceProvider::from_metadata`, `IdentityProvider::from_metadata` | For your own role, `ServiceProvider::new` with an `SpConfig` or `IdentityProvider::new` with an `IdpConfig`. For the peer, `SpDescriptor::from_metadata_xml` or `IdpDescriptor::from_metadata_xml` |
 | `EntitySetting` | `SpConfig` and `IdpConfig`, with their builders |
 | `LoginRequestOptions::custom`, `LoginResponseOptions::custom` | `SpConfigBuilder::authn_request_template`, `IdpConfigBuilder::sso_response_template` |
 | `LoginResponseOptions::encrypt_then_sign` | Nothing. It was never read: an encrypted, message-signed response is always signed after the assertion is encrypted |
 | `Outbound::raw_context().binding` | `Outbound::delivery()` |
 | `Outbound::raw_context().context`, `into_raw_context` | `Outbound::redirect_url`, `post_form`, `soap_request`, or `soap_response` |
 | `raw_flow()` on `SsoSession`, `AuthnRequest`, `LogoutRequest`, `LogoutResponse`, and `LogoutCompleted` | The typed accessors of the message |
-| `Saml::<Sp>::raw_service_provider`, `Saml::<Idp>::raw_identity_provider` | Nothing. Configure the facade with `SpConfig` or `IdpConfig` |
+| `Saml::<Sp>::raw_service_provider`, `Saml::<Idp>::raw_identity_provider` | Nothing. Configure the provider with `SpConfig` or `IdpConfig` |
 | `TryFrom<FlowResult>` for `SsoSession`, `AuthnRequest`, `LogoutRequest`, and `LogoutResponse` | The typed receive operation, which also runs the receiver checks those conversions skipped |
 | `TryFrom<BindingContext>` for `Outbound<_>`, `TryFrom<Inbound<_>>` for `HttpRequest` | Nothing. Typed operations return an `Outbound` and take an `Inbound` |
 | `raw::Binding` | `saml_rs::constants::Binding` |

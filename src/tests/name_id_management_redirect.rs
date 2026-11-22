@@ -27,13 +27,14 @@ use saml_rs::constants::{
 use saml_rs::crypto::{keys::read_private_key, sign_octet_string};
 use saml_rs::error::TimeWindowField;
 use saml_rs::{
-    AcsEndpoint, ClockSkew, EndpointUrl, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    Inbound, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService, MetadataTrustPolicy,
-    NameId, NameIdChange, NameIdFormat, NameIdManagementReceipt, NameIdManagementRedirectReceipt,
-    NameIdManagementRefusal, Outbound, PendingManageNameIdRequest, ReceiveNameIdManagement,
-    Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy, RespondNameIdManagement,
-    Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
+    AcsEndpoint, ClockSkew, EndpointUrl, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, ManageNameIdRequest, ManageNameIdResponse, ManageNameIdService,
+    MetadataTrustPolicy, NameId, NameIdChange, NameIdFormat, NameIdManagementReceipt,
+    NameIdManagementRedirectReceipt, NameIdManagementRefusal, Outbound, PendingManageNameIdRequest,
+    ReceiveNameIdManagement, Received, RelayState, ReplayCache, ReplayPolicy, RequestAgePolicy,
+    RespondNameIdManagement, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
+    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartNameIdManagement, Status,
+    SubordinateStatusCode,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -48,7 +49,7 @@ const IDP_MANAGE: &str = "https://idp.example.com/manage-name-id";
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
 
-fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp_with(endpoints: &[&str]) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut builder =
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(signing_credentials())
@@ -56,14 +57,14 @@ fn sp_with(endpoints: &[&str]) -> Result<Saml<saml_rs::Sp>, SamlError> {
     for endpoint in endpoints {
         builder = builder.manage_name_id_redirect_service(EndpointUrl::try_new(*endpoint)?);
     }
-    Ok(Saml::sp(builder.build()?))
+    Ok(ServiceProvider::new(builder.build()?))
 }
 
-fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
     sp_with(&[SP_MANAGE])
 }
 
-fn idp_with_formats(formats: &[NameIdFormat]) -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp_with_formats(formats: &[NameIdFormat]) -> Result<saml_rs::IdentityProvider, SamlError> {
     let builder = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::redirect(IDP_SSO)?,
@@ -74,14 +75,14 @@ fn idp_with_formats(formats: &[NameIdFormat]) -> Result<Saml<saml_rs::Idp>, Saml
     .credentials(signing_credentials())
     .validation(IdpValidationPolicy::recommended())
     .name_id_formats(formats.iter().cloned());
-    Ok(Saml::idp(builder.build()?))
+    Ok(IdentityProvider::new(builder.build()?))
 }
 
-fn idp() -> Result<Saml<saml_rs::Idp>, SamlError> {
+fn idp() -> Result<saml_rs::IdentityProvider, SamlError> {
     idp_with_formats(&[])
 }
 
-fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
+fn sp_descriptor(sp: &saml_rs::ServiceProvider) -> Result<SpDescriptor, SamlError> {
     SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         sp.metadata_xml(),
@@ -89,7 +90,7 @@ fn sp_descriptor(sp: &Saml<saml_rs::Sp>) -> Result<SpDescriptor, SamlError> {
     )
 }
 
-fn idp_descriptor(idp: &Saml<saml_rs::Idp>) -> Result<IdpDescriptor, SamlError> {
+fn idp_descriptor(idp: &saml_rs::IdentityProvider) -> Result<IdpDescriptor, SamlError> {
     IdpDescriptor::from_metadata_xml(
         EntityId::try_new(IDP_ENTITY_ID)?,
         idp.metadata_xml(),
@@ -1150,7 +1151,7 @@ fn metadata_publishes_each_endpoint_in_the_schema_order() -> TestResult {
     assert!(sp_positions.iter().all(Option::is_some));
     assert!(sp_positions.is_sorted());
 
-    let both = Saml::idp(
+    let both = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect(IDP_SSO)?,
@@ -1212,7 +1213,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
     };
     let (sp_algorithms, sp_credentials) = hmac(b"service-provider-hmac-secret")?;
     let (idp_algorithms, idp_credentials) = hmac(b"identity-provider-hmac-secret")?;
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
             .credentials(sp_credentials)
@@ -1220,7 +1221,7 @@ fn hmac_sha1_signed_messages_verify_with_the_peer_secret() -> TestResult {
             .validation(SpValidationPolicy::recommended())
             .build()?,
     );
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect(IDP_SSO)?,
@@ -1362,7 +1363,7 @@ fn a_request_is_read_under_the_configured_xml_limits() -> TestResult {
         max_attributes_per_element: 128,
         ..saml_rs::XmlLimits::default()
     };
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
             .credentials(signing_credentials())

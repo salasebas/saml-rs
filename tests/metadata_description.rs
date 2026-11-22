@@ -7,9 +7,9 @@ use saml_rs::metadata::{
     SpMetadata, SpMetadataInput,
 };
 use saml_rs::{
-    AcsEndpoint, ContactPerson, ContactType, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, LocalizedValue, MetadataLifetime, MetadataTrustPolicy, Organization, Saml,
-    SamlError, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
+    AcsEndpoint, ContactPerson, ContactType, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, LocalizedValue, MetadataLifetime, MetadataTrustPolicy, Organization,
+    SamlError, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -140,8 +140,8 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
     .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
     .contacts(contacts())
     .validation(IdpValidationPolicy::compatibility());
-    let sp = Saml::sp(sp.build()?);
-    let idp = Saml::idp(idp.build()?);
+    let sp = ServiceProvider::new(sp.build()?);
+    let idp = IdentityProvider::new(idp.build()?);
     assert_eq!(sp.metadata_xml(), SP_XML.trim_end());
     assert_eq!(idp.metadata_xml(), IDP_XML.trim_end());
     let sp_peer = SpDescriptor::from_metadata_xml(

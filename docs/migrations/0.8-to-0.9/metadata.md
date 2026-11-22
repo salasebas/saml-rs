@@ -25,8 +25,9 @@ still, when the first message was rendered.
 at least one of each.
 
 **Now:** `build()` returns each of these errors, with the same `SamlError`
-variant and message. `Saml::sp` and `Saml::idp` take the built config and
-return the facade without a `Result`. `generate_sp_metadata` returns
+variant and message. `ServiceProvider::new` and `IdentityProvider::new`,
+which replace `Saml::sp` and `Saml::idp`, take the built config and return
+the provider without a `Result`. `generate_sp_metadata` returns
 `SamlError::MissingMetadata("AssertionConsumerService")` and
 `generate_idp_metadata` returns
 `SamlError::MissingMetadata("SingleSignOnService")` for a config without that

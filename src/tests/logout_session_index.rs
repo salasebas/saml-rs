@@ -4,16 +4,16 @@ use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::config::LOGOUT_REQUEST_TEMPLATE;
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::sp::ServiceProvider;
+use saml_rs::sp;
 use saml_rs::tests::engine::LogoutUser;
 use saml_rs::tests::engine::{
     create_logout_request, create_logout_request_with_id, create_logout_response,
 };
 use saml_rs::SamlError;
 
-fn idp() -> Result<IdentityProvider, SamlError> {
+fn idp() -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -24,17 +24,17 @@ fn idp() -> Result<IdentityProvider, SamlError> {
         ],
         ..IdpMetadataInput::default()
     };
-    IdentityProvider::from_config(&config, EntitySetting::default())
+    idp::Engine::from_config(&config, EntitySetting::default())
 }
 
-fn sp() -> Result<ServiceProvider, SamlError> {
+fn sp() -> Result<sp::Engine, SamlError> {
     let config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
         assertion_consumer_service: vec![Endpoint::new(Binding::Post, "https://sp/acs")],
         ..SpMetadataInput::default()
     };
-    ServiceProvider::from_config(&config, EntitySetting::default())
+    sp::Engine::from_config(&config, EntitySetting::default())
 }
 
 fn user(session_index: Option<&str>) -> LogoutUser {

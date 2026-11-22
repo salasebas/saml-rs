@@ -7,13 +7,13 @@ Issue a browser SSO response. You already have a service-provider peer, an SSO U
 
 ## Calls
 
-1. Build `IdpConfig` and call `Saml::idp`.
+1. Build `IdpConfig` and pass it to `IdentityProvider::new`.
 2. Import the service provider metadata.
 3. Call `receive_sso` with the browser fields from the `AuthnRequest`.
 4. Call `respond_sso` with an `SsoAssertion` for the subject you authenticated.
 
 ```rust
-let idp = Saml::idp(
+let idp = IdentityProvider::new(
     IdpConfig::builder(
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::post("https://idp.example.com/sso")?,

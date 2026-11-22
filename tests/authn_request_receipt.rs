@@ -16,11 +16,12 @@ use base64::Engine;
 use saml_rs::constants::status_code::INVALID_NAME_ID_POLICY;
 use saml_rs::{
     AcsEndpoint, AuthnContextComparison, AuthnContextReference, AuthnRequest, EntityId, ForceAuthn,
-    FormField, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
+    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, IsPassive,
     MetadataTrustPolicy, NameId, NameIdCreationRequest, NameIdFormat, NameIdPolicy, Outbound,
     OutboundDelivery, Received, ReplayPolicy, RequestedSubject, RequestedSubjectIdentifier,
-    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status, SubordinateStatusCode,
+    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, StartSso, Status,
+    SubordinateStatusCode,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -43,8 +44,8 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
-    Ok(Saml::sp(
+fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -55,8 +56,8 @@ fn sp() -> Result<Saml<saml_rs::Sp>, SamlError> {
     ))
 }
 
-fn idp(validation_policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp(validation_policy: IdpValidationPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -68,7 +69,7 @@ fn idp(validation_policy: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, Sam
 }
 
 struct Receipt {
-    idp: Saml<saml_rs::Idp>,
+    idp: saml_rs::IdentityProvider,
     sp_descriptor: SpDescriptor,
     received: Received<AuthnRequest>,
 }

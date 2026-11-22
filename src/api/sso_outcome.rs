@@ -57,7 +57,7 @@ impl SsoAssertion {
     ///
     /// Pass the context in which the subject was actually authenticated.
     /// The `AuthnStatement` is written by
-    /// [`Saml<Idp>::respond_paos_sso`](crate::Saml::respond_paos_sso), and by
+    /// [`IdentityProvider::respond_paos_sso`](crate::IdentityProvider::respond_paos_sso), and by
     /// browser SSO when
     /// [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules)
     /// is selected. Omitting the context then writes the unspecified class.
@@ -82,7 +82,7 @@ impl SsoAssertion {
     /// Pass the time at which the subject actually authenticated, such as the
     /// start of a reused identity provider session. It is written in UTC,
     /// rounded down to the second. The `AuthnStatement` is written by
-    /// [`Saml<Idp>::respond_paos_sso`](crate::Saml::respond_paos_sso), and by
+    /// [`IdentityProvider::respond_paos_sso`](crate::IdentityProvider::respond_paos_sso), and by
     /// browser SSO when
     /// [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules)
     /// is selected. Omitting the instant then writes the assertion

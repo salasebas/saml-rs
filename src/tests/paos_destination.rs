@@ -10,9 +10,9 @@ use roxmltree::Document;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
 use saml_rs::crypto::{keys::read_private_key, sign_saml_xml};
 use saml_rs::{
-    AcsEndpoint, AuthnRequestValidationPolicy, EndpointUrl, EntityId, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, MetadataTrustPolicy, ReplayPolicy, Saml, SamlValidationContext, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
+    AcsEndpoint, AuthnRequestValidationPolicy, EndpointUrl, EntityId, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, ReplayPolicy, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartPaosSso,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -28,7 +28,7 @@ const CERT: &str = include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pk
 #[test]
 fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing_policy(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs/post")?.with_default(),
@@ -52,7 +52,7 @@ fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing
             },
         ),
     ] {
-        let idp = Saml::idp(
+        let idp = IdentityProvider::new(
             IdpConfig::builder(
                 EntityId::try_new(IDP_ENTITY_ID)?,
                 SsoEndpoint::post("https://idp.example.com/sso/post")?,

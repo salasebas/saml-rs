@@ -1,9 +1,9 @@
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, EndpointUrl, FormField, Idp, Inbound, LogoutBinding, MessageId,
-    NameIdCreationRequest, PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
-    PendingLogoutRequestSnapshot, RelayState, Saml, SamlError, SamlInstant, SloEndpoint, Sp,
-    SsoEndpoint, SsoRequestBinding, SsoResponse, SsoResponseBinding, VerifiedXmlSignature,
-    VerifiedXmlSignatureCoverage,
+    AcsEndpoint, AuthnRequest, EndpointUrl, FormField, IdentityProvider, Inbound, LogoutBinding,
+    MessageId, NameIdCreationRequest, PendingAuthnRequest, PendingAuthnRequestSnapshot,
+    PendingLogoutRequest, PendingLogoutRequestSnapshot, RelayState, SamlError, SamlInstant,
+    ServiceProvider, SloEndpoint, SsoEndpoint, SsoRequestBinding, SsoResponse, SsoResponseBinding,
+    VerifiedXmlSignature, VerifiedXmlSignatureCoverage,
 };
 
 fn assert_send_sync<T: Send + Sync>() {}
@@ -12,8 +12,8 @@ fn assert_eq_trait<T: Eq>() {}
 
 #[test]
 fn typed_api_contract_exposes_role_markers() {
-    assert_send_sync::<Saml<Sp>>();
-    assert_send_sync::<Saml<Idp>>();
+    assert_send_sync::<ServiceProvider>();
+    assert_send_sync::<IdentityProvider>();
     let _: Option<SamlError> = None;
 }
 

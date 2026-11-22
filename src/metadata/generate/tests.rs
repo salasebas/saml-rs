@@ -2,7 +2,7 @@ use super::*;
 use crate::constants::CertUse;
 use crate::entity::EntitySetting;
 use crate::metadata::{IdpMetadata, SpMetadata};
-use crate::sp::ServiceProvider;
+use crate::sp;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -118,7 +118,7 @@ fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
     .validation(crate::SpValidationPolicy::compatibility())
     .build()?;
 
-    let sp = crate::Saml::sp(config);
+    let sp = crate::ServiceProvider::new(config);
     let parsed = SpMetadata::from_xml(sp.metadata_xml())?;
 
     let endpoint = |index, location: &str| crate::metadata::sp::AcsMetadataEndpoint {
@@ -352,7 +352,7 @@ fn sp_from_config_escapes_name_id_format_xml_markup() -> TestResult {
         ..Default::default()
     };
 
-    let sp = ServiceProvider::from_config(&cfg, EntitySetting::default())?;
+    let sp = sp::Engine::from_config(&cfg, EntitySetting::default())?;
 
     assert!(sp
         .metadata

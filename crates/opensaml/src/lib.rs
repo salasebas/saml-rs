@@ -2,9 +2,9 @@
 //! Maintained compatibility re-export of [`saml-rs`](https://crates.io/crates/saml-rs).
 //!
 //! ```
-//! use opensaml::{OpenSamlError, Saml, Sp};
+//! use opensaml::{OpenSamlError, ServiceProvider};
 //!
-//! let _: Option<Saml<Sp>> = None;
+//! let _: Option<ServiceProvider> = None;
 //! #[allow(deprecated)]
 //! let _: Option<OpenSamlError> = None;
 //! ```

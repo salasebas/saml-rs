@@ -7,10 +7,10 @@ use std::time::SystemTime;
 
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, CertificatePem, Credentials, EntityId, IdpConfig, IdpDescriptor,
+    AcsEndpoint, CertificatePem, Credentials, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
     IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, PrivateKeyPem, ReplayPolicy,
-    RespondSso, Saml, SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy,
-    SsoAssertion, SsoEndpoint, StartSso, X509Credential,
+    RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -38,8 +38,8 @@ fn credentials(key: &str, cert: &str) -> Credentials {
     ))
 }
 
-fn idp_signing_with(key: &str, cert: &str) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp_signing_with(key: &str, cert: &str) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO)?,
@@ -55,10 +55,10 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sso_response_from(
-    sp: &Saml<saml_rs::Sp>,
+    sp: &saml_rs::ServiceProvider,
     sp_descriptor: &SpDescriptor,
     idp_descriptor: &IdpDescriptor,
-    responder: &Saml<saml_rs::Idp>,
+    responder: &saml_rs::IdentityProvider,
 ) -> Result<Result<saml_rs::SsoSession, SamlError>, SamlError> {
     let started = sp.start_sso(idp_descriptor, StartSso::post())?;
     let received = responder.receive_sso(
@@ -83,7 +83,7 @@ fn sso_response_from(
 #[test]
 fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(credentials(SP_ROLE_KEY, SP_ROLE_CERT))
             .validation(SpValidationPolicy::recommended())
@@ -166,10 +166,10 @@ fn with_role_in_both_orders(metadata: &str, descriptor: &str, role: &str) -> [St
     ]
 }
 
-fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::recommended();
     validation.authn_requests = saml_rs::AuthnRequestSigningPolicy::Sign;
-    Ok(Saml::sp(
+    Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(credentials(key, cert))
             .validation(validation)
@@ -193,8 +193,9 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
         SsoEndpoint::post(IDP_SSO)?,
     )
     .validation(idp_validation);
-    let published_sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?);
-    let published_idp = Saml::idp(idp_config.clone().credentials(rolling).build()?);
+    let published_sp =
+        ServiceProvider::new(sp_config.clone().credentials(rolling.clone()).build()?);
+    let published_idp = IdentityProvider::new(idp_config.clone().credentials(rolling).build()?);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         published_sp.metadata_xml(),
@@ -212,8 +213,8 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
     ] {
         let rolling = credentials(key, current)
             .with_additional_signing_certificate(CertificatePem::new(overlap));
-        let sp = Saml::sp(sp_config.clone().credentials(rolling.clone()).build()?);
-        let idp = Saml::idp(idp_config.clone().credentials(rolling).build()?);
+        let sp = ServiceProvider::new(sp_config.clone().credentials(rolling.clone()).build()?);
+        let idp = IdentityProvider::new(idp_config.clone().credentials(rolling).build()?);
 
         for metadata in [sp.metadata_xml(), idp.metadata_xml()] {
             let document = roxmltree::Document::parse(metadata)?;
@@ -258,7 +259,7 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
 #[test]
 fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dyn std::error::Error>>
 {
-    let sp = Saml::sp(
+    let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(credentials(SP_ROLE_KEY, SP_ROLE_CERT))
             .validation(SpValidationPolicy::recommended())
@@ -341,7 +342,7 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
     let signed_with_saml11_role_key = sp_signing_authn_requests(IDP_ROLE_KEY, IDP_ROLE_CERT)?;
     let mut idp_validation = IdpValidationPolicy::recommended();
     idp_validation.authn_requests = saml_rs::AuthnRequestValidationPolicy::RequireSigned;
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO)?,
@@ -580,11 +581,11 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
     use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
     use saml_rs::constants::Binding;
     use saml_rs::entity::{EntitySetting, User};
-    use saml_rs::idp::IdentityProvider;
+    use saml_rs::idp;
     use saml_rs::idp::LoginResponseOptions;
     use saml_rs::metadata::{IdpMetadata, SpMetadata};
+    use saml_rs::sp;
     use saml_rs::sp::LoginRequestOptions;
-    use saml_rs::sp::ServiceProvider;
 
     let sp_role = format!(
         r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}"><NameIDFormat>&#x9; {TRANSIENT} &#xD;&#xA;</NameIDFormat><AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://proxy.example.com/acs" index="0"/></SPSSODescriptor>"#
@@ -617,8 +618,8 @@ fn a_dual_role_entity_reads_and_issues_the_name_id_formats_of_the_parsed_role(
             signing_cert: Some(IDP_ROLE_CERT.into()),
             ..EntitySetting::default()
         };
-        let idp = IdentityProvider::from_metadata(&metadata, signing)?;
-        let sp = ServiceProvider::from_metadata(&metadata, EntitySetting::default())?;
+        let idp = idp::Engine::from_metadata(&metadata, signing)?;
+        let sp = sp::Engine::from_metadata(&metadata, EntitySetting::default())?;
         let response = idp.create_login_response(
             &sp,
             Binding::Post,

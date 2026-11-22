@@ -8,10 +8,10 @@ use saml_rs::constants::{status_code, Binding, ParserType};
 use saml_rs::entity::{iso8601_offset, EntitySetting, User};
 use saml_rs::error::{SignatureVerificationReason, TimeWindowField};
 use saml_rs::flow::HttpRequest;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::sp::ServiceProvider;
+use saml_rs::sp;
 use saml_rs::tests::engine::fill_template;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::validator::check_status;
@@ -63,17 +63,17 @@ fn signing() -> EntitySetting {
     }
 }
 
-fn idp() -> Result<IdentityProvider, SamlError> {
+fn idp() -> Result<idp::Engine, SamlError> {
     let config = IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         signing_certs: vec![CERT.into()],
         single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
         ..IdpMetadataInput::default()
     };
-    IdentityProvider::from_config(&config, signing())
+    idp::Engine::from_config(&config, signing())
 }
 
-fn sp() -> Result<ServiceProvider, SamlError> {
+fn sp() -> Result<sp::Engine, SamlError> {
     let mut config = SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         want_assertions_signed: true,
@@ -82,7 +82,7 @@ fn sp() -> Result<ServiceProvider, SamlError> {
     };
     config.assertion_consumer_service =
         vec![Endpoint::new(Binding::Post, "https://sp.example.com/acs")];
-    ServiceProvider::from_config(&config, signing())
+    sp::Engine::from_config(&config, signing())
 }
 
 fn unsigned_response_template() -> String {

@@ -123,7 +123,7 @@ impl IssuedArtifacts {
     /// Choose the shortest `lifetime` in which the service provider receives
     /// the artifact and sends `ArtifactResolve`. A later `ArtifactResolve`
     /// gets Success without the message. The replay retention the service
-    /// provider passes to [`Saml<Sp>::resolve_artifact`](crate::Saml::resolve_artifact)
+    /// provider passes to [`ServiceProvider::resolve_artifact`](crate::ServiceProvider::resolve_artifact)
     /// should be longer. A zero `lifetime` resolves nothing.
     pub fn expire_after(lifetime: Duration) -> Self {
         Self {

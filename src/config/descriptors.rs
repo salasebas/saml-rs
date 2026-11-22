@@ -9,10 +9,10 @@ use crate::browser::{
 use crate::constants::Binding;
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
-use crate::idp::IdentityProvider;
+use crate::idp;
 use crate::metadata::{IdpMetadata, Metadata, MetadataLifetime, MetadataValidity, SpMetadata};
 use crate::model::EndpointUrl;
-use crate::sp::ServiceProvider;
+use crate::sp;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 
 const MAX_ENTITY_ID_CHARACTERS: usize = 1024;
@@ -368,7 +368,7 @@ impl ImportedMetadata {
 #[derive(Debug, Clone)]
 pub struct IdpDescriptor {
     imported: ImportedMetadata,
-    provider: IdentityProvider,
+    provider: idp::Engine,
 }
 
 impl IdpDescriptor {
@@ -411,7 +411,7 @@ impl IdpDescriptor {
         let imported = ImportedMetadata::check(expected_entity_id, metadata.as_metadata(), trust)?;
         Ok(Self {
             imported,
-            provider: IdentityProvider::from_parsed_metadata(metadata, EntitySetting::default()),
+            provider: idp::Engine::from_parsed_metadata(metadata, EntitySetting::default()),
         })
     }
 
@@ -522,7 +522,7 @@ impl IdpDescriptor {
         self.imported.validity.ensure_valid_at(now)
     }
 
-    pub(crate) fn provider(&self) -> &IdentityProvider {
+    pub(crate) fn provider(&self) -> &idp::Engine {
         &self.provider
     }
 
@@ -539,7 +539,7 @@ impl IdpDescriptor {
 #[derive(Debug, Clone)]
 pub struct SpDescriptor {
     imported: ImportedMetadata,
-    provider: ServiceProvider,
+    provider: sp::Engine,
 }
 
 impl SpDescriptor {
@@ -582,7 +582,7 @@ impl SpDescriptor {
         let imported = ImportedMetadata::check(expected_entity_id, metadata.as_metadata(), trust)?;
         Ok(Self {
             imported,
-            provider: ServiceProvider::from_parsed_metadata(metadata, EntitySetting::default()),
+            provider: sp::Engine::from_parsed_metadata(metadata, EntitySetting::default()),
         })
     }
 
@@ -695,7 +695,7 @@ impl SpDescriptor {
         self.imported.validity.ensure_valid_at(now)
     }
 
-    pub(crate) fn provider(&self) -> &ServiceProvider {
+    pub(crate) fn provider(&self) -> &sp::Engine {
         &self.provider
     }
 

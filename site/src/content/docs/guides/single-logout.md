@@ -61,7 +61,7 @@ let status = match end_session(&logout_request) {
 let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo::post())?;
 ```
 
-When the identity provider starts logout itself, `Saml<Idp>::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
+When the identity provider starts logout itself, `IdentityProvider::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
 
 `LogoutPolicy::recommended()` requires a signature on logout requests and responses. `LogoutPolicy::compatibility()` is the legacy unsigned hatch.
 

@@ -3,10 +3,10 @@ use crate::browser::{
 };
 use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::{url_params, Binding};
-use crate::idp::IdentityProvider;
+use crate::idp;
 use crate::metadata::Metadata;
 use crate::model::RelayState;
-use crate::sp::ServiceProvider;
+use crate::sp;
 use std::time::SystemTime;
 
 use super::SamlError;
@@ -14,7 +14,7 @@ use super::SamlError;
 pub(super) fn raw_idp_descriptor(
     idp: &IdpDescriptor,
     now: SystemTime,
-) -> Result<&IdentityProvider, SamlError> {
+) -> Result<&idp::Engine, SamlError> {
     idp.ensure_valid_at(now)?;
     Ok(idp.provider())
 }
@@ -22,7 +22,7 @@ pub(super) fn raw_idp_descriptor(
 pub(super) fn raw_sp_descriptor(
     sp: &SpDescriptor,
     now: SystemTime,
-) -> Result<&ServiceProvider, SamlError> {
+) -> Result<&sp::Engine, SamlError> {
     sp.ensure_valid_at(now)?;
     Ok(sp.provider())
 }
@@ -55,7 +55,7 @@ impl<'a> RawPeer<'a> {
 }
 
 pub(super) fn selected_acs(
-    sp: &ServiceProvider,
+    sp: &sp::Engine,
     requested_binding: Option<SsoResponseBinding>,
     index: Option<u16>,
 ) -> Result<AcsEndpoint, SamlError> {

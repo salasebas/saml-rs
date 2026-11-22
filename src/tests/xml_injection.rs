@@ -15,10 +15,10 @@ use saml_rs::crypto::{decrypt_assertion_with_limits, AssertionDecryptionOptions}
 use saml_rs::crypto::{encrypt_assertion, sign_saml_xml, verify_signature};
 use saml_rs::entity::{EntitySetting, User};
 use saml_rs::flow::HttpRequest;
-use saml_rs::idp::IdentityProvider;
+use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
-use saml_rs::sp::ServiceProvider;
+use saml_rs::sp;
 use saml_rs::template::LoginResponseAttribute;
 use saml_rs::template::LoginResponseTemplate;
 use saml_rs::tests::engine::LogoutUser;
@@ -45,8 +45,8 @@ fn signing() -> EntitySetting {
     }
 }
 
-fn idp(setting: EntitySetting) -> TestResult<IdentityProvider> {
-    Ok(IdentityProvider::from_config(
+fn idp(setting: EntitySetting) -> TestResult<idp::Engine> {
+    Ok(idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
@@ -58,8 +58,8 @@ fn idp(setting: EntitySetting) -> TestResult<IdentityProvider> {
     )?)
 }
 
-fn sp() -> TestResult<ServiceProvider> {
-    Ok(ServiceProvider::from_config(
+fn sp() -> TestResult<sp::Engine> {
+    Ok(sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             signing_certs: vec![CERT.into()],
@@ -295,7 +295,7 @@ fn login_response_wrapper_fields_escape_xml_markup_before_signing() -> TestResul
 
     let mut idp_setting = signing();
     idp_setting.name_id_format = vec![HOSTILE_NAME_ID_FORMAT.into()];
-    let idp = IdentityProvider::from_config(
+    let idp = idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: HOSTILE_IDP_ENTITY_ID.into(),
             signing_certs: vec![CERT.into()],
@@ -305,7 +305,7 @@ fn login_response_wrapper_fields_escape_xml_markup_before_signing() -> TestResul
         },
         idp_setting,
     )?;
-    let sp = ServiceProvider::from_config(
+    let sp = sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: HOSTILE_SP_ENTITY_ID.into(),
             signing_certs: vec![CERT.into()],

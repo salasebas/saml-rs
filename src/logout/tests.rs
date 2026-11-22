@@ -7,10 +7,10 @@ use crate::constants::Binding;
 use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::flow::HttpRequest;
-use crate::idp::IdentityProvider;
+use crate::idp;
 use crate::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use crate::model::ClockSkew;
-use crate::sp::ServiceProvider;
+use crate::sp;
 use crate::tests::engine::{
     create_logout_request, create_logout_response, create_logout_response_with_id,
     parse_logout_request, parse_logout_response, redirect_query, LogoutUser,
@@ -18,8 +18,8 @@ use crate::tests::engine::{
 use std::time::{Duration, SystemTime};
 use url::Url;
 
-fn sp() -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
+fn sp() -> Result<sp::Engine, SamlError> {
+    sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![
@@ -34,8 +34,8 @@ fn sp() -> Result<ServiceProvider, SamlError> {
     )
 }
 
-fn idp() -> Result<IdentityProvider, SamlError> {
-    IdentityProvider::from_config(
+fn idp() -> Result<idp::Engine, SamlError> {
+    idp::Engine::from_config(
         &IdpMetadataInput {
             entity_id: "https://idp.example.com/metadata".into(),
             single_sign_on_service: vec![Endpoint::new(Binding::Post, "https://idp/sso")],
@@ -57,8 +57,8 @@ fn unsigned_setting() -> EntitySetting {
     }
 }
 
-fn unsigned_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
-    ServiceProvider::from_config(
+fn unsigned_sp(entity_id: &str) -> Result<sp::Engine, SamlError> {
+    sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: entity_id.into(),
             single_logout_service: vec![Endpoint::new(Binding::Post, "https://sp/slo")],
@@ -417,8 +417,8 @@ mod signed_tests {
         }
     }
 
-    fn signed_sp(entity_id: &str) -> Result<ServiceProvider, SamlError> {
-        ServiceProvider::from_config(
+    fn signed_sp(entity_id: &str) -> Result<sp::Engine, SamlError> {
+        sp::Engine::from_config(
             &SpMetadataInput {
                 entity_id: entity_id.into(),
                 signing_certs: vec![CERT.into()],
@@ -532,8 +532,8 @@ mod signed_tests {
         )
     }
 
-    fn signed_idp() -> Result<IdentityProvider, SamlError> {
-        IdentityProvider::from_config(
+    fn signed_idp() -> Result<idp::Engine, SamlError> {
+        idp::Engine::from_config(
             &IdpMetadataInput {
                 entity_id: "https://idp.example.com/metadata".into(),
                 signing_certs: vec![CERT.into()],
@@ -545,7 +545,7 @@ mod signed_tests {
         )
     }
 
-    fn strict_sp() -> Result<ServiceProvider, SamlError> {
+    fn strict_sp() -> Result<sp::Engine, SamlError> {
         let mut service_provider = sp()?;
         service_provider.setting.xml_signatures = crate::config::XmlSignatureProfile::StrictRsaSha2;
         Ok(service_provider)
@@ -875,7 +875,7 @@ fn custom_logout_response_omits_optional_in_response_to_placeholder(
 fn custom_logout_response_keeps_placeholder_text_in_the_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut sender = idp()?;
-    let target = ServiceProvider::from_config(
+    let target = sp::Engine::from_config(
         &SpMetadataInput {
             entity_id: "https://sp.example.com/metadata".into(),
             single_logout_service: vec![Endpoint::new(
@@ -949,7 +949,7 @@ fn logout_response_rejects_a_peer_slo_location_that_is_not_a_url(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sender = idp()?;
     for location in ["http://", "https://sp:70000/slo"] {
-        let target = ServiceProvider::from_config(
+        let target = sp::Engine::from_config(
             &SpMetadataInput {
                 entity_id: "https://sp.example.com/metadata".into(),
                 single_logout_service: vec![Endpoint::new(Binding::Redirect, location)],
@@ -1200,7 +1200,7 @@ fn logout_response_uses_response_location_and_request_uses_location(
     <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/acs" index="0"/>
   </SPSSODescriptor>
 </EntityDescriptor>"#;
-    let target = ServiceProvider::from_metadata(sp_xml, EntitySetting::default())?;
+    let target = sp::Engine::from_metadata(sp_xml, EntitySetting::default())?;
     let sender = idp()?;
     let response = create_logout_response(
         &sender.setting,

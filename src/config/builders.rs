@@ -35,9 +35,9 @@ use core::fmt;
 
 use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
-use crate::idp::IdentityProvider;
+use crate::idp;
 use crate::metadata::MetadataLifetime;
-use crate::sp::ServiceProvider;
+use crate::sp;
 use crate::template::validate_tag_prefixes;
 use crate::xml::name::validate_namespace_prefix;
 
@@ -90,7 +90,7 @@ pub struct SpConfig {
     xml: XmlPolicy,
     templates: TemplatePolicy,
     authn_request_template: Option<String>,
-    pub(crate) service_provider: ServiceProvider,
+    pub(crate) engine: sp::Engine,
 }
 
 impl fmt::Debug for SpConfig {
@@ -299,9 +299,9 @@ impl SpConfigBuilder {
         self
     }
 
-    /// Set the template [`Saml<Sp>::start_sso`](crate::Saml::start_sso)
+    /// Set the template [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso)
     /// renders the `<AuthnRequest>` from, in place of the built-in renderer.
-    /// [`Saml<Sp>::start_paos_sso`](crate::Saml::start_paos_sso) always uses
+    /// [`ServiceProvider::start_paos_sso`](crate::ServiceProvider::start_paos_sso) always uses
     /// the built-in renderer.
     ///
     /// [`AUTHN_REQUEST_TEMPLATE`](crate::config::AUTHN_REQUEST_TEMPLATE) is
@@ -343,7 +343,7 @@ impl SpConfigBuilder {
     ///   endpoints than `unsignedShort` indexes, or a `validUntil` outside the
     ///   years 0001 through 9999.
     pub fn build(self) -> Result<SpConfig, SamlError> {
-        let service_provider = self.service_provider()?;
+        let engine = self.engine()?;
         validate_sp_policy(&self)?;
         Ok(SpConfig {
             entity_id: self.entity_id,
@@ -354,7 +354,7 @@ impl SpConfigBuilder {
             xml: self.xml,
             templates: self.templates,
             authn_request_template: self.authn_request_template,
-            service_provider,
+            engine,
         })
     }
 }
@@ -398,7 +398,7 @@ pub struct IdpConfig {
     xml: XmlPolicy,
     templates: TemplatePolicy,
     sso_response_template: Option<String>,
-    pub(crate) identity_provider: IdentityProvider,
+    pub(crate) engine: idp::Engine,
 }
 
 impl fmt::Debug for IdpConfig {
@@ -539,9 +539,9 @@ impl IdpConfigBuilder {
     /// Append a SOAP or HTTP-Redirect `ManageNameIDService` endpoint.
     ///
     /// This turns on name identifier management over that binding.
-    /// [`Saml::start_name_id_management`](crate::Saml::start_name_id_management)
+    /// [`IdentityProvider::start_name_id_management`](crate::IdentityProvider::start_name_id_management)
     /// and
-    /// [`Saml::receive_name_id_management`](crate::Saml::receive_name_id_management)
+    /// [`IdentityProvider::receive_name_id_management`](crate::IdentityProvider::receive_name_id_management)
     /// fail without a SOAP endpoint, and the `_redirect` operations without an
     /// HTTP-Redirect one.
     pub fn manage_name_id_service(mut self, service: ManageNameIdService) -> Self {
@@ -658,7 +658,7 @@ impl IdpConfigBuilder {
     /// With a template set, the response methods return
     /// [`SamlError::Invalid`] for an assertion:
     ///
-    /// - from [`Saml::respond_paos_sso`](crate::Saml::respond_paos_sso),
+    /// - from [`IdentityProvider::respond_paos_sso`](crate::IdentityProvider::respond_paos_sso),
     ///   which always applies the producer rules, or with
     ///   [`RespondSso::apply_producer_rules`](crate::RespondSso::apply_producer_rules);
     /// - with attributes from
@@ -692,7 +692,7 @@ impl IdpConfigBuilder {
     pub fn build(self) -> Result<IdpConfig, SamlError> {
         self.metadata.ensure_unique_artifact_resolution_indexes()?;
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
-        let identity_provider = self.identity_provider()?;
+        let engine = self.engine()?;
         validate_idp_policy(&self)?;
         Ok(IdpConfig {
             entity_id: self.entity_id,
@@ -704,7 +704,7 @@ impl IdpConfigBuilder {
             xml: self.xml,
             templates: self.templates,
             sso_response_template: self.sso_response_template,
-            identity_provider,
+            engine,
         })
     }
 }

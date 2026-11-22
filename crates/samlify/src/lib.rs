@@ -2,9 +2,9 @@
 //! Maintained compatibility re-export of [`saml-rs`](https://crates.io/crates/saml-rs).
 //!
 //! ```
-//! use samlify::{Saml, Sp};
+//! use samlify::ServiceProvider;
 //!
-//! let _: Option<Saml<Sp>> = None;
+//! let _: Option<ServiceProvider> = None;
 //! ```
 
 pub use saml_rs::*;

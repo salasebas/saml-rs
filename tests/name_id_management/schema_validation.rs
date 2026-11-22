@@ -7,7 +7,7 @@ fn schema_policy_covers_both_name_id_management_soap_directions() -> TestResult 
     }
     let mut xml = saml_rs::XmlPolicy::default();
     xml.schema_validator = Some(reject);
-    let idp = Saml::idp(
+    let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::redirect("https://idp.example.com/sso")?,

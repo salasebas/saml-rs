@@ -22,7 +22,7 @@ use crate::xml::is_xml_char;
 use super::raw_mapping::{ensure_entity_id, raw_idp_descriptor, raw_sp_descriptor};
 use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
 use super::sso_outcome::OutcomeParts;
-use super::{Idp, Saml, SamlError, Sp, SsoOutcome};
+use super::{IdentityProvider, SamlError, ServiceProvider, SsoOutcome};
 use crate::http_header::{HttpHeader, PRAGMA};
 use crate::soap::{RESPONSE_CACHE_CONTROL, RESPONSE_HEADERS as SOAP_RESPONSE_HEADERS};
 use protocol::{
@@ -91,9 +91,9 @@ impl StartPaosSso {
     /// `ecp:Request`. Omitted by default.
     ///
     /// The name may be empty and may contain any character XML 1.0 allows.
-    /// [`Saml<Sp>::start_paos_sso`] returns [`SamlError::Invalid`] for a name
+    /// [`ServiceProvider::start_paos_sso`] returns [`SamlError::Invalid`] for a name
     /// with a character XML 1.0 forbids, as
-    /// [`Saml<Sp>::start_sso`] does for
+    /// [`ServiceProvider::start_sso`] does for
     /// [`StartSso::provider_name`](crate::StartSso::provider_name).
     pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
         self.provider_name = Some(provider_name.into());
@@ -103,7 +103,7 @@ impl StartPaosSso {
     /// Set the assertion consumer the response is posted to, in place of the
     /// default one.
     ///
-    /// [`Saml<Sp>::start_paos_sso`] returns [`SamlError::Invalid`] for a URL
+    /// [`ServiceProvider::start_paos_sso`] returns [`SamlError::Invalid`] for a URL
     /// the service provider metadata does not publish for HTTP-POST or
     /// HTTP-POST-SimpleSign.
     pub fn acs_url(mut self, url: EndpointUrl) -> Self {
@@ -312,8 +312,8 @@ impl<Message> PaosHttpResponse<Message> {
 impl PaosHttpResponse<SoapFault> {
     /// HTTP 500 SOAP fault for an envelope that is not a SAML request.
     ///
-    /// Send this when [`Saml<Idp>::receive_paos_sso`] fails before it returns
-    /// a request. A failed login is answered by [`Saml<Idp>::respond_paos_sso`]
+    /// Send this when [`IdentityProvider::receive_paos_sso`] fails before it returns
+    /// a request. A failed login is answered by [`IdentityProvider::respond_paos_sso`]
     /// with an [`SsoOutcome::Failure`] instead, and that response stays HTTP
     /// 200.
     pub fn soap_fault() -> Self {
@@ -339,7 +339,7 @@ impl PaosHttpResponse<SsoResponse> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SoapFault;
 
-impl Saml<Sp> {
+impl ServiceProvider {
     /// Start Enhanced Client/Proxy login for an enhanced client.
     ///
     /// Return [`StartedPaosSso::http_response`] as HTTP 200. Store
@@ -369,18 +369,18 @@ impl Saml<Sp> {
     ///
     /// ```
     /// use saml_rs::{
-    ///     check_paos_client_headers, AcsEndpoint, EndpointUrl, EntityId, IdpConfig,
-    ///     IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, Saml, SpConfig,
-    ///     SpValidationPolicy, SsoEndpoint, StartPaosSso,
+    ///     check_paos_client_headers, AcsEndpoint, EndpointUrl, EntityId, IdentityProvider,
+    ///     IdpConfig, IdpDescriptor, IdpValidationPolicy, MetadataTrustPolicy, ServiceProvider,
+    ///     SpConfig, SpValidationPolicy, SsoEndpoint, StartPaosSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
-    /// let sp = Saml::sp(
+    /// let sp = ServiceProvider::new(
     ///     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
     ///         .validation(SpValidationPolicy::compatibility())
     ///         .build()?,
     /// );
-    /// let idp = Saml::idp(
+    /// let idp = IdentityProvider::new(
     ///     IdpConfig::builder(EntityId::try_new("https://idp.example.com/metadata")?, SsoEndpoint::redirect("https://idp.example.com/sso")?)
     ///         .validation(IdpValidationPolicy::compatibility())
     ///         .build()?,
@@ -423,14 +423,14 @@ impl Saml<Sp> {
         }
         let assertion_consumer = assertion_consumer_url(self, options.acs_url)?;
         let issuer = self
-            .service_provider()
+            .engine()
             .metadata
             .as_metadata()
             .entity_id()
             .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?
             .to_string();
         let (request_id, authn_request_xml) =
-            self.service_provider()
+            self.engine()
                 .render_paos_authn_request(&PaosAuthnRequestInput {
                     destination: options.soap_endpoint.as_str(),
                     assertion_consumer_service_url: assertion_consumer.as_str(),
@@ -516,34 +516,29 @@ impl Saml<Sp> {
         validation: &SamlValidationContext<'_>,
     ) -> Result<SsoSession, SamlError> {
         ensure_entity_id(pending.idp_entity_id(), idp.entity_id())?;
-        let limits = self.service_provider().setting.xml_limits;
+        let limits = self.engine().setting.xml_limits;
         let body = read_soap_body(response_envelope, "Response", limits, SP_UNDERSTOOD_HEADERS)?;
-        crate::schema::validate(
-            response_envelope,
-            self.service_provider().setting.schema_validator,
-        )?;
+        crate::schema::validate(response_envelope, self.engine().setting.schema_validator)?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
         let request = HttpRequest::post(vec![(
             "SAMLResponse".into(),
             crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
-        let parsed = self
-            .service_provider()
-            .parse_login_response_with_request_id_at(
-                raw_idp,
-                crate::constants::Binding::Post,
-                &request,
-                pending.request_id().as_str(),
-                LoginResponseParseOptions::at(validation.now(), validation.clock_skew())
-                    .with_expected_recipient(pending.acs_url().as_str()),
-            )?;
+        let parsed = self.engine().parse_login_response_with_request_id_at(
+            raw_idp,
+            crate::constants::Binding::Post,
+            &request,
+            pending.request_id().as_str(),
+            LoginResponseParseOptions::at(validation.now(), validation.clock_skew())
+                .with_expected_recipient(pending.acs_url().as_str()),
+        )?;
         // The expected value is compared after the response signature verifies.
         super::raw_mapping::ensure_relay_state(pending.relay_state(), body.relay_state.as_ref())?;
         super::sp::session_from_verified_flow(parsed, body.relay_state)
     }
 }
 
-impl Saml<Idp> {
+impl IdentityProvider {
     /// Read the SOAP AuthnRequest an enhanced client forwarded.
     ///
     /// `request_envelope` is the SOAP envelope posted to `soap_endpoint`, the
@@ -570,18 +565,15 @@ impl Saml<Idp> {
         soap_endpoint: &EndpointUrl,
         validation: SamlValidationContext<'_>,
     ) -> Result<Received<AuthnRequest>, SamlError> {
-        let limits = self.identity_provider().setting.xml_limits;
+        let limits = self.engine().setting.xml_limits;
         let body = read_soap_body(request_envelope, "AuthnRequest", limits, &[])?;
-        crate::schema::validate(
-            request_envelope,
-            self.identity_provider().setting.schema_validator,
-        )?;
+        crate::schema::validate(request_envelope, self.engine().setting.schema_validator)?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let http = HttpRequest::post(vec![(
             "SAMLRequest".into(),
             crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
-        let (flow, message_authenticated) = self.identity_provider().parse_login_request_at(
+        let (flow, message_authenticated) = self.engine().parse_login_request_at(
             raw_sp,
             crate::constants::Binding::Post,
             &http,
@@ -590,7 +582,7 @@ impl Saml<Idp> {
         )?;
         let flow = super::requested_subject::decrypt_requested_subject(
             flow,
-            &self.identity_provider().setting,
+            &self.engine().setting,
             message_authenticated,
         )?;
         let authn = AuthnRequest::try_from_paos_flow(flow)?;
@@ -675,7 +667,7 @@ impl Saml<Idp> {
         )?)?;
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let sign_encrypted_cbc = {
-            let setting = &self.identity_provider().setting;
+            let setting = &self.engine().setting;
             super::options::RespondSso::post().should_sign_response(
                 setting.is_assertion_encrypted,
                 &setting.data_encryption_algorithm,
@@ -685,7 +677,7 @@ impl Saml<Idp> {
             acs: Some(acs.as_str()),
             name_id_format,
             name_id_qualifiers,
-            issuance_lifetime: Some(self.0.issuance_lifetime),
+            issuance_lifetime: Some(self.issuance_lifetime()),
             web_browser_sso_producer: WebBrowserSsoProducer::Follow,
             status,
             typed_attributes,
@@ -697,7 +689,7 @@ impl Saml<Idp> {
             want_message_signed: Some(sign_encrypted_cbc),
             transformation_algorithms: None,
         };
-        let issued = self.identity_provider().render_posted_sso_response(
+        let issued = self.engine().render_posted_sso_response(
             raw_sp,
             &user,
             Some(request.message().id().as_str()),
@@ -714,10 +706,10 @@ impl Saml<Idp> {
 }
 
 fn assertion_consumer_url(
-    sp: &Saml<Sp>,
+    sp: &ServiceProvider,
     selected: Option<EndpointUrl>,
 ) -> Result<EndpointUrl, SamlError> {
-    let metadata = &sp.service_provider().metadata;
+    let metadata = &sp.engine().metadata;
     let locations = metadata.assertion_consumer_locations();
     if let Some(selected) = selected {
         if locations

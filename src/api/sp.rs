@@ -1,16 +1,14 @@
 use crate::browser::{
     Inbound, Outbound, PendingAuthnRequest, SsoResponseBinding, Started, Transport,
 };
-use crate::config::IdpDescriptor;
+use crate::config::{IdpDescriptor, SpConfig};
 use crate::constants::Binding;
 use crate::flow::{FlowResultWithSignatureEvidence, HttpRequest, SignedMessageDestination};
 use crate::model::{
     AuthnRequest, OutstandingLogout, RelayState, SamlValidationContext, SsoResponse, SsoSession,
     VerifiedXmlSignature,
 };
-use crate::sp::{
-    AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions, ServiceProvider,
-};
+use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions};
 use crate::xml::XmlLimits;
 use std::time::SystemTime;
 
@@ -18,7 +16,7 @@ use super::raw_mapping::{
     ensure_entity_id, ensure_relay_state, ensure_sso_response_binding, raw_idp_descriptor,
     relay_state_from_input, selected_acs,
 };
-use super::{ForceAuthn, Saml, SamlError, Sp, StartSso};
+use super::{ForceAuthn, SamlError, StartSso};
 
 pub(super) fn session_from_verified_flow(
     result: FlowResultWithSignatureEvidence,
@@ -124,14 +122,32 @@ pub(super) fn finish_validated_session(
     Ok(session)
 }
 
-impl Saml<Sp> {
-    /// Local SP metadata XML.
-    pub fn metadata_xml(&self) -> &str {
-        self.service_provider().metadata_xml()
+/// A SAML service provider built from an [`SpConfig`].
+///
+/// It starts and finishes Web Browser SSO, single logout, artifact
+/// resolution, name identifier management, and ECP with the identity
+/// providers it is given as [`IdpDescriptor`]s.
+#[derive(Debug)]
+pub struct ServiceProvider {
+    config: SpConfig,
+}
+
+impl ServiceProvider {
+    /// A service provider that runs on `config`.
+    ///
+    /// [`SpConfigBuilder::build`](crate::SpConfigBuilder::build) has already
+    /// validated `config`, so this cannot fail.
+    pub fn new(config: SpConfig) -> Self {
+        Self { config }
     }
 
-    pub(crate) fn service_provider(&self) -> &ServiceProvider {
-        &self.0.service_provider
+    /// Local SP metadata XML.
+    pub fn metadata_xml(&self) -> &str {
+        self.engine().metadata_xml()
+    }
+
+    pub(crate) fn engine(&self) -> &sp::Engine {
+        &self.config.engine
     }
 
     /// Start SP-initiated Web SSO.
@@ -150,9 +166,9 @@ impl Saml<Sp> {
     ///
     /// ```
     /// use saml_rs::{
-    ///     AcsEndpoint, EntityId, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    ///     MetadataTrustPolicy, RelayState, Saml, SpConfig, SpValidationPolicy, SsoEndpoint,
-    ///     StartSso,
+    ///     AcsEndpoint, EntityId, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
+    ///     MetadataTrustPolicy, RelayState, ServiceProvider, SpConfig, SpValidationPolicy,
+    ///     SsoEndpoint, StartSso,
     /// };
     ///
     /// # fn main() -> Result<(), saml_rs::SamlError> {
@@ -163,8 +179,8 @@ impl Saml<Sp> {
     ///     .validation(IdpValidationPolicy::compatibility())
     ///     .build()?;
     ///
-    /// let sp = Saml::sp(sp_config);
-    /// let idp = Saml::idp(idp_config);
+    /// let sp = ServiceProvider::new(sp_config);
+    /// let idp = IdentityProvider::new(idp_config);
     /// let idp = IdpDescriptor::from_metadata_xml(
     ///     EntityId::try_new("https://idp.example.com/metadata")?,
     ///     idp.metadata_xml(),
@@ -186,11 +202,7 @@ impl Saml<Sp> {
             relay_state.ensure_sendable()?;
         }
         let raw_idp = raw_idp_descriptor(idp, SystemTime::now())?;
-        let acs = selected_acs(
-            self.service_provider(),
-            options.response_binding,
-            options.acs_index,
-        )?;
+        let acs = selected_acs(self.engine(), options.response_binding, options.acs_index)?;
         let response_binding = acs.binding();
         let raw_options = LoginRequestOptions {
             relay_state: options.relay_state.as_ref().map(RelayState::as_str),
@@ -198,7 +210,7 @@ impl Saml<Sp> {
             assertion_consumer_service_index: options.acs_index,
             response_binding: Some(Binding::from(response_binding)),
         };
-        let context = self.service_provider().create_typed_login_request(
+        let context = self.engine().create_typed_login_request(
             raw_idp,
             Binding::from(options.binding),
             &raw_options,
@@ -248,13 +260,13 @@ impl Saml<Sp> {
     ///
     /// ```no_run
     /// use saml_rs::{
-    ///     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, Saml,
-    ///     SamlValidationContext,
+    ///     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy,
+    ///     SamlValidationContext, ServiceProvider,
     /// };
     /// use std::time::SystemTime;
     ///
     /// # fn finish(
-    /// #     sp: &Saml<saml_rs::Sp>,
+    /// #     sp: &ServiceProvider,
     /// #     idp: &IdpDescriptor,
     /// #     pending: &PendingAuthnRequest,
     /// #     fields: Vec<FormField>,
@@ -372,17 +384,14 @@ impl Saml<Sp> {
         let relay_state = relay_state_from_input(&input)?;
         ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        let parse =
-            ResponseParseInput::try_new(idp, input, self.service_provider().setting.xml_limits)?;
-        let flow = self
-            .service_provider()
-            .parse_login_response_with_request_id_at(
-                raw_idp,
-                parse.binding,
-                &parse.request,
-                pending.request_id().as_str(),
-                parse.options(validation, pending.acs().location().as_str()),
-            )?;
+        let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
+        let flow = self.engine().parse_login_response_with_request_id_at(
+            raw_idp,
+            parse.binding,
+            &parse.request,
+            pending.request_id().as_str(),
+            parse.options(validation, pending.acs().location().as_str()),
+        )?;
         session_from_verified_flow(flow, relay_state)
     }
 
@@ -395,7 +404,7 @@ impl Saml<Sp> {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input.binding())?;
         let raw_idp = raw_idp_descriptor(idp, validation.now())?;
-        let metadata = &self.service_provider().metadata;
+        let metadata = &self.engine().metadata;
         let expected_recipient = match validation.recipient_endpoint() {
             Some(_) => validation.resolve_recipient_endpoint(
                 &metadata.assertion_consumer_service_locations(Binding::from(binding)),
@@ -404,16 +413,13 @@ impl Saml<Sp> {
                 .assertion_consumer_location(Binding::from(binding))
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
-        let parse =
-            ResponseParseInput::try_new(idp, input, self.service_provider().setting.xml_limits)?;
-        let flow = self
-            .service_provider()
-            .parse_unsolicited_login_response_at(
-                raw_idp,
-                parse.binding,
-                &parse.request,
-                parse.options(validation, &expected_recipient),
-            )?;
+        let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
+        let flow = self.engine().parse_unsolicited_login_response_at(
+            raw_idp,
+            parse.binding,
+            &parse.request,
+            parse.options(validation, &expected_recipient),
+        )?;
         session_from_verified_flow(flow, relay_state)
     }
 }

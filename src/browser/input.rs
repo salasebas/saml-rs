@@ -92,13 +92,13 @@ impl SoapMessage for LogoutResponse {}
 ///
 /// ```
 /// use saml_rs::{
-///     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, Saml, SamlError,
-///     SamlValidationContext, Sp, SsoSession,
+///     FormField, IdpDescriptor, Inbound, PendingAuthnRequest, ReplayPolicy, SamlError,
+///     SamlValidationContext, ServiceProvider, SsoSession,
 /// };
 /// use std::time::SystemTime;
 ///
 /// fn finish(
-///     sp: &Saml<Sp>,
+///     sp: &ServiceProvider,
 ///     idp: &IdpDescriptor,
 ///     pending: &PendingAuthnRequest,
 ///     fields: Vec<FormField>,

@@ -11,10 +11,10 @@ use common::signing_credentials;
 use std::time::SystemTime;
 
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdpConfig,
-    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound, ReplayPolicy, Saml,
-    SamlError, SamlValidationContext, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint,
-    StartPaosSso, StartSso,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdentityProvider,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound,
+    ReplayPolicy, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
+    SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
 };
 use url::Url;
 
@@ -30,10 +30,10 @@ fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
 }
 
-fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<Saml<saml_rs::Sp>, SamlError> {
+fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<saml_rs::ServiceProvider, SamlError> {
     let mut validation = SpValidationPolicy::recommended();
     validation.authn_requests = authn_requests;
-    Ok(Saml::sp(
+    Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post(SP_ACS)?.with_default(),
@@ -44,8 +44,8 @@ fn sp(authn_requests: AuthnRequestSigningPolicy) -> Result<Saml<saml_rs::Sp>, Sa
     ))
 }
 
-fn idp(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError> {
-    Ok(Saml::idp(
+fn idp(validation: IdpValidationPolicy) -> Result<saml_rs::IdentityProvider, SamlError> {
+    Ok(IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,
             SsoEndpoint::post(IDP_SSO_POST)?,
@@ -58,8 +58,8 @@ fn idp(validation: IdpValidationPolicy) -> Result<Saml<saml_rs::Idp>, SamlError>
 }
 
 fn descriptors(
-    sp: &Saml<saml_rs::Sp>,
-    idp: &Saml<saml_rs::Idp>,
+    sp: &saml_rs::ServiceProvider,
+    idp: &saml_rs::IdentityProvider,
 ) -> Result<(SpDescriptor, IdpDescriptor), SamlError> {
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,

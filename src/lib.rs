@@ -4,10 +4,10 @@
 //!
 //! Guides are at <https://samlrs.vercel.app>.
 //!
-//! Start new browser SSO/SLO integrations with [`Saml`]. The typed facade keeps
-//! local role state in [`Saml<Sp>`] or [`Saml<Idp>`], accepts peer metadata
-//! through typed descriptors, and returns pending transaction values that
-//! callers can store with browser session state.
+//! Start new browser SSO/SLO integrations with [`ServiceProvider`] or
+//! [`IdentityProvider`]. Each one holds the local role's config, accepts peer
+//! metadata through typed descriptors, and returns pending transaction values
+//! that callers can store with browser session state.
 //!
 //! [`SpValidationPolicy::recommended`] is the preset for claimed features.
 //! [`SpValidationPolicy::compatibility`] keeps the samlify-port behavior.
@@ -34,14 +34,14 @@
 //!
 //! # SP-initiated SSO
 //!
-//! [`Saml<Sp>::start_sso`] creates the browser action and [`PendingAuthnRequest`].
-//! Store the pending value and pass it back to [`Saml<Sp>::finish_sso`] when the
+//! [`ServiceProvider::start_sso`] creates the browser action and [`PendingAuthnRequest`].
+//! Store the pending value and pass it back to [`ServiceProvider::finish_sso`] when the
 //! ACS endpoint receives the SAML response.
 //!
 //! ```no_run
 //! use saml_rs::{
 //!     AcsEndpoint, EntityId, FormField, IdpDescriptor, Inbound, MetadataTrustPolicy, ReplayPolicy,
-//!     Saml, SamlValidationContext, SpConfig, SpValidationPolicy, StartSso,
+//!     SamlValidationContext, ServiceProvider, SpConfig, SpValidationPolicy, StartSso,
 //! };
 //! use std::time::SystemTime;
 //!
@@ -49,7 +49,7 @@
 //! #     idp_metadata_xml: &str,
 //! #     form_fields: Vec<FormField>,
 //! # ) -> Result<(), saml_rs::SamlError> {
-//! let sp = Saml::sp(
+//! let sp = ServiceProvider::new(
 //!     SpConfig::builder(EntityId::try_new("https://sp.example.com/metadata")?, AcsEndpoint::post("https://sp.example.com/acs")?)
 //!         .validation(SpValidationPolicy::compatibility())
 //!         .build()?,
@@ -90,16 +90,16 @@
 //!
 //! # IdP-initiated SSO
 //!
-//! Use [`Saml<Sp>::accept_unsolicited_sso`] for IdP-initiated responses. This
+//! Use [`ServiceProvider::accept_unsolicited_sso`] for IdP-initiated responses. This
 //! method is separate from `finish_sso` so unsolicited responses are an explicit
 //! caller choice rather than a missing pending request.
 //!
 //! ```no_run
-//! use saml_rs::{FormField, IdpDescriptor, Inbound, ReplayPolicy, Saml, SamlValidationContext};
+//! use saml_rs::{FormField, IdpDescriptor, Inbound, ReplayPolicy, SamlValidationContext, ServiceProvider};
 //! use std::time::SystemTime;
 //!
 //! # fn accept(
-//! #     sp: &Saml<saml_rs::Sp>,
+//! #     sp: &ServiceProvider,
 //! #     idp: &IdpDescriptor,
 //! #     form_fields: Vec<FormField>,
 //! # ) -> Result<(), saml_rs::SamlError> {
@@ -119,20 +119,20 @@
 //!
 //! # Identity Provider flows
 //!
-//! [`Saml<Idp>::receive_sso`] parses an SP `AuthnRequest`; [`Saml<Idp>::respond_sso`]
+//! [`IdentityProvider::receive_sso`] parses an SP `AuthnRequest`; [`IdentityProvider::respond_sso`]
 //! returns the typed browser response. An [`SsoAssertion`] answers with a
 //! successful response, and [`SsoOutcome::Failure`] with an error status and no
 //! assertion. [`RespondSso`] says how the response is delivered and signed.
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     FormField, Inbound, NameId, ReplayPolicy, RespondSso, Saml, SamlValidationContext,
-//!     SpDescriptor, SsoAssertion,
+//!     FormField, IdentityProvider, Inbound, NameId, ReplayPolicy, RespondSso,
+//!     SamlValidationContext, SpDescriptor, SsoAssertion,
 //! };
 //! use std::time::SystemTime;
 //!
 //! # fn respond(
-//! #     idp: &Saml<saml_rs::Idp>,
+//! #     idp: &IdentityProvider,
 //! #     sp: &SpDescriptor,
 //! #     request_fields: Vec<FormField>,
 //! # ) -> Result<(), saml_rs::SamlError> {
@@ -156,9 +156,9 @@
 //! # Ok(()) }
 //! ```
 //!
-//! [`Saml<Idp>::common_domain_cookie`] returns the `_saml_idp` cookie
+//! [`IdentityProvider::common_domain_cookie`] returns the `_saml_idp` cookie
 //! for the caller to write after authentication.
-//! [`Saml<Idp>::respond_sso`] does not write that cookie, and a service
+//! [`IdentityProvider::respond_sso`] does not write that cookie, and a service
 //! provider has no method for it.
 //!
 //! # Single Logout
@@ -185,13 +185,13 @@
 //!
 //! ```no_run
 //! use saml_rs::{
-//!     FormField, IdpDescriptor, Inbound, ReplayPolicy, Saml, SamlValidationContext, SsoSession,
-//!     StartSlo,
+//!     FormField, IdpDescriptor, Inbound, ReplayPolicy, SamlValidationContext, ServiceProvider,
+//!     SsoSession, StartSlo,
 //! };
 //! use std::time::SystemTime;
 //!
 //! # fn logout(
-//! #     sp: &Saml<saml_rs::Sp>,
+//! #     sp: &ServiceProvider,
 //! #     idp: &IdpDescriptor,
 //! #     session: &SsoSession,
 //! #     response_fields: Vec<FormField>,
@@ -221,11 +221,12 @@
 //!
 //! ```compile_fail
 //! use saml_rs::{
-//!     IdpDescriptor, Inbound, PendingLogoutRequest, Saml, SamlValidationContext, SsoResponse,
+//!     IdpDescriptor, Inbound, PendingLogoutRequest, SamlValidationContext, ServiceProvider,
+//!     SsoResponse,
 //! };
 //!
 //! fn wrong(
-//!     sp: &Saml<saml_rs::Sp>,
+//!     sp: &ServiceProvider,
 //!     idp: &IdpDescriptor,
 //!     pending: &PendingLogoutRequest,
 //!     input: Inbound<SsoResponse>,
@@ -240,10 +241,10 @@
 //! arbitrary request ID strings:
 //!
 //! ```compile_fail
-//! use saml_rs::{RespondSlo, Saml, SpDescriptor, Status};
+//! use saml_rs::{IdentityProvider, RespondSlo, SpDescriptor, Status};
 //!
 //! fn wrong(
-//!     idp: &Saml<saml_rs::Idp>,
+//!     idp: &IdentityProvider,
 //!     sp: &SpDescriptor,
 //!     request_id: &str,
 //! ) -> Result<(), saml_rs::SamlError> {
@@ -273,10 +274,10 @@
 //!
 //! # Artifact resolution
 //!
-//! [`Saml<Idp>::issue_artifact`] stores a protocol message for one service
-//! provider. [`Saml<Idp>::answer_artifact_resolve`] returns that message in
+//! [`IdentityProvider::issue_artifact`] stores a protocol message for one service
+//! provider. [`IdentityProvider::answer_artifact_resolve`] returns that message in
 //! `ArtifactResponse` only when the presenter is that provider.
-//! [`Saml<Sp>::resolve_artifact`] sends `ArtifactResolve` to the identity
+//! [`ServiceProvider::resolve_artifact`] sends `ArtifactResolve` to the identity
 //! provider's `ArtifactResolutionService`, and [`ArtifactResolution::finish`]
 //! reads the message back. The deployment POSTs the SOAP envelope with
 //! [`SoapRequest::headers`] and answers with [`SoapResponse::headers`]. The
@@ -286,39 +287,39 @@
 //!
 //! # HTTP-Artifact response
 //!
-//! [`Saml<Idp>::respond_sso_artifact`] and
-//! [`Saml<Idp>::initiate_sso_artifact`] store a Web SSO `<Response>` and
+//! [`IdentityProvider::respond_sso_artifact`] and
+//! [`IdentityProvider::initiate_sso_artifact`] store a Web SSO `<Response>` and
 //! return the browser action that carries its artifact. The service provider
 //! reads the artifact with [`DeliveredArtifact`], resolves it with
-//! [`Saml<Sp>::resolve_artifact`], and passes [`Inbound::artifact`] to
-//! [`Saml<Sp>::finish_sso`] or [`Saml<Sp>::accept_unsolicited_sso`]. An
+//! [`ServiceProvider::resolve_artifact`], and passes [`Inbound::artifact`] to
+//! [`ServiceProvider::finish_sso`] or [`ServiceProvider::accept_unsolicited_sso`]. An
 //! `<AuthnRequest>` is not delivered as an artifact.
 //!
 //! # Name identifier management
 //!
 //! An identity provider that publishes a SOAP `ManageNameIDService` changes
 //! or ends a principal's identifier at a service provider with
-//! [`Saml<Idp>::start_name_id_management`] and
+//! [`IdentityProvider::start_name_id_management`] and
 //! [`StartedNameIdManagement::finish`]. It answers a service provider's
-//! request with [`Saml<Idp>::receive_name_id_management`] and
-//! [`Saml<Idp>::respond_name_id_management`]. The service provider has no
+//! request with [`IdentityProvider::receive_name_id_management`] and
+//! [`IdentityProvider::respond_name_id_management`]. The service provider has no
 //! SOAP name identifier management.
 //!
 //! Over HTTP-Redirect, both roles publish a `ManageNameIDService` and use
 //! `start_name_id_management_redirect`, `receive_name_id_management_redirect`,
 //! `respond_name_id_management_redirect`, and
 //! `finish_name_id_management_redirect`, for example
-//! [`Saml<Sp>::start_name_id_management_redirect`]. This does not claim the IdP
+//! [`ServiceProvider::start_name_id_management_redirect`]. This does not claim the IdP
 //! or SP operational mode.
 //!
 //! # Unsupported profiles
 //!
-//! The high-level [`Saml`] API focuses on browser Web SSO, Enhanced Client/Proxy
-//! SSO over PAOS at the service-provider and identity-provider ends,
-//! metadata-driven SP/IdP setup, XML signature/encryption through `bergshamra`,
-//! Single Logout, artifact resolution over SOAP, and name identifier
-//! management. The enhanced-client role
-//! is not a facade. It does not implement HTTP-Artifact delivery of an
+//! The typed [`ServiceProvider`] and [`IdentityProvider`] API focuses on
+//! browser Web SSO, Enhanced Client/Proxy SSO over PAOS at the
+//! service-provider and identity-provider ends, metadata-driven SP/IdP setup,
+//! XML signature/encryption through `bergshamra`, Single Logout, artifact
+//! resolution over SOAP, and name identifier management. The enhanced-client
+//! role has no type. It does not implement HTTP-Artifact delivery of an
 //! `<AuthnRequest>` or a logout message, SOAP profiles other than artifact
 //! resolution, Single Logout, name identifier management at the identity
 //! provider, and the identity-provider leg of Enhanced Client/Proxy SSO, SAML
@@ -415,11 +416,11 @@ pub mod xml;
 mod tests;
 
 pub use api::{
-    check_paos_client_headers, ForceAuthn, Idp, IsPassive, LogoutSigning, MessageDelivery,
-    NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso, PendingPaosSsoSnapshot,
-    ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo, RespondSso, Saml, SoapFault, Sp,
-    SsoAssertion, SsoOutcome, StartNameIdManagement, StartPaosSso, StartSlo, StartSso,
-    StartedPaosSso, Unknown,
+    check_paos_client_headers, ForceAuthn, IdentityProvider, IsPassive, LogoutSigning,
+    MessageDelivery, NameIdManagementRedirectReceipt, PaosHttpResponse, PendingPaosSso,
+    PendingPaosSsoSnapshot, ReceiveNameIdManagement, RespondNameIdManagement, RespondSlo,
+    RespondSso, ServiceProvider, SoapFault, SsoAssertion, SsoOutcome, StartNameIdManagement,
+    StartPaosSso, StartSlo, StartSso, StartedPaosSso,
 };
 pub use artifact::{
     AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,

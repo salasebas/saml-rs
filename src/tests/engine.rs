@@ -9,7 +9,7 @@ use crate::constants::Binding;
 use crate::entity::{now_iso8601, BindingContext, EntitySetting, User};
 use crate::error::SamlError;
 use crate::flow::{flow_with_authentication, FlowOptions, FlowResult, HttpRequest};
-use crate::idp::{IdentityProvider, LoginResponseOptions, LoginResponseOverrides};
+use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::logout::{
     create_logout_request_for_subject_inner, create_logout_response_inner, parse_logout_request_at,
     parse_logout_response_at, LogoutFlowValidation, LogoutReceipt, LogoutRequestInput,
@@ -18,7 +18,7 @@ use crate::logout::{
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, Status};
 use crate::sp::{
-    AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions, ServiceProvider,
+    self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions,
     WebBrowserSsoProducer,
 };
 use crate::template::{
@@ -56,7 +56,7 @@ pub(crate) trait SpMessages {
     /// `<AuthnRequest>` to `idp` over `binding`.
     fn create_login_request(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         options: &LoginRequestOptions<'_>,
     ) -> Result<BindingContext, SamlError>;
@@ -64,7 +64,7 @@ pub(crate) trait SpMessages {
     /// Login `<Response>` whose `InResponseTo` must be `request_id`.
     fn parse_login_response_with_request_id(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         request: &HttpRequest,
         request_id: &str,
@@ -73,7 +73,7 @@ pub(crate) trait SpMessages {
     /// Login `<Response>` that answers no request.
     fn parse_unsolicited_login_response(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         request: &HttpRequest,
     ) -> Result<FlowResult, SamlError>;
@@ -83,17 +83,17 @@ pub(crate) trait SpMessages {
     /// returns the request `ID` and the XML.
     fn create_rendered_login_request(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         options: &LoginRequestOptions<'_>,
         render: &dyn Fn(&str) -> (String, String),
     ) -> Result<BindingContext, SamlError>;
 }
 
-impl SpMessages for ServiceProvider {
+impl SpMessages for sp::Engine {
     fn create_login_request(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         options: &LoginRequestOptions<'_>,
     ) -> Result<BindingContext, SamlError> {
@@ -108,7 +108,7 @@ impl SpMessages for ServiceProvider {
 
     fn parse_login_response_with_request_id(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         request: &HttpRequest,
         request_id: &str,
@@ -127,7 +127,7 @@ impl SpMessages for ServiceProvider {
 
     fn parse_unsolicited_login_response(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         request: &HttpRequest,
     ) -> Result<FlowResult, SamlError> {
@@ -144,7 +144,7 @@ impl SpMessages for ServiceProvider {
 
     fn create_rendered_login_request(
         &self,
-        idp: &IdentityProvider,
+        idp: &idp::Engine,
         binding: Binding,
         options: &LoginRequestOptions<'_>,
         render: &dyn Fn(&str) -> (String, String),
@@ -168,7 +168,7 @@ pub(crate) trait IdpMessages {
     /// Login `<Response>` for `user` to `sp` over `binding`.
     fn create_login_response(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         user: &User,
         options: &LoginResponseOptions<'_>,
@@ -180,7 +180,7 @@ pub(crate) trait IdpMessages {
     /// returns the response `ID` and the XML, which is not prefixed again.
     fn create_rendered_login_response(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         user: &User,
         options: &LoginResponseOptions<'_>,
@@ -190,16 +190,16 @@ pub(crate) trait IdpMessages {
     /// `<AuthnRequest>` from `sp`.
     fn parse_login_request(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         request: &HttpRequest,
     ) -> Result<FlowResult, SamlError>;
 }
 
-impl IdpMessages for IdentityProvider {
+impl IdpMessages for idp::Engine {
     fn create_login_response(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         user: &User,
         options: &LoginResponseOptions<'_>,
@@ -217,7 +217,7 @@ impl IdpMessages for IdentityProvider {
 
     fn create_rendered_login_response(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         user: &User,
         options: &LoginResponseOptions<'_>,
@@ -254,7 +254,7 @@ impl IdpMessages for IdentityProvider {
 
     fn parse_login_request(
         &self,
-        sp: &ServiceProvider,
+        sp: &sp::Engine,
         binding: Binding,
         request: &HttpRequest,
     ) -> Result<FlowResult, SamlError> {
