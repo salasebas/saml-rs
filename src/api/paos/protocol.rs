@@ -1,7 +1,6 @@
 //! SOAP envelopes and the PAOS HTTP header for Enhanced Client/Proxy SSO.
 
 use crate::error::SamlError;
-use crate::model::RelayState;
 use crate::soap::{self, HeaderEntry, UnderstoodHeader, SOAP_ACTOR_NEXT};
 use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::XmlLimits;
@@ -167,7 +166,7 @@ pub(super) fn soap_fault_envelope() -> String {
 
 pub(super) struct SoapBody {
     pub(super) element_xml: String,
-    pub(super) relay_state: Option<RelayState>,
+    pub(super) relay_state: Option<String>,
 }
 
 /// Header entries the service provider processes on the PAOS response.
@@ -200,7 +199,7 @@ pub(super) fn read_soap_body(
         )));
     }
     Ok(SoapBody {
-        relay_state: relay_state_header(&body.header)?,
+        relay_state: relay_state_header(body.header)?,
         element_xml: body.xml,
     })
 }
@@ -211,20 +210,17 @@ fn envelope(header_xml: &str, body_xml: &str) -> String {
     )
 }
 
-fn relay_state_header(header: &[HeaderEntry]) -> Result<Option<RelayState>, SamlError> {
-    let relay_states: Vec<&HeaderEntry> = header
-        .iter()
-        .filter(|entry| entry.node.local_name == "RelayState")
-        .collect();
-    match relay_states.as_slice() {
-        [] => Ok(None),
-        [relay_state] if relay_state.namespace == ECP_PROFILE => {
-            RelayState::try_new(relay_state.node.text.clone()).map(Some)
-        }
-        [_] => Err(SamlError::ProtocolProfile(
+fn relay_state_header(header: Vec<HeaderEntry>) -> Result<Option<String>, SamlError> {
+    let mut states = header
+        .into_iter()
+        .filter(|entry| entry.node.local_name == "RelayState");
+    match (states.next(), states.next()) {
+        (None, _) => Ok(None),
+        (Some(state), None) if state.namespace == ECP_PROFILE => Ok(Some(state.node.text)),
+        (Some(_), None) => Err(SamlError::ProtocolProfile(
             "RelayState header must use the ECP profile namespace".into(),
         )),
-        _ => Err(SamlError::ProtocolProfile(
+        (Some(_), Some(_)) => Err(SamlError::ProtocolProfile(
             "SOAP header must contain at most one RelayState".into(),
         )),
     }
@@ -412,10 +408,7 @@ mod tests {
                 "<samlp:AuthnRequest xmlns:SOAP-ENV=\"{SOAP_ENVELOPE_NS}\" xmlns:samlp=\"{PROTOCOL_NS}\" ID=\"_1\"></samlp:AuthnRequest>"
             )
         );
-        assert_eq!(
-            body.relay_state.as_ref().map(RelayState::as_str),
-            Some("state")
-        );
+        assert_eq!(body.relay_state.as_deref(), Some("state"));
         assert!(envelope.contains("responseConsumerURL=\"https://sp.example.com/acs\""));
         assert!(envelope.contains(&format!("service=\"{ECP_PROFILE}\"")));
         Ok(())
@@ -432,10 +425,7 @@ mod tests {
             XmlLimits::default(),
             SP_UNDERSTOOD_HEADERS,
         )?;
-        assert_eq!(
-            body.relay_state.as_ref().map(RelayState::as_str),
-            Some("state")
-        );
+        assert_eq!(body.relay_state.as_deref(), Some("state"));
         Ok(())
     }
 

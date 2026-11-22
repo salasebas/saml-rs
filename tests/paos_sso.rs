@@ -11,6 +11,9 @@ mod schema_validation;
 #[path = "paos_sso/authn_context.rs"]
 mod authn_context;
 
+#[path = "paos_sso/relay_state.rs"]
+mod relay_state;
+
 use std::time::{Duration, SystemTime};
 
 use roxmltree::{Document, Node};
@@ -768,7 +771,8 @@ fn relay_state_is_checked_after_the_response_signature() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn overlong_relay_state_in_response_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+fn overlong_echo_is_rejected_before_the_response_status() -> Result<(), Box<dyn std::error::Error>>
+{
     let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
     let started = sp.start_paos_sso(
         &idp_descriptor,
@@ -782,8 +786,11 @@ fn overlong_relay_state_in_response_is_rejected() -> Result<(), Box<dyn std::err
         &EndpointUrl::try_new(IDP_SOAP)?,
         validation(),
     )?;
-    let answered =
-        idp.respond_paos_sso(&sp_descriptor, &received, SsoAssertion::new(principal()))?;
+    let answered = idp.respond_paos_sso(
+        &sp_descriptor,
+        &received,
+        SsoOutcome::Failure(Status::responder()),
+    )?;
     let document = Document::parse(answered.envelope())?;
     let response = body_element(answered.envelope(), document.root_element(), "Response")?;
     let long = "r".repeat(81);
