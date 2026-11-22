@@ -76,6 +76,7 @@ states the rules that callers rely on.
 
 ## Type names
 
+- Prefer the OASIS term for a SAML concept, such as `ServiceProvider`.
 - When each role has its own type for one concept, the type name carries the
   role: `SpConfig` and `IdpConfig`, `SpMetadata` and `IdpMetadata`,
   `ServiceProvider` and `IdentityProvider`.
