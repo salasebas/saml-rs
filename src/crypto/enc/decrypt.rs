@@ -348,7 +348,7 @@ pub(crate) fn decrypt_assertion_elements(
 }
 
 /// Replace the `<EncryptedID>` of the `<LogoutRequest>` in `xml` with the
-/// `<NameID>` it carries, decrypted with one of `enc_keys`.
+/// `<NameID>` or `<BaseID>` it carries, decrypted with one of `enc_keys`.
 ///
 /// Returns `None` when no key in `enc_keys` decrypts the `<EncryptedID>`
 /// under `options`.
@@ -357,7 +357,7 @@ pub(crate) fn decrypt_assertion_elements(
 ///
 /// Returns [`SamlError::ProtocolProfile`] unless the request carries exactly
 /// one `<BaseID>`, `<NameID>`, or `<EncryptedID>`, and that one is an
-/// `<EncryptedID>`. Its plaintext follows [`decrypt_assertion_elements`].
+/// `<EncryptedID>`. The plaintext must be one identifier element.
 pub(crate) fn decrypt_logout_request_encrypted_id(
     xml: &str,
     enc_keys: &[Key],
@@ -384,10 +384,17 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
         ) else {
             return Ok(None);
         };
-        let plaintext = decrypted_plaintext(&decrypted, peer_keys, kind, limits)?;
+        let plaintext = decrypted_child(&decrypted, peer_keys, kind, limits)?;
+        match plaintext.local_name.as_str() {
+            "NameID" => {}
+            "BaseID"
+                if !root_children(&parse_xml_document(&decrypted)?, kind.namespace, "BaseID")?
+                    .is_empty() => {}
+            _ => return Err(must_carry(kind)),
+        }
         Ok(Some(vec![DecryptedElement {
             range: node_range(document, *encrypted_id)?,
-            plaintext: plaintext.to_string(),
+            plaintext: decrypted[plaintext.start..plaintext.end].to_string(),
             revealed_elements: work::revealed_elements(&decrypted)?,
         }]))
     })
@@ -509,25 +516,13 @@ fn is_xml_whitespace(text: &str) -> bool {
         .all(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n'))
 }
 
-/// The element that took the place of `EncryptedData` in the decrypted
-/// `wrapper`: its first child, followed by the `peer_keys` `EncryptedKey`
-/// elements that were already there.
 fn decrypted_plaintext(
     wrapper: &str,
     peer_keys: usize,
     kind: EncryptedElementKind,
     limits: XmlLimits,
 ) -> Result<&str, SamlError> {
-    let root = dom::parse_document(wrapper, limits)?.root;
-    let Some((plaintext, keys)) = root.children.split_first() else {
-        return Err(must_carry(kind));
-    };
-    if keys.len() != peer_keys
-        || keys.iter().any(|key| key.local_name != "EncryptedKey")
-        || !is_xml_whitespace(&root.text)
-    {
-        return Err(must_carry(kind));
-    }
+    let plaintext = decrypted_child(wrapper, peer_keys, kind, limits)?;
     if plaintext.local_name == kind.plaintext {
         return Ok(&wrapper[plaintext.start..plaintext.end]);
     }
@@ -541,6 +536,28 @@ fn decrypted_plaintext(
         )));
     }
     Err(must_carry(kind))
+}
+
+/// The element that took the place of `EncryptedData` in the decrypted
+/// `wrapper`, followed by the `peer_keys` `EncryptedKey` elements already there.
+fn decrypted_child(
+    wrapper: &str,
+    peer_keys: usize,
+    kind: EncryptedElementKind,
+    limits: XmlLimits,
+) -> Result<dom::Node, SamlError> {
+    let root = dom::parse_document(wrapper, limits)?.root;
+    let mut keys = root.children.into_iter();
+    let Some(plaintext) = keys.next() else {
+        return Err(must_carry(kind));
+    };
+    if keys.len() != peer_keys
+        || keys.any(|key| key.local_name != "EncryptedKey")
+        || !is_xml_whitespace(&root.text)
+    {
+        return Err(must_carry(kind));
+    }
+    Ok(plaintext)
 }
 
 fn must_carry(kind: EncryptedElementKind) -> SamlError {
