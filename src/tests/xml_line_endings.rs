@@ -59,7 +59,7 @@ impl SignedExchange {
             .validation(SpValidationPolicy {
                 assertions: AssertionSignaturePolicy::RequireSigned,
                 audience: AudienceValidationPolicy::RequireRestriction,
-                ..SpValidationPolicy::recommended()
+                ..SpValidationPolicy::default()
             })
             .build()?,
         );
@@ -69,7 +69,7 @@ impl SignedExchange {
                 SsoEndpoint::post(IDP_SSO_POST)?,
             )
             .credentials(signing_credentials())
-            .validation(IdpValidationPolicy::recommended())
+            .validation(IdpValidationPolicy::default())
             .build()?,
         );
         let sp_descriptor = SpDescriptor::from_metadata_xml(

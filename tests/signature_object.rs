@@ -36,10 +36,10 @@ fn parties(xml_signatures: XmlSignatureProfile) -> Result<Parties, SamlError> {
         CertificatePem::new(CERT),
         PrivateKeyPem::new(KEY),
     ));
-    let mut sp_validation = SpValidationPolicy::recommended();
+    let mut sp_validation = SpValidationPolicy::default();
     sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     sp_validation.xml_signatures = xml_signatures;
-    let mut idp_validation = IdpValidationPolicy::recommended();
+    let mut idp_validation = IdpValidationPolicy::default();
     idp_validation.xml_signatures = xml_signatures;
     let sp = ServiceProvider::new(
         SpConfig::builder(

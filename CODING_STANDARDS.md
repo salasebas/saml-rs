@@ -44,8 +44,7 @@ constructor and assigns the fields it changes, so a later field is not a
 breaking change. A result comes from the operation that returns it.
 
 Each such struct has a public way to get a value: `Default` or a constructor.
-A validation policy also has named presets, and its `Default` is the
-recommended one.
+The validation policies expose their recommended settings through `Default`.
 
 Fields stay public while the struct guarantees nothing about their values. The
 operation that consumes the struct, such as `build()`, checks them. A struct
@@ -111,8 +110,8 @@ These rules apply when an API is added or redesigned.
   There is no bundled strict preset, because callers need the hardenings
   independently.
 - A validation policy enum implements `Default` only when that value is its
-  field in `recommended()`. Otherwise a field would get a silently different
-  value from the enum than from the preset.
+  field in the default validation policy. This keeps the enum and role defaults
+  consistent.
 
 ## Errors
 

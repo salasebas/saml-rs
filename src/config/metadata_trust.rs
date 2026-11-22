@@ -13,8 +13,7 @@ use super::policies::XmlSignatureProfile;
 /// Explicit trust policy for imported SAML metadata.
 ///
 /// This is a caller argument on descriptor import, not a field of
-/// [`crate::SpValidationPolicy`] or [`crate::IdpValidationPolicy`]. There is
-/// no `recommended()` constructor. The classification is
+/// [`crate::SpValidationPolicy`] or [`crate::IdpValidationPolicy`]. The classification is
 /// `docs/conformance/metadata-and-replay.md`.
 ///
 /// SAML metadata trust is caller-pinned or federation-driven; this type does

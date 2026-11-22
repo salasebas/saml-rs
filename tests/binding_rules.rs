@@ -59,7 +59,7 @@ fn credentials() -> Credentials {
 }
 
 fn signing_sp_validation() -> SpValidationPolicy {
-    let mut validation = SpValidationPolicy::recommended();
+    let mut validation = SpValidationPolicy::default();
     validation.assertions = AssertionSignaturePolicy::RequireSigned;
     validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     validation.audience = AudienceValidationPolicy::RequireRestriction;
@@ -67,7 +67,7 @@ fn signing_sp_validation() -> SpValidationPolicy {
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
-    let mut validation = IdpValidationPolicy::recommended();
+    let mut validation = IdpValidationPolicy::default();
     validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
     validation
 }
@@ -158,8 +158,8 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
     assert!(RelayState::try_new("a".repeat(MAX_RELAY_STATE_BYTES + 1)).is_err());
     let relay_state = RelayState::try_new("a".repeat(MAX_RELAY_STATE_BYTES))?;
 
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(
         &idp_descriptor,
@@ -205,8 +205,8 @@ fn typed_send_rejects_relay_state_longer_than_80_bytes() -> Result<(), Box<dyn s
 #[test]
 fn typed_sso_request_without_relay_state_sends_and_records_none(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let redirect = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
@@ -228,8 +228,8 @@ fn typed_sso_request_without_relay_state_sends_and_records_none(
 fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let long = "c".repeat(200);
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     let request_query = |relay_state: &str| -> Result<String, Box<dyn std::error::Error>> {
@@ -299,8 +299,8 @@ fn typed_sso_accepts_and_echoes_received_relay_state_up_to_the_receive_limit(
 fn typed_sso_rejects_received_relay_state_above_the_receive_limit(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let too_long = "d".repeat(MAX_RECEIVED_RELAY_STATE_BYTES + 1);
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     let query = started
@@ -358,8 +358,8 @@ fn expect_ambiguous_relay_state<T: std::fmt::Debug>(
 
 #[test]
 fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended())?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let relay_state = RelayState::try_new("state")?;
 
@@ -431,11 +431,11 @@ fn typed_sso_rejects_a_repeated_relay_state() -> Result<(), Box<dyn std::error::
 fn typed_redirect_removes_protocol_signature_and_verifies_parameter_order(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let unsigned_sp = ServiceProvider::new(
-        sp_config(SpValidationPolicy::recommended())?
+        sp_config(SpValidationPolicy::default())?
             .authn_request_template(SIGNED_AUTHN_REQUEST_TEMPLATE)
             .build()?,
     );
-    let recommended_idp = idp_with(IdpValidationPolicy::recommended())?;
+    let recommended_idp = idp_with(IdpValidationPolicy::default())?;
     let (_, idp_descriptor) = descriptors(&unsigned_sp, &recommended_idp)?;
     match unsigned_sp.start_sso(&idp_descriptor, StartSso::redirect()) {
         Err(SamlError::ProtocolProfile(message)) if message.contains("HTTP-Redirect") => {}

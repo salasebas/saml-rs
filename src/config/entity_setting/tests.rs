@@ -82,7 +82,7 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
         assertions: AssertionSignaturePolicy::RequireSigned,
         responses: ResponseSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     })
     .xml(XmlPolicy {
         limits,
@@ -149,7 +149,7 @@ fn idp_config_converts_authn_request_policy() -> Result<(), SamlError> {
     .name_id_format(NameIdFormat::Transient)
     .validation(IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     })
     .build()?
     .engine

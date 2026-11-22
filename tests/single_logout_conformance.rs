@@ -10,10 +10,10 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
     AcsEndpoint, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, LogoutPolicy, LogoutResponse, LogoutSignaturePolicy,
-    LogoutSigning, LogoutSubject, MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest,
-    ReplayPolicy, RespondSlo, SamlError, SamlValidationContext, ServiceProvider, SessionIndex,
-    SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
+    IdpValidationPolicy, Inbound, LogoutResponse, LogoutSignaturePolicy, LogoutSigning,
+    LogoutSubject, MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy,
+    RespondSlo, SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -26,11 +26,11 @@ const IDP_SLO_HTTPS: &str = "https://idp.example.com/slo/post";
 const IDP_SLO_HTTP: &str = "http://idp.example.com/slo/post";
 
 fn sp_with_slo_accept() -> SpValidationPolicy {
-    SpValidationPolicy::recommended()
+    SpValidationPolicy::default()
 }
 
 fn idp_with_slo_accept() -> IdpValidationPolicy {
-    IdpValidationPolicy::recommended()
+    IdpValidationPolicy::default()
 }
 
 fn validation() -> SamlValidationContext<'static> {
@@ -38,14 +38,14 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn unsigned_logout_sp_validation() -> SpValidationPolicy {
-    let mut policy = SpValidationPolicy::recommended();
+    let mut policy = SpValidationPolicy::default();
     policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
     policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
     policy
 }
 
 fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
-    let mut policy = IdpValidationPolicy::recommended();
+    let mut policy = IdpValidationPolicy::default();
     policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
     policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
     policy
@@ -521,33 +521,4 @@ fn signed_logout_response(
         sp_descriptor,
         idp_descriptor,
     })
-}
-
-#[test]
-fn logout_policy_defaults_follow_recommended() {
-    assert_eq!(
-        SpValidationPolicy::default().logout,
-        LogoutPolicy::recommended()
-    );
-    assert_eq!(
-        IdpValidationPolicy::default().logout,
-        LogoutPolicy::recommended()
-    );
-    assert_eq!(LogoutPolicy::default(), LogoutPolicy::recommended());
-    assert_eq!(
-        SpValidationPolicy::recommended().logout,
-        LogoutPolicy::recommended()
-    );
-    assert_eq!(
-        IdpValidationPolicy::recommended().logout,
-        LogoutPolicy::recommended()
-    );
-    assert_eq!(
-        LogoutPolicy::recommended().requests,
-        LogoutSignaturePolicy::RequireSigned
-    );
-    assert_eq!(
-        LogoutPolicy::recommended().responses,
-        LogoutSignaturePolicy::RequireSigned
-    );
 }

@@ -33,14 +33,14 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn unsigned_logout_sp_validation() -> SpValidationPolicy {
-    let mut policy = SpValidationPolicy::recommended();
+    let mut policy = SpValidationPolicy::default();
     policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
     policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
     policy
 }
 
 fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
-    let mut policy = IdpValidationPolicy::recommended();
+    let mut policy = IdpValidationPolicy::default();
     policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
     policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
     policy
@@ -100,8 +100,8 @@ fn descriptor_pair(
 #[test]
 fn respond_slo_rejects_a_logout_request_issuer_from_another_party(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = sp(SpValidationPolicy::recommended())?;
-    let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
+    let service_provider = sp(SpValidationPolicy::default())?;
+    let identity_provider = idp(IdpValidationPolicy::default(), &[IDP_SLO])?;
     let (sp_descriptor, idp_descriptor) = descriptor_pair(&service_provider, &identity_provider)?;
     let started = service_provider.start_slo(
         &idp_descriptor,
@@ -242,8 +242,8 @@ fn finish_slo_checks_the_actual_receiving_endpoint() -> Result<(), Box<dyn std::
         .credentials(signing_credentials())
         .build()?,
     );
-    let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
-    let peer_sp = sp(SpValidationPolicy::recommended())?;
+    let identity_provider = idp(IdpValidationPolicy::default(), &[IDP_SLO])?;
+    let peer_sp = sp(SpValidationPolicy::default())?;
     let response_metadata = peer_sp.metadata_xml().replace(SP_SLO, SP_SLO_RESPONSE);
     let sp_descriptor = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -376,8 +376,8 @@ fn logout_addresses_the_peer_role_of_a_dual_role_entity() -> Result<(), Box<dyn 
 {
     const SP_ROLE_OF_IDP_SLO: &str = "https://idp.example.com/as-sp/slo";
     const IDP_ROLE_OF_SP_SLO: &str = "https://sp.example.com/as-idp/slo";
-    let service_provider = sp(SpValidationPolicy::recommended())?;
-    let identity_provider = idp(IdpValidationPolicy::recommended(), &[IDP_SLO])?;
+    let service_provider = sp(SpValidationPolicy::default())?;
+    let identity_provider = idp(IdpValidationPolicy::default(), &[IDP_SLO])?;
     let sp_peer = SpDescriptor::from_metadata_xml(
         EntityId::try_new(SP_ENTITY_ID)?,
         &service_provider.metadata_xml().replace(

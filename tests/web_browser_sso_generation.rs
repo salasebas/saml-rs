@@ -17,12 +17,14 @@ use saml_rs::{
     AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, EntityId, ForceAuthn, FormField,
     IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy,
     NameId, NameIdCreationPolicy, NameIdFormat, Outbound, OutboundDelivery, ReplayPolicy,
-    RespondSso, ResponseSignaturePolicy, SamlError, SamlInstant, SamlValidationContext,
-    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, SsoOutcome, SsoResponse, StartSso, Status, SubordinateStatusCode, TemplatePolicy,
+    RespondSso, SamlError, SamlInstant, SamlValidationContext, ServiceProvider, SloEndpoint,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponse,
+    StartSso, Status, SubordinateStatusCode, TemplatePolicy,
 };
 #[cfg(not(feature = "crypto-fips"))]
-use saml_rs::{AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, XmlPolicy};
+use saml_rs::{
+    AssertionEncryptionPolicy, CertificatePem, PrivateKeyPem, ResponseSignaturePolicy, XmlPolicy,
+};
 use url::Url;
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -43,7 +45,7 @@ const PRIVKEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pe
 const CERT: &str = include_str!("fixtures/key/sp/cert.unencrypted.pkcs8.cer");
 
 fn signing_sp_validation() -> SpValidationPolicy {
-    let mut validation = SpValidationPolicy::recommended();
+    let mut validation = SpValidationPolicy::default();
     validation.assertions = AssertionSignaturePolicy::RequireSigned;
     validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     validation.audience = AudienceValidationPolicy::RequireRestriction;
@@ -51,7 +53,7 @@ fn signing_sp_validation() -> SpValidationPolicy {
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
-    let mut validation = IdpValidationPolicy::recommended();
+    let mut validation = IdpValidationPolicy::default();
     validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
     validation
 }
@@ -604,8 +606,8 @@ fn typed_sso_session_index_is_present_only_when_single_logout_is_supported(
 #[test]
 fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended(), false)?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect().apply_producer_rules())?;
     let request = authn_request_xml(&started.outbound)?;
@@ -630,7 +632,7 @@ fn typed_sso_optional_generation_capabilities_stay_off_until_selected(
     assert!(forced_xml.contains("ForceAuthn=\"true\""));
     assert!(forced_xml.contains("AllowCreate=\"false\""));
 
-    let mut creating = SpValidationPolicy::recommended();
+    let mut creating = SpValidationPolicy::default();
     creating.name_id_creation = NameIdCreationPolicy::AllowCreate;
     let sp = sp_with(creating)?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -673,9 +675,9 @@ fn typed_transient_name_id_omits_allow_create_under_producer_rules(
 #[test]
 fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_requests(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut signed_sp_policy = SpValidationPolicy::recommended();
+    let mut signed_sp_policy = SpValidationPolicy::default();
     signed_sp_policy.authn_requests = AuthnRequestSigningPolicy::Sign;
-    let mut requiring_idp_policy = IdpValidationPolicy::recommended();
+    let mut requiring_idp_policy = IdpValidationPolicy::default();
     requiring_idp_policy.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
     let sp = sp_with(signed_sp_policy)?;
     let idp = idp_with(requiring_idp_policy, false)?;
@@ -690,8 +692,8 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
     assert!(!request.contains("ForceAuthn="));
     assert!(request.contains("AllowCreate=\"false\""));
 
-    let sp = sp_with(SpValidationPolicy::recommended())?;
-    let idp = idp_with(IdpValidationPolicy::recommended(), false)?;
+    let sp = sp_with(SpValidationPolicy::default())?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect().apply_producer_rules())?;
     assert!(!started.outbound.redirect_url()?.contains("Signature="));
@@ -708,10 +710,10 @@ fn typed_authn_request_signing_stays_optional_and_does_not_reject_unsigned_reque
 #[test]
 fn typed_signing_sp_starts_sso_against_an_idp_that_does_not_require_signed_requests(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut sp_validation = SpValidationPolicy::recommended();
+    let mut sp_validation = SpValidationPolicy::default();
     sp_validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     let sp = sp_with(sp_validation)?;
-    let idp = idp_with(IdpValidationPolicy::recommended(), false)?;
+    let idp = idp_with(IdpValidationPolicy::default(), false)?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::redirect())?;
     let url = Url::parse(started.outbound.redirect_url()?)?;
@@ -849,7 +851,7 @@ fn typed_cbc_response_signature_stays_recommended_and_relaxes_alone(
         other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
     }
 
-    let mut unsigned_cbc = SpValidationPolicy::recommended();
+    let mut unsigned_cbc = SpValidationPolicy::default();
     unsigned_cbc.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
     let permissive = ServiceProvider::new(
         SpConfig::builder(

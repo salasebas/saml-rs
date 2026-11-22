@@ -81,7 +81,7 @@ fn send<Message>(outbound: &Outbound<Message>) {
 operations check what the raw functions left to the caller, such as
 `InResponseTo` correlation, RelayState, and the receiving endpoint.
 
-The raw service provider's defaults differ from `SpValidationPolicy::recommended`
+The raw service provider's defaults differ from `SpValidationPolicy::default`
 in three fields. To keep what they checked, set those fields:
 
 ```rust
@@ -89,14 +89,14 @@ use saml_rs::{
     AudienceValidationPolicy, ResponseSignaturePolicy, SpValidationPolicy, XmlSignatureProfile,
 };
 
-let mut validation = SpValidationPolicy::recommended();
+let mut validation = SpValidationPolicy::default();
 validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
 validation.xml_signatures = XmlSignatureProfile::AllowWeakAlgorithms;
 validation.audience = AudienceValidationPolicy::RequireRestriction;
 ```
 
 The raw identity provider's defaults differ from
-`IdpValidationPolicy::recommended` in `authn_requests`, which was
+`IdpValidationPolicy::default` in `authn_requests`, which was
 `AuthnRequestValidationPolicy::AllowUnsigned`, and in `xml_signatures`, which
 was `XmlSignatureProfile::AllowWeakAlgorithms`.
 

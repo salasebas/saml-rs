@@ -93,7 +93,7 @@ fn exchange_for(
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -371,7 +371,7 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
         )
         .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default())
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     );
     let idp = IdentityProvider::new(
@@ -380,7 +380,7 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     );
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
@@ -458,7 +458,7 @@ fn expect_unrecognized(
 
 #[test]
 fn finish_sso_rejects_an_unknown_condition() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&insert_after_audience_restriction(
         &response_xml(&exchange.response_fields)?,
         "<saml:Condition/>",
@@ -468,7 +468,7 @@ fn finish_sso_rejects_an_unknown_condition() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn accept_unsolicited_sso_rejects_an_unknown_condition() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), true)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), true)?;
     let xml = resigned(&insert_after_audience_restriction(
         &response_xml(&exchange.response_fields)?,
         "<saml:Condition/>",
@@ -483,7 +483,7 @@ fn weak_algorithms_and_skipped_audience_still_reject_an_unknown_condition(
         SpValidationPolicy {
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
             audience: AudienceValidationPolicy::Skip,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         },
         false,
     )?;
@@ -496,7 +496,7 @@ fn weak_algorithms_and_skipped_audience_still_reject_an_unknown_condition(
 
 #[test]
 fn finish_sso_accepts_proxy_restriction() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&insert_after_audience_restriction(
         &response_xml(&exchange.response_fields)?,
         "<saml:ProxyRestriction Count=\"0\"/>",
@@ -508,7 +508,7 @@ fn finish_sso_accepts_proxy_restriction() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn accept_unsolicited_sso_accepts_proxy_restriction() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), true)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), true)?;
     let xml = resigned(&insert_after_audience_restriction(
         &response_xml(&exchange.response_fields)?,
         "<saml:ProxyRestriction Count=\"0\"/>",
@@ -521,7 +521,7 @@ fn accept_unsolicited_sso_accepts_proxy_restriction() -> Result<(), Box<dyn std:
 #[test]
 fn one_time_use_is_accepted_and_a_later_exchange_succeeds() -> Result<(), Box<dyn std::error::Error>>
 {
-    let first = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let first = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&insert_after_audience_restriction(
         &response_xml(&first.response_fields)?,
         "<saml:OneTimeUse/>",
@@ -529,7 +529,7 @@ fn one_time_use_is_accepted_and_a_later_exchange_succeeds() -> Result<(), Box<dy
     let session = accept(&first, &xml)?;
     assert_eq!(session.name_id().value(), "alice@example.com");
 
-    let later = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let later = exchange_for(SpValidationPolicy::default(), false)?;
     let later_session = accept(&later, &response_xml(&later.response_fields)?)?;
     assert_ne!(
         session.assertion_id().as_str(),
@@ -555,7 +555,7 @@ fn audience_groups(session: &SsoSession) -> Vec<Vec<&str>> {
 #[test]
 fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;
 
     let both = resigned(&insert_after_audience_restriction(
@@ -599,7 +599,7 @@ fn audience_restrictions_are_conjoined_and_audiences_are_alternatives(
 #[test]
 fn every_assertion_is_evaluated_when_they_share_issuer_and_principal(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;
     let xml = resigned(&duplicate_assertion(&original, "_second_assertion")?)?;
     let session = accept(&exchange, &xml)?;
@@ -613,7 +613,7 @@ fn every_assertion_is_evaluated_when_they_share_issuer_and_principal(
 
 #[test]
 fn a_second_assertion_with_another_issuer_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&replace_in_last_assertion(
         &duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
@@ -634,7 +634,7 @@ fn a_second_assertion_with_another_issuer_is_rejected() -> Result<(), Box<dyn st
 #[test]
 fn a_second_assertion_with_another_principal_is_rejected() -> Result<(), Box<dyn std::error::Error>>
 {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&replace_in_last_assertion(
         &duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
@@ -654,7 +654,7 @@ fn a_second_assertion_with_another_principal_is_rejected() -> Result<(), Box<dyn
 
 #[test]
 fn one_valid_bearer_confirmation_is_enough() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;
     let at = original.find("</saml:Subject>").ok_or("missing subject")?;
     let mut altered = original;
@@ -670,7 +670,7 @@ fn one_valid_bearer_confirmation_is_enough() -> Result<(), Box<dyn std::error::E
 #[test]
 fn an_additional_assertion_without_bearer_stays_accepted() -> Result<(), Box<dyn std::error::Error>>
 {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&replace_in_last_assertion(
         &duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
@@ -687,7 +687,7 @@ fn an_additional_assertion_without_bearer_stays_accepted() -> Result<(), Box<dyn
 #[test]
 fn a_second_bearer_assertion_with_the_wrong_audience_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&replace_in_last_assertion(
         &duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
@@ -707,7 +707,7 @@ fn a_second_bearer_assertion_with_the_wrong_audience_is_rejected(
 
 #[test]
 fn an_unsigned_sibling_assertion_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let stripped = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?;
     let key = read_private_key(PRIVKEY, None)?;
     let signed = sign_saml_xml(&stripped, false, &key, CERT, RSA_SHA256, &[], None)?;
@@ -730,7 +730,7 @@ fn an_unsigned_sibling_assertion_is_rejected() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn a_success_response_without_an_assertion_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?;
     let start = xml.find("<saml:Assertion").ok_or("missing assertion")?;
     let end = xml
@@ -747,7 +747,7 @@ fn a_success_response_without_an_assertion_is_rejected() -> Result<(), Box<dyn s
 #[test]
 fn an_unknown_condition_is_rejected_when_its_namespace_is_inherited(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&insert_after_audience_restriction(
         &drop_assertion_namespace_declaration(&response_xml(&exchange.response_fields)?)?,
         "<saml:Condition/>",
@@ -757,7 +757,7 @@ fn an_unknown_condition_is_rejected_when_its_namespace_is_inherited(
 
 #[test]
 fn the_session_comes_from_the_bearer_assertion() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let duplicated = duplicate_assertion(
         &response_xml(&exchange.response_fields)?,
         "_second_assertion",
@@ -795,7 +795,7 @@ fn holder_of_key_assertion_first(
 #[test]
 fn only_the_bearer_assertion_signature_is_consumed_assertion_evidence(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let holder_of_key_signed =
         sign_first_assertion(&holder_of_key_assertion_first(&exchange)?, RSA_SHA384)?;
     let both_signed = sign_first_assertion(
@@ -829,8 +829,10 @@ fn a_later_sha1_assertion_signature_is_rejected_by_the_rsa_sha2_profile(
     use saml_rs::constants::signature_algorithm::{RSA_SHA1, RSA_SHA256};
     use saml_rs::XmlSignatureProfile;
 
-    let mut policy = SpValidationPolicy::recommended();
-    policy.xml_signatures = XmlSignatureProfile::StrictRsaSha2;
+    let policy = SpValidationPolicy {
+        xml_signatures: XmlSignatureProfile::StrictRsaSha2,
+        ..Default::default()
+    };
     let exchange = exchange_for(policy, false)?;
     let duplicated = duplicate_assertion(
         &strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?,
@@ -851,7 +853,7 @@ fn a_later_sha1_assertion_signature_is_rejected_by_the_rsa_sha2_profile(
 #[test]
 fn accept_unsolicited_sso_rejects_a_different_principal() -> Result<(), Box<dyn std::error::Error>>
 {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), true)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), true)?;
     let xml = resigned(&replace_in_last_assertion(
         &duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
@@ -871,7 +873,7 @@ fn accept_unsolicited_sso_rejects_a_different_principal() -> Result<(), Box<dyn 
 
 #[test]
 fn an_omitted_name_id_format_matches_unspecified() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let duplicated = duplicate_assertion(
         &response_xml(&exchange.response_fields)?,
         "_second_assertion",
@@ -888,7 +890,7 @@ fn an_omitted_name_id_format_matches_unspecified() -> Result<(), Box<dyn std::er
 
 #[test]
 fn a_different_name_id_format_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let xml = resigned(&set_name_id_format(
         &duplicate_assertion(
             &response_xml(&exchange.response_fields)?,
@@ -908,7 +910,7 @@ fn a_different_name_id_format_is_rejected() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn replay_stores_every_assertion_identifier() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(SpValidationPolicy::recommended(), false)?;
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let original = response_xml(&exchange.response_fields)?;
     let xml = resigned(&duplicate_assertion(&original, "_second_assertion")?)?;
     let mut cache = RecordingReplayCache::default();
@@ -1006,10 +1008,10 @@ fn is_xml_signature_failure(error: &SamlError) -> bool {
 fn an_assertion_signature_that_does_not_verify_rejects_a_signed_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for policy in [
-        SpValidationPolicy::recommended(),
+        SpValidationPolicy::default(),
         SpValidationPolicy {
             assertions: AssertionSignaturePolicy::RequireSigned,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         },
     ] {
         let exchange = exchange_for(policy, false)?;
@@ -1029,7 +1031,7 @@ fn weak_algorithms_accept_an_assertion_signature_that_does_not_verify_beside_a_s
     let exchange = exchange_for(
         SpValidationPolicy {
             xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         },
         false,
     )?;
@@ -1091,7 +1093,7 @@ mod encrypted_assertions {
     ) -> Result<Exchange, Box<dyn std::error::Error>> {
         Ok(Exchange {
             sp: decrypting_sp(AcsEndpoint::post(SP_ACS_POST)?.with_default(), validation)?,
-            ..exchange_for(SpValidationPolicy::recommended(), false)?
+            ..exchange_for(SpValidationPolicy::default(), false)?
         })
     }
 
@@ -1133,7 +1135,7 @@ mod encrypted_assertions {
     #[test]
     fn every_encrypted_assertion_is_evaluated_and_replay_recorded(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let plaintext = two_assertions(&exchange)?;
         let xml = both_encrypted_then_response_signed(&plaintext)?;
         let mut cache = RecordingReplayCache::default();
@@ -1154,7 +1156,7 @@ mod encrypted_assertions {
     #[test]
     fn a_second_encrypted_assertion_with_the_wrong_audience_is_rejected(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let plaintext =
             replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
         let xml = both_encrypted_then_response_signed(&plaintext)?;
@@ -1167,7 +1169,7 @@ mod encrypted_assertions {
     #[test]
     fn a_second_encrypted_assertion_that_does_not_decrypt_is_rejected(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let first = encrypt_first(&two_assertions(&exchange)?, AES_256, CERT)?;
         let xml = resign_response(&encrypt_first(&first, AES_256, OTHER_RECIPIENT_CERT)?)?;
         expect_error(accept(&exchange, &xml), |error| {
@@ -1180,7 +1182,7 @@ mod encrypted_assertions {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let exchange = post_exchange(SpValidationPolicy {
             assertions: AssertionSignaturePolicy::RequireSigned,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         })?;
         let first_signed = encrypt_first(
             &sign_first_assertion(&two_assertions(&exchange)?, RSA_SHA256)?,
@@ -1238,7 +1240,7 @@ mod encrypted_assertions {
     fn require_signed() -> SpValidationPolicy {
         SpValidationPolicy {
             assertions: AssertionSignaturePolicy::RequireSigned,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         }
     }
 
@@ -1307,7 +1309,7 @@ mod encrypted_assertions {
     #[test]
     fn an_encrypted_id_in_several_assertions_of_an_unsigned_response_is_not_decrypted(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let plaintext = two_assertions(&exchange)?;
         let last = plaintext
             .rfind("<saml:Assertion")
@@ -1339,7 +1341,7 @@ mod encrypted_assertions {
     #[test]
     fn every_assertion_signed_inside_its_encryption_is_evaluated(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let plaintext =
             replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
         let first = encrypt_first(
@@ -1391,7 +1393,7 @@ mod encrypted_assertions {
     #[test]
     fn a_signed_response_mixing_a_plaintext_and_an_encrypted_assertion_is_accepted(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let plaintext = two_assertions(&exchange)?;
         let mixed = encrypt_first(&plaintext, AES_256, CERT)?;
         let inherited_prefix = drop_assertion_namespace_declaration(&mixed)?;
@@ -1421,7 +1423,7 @@ mod encrypted_assertions {
     #[test]
     fn each_assertion_of_a_signed_mixed_response_is_evaluated(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let wrong_audience =
             replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
         let plaintext_wrong = encrypt_first(&wrong_audience, AES_256, CERT)?;
@@ -1486,7 +1488,7 @@ mod encrypted_assertions {
         let exchange = Exchange {
             sp: decrypting_sp(
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
-                SpValidationPolicy::recommended(),
+                SpValidationPolicy::default(),
             )?,
             ..exchange_simple_sign()?
         };
@@ -1503,7 +1505,7 @@ mod encrypted_assertions {
     #[test]
     fn a_decrypted_assertion_signature_that_does_not_verify_rejects_a_signed_response(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let exchange = post_exchange(SpValidationPolicy::recommended())?;
+        let exchange = post_exchange(SpValidationPolicy::default())?;
         let signed = assertion_signed(&exchange)?;
         accept(
             &exchange,
@@ -1522,7 +1524,7 @@ mod encrypted_assertions {
         let exchange = Exchange {
             sp: decrypting_sp(
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
-                SpValidationPolicy::recommended(),
+                SpValidationPolicy::default(),
             )?,
             ..exchange_simple_sign()?
         };

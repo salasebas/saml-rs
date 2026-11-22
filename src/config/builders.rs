@@ -77,7 +77,7 @@ use crate::model::EndpointUrl;
 /// .build()?;
 ///
 /// assert_eq!(config.entity_id().as_str(), "https://sp.example.com/metadata");
-/// assert_eq!(config.validation(), &SpValidationPolicy::recommended());
+/// assert_eq!(config.validation(), &SpValidationPolicy::default());
 /// # Ok::<(), saml_rs::SamlError>(())
 /// ```
 #[derive(Clone)]
@@ -110,13 +110,13 @@ impl fmt::Debug for SpConfig {
 
 impl SpConfig {
     /// Start an SP config builder with its entity ID and first
-    /// `AssertionConsumerService` endpoint, on [`SpValidationPolicy::recommended`].
+    /// `AssertionConsumerService` endpoint, on [`SpValidationPolicy::default`].
     pub fn builder(entity_id: EntityId, acs: AcsEndpoint) -> SpConfigBuilder {
         SpConfigBuilder {
             entity_id,
             metadata: SpMetadataConfig::new(acs),
             credentials: Credentials::default(),
-            validation: SpValidationPolicy::recommended(),
+            validation: SpValidationPolicy::default(),
             algorithms: AlgorithmPolicy::default(),
             xml: XmlPolicy::default(),
             templates: TemplatePolicy::default(),
@@ -364,7 +364,7 @@ impl SpConfigBuilder {
 ///
 /// # Examples
 ///
-/// The builder starts on [`IdpValidationPolicy::recommended`].
+/// The builder starts on [`IdpValidationPolicy::default`].
 ///
 /// ```
 /// use saml_rs::{EntityId, IdpConfig, SsoEndpoint};
@@ -414,7 +414,7 @@ impl fmt::Debug for IdpConfig {
 
 impl IdpConfig {
     /// Start an IdP config builder with its entity ID and first
-    /// `SingleSignOnService` endpoint, on [`IdpValidationPolicy::recommended`]
+    /// `SingleSignOnService` endpoint, on [`IdpValidationPolicy::default`]
     /// and a five-minute issuance lifetime.
     pub fn builder(entity_id: EntityId, sso: SsoEndpoint) -> IdpConfigBuilder {
         IdpConfigBuilder {
@@ -422,7 +422,7 @@ impl IdpConfig {
             metadata: IdpMetadataConfig::new(sso),
             credentials: Credentials::default(),
             issuance_lifetime: Duration::from_secs(300),
-            validation: IdpValidationPolicy::recommended(),
+            validation: IdpValidationPolicy::default(),
             algorithms: AlgorithmPolicy::default(),
             xml: XmlPolicy::default(),
             templates: TemplatePolicy::default(),

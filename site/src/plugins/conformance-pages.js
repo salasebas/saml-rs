@@ -34,7 +34,7 @@ const pages = {
 	'metadata-and-replay.md': {
 		title: 'Metadata and replay',
 		description:
-			'Facts for metadata trust and replay on the typed browser flows. `recommended()` does not select signed metadata, invent trust anchors, or store replay. `Default`, `new`, and...',
+			'How callers select metadata trust and replay storage for the typed browser flows.',
 	},
 	'name-id-management.md': {
 		title: 'Name identifier management',
@@ -49,7 +49,7 @@ const pages = {
 	'web-browser-sso-acceptance.md': {
 		title: 'SSO acceptance',
 		description:
-			'Inbound rules for typed Web Browser SSO: service-provider `finish_sso` and `accept_unsolicited_sso`, and identity-provider `receive_sso`. `SpValidationPolicy::recommended`...',
+			'Inbound rules for typed Web Browser SSO: service-provider `finish_sso` and `accept_unsolicited_sso`, and identity-provider `receive_sso`.',
 	},
 	'web-browser-sso-artifact.md': {
 		title: 'HTTP-Artifact response',
@@ -59,7 +59,7 @@ const pages = {
 	'web-browser-sso-generation.md': {
 		title: 'SSO generation',
 		description:
-			'Producer rules for typed Web Browser SSO generation: service-provider `start_sso`, and identity-provider `respond_sso` and `initiate_sso`. `SpValidationPolicy::recommended`...',
+			'Producer rules for typed Web Browser SSO generation: service-provider `start_sso`, and identity-provider `respond_sso` and `initiate_sso`.',
 	},
 	'xml-schema-validation.md': {
 		title: 'XML schema validation',

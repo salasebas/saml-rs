@@ -2,11 +2,8 @@
 
 Rules for typed Single Logout: `start_slo`, `respond_slo`, and `finish_slo` on
 both roles. `receive_slo` reads the same request-signature field as the accept
-combination below. `LogoutPolicy::recommended`, and the `logout` field of
-`SpValidationPolicy::recommended` and `IdpValidationPolicy::recommended`,
-publish that accept combination. `Default` and the
-config builders are Recommended. The preset distinction is recorded in
-[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
+combination below. Both config builders use `LogoutPolicy::default()` for their
+`logout` field. See [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected
 by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
@@ -25,8 +22,6 @@ On HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign,
 `LogoutSignaturePolicy::AllowUnsigned` in either field accepts that message
 unsigned. Over SOAP, the `SoapChannel` decides instead, as
 [SOAP binding](#soap-binding) describes.
-`LogoutPolicy::recommended` is the accept combination. `LogoutPolicy::default`
-matches it.
 
 ## LogoutRequest from a session participant
 

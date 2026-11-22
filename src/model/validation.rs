@@ -153,8 +153,7 @@ pub trait ReplayCache {
 /// `Debug` identifies the selected policy without exposing cache contents.
 ///
 /// This is a caller argument on [`SamlValidationContext::new`], not a field of
-/// [`crate::SpValidationPolicy`] or [`crate::IdpValidationPolicy`]. There is
-/// no `recommended()` constructor. The classification is
+/// [`crate::SpValidationPolicy`] or [`crate::IdpValidationPolicy`]. The classification is
 /// `docs/conformance/metadata-and-replay.md`.
 #[non_exhaustive]
 pub enum ReplayPolicy<'a> {

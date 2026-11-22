@@ -4,7 +4,7 @@ use saml_rs::{
 };
 
 fn unsigned_logout() -> LogoutPolicy {
-    let mut logout = LogoutPolicy::recommended();
+    let mut logout = LogoutPolicy::default();
     logout.requests = LogoutSignaturePolicy::AllowUnsigned;
     logout.responses = LogoutSignaturePolicy::AllowUnsigned;
     logout
@@ -12,7 +12,7 @@ fn unsigned_logout() -> LogoutPolicy {
 
 /// Recommended, with every field that needs a crypto provider relaxed.
 pub fn sp_validation_without_crypto() -> SpValidationPolicy {
-    let mut validation = SpValidationPolicy::recommended();
+    let mut validation = SpValidationPolicy::default();
     validation.responses = ResponseSignaturePolicy::AllowUnsignedEncryptedCbc;
     validation.logout = unsigned_logout();
     validation
@@ -20,7 +20,7 @@ pub fn sp_validation_without_crypto() -> SpValidationPolicy {
 
 /// Recommended, with every field that needs a crypto provider relaxed.
 pub fn idp_validation_without_crypto() -> IdpValidationPolicy {
-    let mut validation = IdpValidationPolicy::recommended();
+    let mut validation = IdpValidationPolicy::default();
     validation.logout = unsigned_logout();
     validation
 }

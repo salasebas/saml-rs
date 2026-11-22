@@ -2,15 +2,14 @@
 
 Inbound rules for typed Web Browser SSO: service-provider `finish_sso` and
 `accept_unsolicited_sso`, and identity-provider `receive_sso`.
-`SpValidationPolicy::recommended` includes the service-provider rows below. It
+`SpValidationPolicy::default` includes the service-provider rows below. It
 also includes the Single Logout accept combination and leaves AuthnRequest
 signing and identifier creation off. Those last three are not part of this
 accept combination; they are recorded with logout and generation.
-`IdpValidationPolicy::recommended` includes the identity-provider rows below
-and the same logout accept combination. `Default` and
-the config builders are Recommended. Recommended does not select the
-RSA-SHA2 XML-DSig profile. The preset distinction is recorded in
-[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
+`IdpValidationPolicy::default` includes the identity-provider rows below
+and the same logout accept combination. Both config builders use these
+defaults. Callers select the RSA-SHA2 XML-DSig profile explicitly.
+See [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected
 by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
@@ -44,7 +43,7 @@ select the accept combination by setting the fields below.
 | The plaintext is one `<NameID>` or one `<Attribute>` in the assertion namespace | Accepting service provider | Inbound | Library policy. Core §2.2.4 and §2.7.3.2 require that content of the producer. The decrypted element is placed in the same location and the response is validated again against the protocol profile. An `<EncryptedID>` that carries a `<BaseID>` or an `<Assertion>`, which Core allows, returns `Unsupported`. Any other content returns `ProtocolProfile` |
 | Do not require the RSA-SHA2 XML signature profile | Accepting service provider | Inbound | Library hardening, off. Conformance §4.1 requires RSAwithSHA1, and Core §5.4.4 does not require a verifier to reject other transforms |
 | Do not verify with MD5, RIPEMD-160, or an RSA key shorter than 2048 bits | Accepting service provider | Inbound | Library policy, on. `XmlSignatureProfile::ExcludeWeakAlgorithms`. `AllowWeakAlgorithms` relaxes it. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) |
-| Evaluate an `<AudienceRestriction>` that is present | Accepting service provider | Inbound | Mandatory when the element is present. `AudienceValidationPolicy::EvaluatePresentRestrictions`. `RequireRestriction` also rejects a missing restriction. That extra rejection is library hardening. Recommended uses `EvaluatePresentRestrictions` |
+| Evaluate an `<AudienceRestriction>` that is present | Accepting service provider | Inbound | Mandatory when the element is present. `AudienceValidationPolicy::EvaluatePresentRestrictions`. `RequireRestriction` also rejects a missing restriction. That extra rejection is library hardening. Recommended uses `EvaluatePresentRestrictions`. With the legacy `Skip` setting, the caller is responsible for evaluating the restrictions before relying on the assertion |
 | Several `<AudienceRestriction>` elements are all required, and audiences inside one restriction are alternatives | Accepting service provider | Inbound | Mandatory when the elements are present. Core §2.5.1.4, Approved Errata 05 E46. No off switch beyond the audience policy above |
 | Reject a `<Conditions>` child that is not understood | Accepting service provider | Inbound | Mandatory. Core §2.5.1.1. Indeterminate is rejected. No off switch |
 | `<OneTimeUse>` does not affect validity and the assertion is not retained | Accepting service provider | Inbound | Mandatory when the element is present. Core §2.5.1.5. Always Valid. The typed session is not kept for a later exchange |
@@ -84,7 +83,7 @@ select the accept combination by setting the fields below.
 | Do not verify with MD5, RIPEMD-160, or an RSA key shorter than 2048 bits | Identity provider | Inbound | Library policy, on. `XmlSignatureProfile::ExcludeWeakAlgorithms`. `AllowWeakAlgorithms` relaxes it. See [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys) |
 | Verify a signature that is present | Identity provider | Inbound | Mandatory. Core §3.2.1. `AllowUnsigned` is the samlify-port hatch and does not verify it |
 | UTC `IssueInstant` | Identity provider | Inbound | Mandatory. No off switch. An inbound leap-second value stays accepted |
-| Limit an `AuthnRequest` `IssueInstant` to a caller-chosen maximum age | Identity provider | Inbound `receive_sso` | Library hardening, off. Core §1.3.3 requires a UTC `IssueInstant` and does not define a maximum age. Enabling it can reject a conformant request. `RequestAgePolicy::Disabled` is the default on `SamlValidationContext::new`. `Bounded { max_age }` accepts an instant at or after `now - max_age - past_tolerance` and at or before `now + future_tolerance`, both edges inclusive. Past tolerance is the `NotOnOrAfter` skew when that skew is positive, otherwise zero. Future tolerance is the magnitude of the `NotBefore` skew when that skew is negative, otherwise zero. `ClockSkew::five_minutes` widens only a `Bounded` window. An inverted skew does not shrink `max_age`. `max_age` of zero leaves that skew neighborhood. The check runs after signature and `Destination` handling and before replay storage. It is not a field of `IdpValidationPolicy` and it is not part of `recommended()` |
+| Limit an `AuthnRequest` `IssueInstant` to a caller-chosen maximum age | Identity provider | Inbound `receive_sso` | Library hardening, off. Core §1.3.3 requires a UTC `IssueInstant` and does not define a maximum age. Enabling it can reject a conformant request. `RequestAgePolicy::Disabled` is the default on `SamlValidationContext::new`. `Bounded { max_age }` accepts an instant at or after `now - max_age - past_tolerance` and at or before `now + future_tolerance`, both edges inclusive. Past tolerance is the `NotOnOrAfter` skew when that skew is positive, otherwise zero. Future tolerance is the magnitude of the `NotBefore` skew when that skew is negative, otherwise zero. `ClockSkew::five_minutes` widens only a `Bounded` window. An inverted skew does not shrink `max_age`. `max_age` of zero leaves that skew neighborhood. The check runs after signature and `Destination` handling and before replay storage. It is configured independently of `IdpValidationPolicy` |
 | A present `Destination` matches the actual receiving SSO URL, and a signed request carries `Destination` | Identity provider | Inbound | Mandatory. Core §3.2.1; Bindings §§3.4.5.2, 3.5.5.2; SimpleSign §2.4. A missing `Destination` is rejected once `RequireSigned` or `AllowUnsignedVerifyIfPresent` authenticates the signature. `with_recipient_endpoint` supplies the URL, or a unique published `Location` is inferred. Explicit selection for multiple endpoints and the published-URL restriction are library policy. SSO `ResponseLocation` is unused under Metadata §2.2.2/E41 |
 | `AssertionConsumerServiceURL` or `AssertionConsumerServiceIndex` belongs to the service provider | Identity provider | Inbound | Mandatory. Profiles §4.1.4.1. The check runs when the response is issued |
 | Expose `ForceAuthn` when present; leave it absent when omitted | Identity provider | Inbound `receive_sso` | Optional. Core §3.4.1. Omission stays absent. Presence does not reject the request |

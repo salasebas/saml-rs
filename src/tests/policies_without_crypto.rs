@@ -13,7 +13,7 @@ pub(crate) fn sp_validation_without_crypto() -> SpValidationPolicy {
     SpValidationPolicy {
         responses: ResponseSignaturePolicy::AllowUnsignedEncryptedCbc,
         logout: UNSIGNED_LOGOUT,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     }
 }
 
@@ -21,6 +21,6 @@ pub(crate) fn sp_validation_without_crypto() -> SpValidationPolicy {
 pub(crate) fn idp_validation_without_crypto() -> IdpValidationPolicy {
     IdpValidationPolicy {
         logout: UNSIGNED_LOGOUT,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     }
 }

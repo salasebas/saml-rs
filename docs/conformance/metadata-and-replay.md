@@ -1,11 +1,7 @@
 # Metadata trust and replay
 
-Facts for metadata trust and replay on the typed browser flows.
-`recommended()` does not select signed metadata, invent trust anchors, or
-store replay. `Default` and the config builders are
-Recommended. The preset
-distinction is recorded in
-[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
+Callers select metadata trust and replay storage independently of validation.
+The defaults for both roles are recorded in [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Metadata trust is `MetadataTrustPolicy`, passed to
 `IdpDescriptor::from_metadata_xml` and

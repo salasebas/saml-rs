@@ -76,12 +76,12 @@ fn parties_with(idp: IdpConfigBuilder) -> Result<Parties, SamlError> {
             AcsEndpoint::post(SP_ACS)?.with_default(),
         )
         .credentials(credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     );
     let idp = IdentityProvider::new(
         idp.credentials(credentials())
-            .validation(IdpValidationPolicy::recommended())
+            .validation(IdpValidationPolicy::default())
             .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
@@ -659,7 +659,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
             saml_rs::CertificatePem::new(CERT),
             saml_rs::PrivateKeyPem::new(PRIVKEY),
         ));
-    let mut sp_validation = SpValidationPolicy::recommended();
+    let mut sp_validation = SpValidationPolicy::default();
     sp_validation.assertions = saml_rs::AssertionSignaturePolicy::RequireSigned;
     let sp = ServiceProvider::new(
         SpConfig::builder(
@@ -677,7 +677,7 @@ fn cbc_encrypted_response_is_signed() -> Result<(), Box<dyn std::error::Error>> 
             SsoEndpoint::post("https://idp.example.com/sso/post")?,
         )
         .credentials(credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .xml(encryption)
         .build()?,
     );

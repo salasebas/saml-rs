@@ -53,7 +53,7 @@ fn parties_with(
         .credentials(credentials)
         .validation(SpValidationPolicy {
             authn_requests: AuthnRequestSigningPolicy::Sign,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         })
         .build()?,
     );
@@ -64,7 +64,7 @@ fn parties_with(
             .credentials(signing_credentials())
             .validation(IdpValidationPolicy {
                 authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-                ..IdpValidationPolicy::recommended()
+                ..IdpValidationPolicy::default()
             })
             .xml(xml)
             .build()?,
@@ -547,7 +547,7 @@ fn typed_request_preferences_require_the_builtin_renderer() -> Result<(), Box<dy
         .credentials(signing_credentials())
         .validation(SpValidationPolicy {
             authn_requests: AuthnRequestSigningPolicy::Sign,
-            ..SpValidationPolicy::recommended()
+            ..SpValidationPolicy::default()
         })
         .authn_request_template(saml_rs::config::AUTHN_REQUEST_TEMPLATE)
         .build()?,

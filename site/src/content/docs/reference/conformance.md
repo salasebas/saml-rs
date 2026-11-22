@@ -5,7 +5,7 @@ description: "Each record is a table for one flow. A row names the rule, the obl
 
 Each record is a table for one flow. A row names the rule, the obligated actor, the direction, and the level: mandatory, recommendation, optional, or library policy.
 
-`recommended()` publishes the combination recorded for that flow. It is not an implementation of SAML V2.0 as a whole. A producer requirement does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them by name.
+The default validation policies select the settings recorded for each flow. It is not an implementation of SAML V2.0 as a whole. A producer requirement does not, by itself, become a receiver rejection. Optional capabilities stay off until you select them by name.
 
 Normative text is SAML Core 2.0, Profiles 2.0, Bindings 2.0, and Metadata 2.0, as corrected by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.
 

@@ -158,8 +158,8 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     .build()?;
 
     let (sp, idp) = (sp.validation(), idp.validation());
-    assert_eq!(sp, &SpValidationPolicy::recommended());
-    assert_eq!(idp, &IdpValidationPolicy::recommended());
+    assert_eq!(sp, &SpValidationPolicy::default());
+    assert_eq!(idp, &IdpValidationPolicy::default());
     assert_eq!(sp.assertions, AssertionSignaturePolicy::AllowUnsigned);
     assert_eq!(
         sp.responses,
@@ -171,7 +171,7 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
         AudienceValidationPolicy::EvaluatePresentRestrictions
     );
     assert_eq!(sp.name_id_creation, NameIdCreationPolicy::DoNotAllowCreate);
-    assert_eq!(sp.logout, LogoutPolicy::recommended());
+    assert_eq!(sp.logout, LogoutPolicy::default());
     assert_eq!(
         sp.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms
@@ -189,27 +189,21 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn recommended_hardenings_stay_independent() {
-    let mut assertion_signature = SpValidationPolicy::recommended();
+    let mut assertion_signature = SpValidationPolicy::default();
     assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
     assert_eq!(
         assertion_signature.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms
     );
-    let mut rsa_sha2 = SpValidationPolicy::recommended();
+    let mut rsa_sha2 = SpValidationPolicy::default();
     rsa_sha2.xml_signatures = XmlSignatureProfile::StrictRsaSha2;
     assert_eq!(rsa_sha2.assertions, AssertionSignaturePolicy::AllowUnsigned);
 }
 
 #[test]
-fn policy_defaults_are_the_recommended_presets() {
-    let sp = SpValidationPolicy::recommended();
-    let logout = LogoutPolicy::recommended();
-    assert_eq!(SpValidationPolicy::default(), sp);
-    assert_eq!(
-        IdpValidationPolicy::default(),
-        IdpValidationPolicy::recommended()
-    );
-    assert_eq!(LogoutPolicy::default(), logout);
+fn field_defaults_match_the_role_policy() {
+    let sp = SpValidationPolicy::default();
+    let logout = LogoutPolicy::default();
     assert_eq!(AssertionSignaturePolicy::default(), sp.assertions);
     assert_eq!(AuthnRequestSigningPolicy::default(), sp.authn_requests);
     assert_eq!(NameIdCreationPolicy::default(), sp.name_id_creation);
@@ -432,7 +426,7 @@ fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
 #[test]
 fn sp_builder_requires_signing_credentials_when_authn_requests_are_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = SpValidationPolicy::recommended();
+    let mut validation = SpValidationPolicy::default();
     validation.authn_requests = AuthnRequestSigningPolicy::Sign;
     let result = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,

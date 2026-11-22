@@ -12,7 +12,7 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const IDP_ENTITY_COOKIE_VALUE: &str = "aHR0cHM6Ly9pZHAuZXhhbXBsZS5jb20vbWV0YWRhdGE%3D";
 
 fn identity_provider(entity_id: &str) -> Result<IdentityProvider, SamlError> {
-    let mut validation = IdpValidationPolicy::recommended();
+    let mut validation = IdpValidationPolicy::default();
     validation.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
     validation.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
     let config = IdpConfig::builder(

@@ -9,7 +9,7 @@
 //! metadata through typed descriptors, and returns pending transaction values
 //! that callers can store with browser session state.
 //!
-//! [`SpValidationPolicy::recommended`] is the preset for claimed features.
+//! [`SpValidationPolicy::default`] is the preset for claimed features.
 //! `Default` and the config builders start on it. To relax one rule, assign
 //! the field that names it.
 //!

@@ -60,7 +60,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
             AcsEndpoint::post(SP_ACS_POST)?.with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     );
     let idp = IdentityProvider::new(
@@ -69,7 +69,7 @@ fn exchange(delivery: Delivery) -> TestResult<Exchange> {
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(

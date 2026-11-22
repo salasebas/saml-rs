@@ -178,28 +178,28 @@ fn signing_sp_validation() -> SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
         audience: AudienceValidationPolicy::RequireRestriction,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     }
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     }
 }
 
 fn unsigned_logout_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         logout: UNSIGNED_LOGOUT,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     }
 }
 
 fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
         logout: UNSIGNED_LOGOUT,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     }
 }
 
@@ -1749,11 +1749,11 @@ fn recommended_slo_does_not_store_replay_without_a_caller_cache(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(sp_config_with_validation(SpValidationPolicy {
         logout: recommended_logout_accept(),
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     })?);
     let idp = IdentityProvider::new(idp_config_with_validation(IdpValidationPolicy {
         logout: recommended_logout_accept(),
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     })?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     assert!(!sp_descriptor.signed_metadata_xml().is_some());

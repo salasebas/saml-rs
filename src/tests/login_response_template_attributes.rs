@@ -39,7 +39,7 @@ fn login_response_template_rejects_an_attribute_without_a_value_for_both_rendere
             AcsEndpoint::post("https://sp.example.com/acs")?.with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     );
     let idp = IdentityProvider::new(

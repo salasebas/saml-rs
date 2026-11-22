@@ -2,12 +2,10 @@
 
 Producer rules for typed Web Browser SSO generation: service-provider
 `start_sso`, and identity-provider `respond_sso` and `initiate_sso`.
-`SpValidationPolicy::recommended` leaves AuthnRequest signing and identifier
-creation off. `IdpValidationPolicy::recommended` does not turn assertion
-encryption on. `Default` and the config builders are
-Recommended. The
-preset distinction is recorded in
-[validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
+`SpValidationPolicy::default` leaves AuthnRequest signing and identifier
+creation off. `IdpValidationPolicy::default` does not turn assertion
+encryption on. Both config builders use these defaults.
+See [validation presets](https://samlrs.vercel.app/explanation/validation-presets/).
 
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0, as corrected
 by Approved Errata 05. HTTP-POST-SimpleSign is the supported CD04 binding.

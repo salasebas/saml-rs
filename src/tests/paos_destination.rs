@@ -34,7 +34,7 @@ fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing
             AcsEndpoint::post("https://sp.example.com/acs/post")?.with_default(),
         )
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::recommended())
+        .validation(SpValidationPolicy::default())
         .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
@@ -43,12 +43,12 @@ fn signed_paos_authn_request_without_destination_is_accepted_under_every_signing
         MetadataTrustPolicy::AllowUnsigned,
     )?;
     for (policy, validation) in [
-        ("recommended", IdpValidationPolicy::recommended()),
+        ("recommended", IdpValidationPolicy::default()),
         (
             "RequireSigned",
             IdpValidationPolicy {
                 authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-                ..IdpValidationPolicy::recommended()
+                ..IdpValidationPolicy::default()
             },
         ),
     ] {

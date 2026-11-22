@@ -45,7 +45,7 @@ fn idp_signing_with(key: &str, cert: &str) -> Result<saml_rs::IdentityProvider, 
             SsoEndpoint::post(IDP_SSO)?,
         )
         .credentials(credentials(key, cert))
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .build()?,
     ))
 }
@@ -86,7 +86,7 @@ fn sso_response_signed_with_the_sp_role_key_of_a_dual_role_idp_is_rejected(
     let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(credentials(SP_ROLE_KEY, SP_ROLE_CERT))
-            .validation(SpValidationPolicy::recommended())
+            .validation(SpValidationPolicy::default())
             .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
@@ -167,8 +167,10 @@ fn with_role_in_both_orders(metadata: &str, descriptor: &str, role: &str) -> [St
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
-    let mut validation = SpValidationPolicy::recommended();
-    validation.authn_requests = saml_rs::AuthnRequestSigningPolicy::Sign;
+    let validation = SpValidationPolicy {
+        authn_requests: saml_rs::AuthnRequestSigningPolicy::Sign,
+        ..Default::default()
+    };
     Ok(ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(credentials(key, cert))
@@ -182,12 +184,16 @@ fn typed_signing_rollover_verifies_both_keys_with_metadata_published_before_the_
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rolling = credentials(SP_ROLE_KEY, SP_ROLE_CERT)
         .with_additional_signing_certificate(CertificatePem::new(IDP_ROLE_CERT));
-    let mut sp_validation = SpValidationPolicy::recommended();
-    sp_validation.authn_requests = saml_rs::AuthnRequestSigningPolicy::Sign;
+    let sp_validation = SpValidationPolicy {
+        authn_requests: saml_rs::AuthnRequestSigningPolicy::Sign,
+        ..Default::default()
+    };
     let sp_config = SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
         .validation(sp_validation);
-    let mut idp_validation = IdpValidationPolicy::recommended();
-    idp_validation.authn_requests = saml_rs::AuthnRequestValidationPolicy::RequireSigned;
+    let idp_validation = IdpValidationPolicy {
+        authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
+        ..Default::default()
+    };
     let idp_config = IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
         SsoEndpoint::post(IDP_SSO)?,
@@ -262,7 +268,7 @@ fn sso_response_signed_with_a_saml11_role_key_is_rejected() -> Result<(), Box<dy
     let sp = ServiceProvider::new(
         SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
             .credentials(credentials(SP_ROLE_KEY, SP_ROLE_CERT))
-            .validation(SpValidationPolicy::recommended())
+            .validation(SpValidationPolicy::default())
             .build()?,
     );
     let sp_descriptor = SpDescriptor::from_metadata_xml(
@@ -340,8 +346,10 @@ fn authn_request_signed_with_a_saml11_role_key_is_rejected(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_signing_authn_requests(SP_ROLE_KEY, SP_ROLE_CERT)?;
     let signed_with_saml11_role_key = sp_signing_authn_requests(IDP_ROLE_KEY, IDP_ROLE_CERT)?;
-    let mut idp_validation = IdpValidationPolicy::recommended();
-    idp_validation.authn_requests = saml_rs::AuthnRequestValidationPolicy::RequireSigned;
+    let idp_validation = IdpValidationPolicy {
+        authn_requests: saml_rs::AuthnRequestValidationPolicy::RequireSigned,
+        ..Default::default()
+    };
     let idp = IdentityProvider::new(
         IdpConfig::builder(
             EntityId::try_new(IDP_ENTITY_ID)?,

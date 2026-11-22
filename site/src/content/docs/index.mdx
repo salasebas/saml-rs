@@ -76,7 +76,6 @@ let sp = ServiceProvider::new(
         AcsEndpoint::post("https://sp.example.com/acs")?,
     )
     .credentials(credentials)
-    .validation(SpValidationPolicy::recommended())
     .build()?,
 );
 

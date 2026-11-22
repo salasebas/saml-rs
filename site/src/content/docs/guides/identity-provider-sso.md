@@ -19,7 +19,6 @@ let idp = IdentityProvider::new(
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
     .credentials(credentials)
-    .validation(IdpValidationPolicy::recommended())
     .build()?,
 );
 

@@ -55,9 +55,11 @@ fn validation() -> SamlValidationContext<'static> {
 }
 
 fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
-    let mut validation = SpValidationPolicy::recommended();
-    validation.assertions = AssertionSignaturePolicy::RequireSigned;
-    validation.audience = AudienceValidationPolicy::RequireRestriction;
+    let validation = SpValidationPolicy {
+        assertions: AssertionSignaturePolicy::RequireSigned,
+        audience: AudienceValidationPolicy::RequireRestriction,
+        ..Default::default()
+    };
     Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -75,7 +77,7 @@ fn idp_config() -> Result<IdpConfigBuilder, SamlError> {
         SsoEndpoint::post(IDP_SSO_POST)?,
     )
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::recommended()))
+    .validation(IdpValidationPolicy::default()))
 }
 
 fn idp() -> Result<saml_rs::IdentityProvider, SamlError> {
@@ -783,7 +785,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .name_id_format(NameIdFormat::Persistent)
         .build()?,
     );
@@ -802,7 +804,7 @@ fn identity_provider_does_not_issue_a_persistent_or_transient_identifier_over_25
             SsoEndpoint::post(IDP_SSO_POST)?,
         )
         .credentials(signing_credentials())
-        .validation(IdpValidationPolicy::recommended())
+        .validation(IdpValidationPolicy::default())
         .name_id_format(NameIdFormat::Persistent)
         .sso_response_template(SSO_RESPONSE_TEMPLATE)
         .build()?,

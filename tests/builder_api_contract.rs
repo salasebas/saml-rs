@@ -27,7 +27,7 @@ fn sp_config() -> Result<SpConfig, SamlError> {
     )
     .slo_endpoint(SloEndpoint::post(SP_SLO_POST)?)
     .credentials(signing_credentials())
-    .validation(SpValidationPolicy::recommended())
+    .validation(SpValidationPolicy::default())
     .build()
 }
 
@@ -38,7 +38,7 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
     )
     .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
     .credentials(signing_credentials())
-    .validation(IdpValidationPolicy::recommended())
+    .validation(IdpValidationPolicy::default())
     .build()
 }
 

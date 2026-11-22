@@ -93,14 +93,14 @@ fn signing_sp_validation() -> SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
         authn_requests: AuthnRequestSigningPolicy::Sign,
         audience: AudienceValidationPolicy::RequireRestriction,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     }
 }
 
 fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::RequireSigned,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     }
 }
 
@@ -192,11 +192,11 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
 
 // Field combination exercised by the typed Web Browser SSO accept tests.
 fn recommended_sso_accept_validation() -> SpValidationPolicy {
-    SpValidationPolicy::recommended()
+    SpValidationPolicy::default()
 }
 
 fn recommended_sso_accept_idp_validation() -> IdpValidationPolicy {
-    IdpValidationPolicy::recommended()
+    IdpValidationPolicy::default()
 }
 
 fn signed_idp_metadata() -> Result<String, SamlError> {
@@ -309,7 +309,7 @@ fn unsigned_request_facades() -> Result<(ServiceProvider, IdentityProvider), Sam
 fn unverified_authn_request_idp_validation() -> IdpValidationPolicy {
     IdpValidationPolicy {
         authn_requests: AuthnRequestValidationPolicy::AllowUnsigned,
-        ..IdpValidationPolicy::recommended()
+        ..IdpValidationPolicy::default()
     }
 }
 
@@ -789,7 +789,7 @@ struct IssuedAuthnRequest {
 fn issued_authn_request_for_recommended_idp(
 ) -> Result<IssuedAuthnRequest, Box<dyn std::error::Error>> {
     let (sp, _) = unsigned_request_facades()?;
-    let idp = IdentityProvider::new(idp_with_validation(IdpValidationPolicy::recommended())?);
+    let idp = IdentityProvider::new(idp_with_validation(IdpValidationPolicy::default())?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
     let xml = authn_request_xml(&started.outbound)?;
@@ -3246,7 +3246,7 @@ fn skipped_audience_and_unsigned_authn_requests_keep_the_other_sso_checks(
     let exchange = recommended_post_exchange()?;
     let audience_skipped = ServiceProvider::new(sp_with_validation(SpValidationPolicy {
         audience: AudienceValidationPolicy::Skip,
-        ..SpValidationPolicy::recommended()
+        ..SpValidationPolicy::default()
     })?);
     let session = audience_skipped.finish_sso(
         &exchange.idp_descriptor,

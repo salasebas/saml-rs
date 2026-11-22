@@ -8,31 +8,31 @@ This guide shows you how to choose the validation preset for typed service-provi
 ## Start on Recommended
 
 ```rust
-let policy = SpValidationPolicy::recommended();
+let policy = SpValidationPolicy::default();
 ```
 
 To require a signature directly on the Assertion, and leave the XML-DSig profile unchanged:
 
 ```rust
-let mut require_assertion_signature = SpValidationPolicy::recommended();
+let mut require_assertion_signature = SpValidationPolicy::default();
 require_assertion_signature.assertions = AssertionSignaturePolicy::RequireSigned;
 ```
 
 To require the RSA-SHA2 XML-DSig profile, and leave Assertion signatures optional:
 
 ```rust
-let mut require_rsa_sha2 = SpValidationPolicy::recommended();
+let mut require_rsa_sha2 = SpValidationPolicy::default();
 require_rsa_sha2.xml_signatures = XmlSignatureProfile::StrictRsaSha2;
 ```
 
-Set both fields when you want both. `IdpValidationPolicy::recommended()` and `LogoutPolicy::recommended()` are the matching presets. `LogoutPolicy::recommended()` requires a signature on logout requests and responses.
+Set both fields when you want both. `IdpValidationPolicy::default()` and `LogoutPolicy::default()` are the matching presets. `LogoutPolicy::default()` requires a signature on logout requests and responses.
 
 ## Relax one rule
 
 To relax a rule, assign the field that names it. For example, to accept unsigned logout requests and responses:
 
 ```rust
-let mut unsigned_logout = SpValidationPolicy::recommended();
+let mut unsigned_logout = SpValidationPolicy::default();
 unsigned_logout.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
 unsigned_logout.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
 ```
