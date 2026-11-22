@@ -1,49 +1,12 @@
 use crate::browser::{AcsEndpoint, SsoEndpoint};
 use crate::config::{EntityId, IdpConfig, SpConfig};
-#[cfg(crypto)]
 use crate::config::{IdpValidationPolicy, NameIdFormat, SpValidationPolicy};
-#[cfg(crypto)]
 use crate::constants::{
     data_encryption_algorithm, key_encryption_algorithm, name_id_format, signature_algorithm,
     transform_algorithm,
 };
-use crate::entity::EntitySetting;
 use crate::error::SamlError;
-use crate::tests::policies_without_crypto::{
-    idp_validation_without_crypto, sp_validation_without_crypto,
-};
 
-#[test]
-fn unsigned_logout_clears_the_raw_signature_requirements() -> Result<(), SamlError> {
-    let raw = EntitySetting::default();
-    assert!(raw.want_logout_request_signed);
-    assert!(raw.want_logout_response_signed);
-
-    let sp = SpConfig::builder(
-        EntityId::try_new("https://sp.example.com/metadata")?,
-        AcsEndpoint::post("https://sp.example.com/acs")?,
-    )
-    .validation(sp_validation_without_crypto())
-    .build()?
-    .engine
-    .setting;
-    assert!(!sp.want_logout_request_signed);
-    assert!(!sp.want_logout_response_signed);
-
-    let idp = IdpConfig::builder(
-        EntityId::try_new("https://idp.example.com/metadata")?,
-        SsoEndpoint::redirect("https://idp.example.com/sso")?,
-    )
-    .validation(idp_validation_without_crypto())
-    .build()?
-    .engine
-    .setting;
-    assert!(!idp.want_logout_request_signed);
-    assert!(!idp.want_logout_response_signed);
-    Ok(())
-}
-
-#[cfg(crypto)]
 #[test]
 fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     use crate::config::{
@@ -131,7 +94,6 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     Ok(())
 }
 
-#[cfg(crypto)]
 #[test]
 fn idp_config_converts_authn_request_policy() -> Result<(), SamlError> {
     use crate::config::AuthnRequestValidationPolicy;

@@ -13,10 +13,10 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
     AcsEndpoint, EntityId, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, LogoutResponse, LogoutSignaturePolicy, LogoutSubject,
-    MetadataTrustPolicy, NameId, Outbound, PendingLogoutRequest, ReplayPolicy, RespondSlo,
-    SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoEndpoint, StartSlo, Status,
+    IdpValidationPolicy, Inbound, LogoutResponse, LogoutSubject, MetadataTrustPolicy, NameId,
+    Outbound, PendingLogoutRequest, ReplayPolicy, RespondSlo, SamlError, SamlValidationContext,
+    ServiceProvider, SessionIndex, SloEndpoint, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartSlo, Status,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -28,30 +28,8 @@ const IDP_SSO: &str = "https://idp.example.com/sso/post";
 const IDP_SLO_HTTPS: &str = "https://idp.example.com/slo/post";
 const IDP_SLO_HTTP: &str = "http://idp.example.com/slo/post";
 
-fn sp_with_slo_accept() -> SpValidationPolicy {
-    SpValidationPolicy::default()
-}
-
-fn idp_with_slo_accept() -> IdpValidationPolicy {
-    IdpValidationPolicy::default()
-}
-
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
-}
-
-fn unsigned_logout_sp_validation() -> SpValidationPolicy {
-    let mut policy = SpValidationPolicy::default();
-    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
-    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
-    policy
-}
-
-fn unsigned_logout_idp_validation() -> IdpValidationPolicy {
-    let mut policy = IdpValidationPolicy::default();
-    policy.logout.requests = LogoutSignaturePolicy::AllowUnsigned;
-    policy.logout.responses = LogoutSignaturePolicy::AllowUnsigned;
-    policy
 }
 
 fn sp(slo: &str, policy: SpValidationPolicy) -> Result<ServiceProvider, SamlError> {
@@ -119,8 +97,8 @@ fn post_input<Message>(outbound: &Outbound<Message>) -> Result<Vec<FormField>, S
 #[test]
 fn session_participant_generation_rules_sign_and_require_session_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
-    let idp = idp(IDP_SLO_HTTPS, idp_with_slo_accept())?;
+    let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::default())?;
+    let idp = idp(IDP_SLO_HTTPS, IdpValidationPolicy::default())?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = sp.start_slo(&idp_descriptor, subject_with_session()?, StartSlo::post())?;
     let xml = post_xml(&started.outbound)?;
@@ -138,9 +116,9 @@ fn session_participant_generation_rules_sign_and_require_session_index(
 }
 
 #[test]
-fn logout_request_receipt_obeys_the_signature_policy() -> Result<(), Box<dyn std::error::Error>> {
-    let service_provider = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
-    let identity_provider = idp(IDP_SLO_HTTP, unsigned_logout_idp_validation())?;
+fn logout_request_receipt_requires_a_signature() -> Result<(), Box<dyn std::error::Error>> {
+    let service_provider = sp(SP_SLO_HTTPS, SpValidationPolicy::default())?;
+    let identity_provider = idp(IDP_SLO_HTTP, IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&service_provider, &identity_provider)?;
     let started = service_provider.start_slo(
         &idp_descriptor,
@@ -148,13 +126,10 @@ fn logout_request_receipt_obeys_the_signature_policy() -> Result<(), Box<dyn std
         StartSlo::post().allow_http(),
     )?;
     let input = Inbound::post(unsigned_post_fields(&started.outbound, "SAMLRequest")?);
-    identity_provider.receive_slo(&sp_descriptor, input.clone(), validation())?;
-
-    let rejecting = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
-    match rejecting.receive_slo(&sp_descriptor, input, validation()) {
+    match identity_provider.receive_slo(&sp_descriptor, input, validation()) {
         Err(SamlError::SignatureMissing) => Ok(()),
         other => Err(format!(
-            "expected the accept combination to reject an unsigned LogoutRequest, got {other:?}"
+            "expected the receiver to reject an unsigned LogoutRequest, got {other:?}"
         )
         .into()),
     }
@@ -163,8 +138,8 @@ fn logout_request_receipt_obeys_the_signature_policy() -> Result<(), Box<dyn std
 #[test]
 fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
-    let idp = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
+    let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::default())?;
+    let idp = idp(IDP_SLO_HTTP, IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     match sp.start_slo(&idp_descriptor, subject_with_session()?, StartSlo::post()) {
@@ -214,8 +189,8 @@ fn http_logout_request_relaxes_transport_without_dropping_the_other_rules(
 #[test]
 fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp(SP_SLO_HTTP, sp_with_slo_accept())?;
-    let idp = idp(IDP_SLO_HTTPS, unsigned_logout_idp_validation())?;
+    let sp = sp(SP_SLO_HTTP, SpValidationPolicy::default())?;
+    let idp = idp(IDP_SLO_HTTPS, IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let started = idp.start_slo(&sp_descriptor, subject_without_session(), StartSlo::post())?;
@@ -269,8 +244,8 @@ fn session_authority_keeps_expiration_and_does_not_gain_participant_duties(
 #[test]
 fn session_participant_response_requires_https_unless_that_recommendation_is_relaxed(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = sp(SP_SLO_HTTPS, sp_with_slo_accept())?;
-    let idp = idp(IDP_SLO_HTTP, idp_with_slo_accept())?;
+    let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::default())?;
+    let idp = idp(IDP_SLO_HTTP, IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let started = idp.start_slo(&sp_descriptor, subject_with_session()?, StartSlo::post())?;
     let received = sp.receive_slo(
@@ -313,8 +288,7 @@ fn session_participant_response_requires_https_unless_that_recommendation_is_rel
 }
 
 #[test]
-fn finish_slo_requires_a_logout_response_signature_under_the_accept_combination(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn finish_slo_requires_a_logout_response_signature() -> Result<(), Box<dyn std::error::Error>> {
     finish_rejects_unsigned_response(LocalRole::Sp)?;
     finish_rejects_unsigned_response(LocalRole::Idp)?;
     Ok(())
@@ -350,13 +324,13 @@ fn finish_rejects_unsigned_response(role: LocalRole) -> Result<(), Box<dyn std::
         LocalRole::Sp => service_provider.finish_slo(
             &idp_descriptor,
             &pending,
-            Inbound::post(unsigned.clone()),
+            Inbound::post(unsigned),
             validation(),
         ),
         LocalRole::Idp => identity_provider.finish_slo(
             &sp_descriptor,
             &pending,
-            Inbound::post(unsigned.clone()),
+            Inbound::post(unsigned),
             validation(),
         ),
     };
@@ -367,35 +341,14 @@ fn finish_rejects_unsigned_response(role: LocalRole) -> Result<(), Box<dyn std::
         }
     }
 
-    let unsigned_sp = sp(SP_SLO_HTTPS, unsigned_logout_sp_validation())?;
-    let unsigned_idp = idp(IDP_SLO_HTTPS, unsigned_logout_idp_validation())?;
-    let completed = match role {
-        LocalRole::Sp => unsigned_sp.finish_slo(
-            &idp_descriptor,
-            &pending,
-            Inbound::post(unsigned),
-            validation(),
-        )?,
-        LocalRole::Idp => unsigned_idp.finish_slo(
-            &sp_descriptor,
-            &pending,
-            Inbound::post(unsigned),
-            validation(),
-        )?,
-    };
-    let expected_issuer = match role {
-        LocalRole::Sp => IDP_ENTITY_ID,
-        LocalRole::Idp => SP_ENTITY_ID,
-    };
-    assert_eq!(completed.response().issuer().as_str(), expected_issuer);
     Ok(())
 }
 
 fn signed_logout_response(
     finishing_role: LocalRole,
 ) -> Result<SignedLogoutExchange, Box<dyn std::error::Error>> {
-    let sp = sp(SP_SLO_HTTPS, sp_with_slo_accept())?;
-    let idp = idp(IDP_SLO_HTTPS, idp_with_slo_accept())?;
+    let sp = sp(SP_SLO_HTTPS, SpValidationPolicy::default())?;
+    let idp = idp(IDP_SLO_HTTPS, IdpValidationPolicy::default())?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let (response, pending) = match finishing_role {
         LocalRole::Sp => {

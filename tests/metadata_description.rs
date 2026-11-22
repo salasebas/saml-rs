@@ -1,7 +1,7 @@
 #[path = "common/policies_without_crypto.rs"]
 mod policies_without_crypto;
 
-use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+use policies_without_crypto::sp_validation_without_crypto;
 
 use std::time::Duration;
 
@@ -123,8 +123,7 @@ fn typed_builders_publish_the_same_descriptions() -> TestResult {
     .organization(organization())
     .error_url(ERROR_URL)
     .metadata_lifetime(MetadataLifetime::CacheDuration(Duration::from_secs(3600)))
-    .contacts(contacts())
-    .validation(idp_validation_without_crypto());
+    .contacts(contacts());
     let sp = ServiceProvider::new(sp.build()?);
     let idp = IdentityProvider::new(idp.build()?);
     assert_eq!(sp.metadata_xml(), SP_XML.trim_end());

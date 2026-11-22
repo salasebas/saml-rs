@@ -63,11 +63,11 @@ let logout_response = idp.respond_slo(&sp, &logout_request, &status, RespondSlo:
 
 When the identity provider starts logout itself, `IdentityProvider::start_slo` is the session authority. It always emits `LogoutRequest@NotOnOrAfter`. The deadline comes from the same issuance lifetime used for assertion time bounds. The five-minute default is library policy. Why that does not claim an ordering against every historical assertion is in [Logout expiration](../explanation/logout-expiration.md).
 
-`LogoutPolicy::default()` requires a signature on logout requests and responses. To accept an unsigned message, set `requests` or `responses` to `LogoutSignaturePolicy::AllowUnsigned`.
+Both roles verify the sender's signature before accepting a browser logout request or response. Publish the signing certificate in the peer metadata for XML signatures on POST and detached signatures on Redirect or SimpleSign.
 
 ## Over SOAP
 
-`StartSlo::soap()` and `RespondSlo::soap()` run the same calls as one back-channel SOAP exchange. Your HTTP client sends the request, and saml-rs reads the reply. Both peers publish `SloEndpoint::soap(...)`. saml-rs signs every SOAP logout message it writes, and none carries `RelayState`. `Inbound::soap(body, channel)` reads a received envelope. With `SoapChannel::unattested()`, the message must be signed under every `LogoutPolicy`. When your server or client authenticated the peer with mutual TLS, pass a `SoapChannel` that says so; an unsigned message is then accepted, and a present signature is still checked.
+`StartSlo::soap()` and `RespondSlo::soap()` run the same calls as one back-channel SOAP exchange. Your HTTP client sends the request, and saml-rs reads the reply. Both peers publish `SloEndpoint::soap(...)`. saml-rs signs every SOAP logout message it writes, and none carries `RelayState`. `Inbound::soap(body, channel)` reads a received envelope. With `SoapChannel::unattested()`, the message must be signed. When your server or client authenticated the peer with mutual TLS, pass a `SoapChannel` that says so; an unsigned message is then accepted, and a present signature is still checked.
 
 ```rust
 let logout = sp.start_slo(&idp, subject, StartSlo::soap())?;

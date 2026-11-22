@@ -14,17 +14,14 @@ use saml_rs::sp::LoginRequestOptions;
 use saml_rs::tests::engine::flow;
 use saml_rs::tests::engine::{create_logout_request, create_logout_response, LogoutUser};
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
-use saml_rs::tests::policies_without_crypto::{
-    idp_validation_without_crypto, sp_validation_without_crypto,
-};
+use saml_rs::tests::policies_without_crypto::sp_validation_without_crypto;
 use saml_rs::xml::{extract, ExtractorField};
 use saml_rs::{
     AcsEndpoint, AssertionEncryptionPolicy, AssertionSignaturePolicy, AuthnRequestSigningPolicy,
     AuthnRequestValidationPolicy, CertificatePem, EntityId, IdentityProvider, IdpConfig,
-    IdpDescriptor, Inbound, LogoutSignaturePolicy, LogoutSubject, MetadataTrustPolicy, NameId,
-    RelayState, ReplayPolicy, ResponseSignaturePolicy, SamlError, SamlValidationContext,
-    ServiceProvider, SloEndpoint, SpConfig, SpDescriptor, SsoEndpoint, StartSlo, StartSso,
-    XmlPolicy,
+    IdpDescriptor, Inbound, LogoutSubject, MetadataTrustPolicy, NameId, RelayState, ReplayPolicy,
+    ResponseSignaturePolicy, SamlError, SamlValidationContext, ServiceProvider, SloEndpoint,
+    SpConfig, SpDescriptor, SsoEndpoint, StartSlo, StartSso, XmlPolicy,
 };
 use std::time::SystemTime;
 
@@ -81,8 +78,7 @@ fn idp_config_builder() -> Result<saml_rs::IdpConfigBuilder, SamlError> {
     Ok(IdpConfig::builder(
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
-    )
-    .validation(idp_validation_without_crypto()))
+    ))
 }
 
 fn typed_sp_config() -> Result<SpConfig, SamlError> {
@@ -101,7 +97,6 @@ fn typed_idp_config() -> Result<IdpConfig, SamlError> {
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
     .slo_endpoint(SloEndpoint::post("https://idp.example.com/slo")?)
-    .validation(idp_validation_without_crypto())
     .build()
 }
 
@@ -210,7 +205,6 @@ fn typed_config_builders_construct_protocol_only_without_default_crypto(
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
-    .validation(idp_validation_without_crypto())
     .build()?;
 
     assert_eq!(
@@ -222,7 +216,10 @@ fn typed_config_builders_construct_protocol_only_without_default_crypto(
         "https://idp.example.com/metadata"
     );
     assert_eq!(sp_config.validation(), &sp_validation_without_crypto());
-    assert_eq!(idp_config.validation(), &idp_validation_without_crypto());
+    assert_eq!(
+        idp_config.validation(),
+        &saml_rs::IdpValidationPolicy::default()
+    );
     Ok(())
 }
 
@@ -251,7 +248,7 @@ fn typed_facade_creates_and_receives_unsigned_protocol_sso_without_default_crypt
 }
 
 #[test]
-fn typed_config_builders_return_unsupported_for_crypto_required_policy_without_default_crypto(
+fn default_sp_requires_crypto_and_default_idp_builds_without_it(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(
         SpConfig::builder(
@@ -260,13 +257,11 @@ fn typed_config_builders_return_unsupported_for_crypto_required_policy_without_d
         )
         .build(),
     );
-    assert_unsupported(
-        IdpConfig::builder(
-            EntityId::try_new("https://idp.example.com/metadata")?,
-            SsoEndpoint::redirect("https://idp.example.com/sso")?,
-        )
-        .build(),
-    );
+    IdpConfig::builder(
+        EntityId::try_new("https://idp.example.com/metadata")?,
+        SsoEndpoint::redirect("https://idp.example.com/sso")?,
+    )
+    .build()?;
     Ok(())
 }
 
@@ -301,16 +296,6 @@ fn sp_signed_authn_requests_return_unsupported_without_default_crypto(
 }
 
 #[test]
-fn sp_signed_logout_policy_returns_unsupported_without_default_crypto(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = sp_validation_without_crypto();
-    validation.logout.requests = LogoutSignaturePolicy::RequireSigned;
-
-    assert_unsupported(sp_config_builder()?.validation(validation).build());
-    Ok(())
-}
-
-#[test]
 fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut xml = XmlPolicy::default();
@@ -323,18 +308,10 @@ fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
 #[test]
 fn idp_required_authn_request_signatures_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = idp_validation_without_crypto();
-    validation.authn_requests = AuthnRequestValidationPolicy::RequireSigned;
-
-    assert_unsupported(idp_config_builder()?.validation(validation).build());
-    Ok(())
-}
-
-#[test]
-fn idp_signed_logout_policy_returns_unsupported_without_default_crypto(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut validation = idp_validation_without_crypto();
-    validation.logout.responses = LogoutSignaturePolicy::RequireSigned;
+    let validation = saml_rs::IdpValidationPolicy {
+        authn_requests: AuthnRequestValidationPolicy::RequireSigned,
+        ..Default::default()
+    };
 
     assert_unsupported(idp_config_builder()?.validation(validation).build());
     Ok(())
@@ -353,7 +330,7 @@ fn idp_encrypted_assertions_return_unsupported_without_default_crypto(
 #[test]
 fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (sp, _idp, _sp_descriptor, idp_descriptor) = typed_protocol_facades()?;
+    let (sp, idp, sp_descriptor, idp_descriptor) = typed_protocol_facades()?;
 
     assert_unsupported(
         sp.start_slo(
@@ -363,6 +340,31 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
             StartSlo::post(),
         ),
     );
+    let request_from = |sender: &str, recipient: &str| {
+        let xml = format!(
+            r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_logout" Version="2.0" IssueInstant="2025-01-01T00:00:00Z" Destination="{recipient}"><saml:Issuer>{sender}</saml:Issuer><saml:NameID>alice@example.com</saml:NameID><samlp:SessionIndex>_session</samlp:SessionIndex></samlp:LogoutRequest>"#
+        );
+        Inbound::post(vec![saml_rs::FormField::new(
+            "SAMLRequest",
+            STANDARD.encode(xml),
+        )])
+    };
+    assert_unsupported(sp.receive_slo(
+        &idp_descriptor,
+        request_from(
+            idp_descriptor.entity_id().as_str(),
+            "https://sp.example.com/slo",
+        ),
+        typed_validation(),
+    ));
+    assert_unsupported(idp.receive_slo(
+        &sp_descriptor,
+        request_from(
+            sp_descriptor.entity_id().as_str(),
+            "https://idp.example.com/slo",
+        ),
+        typed_validation(),
+    ));
     Ok(())
 }
 

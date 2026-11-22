@@ -1,7 +1,7 @@
 #[path = "common/policies_without_crypto.rs"]
 mod policies_without_crypto;
 
-use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+use policies_without_crypto::sp_validation_without_crypto;
 
 use std::time::SystemTime;
 
@@ -51,7 +51,6 @@ fn idp(validator: Option<SchemaValidator>) -> Result<saml_rs::IdentityProvider, 
             EntityId::try_new(IDP)?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(idp_validation_without_crypto())
         .xml(policy(validator))
         .build()?,
     ))

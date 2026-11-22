@@ -1,7 +1,7 @@
 #[path = "common/policies_without_crypto.rs"]
 mod policies_without_crypto;
 
-use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+use policies_without_crypto::sp_validation_without_crypto;
 
 use std::{str::FromStr, time::Duration};
 
@@ -51,7 +51,6 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
             EntityId::try_new("https://idp.example.com/metadata")?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(idp_validation_without_crypto())
         .algorithms(algorithms)
         .build();
         assert!(matches!(sp, Err(SamlError::Unsupported(_))), "{sp:?}");
@@ -82,7 +81,6 @@ fn idp_config_defaults_issuance_lifetime_to_five_minutes() -> Result<(), Box<dyn
         EntityId::try_new("https://idp.example.com/metadata")?,
         SsoEndpoint::post("https://idp.example.com/sso")?,
     )
-    .validation(idp_validation_without_crypto())
     .build()?;
 
     assert_eq!(config.issuance_lifetime(), Duration::from_secs(300));
@@ -142,7 +140,7 @@ fn idp_config_rejects_unrepresentable_issuance_lifetime() -> Result<(), Box<dyn 
 #[test]
 fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
     use saml_rs::{
-        AudienceValidationPolicy, AuthnRequestValidationPolicy, IdpValidationPolicy, LogoutPolicy,
+        AudienceValidationPolicy, AuthnRequestValidationPolicy, IdpValidationPolicy,
         ResponseSignaturePolicy,
     };
 
@@ -171,7 +169,6 @@ fn builders_start_on_recommended() -> Result<(), Box<dyn std::error::Error>> {
         AudienceValidationPolicy::EvaluatePresentRestrictions
     );
     assert_eq!(sp.name_id_creation, NameIdCreationPolicy::DoNotAllowCreate);
-    assert_eq!(sp.logout, LogoutPolicy::default());
     assert_eq!(
         sp.xml_signatures,
         XmlSignatureProfile::ExcludeWeakAlgorithms
@@ -402,7 +399,6 @@ fn config_builders_reject_a_tag_prefix_that_is_not_an_ncname(
             EntityId::try_new("https://idp.example.com/metadata")?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(idp_validation_without_crypto())
         .templates(templates)
         .build();
 

@@ -28,6 +28,7 @@ Check the topics that affect your integration.
 - [Update metadata imports and accessors](metadata-api.md)
 - [Move schema validation into XML policy](xml-policy.md)
 - [Update AuthnRequest signature verification](authn-request-signatures.md)
+- [Authenticate browser logout messages](logout-authentication.md)
 - [Upgrade logout, validation, and replay code](logout-validation-replay.md)
 - [Match typed `SamlError` variants](errors.md)
 - [Upgrade RelayState, pending state, and inbound message code](browser-transport.md)

@@ -352,14 +352,13 @@ pub(crate) fn parse_logout_request(
     binding: Binding,
     request: &HttpRequest,
 ) -> Result<FlowResult, SamlError> {
-    Ok(parse_logout_request_at(
+    parse_logout_request_at(
         self_setting,
         from_meta,
-        LogoutReceipt::of_binding(binding),
+        LogoutReceipt::browser(binding),
         request,
         LogoutFlowValidation::typed(None, SystemTime::now(), clock_skew(self_setting), None),
-    )?
-    .0)
+    )
 }
 
 /// `<LogoutResponse>` from the peer described by `from_meta` that answers
@@ -374,7 +373,7 @@ pub(crate) fn parse_logout_response(
     parse_logout_response_at(
         self_setting,
         from_meta,
-        LogoutReceipt::of_binding(binding),
+        LogoutReceipt::browser(binding),
         request,
         request_id,
         LogoutFlowValidation::typed(None, SystemTime::now(), clock_skew(self_setting), None),

@@ -20,7 +20,7 @@ mod policies_without_crypto;
 #[path = "common/tag_prefixes.rs"]
 mod tag_prefixes;
 
-use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+use policies_without_crypto::sp_validation_without_crypto;
 
 use replay_cache::RecordingReplayCache;
 
@@ -71,8 +71,7 @@ fn identity_provider_with_templates(
         SsoEndpoint::redirect("https://idp.example.com/sso")?,
     )
     .templates(templates)
-    .name_id_format(NameIdFormat::Persistent)
-    .validation(idp_validation_without_crypto());
+    .name_id_format(NameIdFormat::Persistent);
     if let Some(location) = service {
         builder = builder
             .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(location)?));
@@ -394,7 +393,6 @@ fn a_transient_identifier_is_not_managed() -> TestResult {
         .manage_name_id_service(ManageNameIdService::soap(EndpointUrl::try_new(
             IDP_NIM_URL,
         )?))
-        .validation(idp_validation_without_crypto())
         .build()?,
     );
 
@@ -920,7 +918,6 @@ fn soap_envelopes_are_read_under_the_configured_xml_limits() -> TestResult {
             IDP_NIM_URL,
         )?))
         .xml(xml)
-        .validation(idp_validation_without_crypto())
         .build()?,
     );
     let sp = soap_service_provider()?;

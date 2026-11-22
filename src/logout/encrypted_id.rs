@@ -8,14 +8,6 @@ use crate::flow::FlowResult;
 use crate::metadata::Metadata;
 use crate::model::LogoutRequest;
 
-/// Whether a received `<LogoutRequest>` is authenticated. Only an
-/// authenticated request has its `<EncryptedID>` decrypted.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum LogoutRequestAuthentication {
-    Authenticated,
-    Unauthenticated,
-}
-
 /// `xml` with its `<NameID>` encrypted for the peer when `policy` selects it.
 /// The peer key is the first `KeyDescriptor` with `use="encryption"` in
 /// `target_meta`.
@@ -57,19 +49,14 @@ fn encrypt(_xml: &str, _certificate: &str, _setting: &EntitySetting) -> Result<S
 /// `request` with the `<EncryptedID>` of its `<LogoutRequest>` replaced by
 /// the `<NameID>` it carries, decrypted with the local decryption key.
 ///
-/// A request without an `<EncryptedID>`, an unauthenticated request, a
-/// receiver without a decryption key, and an `<EncryptedID>` that no
-/// decryption key decrypts return `request` unchanged, so the `<EncryptedID>`
-/// stays unread.
+/// Call after authenticating the request. If the request has no encrypted
+/// identifier or no configured key can decrypt it, return the original request.
 pub(crate) fn decrypt_encrypted_id(
     request: LogoutRequest,
     setting: &EntitySetting,
-    authentication: LogoutRequestAuthentication,
 ) -> Result<LogoutRequest, SamlError> {
-    let key_pem = match (authentication, setting.enc_private_key.as_deref()) {
-        (LogoutRequestAuthentication::Authenticated, Some(key_pem)) => key_pem,
-        (LogoutRequestAuthentication::Unauthenticated, _)
-        | (LogoutRequestAuthentication::Authenticated, None) => return Ok(request),
+    let Some(key_pem) = setting.enc_private_key.as_deref() else {
+        return Ok(request);
     };
     let flow = request.raw_flow();
     let document = crate::xml::dom::parse_document(&flow.saml_content, setting.xml_limits)?;

@@ -3,7 +3,7 @@ mod policies_without_crypto;
 
 use std::time::{Duration, SystemTime};
 
-use policies_without_crypto::{idp_validation_without_crypto, sp_validation_without_crypto};
+use policies_without_crypto::sp_validation_without_crypto;
 use saml_rs::constants::Binding;
 use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
@@ -61,8 +61,7 @@ fn generated_root_carries_the_default_or_configured_lifetime(
         let mut idp = IdpConfig::builder(
             EntityId::try_new(idp_entity_id)?,
             SsoEndpoint::post(sso_url)?,
-        )
-        .validation(idp_validation_without_crypto());
+        );
         if let Some(lifetime) = lifetime {
             sp = sp.metadata_lifetime(lifetime);
             idp = idp.metadata_lifetime(lifetime);

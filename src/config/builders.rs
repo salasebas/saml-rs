@@ -20,8 +20,7 @@ use super::descriptors::{
 #[cfg(not(crypto))]
 use super::policies::{
     assertion_signature_required, authn_request_signature_required,
-    encrypted_cbc_response_signature_required, logout_signature_required,
-    response_signature_required, LogoutPolicy,
+    encrypted_cbc_response_signature_required, response_signature_required,
 };
 use super::policies::{
     authn_request_signing_enabled, AlgorithmPolicy, IdpValidationPolicy, SpValidationPolicy,
@@ -694,20 +693,13 @@ fn sp_config_requires_crypto(config: &SpConfigBuilder) -> bool {
         || response_signature_required(validation.responses)
         || encrypted_cbc_response_signature_required(validation.responses)
         || authn_request_signing_enabled(validation.authn_requests)
-        || logout_policy_requires_crypto(validation.logout)
         || config.xml.encryption.selects_any_element()
 }
 
 #[cfg(not(crypto))]
 fn idp_config_requires_crypto(config: &IdpConfigBuilder) -> bool {
     authn_request_signature_required(config.validation.authn_requests)
-        || logout_policy_requires_crypto(config.validation.logout)
         || config.xml.encryption.selects_any_element()
-}
-
-#[cfg(not(crypto))]
-fn logout_policy_requires_crypto(policy: LogoutPolicy) -> bool {
-    logout_signature_required(policy.requests) || logout_signature_required(policy.responses)
 }
 
 #[cfg(all(test, not(crypto)))]
@@ -716,25 +708,17 @@ mod no_crypto_tests {
     use crate::browser::{AcsEndpoint, SsoEndpoint};
     use crate::config::descriptors::EntityId;
     use crate::error::SamlError;
-    use crate::tests::policies_without_crypto::{
-        idp_validation_without_crypto, sp_validation_without_crypto,
-    };
+    use crate::tests::policies_without_crypto::sp_validation_without_crypto;
 
     #[test]
-    fn recommended_builders_need_a_crypto_provider() -> Result<(), SamlError> {
+    fn protocol_only_builders_require_crypto_for_the_default_sp_response_policy(
+    ) -> Result<(), SamlError> {
         let sp_builder = SpConfig::builder(
             EntityId::try_new("https://sp.example.com/metadata")?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
         .build();
         assert!(matches!(sp_builder, Err(SamlError::Unsupported(_))));
-
-        let idp_builder = IdpConfig::builder(
-            EntityId::try_new("https://idp.example.com/metadata")?,
-            SsoEndpoint::post("https://idp.example.com/sso")?,
-        )
-        .build();
-        assert!(matches!(idp_builder, Err(SamlError::Unsupported(_))));
 
         SpConfig::builder(
             EntityId::try_new("https://sp.example.com/metadata")?,
@@ -746,7 +730,6 @@ mod no_crypto_tests {
             EntityId::try_new("https://idp.example.com/metadata")?,
             SsoEndpoint::post("https://idp.example.com/sso")?,
         )
-        .validation(idp_validation_without_crypto())
         .build()?;
         Ok(())
     }

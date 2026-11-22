@@ -7,8 +7,8 @@ use super::descriptors::EntityId;
 use super::policies::{
     assertion_signature_required, audience_restriction_required, authn_request_signature_required,
     authn_request_signing_enabled, encrypted_cbc_response_signature_required,
-    logout_signature_required, name_id_creation_allowed, response_signature_required,
-    AlgorithmPolicy, ReceivedEncryptedElements, TemplatePolicy, XmlPolicy,
+    name_id_creation_allowed, response_signature_required, AlgorithmPolicy,
+    ReceivedEncryptedElements, TemplatePolicy, XmlPolicy,
 };
 
 impl SpConfigBuilder {
@@ -30,9 +30,6 @@ impl SpConfigBuilder {
         setting.xml_signatures = validation.xml_signatures;
         setting.want_encrypted_cbc_response_signed =
             encrypted_cbc_response_signature_required(validation.responses);
-        setting.want_logout_request_signed = logout_signature_required(validation.logout.requests);
-        setting.want_logout_response_signed =
-            logout_signature_required(validation.logout.responses);
         setting
     }
 }
@@ -51,9 +48,6 @@ impl IdpConfigBuilder {
         setting.want_authn_requests_signed =
             authn_request_signature_required(validation.authn_requests);
         setting.xml_signatures = validation.xml_signatures;
-        setting.want_logout_request_signed = logout_signature_required(validation.logout.requests);
-        setting.want_logout_response_signed =
-            logout_signature_required(validation.logout.responses);
         setting
     }
 }
@@ -119,5 +113,5 @@ fn common_setting(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, crypto))]
 mod tests;
