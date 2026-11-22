@@ -817,11 +817,14 @@ let code = saml_rs::constants::status_code::AUTHN_FAILED;
 
 **Affects:** every typed integration. It names `Saml`, `Sp`, or `Idp`.
 
-**Before:** `Saml::sp(config)` returned `Saml<Sp>` and `Saml::idp(config)`
-returned `Saml<Idp>`. `Sp`, `Idp`, and `Unknown` were the role parameters.
+**Before:** `Saml::sp(config)` returned `Result<Saml<Sp>, SamlError>` and
+`Saml::idp(config)` returned `Result<Saml<Idp>, SamlError>`. `Sp`, `Idp`, and
+`Unknown` were the role parameters.
 
 **Now:** the two roles are two types. `Saml`, `Sp`, `Idp`, and `Unknown` are
-removed. Every method keeps its name and signature:
+removed. The methods move to the new types. The methods that 0.9 renames or
+changes, such as `remember_identity_provider`, are in the table at the top of
+this page.
 
 | 0.8 | 0.9 |
 | --- | --- |
@@ -841,17 +844,20 @@ explains why.
    `sed`, and leaves a `.bak` copy of each file it changes:
 
    ```sh
-   rg -l --type rust 'Saml' . | xargs sed -i.bak -E \
-   	-e 's/Saml::sp\(/ServiceProvider::new(/g' \
-   	-e 's/Saml::idp\(/IdentityProvider::new(/g' \
-   	-e 's/Saml(::)?<([a-z_]+::)*Sp>/ServiceProvider/g' \
-   	-e 's/Saml(::)?<([a-z_]+::)*Idp>/IdentityProvider/g'
+   rg -l0 --type rust 'Saml' . | xargs -0 sed -i.bak -E \
+   	-e 's/(^|[^[:alnum:]_])Saml::sp\(/\1ServiceProvider::new(/g' \
+   	-e 's/(^|[^[:alnum:]_])Saml::idp\(/\1IdentityProvider::new(/g' \
+   	-e 's/(^|[^[:alnum:]_])Saml(::)?<([a-z_]+::)*Sp>/\1ServiceProvider/g' \
+   	-e 's/(^|[^[:alnum:]_])Saml(::)?<([a-z_]+::)*Idp>/\1IdentityProvider/g'
    ```
 
-2. In each `use` list, replace `Saml`, `Sp`, and `Idp` with
+2. Delete the `?` or the error handling after each `ServiceProvider::new(..)`
+   and `IdentityProvider::new(..)`. Keep the `?` after `build()`. The compiler
+   reports each `?` that is left with error E0277.
+3. In each `use` list, replace `Saml`, `Sp`, and `Idp` with
    `ServiceProvider`, `IdentityProvider`, or both. The compiler names each
    import that is left.
-3. Delete the `.bak` files.
+4. Delete the `.bak` files.
 
 ```rust
 // Before
