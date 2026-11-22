@@ -32,6 +32,7 @@
 | `constants::url_params` | No longer public; write the parameter name | [1.21](#121-write-the-binding-parameter-names) |
 | `constants::MessageSignatureOrder`, `AlgorithmPolicy::message_signing_order`, or `EntitySetting::message_signing_order` | Removed; saml-rs never used the value | [1.22](#122-remove-message_signing_order) |
 | `MessageSignatureOrder::as_str` or `ParserType::as_str` | Removed | [1.23](#123-replace-parsertypeas_str) |
+| `constants::status_code::AUTH_FAILED` | Renamed to `AUTHN_FAILED` | [1.24](#124-rename-auth_failed-to-authn_failed) |
 | `FlowOptions::check_signature`, `verify_signature_if_present`, or `clock_drifts` | Replaced by `signature_check` and `clock_skew` | [3.1](raw-api.md#31-set-the-signature-check-and-clock-skew-on-flowoptions) |
 | A helper from a hidden module, such as `binding::xml_escape`, `util::camel_case`, `entity::generate_id`, `validator::verify_time`, or the one-argument `binding::deflate_raw_decode` and two-argument `validator::check_status` | No longer public, or takes its limit as an argument | [2.5](public-imports.md#25-replace-the-helpers-that-are-no-longer-public) |
 | `SpConfig::builder(entity_id)` or `IdpConfig::builder(entity_id)` | Takes the first ACS or SSO endpoint too | [Typed config](config.md#pass-the-first-endpoint-to-builder) |
@@ -826,3 +827,24 @@ let parameter = parser_type.query_param();
 
 If you need the strings that `as_str` returned, write them in a `match` of your
 own. `ParserType` is `#[non_exhaustive]`, so the `match` needs a `_` arm.
+
+## 1.24 Rename `AUTH_FAILED` to `AUTHN_FAILED`
+
+**Affects:** code that reads `saml_rs::constants::status_code::AUTH_FAILED`.
+
+**Before:** the constant held the
+`urn:oasis:names:tc:SAML:2.0:status:AuthnFailed` status code under the name
+`AUTH_FAILED`.
+
+**Now:** the constant is named `AUTHN_FAILED`, after the `AuthnFailed` code in
+Core §3.2.2.2. Its value is the same.
+
+**Upgrade:** rename each use:
+
+```rust
+// Before
+let code = saml_rs::constants::status_code::AUTH_FAILED;
+
+// Now
+let code = saml_rs::constants::status_code::AUTHN_FAILED;
+```

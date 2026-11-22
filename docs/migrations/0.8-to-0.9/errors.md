@@ -47,7 +47,7 @@ fn authentication_failed(error: &SamlError) -> bool {
 		SamlError::StatusNotSuccess { status, .. }
 			if status.top_level() == TopLevelStatusCode::Responder
 				&& status.subordinate().map(SubordinateStatusCode::as_uri)
-					== Some(saml_rs::constants::status_code::AUTH_FAILED)
+					== Some(saml_rs::constants::status_code::AUTHN_FAILED)
 	)
 }
 ```

@@ -148,7 +148,7 @@ pub mod status_code {
     pub const VERSION_MISMATCH: &str = "urn:oasis:names:tc:SAML:2.0:status:VersionMismatch";
     // second-tier
     /// Authentication failed.
-    pub const AUTH_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
+    pub const AUTHN_FAILED: &str = "urn:oasis:names:tc:SAML:2.0:status:AuthnFailed";
     /// Invalid attribute name or value.
     pub const INVALID_ATTR_NAME_OR_VALUE: &str =
         "urn:oasis:names:tc:SAML:2.0:status:InvalidAttrNameOrValue";

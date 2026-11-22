@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime};
 
 use roxmltree::{Document, Node};
 use saml_rs::config::SSO_RESPONSE_TEMPLATE;
-use saml_rs::constants::{status_code::AUTH_FAILED, transform_algorithm};
+use saml_rs::constants::{status_code::AUTHN_FAILED, transform_algorithm};
 use saml_rs::{
     check_paos_client_headers, AcsEndpoint, AlgorithmPolicy, Attribute, AttributeNameFormat,
     AttributeValue, Attributes, AuthnContextReference, EndpointUrl, EntityId, IdpConfig,
@@ -317,7 +317,7 @@ fn failed_authentication_does_not_establish_a_session() -> Result<(), Box<dyn st
             validation(),
         )?;
         let authn_failed =
-            Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTH_FAILED)?);
+            Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?);
         let rejected = idp.respond_paos_sso(
             &sp_descriptor,
             &received,
@@ -1083,7 +1083,7 @@ fn request_without_an_assertion_consumer_is_answered_at_the_metadata_default(
         &sp_descriptor,
         &received,
         SsoOutcome::Failure(
-            Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTH_FAILED)?),
+            Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?),
         ),
     )?;
     let sp_request = enhanced_client_takes_response(&client, rejected.envelope())?;
