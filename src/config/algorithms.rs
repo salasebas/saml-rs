@@ -133,7 +133,9 @@ pub enum KeyEncryptionAlgorithm {
     RsaOaepMgf1p,
     /// XML Encryption 1.1 RSA-OAEP with explicit digest and mask generation.
     ///
-    /// Config builders reject parameters the selected provider does not support.
+    /// With a crypto provider, config builders reject parameters it does not
+    /// support. A build without one accepts any parameters, because it does
+    /// not encrypt.
     RsaOaep {
         /// Digest used by OAEP.
         digest: DigestAlgorithm,

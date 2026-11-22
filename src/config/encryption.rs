@@ -1,4 +1,6 @@
-use super::{AlgorithmPolicy, KeyEncryptionAlgorithm};
+use super::AlgorithmPolicy;
+#[cfg(crypto)]
+use super::KeyEncryptionAlgorithm;
 use crate::error::SamlError;
 
 #[cfg(crypto)]
@@ -27,17 +29,6 @@ pub(super) fn validate_algorithms(algorithms: &AlgorithmPolicy) -> Result<(), Sa
 }
 
 #[cfg(not(crypto))]
-pub(super) fn validate_algorithms(algorithms: &AlgorithmPolicy) -> Result<(), SamlError> {
-    if matches!(
-        algorithms.key_encryption,
-        KeyEncryptionAlgorithm::RsaOaep { .. }
-    ) || matches!(
-        algorithms.data_encryption,
-        super::DataEncryptionAlgorithm::Aes256Gcm
-    ) {
-        return Err(SamlError::Unsupported(
-            "selected XML Encryption 1.1 algorithm requires a crypto provider feature".into(),
-        ));
-    }
+pub(super) fn validate_algorithms(_algorithms: &AlgorithmPolicy) -> Result<(), SamlError> {
     Ok(())
 }

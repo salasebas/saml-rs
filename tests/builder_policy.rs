@@ -14,6 +14,7 @@ use saml_rs::{
     XmlSignatureProfile,
 };
 
+#[cfg(crypto)]
 #[test]
 fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::error::Error>> {
     let mut unsupported_digest = AlgorithmPolicy::default();
@@ -22,22 +23,13 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
         mgf: MaskGenerationFunction::Mgf1Sha256,
     };
     let mut algorithms = vec![unsupported_digest];
-    if cfg!(any(
-        feature = "crypto-aws-lc",
-        feature = "crypto-fips",
-        not(crypto)
-    )) {
+    if cfg!(any(feature = "crypto-aws-lc", feature = "crypto-fips")) {
         let mut mismatched_mgf = AlgorithmPolicy::default();
         mismatched_mgf.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
             digest: DigestAlgorithm::Sha256,
             mgf: MaskGenerationFunction::Mgf1Sha384,
         };
         algorithms.push(mismatched_mgf);
-    }
-    if cfg!(not(crypto)) {
-        let mut gcm = AlgorithmPolicy::default();
-        gcm.data_encryption = DataEncryptionAlgorithm::Aes256Gcm;
-        algorithms.push(gcm);
     }
     for algorithms in algorithms {
         let sp = SpConfig::builder(
@@ -55,6 +47,37 @@ fn builders_reject_unsupported_xmlenc11_parameters() -> Result<(), Box<dyn std::
         .build();
         assert!(matches!(sp, Err(SamlError::Unsupported(_))), "{sp:?}");
         assert!(matches!(idp, Err(SamlError::Unsupported(_))), "{idp:?}");
+    }
+    Ok(())
+}
+
+#[cfg(not(crypto))]
+#[test]
+fn protocol_only_builders_accept_any_encryption_algorithm() -> Result<(), Box<dyn std::error::Error>>
+{
+    let mut aes128_gcm = AlgorithmPolicy::default();
+    aes128_gcm.data_encryption = DataEncryptionAlgorithm::Aes128Gcm;
+    let mut aes256_gcm = AlgorithmPolicy::default();
+    aes256_gcm.data_encryption = DataEncryptionAlgorithm::Aes256Gcm;
+    let mut rsa_oaep = AlgorithmPolicy::default();
+    rsa_oaep.key_encryption = KeyEncryptionAlgorithm::RsaOaep {
+        digest: DigestAlgorithm::Custom("urn:test:unsupported-oaep-digest".into()),
+        mgf: MaskGenerationFunction::Mgf1Sha256,
+    };
+    for algorithms in [aes128_gcm, aes256_gcm, rsa_oaep] {
+        SpConfig::builder(
+            EntityId::try_new("https://sp.example.com/metadata")?,
+            AcsEndpoint::post("https://sp.example.com/acs")?,
+        )
+        .validation(sp_validation_without_crypto())
+        .algorithms(algorithms.clone())
+        .build()?;
+        IdpConfig::builder(
+            EntityId::try_new("https://idp.example.com/metadata")?,
+            SsoEndpoint::post("https://idp.example.com/sso")?,
+        )
+        .algorithms(algorithms)
+        .build()?;
     }
     Ok(())
 }

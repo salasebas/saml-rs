@@ -5,8 +5,8 @@
 This guide covers callers that build an `SpConfig` or `IdpConfig`, fill
 `Credentials`, build a policy, limit, or input struct with a struct literal,
 destructure one or a started flow, match on a policy enum, set an
-`XmlEncryptionPolicy`, `AudienceValidationPolicy`, or `TemplatePolicy`, or
-configure an SSO template. Apply the sections that match your integration.
+`XmlEncryptionPolicy`, `AudienceValidationPolicy`, or `TemplatePolicy`,
+build a config without a crypto provider, or configure an SSO template. Apply the sections that match your integration.
 
 ## Pass the first endpoint to `builder`
 
@@ -327,6 +327,26 @@ encrypted assertions. If your identity provider sends mixed responses,
 configure it to encrypt every assertion. If your service provider accepts
 plaintext assertions, select `PlaintextAssertions` (the default) and keep its
 decryption credential to process the encrypted assertions.
+
+## Stop relying on encryption algorithm errors without a crypto provider
+
+**Affects:** builds without a crypto provider feature that expect
+`SpConfigBuilder::build` or `IdpConfigBuilder::build` to return
+`SamlError::Unsupported` for `DataEncryptionAlgorithm::Aes256Gcm` or
+`KeyEncryptionAlgorithm::RsaOaep`.
+
+**Before:** without a crypto provider, both builders rejected these two
+algorithms. They accepted every other algorithm, including `Aes128Gcm`.
+
+**Now:** without a crypto provider, both builders accept any
+`AlgorithmPolicy`. That build cannot encrypt or decrypt, so the algorithm has
+no effect. The builders still return `SamlError::Unsupported` for an
+`XmlEncryptionPolicy` that encrypts. Builds with a crypto provider do not
+change.
+
+**Upgrade:** if you used this error to detect a build without a crypto
+provider, check which `saml-rs` features the build enables instead, for
+example with `cargo tree -e features -i saml-rs`.
 
 ## Rename `AudienceValidationPolicy::Validate` to `RequireRestriction`
 
