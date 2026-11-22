@@ -315,23 +315,34 @@
 //! [`ServiceProvider::start_name_id_management_redirect`]. This does not claim the IdP
 //! or SP operational mode.
 //!
-//! # Unsupported profiles
+//! # Profile coverage
 //!
-//! The typed [`ServiceProvider`] and [`IdentityProvider`] API focuses on
-//! browser Web SSO, Enhanced Client/Proxy SSO over PAOS at the
-//! service-provider and identity-provider ends, metadata-driven SP/IdP setup,
-//! XML signature/encryption through `bergshamra`, Single Logout, artifact
-//! resolution over SOAP, and name identifier management. The enhanced-client
-//! role has no type. It does not implement HTTP-Artifact delivery of an
-//! `<AuthnRequest>` or a logout message, SOAP profiles other than artifact
-//! resolution, Single Logout, name identifier management at the identity
-//! provider, and the identity-provider leg of Enhanced Client/Proxy SSO, SAML
-//! query protocols, SOAP name identifier management at the service provider,
-//! name identifier mapping, or metadata federation. If you
-//! need one of those profiles for a real
-//! interoperability target, please open an issue with the profile, binding,
-//! IdP/SP product, and a minimal expected flow so we can consider the
-//! implementation.
+//! [`ServiceProvider`] and [`IdentityProvider`] support browser Web SSO and
+//! metadata-driven setup. Both roles support Single Logout over HTTP-Redirect,
+//! HTTP-POST, and HTTP-POST-SimpleSign, and name identifier management over
+//! HTTP-Redirect.
+//!
+//! ## Supported SOAP exchanges
+//!
+//! - Artifact resolution
+//! - Single Logout at both the identity provider and the service provider
+//! - Name identifier management at the identity provider
+//! - Enhanced Client/Proxy SSO at the identity provider (the service provider uses PAOS)
+//!
+//! ## Unsupported profiles
+//!
+//! - HTTP-Artifact delivery of an `<AuthnRequest>` or a logout message
+//! - SOAP name identifier management at the service provider
+//! - SAML query protocols
+//! - Name identifier mapping
+//! - Other SOAP profiles
+//! - Metadata federation
+//! - The enhanced-client role in Enhanced Client/Proxy SSO
+//!
+//! To request support for a profile, open an issue with the profile, binding,
+//! peer product, and a minimal expected flow.
+//!
+//! # Cargo features
 //!
 //! XML cryptography (XML-DSig sign/verify with anti-wrapping, XML-Enc, detached
 //! message signatures) is delegated to `bergshamra`. The default

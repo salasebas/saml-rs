@@ -7,10 +7,10 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 
 | Area | Support |
 | --- | --- |
-| Web SSO | Signed `AuthnRequest` and `Response` over HTTP-POST, HTTP-Redirect, and HTTP-POST-SimpleSign |
-| Enhanced Client/Proxy SSO | Service-provider and identity-provider ends over PAOS. The enhanced client is not a facade |
+| Web SSO | The service provider can send a signed `AuthnRequest` over HTTP-POST, HTTP-Redirect, or HTTP-POST-SimpleSign. The identity provider can send a signed `Response` over HTTP-POST, HTTP-POST-SimpleSign, or HTTP-Artifact |
+| Enhanced Client/Proxy SSO | The service provider uses PAOS with the enhanced client. The identity provider uses SOAP with the enhanced client |
 | Metadata | Parse peer metadata, generate SP and IdP descriptors, verify signed metadata |
-| Single Logout | Create and parse `LogoutRequest` and `LogoutResponse` on the same three bindings, and over SOAP for the identity provider and service provider. The deployment sends the SOAP HTTP request |
+| Single Logout | Create and parse `LogoutRequest` and `LogoutResponse` over HTTP-Redirect, HTTP-POST, HTTP-POST-SimpleSign, or SOAP for the identity provider and service provider. The deployment sends the SOAP HTTP request |
 | Identity Provider Discovery | `common_domain_cookie` returns the `_saml_idp` cookie for the caller to write. Service providers do not set or read it |
 | Identifiers | Every attribute name format on `SsoAssertion::with_attributes` and on an accepted `Attribute`. `NameId::generate_transient`, `NameId::generate_persistent`, and `NameId::persistent` for the identifiers an identity provider issues. The library writes the `ID` of every generated message and assertion |
 | HTTP-Artifact response | A Web SSO `Response` delivered as an artifact through `respond_sso_artifact`, and accepted by `finish_sso` after `resolve_artifact`. `AuthnRequest` and logout messages are not delivered this way |
@@ -20,7 +20,24 @@ description: "`ServiceProvider` and `IdentityProvider` implement this surface."
 | Crypto | XML-DSig, XML-Enc, detached signatures, and metadata key pinning through bergshamra. The Conformance §4 algorithms, with SHA-1, Triple DES, and RSA-v1.5 used only when selected |
 | Parsing | `quick-xml` DOM with local-name extraction, bounded before authentication |
 
-HTTP-Artifact delivery of an `AuthnRequest` or a logout message, SOAP profiles other than artifact resolution, Single Logout, name identifier management at the identity provider, and the identity-provider leg of Enhanced Client/Proxy SSO, the enhanced-client role, SAML query protocols, SOAP name identifier management at the service provider, name identifier mapping, and metadata federation are outside the typed `ServiceProvider` and `IdentityProvider` API. The HTTP-Artifact response, artifact resolution, Single Logout over SOAP, and name identifier management do not claim the IdP or SP operational mode.
+## Supported SOAP exchanges
+
+- Artifact resolution
+- Single Logout at both the identity provider and the service provider
+- Name identifier management at the identity provider
+- Enhanced Client/Proxy SSO at the identity provider (the service provider uses PAOS)
+
+## Unsupported profiles
+
+- HTTP-Artifact delivery of an `<AuthnRequest>` or a logout message
+- SOAP name identifier management at the service provider
+- SAML query protocols
+- Name identifier mapping
+- Other SOAP profiles
+- Metadata federation
+- The enhanced-client role in Enhanced Client/Proxy SSO
+
+The crate does not claim the [IdP or SP operational mode](conformance/idp-sp-operational-modes.md).
 
 A request for one of the remaining profiles needs the profile, the binding, the peer product, and a minimal expected flow on [an issue](https://github.com/salasebas/saml-rs/issues).
 
