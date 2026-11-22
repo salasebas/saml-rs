@@ -82,7 +82,9 @@ operations check what the raw functions left to the caller, such as
 `InResponseTo` correlation, RelayState, and the receiving endpoint.
 
 The raw service provider's defaults differ from `SpValidationPolicy::default`
-in three fields. To keep what they checked, set those fields:
+in three fields. To select the old settings, set those fields as shown below.
+The SP now [verifies every present SSO signature](logout-validation-replay.md#verify-every-signature-on-sso-responses)
+under these settings.
 
 ```rust
 use saml_rs::{

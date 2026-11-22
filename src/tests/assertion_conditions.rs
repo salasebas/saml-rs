@@ -363,7 +363,9 @@ fn simple_sign_fields(
     Ok(signed)
 }
 
-fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
+fn exchange_simple_sign(
+    validation: SpValidationPolicy,
+) -> Result<Exchange, Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
@@ -371,7 +373,7 @@ fn exchange_simple_sign() -> Result<Exchange, Box<dyn std::error::Error>> {
         )
         .acs_endpoint(AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default())
         .credentials(signing_credentials())
-        .validation(SpValidationPolicy::default())
+        .validation(validation)
         .build()?,
     );
     let idp = IdentityProvider::new(
@@ -945,7 +947,7 @@ fn replay_stores_every_assertion_identifier() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn several_assertions_are_accepted_over_simple_sign() -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_simple_sign()?;
+    let exchange = exchange_simple_sign(SpValidationPolicy::default())?;
     let xml = duplicate_assertion(
         &response_xml(&exchange.response_fields)?,
         "_second_assertion",
@@ -1010,6 +1012,10 @@ fn an_assertion_signature_that_does_not_verify_rejects_a_signed_response(
     for policy in [
         SpValidationPolicy::default(),
         SpValidationPolicy {
+            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
+            ..SpValidationPolicy::default()
+        },
+        SpValidationPolicy {
             assertions: AssertionSignaturePolicy::RequireSigned,
             ..SpValidationPolicy::default()
         },
@@ -1026,31 +1032,24 @@ fn an_assertion_signature_that_does_not_verify_rejects_a_signed_response(
 }
 
 #[test]
-fn weak_algorithms_accept_an_assertion_signature_that_does_not_verify_beside_a_signed_response(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_for(
-        SpValidationPolicy {
-            xml_signatures: XmlSignatureProfile::AllowWeakAlgorithms,
-            ..SpValidationPolicy::default()
-        },
-        false,
-    )?;
-    let altered = with_name_id_changed(&assertion_signed(&exchange)?)?;
-    let session = accept(&exchange, &sign_response(&altered)?)?;
-    assert_eq!(session.name_id().value(), "mallory@example.com");
-    Ok(())
-}
-
-#[test]
 fn an_assertion_signature_that_does_not_verify_rejects_a_simple_sign_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exchange = exchange_simple_sign()?;
-    let signed = assertion_signed(&exchange)?;
-    accept_simple_sign(&exchange, &signed)?;
-    expect_error(
-        accept_simple_sign(&exchange, &with_name_id_changed(&signed)?),
-        is_xml_signature_failure,
-    )
+    for xml_signatures in [
+        XmlSignatureProfile::ExcludeWeakAlgorithms,
+        XmlSignatureProfile::AllowWeakAlgorithms,
+    ] {
+        let exchange = exchange_simple_sign(SpValidationPolicy {
+            xml_signatures,
+            ..SpValidationPolicy::default()
+        })?;
+        let signed = assertion_signed(&exchange)?;
+        accept_simple_sign(&exchange, &signed)?;
+        expect_error(
+            accept_simple_sign(&exchange, &with_name_id_changed(&signed)?),
+            is_xml_signature_failure,
+        )?;
+    }
+    Ok(())
 }
 
 /// Each `<EncryptedAssertion>` of a response is decrypted and evaluated as a
@@ -1294,7 +1293,7 @@ mod encrypted_assertions {
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 require_signed(),
             )?,
-            ..exchange_simple_sign()?
+            ..exchange_simple_sign(SpValidationPolicy::default())?
         };
         let first_signed = sign_and_encrypt_first(&two_assertions(&exchange)?, AES_256)?;
 
@@ -1490,7 +1489,7 @@ mod encrypted_assertions {
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 SpValidationPolicy::default(),
             )?,
-            ..exchange_simple_sign()?
+            ..exchange_simple_sign(SpValidationPolicy::default())?
         };
         let plaintext =
             replace_in_last_assertion(&two_assertions(&exchange)?, SP_ENTITY_ID, OTHER_AUDIENCE)?;
@@ -1526,7 +1525,7 @@ mod encrypted_assertions {
                 AcsEndpoint::simple_sign(SP_ACS_SIMPLE)?.with_default(),
                 SpValidationPolicy::default(),
             )?,
-            ..exchange_simple_sign()?
+            ..exchange_simple_sign(SpValidationPolicy::default())?
         };
         let signed = assertion_signed(&exchange)?;
         accept_simple_sign(&exchange, &encrypt_first(&signed, AES_256, CERT)?)?;

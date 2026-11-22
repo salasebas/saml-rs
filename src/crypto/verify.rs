@@ -14,7 +14,6 @@ use super::keys::{load_certificate, load_hmac_secret};
 use super::response_root::root_uses_protocol_response_rules;
 use super::signature_profile::{
     allows_digest_method, allows_signature_method, check_verification_key,
-    rejects_present_signature_that_does_not_verify,
 };
 use crate::assertion_acceptance::consumed_assertion;
 use crate::config::{HmacSecret, XmlSignatureProfile};
@@ -615,17 +614,16 @@ pub(crate) fn verify_first_signature_with_profile(
 }
 
 /// Reject a `Response` or `Assertion` whose signature in a SAML signature
-/// position does not verify, when `profile` rejects one.
+/// position does not verify.
 fn reject_present_signature_that_does_not_verify(
     prepared: &PreparedSignatureVerification,
-    profile: XmlSignatureProfile,
     document: &BergshamraDocument<'_>,
     results: &[VerifyResult],
 ) -> Result<(), SamlError> {
     let root = &prepared.dom.root;
     let response_or_assertion = root.local_name == "Assertion"
         || (prepared.protocol_response && root.local_name == "Response");
-    if !response_or_assertion || !rejects_present_signature_that_does_not_verify(profile) {
+    if !response_or_assertion {
         return Ok(());
     }
     let placed: Vec<usize> = saml_signature_candidates(root)
@@ -650,8 +648,7 @@ fn reject_present_signature_that_does_not_verify(
 }
 
 /// Reject a `Response` or `Assertion` whose signature in a SAML signature
-/// position does not verify, when `profile` rejects one. The coverage of the
-/// accepted content is not checked.
+/// position does not verify, without requiring it to cover the accepted content.
 pub(crate) fn verify_present_signatures(
     xml: &str,
     metadata_certs: &[String],
@@ -659,9 +656,6 @@ pub(crate) fn verify_present_signatures(
     limits: XmlLimits,
     profile: XmlSignatureProfile,
 ) -> Result<(), SamlError> {
-    if !rejects_present_signature_that_does_not_verify(profile) {
-        return Ok(());
-    }
     let dom = dom::parse_document(xml, limits)?;
     if saml_signature_candidates(&dom.root).is_empty() {
         return Ok(());
@@ -675,7 +669,7 @@ pub(crate) fn verify_present_signatures(
     preflight_signature_processing(&document, SignatureSelection::All, profile)?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
         .map_err(crypto_err)?;
-    reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)
+    reject_present_signature_that_does_not_verify(&prepared, &document, &results)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -752,7 +746,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     preflight_signature_processing(&document, SignatureSelection::All, profile)?;
     let results = verify_all_document_with_source(&prepared.context, &document, Some(xml))
         .map_err(crypto_err)?;
-    reject_present_signature_that_does_not_verify(&prepared, profile, &document, &results)?;
+    reject_present_signature_that_does_not_verify(&prepared, &document, &results)?;
     let first_signature_verified = matches!(results.first(), Some(VerifyResult::Valid { .. }));
     let mut targets = Vec::new();
     let mut verified_embedded_signatures = Vec::new();
