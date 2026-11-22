@@ -123,7 +123,8 @@ pub enum XmlSignatureProfile {
 pub enum AuthnRequestSigningPolicy {
     /// Sign outgoing AuthnRequests.
     Sign,
-    /// Send unsigned AuthnRequests, preserving the samlify port.
+    /// Send unsigned AuthnRequests unless the IdP advertises `WantAuthnRequestsSigned`.
+    /// In that case, request creation returns [`crate::SamlError::AuthnRequestSigningRequired`].
     #[default]
     DoNotSign,
 }

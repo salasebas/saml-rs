@@ -14,12 +14,11 @@
 //! start from the role default and assign the field you want to change.
 //!
 //! HTTP-POST SSO responses require a caller-owned replay cache.
-//! Where the compact flow examples below use
-//! [`ReplayPolicy::Disabled`] or unsigned metadata, treat those
-//! as explicit interoperability choices. Production-shaped inbound flows should
-//! use [`ReplayPolicy::RequireCache`] with a caller-owned [`ReplayCache`] and,
-//! when protocol timestamps are not enough for expiry,
-//! [`SamlValidationContext::with_replay_retention`].
+//! Pass [`ReplayPolicy::RequireCache`] with a caller-owned [`ReplayCache`] in the
+//! [`SamlValidationContext`] for [`ServiceProvider::finish_sso`] or
+//! [`ServiceProvider::accept_unsolicited_sso`].
+//! Set [`SamlValidationContext::with_replay_retention`] when protocol timestamps
+//! do not provide an expiry.
 //!
 //! ```
 //! use saml_rs::{AcsEndpoint, EntityId, SpConfig};
@@ -49,6 +48,7 @@
 //!
 //! # fn run(
 //! #     idp_metadata_xml: &str,
+//! #     trusted_metadata_signers: &[saml_rs::CertificatePem],
 //! #     form_fields: Vec<FormField>,
 //! #     replay_cache: &mut dyn saml_rs::ReplayCache,
 //! # ) -> Result<(), saml_rs::SamlError> {
@@ -59,7 +59,9 @@
 //! let idp = IdpDescriptor::from_metadata_xml(
 //!     EntityId::try_new("https://idp.example.com/metadata")?,
 //!     idp_metadata_xml,
-//!     MetadataTrustPolicy::AllowUnsigned,
+//!     MetadataTrustPolicy::RequireSignature {
+//!         trusted_certificates: trusted_metadata_signers,
+//!     },
 //! )?;
 //!
 //! let started = sp.start_sso(&idp, StartSso::redirect())?;
@@ -258,18 +260,15 @@
 //!
 //! # Metadata trust
 //!
-//! Metadata trust is explicit and caller-pinned. [`MetadataTrustPolicy`] can
-//! accept unsigned metadata with
-//! [`MetadataTrustPolicy::AllowUnsigned`], or require a signature from
-//! caller-provided certificates with
-//! [`MetadataTrustPolicy::RequireSignature`].
+//! Pin the metadata publisher's certificate independently of the document and
+//! import with [`MetadataTrustPolicy::RequireSignature`]. If your application
+//! authenticates the document through another trusted channel, such as a locally
+//! provisioned file, [`MetadataTrustPolicy::AllowUnsigned`] skips signature verification.
 //! [`MetadataTrustPolicy::RequireSignatureAllowingOtherCanonicalization`]
 //! also accepts inclusive canonicalization. Both reject MD5 and RIPEMD-160
 //! signatures and RSA keys shorter than 2048 bits;
 //! [`MetadataTrustPolicy::RequireSignatureAllowingWeakAlgorithms`]
-//! accepts them. Prefer signed metadata with
-//! pinned certificates for production trust decisions; the crate does not treat
-//! the public web PKI CA store as SAML metadata trust.
+//! accepts them when the provider supports them.
 //!
 //! Visible docs.rs modules and crate-root re-exports are the supported public
 //! documentation surface. Hidden modules are lower-level implementation paths

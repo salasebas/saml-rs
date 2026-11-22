@@ -60,7 +60,7 @@ impl SignatureAlgorithm {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DigestAlgorithm {
-    /// SHA-1 digest preserved from the samlify port.
+    /// SHA-1 digest.
     Sha1,
     /// SHA-256 digest.
     Sha256,
@@ -97,7 +97,7 @@ pub enum DataEncryptionAlgorithm {
     /// AES-256-CBC.
     #[default]
     Aes256Cbc,
-    /// Triple DES CBC preserved from the samlify port.
+    /// Triple DES CBC, available with RustCrypto and `crypto-legacy-algorithms`.
     TripleDesCbc,
     /// AES-128-GCM.
     Aes128Gcm,
@@ -140,7 +140,8 @@ pub enum KeyEncryptionAlgorithm {
         /// Mask generation function used by OAEP.
         mgf: MaskGenerationFunction,
     },
-    /// RSAES-PKCS1-v1_5 preserved from the samlify port.
+    /// RSAES-PKCS1-v1_5 for outbound key transport on RustCrypto with `crypto-legacy-algorithms`.
+    /// Inbound use requires [`crate::Rsa15KeyTransportPolicy::AllowDecryption`].
     Rsa15,
     /// Backend-specific key transport algorithm URI.
     Custom(String),
