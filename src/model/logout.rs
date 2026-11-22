@@ -1,12 +1,11 @@
 use super::extract::{
-    name_id_format_from_uri, optional_endpoint, optional_request_id, required_str,
-    session_indexes_from_value,
+    optional_endpoint, optional_request_id, required_str, session_indexes_from_value,
 };
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
 use super::status::Status;
 use super::subject::NameId;
 use super::{EndpointUrl, RelayState};
-use crate::config::EntityId;
+use crate::config::{EntityId, NameIdFormat};
 use crate::error::SamlError;
 use crate::flow::FlowResult;
 use crate::xml::parse_saml_utc_date_time;
@@ -141,7 +140,7 @@ impl LogoutRequest {
                 raw_flow
                     .extract
                     .get_str("nameIDFormat")
-                    .map(name_id_format_from_uri),
+                    .map(NameIdFormat::from_uri),
                 name_id_attribute("nameIDQualifiers.nameQualifier"),
                 name_id_attribute("nameIDQualifiers.spNameQualifier"),
                 name_id_attribute("nameIDQualifiers.spProvidedId"),

@@ -1,13 +1,13 @@
 use super::authn_context::{requested_authn_context_from_extract, RequestedAuthnContext};
 use super::extract::{
-    name_id_format_from_uri, name_id_policy_from_extract, optional_endpoint, optional_u16,
-    required_str, subject_confirmations_at,
+    name_id_policy_from_extract, optional_endpoint, optional_u16, required_str,
+    subject_confirmations_at,
 };
 use super::identifiers::{MessageId, SamlInstant};
 use super::subject::{NameId, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier};
 use super::EndpointUrl;
 use crate::browser::SsoResponseBinding;
-use crate::config::EntityId;
+use crate::config::{EntityId, NameIdFormat};
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
@@ -287,7 +287,7 @@ fn name_id_from_extract(extract: &crate::util::Value, value: &str) -> Result<Nam
         "requestedNameIdFormat",
         "AuthnRequest NameID Format",
     )?
-    .map(name_id_format_from_uri);
+    .map(NameIdFormat::from_uri);
     Ok(NameId::received(
         value.to_string(),
         format,

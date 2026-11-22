@@ -22,7 +22,7 @@ mod subject;
 mod validation;
 
 pub(crate) use authn_statement::earliest_authn_session_expiration;
-pub(crate) use extract::{authn_statement_not_on_or_after_values, name_id_format_from_uri};
+pub(crate) use extract::authn_statement_not_on_or_after_values;
 pub(crate) use subject::{
     is_name_id_format, validate_issued_name_id_length, validate_name_id_format,
 };

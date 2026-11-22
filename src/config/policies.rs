@@ -697,7 +697,10 @@ pub(super) fn encrypted_cbc_response_signature_required(policy: ResponseSignatur
 }
 
 pub(super) fn name_id_creation_allowed(policy: NameIdCreationPolicy) -> bool {
-    matches!(policy, NameIdCreationPolicy::AllowCreate)
+    match policy {
+        NameIdCreationPolicy::AllowCreate => true,
+        NameIdCreationPolicy::DoNotAllowCreate => false,
+    }
 }
 
 pub(super) fn audience_restriction_required(policy: AudienceValidationPolicy) -> bool {

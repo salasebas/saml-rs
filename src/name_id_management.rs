@@ -5,14 +5,14 @@
 
 use std::sync::Arc;
 
-use crate::config::{EntityId, IdentifierEncryptionPolicy, SpDescriptor};
+use crate::config::{EntityId, IdentifierEncryptionPolicy, NameIdFormat, SpDescriptor};
 use crate::constants::{namespace, Binding};
 use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    name_id_format_from_uri, EndpointUrl, MessageId, NameId, Received, ReplayKey, SamlInstant,
-    SamlValidationContext, Status, SubordinateStatusCode,
+    EndpointUrl, MessageId, NameId, Received, ReplayKey, SamlInstant, SamlValidationContext,
+    Status, SubordinateStatusCode,
 };
 use crate::soap::{read_soap_body, SoapChannel, SoapRequest, SoapResponse};
 use crate::xml::parse_saml_utc_date_time;
@@ -538,7 +538,7 @@ fn name_id(element: &SamlElement) -> NameId {
     let attr = |name| element.attr(name).map(str::to_string);
     NameId::received(
         element.text.clone(),
-        element.attr("Format").map(name_id_format_from_uri),
+        element.attr("Format").map(NameIdFormat::from_uri),
         attr("NameQualifier"),
         attr("SPNameQualifier"),
         attr("SPProvidedID"),

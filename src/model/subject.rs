@@ -5,8 +5,6 @@ use crate::error::SamlError;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 use crate::xml::OutboundNameIdQualifiers;
 
-use super::extract::name_id_format_from_uri;
-
 const MAX_OPAQUE_NAME_ID_CHARS: usize = 256;
 const ENCRYPTED_NAME_ID_POLICY_FORMAT: &str = "urn:oasis:names:tc:SAML:2.0:nameid-format:encrypted";
 
@@ -316,7 +314,7 @@ impl NameIdPolicy {
                 }
             };
         }
-        let requested = name_id_format_from_uri(&requested_uri);
+        let requested = NameIdFormat::from_uri(&requested_uri);
         match requested {
             NameIdFormat::EmailAddress
             | NameIdFormat::Persistent
@@ -330,7 +328,7 @@ impl NameIdPolicy {
         if !is_name_id_format(issued_format, &requested_uri) {
             return Err(SamlError::NameIdPolicyFormatMismatch {
                 requested,
-                issued: issued_format.map(|uri| name_id_format_from_uri(&collapse_whitespace(uri))),
+                issued: issued_format.map(|uri| NameIdFormat::from_uri(&collapse_whitespace(uri))),
             });
         }
         match self.sp_name_qualifier.as_deref() {
