@@ -635,8 +635,9 @@ impl IdentityProvider {
     /// `NameId` is longer than 256 characters, the NameID format is not an
     /// absolute URI reference,
     /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes) names a basic attribute that
-    /// is not an XML name, or has a `NameFormat` that is not an absolute URI
-    /// reference, the authentication context does not meet an exact
+    /// is not an XML name, has a `NameFormat` that is not an absolute URI
+    /// reference, or has a `subject-id` or `pairwise-id` attribute that breaks
+    /// its rules, the authentication context does not meet an exact
     /// `RequestedAuthnContext`,
     /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
     /// later than the response `IssueInstant` or before year 1, the `NameId`

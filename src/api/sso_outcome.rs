@@ -40,12 +40,18 @@ impl SsoAssertion {
     ///
     /// Each attribute is written with its `Name`, its `NameFormat` and
     /// `FriendlyName` when it has them, and one `xs:string` `AttributeValue`
-    /// for each value. An attribute without values is written without
+    /// for each value. A `subject-id` or `pairwise-id` value is written
+    /// without `xsi:type`. An attribute without values is written without
     /// `AttributeValue`. An empty collection writes no `AttributeStatement`.
     ///
     /// The response is rejected when a `NameFormat` is not an absolute URI
     /// reference, or when an [`crate::AttributeNameFormat::Basic`] name is not an
-    /// XML name.
+    /// XML name. It is also rejected when a `subject-id` or `pairwise-id`
+    /// attribute lacks the `uri` `NameFormat`, appears twice, does not have
+    /// exactly one `uniqueID@scope` value, has an upper case letter in its
+    /// scope, or mixes upper and lower case letters in its unique ID.
+    /// [`Attribute::from`] with a [`crate::SubjectId`] or
+    /// [`crate::PairwiseId`] writes the `uri` `NameFormat` and one value.
     pub fn with_attributes(mut self, attributes: Attributes) -> Self {
         self.attributes = attributes;
         self
