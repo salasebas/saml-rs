@@ -58,9 +58,11 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Return the message only to the service provider it was issued to, authenticated by `SoapChannel` | Mandatory | Core §3.5.3, Bindings §3.6.5.2, Profiles §4.1.4.4 | Always |
 | Treat a missing or different `Issuer`, or one with a format other than omitted or `entity`, as an unauthorized presenter | Library policy: the presenter check ties the request to the service provider the artifact was issued to. | Profiles §5.4.1, Bindings §3.6.6 | Always |
 | Return the stored message at most once | Mandatory | Core §3.5.3, Bindings §3.6.5.2 | Always |
+| Resolve artifacts across clustered nodes through a shared atomic store, or route each node's artifacts through a per-node `ArtifactResolutionService` `EndpointIndex` | Optional | Core §3.5.3, Bindings §3.6.4.2, §3.6.5.2, Profiles §5.5 | `ArtifactStore`, `IdpConfigBuilder::artifact_resolution_service` |
 | Keep an outstanding artifact after withholding its message | Library policy: the intended recipient can still resolve it within its lifetime. | Core §3.5.3 | Always |
+| Fail closed without releasing the message when the artifact store cannot verify or consume the entry | Library policy: releasing an unconsumed artifact would violate single-use enforcement across retries or concurrent nodes. | Core §3.5.3, Bindings §3.6.5.2 | Always |
 | Withhold the message when a present `Destination`, after XML whitespace collapse, differs from this endpoint | Mandatory | Core §3.2.1, `RequestAbstractType`, XML Schema Part 2 §4.3.6 | Always |
-| Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `IssuedArtifacts::expire_after` |
+| Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `ArtifactStore::lifetime`, `IssuedArtifacts::expire_after` |
 | Include the artifact issuer's entity ID in `Issuer` and omit `Format` or set it to `entity` | Mandatory | Profiles §5.4.2 | Always |
 | Set `InResponseTo` to the request `ID` | Mandatory | Core §3.2.2, §3.5.3 | Always |
 | Authenticate the responder and protect integrity | Mandatory | Profiles §5.3.2, §5.4.2 | `SoapChannel` |

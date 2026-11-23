@@ -277,8 +277,11 @@
 //! # Artifact resolution
 //!
 //! [`IdentityProvider::issue_artifact`] stores a protocol message for one service
-//! provider. [`IdentityProvider::answer_artifact_resolve`] returns that message in
-//! `ArtifactResponse` only when the presenter is that provider.
+//! provider in an [`ArtifactStore`] (such as the in-memory [`IssuedArtifacts`]
+//! or a shared store across clustered identity provider nodes).
+//! [`IdentityProvider::answer_artifact_resolve`] returns that message in
+//! `ArtifactResponse` only when the presenter is that provider and the store
+//! atomically consumes the entry.
 //! [`ServiceProvider::resolve_artifact`] sends `ArtifactResolve` to the identity
 //! provider's `ArtifactResolutionService`, and [`ArtifactResolution::finish`]
 //! reads the message back. The deployment POSTs the SOAP envelope with
@@ -423,8 +426,8 @@ pub use api::{
     SsoAssertion, SsoOutcome, StartNameIdManagement, StartSlo, StartSso,
 };
 pub use artifact::{
-    AnsweredArtifact, Artifact, ArtifactRelease, ArtifactResolution, ArtifactWithheld,
-    IssuedArtifacts, ResolvedProtocolMessage,
+    AnsweredArtifact, Artifact, ArtifactChannelRequirement, ArtifactRelease, ArtifactResolution,
+    ArtifactStore, ArtifactWithheld, IssuedArtifact, IssuedArtifacts, ResolvedProtocolMessage,
 };
 pub use browser::{
     AcsEndpoint, ArtifactDelivery, DeliveredArtifact, EndpointUrl, FormField, Inbound,

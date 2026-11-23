@@ -109,6 +109,16 @@ context. See
 [Resolve an artifact](soap-artifact-discovery.md#resolve-an-artifact-with-a-channel-and-a-validation-context).
 `ReplayKey` is non-exhaustive, so a `match` on it needs a wildcard arm.
 
+## Report artifact store failures with `ArtifactStoreUnavailable`
+
+If you adopt a shared `ArtifactStore` or share an
+`Arc<Mutex<IssuedArtifacts>>`, match `SamlError::ArtifactStoreUnavailable { .. }`
+for backend failures and poisoned locks. Custom `ArtifactStore` implementations
+return `SamlError::ArtifactStoreUnavailable { source }` directly when they
+cannot store, look up, or atomically consume an entry. Treat it as a
+server-side failure (such as HTTP 503): the identity provider never releases an
+unconsumed artifact when the store fails.
+
 ## Report replay cache failures with `ReplayCacheUnavailable`
 
 A cache that cannot check or store a key returns
@@ -357,9 +367,10 @@ fn decode(field: &str) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Syn
 ## End field patterns with `..`
 
 Every `SamlError` variant with named fields is `#[non_exhaustive]`, except
-`ReplayDetected` and `ReplayCacheUnavailable`. A later release can add a field
-to such a variant without breaking you. Outside `saml-rs`, a pattern on one of
-these variants ends with `..`, and code cannot build one.
+`ReplayDetected`, `ReplayCacheUnavailable`, and `ArtifactStoreUnavailable`. A
+later release can add a field to such a variant without breaking you. Outside
+`saml-rs`, a pattern on one of these variants ends with `..`, and code cannot
+build one.
 
 Before the upgrade, a pattern could list every field:
 
@@ -385,7 +396,9 @@ fn issuer(error: &SamlError) -> Option<(&str, Option<&str>)> {
 A test that built one of these variants as a fake error builds its own error
 type instead. A `ReplayCache` implementation still returns
 `SamlError::ReplayDetected { key }` and
-`SamlError::ReplayCacheUnavailable { source }` directly.
+`SamlError::ReplayCacheUnavailable { source }` directly, and an `ArtifactStore`
+implementation returns `SamlError::ArtifactStoreUnavailable { source }`
+directly.
 
 ## Import the reason enums from the crate root
 

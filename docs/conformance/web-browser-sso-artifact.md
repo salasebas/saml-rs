@@ -12,7 +12,7 @@ For the SP and SP Lite columns, the claim covers only sessions where an XML sign
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Store the `Response` while its artifact is outstanding | Mandatory | Bindings §3.6.2 | `IssuedArtifacts::expire_after` |
+| Store the `Response` while its artifact is outstanding | Mandatory | Bindings §3.6.2 | `ArtifactStore`, `IssuedArtifacts::expire_after` |
 | Publish at least one `ArtifactResolutionService` when delivering a Web SSO response by artifact | Mandatory | Profiles §4.1.6, E2 | `IdpConfigBuilder::artifact_resolution_service` |
 | Reject a delivery whose index does not name a SOAP `ArtifactResolutionService` in the local metadata, and store nothing | Library policy: SOAP is the only synchronous resolution binding the crate implements. | Bindings §3.6.4 | `ArtifactDelivery::redirect`, `ArtifactDelivery::post_form` |
 | Put the URL-encoded artifact in a `SAMLart` query parameter | Mandatory | Bindings §3.6.3.2 | `ArtifactDelivery::redirect` |

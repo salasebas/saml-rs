@@ -14,6 +14,9 @@ mod schema_validation;
 #[path = "artifact_resolution/signing.rs"]
 mod signing;
 
+#[path = "artifact_resolution/store.rs"]
+mod store;
+
 #[path = "common/policies_without_crypto.rs"]
 mod policies_without_crypto;
 

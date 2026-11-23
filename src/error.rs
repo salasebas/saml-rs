@@ -227,9 +227,10 @@ impl fmt::Display for ResourceLimit {
 /// This enum is `#[non_exhaustive]`; downstream callers should include a
 /// fallback arm when matching. Each variant with named fields is
 /// `#[non_exhaustive]` too, so a pattern on it ends with `..` and a field can
-/// be added later. [`Self::ReplayDetected`] and
-/// [`Self::ReplayCacheUnavailable`] stay constructible, because a
-/// [`crate::ReplayCache`] implementation returns them.
+/// be added later. [`Self::ReplayDetected`], [`Self::ReplayCacheUnavailable`],
+/// and [`Self::ArtifactStoreUnavailable`] stay constructible, because a
+/// [`crate::ReplayCache`] or [`crate::ArtifactStore`] implementation returns
+/// them.
 ///
 /// # Examples
 ///
@@ -489,6 +490,12 @@ pub enum SamlError {
     #[error("replay cache could not check or store the key")]
     ReplayCacheUnavailable {
         /// Cache error.
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    /// The artifact store could not store, look up, or consume an artifact.
+    #[error("artifact store could not complete the operation")]
+    ArtifactStoreUnavailable {
+        /// Store error.
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
