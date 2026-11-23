@@ -91,7 +91,7 @@ If the request combines the `entity` format with `SPNameQualifier`, send a failu
 
 Pass the attributes with `SsoAssertion::with_attributes`. `with_name_format` sets an attribute's format: `Unspecified`, `Uri`, `Basic`, or `Custom` for another URI. An attribute without it has no `NameFormat`, which SAML reads as `Unspecified`.
 
-`with_friendly_name` adds a `FriendlyName`, a readable label such as `mail` for an OID name. The service provider still identifies the attribute by its `Name` and `NameFormat`.
+`with_friendly_name` sets an attribute's `FriendlyName`, a readable label such as `mail` for an OID name. The service provider identifies the attribute by its `Name` and `NameFormat`, not by this label.
 
 ```rust
 let attributes = Attributes::new([
