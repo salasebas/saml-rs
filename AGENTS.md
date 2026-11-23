@@ -109,7 +109,9 @@ cargo check -p saml-rs --no-default-features
 
 Do not use `--all-features`. Document-crypto providers are mutually exclusive.
 AWS-LC, FIPS, and provider-specific rustdoc run in the Linux `provider-matrix`
-job in `.github/workflows/ci.yml`.
+job in `.github/workflows/ci.yml`. Locally, `crypto-aws-lc` also runs on macOS.
+`crypto-fips` builds only on Linux: `kryptering` rejects it at compile time
+elsewhere, so on macOS leave it to that job and say so in the pull request.
 
 `codecov/patch` is a signal, not a merge gate. When it is red, the pull
 request names the changed lines that no test runs and says why.
