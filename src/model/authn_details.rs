@@ -101,30 +101,32 @@ pub(super) struct StatementChildren {
 
 impl StatementChildren {
     fn from_element(statement: &SamlElement) -> Result<Self, SamlError> {
-        let mut contexts = statement
-            .children
-            .iter()
-            .filter(|child| child.is(namespace::ASSERTION, "AuthnContext"));
-        let context = contexts.next().ok_or_else(|| {
+        let context = at_most_one_child(statement, "AuthnContext")?.ok_or_else(|| {
             SamlError::ProtocolProfile("AuthnStatement is missing AuthnContext".into())
         })?;
-        if contexts.next().is_some() {
-            return Err(SamlError::ProtocolProfile(
-                "AuthnStatement has more than one AuthnContext".into(),
-            ));
-        }
-        let authn_context = AuthnContext::from_element(context);
-        let subject_locality = statement
-            .children
-            .iter()
-            .rev()
-            .find(|child| child.is(namespace::ASSERTION, "SubjectLocality"))
-            .map(SubjectLocality::from_element);
         Ok(Self {
-            authn_context,
-            subject_locality,
+            authn_context: AuthnContext::from_element(context),
+            subject_locality: at_most_one_child(statement, "SubjectLocality")?
+                .map(SubjectLocality::from_element),
         })
     }
+}
+
+fn at_most_one_child<'a>(
+    statement: &'a SamlElement,
+    name: &str,
+) -> Result<Option<&'a SamlElement>, SamlError> {
+    let mut children = statement
+        .children
+        .iter()
+        .filter(|child| child.is(namespace::ASSERTION, name));
+    let first = children.next();
+    if children.next().is_some() {
+        return Err(SamlError::ProtocolProfile(format!(
+            "AuthnStatement has more than one {name}"
+        )));
+    }
+    Ok(first)
 }
 
 pub(super) fn statement_children(
