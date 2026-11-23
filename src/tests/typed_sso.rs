@@ -39,11 +39,11 @@ use saml_rs::tests::engine::create_logout_request;
 use saml_rs::xml::dom::parse_document;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, AudienceValidationPolicy, AuthnRequest,
-    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew, EntityId,
-    ForceAuthn, FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy,
-    Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery,
-    PendingAuthnRequest, PendingAuthnRequestSnapshot, Received, RelayState, ReplayCache,
-    ReplayPolicy, RequestAgePolicy, RespondSso, ResponseSignaturePolicy, SamlError,
+    AuthnRequestSigningPolicy, AuthnRequestValidationPolicy, CertificatePem, ClockSkew,
+    EndpointUrl, EntityId, ForceAuthn, FormField, IdentityProvider, IdpConfig, IdpDescriptor,
+    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
+    OutboundDelivery, PendingAuthnRequest, PendingAuthnRequestSnapshot, Received, RelayState,
+    ReplayCache, ReplayPolicy, RequestAgePolicy, RespondSso, ResponseSignaturePolicy, SamlError,
     SamlValidationContext, ServiceProvider, SloEndpoint, SpConfig, SpDescriptor,
     SpValidationPolicy, SsoAssertion, SsoEndpoint, SsoOutcome, SsoResponseBinding, StartSso,
     Status, SubordinateStatusCode, VerifiedXmlSignatureCoverage, XmlSignatureProfile,
@@ -3338,6 +3338,25 @@ fn unsigned_authn_requests_still_require_the_correct_destination(
         validation(),
     )?;
     assert_eq!(received.message().id(), started.pending.request_id());
+
+    let destination = format!("Destination=\"{IDP_SSO_POST}\"");
+    let xml = authn_request_xml(&started.outbound)?;
+    if xml.matches(&destination).count() != 1 {
+        return Err(format!("expected one {destination:?}").into());
+    }
+    let padded_destination = xml.replace(
+        &destination,
+        &format!("Destination=\"&#10;  {IDP_SSO_POST} \""),
+    );
+    let received = default_idp.receive_sso(
+        &sp_descriptor,
+        post_authn_request_input_with_xml(&padded_destination),
+        validation(),
+    )?;
+    assert_eq!(
+        received.message().destination().map(EndpointUrl::as_str),
+        Some(IDP_SSO_POST)
+    );
 
     let wrong_destination = authn_request_xml(&started.outbound)?
         .replace(IDP_SSO_POST, "https://idp.example.com/sso/wrong");

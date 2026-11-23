@@ -618,6 +618,37 @@ fn each_sso_entry_point_rejects_one_unsatisfied_audience_restriction(
 }
 
 #[test]
+fn padded_destination_recipient_and_audience_are_read_as_any_uri_values(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let pad = |xml: String, from: String, to: String| match xml.matches(&from).count() {
+        1 => Ok(xml.replacen(&from, &to, 1)),
+        count => Err(format!("expected one {from:?}, found {count}")),
+    };
+    for unsolicited in [false, true] {
+        let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
+        let xml = response_xml(&exchange.response_fields)?;
+        let xml = pad(
+            xml,
+            format!("Destination=\"{SP_ACS_POST}\""),
+            format!("Destination=\" {SP_ACS_POST}&#9;\""),
+        )?;
+        let xml = pad(
+            xml,
+            format!("Recipient=\"{SP_ACS_POST}\""),
+            format!("Recipient=\"&#10;{SP_ACS_POST} \""),
+        )?;
+        let xml = pad(
+            xml,
+            format!("<saml:Audience>{SP_ENTITY_ID}</saml:Audience>"),
+            format!("<saml:Audience>\n    {SP_ENTITY_ID}\n  </saml:Audience>"),
+        )?;
+        let session = accept(&exchange, &resigned(&xml)?)?;
+        assert_eq!(audience_groups(&session), [[SP_ENTITY_ID]]);
+    }
+    Ok(())
+}
+
+#[test]
 fn every_assertion_is_evaluated_when_they_share_issuer_and_principal(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;

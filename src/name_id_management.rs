@@ -15,6 +15,7 @@ use crate::model::{
     Status, SubordinateStatusCode,
 };
 use crate::soap::{read_soap_body, SoapChannel, SoapRequest, SoapResponse};
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml_with_limits, read_status, SamlElement,
@@ -341,7 +342,7 @@ pub(crate) fn receive(
     require_peer_issuer(&request, sp_entity_id.as_str())?;
     let recipient = validation.resolve_recipient_endpoint(&locations)?;
     if let Some(destination) = request.attr("Destination") {
-        if destination != recipient {
+        if collapse_whitespace(destination) != recipient {
             return Err(SamlError::destination_mismatch(
                 &recipient,
                 Some(destination),

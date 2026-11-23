@@ -3,6 +3,7 @@
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
 use crate::model::Status;
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::XmlLimits;
 pub(crate) use crate::xml::dom::{
     parse_qualified_document as parse_saml_with_limits, QualifiedElement as SamlElement,
@@ -49,19 +50,21 @@ pub(crate) fn parse_saml(xml: &str) -> Result<SamlElement, SamlError> {
     parse_saml_with_limits(xml, XmlLimits::default())
 }
 
-/// The first non-empty `saml:Issuer` child.
+/// The first `saml:Issuer` child, unless its content is empty.
+///
+/// The content is an `xs:string`, read as sent. `Format` is an `xs:anyURI`,
+/// read with its whitespace collapsed.
 pub(crate) fn issuer(element: &SamlElement) -> Option<PartyName> {
     let issuer = element
         .children
         .iter()
         .find(|child| child.is(namespace::ASSERTION, "Issuer"))?;
-    let value = issuer.text.trim();
-    if value.is_empty() {
+    if issuer.text.is_empty() {
         return None;
     }
     Some(PartyName {
-        value: value.to_string(),
-        format: issuer.attr("Format").map(str::to_string),
+        value: issuer.text.clone(),
+        format: issuer.attr("Format").map(collapse_whitespace),
     })
 }
 

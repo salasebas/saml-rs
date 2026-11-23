@@ -12,6 +12,7 @@ use crate::error::{utf8_err, SamlError};
 use crate::model::ClockSkew;
 use crate::util::Value;
 use crate::validator::{check_status, logout_request_not_on_or_after_deadline};
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::signature_placement::saml_signature_candidates;
 use crate::xml::{
     extract_with_limits, fields, validate_protocol_profile, ExtractorField, XmlLimits,
@@ -428,7 +429,7 @@ fn validate_message_destination(
     }
     // SAML Core 2.0 §§3.2.1 and 3.2.2 require the actual recipient to discard
     // any protocol message whose present Destination does not match itself.
-    if destination.is_some_and(|destination| destination != expected) {
+    if destination.is_some_and(|destination| collapse_whitespace(destination) != expected) {
         return Err(SamlError::destination_mismatch(expected, destination));
     }
     Ok(())

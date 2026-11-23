@@ -103,7 +103,8 @@ impl LogoutRequest {
         &self.session_indexes
     }
 
-    /// Destination endpoint, when present.
+    /// `Destination`, when present, with its XML Schema `anyURI` whitespace
+    /// collapsed.
     pub fn destination(&self) -> Option<&EndpointUrl> {
         self.destination.as_ref()
     }
@@ -201,7 +202,8 @@ impl LogoutResponse {
         self.in_response_to.as_ref()
     }
 
-    /// Destination endpoint, when present.
+    /// `Destination`, when present, with its XML Schema `anyURI` whitespace
+    /// collapsed.
     pub fn destination(&self) -> Option<&EndpointUrl> {
         self.destination.as_ref()
     }

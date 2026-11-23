@@ -721,6 +721,7 @@ fn a_request_the_service_provider_did_not_issue_is_rejected() -> TestResult {
 
     for issuer in [
         format!("<saml:Issuer>{OTHER_ENTITY_ID}</saml:Issuer>"),
+        format!("<saml:Issuer>\n  {SP_ENTITY_ID}\n</saml:Issuer>"),
         String::new(),
     ] {
         let envelope = sp_request_with(&version, &issuer, &content)?;
@@ -764,6 +765,19 @@ fn a_destination_other_than_the_receiving_endpoint_is_rejected() -> TestResult {
         received,
         Err(SamlError::DestinationMismatch { .. })
     ));
+
+    let padded = sp_request_with(
+        &format!(r#"Version="2.0" Destination=" {IDP_NIM_URL}&#9;""#),
+        &format!("<saml:Issuer>{SP_ENTITY_ID}</saml:Issuer>"),
+        &format!("{}<samlp:Terminate/>", current_name_id_xml()),
+    )?;
+    let request = received_request(idp.receive_name_id_management(
+        &sp,
+        &padded,
+        authenticated(),
+        validation(),
+    )?)?;
+    assert_eq!(request.message().change(), &NameIdChange::Terminate);
     Ok(())
 }
 

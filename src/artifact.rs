@@ -18,6 +18,7 @@ use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
 use crate::model::{EndpointUrl, ReplayKey, SamlValidationContext};
 use crate::soap::{read_soap_body, MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse};
+use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fragment::standalone_element;
 use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
@@ -714,7 +715,7 @@ fn parse_resolve(xml: &str, limits: XmlLimits) -> Result<ResolveRequest, SamlErr
     Ok(ResolveRequest {
         id,
         version,
-        destination: element.attr("Destination").map(str::to_string),
+        destination: element.attr("Destination").map(collapse_whitespace),
         issuer: issuer(&element),
         artifact,
     })

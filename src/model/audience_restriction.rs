@@ -16,7 +16,8 @@ impl AudienceRestriction {
         Self { audiences }
     }
 
-    /// The `<Audience>` values of this restriction, in document order.
+    /// The `<Audience>` values of this restriction, in document order, with
+    /// their XML Schema `anyURI` whitespace collapsed.
     pub fn audiences(&self) -> &[EntityId] {
         &self.audiences
     }
