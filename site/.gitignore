@@ -23,3 +23,4 @@ pnpm-debug.log*
 
 # Generated from docs/conformance/ by src/plugins/conformance-pages.js
 src/content/docs/reference/conformance/
+versions/stable/docs/reference/conformance/

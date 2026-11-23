@@ -1,22 +1,23 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-const docsRoot = fileURLToPath(new URL('../content/docs/', import.meta.url));
+import { docsPath } from '../docs-version.mjs';
 
 /** Turn a file-relative `../page.md` link into the Starlight route. */
-export function rewriteDocLinks() {
+export function rewriteDocLinks({ docsDir, base }) {
+	const docsRoot = fileURLToPath(docsDir);
 	return {
 		name: 'rewrite-doc-links',
 		link(node, ctx) {
-			const next = toRoute(node.url, ctx.fileURL);
-			if (next && next !== node.url) ctx.setProperty(node, 'url', next);
+			const route = toRoute(node.url, ctx.fileURL, docsRoot);
+			if (route) ctx.setProperty(node, 'url', docsPath(base, route));
 		},
 	};
 }
 
-function toRoute(url, fileURL) {
+function toRoute(url, fileURL, docsRoot) {
 	if (!fileURL || !url) return null;
-	if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('/') || url.startsWith('#')) return null;
+	if (url.startsWith('/')) return url;
+	if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('#')) return null;
 
 	const hashAt = url.indexOf('#');
 	const href = hashAt === -1 ? url : url.slice(0, hashAt);

@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev",
+    "dev:next": "SAML_DOCS=next astro dev",
     "start": "astro dev",
-    "build": "astro build",
+    "build": "SAML_DOCS=stable astro build && SAML_DOCS=next astro build && node --test scripts/check-docs.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },

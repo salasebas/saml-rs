@@ -7,7 +7,7 @@ You will run one program that plays both sides of a login. It prints `alice@exam
 
 ## Run it
 
-From the repository root:
+From a checkout of `main`, run the example from the repository root.
 
 ```sh
 cargo run -p saml-rs --example sso

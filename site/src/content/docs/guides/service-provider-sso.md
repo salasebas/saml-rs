@@ -94,6 +94,6 @@ The builder uses the recommended policy by default. It does not require a signat
 cargo run -p saml-rs --example sso
 ```
 
-The same calls, checked by `cargo test --doc`, are in the [crate-root SSO example](https://docs.rs/saml-rs/latest/saml_rs/#sp-initiated-sso).
+The same calls are in the [crate-root SSO example](https://github.com/salasebas/saml-rs/blob/main/src/lib.rs). Run `cargo doc -p saml-rs --open` from the repository root to read the API reference for `main`.
 
 Issue the response with [Identity provider](identity-provider-sso.md). End the session with [Single Logout](single-logout.md).

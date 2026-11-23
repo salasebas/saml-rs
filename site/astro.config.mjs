@@ -2,8 +2,18 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
+import { nextBase, stableVersion } from './src/docs-version.mjs';
 import { conformancePages } from './src/plugins/conformance-pages.js';
 import { rewriteDocLinks } from './src/plugins/doc-links.js';
+import * as nextConformance from './versions/next/conformance.mjs';
+import { sidebar as nextSidebar } from './versions/next/sidebar.mjs';
+import * as stableConformance from './versions/stable/conformance.mjs';
+import { sidebar as stableSidebar } from './versions/stable/sidebar.mjs';
+
+const isNext = process.env.SAML_DOCS === 'next';
+const base = isNext ? nextBase : '/';
+const docsDir = new URL(isNext ? './src/content/docs/' : './versions/stable/docs/', import.meta.url);
+const recordsDir = new URL(isNext ? '../docs/conformance/' : './versions/stable/conformance/', import.meta.url);
 
 /** Registers the link rewriter on Astro's default Markdown processor. */
 function docLinks() {
@@ -11,7 +21,7 @@ function docLinks() {
 		name: 'saml-doc-links',
 		hooks: {
 			'astro:config:setup'({ config }) {
-				config.markdown.processor?.options?.mdastPlugins?.push(rewriteDocLinks());
+				config.markdown.processor?.options?.mdastPlugins?.push(rewriteDocLinks({ docsDir, base }));
 			},
 		},
 	};
@@ -20,14 +30,19 @@ function docLinks() {
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://samlrs.vercel.app',
-	redirects: {
+	base,
+	outDir: isNext ? './dist/next' : './dist',
+	redirects: isNext ? {
 		'/reference/conformance/xml-signature-processing':
-			'/reference/conformance/xml-security-algorithms/#reference-and-coverage-processing',
+			`${nextBase}/reference/conformance/xml-security-algorithms/#reference-and-coverage-processing`,
 		'/reference/conformance/extended-and-authority-modes':
-			'/reference/conformance/idp-sp-operational-modes/#extended-authority-and-requester-modes',
+			`${nextBase}/reference/conformance/idp-sp-operational-modes/#extended-authority-and-requester-modes`,
+	} : {
+		'/reference/conformance/xml-schema-validation':
+			`${nextBase}/reference/conformance/xml-schema-validation/`,
 	},
 	integrations: [
-		conformancePages(),
+		conformancePages({ docsDir, recordsDir, ...(isNext ? nextConformance : stableConformance) }),
 		starlight({
 			title: 'saml-rs',
 			description: 'SAML 2.0 browser SSO, metadata, and Single Logout for Rust.',
@@ -37,115 +52,18 @@ export default defineConfig({
 				'@fontsource-variable/geist-mono',
 				'./src/styles/custom.css',
 			],
-			components: { Hero: './src/components/Hero.astro' },
+			components: {
+				Banner: './src/components/DocsVersion.astro',
+				Hero: './src/components/Hero.astro',
+			},
 			plugins: [
 				starlightLlmsTxt({
 					projectName: 'saml-rs',
-					description:
-						'saml-rs is a Rust crate for SAML 2.0 Service Provider and Identity Provider support: browser SSO, metadata, and Single Logout. The published crate is `saml-rs`; Rust imports use `saml_rs`.',
+					description: `SAML 2.0 Service Provider and Identity Provider support for Rust. ${isNext ? 'Next documents the unreleased API on main.' : `Stable documents saml-rs v${stableVersion}.`}`,
 				}),
 			],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/salasebas/saml-rs' }],
-			sidebar: [
-				{
-					label: 'Start',
-					items: [
-						{ label: 'Install', slug: 'start/install' },
-						{ label: 'Run the example', slug: 'tutorial/run-the-sso-example' },
-					],
-				},
-				{
-					label: 'Guides',
-					items: [
-						{ label: 'Service provider', slug: 'guides/service-provider-sso' },
-						{ label: 'Identity provider', slug: 'guides/identity-provider-sso' },
-						{ label: 'Single Logout', slug: 'guides/single-logout' },
-						{ label: 'Crypto provider', slug: 'guides/crypto-provider' },
-						{ label: 'Validation', slug: 'guides/validation-preset' },
-						{
-							label: 'Upgrade',
-							items: [
-								{ label: 'Overview', slug: 'guides/upgrade' },
-								{ label: '0.2 to 0.3', slug: 'guides/upgrade/v0-2-to-v0-3' },
-								{ label: '0.3 to 0.4', slug: 'guides/upgrade/v0-3-to-v0-4' },
-								{ label: '0.4 to 0.5', slug: 'guides/upgrade/v0-4-to-v0-5' },
-								{ label: '0.5 to 0.6', slug: 'guides/upgrade/v0-5-to-v0-6' },
-								{ label: '0.6 to 0.7', slug: 'guides/upgrade/v0-6-to-v0-7' },
-								{
-									label: '0.7 to 0.8',
-									link: 'https://github.com/salasebas/saml-rs/blob/v0.8.0/docs/migrations/0.7-to-0.8.md',
-								},
-							],
-						},
-					],
-				},
-				{
-					label: 'Reference',
-					items: [
-						{ label: 'Coverage', slug: 'reference/coverage' },
-						{ label: 'Cargo features', slug: 'reference/features' },
-						{ label: 'Security', slug: 'reference/security' },
-						{ label: 'Compatibility crates', slug: 'reference/compatibility-crates' },
-						{
-							label: 'Conformance',
-							items: [
-								{ label: 'How to read them', slug: 'reference/conformance' },
-								{
-									label: 'IdP and SP operational modes',
-									slug: 'reference/conformance/idp-sp-operational-modes',
-								},
-								{
-									label: 'SSO acceptance',
-									slug: 'reference/conformance/web-browser-sso-acceptance',
-								},
-								{
-									label: 'SSO generation',
-									slug: 'reference/conformance/web-browser-sso-generation',
-								},
-								{ label: 'Logout', slug: 'reference/conformance/single-logout' },
-								{
-									label: 'Identity Provider Discovery',
-									slug: 'reference/conformance/identity-provider-discovery',
-								},
-								{
-									label: 'SAML-defined identifiers',
-									slug: 'reference/conformance/identifiers',
-								},
-								{ label: 'Metadata and replay', slug: 'reference/conformance/metadata-and-replay' },
-								{
-									label: 'HTTP-Artifact response',
-									slug: 'reference/conformance/web-browser-sso-artifact',
-								},
-								{
-									label: 'Artifact resolution',
-									slug: 'reference/conformance/artifact-resolution',
-								},
-								{
-									label: 'XML schema validation',
-									slug: 'reference/conformance/xml-schema-validation',
-								},
-								{
-									label: 'Algorithms',
-									slug: 'reference/conformance/xml-security-algorithms',
-								},
-								{
-									label: 'Name identifier management',
-									slug: 'reference/conformance/name-id-management',
-								},
-							],
-						},
-					],
-				},
-				{
-					label: 'Explanation',
-					items: [
-						{ label: 'Validation presets', slug: 'explanation/validation-presets' },
-						{ label: 'Logout expiration', slug: 'explanation/logout-expiration' },
-						{ label: 'XML signatures', slug: 'explanation/xml-signature-recommendations' },
-						{ label: 'Typed API', slug: 'explanation/typed-api' },
-					],
-				},
-			],
+			sidebar: isNext ? nextSidebar : stableSidebar,
 		}),
 		docLinks(),
 	],

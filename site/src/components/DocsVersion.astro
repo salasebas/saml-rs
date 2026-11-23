@@ -1,0 +1,48 @@
+---
+import Banner from '@astrojs/starlight/components/Banner.astro';
+import { nextBase, stableVersion } from '../docs-version.mjs';
+
+const isNext = import.meta.env.BASE_URL.replace(/\/$/, '') === nextBase;
+---
+
+<nav class="docs-version" aria-label="Documentation version" data-pagefind-ignore>
+	<a href="/" aria-current={isNext ? undefined : 'true'}>v{stableVersion} (Stable)</a>
+	<a href={`${nextBase}/`} aria-current={isNext ? 'true' : undefined}>Next (unreleased)</a>
+</nav>
+<Banner />
+
+<style>
+	.docs-version {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.25rem;
+		padding: 0.25rem var(--sl-nav-pad-x);
+		background: var(--sl-color-bg-nav);
+		border-block-end: 1px solid var(--sl-color-hairline-shade);
+	}
+	.docs-version a {
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.25rem;
+		color: var(--sl-color-text);
+		font-size: var(--sl-text-sm);
+		text-decoration: none;
+	}
+	.docs-version a[aria-current] {
+		background: var(--sl-color-accent-low);
+		color: var(--sl-color-text-accent);
+		font-weight: 600;
+	}
+	.docs-version a:focus-visible {
+		outline: 2px solid var(--sl-color-text-accent);
+		outline-offset: 2px;
+	}
+	.docs-version a:active {
+		background: var(--sl-color-accent-low);
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.docs-version a:hover {
+			text-decoration: underline;
+		}
+	}
+</style>
