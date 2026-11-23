@@ -8,10 +8,11 @@ use std::time::SystemTime;
 
 use saml_rs::error::SignatureVerificationReason;
 use saml_rs::{
-    AcsEndpoint, CertificatePem, Credentials, EntityId, IdentityProvider, IdpConfig, IdpDescriptor,
-    IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem,
-    ReplayPolicy, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SpConfig,
-    SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSso, X509Credential,
+    AcsEndpoint, AssertionSignaturePolicy, CertificatePem, Credentials, EntityId, IdentityProvider,
+    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, NameId,
+    NameIdFormat, PrivateKeyPem, ReplayPolicy, RespondSso, SamlError, SamlValidationContext,
+    ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
+    StartSso, X509Credential,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
@@ -165,6 +166,42 @@ fn with_role_in_both_orders(metadata: &str, descriptor: &str, role: &str) -> [St
         metadata.replacen(&opening, &format!("{role}{opening}"), 1),
         metadata.replace("</EntityDescriptor>", &format!("{role}</EntityDescriptor>")),
     ]
+}
+
+#[test]
+fn http_post_honors_want_assertions_signed_with_multiple_saml2_sp_roles(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = ServiceProvider::new(
+        SpConfig::builder(EntityId::try_new(SP_ENTITY_ID)?, AcsEndpoint::post(SP_ACS)?)
+            .validation(SpValidationPolicy {
+                assertions: AssertionSignaturePolicy::RequireSigned,
+                ..Default::default()
+            })
+            .build()?,
+    );
+    let idp = idp_signing_with(IDP_ROLE_KEY, IDP_ROLE_CERT)?;
+    let idp_descriptor = IdpDescriptor::from_metadata_xml(
+        EntityId::try_new(IDP_ENTITY_ID)?,
+        idp.metadata_xml(),
+        MetadataTrustPolicy::AllowUnsigned,
+    )?;
+    let second_acs_role = format!(
+        r#"<SPSSODescriptor protocolSupportEnumeration="{SAML2_PROTOCOL}" WantAssertionsSigned="false">
+  <AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://sp.example.com/second/acs" index="1"/>
+</SPSSODescriptor>"#
+    );
+
+    for metadata in with_role_in_both_orders(sp.metadata_xml(), "SPSSODescriptor", &second_acs_role)
+    {
+        let sp_descriptor = SpDescriptor::from_metadata_xml(
+            EntityId::try_new(SP_ENTITY_ID)?,
+            &metadata,
+            MetadataTrustPolicy::AllowUnsigned,
+        )?;
+        let session = sso_response_from(&sp, &sp_descriptor, &idp_descriptor, &idp)??;
+        assert_eq!(session.name_id().value(), "alice@example.com");
+    }
+    Ok(())
 }
 
 fn sp_signing_authn_requests(key: &str, cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {

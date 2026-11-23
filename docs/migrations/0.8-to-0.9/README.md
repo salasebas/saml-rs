@@ -27,6 +27,7 @@ Check the topics that affect your integration.
 - [Update metadata configuration and trust](metadata.md)
 - [Update metadata imports and accessors](metadata-api.md)
 - [Correct metadata signing flags](metadata-signing-flags.md)
+- [Keep response signatures for SPs with several SAML 2.0 roles](sso-response-signatures.md)
 - [Move schema validation into XML policy](xml-policy.md)
 - [Update AuthnRequest signature verification](authn-request-signatures.md)
 - [Update truncated XML HMAC signatures](hmac-truncation.md)
