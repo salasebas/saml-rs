@@ -20,14 +20,6 @@ If your SOAP or HTTP-Redirect handler catches
 `NameIdManagementRefusal::RequestAgeOutsideWindow`. Send
 `refused.response()` as you would for an undecryptable identifier.
 
-## PAOS
-
-When `receive_paos_sso` returns `SamlError::PaosRequestRefused`, return
-the error's `response` as HTTP 200. The `source` holds the age or replay
-error for logging. Use `PaosHttpResponse::soap_fault()` for SOAP errors.
-An issuer or signature failure lacks a verified requester. Discard an
-`AuthnRequest` addressed to a different endpoint.
-
 ## Response versions
 
 Single Logout, NameID Management, and Artifact Resolution use a 2.0

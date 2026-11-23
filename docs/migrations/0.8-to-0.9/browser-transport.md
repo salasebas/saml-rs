@@ -23,8 +23,8 @@ parameter sent with no value. The two stay distinct, as `Absent` and
 | `&RelayStateParam` returned by `relay_state()` | `Option<&RelayState>` |
 | `RelayStateMismatch { expected, actual }` with `RelayStateParam` | The same fields as `Option<RelayState>` |
 
-The `relay_state` setters of `StartSso`, `RespondSso`, `StartSlo`,
-`StartNameIdManagement`, and `StartPaosSso` take a `RelayState`. A request
+The `relay_state` setters of `StartSso`, `RespondSso`, `StartSlo`, and
+`StartNameIdManagement` take a `RelayState`. A request
 carries no RelayState when you leave its setter out. A response always carries
 the RelayState its request carried, as the next section describes. `finish_name_id_management_redirect` returns
 `Option<RelayState>`.
@@ -90,7 +90,7 @@ let options = match request.relay_state() {
 ## Store pending state with the snapshot for its message
 
 **Affects:** callers that store pending state between the start and the finish
-of a request, and callers that build a `PendingPaosSsoSnapshot`.
+of a request.
 
 `PendingSnapshot<Message>` and its constructors `authn_request`,
 `logout_request`, and `manage_name_id_request` are removed. Each pending type
@@ -101,8 +101,8 @@ has its own snapshot:
 - `PendingManageNameIdRequest::snapshot` returns
   `PendingManageNameIdRequestSnapshot`.
 
-The snapshot structs, `PendingPaosSsoSnapshot` included, are non-exhaustive,
-so a struct literal of one does not compile. Build a snapshot from stored
+The snapshot structs are non-exhaustive, so a struct literal of one does not
+compile. Build a snapshot from stored
 values with `new`, which takes the required fields. Assign the optional
 fields, then call `from_snapshot`. A pattern that destructures a snapshot
 ends with `..`.
@@ -112,7 +112,6 @@ ends with `..`.
 | `PendingAuthnRequestSnapshot` | `request_id`, `idp_entity_id`, `acs_binding`, `acs_url` | `relay_state`, `acs_index`, `acs_is_default` |
 | `PendingLogoutRequestSnapshot` | `request_id`, `peer_entity_id`, `request_binding` | `relay_state`, `not_on_or_after` |
 | `PendingManageNameIdRequestSnapshot` | `request_id`, `peer_entity_id` | `relay_state` |
-| `PendingPaosSsoSnapshot` | `request_id`, `idp_entity_id`, `acs_url` | `relay_state` |
 
 Before the upgrade, a constructor filled part of the snapshot and you assigned
 the rest.
@@ -180,12 +179,6 @@ pending type, store those values next to the snapshot. Do not copy them into
 binding URN. A SOAP logout snapshot with RelayState returns
 `SamlError::ProtocolProfile`, because a SOAP request carries none.
 
-`PendingPaosSsoSnapshot` keeps its field names. Its `relay_state` is an
-`Option<String>`. Replace a 0.8 struct literal of it with
-`PendingPaosSsoSnapshot::new(request_id, idp_entity_id, acs_url)`, then
-assign `relay_state`. Add `..` to a pattern that destructures it, such as
-`let PendingPaosSsoSnapshot { request_id, relay_state, .. } = snapshot;`.
-
 ## Read pending state through one accessor each
 
 Each value has one accessor, named for what it is:
@@ -202,8 +195,6 @@ Each value has one accessor, named for what it is:
 | `PendingLogoutRequest::expires_at()` | `not_on_or_after()`. `None` for a session participant |
 | `PendingManageNameIdRequest::request_binding()`, `response_binding()` | Removed. Both returned `NameIdManagementBinding::Redirect` |
 | `issued_at()`, `expires_at()` on `PendingAuthnRequest` or `PendingManageNameIdRequest` | Removed. saml-rs never set them; keep a time you set yourself next to the pending state |
-
-`PendingPaosSso` keeps `request_id()` and `idp_entity_id()`.
 
 `Pending::try_new`, `with_request_binding`, `with_issue_instant`, and
 `with_expiration` are removed. Take pending state from the start operation,

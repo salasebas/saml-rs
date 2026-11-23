@@ -14,7 +14,7 @@ need no code changes.
 +validation.authn_requests = AuthnRequestValidationPolicy::AllowUnsigned;
 ```
 
-For browser SSO and PAOS, publish each signing key in the SP metadata you
+For browser SSO, publish each signing key in the SP metadata you
 give the IdP. The IdP verifies every signature on the request, including an
 XML signature carried alongside a detached signature. A request with a
 signature that fails verification is rejected.

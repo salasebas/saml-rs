@@ -7,18 +7,16 @@ use std::time::SystemTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EndpointUrl, EntityId,
-    FormField, IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound,
-    LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy,
-    RespondSlo, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex,
-    SloEndpoint, SoapChannel, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion,
-    SsoEndpoint, StartPaosSso, StartSlo, StartSso, Status, X509Credential, XmlSignatureProfile,
+    AcsEndpoint, AuthnRequestSigningPolicy, CertificatePem, Credentials, EntityId, FormField,
+    IdentityProvider, IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, LogoutSubject,
+    MetadataTrustPolicy, NameId, NameIdFormat, PrivateKeyPem, ReplayPolicy, RespondSlo, RespondSso,
+    SamlError, SamlValidationContext, ServiceProvider, SessionIndex, SloEndpoint, SoapChannel,
+    SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint, StartSlo, StartSso,
+    Status, X509Credential, XmlSignatureProfile,
 };
 
 const SP_ENTITY_ID: &str = "https://sp.example.com/metadata";
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
-const IDP_PAOS: &str = "https://idp.example.com/sso/soap";
-const SOAP_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 const UNSIGNED_OBJECT: &str = "<ds:Object><Unsigned>evil</Unsigned></ds:Object></ds:Signature>";
 
 const KEY: &str = include_str!("fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -120,22 +118,6 @@ fn form_with_object(
         .collect()
 }
 
-fn soap_body_element(envelope: &str, element: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let start = envelope
-        .find(&format!("<samlp:{element}"))
-        .ok_or(format!("{element} missing"))?;
-    let end_tag = format!("</samlp:{element}>");
-    let end = envelope[start..]
-        .find(&end_tag)
-        .ok_or(format!("{element} is not closed"))?
-        + start
-        + end_tag.len();
-    Ok(format!(
-        "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"{SOAP_NS}\"><SOAP-ENV:Body>{}</SOAP-ENV:Body></SOAP-ENV:Envelope>",
-        &envelope[start..end]
-    ))
-}
-
 fn assert_object_rejected<T: std::fmt::Debug>(result: Result<T, SamlError>) {
     assert!(
         matches!(result, Err(SamlError::SignedReferenceMismatch)),
@@ -202,43 +184,6 @@ fn post_response_with_object_is_rejected() -> Result<(), Box<dyn std::error::Err
             validation(),
         ));
     }
-    Ok(())
-}
-
-#[test]
-fn paos_authn_request_and_response_with_object_are_rejected(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let parties = parties(XmlSignatureProfile::ExcludeWeakAlgorithms)?;
-    let started = parties.sp.start_paos_sso(
-        &parties.idp_descriptor,
-        StartPaosSso::new(EndpointUrl::try_new(IDP_PAOS)?),
-    )?;
-    let request = soap_body_element(started.http_response.envelope(), "AuthnRequest")?;
-    assert_object_rejected(parties.idp.receive_paos_sso(
-        &parties.sp_descriptor,
-        &with_object(&request)?,
-        &EndpointUrl::try_new(IDP_PAOS)?,
-        validation(),
-    ));
-
-    let received = parties.idp.receive_paos_sso(
-        &parties.sp_descriptor,
-        &request,
-        &EndpointUrl::try_new(IDP_PAOS)?,
-        validation(),
-    )?;
-    let answered = parties.idp.respond_paos_sso(
-        &parties.sp_descriptor,
-        &received,
-        SsoAssertion::new(principal()),
-    )?;
-    let response = soap_body_element(answered.envelope(), "Response")?;
-    assert_object_rejected(parties.sp.finish_paos_sso(
-        &parties.idp_descriptor,
-        &started.pending,
-        &with_object(&response)?,
-        validation(),
-    ));
     Ok(())
 }
 

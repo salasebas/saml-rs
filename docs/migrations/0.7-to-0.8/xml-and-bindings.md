@@ -167,7 +167,7 @@ recommend, or to sign the message in place in the envelope.
 
 **Affects:** `receive_paos_sso`, `finish_paos_sso`, and
 `finish_paos_sso_with_outstanding_logout`. See
-[Enhanced Client/Proxy SSO](../../conformance/enhanced-client-proxy.md).
+[Enhanced Client/Proxy SSO](https://github.com/salasebas/saml-rs/blob/v0.8.0/docs/conformance/enhanced-client-proxy.md).
 
 | Envelope | Before | Now |
 | --- | --- | --- |

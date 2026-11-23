@@ -34,14 +34,13 @@ Custom algorithm URIs are listed in bergshamra's [provider capabilities](https:/
 
 ## Serialize pending snapshots with `serde`
 
-The `serde` feature is off by default. It implements `Serialize` and `Deserialize` for the four pending snapshot types, and for no other type:
+The `serde` feature is off by default. It implements `Serialize` and `Deserialize` for the three pending snapshot types, and for no other type:
 
 | Snapshot | Returned by |
 | --- | --- |
 | `PendingAuthnRequestSnapshot` | `PendingAuthnRequest::snapshot` |
 | `PendingLogoutRequestSnapshot` | `PendingLogoutRequest::snapshot` |
 | `PendingManageNameIdRequestSnapshot` | `PendingManageNameIdRequest::snapshot` |
-| `PendingPaosSsoSnapshot` | `PendingPaosSso::snapshot` |
 
 ```sh
 cargo add saml-rs --features serde
@@ -78,10 +77,10 @@ Each snapshot stores these fields:
 | --- | --- | --- | --- |
 | `request_id` | String | All | Required |
 | `relay_state` | String, or `null` when the request carried no RelayState. `""` is an empty RelayState | All | Optional, absent reads as `None` |
-| `idp_entity_id` | String | AuthnRequest, PAOS SSO | Required |
+| `idp_entity_id` | String | AuthnRequest | Required |
 | `peer_entity_id` | String | LogoutRequest, ManageNameIDRequest | Required |
 | `acs_binding` | Binding short name | AuthnRequest | Required |
-| `acs_url` | String | AuthnRequest, PAOS SSO | Required |
+| `acs_url` | String | AuthnRequest | Required |
 | `acs_index` | Integer or `null` | AuthnRequest | Optional, absent reads as `None` |
 | `acs_is_default` | Boolean | AuthnRequest | Optional, absent reads as `false` |
 | `request_binding` | Binding short name | LogoutRequest | Required |

@@ -5,7 +5,6 @@ use std::error::Error;
 use saml_rs::{
     PendingAuthnRequest, PendingAuthnRequestSnapshot, PendingLogoutRequest,
     PendingLogoutRequestSnapshot, PendingManageNameIdRequest, PendingManageNameIdRequestSnapshot,
-    PendingPaosSso, PendingPaosSsoSnapshot,
 };
 use serde_json::Value;
 
@@ -31,13 +30,6 @@ const MANAGE_NAME_ID_REQUEST_JSON: &str = r#"{
   "request_id": "_manage123",
   "relay_state": null,
   "peer_entity_id": "https://idp.example.com/metadata"
-}"#;
-
-const PAOS_SSO_JSON: &str = r#"{
-  "request_id": "_paos123",
-  "relay_state": null,
-  "idp_entity_id": "https://idp.example.com/metadata",
-  "acs_url": "https://sp.example.com/acs/paos"
 }"#;
 
 fn with_unknown_field(json: &str) -> Result<String, Box<dyn Error>> {
@@ -82,14 +74,6 @@ fn documented_logout_request_snapshot() -> PendingLogoutRequestSnapshot {
 
 fn documented_manage_name_id_request_snapshot() -> PendingManageNameIdRequestSnapshot {
     PendingManageNameIdRequestSnapshot::new("_manage123", "https://idp.example.com/metadata")
-}
-
-fn documented_paos_sso_snapshot() -> PendingPaosSsoSnapshot {
-    PendingPaosSsoSnapshot::new(
-        "_paos123",
-        "https://idp.example.com/metadata",
-        "https://sp.example.com/acs/paos",
-    )
 }
 
 #[test]
@@ -378,81 +362,6 @@ fn pending_snapshot_serde_manage_name_id_request_refuses_json_without_a_required
                 field
             )?)
             .is_err(),
-            "{field}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn pending_snapshot_serde_paos_sso_matches_the_documented_json() -> Result<(), Box<dyn Error>> {
-    let snapshot = documented_paos_sso_snapshot();
-
-    assert_eq!(
-        serde_json::to_value(&snapshot)?,
-        serde_json::from_str::<Value>(PAOS_SSO_JSON)?
-    );
-    assert_eq!(
-        serde_json::from_str::<PendingPaosSsoSnapshot>(PAOS_SSO_JSON)?,
-        snapshot
-    );
-    Ok(())
-}
-
-#[test]
-fn pending_snapshot_serde_paos_sso_round_trips() -> Result<(), Box<dyn Error>> {
-    let mut snapshot = PendingPaosSsoSnapshot::new(
-        "_paos456",
-        "https://idp.example.com/metadata",
-        "https://sp.example.com/acs/paos",
-    );
-    snapshot.relay_state = Some(String::new());
-    let pending = PendingPaosSso::from_snapshot(snapshot)?;
-
-    let json = serde_json::to_string(&pending.snapshot())?;
-
-    assert_eq!(
-        PendingPaosSso::from_snapshot(serde_json::from_str(&json)?)?,
-        pending
-    );
-    Ok(())
-}
-
-#[test]
-fn pending_snapshot_serde_paos_sso_reads_absent_optional_fields() -> Result<(), Box<dyn Error>> {
-    let json = r#"{
-      "request_id": "_paos123",
-      "idp_entity_id": "https://idp.example.com/metadata",
-      "acs_url": "https://sp.example.com/acs/paos"
-    }"#;
-
-    assert_eq!(
-        serde_json::from_str::<PendingPaosSsoSnapshot>(json)?,
-        PendingPaosSsoSnapshot::new(
-            "_paos123",
-            "https://idp.example.com/metadata",
-            "https://sp.example.com/acs/paos",
-        )
-    );
-    Ok(())
-}
-
-#[test]
-fn pending_snapshot_serde_paos_sso_ignores_unknown_fields() -> Result<(), Box<dyn Error>> {
-    assert_eq!(
-        serde_json::from_str::<PendingPaosSsoSnapshot>(&with_unknown_field(PAOS_SSO_JSON)?)?,
-        documented_paos_sso_snapshot()
-    );
-    Ok(())
-}
-
-#[test]
-fn pending_snapshot_serde_paos_sso_refuses_json_without_a_required_field(
-) -> Result<(), Box<dyn Error>> {
-    for field in ["request_id", "idp_entity_id", "acs_url"] {
-        assert!(
-            serde_json::from_str::<PendingPaosSsoSnapshot>(&without_field(PAOS_SSO_JSON, field)?)
-                .is_err(),
             "{field}"
         );
     }

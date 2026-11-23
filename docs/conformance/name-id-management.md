@@ -214,7 +214,7 @@ Approved Errata 05 E12, E19, and E43.
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| After the service provider's `NewID`, send that value as `SPProvidedID` | Identity provider | Generate Response | Mandatory. Core §3.6.3, as amended by E55, and Core §8.3.7. The caller stores the value. `respond_sso`, `respond_sso_artifact`, and `respond_paos_sso` write the subject `NameId` `SPProvidedID`. |
+| After the service provider's `NewID`, send that value as `SPProvidedID` | Identity provider | Generate Response | Mandatory. Core §3.6.3, as amended by E55, and Core §8.3.7. The caller stores the value. `respond_sso` and `respond_sso_artifact` write the subject `NameId` `SPProvidedID`. |
 | After the identity provider's `NewID`, issue the new value | Identity provider | Generate Response | Core §3.6.3. The caller passes the new value in later responses |
 | After the identity provider's `NewID`, use the new value | Service provider | Later messages | Mandatory. Core §3.6.3, as amended by E55. The service provider stores it and sends it as the `NameID` content, for example in a later `LogoutSubject` |
 | After a termination, remove state kept for the identifier | Responder | Application | Recommendation. Core §3.6.3 as amended by E14: later operations should behave as if that state never existed. saml-rs keeps no identifier state |

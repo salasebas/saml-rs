@@ -15,10 +15,10 @@ use std::time::SystemTime;
 
 use base64::Engine;
 use saml_rs::{
-    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EndpointUrl, EntityId, IdentityProvider,
-    IdpConfig, IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound,
-    ReplayPolicy, SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor,
-    SpValidationPolicy, SsoEndpoint, StartPaosSso, StartSso,
+    AcsEndpoint, AuthnRequest, AuthnRequestSigningPolicy, EntityId, IdentityProvider, IdpConfig,
+    IdpDescriptor, IdpValidationPolicy, Inbound, MetadataTrustPolicy, Outbound, ReplayPolicy,
+    SamlError, SamlValidationContext, ServiceProvider, SpConfig, SpDescriptor, SpValidationPolicy,
+    SsoEndpoint, StartSso,
 };
 use url::Url;
 
@@ -27,8 +27,6 @@ const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
 const SP_ACS: &str = "https://sp.example.com/acs";
 const IDP_SSO_POST: &str = "https://idp.example.com/sso/post";
 const IDP_SSO_REDIRECT: &str = "https://idp.example.com/sso/redirect";
-const IDP_SOAP: &str = "https://idp.example.com/sso/soap";
-const SOAP_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 
 fn validation() -> SamlValidationContext<'static> {
     SamlValidationContext::new(SystemTime::now(), ReplayPolicy::Disabled)
@@ -93,23 +91,6 @@ fn redirect_input(
     Ok(Inbound::redirect(url.query().unwrap_or_default()))
 }
 
-fn envelope_for_idp(sp_soap: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let document = roxmltree::Document::parse(sp_soap)?;
-    let authn = document
-        .root_element()
-        .children()
-        .find(|node| node.has_tag_name("Body"))
-        .and_then(|body| {
-            body.children()
-                .find(|node| node.has_tag_name("AuthnRequest"))
-        })
-        .ok_or("AuthnRequest missing from the SOAP body")?;
-    let authn = sp_soap.get(authn.range()).ok_or("element offsets")?;
-    Ok(format!(
-        "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"{SOAP_NS}\"><SOAP-ENV:Body>{authn}</SOAP-ENV:Body></SOAP-ENV:Envelope>"
-    ))
-}
-
 #[test]
 fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_signed(
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -162,59 +143,5 @@ fn unsigned_browser_request_is_rejected_when_sp_metadata_sets_authn_requests_sig
         validation(),
     )?;
     assert_eq!(received.message().id(), unsigned_post.pending.request_id());
-    Ok(())
-}
-
-#[test]
-fn unsigned_paos_request_is_rejected_when_sp_metadata_sets_authn_requests_signed(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let signing_sp = sp(AuthnRequestSigningPolicy::Sign)?;
-    let idp = idp(IdpValidationPolicy::default())?;
-    let (signing_descriptor, idp_descriptor) = descriptors(&signing_sp, &idp)?;
-
-    let unsigned = signing_sp.start_paos_sso(
-        &idp_descriptor,
-        StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?).allow_unsigned_authn_request(),
-    )?;
-    let unsigned_envelope = envelope_for_idp(unsigned.http_response.envelope())?;
-    assert!(!unsigned_envelope.contains("<ds:Signature"));
-    match idp.receive_paos_sso(
-        &signing_descriptor,
-        &unsigned_envelope,
-        &EndpointUrl::try_new(IDP_SOAP)?,
-        validation(),
-    ) {
-        Err(SamlError::SignatureMissing) => {}
-        other => return Err(format!("expected SignatureMissing, got {other:?}").into()),
-    }
-
-    let signed = signing_sp.start_paos_sso(
-        &idp_descriptor,
-        StartPaosSso::new(EndpointUrl::try_new(IDP_SOAP)?),
-    )?;
-    let soap = signed.http_response.envelope();
-    assert!(soap.contains("<a:Issuer xmlns:a="));
-    assert!(soap.contains("<p:IDPList xmlns:p=") && soap.contains("<p:IDPEntry "));
-    let envelope = envelope_for_idp(soap)?;
-    assert!(envelope.contains("<p:AuthnRequest ") && envelope.contains("<a:Issuer>"));
-
-    let received = idp.receive_paos_sso(
-        &signing_descriptor,
-        &envelope,
-        &EndpointUrl::try_new(IDP_SOAP)?,
-        validation(),
-    )?;
-    assert_eq!(received.message().id(), signed.pending.request_id());
-    let optional_sp = sp(AuthnRequestSigningPolicy::DoNotSign)?;
-    let (optional_descriptor, _) = descriptors(&optional_sp, &idp)?;
-    assert!(matches!(
-        idp.receive_paos_sso(
-            &optional_descriptor,
-            &envelope.replace(SP_ACS, "https://sp.example.com/acs/updated"),
-            &EndpointUrl::try_new(IDP_SOAP)?,
-            validation(),
-        ),
-        Err(SamlError::SignatureVerification { .. })
-    ));
     Ok(())
 }

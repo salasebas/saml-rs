@@ -7,7 +7,7 @@ use crate::error::{utf8_err, SamlError};
 use crate::sp;
 
 impl Engine {
-    /// SAML `Response` XML for PAOS or HTTP-Artifact delivery.
+    /// SAML `Response` XML for HTTP-Artifact delivery.
     ///
     /// The XML is the HTTP-POST response for the assertion consumer in
     /// `overrides`, including its signature. A status other than top-level

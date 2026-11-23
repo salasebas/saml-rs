@@ -22,8 +22,8 @@ rejects the input with `SamlError::Invalid`. Use `None` to build a configuration
 without the additional schema check. A configuration does not change another
 configuration's validator.
 
-The callback receives decoded protocol documents, SOAP and PAOS envelopes,
-and protocol documents after decryption. It can run multiple times during
+The callback receives decoded protocol documents, SOAP envelopes, and
+protocol documents after decryption. It can run multiple times during
 one operation. Support every document type used by that role, including SOAP
 and extension schemas. Load schemas from trusted local resources and disable
 network resolution in your validator.

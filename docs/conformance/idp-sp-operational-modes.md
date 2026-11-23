@@ -5,13 +5,16 @@ Conformance Requirements Table 2, and of Conformance §§3.3 to 3.7, 4, and 5.
 Each row names the obligated actor, the level for each column, and one
 disposition. The rules of a claimed feature are on the record it links to.
 
-The IdP operational mode and the SP operational mode are not claimed. Every
-Table 2 `MUST` cell of the IdP and SP columns has a claimed feature.
+[Conformance Requirements Table 2](https://docs.oasis-open.org/security/saml/v2.0/saml-conformance-2.0-os.pdf#page=9)
+requires Enhanced Client/Proxy SSO over PAOS for IdP, IdP Lite, SP, and SP Lite.
+The crate has never claimed conformance to these operational modes. Removing
+ECP leaves a mandatory requirement unmet in each mode.
+
 The SP's HTTP-Artifact claim covers only sessions where a signature protects
 the response or each assertion. Two other limits remain: the unsigned CBC
 `AuthnRequest` subject that the identity provider leaves unread by library
 policy under §3.4, and the HTTP Redirect rows, which are claimed for the
-default build only. This page is the inventory, not the claim.
+default build only.
 
 Normative text is Conformance Requirements, as corrected by Approved
 Errata 05. E11 relabels the name identifier management rows. E25 adds the
@@ -29,8 +32,8 @@ A disposition is one of:
   such as the deployment being the obligated actor or the mode not being
   claimed.
 
-The ECP column of Table 2 is a separate operational mode. The enhanced client
-is not a facade, and this page does not record that column. The IdP Extended
+Table 2 lists the enhanced client as a separate operational mode. The matrix
+below covers the identity provider and service provider roles. The IdP Extended
 and SP Extended modes of Table 3, the authorities and requester of Table 4,
 and the attribute profiles are in
 [Extended, authority, and requester modes](#extended-authority-and-requester-modes).
@@ -43,7 +46,7 @@ and the attribute profiles are in
 | Web SSO, `<Response>`, HTTP POST | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. `respond_sso`, `initiate_sso`, `finish_sso`, and `accept_unsolicited_sso`, in the same records. HTTP-POST-SimpleSign is claimed as well. The identity provider never sends a `<Response>` over HTTP-Redirect: Profiles §4.1.2 prohibits it. The service provider still reads one, because no receiver rule rejects it |
 | Web SSO, `<Response>`, HTTP Artifact | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. The IdP signs the response or its assertion. The SP requires an XML signature on the response or each assertion to establish a session. See [HTTP-Artifact response](web-browser-sso-artifact.md) |
 | Artifact Resolution, SOAP | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature. [Artifact resolution](artifact-resolution.md). The identity provider issues and answers. The service provider is the requester. It issues no artifact that a Table 2 `MUST` cell needs, so it does not answer `ArtifactResolve` |
-| Enhanced Client/Proxy SSO, PAOS | `MUST` | `MUST` | `MUST` | `MUST` | Claimed feature for the service-provider and identity-provider ends. [Enhanced Client/Proxy](enhanced-client-proxy.md) |
+| Enhanced Client/Proxy SSO, PAOS | `MUST` | `MUST` | `MUST` | `MUST` | Exclusion. The crate no longer implements the IdP and SP ends of this profile |
 | Name Identifier Management (IdP-Initiated), HTTP Redirect | `MUST` | `MUST NOT` | `MUST` | `MUST NOT` | Claimed feature for the IdP and the SP. [Name identifier management](name-id-management.md). Prohibited for IdP Lite and SP Lite: such a deployment publishes no `ManageNameIDService` and calls no `start_name_id_management_redirect`. Publishing none is the default, and without one the operations return `SamlError::MissingMetadata` |
 | Name Identifier Management (IdP-Initiated), SOAP | `MUST` | `MUST NOT` | `OPTIONAL` | `MUST NOT` | Claimed feature for the IdP: `start_name_id_management`. Not implemented, off, for the SP. Prohibited for IdP Lite and SP Lite, as in the row above |
 | Name Identifier Management (SP-Initiated), HTTP Redirect | `MUST` | `MUST NOT` | `MUST` | `MUST NOT` | Claimed feature for the IdP and the SP. Prohibited for IdP Lite and SP Lite, as in the rows above |
@@ -90,7 +93,7 @@ receives.
 | Context | Actor | Disposition |
 | --- | --- | --- |
 | `<EncryptedAssertion>`, assertion `<EncryptedID>`, and `<EncryptedAttribute>` in a `<Response>` | Identity provider, generate | Claimed feature. The `assertions`, `identifiers`, and `attributes` fields of `XmlEncryptionPolicy`. [SSO generation](web-browser-sso-generation.md) |
-| The same three in a received `<Response>`, on every response binding and over PAOS | Service provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). |
+| The same three in a received `<Response>`, on every response binding | Service provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). |
 | `<EncryptedID>` in the requested `<Subject>` of an `<AuthnRequest>` | Identity provider, process | Claimed feature. [SSO acceptance](web-browser-sso-acceptance.md). Library policy leaves an unsigned request whose data encryption is CBC unread |
 | `<EncryptedID>` in a `<LogoutRequest>` | Both roles, generate and process | Claimed feature. [Encrypted principal identifier](single-logout.md#encrypted-principal-identifier) |
 | `<EncryptedID>` and `<NewEncryptedID>` in a `<ManageNameIDRequest>` | Requester, generate. Responder, process | Claimed feature. [EncryptedID and NewEncryptedID](name-id-management.md#encryptedid-and-newencryptedid) |

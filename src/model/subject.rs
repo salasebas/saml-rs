@@ -366,7 +366,7 @@ impl SubjectConfirmation {
 
 /// Subject requested by an `<AuthnRequest>` (Core §3.4.1).
 ///
-/// In browser and PAOS SSO, generating a success response returns [`SamlError::Invalid`]
+/// In browser SSO, generating a success response returns [`SamlError::Invalid`]
 /// unless the issued `NameId` has the requested `<NameID>` value, `Format`,
 /// `NameQualifier`, `SPNameQualifier`, and `SPProvidedID`. An omitted
 /// `Format` is `unspecified`. A `NameId` in the `NameIDPolicy` `Format` is

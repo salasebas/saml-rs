@@ -568,9 +568,9 @@ pub struct AlgorithmPolicy {
     ///
     /// They apply to responses from `respond_sso` and `initiate_sso`, to an
     /// `AuthnRequest` with an XML signature, and to logout messages signed on
-    /// HTTP-POST. Responses from `respond_sso_artifact`,
-    /// `initiate_sso_artifact`, and `respond_paos_sso`, and logout messages
-    /// over SOAP, keep the enveloped-signature and exclusive canonicalization
+    /// HTTP-POST. Responses from `respond_sso_artifact` and
+    /// `initiate_sso_artifact`, and logout messages over SOAP, keep the
+    /// enveloped-signature and exclusive canonicalization
     /// transforms. The scope is in
     /// `docs/conformance/xml-security-algorithms.md`.
     pub signed_reference_transforms: Vec<TransformAlgorithm>,
@@ -600,8 +600,8 @@ pub struct TemplatePolicy {
     /// Prefix of the generated protocol-namespace elements, `samlp` by
     /// default.
     ///
-    /// Applies to protocol elements the entity generates across bindings,
-    /// including the IDP list in the ECP request header. Logout templates use
+    /// Applies to protocol elements the entity generates across bindings.
+    /// Logout templates use
     /// this prefix for elements written with `samlp`. Artifact resolution
     /// preserves the prefixes in the stored message.
     ///
@@ -612,7 +612,7 @@ pub struct TemplatePolicy {
     /// default.
     ///
     /// Applies to assertion elements the entity generates across bindings,
-    /// including the ECP request issuer and the encrypted assertion wrapper.
+    /// including the encrypted assertion wrapper.
     /// Logout templates use this prefix for elements written with `saml`.
     /// Artifact resolution preserves the prefixes in the stored message.
     ///

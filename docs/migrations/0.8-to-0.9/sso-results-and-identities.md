@@ -10,8 +10,7 @@ your integration.
 ## Answer with an `SsoAssertion` or an `SsoOutcome`
 
 **Affects:** identity providers that call `respond_sso`, `initiate_sso`,
-`respond_sso_artifact`, `initiate_sso_artifact`, or `respond_paos_sso`, or
-that set `RespondSso::attributes`, `RespondSso::authn_context`,
+`respond_sso_artifact`, or `initiate_sso_artifact`, or that set `RespondSso::attributes`, `RespondSso::authn_context`,
 `RespondSso::authn_instant`, or `RespondSso::status`.
 
 **Before:** these methods took a `Subject`. The `RespondSso` options carried
@@ -40,10 +39,6 @@ it says what the response reports:
   qualifiers on the successful assertion.
 - `RespondSso` keeps `post`, `simple_sign`, `artifact`, `relay_state`,
   `sign_response`, and `allow_unsigned_encrypted_cbc`.
-
-`respond_paos_sso` takes the same outcome, as
-[Answer PAOS login with an `SsoOutcome`](typed-operations.md#answer-paos-login-with-an-ssooutcome)
-shows.
 
 Before the upgrade:
 
@@ -290,8 +285,8 @@ audience restriction. To reject omission too, set `validation.audience` to
 Both methods are removed from the public API. What to do depends on where
 the value came from:
 
-- **A typed receiving method.** `finish_sso`, `accept_unsolicited_sso`,
-  `finish_paos_sso`, `receive_sso`, and `receive_paos_sso` store the replay
+- **A typed receiving method.** `finish_sso`, `accept_unsolicited_sso`, and
+  `receive_sso` store the replay
   keys under `ReplayPolicy::RequireCache`. A removed method called on their
   result returned `SamlError::ReplayDetected`, because the keys were already
   stored. Delete the call.
@@ -328,8 +323,7 @@ assert_eq!(policy.creation_request(), NameIdCreationRequest::AllowCreate);
 ```
 
 `SsoResponse` now only names the SSO response message in
-`Inbound<SsoResponse>`, `Outbound<SsoResponse>`, and
-`PaosHttpResponse<SsoResponse>`. It has no values.
+`Inbound<SsoResponse>` and `Outbound<SsoResponse>`. It has no values.
 
 ## Call `RequestedAuthnContext::try_new`
 
@@ -365,8 +359,8 @@ context and the last context for repeated ones.
 
 If a configured schema validator rejects the document, the service provider
 returns `SamlError::Invalid` from that callback. If the document reaches the
-built-in statement reader, `finish_sso`, `accept_unsolicited_sso`, and
-`finish_paos_sso` return `SamlError::ProtocolProfile` when a statement of the
+built-in statement reader, `finish_sso` and `accept_unsolicited_sso` return
+`SamlError::ProtocolProfile` when a statement of the
 selected assertion has no context or more than one.
 
 `AuthnStatement::authn_context()` returns `&AuthnContext` instead of
@@ -428,8 +422,8 @@ returned `None`. It also accepted any non-blank text, such as an offset form lik
 
 If a configured schema validator rejects the document, the service provider
 returns `SamlError::Invalid` from that callback. If the document reaches the
-built-in statement reader, `finish_sso`, `accept_unsolicited_sso`, and
-`finish_paos_sso` return `SamlError::ProtocolProfile` when a statement of the
+built-in statement reader, `finish_sso` and `accept_unsolicited_sso` return
+`SamlError::ProtocolProfile` when a statement of the
 selected assertion has no `AuthnInstant` or one in another form.
 
 `AuthnStatement::authn_instant()` returns `&SamlInstant` instead of

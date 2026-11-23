@@ -76,7 +76,7 @@ pub enum ReplayKey {
     ManageNameIdRequest(MessageId),
     /// SAML ManageNameIDResponse ID.
     ManageNameIdResponse(MessageId),
-    /// SAML Response ID from a Web Browser SSO or ECP login.
+    /// SAML Response ID from a Web Browser SSO login.
     SsoResponse(MessageId),
     /// SAML assertion ID.
     Assertion(AssertionId),

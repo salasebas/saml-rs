@@ -23,9 +23,8 @@ Use the [typed SSO inputs](config.md#replace-sso-templates-with-typed-options).
 
 **Affects:** service providers whose identity provider sends an `<Attribute>`
 without a `Name`. This applies to `finish_sso`,
-`finish_sso_with_outstanding_logout`, `accept_unsolicited_sso`,
-`accept_unsolicited_sso_with_outstanding_logout`, `finish_paos_sso`, and
-`finish_paos_sso_with_outstanding_logout`, with every validation preset.
+`finish_sso_with_outstanding_logout`, `accept_unsolicited_sso`, and
+`accept_unsolicited_sso_with_outstanding_logout`, with every validation preset.
 
 **Before:** the session accepted the attribute under the name `""`. Every
 `<Attribute>` without a `Name` and with the same `NameFormat` merged into that
@@ -49,8 +48,8 @@ the unspecified one, or none, to `SsoAssertion::with_attributes`.
 **Before:** the identity provider wrote the attribute as given, with
 `xsi:type="xs:string"` on each value.
 
-**Now:** `respond_sso`, `initiate_sso`, `respond_sso_artifact`,
-`initiate_sso_artifact`, and `respond_paos_sso` return `SamlError::Invalid`
+**Now:** `respond_sso`, `initiate_sso`, `respond_sso_artifact`, and
+`initiate_sso_artifact` return `SamlError::Invalid`
 when the attribute has the unspecified name format or none, when it has no
 value or several values, when the assertion has it twice in any of those name
 formats, when the value is not `uniqueID@scope`, when the scope has an upper

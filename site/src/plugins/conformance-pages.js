@@ -11,11 +11,6 @@ const pages = {
 		description:
 			'Rules for typed artifact resolution over SOAP: issue_artifact, answer_artifact_resolve, and resolve_artifact.',
 	},
-	'enhanced-client-proxy.md': {
-		title: 'Enhanced Client/Proxy',
-		description:
-			'Typed service-provider and identity-provider ends of one Enhanced Client/Proxy login over PAOS.',
-	},
 	'identifiers.md': {
 		title: 'SAML-defined identifiers',
 		description:

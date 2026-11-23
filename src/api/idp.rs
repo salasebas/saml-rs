@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use super::raw_mapping::{ensure_entity_id, raw_sp_descriptor, relay_state_from_input};
 use super::requested_subject::decrypt_requested_subject;
-use super::response_acs::{resolve_response_acs, ResponseAcsBindings};
+use super::response_acs::resolve_response_acs;
 use super::sso_outcome::OutcomeParts;
 use super::{RespondSso, SamlError, SsoOutcome};
 
@@ -27,8 +27,8 @@ pub(super) enum ResponseTransport<'a> {
 /// A SAML identity provider built from an [`IdpConfig`].
 ///
 /// It answers and initiates Web Browser SSO, single logout, artifact
-/// resolution, name identifier management, and ECP with the service
-/// providers it is given as [`SpDescriptor`]s.
+/// resolution, and name identifier management with the service providers it
+/// is given as [`SpDescriptor`]s.
 #[derive(Debug)]
 pub struct IdentityProvider {
     config: IdpConfig,
@@ -355,11 +355,7 @@ impl IdentityProvider {
         };
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
         let binding = options.binding;
-        let acs = resolve_response_acs(
-            &raw_sp.metadata,
-            request.map(Received::message),
-            ResponseAcsBindings::Browser(binding),
-        )?;
+        let acs = resolve_response_acs(&raw_sp.metadata, request.map(Received::message), binding)?;
         let in_response_to = request.map(|request| request.message().id().as_str());
         let overrides = LoginResponseOverrides {
             acs: Some(&acs),
