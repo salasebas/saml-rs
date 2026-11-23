@@ -67,6 +67,7 @@ HTTP-POST-SimpleSign, and SOAP. The request signature covers the attribute.
 | Refuse to answer over SOAP a request that carried `RelayState` | Mandatory | Bindings §3.4.3, §3.5.3 | Always |
 | Reject a `LogoutRequest` whose issuer is not the peer descriptor entity | Library policy: a response must not go to another party's `SingleLogoutService`. | — | Always |
 | Write a top-level `StatusCode` of `Success`, `Requester`, `Responder`, or `VersionMismatch`, with an optional subordinate code | Mandatory | Core §3.2.2.2 | `status` argument |
+| Write caller-supplied plain text as `StatusMessage` after `StatusCode` before signing. Omit the element by default | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSlo::with_status_message` |
 | Write a subordinate `StatusCode` `Value` that is an absolute URI reference | Mandatory | Core §1.3.2 | `SubordinateStatusCode::try_new` |
 | Reject whitespace, `"`, `<`, and `>` in a caller-supplied subordinate code, and whitespace in the outbound response `Issuer` | Library policy: reason not recorded. | Core §1.3.2 | Always |
 | A session authority returns `Success` only when it ended its own session, and adds `PartialLogout` when another participant did not confirm. The caller passes the status | Mandatory | Core §3.7.3.2 | `IdentityProvider::respond_slo` `status` |
@@ -156,7 +157,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 
 ## Outside this flow
 
-- Setting `Consent` or `Extensions` on outbound logout messages, or `StatusMessage` or `StatusDetail` on outbound responses. Optional, `RequestAbstractType`, `StatusResponseType`, `StatusType`.
+- Setting `Consent` or `Extensions` on outbound logout messages, or `StatusDetail` on outbound responses. Optional, `RequestAbstractType`, `StatusResponseType`, `StatusType`.
 - Propagating logout to other participants. Each call addresses one peer. After a synchronous participant request, the IdP should use a synchronous binding for required propagation. Recommended, Core §3.7.3.2, Profiles §4.4.3.1.
 - Session invalidation and session tracking. The caller owns them. Mandatory for the participant, Core §3.7.3.1.
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.

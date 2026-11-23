@@ -28,14 +28,19 @@ pub(crate) struct LogoutRequestAttributes<'a> {
     pub(crate) reason: Option<&'a str>,
 }
 
+pub(super) struct LogoutResponseAttributes<'a> {
+    pub(super) id: &'a str,
+    pub(super) issue_instant: &'a str,
+    pub(super) destination: Option<&'a str>,
+    pub(super) in_response_to: Option<&'a str>,
+}
+
 pub(super) fn render_logout_response(
     setting: &EntitySetting,
-    id: &str,
-    issue_instant: &str,
-    destination: Option<&str>,
-    in_response_to: Option<&str>,
+    response: LogoutResponseAttributes<'_>,
     issuer: &str,
     status: &Status,
+    status_message: Option<&str>,
 ) -> Result<String, SamlError> {
     let prefixes = Prefixes::of(setting)?;
     let root_name = prefixes.protocol("LogoutResponse");
@@ -45,21 +50,21 @@ pub(super) fn render_logout_response(
     let mut attrs = vec![
         (xmlns_protocol.as_str(), namespace::PROTOCOL),
         (xmlns_assertion.as_str(), namespace::ASSERTION),
-        ("ID", id),
+        ("ID", response.id),
         ("Version", "2.0"),
-        ("IssueInstant", issue_instant),
+        ("IssueInstant", response.issue_instant),
     ];
-    if let Some(value) = destination {
+    if let Some(value) = response.destination {
         attrs.push(("Destination", value));
     }
-    if let Some(value) = in_response_to {
+    if let Some(value) = response.in_response_to {
         attrs.push(("InResponseTo", value));
     }
 
     let mut writer = XmlWriter::new();
     writer.start(&root_name, &attrs);
     writer.text_element(&issuer_name, &[], issuer);
-    writer.status(&prefixes, status);
+    writer.status(&prefixes, status, status_message);
     writer.end(&root_name);
     Ok(writer.finish())
 }

@@ -14,7 +14,7 @@ use crate::xml::{
 use super::encrypted_id::encrypt_name_id_for_peer;
 use super::rendering::{
     issuer_of, render_logout_request, render_logout_response, LogoutRequestAttributes,
-    LogoutRequestSubject,
+    LogoutRequestSubject, LogoutResponseAttributes,
 };
 
 pub(crate) struct CreatedLogoutRequest {
@@ -157,6 +157,7 @@ pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) in_response_to: Option<&'a str>,
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) status: &'a Status,
+    pub(crate) status_message: Option<&'a str>,
 }
 
 pub(crate) struct RenderedLogoutResponse {
@@ -176,6 +177,7 @@ impl LogoutResponseInput<'_> {
             in_response_to,
             relay_state,
             status,
+            status_message,
         } = *self;
         reject_soap_relay_state(binding, relay_state)?;
         // A SOAP response returns on the requester's own HTTP exchange, so it has
@@ -194,12 +196,15 @@ impl LogoutResponseInput<'_> {
         let issuer = issuer_of(init_setting, init_meta);
         let xml = render_logout_response(
             init_setting,
-            &id,
-            &issue_instant,
-            destination.as_deref(),
-            in_response_to,
+            LogoutResponseAttributes {
+                id: &id,
+                issue_instant: &issue_instant,
+                destination: destination.as_deref(),
+                in_response_to,
+            },
             &issuer,
             status,
+            status_message,
         )?;
         validate_logout_response_outbound(
             &xml,

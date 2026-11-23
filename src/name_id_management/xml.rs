@@ -131,7 +131,7 @@ pub(crate) fn render_response(prefixes: &Prefixes<'_>, response: &ResponseXml<'_
     let mut writer = XmlWriter::new();
     writer.start(&root, &attributes);
     writer.text_element(&prefixes.assertion("Issuer"), &[], response.issuer);
-    writer.status(prefixes, response.status);
+    writer.status(prefixes, response.status, None);
     writer.end(&root);
     writer.finish()
 }
