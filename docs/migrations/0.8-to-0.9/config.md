@@ -481,3 +481,32 @@ Update peers and XML snapshots that expect the old spellings. In a
 namespace-aware consumer, match the namespace URI and local name. To emit
 `samlp` and `saml` throughout, use the default prefix settings. The artifact
 response embeds the stored protocol message with its original prefixes.
+
+## Write logout templates as well-formed XML
+
+**Affects:** callers that set `TemplatePolicy::logout_request_template` or
+`TemplatePolicy::logout_response_template`.
+
+**Before:** the library searched the template text for a placeholder to decide
+which optional attribute or element to omit. Text that looked like markup
+counted as markup. For example, without an `InResponseTo` value,
+`<custom:Note text='InResponseTo="{InResponseTo}"'/>` rendered as
+`<custom:Note text=''/>`. A start tag inside a comment before a placeholder
+could cut the output short. A start tag with a bare placeholder,
+such as `<samlp:LogoutResponse ... {InResponseTo}>`, rendered when the value
+was absent.
+
+**Now:** the library parses the template's tags and attributes before it fills
+the placeholders. It omits an attribute only when the attribute's whole value
+is the placeholder, and an element only when the placeholder is its only
+content. Other text stays as written. A template whose tags or attributes are
+not well-formed XML returns `SamlError::Xml`, even when the filled template
+would have been well-formed. A bare placeholder in a start tag and a repeated
+attribute are two such cases. When the library omits an attribute, it
+rewrites that start tag with one space before each remaining attribute. Each
+value keeps double quotes unless it contains one, and then takes single quotes.
+
+**Upgrade:** write the template as well-formed XML. Replace a bare placeholder
+in a start tag with an attribute whose value is the placeholder, such as
+`InResponseTo="{InResponseTo}"`. The library omits that attribute when there
+is no value. Declare each attribute once.

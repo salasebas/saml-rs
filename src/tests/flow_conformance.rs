@@ -205,7 +205,7 @@ fn simplesign_form_request(
 }
 
 /// A `customTagReplacement` that renders our default template + attributes.
-fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) {
+fn fill_response(template: &str, idp_id: &str, email: &str) -> Result<(String, String), SamlError> {
     let id = "_8e8dc5f69a98cc4c1ff3427e5ce34606fd672f91e6".to_string();
     let now = iso8601_offset(-60);
     let later = iso8601_offset(300);
@@ -243,8 +243,8 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) 
             ("attrUserEmail", email.to_string()),
             ("attrUserName", "user name".into()),
         ],
-    );
-    (id, xml)
+    )?;
+    Ok((id, xml))
 }
 
 fn custom_idp() -> Result<idp::Engine, SamlError> {

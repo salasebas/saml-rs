@@ -86,7 +86,7 @@ fn response_for_audience_restrictions(
             format!("<saml:AudienceRestriction>{audiences}</saml:AudienceRestriction>")
         })
         .collect::<String>();
-    let cb = |template: &str| {
+    let cb = |template: &str| -> Result<(String, String), SamlError> {
         let id = "_response_audience_restrictions".to_string();
         let now = iso8601_offset(-60);
         let later = iso8601_offset(300);
@@ -125,8 +125,8 @@ fn response_for_audience_restrictions(
                 ("InResponseTo", "_req1".into()),
                 ("AuthnStatement", String::new()),
             ],
-        );
-        (id, xml)
+        )?;
+        Ok((id, xml))
     };
     Ok(idp
         .create_rendered_login_response(sp, Binding::Post, &cb)?
@@ -146,7 +146,7 @@ fn response_for_subject_confirmation(
     case: &SubjectConfirmationCase<'_>,
 ) -> Result<String, SamlError> {
     let idp = idp();
-    let cb = |template: &str| {
+    let cb = |template: &str| -> Result<(String, String), SamlError> {
         let id = "_response_subject_confirmation".to_string();
         let now = iso8601_offset(-60);
         let later = iso8601_offset(300);
@@ -201,8 +201,8 @@ fn response_for_subject_confirmation(
                 ),
                 ("AuthnStatement", String::new()),
             ],
-        );
-        (id, xml)
+        )?;
+        Ok((id, xml))
     };
     Ok(idp
         .create_rendered_login_response(sp, Binding::Post, &cb)?
@@ -224,7 +224,7 @@ fn response_for_destination(
     destination: Option<&str>,
 ) -> Result<String, SamlError> {
     let idp = idp();
-    let cb = |template: &str| {
+    let cb = |template: &str| -> Result<(String, String), SamlError> {
         let id = "_response_destination".to_string();
         let now = iso8601_offset(-60);
         let later = iso8601_offset(300);
@@ -262,8 +262,8 @@ fn response_for_destination(
                 ("InResponseTo", "_req1".into()),
                 ("AuthnStatement", String::new()),
             ],
-        );
-        (id, xml)
+        )?;
+        Ok((id, xml))
     };
     Ok(idp
         .create_rendered_login_response(sp, Binding::Post, &cb)?

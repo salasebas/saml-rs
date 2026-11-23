@@ -131,7 +131,7 @@ pub(crate) fn render_logout_request(
         if let Some(expiration) = timing.not_on_or_after {
             replacements.push(("NotOnOrAfter", Some(expiration.to_owned())));
         }
-        return Ok(replace_tags_by_optional_value(&template, &replacements));
+        return replace_tags_by_optional_value(&template, &replacements);
     }
     validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
 

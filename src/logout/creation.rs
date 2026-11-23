@@ -216,7 +216,7 @@ impl LogoutResponseInput<'_> {
                     ("StatusCode", Some(status.top_level().as_uri().to_string())),
                     ("InResponseTo", in_response_to.map(str::to_string)),
                 ],
-            )
+            )?
         } else {
             render_default_logout_response(
                 init_setting,
