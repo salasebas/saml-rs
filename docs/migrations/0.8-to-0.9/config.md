@@ -489,8 +489,7 @@ builders and configs accept typed SSO settings only.
 and NameID formats on the role that advertises them. Use `StartSso` for request
 preferences, `SsoAssertion` for the subject, attributes, authentication context
 and instant, and `SsoOutcome::Failure` for an error status. Arbitrary XML
-extensions have no typed replacement. Logout templates remain available on
-`TemplatePolicy`.
+extensions have no typed replacement.
 
 The built-in renderer writes failure responses from `SsoOutcome::Failure`.
 Change handlers that expected an error when combining a failure status with
@@ -558,45 +557,32 @@ prefixes on typed `AttributeValue` elements. If the assertion prefix is
 `xs` or `xsi`, the corresponding schema prefix on the value is `xsd` or
 `xsi1`. Compare namespace URIs when reading the value's type.
 
-## Write logout templates as well-formed XML
+## Replace logout templates with typed operations
 
-**Affects:** callers that set `TemplatePolicy::logout_request_template` or
-`TemplatePolicy::logout_response_template`.
+Remove `TemplatePolicy::logout_request_template` and
+`TemplatePolicy::logout_response_template` from your configuration. Remove
+imports of `LOGOUT_REQUEST_TEMPLATE` and `LOGOUT_RESPONSE_TEMPLATE`.
 
-**Before:** the library searched the template text for a placeholder to decide
-which optional attribute or element to omit. Text that looked like markup
-counted as markup. For example, without an `InResponseTo` value,
-`<custom:Note text='InResponseTo="{InResponseTo}"'/>` rendered as
-`<custom:Note text=''/>`. A start tag inside a comment before a placeholder
-could cut the output short. A start tag with a bare placeholder,
-such as `<samlp:LogoutResponse ... {InResponseTo}>`, rendered when the value
-was absent.
+A service provider that used a standard request template continues to call
+`start_slo` with a `LogoutSubject` and the chosen binding. Supply the
+principal and session indexes in the subject. An identity provider that
+used a standard response template passes the actual logout outcome to
+`respond_slo`.
 
-**Now:** the library parses the template's tags and attributes before it fills
-the placeholders. It omits an attribute only when the attribute's whole value
-is the placeholder, and an element only when the placeholder is its only
-content. Other text stays as written. A template whose tags or attributes
-cannot be read returns `SamlError::Xml`, even when the filled template would
-have been well-formed. A bare placeholder in a start tag and a repeated
-attribute are two such cases. When the library omits an attribute, it
-rewrites that start tag with one space before each remaining attribute. Each
-value keeps double quotes unless it contains one, and then takes single quotes.
-The same formatting applies to a tag whose namespace declaration changes.
+```rust,ignore
+let started = sp.start_slo(&idp_descriptor, subject, StartSlo::post())?;
+let response = idp.respond_slo(&sp_descriptor, &received, &status, RespondSlo::post())?;
+```
 
-Custom prefixes now apply only to element names and namespace declarations.
-Literal content such as `xmlns:saml=example` in an extension keeps its
-spelling. Write the intended literal directly if your template relied on
-prefix substitution inside a value. Use matching names in start and end
-tags. For example, with protocol prefix `p`, the old renderer could turn
-`<samlp:Status>...</p:Status>` into matching tags. Write
-`<samlp:Status>...</samlp:Status>` so the template itself parses.
+Both roles write the issuer. Send requests and browser responses to the
+peer's endpoint for the chosen binding. Return a SOAP response on the HTTP
+exchange that carried the request. `respond_slo` correlates the response
+with the received request and writes the top-level and optional subordinate
+status code. The identity provider sets `NotOnOrAfter` through
+`IdpConfigBuilder::issuance_lifetime`. Service provider requests omit
+`NotOnOrAfter`.
 
-The renderer also recognizes declarations with whitespace before `=`, such
-as `xmlns:samlp = "..."`. For example, if you configured `p` for protocol
-and declared both `xmlns:samlp = "..."` and `xmlns:p="..."` for that URI on
-one tag, remove `xmlns:p`. Renaming the first declaration already produces it.
-
-**Upgrade:** write the template as well-formed XML. Replace a bare placeholder
-in a start tag with an attribute whose value is the placeholder, such as
-`InResponseTo="{InResponseTo}"`. The library omits that attribute when there
-is no value. Declare each attribute once.
+Move a custom `Reason` URI to `StartSlo::with_reason`. Custom `Consent`,
+`Extensions`, `StatusMessage`, and `StatusDetail` have no typed outbound
+equivalent. Keep the `TemplatePolicy` fields for XML prefixes and embedded
+signature placement if you use them.

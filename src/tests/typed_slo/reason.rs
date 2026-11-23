@@ -59,41 +59,21 @@ fn typed_slo_rejects_invalid_reason_uris() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-fn typed_slo_checks_reason_in_custom_request_templates() -> Result<(), Box<dyn std::error::Error>> {
-    let template = saml_rs::config::LOGOUT_REQUEST_TEMPLATE;
-    let literal_reason = "urn:example:{Reason}";
-    let template_with_literal = template.replace(
-        r#"Destination="{Destination}""#,
-        &format!(r#"Destination="{{Destination}}" Reason="{literal_reason}""#),
-    );
-    let sp = ServiceProvider::new(sp_config_with_logout_request_template(template)?);
-    let sp_with_literal = ServiceProvider::new(sp_config_with_logout_request_template(
-        &template_with_literal,
-    )?);
-    let sp_with_builtin_writer = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config()?);
+fn typed_slo_omits_reason_by_default_and_collapses_supplied_whitespace(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
     let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-
-    let reason_in_request = |sp: &ServiceProvider, options, expected| {
+    for (options, expected) in [
+        (StartSlo::post(), None),
+        (
+            StartSlo::post().with_reason(format!(" \t{REASON}\n")),
+            Some(REASON),
+        ),
+    ] {
         let started = sp.start_slo(&idp_descriptor, subject()?, options)?;
         let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
         let document = parse_document(&xml, saml_rs::XmlLimits::default())?;
         assert_eq!(document.root.attr("Reason"), expected);
-        Ok::<_, Box<dyn std::error::Error>>(())
-    };
-    reason_in_request(&sp_with_literal, StartSlo::post(), Some(literal_reason))?;
-    reason_in_request(
-        &sp,
-        StartSlo::post().with_reason(format!(" \t{REASON}\n")),
-        Some(REASON),
-    )?;
-    reason_in_request(&sp, StartSlo::post(), None)?;
-    reason_in_request(&sp_with_builtin_writer, StartSlo::post(), None)?;
-    let result = sp_with_literal.start_slo(
-        &idp_descriptor,
-        subject()?,
-        StartSlo::post().with_reason(REASON),
-    );
-    assert!(matches!(result, Err(SamlError::Invalid(_))), "{result:?}");
+    }
     Ok(())
 }

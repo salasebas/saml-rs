@@ -14,8 +14,8 @@ use crate::model::{
     TopLevelStatusCode,
 };
 use crate::sp;
-use crate::template::validate_tag_prefixes;
 use crate::validator::offset_datetime_from_system_time;
+use crate::xml::write::validate_tag_prefixes;
 use crate::xml::OutboundNameIdQualifiers;
 
 mod login_response;

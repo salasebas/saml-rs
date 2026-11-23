@@ -408,7 +408,6 @@ pub mod model;
 mod name_id_management;
 mod soap;
 mod sp;
-mod template;
 mod util;
 mod validator;
 mod xml;

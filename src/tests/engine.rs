@@ -18,8 +18,7 @@ use crate::logout::{
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, ClockSkew, Status};
 use crate::sp::{self, AuthnRequestPreferences, LoginRequestOptions, LoginResponseParseOptions};
-use crate::template::{render_template, LOGIN_RESPONSE_TEMPLATE};
-use crate::xml::write::Prefixes;
+use crate::tests::template::LOGIN_RESPONSE_TEMPLATE;
 
 /// The subject of a `<LogoutRequest>`.
 #[derive(Debug, Clone, Default)]
@@ -311,7 +310,6 @@ pub(crate) fn create_logout_response(
         in_response_to,
         relay_state,
         status: &status,
-        template: init_setting.logout_response_template.as_deref(),
     };
     if want_signed {
         return create_logout_response_inner(input);
@@ -378,22 +376,6 @@ pub(crate) type RenderedLoginResponse = Result<(String, String), SamlError>;
 /// Run the receive flow that `opts` describes against `request`.
 pub(crate) fn flow(opts: &FlowOptions<'_>, request: &HttpRequest) -> Result<FlowResult, SamlError> {
     Ok(flow_with_authentication(opts, request)?.into_flow_result())
-}
-
-/// `raw_xml` with each `{key}` placeholder of `tags` filled.
-pub(crate) fn fill_template(raw_xml: &str, tags: &[(&str, String)]) -> Result<String, SamlError> {
-    let tags: Vec<(&str, Option<String>)> = tags
-        .iter()
-        .map(|(key, value)| (*key, Some(value.clone())))
-        .collect();
-    replace_tags_by_optional_value(raw_xml, &tags)
-}
-
-pub(crate) fn replace_tags_by_optional_value(
-    raw_xml: &str,
-    tags: &[(&str, Option<String>)],
-) -> Result<String, SamlError> {
-    render_template(raw_xml, Prefixes::of(&EntitySetting::default())?, tags)
 }
 
 /// HTTP-Redirect request from decoded query pairs.

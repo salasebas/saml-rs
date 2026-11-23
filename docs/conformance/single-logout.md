@@ -12,13 +12,13 @@
 | Write `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Never write a time with a leap second | Mandatory | Core §1.3.3 | Always |
 | Identify the principal with `NameID`, or `EncryptedID` when selected | Mandatory | Profiles §4.4.4.1, `LogoutRequestType` | `StartSlo::identifier_encryption` |
-| Copy `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the `LogoutSubject` `NameId`, compare `Format` after `anyURI` whitespace collapse, and reject a template that drops or changes them | Mandatory | Profiles §4.4.4.1, Core §3.7.1, §3.3.4 | Always |
-| Omit `Format` when the `NameId` has none. A custom template may write the `unspecified` URI | Optional | Core §2.2.2, E60 | Always |
+| Copy `Format`, `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` from the `LogoutSubject` `NameId` | Mandatory | Profiles §4.4.4.1, Core §3.7.1, §3.3.4 | Always |
+| Omit `Format` when the `NameId` has none | Optional | Core §2.2.2, E60 | Always |
 | Reject a `Format` that is not an absolute URI reference, also when the `NameId` came from an accepted assertion | Mandatory | Core §1.3.2 | Always |
 | Include at least one `SessionIndex` | Mandatory | Profiles §4.4.4.1, E38 | Always |
 | Sign the request on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires the requester to authenticate by signing, so for logout it is mandatory | Mandatory | Profiles §4.4.3.1, §4.4.4.1, CD-04 §2.4 | Always |
 | Send the user agent to an `https` `SingleLogoutService`. A recipient does not reject an `http` `Destination` | Recommended | Profiles §4.4.3.1 | `StartSlo::allow_http` |
-| Omit `NotOnOrAfter` by default. A participant template may supply a UTC expiration | Optional | Core §3.7.1, §3.7.3.2 | `TemplatePolicy::logout_request_template` |
+| Omit `NotOnOrAfter` in session participant requests | Optional | Core §3.7.1, §3.7.3.2 | Always |
 
 ## LogoutRequest from a session authority
 
@@ -41,9 +41,8 @@ HTTP-POST-SimpleSign, and SOAP. The request signature covers the attribute.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| Write a caller-supplied `Reason`. The built-in writer omits it by default | Optional | Core §3.7.1, §3.7.3 | `StartSlo::with_reason` |
+| Write a caller-supplied `Reason` and omit it when unset | Optional | Core §3.7.1, §3.7.3 | `StartSlo::with_reason` |
 | Require an absolute URI reference for a typed `Reason`, using the same `anyURI` whitespace and syntax rules as [identifier formats](identifiers.md#name-identifier-formats) | Mandatory | Core §1.3.2, §3.7.1, E10 | `StartSlo::with_reason` |
-| Add the supplied reason to a rendered custom template when it has no `Reason`. Require an existing `Reason` to match the supplied value. A template can supply its own `Reason` when the option is unset | Library policy. This keeps the signed request consistent with the options for that request. | — | `TemplatePolicy::logout_request_template` |
 
 ## Peer endpoints
 
@@ -69,7 +68,7 @@ HTTP-POST-SimpleSign, and SOAP. The request signature covers the attribute.
 | Reject a `LogoutRequest` whose issuer is not the peer descriptor entity | Library policy: a response must not go to another party's `SingleLogoutService`. | — | Always |
 | Write a top-level `StatusCode` of `Success`, `Requester`, `Responder`, or `VersionMismatch`, with an optional subordinate code | Mandatory | Core §3.2.2.2 | `status` argument |
 | Write a subordinate `StatusCode` `Value` that is an absolute URI reference | Mandatory | Core §1.3.2 | `SubordinateStatusCode::try_new` |
-| Reject whitespace, `"`, `<`, and `>` in a caller-supplied subordinate code, and whitespace in `Consent`, each `StatusCode` `Value`, and `Issuer` of the outbound response | Library policy: reason not recorded. | Core §1.3.2 | Always |
+| Reject whitespace, `"`, `<`, and `>` in a caller-supplied subordinate code, and whitespace in the outbound response `Issuer` | Library policy: reason not recorded. | Core §1.3.2 | Always |
 | A session authority returns `Success` only when it ended its own session, and adds `PartialLogout` when another participant did not confirm. The caller passes the status | Mandatory | Core §3.7.3.2 | `IdentityProvider::respond_slo` `status` |
 | A session participant returns an appropriate status after processing the request or on error. The caller passes the status | Mandatory | Profiles §4.4.3.4, Core §3.7.3.1 | `ServiceProvider::respond_slo` `status` |
 
@@ -145,7 +144,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 | Reject `RelayState` on a SOAP message | Library policy: the SOAP binding has no place to carry it, so a value is rejected rather than dropped. | Bindings §3.2 | `StartSlo::relay_state` |
 | Set the request `Destination` to the peer SOAP `SingleLogoutService` `Location` | Optional | Core §3.2.1 | Always |
 | Compare a present `LogoutRequest` `Destination` with the local SOAP `SingleLogoutService` after collapsing XML whitespace. Accept a signed SOAP request without it | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
-| Omit `Destination` from the `LogoutResponse`, and reject a template that writes one | Optional | Core §3.2.2 | Always |
+| Omit `Destination` from the `LogoutResponse` | Optional | Core §3.2.2 | Always |
 | Do not compare a present `LogoutResponse` `Destination` | Library policy: a SOAP response arrives on the exchange the requester opened, so no local endpoint received it. | Core §3.2.2 | Always |
 | Publish a SOAP `SingleLogoutService`, and do not read its `ResponseLocation` | Recommended | Bindings §3.2.3.4, Profiles §4.4.5 | `SloEndpoint::soap` |
 | Send a `SOAPAction` header | Mandatory | SOAP 1.1 §6.1.1 | `SoapRequest::headers` |
@@ -157,6 +156,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 
 ## Outside this flow
 
+- Setting `Consent` or `Extensions` on outbound logout messages, or `StatusMessage` or `StatusDetail` on outbound responses. Optional, `RequestAbstractType`, `StatusResponseType`, `StatusType`.
 - Propagating logout to other participants. Each call addresses one peer. After a synchronous participant request, the IdP should use a synchronous binding for required propagation. Recommended, Core §3.7.3.2, Profiles §4.4.3.1.
 - Session invalidation and session tracking. The caller owns them. Mandatory for the participant, Core §3.7.3.1.
 - Setting `NotOnOrAfter` at or after the latest assertion `NotOnOrAfter`. Recommended, Core §3.7.3.2. Typed `start_slo` receives no assertion, and [ADR 0001](https://samlrs.vercel.app/explanation/logout-expiration/) records the choice.

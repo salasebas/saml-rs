@@ -1,7 +1,6 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
-use saml_rs::config::LOGOUT_REQUEST_TEMPLATE;
 use saml_rs::constants::Binding;
 use saml_rs::entity::EntitySetting;
 use saml_rs::idp;
@@ -170,35 +169,6 @@ fn public_raw_logout_request_generation_keeps_expiration_omitted_for_supported_b
         let xml = decode_logout_request(binding, &context.context)?;
         assert!(!xml.contains("NotOnOrAfter="));
     }
-    Ok(())
-}
-
-#[test]
-fn public_raw_logout_request_preserves_unrecognized_expiration_placeholder(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut sp = sp()?;
-    sp.setting.logout_request_template = Some(LOGOUT_REQUEST_TEMPLATE.replace(
-        r#" Destination="{Destination}""#,
-        r#" NotOnOrAfter="{NotOnOrAfter}" Destination="{Destination}""#,
-    ));
-    let idp = idp()?;
-    let context = create_logout_request(
-        &sp.setting,
-        sp.metadata.as_metadata(),
-        idp.metadata.as_metadata(),
-        Binding::Post,
-        &user(Some("_session-123")),
-        None,
-        false,
-    )?;
-    let xml = decode_logout_request(Binding::Post, &context.context)?;
-
-    assert_eq!(
-        roxmltree::Document::parse(&xml)?
-            .root_element()
-            .attribute("NotOnOrAfter"),
-        Some("{NotOnOrAfter}")
-    );
     Ok(())
 }
 

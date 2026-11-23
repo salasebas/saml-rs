@@ -17,6 +17,7 @@ pub(crate) use signing::sign_detached_message;
 pub(crate) use deflate::deflate_raw_encode;
 pub(crate) use deflate::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 pub(crate) use encoding::{decode_base64, decode_base64_with_limit, encode_base64};
+#[cfg(any(crypto, test))]
 pub(crate) use escape::xml_escape;
 pub(crate) use parameters::single_parameter;
 #[cfg(test)]

@@ -265,8 +265,7 @@ impl Pending<LogoutRequest> {
     /// `NotOnOrAfter` saml-rs wrote on a session authority's LogoutRequest,
     /// after which the peer discards the request.
     ///
-    /// `None` for a session participant, including when its custom
-    /// LogoutRequest template writes a `NotOnOrAfter`.
+    /// `None` for a session participant.
     pub fn not_on_or_after(&self) -> Option<&SamlInstant> {
         self.details.not_on_or_after.as_ref()
     }

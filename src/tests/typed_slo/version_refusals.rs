@@ -44,9 +44,7 @@ fn the_sp_refuses_a_signed_newer_minor_logout_request_over_soap(
 fn a_browser_refusal_uses_the_receive_channel_and_keeps_relay_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_logout_response_template(
-        saml_rs::config::LOGOUT_RESPONSE_TEMPLATE.to_string(),
-    )?);
+    let idp = IdentityProvider::new(idp_config()?);
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let relay_state = RelayState::try_new("logout-return")?;
     let started = sp.start_slo(

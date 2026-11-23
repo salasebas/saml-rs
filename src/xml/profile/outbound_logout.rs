@@ -267,7 +267,7 @@ fn validate_outbound_root_child(
             if !expectation.validation.root_signature_allowed() {
                 // HTTP-Redirect removes a protocol signature before DEFLATE.
                 return Err(profile_error(
-                    "outbound LogoutResponse templates must not contain a root ds:Signature before library signing",
+                    "outbound LogoutResponse must not contain a root ds:Signature before library signing",
                 ));
             }
             state.root_stage = RootStage::AfterSignature;

@@ -47,6 +47,7 @@ mod simplesign_xml_limits;
 mod sso_flow_document;
 mod sso_response_issuer;
 mod subject_identifier_attributes;
+mod template;
 mod typed_config;
 mod typed_models;
 mod typed_slo;
