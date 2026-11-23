@@ -11,7 +11,7 @@ fn replay_honors_the_configured_xml_limits() -> Result<(), Box<dyn std::error::E
     let xml = strip_embedded_signatures(&response_xml(&exchange.response_fields)?)?.replace(
         "</saml:Subject>",
         &format!(
-            r#"<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData xmlns:ext="urn:example:extension" ext:value="{extension}" Recipient="{SP_ACS_SIMPLE}" NotOnOrAfter="2099-01-01T00:00:00Z"/></saml:SubjectConfirmation></saml:Subject>"#
+            r#"<saml:SubjectConfirmation Method=" urn:oasis:names:tc:SAML:2.0:cm:bearer&#9;"><saml:SubjectConfirmationData xmlns:ext="urn:example:extension" ext:value="{extension}" Recipient="{SP_ACS_SIMPLE}" NotOnOrAfter="2099-01-01T00:00:00Z"/></saml:SubjectConfirmation></saml:Subject>"#
         ),
     );
     let fields = simple_sign_fields(&exchange.response_fields, &xml)?;

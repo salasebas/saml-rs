@@ -808,7 +808,8 @@ fn an_unknown_condition_is_rejected_when_its_namespace_is_inherited(
 }
 
 #[test]
-fn the_session_comes_from_the_bearer_assertion() -> Result<(), Box<dyn std::error::Error>> {
+fn the_session_comes_from_the_assertion_with_a_padded_bearer_method(
+) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = exchange_for(SpValidationPolicy::default(), false)?;
     let duplicated = duplicate_assertion(
         &response_xml(&exchange.response_fields)?,
@@ -823,6 +824,7 @@ fn the_session_comes_from_the_bearer_assertion() -> Result<(), Box<dyn std::erro
         at..at + bearer.len(),
         "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key",
     );
+    let altered = altered.replace(bearer, &format!("&#10;{bearer} &#9;"));
     let session = accept(&exchange, &resigned(&altered)?)?;
     assert_eq!(session.assertion_id().as_str(), "_second_assertion");
     assert_eq!(session.name_id().value(), "alice@example.com");

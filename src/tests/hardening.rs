@@ -451,7 +451,7 @@ fn hardening_unsolicited_response_rejects_subject_confirmation_in_response_to(
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
-            method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
+            method: " urn:oasis:names:tc:SAML:2.0:cm:bearer&#9;",
             recipient: "https://sp/acs",
             not_on_or_after: iso8601_offset(300),
             response_in_response_to: None,
@@ -475,7 +475,7 @@ fn hardening_subject_confirmation_method_must_be_bearer() -> Result<(), Box<dyn 
     let response = response_for_subject_confirmation(
         &sp,
         &SubjectConfirmationCase {
-            method: "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key",
+            method: " urn:oasis:names:tc:SAML:2.0:cm:holder-of-key&#9;",
             recipient: "https://sp/acs",
             not_on_or_after: iso8601_offset(300),
             response_in_response_to: Some("_req1"),

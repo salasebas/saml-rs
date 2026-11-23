@@ -93,10 +93,7 @@ pub(crate) fn read_status(response: &SamlElement) -> Result<Status, SamlError> {
         .iter()
         .find(|child| child.is(namespace::PROTOCOL, "StatusCode"))
         .ok_or(SamlError::StatusMissing)?;
-    let top = code
-        .attr("Value")
-        .filter(|value| !value.is_empty())
-        .ok_or(SamlError::StatusMissing)?;
+    let top = code.attr("Value").ok_or(SamlError::StatusMissing)?;
     let second = code
         .children
         .iter()

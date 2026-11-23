@@ -107,13 +107,12 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
     let document = dom::parse_document(response_xml, limits)?;
     for assertion in direct_assertions(&document.root) {
         for confirmation in subject_confirmations(assertion) {
-            let is_bearer = confirmation.attr("Method") == Some(BEARER_SUBJECT_CONFIRMATION_METHOD);
             let request_id = confirmation
                 .children
                 .iter()
                 .filter(|child| child.local_name == "SubjectConfirmationData")
                 .find_map(|data| data.attr("InResponseTo"));
-            if is_bearer && request_id.is_some() {
+            if request_id.is_some() && is_bearer_confirmation(confirmation) {
                 return Err(SamlError::in_response_to_mismatch(None, request_id));
             }
         }
@@ -191,8 +190,13 @@ fn subject_confirmations(assertion: &Node) -> impl Iterator<Item = &Node> {
 }
 
 fn node_has_bearer(assertion: &Node) -> bool {
-    subject_confirmations(assertion)
-        .any(|confirmation| confirmation.attr("Method") == Some(BEARER_SUBJECT_CONFIRMATION_METHOD))
+    subject_confirmations(assertion).any(is_bearer_confirmation)
+}
+
+fn is_bearer_confirmation(confirmation: &Node) -> bool {
+    confirmation
+        .attr("Method")
+        .is_some_and(|method| collapse_whitespace(method) == BEARER_SUBJECT_CONFIRMATION_METHOD)
 }
 
 /// Latest bearer `SubjectConfirmationData@NotOnOrAfter` of `confirmations`.
@@ -205,7 +209,7 @@ pub(crate) fn latest_bearer_not_on_or_after<'a>(
     let mut latest: Option<(OffsetDateTime, String)> = None;
     let mut unparsed = None;
     for confirmation in confirmations {
-        if confirmation.attr("Method") != Some(BEARER_SUBJECT_CONFIRMATION_METHOD) {
+        if !is_bearer_confirmation(confirmation) {
             continue;
         }
         let Some(value) = confirmation
@@ -459,7 +463,7 @@ fn check_bearer_subject_confirmation(
     opts: &FlowOptions<'_>,
     expected_recipient: Option<&str>,
 ) -> Result<SubjectConfirmationCheck, SamlError> {
-    if confirmation.attr("Method") != Some(BEARER_SUBJECT_CONFIRMATION_METHOD) {
+    if !is_bearer_confirmation(confirmation) {
         return Ok(SubjectConfirmationCheck::Invalid(
             SubjectConfirmationReason::InvalidMethod,
         ));
