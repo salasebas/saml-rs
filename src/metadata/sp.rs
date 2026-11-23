@@ -137,8 +137,8 @@ impl SpMetadata {
 
     /// `WantAssertionsSigned` flag.
     ///
-    /// True when the single SAML 2.0 `SPSSODescriptor` sets the attribute to
-    /// `true` or `1`. An absent attribute is false.
+    /// True when any SAML 2.0 `SPSSODescriptor` sets the attribute to `true`
+    /// or `1`. An absent attribute is false.
     pub fn want_assertions_signed(&self) -> bool {
         self.inner.signing_flags.want_assertions_signed
     }

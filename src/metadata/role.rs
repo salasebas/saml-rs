@@ -70,10 +70,8 @@ impl SsoDescriptorRole {
                     Self::ServiceProvider => {
                         signing_flags.authn_requests_signed |=
                             signing_flag(&descriptor, "AuthnRequestsSigned")?.unwrap_or_default();
-                        let want_assertions_signed =
+                        signing_flags.want_assertions_signed |=
                             signing_flag(&descriptor, "WantAssertionsSigned")?.unwrap_or_default();
-                        signing_flags.want_assertions_signed =
-                            nodes.is_empty() && want_assertions_signed;
                     }
                     Self::IdentityProvider => {
                         let want_authn_requests_signed =
