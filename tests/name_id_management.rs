@@ -31,8 +31,8 @@ use saml_rs::{
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdChange,
     NameIdFormat, NameIdManagementReceipt, NameIdManagementRefusal, PartyAuthentication,
     RelayState, ReplayPolicy, RequestAgePolicy, SamlError, SamlValidationContext, ServiceProvider,
-    SoapChannel, SoapProtocolMessage, SoapRequest, SoapResponse, SpConfig, SpDescriptor,
-    SsoEndpoint, StartNameIdManagement, Status, SubordinateStatusCode,
+    SoapBodyElement, SoapChannel, SoapRequest, SoapResponse, SpConfig, SpDescriptor, SsoEndpoint,
+    StartNameIdManagement, Status, SubordinateStatusCode,
 };
 
 const IDP_ENTITY_ID: &str = "https://idp.example.com/metadata";
@@ -117,7 +117,7 @@ fn authenticated() -> SoapChannel {
     SoapChannel::new(
         PartyAuthentication::Mutual,
         MessageIntegrity::Protected,
-        MessageConfidentiality::Absent,
+        MessageConfidentiality::Unattested,
     )
 }
 
@@ -126,9 +126,7 @@ fn validation<'a>() -> SamlValidationContext<'a> {
 }
 
 fn body(envelope: &str) -> Result<String, SamlError> {
-    Ok(SoapProtocolMessage::from_envelope(envelope)?
-        .xml()
-        .to_string())
+    Ok(SoapBodyElement::from_envelope(envelope)?.xml().to_string())
 }
 
 fn attribute<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
@@ -683,13 +681,13 @@ fn an_unauthenticated_channel_is_refused_in_both_directions() -> TestResult {
     let sp = soap_service_provider()?;
     let weak = [
         SoapChannel::new(
-            PartyAuthentication::Absent,
+            PartyAuthentication::Unattested,
             MessageIntegrity::Protected,
             MessageConfidentiality::Protected,
         ),
         SoapChannel::new(
             PartyAuthentication::Mutual,
-            MessageIntegrity::Absent,
+            MessageIntegrity::Unattested,
             MessageConfidentiality::Protected,
         ),
     ];

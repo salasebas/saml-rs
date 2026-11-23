@@ -29,8 +29,8 @@ use saml_rs::{
     LogoutRequest, LogoutResponse, LogoutSubject, MetadataTrustPolicy, NameId, NameIdFormat,
     Outbound, OutboundDelivery, OutstandingLogout, PrivateKeyPem, Received, ReplayPolicy,
     RespondSlo, RespondSso, SamlError, SamlValidationContext, ServiceProvider, SessionIndex,
-    SloEndpoint, SoapChannel, SoapProtocolMessage, SoapRequest, SpConfig, SpDescriptor,
-    SsoAssertion, SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
+    SloEndpoint, SoapBodyElement, SoapChannel, SoapRequest, SpConfig, SpDescriptor, SsoAssertion,
+    SsoEndpoint, StartSlo, StartSso, Status, SubordinateStatusCode, X509Credential,
     XmlEncryptionPolicy, XmlPolicy,
 };
 use url::Url;
@@ -273,7 +273,7 @@ fn request_xml(outbound: &Outbound<LogoutRequest>) -> Result<String, Box<dyn std
             STANDARD.decode(form.value("SAMLRequest").ok_or("missing SAMLRequest")?)?,
         )?),
         OutboundDelivery::SoapRequest(request) => {
-            Ok(SoapProtocolMessage::from_envelope(request.envelope())?
+            Ok(SoapBodyElement::from_envelope(request.envelope())?
                 .xml()
                 .to_string())
         }

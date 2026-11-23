@@ -37,37 +37,37 @@ const REQUEST_HEADERS: &[HttpHeader] = &[
 ];
 pub(crate) const RESPONSE_HEADERS: &[HttpHeader] = &[CONTENT_TYPE, RESPONSE_CACHE_CONTROL, PRAGMA];
 
-/// Whether the deployment authenticated both SOAP parties.
+/// The caller's attestation of mutual authentication for a SOAP exchange.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PartyAuthentication {
-    /// Each party authenticated the other for this exchange.
+    /// The caller attests that each party authenticated the other.
     Mutual,
     /// The caller did not attest mutual authentication.
-    Absent,
+    Unattested,
 }
 
-/// Whether the deployment protected the SOAP bytes against modification.
+/// The caller's attestation of integrity protection for a SOAP exchange.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageIntegrity {
-    /// The exchange is integrity protected.
+    /// The caller attests that the exchange is protected against modification.
     Protected,
     /// The caller did not attest integrity protection.
-    Absent,
+    Unattested,
 }
 
-/// Whether the deployment kept the SOAP bytes confidential.
+/// The caller's attestation of confidentiality for a SOAP exchange.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageConfidentiality {
-    /// The exchange is confidential.
+    /// The caller attests that the exchange is confidential.
     Protected,
     /// The caller did not attest confidentiality.
-    Absent,
+    Unattested,
 }
 
-/// Protection the deployment established for one SOAP exchange.
+/// Channel protection attestations for one SOAP exchange.
 ///
-/// saml-rs does not open TLS or check HTTP credentials. Pass the properties
-/// the deployment actually provided.
+/// The deployment handles TLS and HTTP authentication. Pass the properties
+/// the deployment established for this exchange.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SoapChannel {
     authentication: PartyAuthentication,
@@ -76,7 +76,7 @@ pub struct SoapChannel {
 }
 
 impl SoapChannel {
-    /// Record the protection the deployment provided.
+    /// Record the caller's attestations for the exchange.
     pub fn new(
         authentication: PartyAuthentication,
         integrity: MessageIntegrity,
@@ -89,12 +89,12 @@ impl SoapChannel {
         }
     }
 
-    /// No protection attested.
+    /// Set all three channel protection attestations to `Unattested`.
     pub fn unattested() -> Self {
         Self::new(
-            PartyAuthentication::Absent,
-            MessageIntegrity::Absent,
-            MessageConfidentiality::Absent,
+            PartyAuthentication::Unattested,
+            MessageIntegrity::Unattested,
+            MessageConfidentiality::Unattested,
         )
     }
 
@@ -107,17 +107,17 @@ impl SoapChannel {
         )
     }
 
-    /// How the parties authenticated.
+    /// The mutual authentication attestation.
     pub fn authentication(self) -> PartyAuthentication {
         self.authentication
     }
 
-    /// Whether the exchange is integrity protected.
+    /// The integrity protection attestation.
     pub fn integrity(self) -> MessageIntegrity {
         self.integrity
     }
 
-    /// Whether the exchange is confidential.
+    /// The confidentiality attestation.
     pub fn confidentiality(self) -> MessageConfidentiality {
         self.confidentiality
     }
@@ -212,14 +212,16 @@ impl SoapResponse {
 }
 
 /// One XML element read from a SOAP 1.1 body.
+///
+/// The element exposes its local name, namespace URI, and standalone XML.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SoapProtocolMessage {
+pub struct SoapBodyElement {
     local_name: String,
     namespace: String,
     xml: String,
 }
 
-impl SoapProtocolMessage {
+impl SoapBodyElement {
     /// Read the single element in a SOAP 1.1 body.
     ///
     /// The payload can use any element name and namespace. Use a typed receive
@@ -310,7 +312,7 @@ fn verify_soap_body_signature(
     ))
 }
 
-/// Read the single SAML element of a SOAP 1.1 body.
+/// Read the single XML element of a SOAP 1.1 body.
 ///
 /// A locally addressed header entry with SOAP `mustUnderstand` set is refused.
 pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBody, SamlError> {
@@ -619,7 +621,7 @@ mod tests {
         assert!(envelope.contains(logout));
         assert!(!envelope.contains("<?before?>"));
         assert!(!envelope.contains("<?after?>"));
-        let message = SoapProtocolMessage::from_envelope(envelope)?;
+        let message = SoapBodyElement::from_envelope(envelope)?;
 
         assert_eq!(message.local_name(), "LogoutRequest");
         assert_eq!(message.namespace(), "urn:oasis:names:tc:SAML:2.0:protocol");
@@ -658,7 +660,7 @@ mod tests {
     fn soap_body_rejects_a_second_element() {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><samlp:One xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/><samlp:Two xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
         assert!(matches!(
-            SoapProtocolMessage::from_envelope(envelope),
+            SoapBodyElement::from_envelope(envelope),
             Err(SamlError::ProtocolProfile(_))
         ));
     }
@@ -666,14 +668,14 @@ mod tests {
     #[test]
     fn soap_header_must_understand_is_rejected() {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" soap:mustUnderstand="1"/></soap:Header><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
-        assert!(SoapProtocolMessage::from_envelope(envelope).is_err());
+        assert!(SoapBodyElement::from_envelope(envelope).is_err());
     }
 
     #[test]
     fn soap_header_padded_must_understand_is_rejected() {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Header><extra soap:mustUnderstand=" 1 ">note</extra></soap:Header><soap:Body><samlp:ArtifactResolve xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"/></soap:Body></soap:Envelope>"#;
         assert!(matches!(
-            SoapProtocolMessage::from_envelope(envelope),
+            SoapBodyElement::from_envelope(envelope),
             Err(SamlError::Xml { .. })
         ));
     }
@@ -690,7 +692,7 @@ mod tests {
             );
             assert!(
                 matches!(
-                    SoapProtocolMessage::from_envelope(&envelope),
+                    SoapBodyElement::from_envelope(&envelope),
                     Err(SamlError::ProtocolProfile(_))
                 ),
                 "{envelope}"
@@ -701,7 +703,7 @@ mod tests {
     #[test]
     fn soap_body_keeps_namespaces_declared_on_the_envelope() -> Result<(), SamlError> {
         let envelope = r#"<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"><soap:Body><samlp:LogoutRequest ID="_logout"/></soap:Body></soap:Envelope>"#;
-        let message = SoapProtocolMessage::from_envelope(envelope)?;
+        let message = SoapBodyElement::from_envelope(envelope)?;
         assert_eq!(
             message.xml(),
             r#"<samlp:LogoutRequest xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout"/>"#
@@ -736,7 +738,7 @@ mod tests {
             let envelope = format!(
                 r#"<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ext="urn:example:headers"><Header><ext:Trace {attributes}/></Header><Body><LogoutRequest xmlns="urn:oasis:names:tc:SAML:2.0:protocol"/></Body></Envelope>"#
             );
-            let result = SoapProtocolMessage::from_envelope(&envelope);
+            let result = SoapBodyElement::from_envelope(&envelope);
             if mandatory_here {
                 assert!(matches!(result, Err(SamlError::Xml { .. })), "{attributes}");
             } else {

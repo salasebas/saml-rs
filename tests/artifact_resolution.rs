@@ -173,7 +173,7 @@ fn authenticated_without_confidentiality() -> SoapChannel {
     SoapChannel::new(
         PartyAuthentication::Mutual,
         MessageIntegrity::Protected,
-        MessageConfidentiality::Absent,
+        MessageConfidentiality::Unattested,
     )
 }
 
@@ -1354,13 +1354,13 @@ fn the_service_provider_resolves_only_over_a_confidential_channel(
     for weak in [
         authenticated_without_confidentiality(),
         SoapChannel::new(
-            PartyAuthentication::Absent,
+            PartyAuthentication::Unattested,
             MessageIntegrity::Protected,
             MessageConfidentiality::Protected,
         ),
         SoapChannel::new(
             PartyAuthentication::Mutual,
-            MessageIntegrity::Absent,
+            MessageIntegrity::Unattested,
             MessageConfidentiality::Protected,
         ),
     ] {

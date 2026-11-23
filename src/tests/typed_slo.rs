@@ -59,7 +59,7 @@ use saml_rs::{
     MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound, OutboundDelivery,
     PartyAuthentication, PendingLogoutRequest, PendingLogoutRequestSnapshot, Received, RelayState,
     ReplayCache, ReplayPolicy, RespondSlo, RespondSso, SamlError, SamlValidationContext,
-    ServiceProvider, SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SoapRequest,
+    ServiceProvider, SessionIndex, SloEndpoint, SoapBodyElement, SoapChannel, SoapRequest,
     SoapResponse, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
     SsoSession, StartSlo, Status, SubordinateStatusCode, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
@@ -3390,9 +3390,7 @@ fn typed_slo_subject_from_sso_session_keeps_name_id_qualifiers(
 }
 
 fn soap_body_xml(envelope: &str) -> Result<String, SamlError> {
-    Ok(SoapProtocolMessage::from_envelope(envelope)?
-        .xml()
-        .to_string())
+    Ok(SoapBodyElement::from_envelope(envelope)?.xml().to_string())
 }
 
 fn root_has_signature(xml: &str) -> Result<bool, Box<dyn std::error::Error>> {
@@ -3712,7 +3710,7 @@ fn soap_logout_accepts_unsigned_messages_only_over_an_attested_mutual_channel(
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
     let server_only = SoapChannel::new(
-        PartyAuthentication::Absent,
+        PartyAuthentication::Unattested,
         MessageIntegrity::Protected,
         MessageConfidentiality::Protected,
     );
