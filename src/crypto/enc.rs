@@ -197,13 +197,13 @@ fn namespace_complete(document: &XmlDocument<'_>, element: NodeId) -> Result<Vec
 }
 
 /// Replace each `(range, replacement)` of `xml`. Ranges are disjoint.
-fn splice(xml: &str, mut replacements: Vec<(Range<usize>, String)>) -> String {
+fn splice(xml: &str, mut replacements: Vec<(Range<usize>, impl AsRef<str>)>) -> String {
     replacements.sort_by_key(|(range, _)| range.start);
     let mut output = String::with_capacity(xml.len());
     let mut cursor = 0;
     for (range, replacement) in replacements {
         output.push_str(&xml[cursor..range.start]);
-        output.push_str(&replacement);
+        output.push_str(replacement.as_ref());
         cursor = range.end;
     }
     output.push_str(&xml[cursor..]);

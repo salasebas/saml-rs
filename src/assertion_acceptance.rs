@@ -419,24 +419,22 @@ enum AudienceCheck {
 }
 
 fn audience_restrictions_contain(assertion: &Node, expected: &str) -> AudienceCheck {
-    let mut result = AudienceCheck::Absent;
-    for restriction in assertion
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Conditions")
-        .flat_map(|conditions| conditions.children.iter())
-        .filter(|child| child.local_name == "AudienceRestriction")
-    {
-        if !restriction
-            .children
-            .iter()
-            .any(|child| child.local_name == "Audience" && child.text == expected)
-        {
-            return AudienceCheck::Rejected;
-        }
-        result = AudienceCheck::Satisfied;
+    let restrictions: Vec<&Node> = assertion
+        .children_named("Conditions")
+        .flat_map(|conditions| conditions.children_named("AudienceRestriction"))
+        .collect();
+    let names_expected = |restriction: &Node| {
+        restriction
+            .children_named("Audience")
+            .any(|audience| audience.text == expected)
+    };
+    if restrictions.is_empty() {
+        AudienceCheck::Absent
+    } else if restrictions.into_iter().all(names_expected) {
+        AudienceCheck::Satisfied
+    } else {
+        AudienceCheck::Rejected
     }
-    result
 }
 
 fn validate_audience(assertion: &Node, opts: &FlowOptions<'_>) -> Result<(), SamlError> {
@@ -469,18 +467,21 @@ fn check_bearer_subject_confirmation(
         ));
     }
 
-    let mut data = confirmation
-        .children
-        .iter()
-        .filter(|child| child.local_name == "SubjectConfirmationData");
-    let data = data.next().filter(|_| data.next().is_none());
-    let Some(not_on_or_after) = data.and_then(|data| data.attr("NotOnOrAfter")) else {
+    let data: Vec<&Node> = confirmation
+        .children_named("SubjectConfirmationData")
+        .collect();
+    let [data] = data[..] else {
+        return Ok(SubjectConfirmationCheck::Invalid(
+            SubjectConfirmationReason::MissingNotOnOrAfter,
+        ));
+    };
+    let Some(not_on_or_after) = data.attr("NotOnOrAfter") else {
         return Ok(SubjectConfirmationCheck::Invalid(
             SubjectConfirmationReason::MissingNotOnOrAfter,
         ));
     };
     let window = TimeWindow {
-        not_before: data.and_then(|data| data.attr("NotBefore")),
+        not_before: data.attr("NotBefore"),
         not_on_or_after: Some(not_on_or_after),
     };
     if !window.contains(opts.validation_now()?, opts.clock_skew) {
@@ -490,7 +491,7 @@ fn check_bearer_subject_confirmation(
     }
 
     if let Some(expected) = expected_recipient {
-        if data.and_then(|data| data.attr("Recipient")) != Some(expected) {
+        if data.attr("Recipient") != Some(expected) {
             return Ok(SubjectConfirmationCheck::Invalid(
                 SubjectConfirmationReason::RecipientMismatch,
             ));
@@ -498,7 +499,7 @@ fn check_bearer_subject_confirmation(
     }
 
     if let Some(expected) = opts.expected_in_response_to {
-        if data.and_then(|data| data.attr("InResponseTo")) != Some(expected) {
+        if data.attr("InResponseTo") != Some(expected) {
             return Ok(SubjectConfirmationCheck::Invalid(
                 SubjectConfirmationReason::InResponseToMismatch,
             ));

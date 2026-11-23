@@ -140,8 +140,7 @@ pub(crate) fn decrypt_assertions_with_limits(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<(String, Vec<String>), SamlError> {
-    let mut assertions = Vec::new();
-    let response = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
+    let decrypted = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let encrypted = root_children(document, namespace::ASSERTION, "EncryptedAssertion")?;
         if encrypted.is_empty() {
             return Err(if super::assertions(document)?.is_empty() {
@@ -165,14 +164,10 @@ pub(crate) fn decrypt_assertions_with_limits(
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        assertions = replacements
-            .iter()
-            .map(|replacement| replacement.plaintext.clone())
-            .collect();
         Ok(Some(replacements))
     })?
     .ok_or(SamlError::AssertionMissing)?;
-    Ok((response, assertions))
+    Ok((decrypted.xml, decrypted.plaintexts))
 }
 
 /// Replace the one `kind.encrypted` child of the document element of `xml`
@@ -197,6 +192,7 @@ pub(crate) fn decrypt_root_child(
         let replacement = decrypted_element(document, element, kind, enc_keys, options, limits)?;
         Ok(Some(vec![replacement]))
     })?
+    .map(|decrypted| decrypted.xml)
     .ok_or_else(|| {
         SamlError::ProtocolProfile(format!("{} requires one {}", kind.parent, kind.encrypted))
     })
@@ -230,7 +226,7 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
     limits: XmlLimits,
     authentication: RequestAuthentication,
 ) -> Result<Option<String>, SamlError> {
-    decrypt_selected(
+    let decrypted = decrypt_selected(
         xml,
         limits,
         additional.len().saturating_add(1),
@@ -266,7 +262,8 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
             };
             Ok(Some(vec![replacement]))
         },
-    )
+    )?;
+    Ok(decrypted.map(|decrypted| decrypted.xml))
 }
 
 /// Whether the `EncryptedData` of `encrypted` names an AES-GCM
@@ -327,7 +324,7 @@ pub(crate) fn decrypt_assertion_elements(
         }
         Ok((!replacements.is_empty()).then_some(replacements))
     })?;
-    Ok(decrypted.unwrap_or_else(|| xml.to_owned()))
+    Ok(decrypted.map_or_else(|| xml.to_owned(), |decrypted| decrypted.xml))
 }
 
 /// Replace the `<EncryptedID>` of the `<LogoutRequest>` in `xml` with the
@@ -347,7 +344,7 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
 ) -> Result<Option<String>, SamlError> {
-    decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
+    let decrypted = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
         let mut identifiers = Vec::new();
         for name in ["BaseID", "NameID", "EncryptedID"] {
             identifiers.extend(root_children(document, namespace::ASSERTION, name)?);
@@ -380,7 +377,8 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
             plaintext: decrypted[plaintext.start..plaintext.end].to_string(),
             revealed_elements: work::revealed_elements(&decrypted)?,
         }]))
-    })
+    })?;
+    Ok(decrypted.map(|decrypted| decrypted.xml))
 }
 
 struct DecryptedElement {
@@ -389,16 +387,22 @@ struct DecryptedElement {
     revealed_elements: usize,
 }
 
-/// `xml` with the replacements that `decrypt` returns spliced in, or `None`
-/// when `decrypt` decrypts nothing. `xml` is parsed under `limits` before
-/// `decrypt` reads it, and the result must stay within `limits.max_bytes`.
+struct DecryptedDocument {
+    xml: String,
+    plaintexts: Vec<String>,
+}
+
+/// `xml` with the replacements that `decrypt` returns spliced in, and their
+/// plaintexts in the order `decrypt` returns them, or `None` when `decrypt`
+/// decrypts nothing. `xml` is parsed under `limits` before `decrypt` reads it,
+/// and the result must stay within `limits.max_bytes`.
 fn decrypt_selected(
     xml: &str,
     limits: XmlLimits,
     keys: usize,
     options: AssertionDecryptionOptions,
     decrypt: impl FnOnce(&XmlDocument<'_>) -> Result<Option<Vec<DecryptedElement>>, SamlError>,
-) -> Result<Option<String>, SamlError> {
+) -> Result<Option<DecryptedDocument>, SamlError> {
     crate::crypto::provider::ensure_crypto_provider_initialized()?;
     dom::parse_document(xml, limits)?;
     let document = parse_xml_document(xml)?;
@@ -417,12 +421,18 @@ fn decrypt_selected(
     let decrypted = splice(
         xml,
         replacements
-            .into_iter()
-            .map(|replacement| (replacement.range, replacement.plaintext))
+            .iter()
+            .map(|replacement| (replacement.range.clone(), replacement.plaintext.as_str()))
             .collect(),
     );
     limits.check_input_bytes(decrypted.len())?;
-    Ok(Some(decrypted))
+    Ok(Some(DecryptedDocument {
+        xml: decrypted,
+        plaintexts: replacements
+            .into_iter()
+            .map(|replacement| replacement.plaintext)
+            .collect(),
+    }))
 }
 
 /// The source range of the encrypted `element` and the plaintext it carries.
