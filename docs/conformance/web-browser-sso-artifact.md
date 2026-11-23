@@ -1,109 +1,69 @@
 # Web Browser SSO response over HTTP-Artifact
 
-Rules for a typed Web Browser SSO `<Response>` delivered as an HTTP-Artifact:
-identity-provider `respond_sso_artifact` and `initiate_sso_artifact`, and
-service-provider `DeliveredArtifact`, `finish_sso`, and
-`accept_unsolicited_sso` with `Inbound::artifact`. The dereference
-between the two is [artifact resolution](artifact-resolution.md). The content
-of the `<Response>` is in
-[generation](web-browser-sso-generation.md) and
-[identifiers](identifiers.md), and assertion acceptance is in
-[acceptance](web-browser-sso-acceptance.md). This page records what the
-binding adds or changes.
-
-This flow covers signed delivery and session creation for the "Web SSO,
-`<Response>`, HTTP artifact" feature in Conformance Requirements Table 2.
-For the SP and SP Lite columns, the claim covers only sessions where an XML
-signature protects the response or each assertion. If the IdP relies solely
-on the protected SOAP exchange, the SP can retrieve the response but cannot
-establish a typed session from it.
-
-Normative text is SAML Bindings 2.0 §3.6 and Profiles 2.0 §4.1, as corrected
-by Approved Errata 05. Errata that change this flow are E2, E4, E26, E31, E59,
-E85, E90, and E93.
-
-The deployment sends the HTTP response that carries the artifact and receives
-the request at the assertion consumer. TLS for that exchange stays there.
+Rules for a Web Browser SSO `<Response>` delivered as an HTTP-Artifact: `IdentityProvider::respond_sso_artifact` and `initiate_sso_artifact`, and `DeliveredArtifact`, `ServiceProvider::finish_sso`, and `accept_unsolicited_sso` with `Inbound::artifact`.
+The normative documents are [Bindings §3.6](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf) and [Profiles §4.1](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf), as corrected by [Approved Errata 05](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/).
+This record lists only the differences from the HTTP-POST rows in [acceptance](web-browser-sso-acceptance.md), the `<Response>` content in [generation](web-browser-sso-generation.md) and [identifiers](identifiers.md), and the SOAP dereference in [artifact resolution](artifact-resolution.md).
+It covers the "Web SSO, `<Response>`, HTTP artifact" feature of Conformance Requirements Table 2 (Conformance §3.2).
+For the SP and SP Lite columns, the claim covers only sessions where an XML signature protects the response or each assertion.
 
 ## Identity provider delivery
 
-`IdentityProvider::respond_sso_artifact` and `IdentityProvider::initiate_sso_artifact` are
-this actor.
+`IdentityProvider::respond_sso_artifact` and `IdentityProvider::initiate_sso_artifact` store the response and return the browser action that carries the artifact.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| The response is stored while its artifact is outstanding | Identity provider | Generate Response | Bindings §3.6.2: the artifact issuer maintains state while the artifact is pending. The caller owns `IssuedArtifacts`, which keeps the response for the lifetime the caller chooses. Core §3.5.3 asks for the shortest practical lifetime; that row is in [Artifact resolution](artifact-resolution.md) |
-| Publish at least one `ArtifactResolutionService` | Identity provider | IdP metadata | Mandatory. Profiles §4.1.6. Errata 05 E2 recommends indexed endpoints. A delivery whose index has no SOAP endpoint in local metadata is `SamlError::MissingMetadata`, and nothing is stored |
-| URL encoding places the URL-encoded artifact in a `SAMLart` query parameter | Identity provider | Deliver artifact | Mandatory when that encoding is used. Bindings §3.6.3.2. `ArtifactDelivery::redirect`. The parameter follows any query the assertion consumer URL already has |
-| The URL-encoded artifact is returned with HTTP 302 or 303 | Identity provider | HTTP | Mandatory. Bindings §3.6.5. `Outbound::redirect_url` is the `Location`. The deployment sends the status |
-| Form encoding places the artifact in a hidden control named `SAMLart`, in a form whose action is the assertion consumer and whose method is `POST` | Identity provider | Deliver artifact | Mandatory when that encoding is used. Bindings §3.6.3.3. `ArtifactDelivery::post_form`. `Outbound::post_form` is the action and the controls. The caller renders the XHTML document |
-| `RelayState` accompanies the artifact in a `RelayState` query parameter or hidden control | Identity provider | Deliver artifact | Mandatory when a value accompanies the artifact. Bindings §3.6.3.2 and §3.6.3.3 |
-| `RelayState` received with the `AuthnRequest` is returned unchanged | Identity provider | Deliver artifact | Mandatory. Bindings §3.4.3 and §3.5.3 require a response binding with a RelayState mechanism and the exact value. `respond_sso_artifact` writes the RelayState of `Received<AuthnRequest>`, and `RespondSso::relay_state` on such a request returns `SamlError::ProtocolProfile`, as for HTTP-POST |
-| `RelayState` does not exceed 80 bytes | Identity provider | Deliver artifact | Mandatory prohibition for a value the identity provider sets with `RespondSso::relay_state`. Bindings §3.6.3.1. A value received with the `AuthnRequest` is returned unchanged even when longer, because Bindings §3.4.3, §3.5.3, and HTTP-POST-SimpleSign CD-04 §2.3 require the responder to return the exact data it received. Integrity protection of the value remains a recommendation for the party that creates it |
-| `Cache-Control: no-cache, no-store` and `Pragma: no-cache` | Identity provider | HTTP | Recommendation. Bindings §3.6.5.1. `Outbound::headers` includes those values for the artifact redirect or form. saml-rs does not send the response |
-| Honour the binding and assertion consumer the `AuthnRequest` names | Identity provider | Deliver artifact | Mandatory when the identity provider can. Profiles §4.1.3.5. A request whose `ProtocolBinding` is HTTP-Artifact is not answered by `respond_sso`, and a request that names another binding is not answered by `respond_sso_artifact`. Profiles §4.1.4.1 requires the named consumer to belong to the service provider |
-| An unsolicited artifact goes to the default assertion consumer | Identity provider | Deliver artifact | Recommendation. Profiles §4.1.5. `initiate_sso_artifact` uses the metadata default `AssertionConsumerService` from [generation](web-browser-sso-generation.md). A default with another binding returns `Invalid`. There is no recommendation relaxation in this API |
-| Sign the assertions | Identity provider | Generate Response | Optional on this binding. Profiles §4.1.3.5. Library policy: the stored response is signed the way an HTTP-POST response is. The assertion is signed when the service provider metadata sets `WantAssertionsSigned`, and the `Response` is signed otherwise |
-| `Destination` | Identity provider | Generate Response | Unspecified by this binding. Errata 05 E59. Generation writes the assertion consumer URL, as it does for HTTP-POST |
-| An error `Response` is delivered as an artifact | Identity provider | Deliver artifact | Recommendation. Profiles §4.1.3.5 and Errata 05 E85: an identity provider SHOULD support issuing an error `Response` when the user agent remains available and an acceptable response location exists. `respond_sso_artifact` takes `SsoOutcome::Failure`. That response carries no assertion (Profiles §4.1.4.2) and follows the same store and delivery. `initiate_sso_artifact` takes one too, as the unsolicited error row in [generation](web-browser-sso-generation.md) records |
-| A `Success` response contains at least one assertion | Identity provider | Generate Response | Mandatory. Profiles §4.1.4.2 / E26. `SsoOutcome::Failure` with a top-level `Success` status returns `SamlError::Invalid` from `respond_sso_artifact` and `initiate_sso_artifact`, as it does from `respond_sso` in [generation](web-browser-sso-generation.md) |
-| Do not use an HTTP error status for a SAML failure | Identity provider | HTTP | Mandatory prohibition. Bindings §3.6.6. The failure is the status of the stored `Response`. The deployment chooses the HTTP status |
-
-Artifact construction, the single-use rule, and the release of the message
-only to the service provider it was issued to are in
-[artifact resolution](artifact-resolution.md).
+| Store the `Response` while its artifact is outstanding | Mandatory | Bindings §3.6.2 | `IssuedArtifacts::expire_after` |
+| Publish at least one `ArtifactResolutionService` when delivering a Web SSO response by artifact | Mandatory | Profiles §4.1.6, E2 | `IdpConfigBuilder::artifact_resolution_service` |
+| Reject a delivery whose index does not name a SOAP `ArtifactResolutionService` in the local metadata, and store nothing | Library policy: SOAP is the only synchronous resolution binding the crate implements. | Bindings §3.6.4 | `ArtifactDelivery::redirect`, `ArtifactDelivery::post_form` |
+| Put the URL-encoded artifact in a `SAMLart` query parameter | Mandatory | Bindings §3.6.3.2 | `ArtifactDelivery::redirect` |
+| Put the artifact in a hidden control named `SAMLart`, in a form posted to the assertion consumer | Mandatory | Bindings §3.6.3.3 | `ArtifactDelivery::post_form` |
+| Carry a `RelayState` that accompanies the artifact in a `RelayState` query parameter or hidden control | Mandatory | Bindings §3.6.3.2, §3.6.3.3 | Always |
+| Return the `RelayState` received with the `AuthnRequest` unchanged, including values over 80 bytes | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
+| Reject an explicit `RespondSso::relay_state` whenever the request supplied a `RelayState` | Library policy: reason not recorded. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
+| Reject a `RelayState` over 80 bytes that the IdP sets | Mandatory | Bindings §3.6.3.1 | Always |
+| Send `Cache-Control: no-cache, no-store` and `Pragma: no-cache` with the artifact | Recommended | Bindings §3.6.5.1 | `Outbound::headers` |
+| Honor a requested binding and assertion consumer when possible, and verify that the consumer belongs to the service provider | Mandatory | Profiles §4.1.3.5, §4.1.4.1 | Always |
+| Require the selected consumer to appear in the service provider metadata | Library policy: the IdP uses the SP metadata to establish endpoint ownership. | Profiles §4.1.3.5, §4.1.4.1 | Always |
+| Deliver an unsolicited artifact to the default assertion consumer, and reject a default that is not HTTP-Artifact | Recommended | Profiles §4.1.5 | Always |
+| Sign the assertions or the `Response` | Optional | Profiles §4.1.3.5, E93 | Always |
+| For `Success`, sign the assertion when the SP metadata sets `WantAssertionsSigned`, and sign the `Response` otherwise. For an error, sign the `Response` | Library policy: reason not recorded. | Profiles §4.1.3.5 | `RespondSso::sign_response` also signs a `Success` `Response` |
+| Sign the `Response` when an `EncryptedAssertion` uses a CBC algorithm | Recommended | Profiles §4.1.3.5, E93 | `RespondSso::allow_unsigned_encrypted_cbc` |
+| Write the assertion consumer URL in `Destination` | Library policy: reason not recorded. | Core §3.2.2, Bindings §3.6.5.2, E59 | Always |
+| Support error delivery by artifact when the user agent remains available and an acceptable response location exists | Recommended | Profiles §4.1.3.5, E85 | `SsoOutcome::Failure` |
+| Omit all assertions from an error `Response` | Mandatory | Profiles §4.1.4.2 | `SsoOutcome::Failure` |
+| Reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
 
 ## Service provider receipt
 
-`DeliveredArtifact`, `ServiceProvider::finish_sso`, and
-`ServiceProvider::accept_unsolicited_sso` are this actor.
+`DeliveredArtifact`, `ServiceProvider::finish_sso`, and `ServiceProvider::accept_unsolicited_sso` receive the artifact and accept the resolved `Response`.
 
-| Rule | Actor | Direction | Level |
+| Rule | Level | Section | Option |
 | --- | --- | --- | --- |
-| An endpoint that supports this binding accepts both encodings | Service provider | Inbound artifact | Mandatory. Bindings §3.6.3. `DeliveredArtifact::from_query` reads an HTTP GET, and `DeliveredArtifact::from_form` reads an HTTP POST. The deployment routes both methods to the assertion consumer |
-| Publish the assertion consumer with the HTTP-Artifact binding | Service provider | SP metadata | Recommendation. Bindings §3.6.7 as replaced by Errata 05 E2. `AcsEndpoint::artifact` |
-| Other controls are not required to process the artifact | Service provider | Inbound artifact | Mandatory. Bindings §3.6.3.3. Parameters other than `SAMLart` and `RelayState` are ignored |
-| One `SAMLart` value and at most one `RelayState` value | Service provider | Inbound artifact | Library policy. Bindings §3.6.3 names one parameter of each and does not require a receiver to reject a repeat. The looser rule cannot be applied because two artifact values refer to two stored messages, and two `RelayState` values cannot both equal the one the service provider sent |
-| The artifact is the SAML V2.0 type `0x0004` | Service provider | Inbound artifact | Mandatory. Errata 05 E4: an artifact format not defined for SAML V2.0 must not be used with this binding |
-| A received `RelayState` longer than 80 bytes is accepted | Service provider | Inbound artifact | Bindings §3.6.3.1 forbids the entity creating the message from exceeding 80 bytes and has no receiver rule. `DeliveredArtifact::from_query` and `from_form` keep the value. Library policy for the bound: a value longer than `MAX_RECEIVED_RELAY_STATE_BYTES`, 4096 bytes, returns `SamlError::LimitExceeded`. It is a resource limit on unauthenticated input, not an OASIS rule |
-| `RelayState` is the value the service provider sent, when it sent one | Service provider | Inbound `finish_sso` | Library policy, as for HTTP-POST. Bindings §3.6.5.2 says nothing protects the pairing of an artifact and its `RelayState`, and requires the consumer to take care. It does not require this comparison. The pending login supplies the expected value. The SP validates the resolved response before comparing the state, so a refusal reports its status and a session can carry only the expected value. When the service provider sent none, Bindings §3.6.3.1 lets the identity provider include one, and `SsoSession::relay_state` reports it |
-| A URL taken from `RelayState` is sanitized | Service provider | Inbound artifact | Mandatory for the party that uses the value that way. Bindings §3.6.5.2 as amended by Errata 05 E90. saml-rs does not interpret `RelayState`. The caller sanitizes it |
-| Resolve the artifact on a synchronous binding that does not use the browser | Service provider | Resolve artifact | Mandatory. Bindings §3.6.5, Errata 05 E31. `ServiceProvider::resolve_artifact` over SOAP |
-| The dereference is mutually authenticated, integrity protected, and confidential | Both parties | Resolve artifact | Mandatory. Profiles §4.1.4.4. `Inbound::artifact` takes the message `ArtifactResolution::finish` returned. `resolve_artifact` builds that resolution only for a `SoapChannel` that attests all three, and `answer_artifact_resolve` releases a stored `<Response>` only on such a channel |
-| The message is the one resolved from the delivered artifact, by the identity provider being accepted | Service provider | Inbound `finish_sso` and `accept_unsolicited_sso` | Library policy. Profiles §4.1.3.5 has the service provider retrieve the `Response` for the artifact from the identity provider that issued it, and does not state a receiver rejection. The looser rule cannot be applied because `Inbound::artifact` pairs two caller values, and a mismatched pair would accept a message for another artifact or identity provider. Such a message is rejected |
-| Enforce single use of a received artifact, and do not retry one whose resolution did not complete | Service provider | Resolve artifact | Recommendation. Bindings §3.6.5.2. With `ReplayPolicy::RequireCache`, `resolve_artifact` stores `ReplayKey::Artifact` in the caller's `ReplayCache` when resolution starts, until the context time plus `SamlValidationContext::with_replay_retention`. The binding asks that period to exceed the time the issuer would resolve the artifact. `ReplayPolicy::Disabled` on that call relaxes it |
-| Verify any signature on the `Response` or an assertion | Service provider | Inbound | Mandatory. Profiles §4.1.4.3. The SP verifies the resolved response under the same [signature rules as HTTP-POST](web-browser-sso-acceptance.md). |
-| An XML signature covers the `Response` or each assertion | Service provider | Inbound, `Success` response | Library policy. Profiles §4.1.3.5 as amended by Errata 05 E93 makes signing optional for the IdP on HTTP-Artifact. Section 4.1.4.4 permits the dereference binding to authenticate the parties and protect the exchange. The SP requires signature coverage because `finish_sso` and `accept_unsolicited_sso` take the subject, conditions, and attributes for `SsoSession` only from XML verified against the IdP's signing key. `AssertionSignaturePolicy` and `ResponseSignaturePolicy` apply as for HTTP-POST |
-| Bearer `Recipient` is the assertion consumer the artifact was delivered to | Service provider | Inbound | Mandatory. Profiles §4.1.4.3 as replaced by Errata 05 E26. `finish_sso` uses the pending assertion consumer. `accept_unsolicited_sso` uses the URL supplied with `SamlValidationContext::with_recipient_endpoint`, as for HTTP-POST in [acceptance](web-browser-sso-acceptance.md). Without one, it compares the `Recipient` with the local default HTTP-Artifact consumer, selected by the indexed-default algorithm in [generation](web-browser-sso-generation.md). Treating that default as the consumer the artifact reached is library policy. The looser rule cannot be applied because without a supplied URL `accept_unsolicited_sso` is not told which URL received the artifact. A response delivered to another HTTP-Artifact consumer is then rejected, as an unsolicited HTTP-POST response is |
-| A present `Destination` is that assertion consumer | Service provider | Inbound | Mandatory when the attribute is present. Core §3.2.2. `Destination` is compared after the `xs:anyURI` whitespace collapse |
-| A signed `Response` may omit `Destination` | Service provider | Inbound | Errata 05 E59 leaves the attribute unspecified on this binding. The HTTP-POST rule that a signed message carries it (Bindings §3.5.5.2) is not applied |
-| A status other than Success does not establish a session | Service provider | Inbound | Mandatory. Profiles §4.1.4.2: an error `Response` carries no assertion. `SamlError::StatusNotSuccess` carries the status codes read using [XML Schema whitespace collapse](web-browser-sso-acceptance.md#service-provider) |
-| Do not replay a bearer assertion | Service provider | Inbound | Profiles §4.1.4.5 states this for HTTP-POST. On this binding it is the caller's `ReplayPolicy`, classified in [metadata and replay](metadata-and-replay.md) |
-| Accepting an unsolicited response can be disabled | Service provider | Inbound | Recommendation. Profiles §4.1.5 as amended by Errata 05 E90. `accept_unsolicited_sso` is a separate call. `finish_sso` does not accept one |
+| Accept the artifact from an HTTP GET query and from an HTTP POST form | Mandatory | Bindings §3.6.3 | `DeliveredArtifact::from_query`, `DeliveredArtifact::from_form` |
+| Publish an assertion consumer with the HTTP-Artifact binding | Recommended | Bindings §3.6.7, E2 | `AcsEndpoint::artifact` |
+| Process a form without requiring any additional controls, and ignore controls other than `SAMLart` and `RelayState` | Mandatory | Bindings §3.6.3.3 | Always |
+| Require exactly one `SAMLart` and at most one `RelayState` | Library policy: two artifact values refer to two stored messages, and two `RelayState` values cannot both equal the one the service provider sent. | Bindings §3.6.3 | Always |
+| Reject an artifact that is not the SAML V2.0 type `0x0004` | Mandatory | Bindings §3.6.4.2, E4 | Always |
+| Accept a received `RelayState` of 81 to 4096 bytes, and reject a longer one | Library policy: the 80-byte limit binds only the creator, and 4096 bytes is a resource limit on unauthenticated input. | Bindings §3.6.3.1 | Always |
+| Compare the `RelayState` with the pending login when the SP sent one | Library policy: nothing protects the pairing of an artifact and its `RelayState`. | Bindings §3.6.5.2 | `ServiceProvider::finish_sso` |
+| Accept only the message that the accepted IdP returned for the delivered artifact | Library policy: `Inbound::artifact` pairs two caller values, and a mismatched pair would accept a message for another artifact or identity provider. | Profiles §4.1.3.5 | `Inbound::artifact` |
+| Require an XML signature on the `Response` or on each assertion of a `Success` response | Library policy: `SsoSession` takes the subject, conditions, and attributes only from XML verified against the IdP signing key. | Profiles §4.1.3.5, §4.1.4.4, E93, `StatusResponseType`, `AssertionType` | Always |
+| Compare a present `Destination` and the bearer `Recipient` with the assertion consumer the artifact was delivered to | Mandatory | Core §3.2.2, Profiles §4.1.4.3, E26 | Always for `finish_sso`. `SamlValidationContext::with_recipient_endpoint` selects the endpoint for `accept_unsolicited_sso` |
+| Expect the default HTTP-Artifact assertion consumer when `accept_unsolicited_sso` gets no recipient endpoint | Library policy: without a supplied URL, `accept_unsolicited_sso` is not told which URL received the artifact. | Profiles §4.1.4.3 | `SamlValidationContext::with_recipient_endpoint` |
+| Allow `Destination` to be omitted from a signed `Response` | Optional | Core §3.2.2, Bindings §3.6.5.2, E59 | Always |
+| Store the bearer assertion `ID` only when the caller passes a replay cache | Library policy: Profiles §4.1.4.5 states the replay duty for HTTP-POST only. | Profiles §4.1.4.5 | `ReplayPolicy` |
+| Accept an IdP-supplied `RelayState` on an unsolicited artifact response or when the request carried none | Optional | Bindings §3.6.3.1, Profiles §4.1.5 | Always |
+| Allow the SP to refuse unsolicited responses | Recommended | Profiles §4.1.5, E90 | Do not call `accept_unsolicited_sso` |
 
-The remaining acceptance rows, including bearer `NotOnOrAfter`,
-`InResponseTo`, audience, conditions, and clock skew, are the HTTP-POST rows
-in [acceptance](web-browser-sso-acceptance.md).
-
-The SP relies on the deployment's `SoapChannel` attestation for the exchange
-it starts with `resolve_artifact`. The caller supplies the reply separately.
-`ArtifactResolution::finish` uses the issuer and request ID to correlate that
-reply. Only session creation needs independent proof of the assertion data.
-For an otherwise valid unsigned plaintext login response, it returns
-`SamlError::SignatureMissing`.
-
-For the issuing IdP, Profiles §4.1.3.5 as amended by
-[Errata 05 E93](https://docs.oasis-open.org/security/saml/v2.0/errata05/os/saml-v2.0-errata05-os.html)
-makes signing optional on HTTP-Artifact and recommends signing the response
-when an encrypted assertion uses CBC. Both the
-[protocol schema](https://docs.oasis-open.org/security/saml/v2.0/saml-schema-protocol-2.0.xsd)
-(`StatusResponseType`, the base of `ResponseType`) and the
-[assertion schema](https://docs.oasis-open.org/security/saml/v2.0/saml-schema-assertion-2.0.xsd)
-(`AssertionType`) give `ds:Signature` a minimum occurrence of zero.
+The artifact value, the mutually authenticated, integrity-protected, and confidential SOAP dereference, single use of the received artifact, and release only to the service provider the response was issued to are in [artifact resolution](artifact-resolution.md). Signature verification, `Recipient` and `NotOnOrAfter`, `InResponseTo`, audience, conditions, the status check, and clock skew are the HTTP-POST rows in [acceptance](web-browser-sso-acceptance.md).
 
 ## Outside this flow
 
-- `<AuthnRequest>` over HTTP-Artifact, and Single Logout over HTTP-Artifact.
-- The HTTP response that carries the artifact, including the XHTML form document, and TLS for the browser exchange.
-- Accepting a `Response` that carries no XML signature on the strength of the dereference channel alone.
-- The IdP operational mode and the SP operational mode.
+- Sanitizing a URL taken from `RelayState`. Mandatory, Bindings §3.6.5.2 and E90. The caller does it, because saml-rs does not interpret `RelayState`.
+- Integrity protection of a `RelayState` the application sets. Recommended, Bindings §3.6.3.1.
+- The HTTP 302 or 303 status for a URL-encoded artifact, and no HTTP error status for a SAML failure. Mandatory, Bindings §3.6.5 and §3.6.6. The deployment sends the response. `Outbound::redirect_url` is the `Location`.
+- The XHTML document and `method="POST"` of the form-encoded artifact. Mandatory, Bindings §3.6.3.3. The caller renders `Outbound::post_form`.
+- TLS for the browser exchange. Recommended, Bindings §3.6.5.2 and Profiles §4.1.3.5.
+- Accepting a `Response` with no XML signature on the strength of the dereference channel alone. Optional, Profiles §4.1.4.4.
+- `<AuthnRequest>` over HTTP-Artifact, and Single Logout over HTTP-Artifact. Optional, Bindings §3.6.
+- The IdP operational mode and the SP operational mode. Conformance §3.1.
