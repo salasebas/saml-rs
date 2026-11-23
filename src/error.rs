@@ -137,8 +137,8 @@ pub enum ResourceLimit {
     XmlBytes,
     /// Nested element depth, [`crate::XmlLimits::max_depth`].
     XmlDepth,
-    /// Element nodes in one document, [`crate::XmlLimits::max_nodes`].
-    XmlNodes,
+    /// Elements in one XML document, [`crate::XmlLimits::max_elements`].
+    XmlElements,
     /// Attributes on one element,
     /// [`crate::XmlLimits::max_attributes_per_element`].
     XmlAttributesPerElement,
@@ -149,8 +149,8 @@ pub enum ResourceLimit {
     /// [`crate::XmlLimits::max_attribute_value_bytes`].
     XmlAttributeValueBytes,
     /// Decoded direct text bytes of one element,
-    /// [`crate::XmlLimits::max_text_bytes`].
-    XmlTextBytes,
+    /// [`crate::XmlLimits::max_element_text_bytes`].
+    XmlElementTextBytes,
     /// Bytes decoded from a base64 binding parameter. HTTP-POST and
     /// SimpleSign messages are bounded by [`crate::XmlLimits::max_bytes`], and
     /// HTTP-Redirect messages by
@@ -172,11 +172,11 @@ impl fmt::Display for ResourceLimit {
         match self {
             Self::XmlBytes => f.write_str("XML bytes"),
             Self::XmlDepth => f.write_str("XML depth"),
-            Self::XmlNodes => f.write_str("XML nodes"),
+            Self::XmlElements => f.write_str("XML elements"),
             Self::XmlAttributesPerElement => f.write_str("XML attributes per element"),
             Self::XmlNamespaceBindings => f.write_str("XML namespace bindings in scope"),
             Self::XmlAttributeValueBytes => f.write_str("XML attribute value bytes"),
-            Self::XmlTextBytes => f.write_str("XML text bytes"),
+            Self::XmlElementTextBytes => f.write_str("XML text bytes per element"),
             Self::Base64DecodedBytes => f.write_str("base64-decoded bytes"),
             Self::InflatedBytes => f.write_str("inflated bytes"),
             Self::DecryptionWork => f.write_str("decryption work units"),

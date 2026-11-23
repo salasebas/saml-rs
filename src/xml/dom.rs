@@ -14,10 +14,10 @@ use quick_xml::Reader;
 
 const DEFAULT_XML_MAX_BYTES: usize = 1024 * 1024;
 const DEFAULT_XML_MAX_DEPTH: usize = 1024;
-const DEFAULT_XML_MAX_NODES: usize = 50_000;
+const DEFAULT_XML_MAX_ELEMENTS: usize = 50_000;
 const DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT: usize = 64;
 const DEFAULT_XML_MAX_ATTRIBUTE_VALUE_BYTES: usize = 16 * 1024;
-const DEFAULT_XML_MAX_TEXT_BYTES: usize = DEFAULT_XML_MAX_BYTES;
+const DEFAULT_XML_MAX_ELEMENT_TEXT_BYTES: usize = DEFAULT_XML_MAX_BYTES;
 
 /// Resource limits enforced while parsing XML into the local DOM.
 ///
@@ -34,10 +34,10 @@ pub struct XmlLimits {
     ///
     /// Defaults to 1,024.
     pub max_depth: usize,
-    /// Maximum element nodes in the document.
+    /// Maximum elements in the XML document.
     ///
     /// Defaults to 50,000.
-    pub max_nodes: usize,
+    pub max_elements: usize,
     /// Maximum attributes on one element.
     ///
     /// The DOM parser and protocol-profile validation also use this number as
@@ -52,7 +52,7 @@ pub struct XmlLimits {
     /// Maximum decoded direct text bytes for one element.
     ///
     /// Defaults to 1 MiB (1,048,576 bytes).
-    pub max_text_bytes: usize,
+    pub max_element_text_bytes: usize,
 }
 
 impl XmlLimits {
@@ -61,10 +61,10 @@ impl XmlLimits {
         Self {
             max_bytes: usize::MAX,
             max_depth: usize::MAX,
-            max_nodes: usize::MAX,
+            max_elements: usize::MAX,
             max_attributes_per_element: usize::MAX,
             max_attribute_value_bytes: usize::MAX,
-            max_text_bytes: usize::MAX,
+            max_element_text_bytes: usize::MAX,
         }
     }
 
@@ -82,13 +82,13 @@ impl XmlLimits {
         *count = count
             .checked_add(1)
             .ok_or_else(|| SamlError::LimitExceeded {
-                limit: ResourceLimit::XmlNodes,
-                maximum: self.max_nodes,
+                limit: ResourceLimit::XmlElements,
+                maximum: self.max_elements,
             })?;
-        if *count > self.max_nodes {
+        if *count > self.max_elements {
             return Err(SamlError::LimitExceeded {
-                limit: ResourceLimit::XmlNodes,
-                maximum: self.max_nodes,
+                limit: ResourceLimit::XmlElements,
+                maximum: self.max_elements,
             });
         }
         Ok(())
@@ -121,10 +121,10 @@ impl Default for XmlLimits {
         Self {
             max_bytes: DEFAULT_XML_MAX_BYTES,
             max_depth: DEFAULT_XML_MAX_DEPTH,
-            max_nodes: DEFAULT_XML_MAX_NODES,
+            max_elements: DEFAULT_XML_MAX_ELEMENTS,
             max_attributes_per_element: DEFAULT_XML_MAX_ATTRIBUTES_PER_ELEMENT,
             max_attribute_value_bytes: DEFAULT_XML_MAX_ATTRIBUTE_VALUE_BYTES,
-            max_text_bytes: DEFAULT_XML_MAX_TEXT_BYTES,
+            max_element_text_bytes: DEFAULT_XML_MAX_ELEMENT_TEXT_BYTES,
         }
     }
 }
@@ -155,13 +155,13 @@ fn checked_append_text(
             .len()
             .checked_add(text.len())
             .ok_or_else(|| SamlError::LimitExceeded {
-                limit: ResourceLimit::XmlTextBytes,
-                maximum: limits.max_text_bytes,
+                limit: ResourceLimit::XmlElementTextBytes,
+                maximum: limits.max_element_text_bytes,
             })?;
-    if next_len > limits.max_text_bytes {
+    if next_len > limits.max_element_text_bytes {
         return Err(SamlError::LimitExceeded {
-            limit: ResourceLimit::XmlTextBytes,
-            maximum: limits.max_text_bytes,
+            limit: ResourceLimit::XmlElementTextBytes,
+            maximum: limits.max_element_text_bytes,
         });
     }
     target.push_str(text);
@@ -348,7 +348,7 @@ fn parse_roots_inner<N, A>(
     let bom_len = utf8_bom_len(xml);
     let mut stack: Vec<Element<N, A>> = Vec::new();
     let mut roots = Vec::new();
-    let mut node_count = 0usize;
+    let mut element_count = 0usize;
 
     loop {
         let before = bom_len + reader.buffer_position() as usize;
@@ -356,7 +356,7 @@ fn parse_roots_inner<N, A>(
         let after = bom_len + reader.buffer_position() as usize;
         match event {
             Event::Start(ref e) | Event::Empty(ref e) => {
-                limits.count_element(&mut node_count)?;
+                limits.count_element(&mut element_count)?;
                 limits.check_depth(stack.len().saturating_add(1))?;
                 let node = element::read_element(
                     e,
@@ -849,16 +849,24 @@ mod tests {
     }
 
     #[test]
-    fn rejects_xml_over_node_limit() {
+    fn rejects_xml_over_element_limit() -> Result<(), Box<dyn std::error::Error>> {
         let limits = XmlLimits {
-            max_nodes: 2,
+            max_elements: 2,
             ..Default::default()
         };
 
-        assert!(limit_hit(
-            parse_document("<a><b/><c/></a>", limits),
-            ResourceLimit::XmlNodes
+        let error = parse_document("<a><b/><c/></a>", limits)
+            .err()
+            .ok_or("expected the XML element limit to be exceeded")?;
+        assert!(matches!(
+            error,
+            SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlElements,
+                maximum: 2,
+            }
         ));
+        assert_eq!(error.to_string(), "XML elements limit exceeded (maximum 2)");
+        Ok(())
     }
 
     #[test]
@@ -954,15 +962,26 @@ mod tests {
     }
 
     #[test]
-    fn rejects_xml_over_text_limit() {
+    fn rejects_xml_over_element_text_limit() -> Result<(), Box<dyn std::error::Error>> {
         let limits = XmlLimits {
-            max_text_bytes: 3,
+            max_element_text_bytes: 3,
             ..Default::default()
         };
 
-        assert!(limit_hit(
-            parse_document("<a>1234</a>", limits),
-            ResourceLimit::XmlTextBytes
+        let error = parse_document("<a>1234</a>", limits)
+            .err()
+            .ok_or("expected the XML element text limit to be exceeded")?;
+        assert!(matches!(
+            error,
+            SamlError::LimitExceeded {
+                limit: ResourceLimit::XmlElementTextBytes,
+                maximum: 3,
+            }
         ));
+        assert_eq!(
+            error.to_string(),
+            "XML text bytes per element limit exceeded (maximum 3)"
+        );
+        Ok(())
     }
 }

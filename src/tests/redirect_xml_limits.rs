@@ -35,7 +35,7 @@ fn decode_request(query: &str) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn redirect_byte_limit_accepts_boundary_and_precedes_node_depth_and_signature_errors(
+fn redirect_byte_limit_accepts_boundary_and_precedes_element_depth_and_signature_errors(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let limits = XmlLimits::default();
     let xml = format!(
@@ -52,7 +52,7 @@ fn redirect_byte_limit_accepts_boundary_and_precedes_node_depth_and_signature_er
     let over_boundary = xml.replacen('é', "é ", 1);
     let competing_limits = format!(
         "{ROOT}<ds:Signature/>{}{}{}</r>",
-        "<n/>".repeat(limits.max_nodes),
+        "<n/>".repeat(limits.max_elements),
         "<n>".repeat(limits.max_depth),
         "</n>".repeat(limits.max_depth),
     );
@@ -74,10 +74,11 @@ fn redirect_byte_limit_accepts_boundary_and_precedes_node_depth_and_signature_er
 }
 
 #[test]
-fn redirect_node_limit_counts_start_and_empty_elements() -> Result<(), Box<dyn std::error::Error>> {
+fn redirect_element_limit_counts_start_and_empty_elements() -> Result<(), Box<dyn std::error::Error>>
+{
     let limits = XmlLimits::default();
     for element in ["<n/>", "<n></n>"] {
-        let content = element.repeat(limits.max_nodes - 1);
+        let content = element.repeat(limits.max_elements - 1);
         let xml = format!("<r>text&amp;<![CDATA[data]]><!--comment--><?p value?>{content}</r>");
         for result in [
             build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
@@ -90,7 +91,7 @@ fn redirect_node_limit_counts_start_and_empty_elements() -> Result<(), Box<dyn s
             build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
             build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
         ] {
-            assert_limit(result, ResourceLimit::XmlNodes, limits.max_nodes);
+            assert_limit(result, ResourceLimit::XmlElements, limits.max_elements);
         }
     }
     Ok(())
@@ -124,11 +125,11 @@ fn redirect_depth_limit_counts_open_elements_but_not_empty_elements(
 }
 
 #[test]
-fn redirect_node_limit_includes_detached_signature_subtree(
+fn redirect_element_limit_includes_detached_signature_subtree(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let limits = XmlLimits::default();
     for element in ["<n/>", "<n></n>"] {
-        let content = element.repeat(limits.max_nodes - 2);
+        let content = element.repeat(limits.max_elements - 2);
         let xml = format!("{ROOT}<ds:Signature>{content}</ds:Signature></r>");
         let octet = build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg")?;
         assert_eq!(decode_request(&octet)?, format!("{ROOT}</r>"));
@@ -142,7 +143,7 @@ fn redirect_node_limit_includes_detached_signature_subtree(
             build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
             build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
         ] {
-            assert_limit(result, ResourceLimit::XmlNodes, limits.max_nodes);
+            assert_limit(result, ResourceLimit::XmlElements, limits.max_elements);
         }
     }
     Ok(())
@@ -176,11 +177,11 @@ fn redirect_depth_limit_includes_detached_signature_subtree(
 }
 
 #[test]
-fn redirect_node_limit_precedes_depth_limit() {
+fn redirect_element_limit_precedes_depth_limit() {
     let limits = XmlLimits::default();
     let xml = format!(
         "<r>{}{}{}</r>",
-        "<n/>".repeat(limits.max_nodes - limits.max_depth),
+        "<n/>".repeat(limits.max_elements - limits.max_depth),
         "<n>".repeat(limits.max_depth),
         "</n>".repeat(limits.max_depth),
     );
@@ -188,7 +189,7 @@ fn redirect_node_limit_precedes_depth_limit() {
         build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
         build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
     ] {
-        assert_limit(result, ResourceLimit::XmlNodes, limits.max_nodes);
+        assert_limit(result, ResourceLimit::XmlElements, limits.max_elements);
     }
 }
 

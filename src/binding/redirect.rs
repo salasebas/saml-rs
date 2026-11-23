@@ -112,7 +112,7 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
         .resolver_mut()
         .set_max_namespace_bindings(limits.max_attributes_per_element);
     let mut depth = 0usize;
-    let mut nodes = 0usize;
+    let mut element_count = 0usize;
     let mut open_signature = None;
     let mut spans = Vec::new();
 
@@ -127,14 +127,14 @@ fn protocol_signature_spans(xml: &str) -> Result<Vec<(usize, usize)>, SamlError>
                 return Err(SamlError::xml("DOCTYPE is not allowed"));
             }
             RedirectTag::Start { protocol_signature } => {
-                limits.count_element(&mut nodes)?;
+                limits.count_element(&mut element_count)?;
                 if depth == 1 && protocol_signature {
                     open_signature = Some(element_start(xml, end)?);
                 }
                 depth = limits.checked_depth(depth)?;
             }
             RedirectTag::Empty { protocol_signature } => {
-                limits.count_element(&mut nodes)?;
+                limits.count_element(&mut element_count)?;
                 if depth == 1 && protocol_signature {
                     let start = element_start(xml, end)?;
                     spans.push((start, end));

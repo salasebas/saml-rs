@@ -22,10 +22,10 @@ fn sp_config_converts_selected_settings() -> Result<(), SamlError> {
     let limits = XmlLimits {
         max_bytes: 32_768,
         max_depth: 64,
-        max_nodes: 512,
+        max_elements: 512,
         max_attributes_per_element: 16,
         max_attribute_value_bytes: 2048,
-        max_text_bytes: 4096,
+        max_element_text_bytes: 4096,
     };
     let setting = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,

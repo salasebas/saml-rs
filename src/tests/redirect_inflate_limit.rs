@@ -195,7 +195,7 @@ fn simplesign_flow_rejects_decoded_xml_byte_limit() -> Result<(), Box<dyn std::e
 }
 
 #[test]
-fn post_flow_rejects_dom_node_budget_before_authentication(
+fn post_flow_rejects_dom_element_limit_before_authentication(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let xml = format!("<AuthnRequest>{}</AuthnRequest>", "<Extra/>".repeat(4));
     let request = HttpRequest::post(vec![(
@@ -203,7 +203,7 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
         STANDARD.encode(xml.as_bytes()),
     )]);
     let mut opts = FlowOptions::new(Binding::Post, ParserType::SamlRequest);
-    opts.xml_limits.max_nodes = 3;
+    opts.xml_limits.max_elements = 3;
 
     let err = flow(&opts, &request)
         .err()
@@ -212,7 +212,7 @@ fn post_flow_rejects_dom_node_budget_before_authentication(
     assert!(matches!(
         err,
         SamlError::LimitExceeded {
-            limit: ResourceLimit::XmlNodes,
+            limit: ResourceLimit::XmlElements,
             ..
         }
     ));
