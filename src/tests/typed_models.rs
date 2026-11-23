@@ -167,7 +167,7 @@ fn typed_models_redirect_outbound_exposes_only_redirect_url(
     );
     assert!(matches!(
         outbound.post_form(),
-        Err(SamlError::OutboundBindingMismatch {
+        Err(SamlError::OutboundDeliveryMismatch {
             actual: Binding::Redirect,
             ..
         })
@@ -198,7 +198,7 @@ fn typed_models_post_outbound_exposes_post_form() -> Result<(), Box<dyn std::err
     );
     assert!(matches!(
         outbound.redirect_url(),
-        Err(SamlError::OutboundBindingMismatch {
+        Err(SamlError::OutboundDeliveryMismatch {
             actual: Binding::Post,
             ..
         })
@@ -468,14 +468,14 @@ fn typed_models_slo_outbound_accepts_logout_bindings() -> Result<(), Box<dyn std
         assert!(
             matches!(
                 request.soap_request(),
-                Err(SamlError::OutboundBindingMismatch { actual, .. }) if actual == binding
+                Err(SamlError::OutboundDeliveryMismatch { actual, .. }) if actual == binding
             ),
             "{binding:?}"
         );
         assert!(
             matches!(
                 response.soap_response(),
-                Err(SamlError::OutboundBindingMismatch { actual, .. }) if actual == binding
+                Err(SamlError::OutboundDeliveryMismatch { actual, .. }) if actual == binding
             ),
             "{binding:?}"
         );

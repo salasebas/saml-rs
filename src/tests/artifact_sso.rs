@@ -501,7 +501,7 @@ fn an_artifact_delivered_in_a_form_establishes_the_session(
     assert_eq!(form.value("RelayState"), Some("form-state"));
     assert!(matches!(
         response.redirect_url(),
-        Err(SamlError::OutboundBindingMismatch {
+        Err(SamlError::OutboundDeliveryMismatch {
             actual: saml_rs::constants::Binding::Post
         })
     ));
@@ -1332,7 +1332,7 @@ fn a_typed_sso_artifact_response_is_withheld_without_confidentiality(
     )?;
     assert_eq!(
         answer.release(),
-        ArtifactRelease::Withheld(ArtifactWithheld::Channel)
+        ArtifactRelease::Withheld(ArtifactWithheld::InsufficientChannelProtection)
     );
     assert!(!answer.response().envelope().contains("Assertion"));
     Ok(())
