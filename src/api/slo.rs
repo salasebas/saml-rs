@@ -599,6 +599,7 @@ fn start_slo_impl(
         name_id_format,
         issue_instant: &issue_instant,
         not_on_or_after: not_on_or_after.as_deref(),
+        reason: options.reason.as_deref(),
         validation: request_validation,
         name_id_encryption: options.identifier_encryption,
     })?;

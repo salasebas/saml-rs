@@ -6,6 +6,7 @@ use crate::error::{utf8_err, SamlError};
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
 use crate::template::render_template;
+use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 use crate::xml::write::Prefixes;
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
@@ -14,8 +15,8 @@ use crate::xml::{
 
 use super::encrypted_id::encrypt_name_id_for_peer;
 use super::rendering::{
-    issuer_of, render_default_logout_response, render_logout_request, LogoutRequestSubject,
-    LogoutRequestTimeAttributes,
+    issuer_of, render_default_logout_response, render_logout_request, LogoutRequestAttributes,
+    LogoutRequestSubject,
 };
 
 pub(crate) struct CreatedLogoutRequest {
@@ -41,6 +42,7 @@ pub(crate) struct LogoutRequestInput<'a> {
     pub(crate) name_id_format: Option<&'a str>,
     pub(crate) issue_instant: &'a str,
     pub(crate) not_on_or_after: Option<&'a str>,
+    pub(crate) reason: Option<&'a str>,
     pub(crate) validation: LogoutRequestValidation,
     /// `EncryptIdentifiers` sends the `<NameID>` as an `<EncryptedID>` for the
     /// peer's encryption key.
@@ -60,12 +62,20 @@ pub(crate) fn create_logout_request_for_subject_inner(
         name_id_format,
         issue_instant,
         not_on_or_after,
+        reason,
         validation,
         name_id_encryption,
     } = input;
 
     reject_soap_relay_state(binding, relay_state)?;
     validate_name_id_format(name_id_format)?;
+    if reason.is_some_and(|value| !is_absolute_uri_reference(value)) {
+        return Err(SamlError::Invalid(
+            "a LogoutRequest reason must be an absolute URI reference".into(),
+        ));
+    }
+    let reason = reason.map(collapse_whitespace);
+    let reason = reason.as_deref();
     if matches!(validation, LogoutRequestValidation::SessionParticipant)
         && subject.session_indexes.is_empty()
     {
@@ -81,12 +91,13 @@ pub(crate) fn create_logout_request_for_subject_inner(
     let xml = render_logout_request(
         init_setting,
         &issuer,
-        &id,
-        LogoutRequestTimeAttributes {
+        LogoutRequestAttributes {
+            id: &id,
+            destination: &destination,
             issue_instant,
             not_on_or_after,
+            reason,
         },
-        &destination,
         subject,
         name_id_format,
     )?;
@@ -107,6 +118,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         destination: &destination,
         issuer: &issuer,
         expiration,
+        reason,
         name_id: subject.name_id,
         name_id_format,
         name_id_qualifiers: subject.qualifiers,
