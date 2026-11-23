@@ -282,5 +282,18 @@ fn sign_metadata_rejects_inputs_it_cannot_sign() -> Result<(), Box<dyn std::erro
             "{case}: {result:?}"
         );
     }
+    let mismatched_credential = X509Credential::new(
+        CertificatePem::new(MESSAGE_CERT),
+        PrivateKeyPem::new(METADATA_KEY),
+    );
+    let result = sign_metadata(
+        &metadata,
+        &mismatched_credential,
+        &SignatureAlgorithm::RsaSha256,
+    );
+    assert!(
+        matches!(result, Err(SamlError::Crypto { .. })),
+        "{result:?}"
+    );
     Ok(())
 }

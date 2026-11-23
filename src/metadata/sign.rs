@@ -5,8 +5,8 @@ use std::borrow::Cow;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-use crate::config::{Passphrase, SignatureAlgorithm, X509Credential};
-use crate::crypto::keys::read_private_key;
+use crate::config::{SignatureAlgorithm, X509Credential};
+use crate::crypto::keys::load_credential_key;
 use crate::crypto::sign::sign_root_as_first_child;
 use crate::entity::generate_id;
 use crate::error::{xml_err, SamlError};
@@ -37,7 +37,8 @@ use crate::xml::name::is_ncname;
 /// [`SignatureAlgorithm::HmacSha1`]. Returns [`SamlError::Xml`]
 /// or [`SamlError::LimitExceeded`] when `xml` is not well-formed or exceeds the
 /// default [`XmlLimits`](crate::XmlLimits). Returns [`SamlError::Crypto`] when
-/// the key cannot be read or the crypto provider cannot sign with `algorithm`.
+/// the private key or certificate cannot be loaded, the private key does not
+/// match the certificate, or the crypto provider cannot sign with `algorithm`.
 pub fn sign_metadata(
     xml: &str,
     credential: &X509Credential,
@@ -70,10 +71,7 @@ pub fn sign_metadata(
         Some(_) => Cow::Borrowed(xml),
         None => Cow::Owned(with_generated_root_id(xml, &root)?),
     };
-    let key = read_private_key(
-        credential.key().as_str(),
-        credential.passphrase().map(Passphrase::as_str),
-    )?;
+    let key = load_credential_key(credential, "metadata signing credential")?;
     sign_root_as_first_child(
         &xml,
         &root.local_name,

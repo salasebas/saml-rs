@@ -14,12 +14,10 @@ pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key,
     load_pem_auto(pem.as_bytes(), password).map_err(crypto_err)
 }
 
-/// Check that every key and certificate in `credentials` loads, and that the
-/// key of each signing and decryption credential is the private key of its
-/// certificate.
+/// Check the keys and certificates used for message signing and decryption.
 pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlError> {
     if let Some(credential) = credentials.signing_credential() {
-        check_credential(credential, "signing credential")?;
+        load_credential_key(credential, "signing credential")?;
     }
     for (index, certificate) in credentials
         .additional_signing_certificates()
@@ -32,7 +30,7 @@ pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlErr
         )?;
     }
     for (index, credential) in credentials.decryption_credentials().iter().enumerate() {
-        check_credential(
+        load_credential_key(
             credential,
             &format!("decryption credential at index {index}"),
         )?;
@@ -40,7 +38,10 @@ pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlErr
     Ok(())
 }
 
-fn check_credential(credential: &X509Credential, name: &str) -> Result<(), SamlError> {
+pub(crate) fn load_credential_key(
+    credential: &X509Credential,
+    name: &str,
+) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     let key = load_pem_auto(
         credential.key().as_str().as_bytes(),
@@ -58,7 +59,7 @@ fn check_credential(credential: &X509Credential, name: &str) -> Result<(), SamlE
             "{name}: the private key does not match the certificate"
         )));
     }
-    Ok(())
+    Ok(key)
 }
 
 fn load_published_certificate(certificate: &CertificatePem, name: &str) -> Result<Key, SamlError> {
