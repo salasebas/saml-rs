@@ -6,11 +6,8 @@ hero:
   title: SAML 2.0 sign-in for Rust, at both ends
   tagline: Accept a browser login, or issue one from your own identity provider. The same crate reads metadata and runs Single Logout.
   actions:
-    - text: Run the example
-      link: /tutorial/run-the-sso-example/
-    - text: Install
+    - text: Get Started
       link: /start/install/
-      variant: secondary
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -25,10 +22,10 @@ import FeatureGrid from '../../components/FeatureGrid.astro';
 </p>
 
 ```sh
-cargo add saml-rs
+cargo add saml-rs --git https://github.com/salasebas/saml-rs.git --branch main
 ```
 
-The package name is `saml-rs`. Rust imports `saml_rs`. Method signatures live on [docs.rs](https://docs.rs/saml-rs).
+The package name is `saml-rs`. Rust imports `saml_rs`.
 
 <div class="saml-label">Start here</div>
 

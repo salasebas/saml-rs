@@ -37,6 +37,7 @@
 	--saml-muted: #a1a1a1;
 	--saml-on-accent: #1a1a1a;
 	--saml-radius: 0.5rem;
+	--saml-header-control-height: 2.5rem;
 }
 
 :root[data-theme='light'] {
@@ -93,6 +94,7 @@ header.header {
 }
 
 site-search button[data-open-modal] {
+	block-size: var(--saml-header-control-height);
 	border-radius: var(--saml-radius);
 	border-color: var(--sl-color-hairline-light);
 	background: transparent;

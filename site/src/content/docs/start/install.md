@@ -1,20 +1,20 @@
 ---
 title: "Install"
-description: "Add the crate to the package that runs the SAML flow. You need Rust 1.88 or newer."
+description: "Add the unreleased crate from main. You need Rust 1.88 or newer."
 ---
 
-Add the crate to the package that runs the SAML flow. You need Rust 1.88 or newer.
+Add the unreleased crate from `main` to the package that runs the SAML flow. You need Rust 1.88 or newer.
 
 ```sh
-cargo add saml-rs
+cargo add saml-rs --git https://github.com/salasebas/saml-rs.git --branch main
 ```
 
-Cargo records the latest published release. The default features turn signing and encryption on with RustCrypto. Releases are listed on [crates.io](https://crates.io/crates/saml-rs).
+The default features turn signing and encryption on with RustCrypto.
 
 To build messages without cryptography:
 
 ```sh
-cargo add saml-rs --no-default-features
+cargo add saml-rs --git https://github.com/salasebas/saml-rs.git --branch main --no-default-features
 ```
 
 Signing, verification, and encryption then return `SamlError::Unsupported`.

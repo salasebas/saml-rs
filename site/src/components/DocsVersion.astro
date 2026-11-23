@@ -1,0 +1,106 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+import { nextBase, stableVersion } from '../docs-version.mjs';
+
+const isNext = import.meta.env.BASE_URL.replace(/\/$/, '') === nextBase;
+const stable = { label: 'Stable', detail: `v${stableVersion}`, href: '/' };
+const next = { label: 'Next', detail: 'Unreleased', href: `${nextBase}/` };
+const current = isNext ? next : stable;
+---
+
+<button
+	class="version-trigger"
+	type="button"
+	popovertarget="docs-versions"
+	aria-label={`Documentation version (${current.label} ${current.detail})`}
+>
+	<span>{isNext ? current.label : current.detail}</span>
+	<Icon name="down-caret" />
+</button>
+<nav id="docs-versions" class="version-options" popover aria-label="Documentation version">
+	{[stable, next].map((version) => (
+		<a href={version.href} aria-current={version === current ? 'true' : undefined}>
+			<span>{version.label} <small>{version.detail}</small></span>
+			{version === current && <Icon name="approve-check" />}
+		</a>
+	))}
+</nav>
+
+<style>
+	.version-trigger,
+	.version-options a {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.625rem;
+		padding: 0.375rem 0.75rem;
+		border-radius: var(--saml-radius);
+		color: var(--sl-color-text);
+		font: inherit;
+		font-size: var(--sl-text-sm);
+		font-weight: 500;
+		line-height: 1.2;
+		text-align: start;
+		text-decoration: none;
+	}
+
+	.version-trigger {
+		block-size: var(--saml-header-control-height);
+		border: 1px solid var(--sl-color-hairline-light);
+		background: var(--saml-card);
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.version-options a {
+		min-block-size: 2.75rem;
+	}
+
+	.version-options small {
+		display: block;
+		margin-block-start: 0.125rem;
+		color: var(--saml-muted);
+		font: var(--sl-text-xs) var(--sl-font-mono);
+	}
+
+	.version-options {
+		min-inline-size: 10rem;
+		max-inline-size: calc(100% - 2rem);
+		padding: 0.25rem;
+		border: 1px solid var(--sl-color-hairline-light);
+		border-radius: var(--saml-radius);
+		background: var(--sl-color-bg-nav);
+		box-shadow: var(--sl-shadow-md);
+	}
+
+	@supports (position-area: block-end) {
+		.version-options {
+			position-area: block-end span-inline-end;
+			position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+			justify-self: start;
+			margin: 0;
+			margin-block-start: 0.375rem;
+			min-inline-size: max(10rem, anchor-size(width));
+		}
+	}
+
+	.version-options a[aria-current] {
+		color: var(--sl-color-text-accent);
+	}
+
+	.version-trigger:focus-visible,
+	.version-options a:focus-visible {
+		outline: 2px solid var(--sl-color-text-accent);
+		outline-offset: -2px;
+	}
+	.version-trigger:active,
+	.version-options a:active {
+		background: var(--sl-color-accent-low);
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.version-trigger:hover,
+		.version-options a:hover {
+			background: var(--sl-color-gray-5);
+		}
+	}
+</style>

@@ -39,4 +39,4 @@ The crate does not claim the [IdP or SP operational mode](conformance/idp-sp-ope
 
 A request for one of the remaining profiles needs the profile, the binding, the peer product, and a minimal expected flow on [an issue](https://github.com/salasebas/saml-rs/issues).
 
-Claimed rules for the flows that do exist are the [conformance records](conformance.md). Method signatures are on [docs.rs](https://docs.rs/saml-rs).
+The [conformance records](conformance.md) list the rules for each supported flow. Run `cargo doc -p saml-rs --open` from the repository root to read the API reference for `main`.
