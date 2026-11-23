@@ -99,9 +99,7 @@ pub(crate) fn load_decryption_keys(
         .chain(additional.iter().map(|credential| {
             read_private_key(
                 credential.key().as_str(),
-                credential
-                    .passphrase()
-                    .map(|passphrase| passphrase.as_str()),
+                credential.passphrase().map(Passphrase::as_str),
             )
         }))
         .collect()
@@ -225,13 +223,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_ascii_bare_certificate_across_pem_line_boundary(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn rejects_non_ascii_bare_certificate_across_pem_line_boundary() {
         let cert = format!("{}\u{a0}AAAA", "A".repeat(63));
         assert!(matches!(
             load_certificate(&cert),
             Err(SamlError::Crypto { message, .. }) if message == "certificate is not base64 text"
         ));
-        Ok(())
     }
 }

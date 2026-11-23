@@ -103,8 +103,8 @@ pub struct EntitySetting {
     pub transformation_algorithms: Vec<String>,
 }
 
-fn redacted_option<T>(value: &Option<T>) -> Option<&'static str> {
-    value.as_ref().map(|_| "<redacted>")
+fn redacted_option<T>(value: Option<&T>) -> Option<&'static str> {
+    value.map(|_| "<redacted>")
 }
 
 impl fmt::Debug for EntitySetting {
@@ -141,15 +141,21 @@ impl fmt::Debug for EntitySetting {
                 &self.want_encrypted_cbc_response_signed,
             )
             .field("name_id_format", &self.name_id_format)
-            .field("private_key", &redacted_option(&self.private_key))
-            .field("private_key_pass", &redacted_option(&self.private_key_pass))
-            .field("signing_cert", &redacted_option(&self.signing_cert))
-            .field("hmac_secret", &redacted_option(&self.hmac_secret))
-            .field("encrypt_cert", &redacted_option(&self.encrypt_cert))
-            .field("enc_private_key", &redacted_option(&self.enc_private_key))
+            .field("private_key", &redacted_option(self.private_key.as_ref()))
+            .field(
+                "private_key_pass",
+                &redacted_option(self.private_key_pass.as_ref()),
+            )
+            .field("signing_cert", &redacted_option(self.signing_cert.as_ref()))
+            .field("hmac_secret", &redacted_option(self.hmac_secret.as_ref()))
+            .field("encrypt_cert", &redacted_option(self.encrypt_cert.as_ref()))
+            .field(
+                "enc_private_key",
+                &redacted_option(self.enc_private_key.as_ref()),
+            )
             .field(
                 "enc_private_key_pass",
-                &redacted_option(&self.enc_private_key_pass),
+                &redacted_option(self.enc_private_key_pass.as_ref()),
             )
             .field(
                 "additional_decryption_keys",

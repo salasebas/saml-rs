@@ -257,7 +257,7 @@ pub(crate) fn create_logout_request_with_id(
     let xml = render_logout_request(
         init_setting,
         &issuer_of(init_setting, init_meta),
-        LogoutRequestAttributes {
+        &LogoutRequestAttributes {
             id: &id,
             destination: &destination,
             issue_instant: &issue_instant,
@@ -312,7 +312,7 @@ pub(crate) fn create_logout_response(
         status_message: None,
     };
     if want_signed {
-        return create_logout_response_inner(input);
+        return create_logout_response_inner(&input);
     }
     let rendered = input.render()?;
     let endpoint = rendered.destination.unwrap_or_default();

@@ -172,7 +172,7 @@ fn simplesign_request(param: &str, ctx: &BindingContext) -> Result<HttpRequest, 
 }
 
 /// A `customTagReplacement` that renders our default template + attributes.
-fn fill_response(template: &str, idp_id: &str, email: &str) -> Result<(String, String), SamlError> {
+fn fill_response(template: &str, idp_id: &str, email: &str) -> (String, String) {
     let id = "_8e8dc5f69a98cc4c1ff3427e5ce34606fd672f91e6".to_string();
     let now = iso8601_offset(-60);
     let later = iso8601_offset(300);
@@ -211,7 +211,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> Result<(String, S
             ("attrUserName", "user name".into()),
         ],
     );
-    Ok((id, xml))
+    (id, xml)
 }
 
 fn custom_idp() -> Result<idp::Engine, SamlError> {
@@ -726,7 +726,7 @@ fn send_custom_signed_assertion(binding: Binding) -> Result<(), Box<dyn std::err
     let idp = custom_idp()?;
     let sp = sp(true, false);
     let idp_id = "https://idp.example.com/metadata";
-    let cb = |t: &str| fill_response(t, idp_id, "custom@example.com");
+    let cb = |t: &str| Ok(fill_response(t, idp_id, "custom@example.com"));
     let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("custom@example.com"));
@@ -840,11 +840,11 @@ fn signed_response_without_destination_is_rejected(
     let idp = idp::Engine::from_config(&idp_config(false), signing())?;
     let sp = sp(false, false);
     let callback = |template: &str| {
-        fill_response(
+        Ok(fill_response(
             &template.replacen(" Destination=\"{Destination}\"", "", 1),
             "https://idp.example.com/metadata",
             "missing-destination@example.com",
-        )
+        ))
     };
     let context = idp.create_rendered_login_response(&sp, binding, &callback)?;
 
@@ -882,11 +882,11 @@ fn flow_conformance_assertion_only_signed_post_allows_omitted_response_destinati
     let idp = idp::Engine::from_config(&idp_config(false), signing())?;
     let sp = sp(true, false);
     let callback = |template: &str| {
-        fill_response(
+        Ok(fill_response(
             &template.replacen(" Destination=\"{Destination}\"", "", 1),
             "https://idp.example.com/metadata",
             "assertion-only@example.com",
-        )
+        ))
     };
     let context = idp.create_rendered_login_response(&sp, Binding::Post, &callback)?;
     let parsed = parse_response_with_request_id(&sp, &idp, Binding::Post, &context, "_req")?;
@@ -960,7 +960,7 @@ fn send_custom_signed_message(binding: Binding) -> Result<(), Box<dyn std::error
     let idp = custom_idp()?;
     let sp = sp(false, false);
     let idp_id = "https://idp.example.com/metadata";
-    let cb = |t: &str| fill_response(t, idp_id, "cm@example.com");
+    let cb = |t: &str| Ok(fill_response(t, idp_id, "cm@example.com"));
     let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("cm@example.com"));
@@ -1018,7 +1018,7 @@ fn send_custom_assertion_and_message(binding: Binding) -> Result<(), Box<dyn std
     sp_setting.want_message_signed = true;
     let sp = sp::Engine::from_config(&sp_config(false, true, false), sp_setting)?;
     let idp_id = "https://idp.example.com/metadata";
-    let cb = |t: &str| fill_response(t, idp_id, "cam@example.com");
+    let cb = |t: &str| Ok(fill_response(t, idp_id, "cam@example.com"));
     let ctx = idp.create_rendered_login_response(&sp, binding, &cb)?;
     let parsed = parse_response_with_request_id(&sp, &idp, binding, &ctx, "_req")?;
     assert_eq!(parsed.extract.get_str("nameID"), Some("cam@example.com"));
@@ -1054,7 +1054,7 @@ fn encrypted_signed(custom: bool, with_message: bool) -> Result<(), Box<dyn std:
     sp_setting.want_message_signed = with_message;
     let sp = sp::Engine::from_config(&sp_config(false, true, true), sp_setting)?;
     let idp_id = "https://idp.example.com/metadata";
-    let cb = |t: &str| fill_response(t, idp_id, "es@example.com");
+    let cb = |t: &str| Ok(fill_response(t, idp_id, "es@example.com"));
     let options = LoginResponseOptions {
         in_response_to: Some("_r"),
         ..Default::default()
@@ -1493,7 +1493,7 @@ fn flow_conformance_signed_logout_response_wrong_request_id_rejected(
 
 // ----- malformed response (57-59) -----
 
-fn malformed(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
+fn malformed(binding: Binding) {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
     let idp = idp(false);
@@ -1506,19 +1506,18 @@ fn malformed(binding: Binding) -> Result<(), Box<dyn std::error::Error>> {
     assert!(sp
         .parse_unsolicited_login_response(&idp, binding, &request)
         .is_err());
-    Ok(())
 }
 
 #[test]
-fn flow_conformance_malformed_response_post() -> Result<(), Box<dyn std::error::Error>> {
+fn flow_conformance_malformed_response_post() {
     malformed(Binding::Post)
 }
 #[test]
-fn flow_conformance_malformed_response_redirect() -> Result<(), Box<dyn std::error::Error>> {
+fn flow_conformance_malformed_response_redirect() {
     malformed(Binding::Redirect)
 }
 #[test]
-fn flow_conformance_malformed_response_simplesign() -> Result<(), Box<dyn std::error::Error>> {
+fn flow_conformance_malformed_response_simplesign() {
     malformed(Binding::SimpleSign)
 }
 
@@ -1527,8 +1526,7 @@ fn flow_conformance_malformed_response_simplesign() -> Result<(), Box<dyn std::e
 const ATTACK: &str = include_str!("../../tests/fixtures/misc/attack_response_signed.xml");
 
 #[test]
-fn flow_conformance_reject_signature_wrapped_response_case_1(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn flow_conformance_reject_signature_wrapped_response_case_1() {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
     let idp = idp(false);
@@ -1540,7 +1538,6 @@ fn flow_conformance_reject_signature_wrapped_response_case_1(
     assert!(sp
         .parse_unsolicited_login_response(&idp, Binding::Post, &request)
         .is_err());
-    Ok(())
 }
 
 #[test]

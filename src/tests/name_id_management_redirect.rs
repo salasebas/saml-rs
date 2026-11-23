@@ -271,7 +271,7 @@ fn identity_provider_changes_and_terminates_an_identifier_with_the_service_provi
         )?;
         assert!(response.redirect_url()?.starts_with(IDP_MANAGE));
         assert_eq!(
-            response.relay_state().map(|state| state.as_str()),
+            response.relay_state().map(saml_rs::RelayState::as_str),
             Some("manage")
         );
 

@@ -163,7 +163,7 @@ impl AuthnRequest {
 }
 
 impl AuthnRequest {
-    pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
+    pub(crate) fn from_flow(raw_flow: &FlowResult) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
         let issue_instant = required_saml_utc_instant(
             raw_flow.extract.get_str(request::ISSUE_INSTANT),

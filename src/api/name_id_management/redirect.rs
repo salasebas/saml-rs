@@ -134,7 +134,13 @@ impl ServiceProvider {
         validation: SamlValidationContext<'_>,
     ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
         let peer = Peer::from_idp(idp, validation.now())?;
-        receive(self.local(), peer, input, options, validation)
+        receive(
+            self.local(),
+            peer,
+            input,
+            options.into_transport(),
+            validation,
+        )
     }
 
     /// Answer a received `ManageNameIDRequest` over HTTP-Redirect.
@@ -162,7 +168,13 @@ impl ServiceProvider {
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
         let peer = Peer::from_idp(idp, SystemTime::now())?;
-        respond(self.local(), peer, request, status, options)
+        respond(
+            self.local(),
+            peer,
+            request,
+            status,
+            options.into_transport(),
+        )
     }
 
     /// Read the identity provider's `ManageNameIDResponse` to a request this
@@ -342,7 +354,13 @@ impl IdentityProvider {
         validation: SamlValidationContext<'_>,
     ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
         let peer = Peer::from_sp(sp, validation.now())?;
-        receive(self.local(), peer, input, options, validation)
+        receive(
+            self.local(),
+            peer,
+            input,
+            options.into_transport(),
+            validation,
+        )
     }
 
     /// Answer a received `ManageNameIDRequest` over HTTP-Redirect.
@@ -367,7 +385,13 @@ impl IdentityProvider {
         options: RespondNameIdManagement,
     ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
         let peer = Peer::from_sp(sp, SystemTime::now())?;
-        respond(self.local(), peer, request, status, options)
+        respond(
+            self.local(),
+            peer,
+            request,
+            status,
+            options.into_transport(),
+        )
     }
 
     /// Read the service provider's `ManageNameIDResponse` to a request this
@@ -459,7 +483,7 @@ fn start(
     let outbound = Outbound::<ManageNameIdRequest>::from_context(context)?;
     let pending = PendingManageNameIdRequest::new(
         outbound.id().clone(),
-        outbound.relay_state().cloned(),
+        options.relay_state,
         peer.entity_id.clone(),
     );
     Ok(Started { pending, outbound })
@@ -469,7 +493,7 @@ fn receive(
     local: Local<'_>,
     peer: Peer<'_>,
     input: Inbound<ManageNameIdRequest>,
-    options: ReceiveNameIdManagement,
+    transport: PeerEndpointTransport,
     validation: SamlValidationContext<'_>,
 ) -> Result<NameIdManagementRedirectReceipt, SamlError> {
     require_redirect_input(&input)?;
@@ -501,7 +525,7 @@ fn receive(
             &id,
             relay_state.as_ref().map(RelayState::as_str),
             refusal,
-            options.transport(),
+            transport,
         ),
     }
 }
@@ -532,7 +556,7 @@ fn respond(
     peer: Peer<'_>,
     request: &Received<ManageNameIdRequest>,
     status: &Status,
-    options: RespondNameIdManagement,
+    transport: PeerEndpointTransport,
 ) -> Result<Outbound<ManageNameIdResponse>, SamlError> {
     ensure_entity_id(request.message().issuer(), peer.entity_id)?;
     response_outbound(
@@ -541,7 +565,7 @@ fn respond(
         request.message().id().as_str(),
         status,
         request.relay_state().map(RelayState::as_str),
-        options.transport(),
+        transport,
     )
 }
 

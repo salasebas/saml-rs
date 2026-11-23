@@ -819,12 +819,12 @@ fn unsigned_response(
 fn store_and_finish(
     parties: &Parties,
     pending: &PendingAuthnRequest,
-    xml: String,
+    xml: &str,
     issued: &mut IssuedArtifacts,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     let artifact = parties
         .idp
-        .issue_artifact(&parties.sp_metadata, &xml, 0, issued)?;
+        .issue_artifact(&parties.sp_metadata, xml, 0, issued)?;
     let delivered = DeliveredArtifact::from_form(&[FormField::new("SAMLart", artifact.as_str())])?;
     resolve_and_finish(parties, pending, delivered, issued)
 }
@@ -840,7 +840,7 @@ fn a_signed_artifact_response_may_omit_destination() -> Result<(), Box<dyn std::
     let session = store_and_finish(
         &parties,
         &pending,
-        sign_response(&without_destination)?,
+        &sign_response(&without_destination)?,
         &mut issued,
     )?;
     assert_eq!(session.name_id().value(), USER);
@@ -858,7 +858,7 @@ fn an_artifact_response_destination_must_be_the_assertion_consumer(
         &format!("Destination=\"{SP_ACS_POST}\""),
     );
 
-    let result = store_and_finish(&parties, &pending, sign_response(&elsewhere)?, &mut issued);
+    let result = store_and_finish(&parties, &pending, &sign_response(&elsewhere)?, &mut issued);
     assert!(matches!(
         saml_error(result),
         Some(SamlError::DestinationMismatch { .. })
@@ -872,7 +872,7 @@ fn an_unsigned_artifact_response_is_rejected() -> Result<(), Box<dyn std::error:
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
     let (pending, xml) = unsigned_response(&parties, &mut issued)?;
 
-    let result = store_and_finish(&parties, &pending, xml, &mut issued);
+    let result = store_and_finish(&parties, &pending, &xml, &mut issued);
     assert!(matches!(
         saml_error(result),
         Some(SamlError::SignatureMissing)
@@ -1117,7 +1117,7 @@ fn a_bearer_recipient_must_be_the_consumer_the_artifact_was_delivered_to(
     assert_eq!(xml.matches(&recipient).count(), 1);
     let elsewhere = xml.replace(&recipient, &format!("Recipient=\"{SP_ACS_POST}\""));
 
-    let result = store_and_finish(&parties, &pending, sign_response(&elsewhere)?, &mut issued);
+    let result = store_and_finish(&parties, &pending, &sign_response(&elsewhere)?, &mut issued);
     assert!(matches!(
         saml_error(result),
         Some(SamlError::SubjectConfirmationInvalid {
@@ -1292,7 +1292,7 @@ fn an_artifact_for_another_protocol_message_does_not_establish_a_session(
         r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer></samlp:LogoutRequest>"#
     );
 
-    let result = store_and_finish(&parties, &pending, logout, &mut issued);
+    let result = store_and_finish(&parties, &pending, &logout, &mut issued);
     assert!(matches!(
         saml_error(result),
         Some(SamlError::ProtocolProfile(message)) if message == "artifact must resolve to a protocol Response"

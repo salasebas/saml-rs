@@ -1,5 +1,6 @@
 //! Typed config builders to the metadata generator input and the internal providers the typed API runs on.
 
+use crate::browser::{AcsEndpoint, SloEndpoint, SsoEndpoint};
 use crate::error::SamlError;
 use crate::idp;
 use crate::metadata::{IdpMetadataInput, SpMetadataInput};
@@ -41,12 +42,12 @@ fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
         single_logout_service: metadata
             .slo_endpoints()
             .iter()
-            .map(|endpoint| endpoint.to_raw())
+            .map(SloEndpoint::to_raw)
             .collect(),
         assertion_consumer_service: metadata
             .acs_endpoints()
             .iter()
-            .map(|endpoint| endpoint.to_raw())
+            .map(AcsEndpoint::to_raw)
             .collect(),
         manage_name_id_service: metadata
             .manage_name_id_services()
@@ -74,12 +75,12 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
         single_sign_on_service: metadata
             .sso_endpoints()
             .iter()
-            .map(|endpoint| endpoint.to_raw())
+            .map(SsoEndpoint::to_raw)
             .collect(),
         single_logout_service: metadata
             .slo_endpoints()
             .iter()
-            .map(|endpoint| endpoint.to_raw())
+            .map(SloEndpoint::to_raw)
             .collect(),
         artifact_resolution_service: metadata.artifact_resolution_services().to_vec(),
         manage_name_id_service: metadata

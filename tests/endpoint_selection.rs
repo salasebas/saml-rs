@@ -101,7 +101,10 @@ fn default_assertion_consumer_service_is_selected_when_the_request_names_neither
         validation(),
     )?;
     assert_eq!(
-        received.message().acs_url().map(|url| url.as_str()),
+        received
+            .message()
+            .acs_url()
+            .map(saml_rs::EndpointUrl::as_str),
         Some(DEFAULT_ACS)
     );
 
@@ -416,7 +419,10 @@ fn sso_destination_matches_the_actual_published_receiving_endpoint(
         validation().with_recipient_endpoint(EndpointUrl::try_new(IDP_SSO_SECOND)?),
     )?;
     assert_eq!(
-        accepted.message().destination().map(|url| url.as_str()),
+        accepted
+            .message()
+            .destination()
+            .map(saml_rs::EndpointUrl::as_str),
         Some(IDP_SSO_SECOND)
     );
 

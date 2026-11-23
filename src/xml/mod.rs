@@ -28,6 +28,10 @@ pub(crate) use profile::{
 };
 pub(crate) use schema_value::{xs_boolean, xs_unsigned_short};
 
+pub(crate) fn decode_utf8(bytes: Vec<u8>) -> Result<String, crate::error::SamlError> {
+    String::from_utf8(bytes).map_err(|error| crate::error::xml_err(error.utf8_error()))
+}
+
 /// Length of the UTF-8 byte order mark that starts `xml`, or 0.
 ///
 /// quick-xml skips a leading byte order mark without counting it, so

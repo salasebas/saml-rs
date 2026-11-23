@@ -38,7 +38,7 @@ pub(super) struct LogoutResponseAttributes<'a> {
 
 pub(super) fn render_logout_response(
     setting: &EntitySetting,
-    response: LogoutResponseAttributes<'_>,
+    response: &LogoutResponseAttributes<'_>,
     issuer: &str,
     status: &Status,
     status_message: Option<&str>,
@@ -73,7 +73,7 @@ pub(super) fn render_logout_response(
 pub(crate) fn render_logout_request(
     setting: &EntitySetting,
     issuer: &str,
-    attributes: LogoutRequestAttributes<'_>,
+    attributes: &LogoutRequestAttributes<'_>,
     subject: &LogoutRequestSubject<'_>,
     name_id_format: Option<&str>,
 ) -> Result<String, SamlError> {
@@ -84,7 +84,7 @@ pub(crate) fn render_logout_request(
         not_on_or_after,
         reason,
         asynchronous,
-    } = attributes;
+    } = *attributes;
     let prefixes = Prefixes::of(setting)?;
     let root_name = prefixes.protocol("LogoutRequest");
     let issuer_name = prefixes.assertion("Issuer");

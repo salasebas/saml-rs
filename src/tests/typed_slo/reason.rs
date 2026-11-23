@@ -11,7 +11,7 @@ fn typed_slo_writes_reason_in_signed_requests_for_both_roles(
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     for binding in LOGOUT_BINDINGS_WITH_SOAP {
-        let options = start_slo_for_binding(binding)?;
+        let options = start_slo_for_binding(binding);
         let from_sp = sp.start_slo(
             &idp_descriptor,
             subject()?,

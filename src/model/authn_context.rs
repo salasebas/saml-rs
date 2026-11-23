@@ -34,7 +34,7 @@ impl AuthnContextReference {
     /// Returns [`SamlError::Invalid`] when `uri` is not an absolute URI
     /// reference.
     pub fn class(uri: impl Into<String>) -> Result<Self, SamlError> {
-        Self::try_new(AuthnContextReferenceKind::Class, uri.into())
+        Self::try_new(AuthnContextReferenceKind::Class, &uri.into())
     }
 
     /// An `<AuthnContextDeclRef>`.
@@ -44,7 +44,7 @@ impl AuthnContextReference {
     /// Returns [`SamlError::Invalid`] when `uri` is not an absolute URI
     /// reference.
     pub fn declaration(uri: impl Into<String>) -> Result<Self, SamlError> {
-        Self::try_new(AuthnContextReferenceKind::Declaration, uri.into())
+        Self::try_new(AuthnContextReferenceKind::Declaration, &uri.into())
     }
 
     /// The class `urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified`.
@@ -57,8 +57,8 @@ impl AuthnContextReference {
         )
     }
 
-    fn try_new(kind: AuthnContextReferenceKind, uri: String) -> Result<Self, SamlError> {
-        let reference = Self::received(kind, &uri);
+    fn try_new(kind: AuthnContextReferenceKind, uri: &str) -> Result<Self, SamlError> {
+        let reference = Self::received(kind, uri);
         reference.ensure_absolute_uri()?;
         Ok(reference)
     }

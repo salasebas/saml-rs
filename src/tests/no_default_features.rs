@@ -62,7 +62,7 @@ fn sp(authn_requests_signed: bool) -> Result<sp::Engine, SamlError> {
     sp::Engine::from_config(&sp_config(authn_requests_signed), EntitySetting::default())
 }
 
-fn assert_unsupported(result: Result<impl Sized, SamlError>) {
+fn assert_unsupported(result: &Result<impl Sized, SamlError>) {
     assert!(matches!(result, Err(SamlError::Unsupported(_))));
 }
 
@@ -182,7 +182,7 @@ fn typed_metadata_require_signature_is_unsupported_without_default_crypto(
     let idp_metadata_xml = idp(false)?.metadata_xml().to_string();
     let cert = CertificatePem::new("placeholder");
 
-    assert_unsupported(IdpDescriptor::from_metadata_xml(
+    assert_unsupported(&IdpDescriptor::from_metadata_xml(
         EntityId::try_new("https://idp.example.com/metadata")?,
         &idp_metadata_xml,
         MetadataTrustPolicy::RequireSignature {
@@ -251,7 +251,7 @@ fn typed_facade_creates_and_receives_unsigned_protocol_sso_without_default_crypt
 fn default_sp_requires_crypto_and_default_idp_builds_without_it(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_unsupported(
-        SpConfig::builder(
+        &SpConfig::builder(
             EntityId::try_new("https://sp.example.com/metadata")?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
@@ -271,7 +271,7 @@ fn sp_required_assertion_signatures_return_unsupported_without_default_crypto(
     let mut validation = sp_validation_without_crypto();
     validation.assertion_signatures = AssertionSignaturePolicy::RequireSigned;
 
-    assert_unsupported(sp_config_builder()?.validation(validation).build());
+    assert_unsupported(&sp_config_builder()?.validation(validation).build());
     Ok(())
 }
 
@@ -281,7 +281,7 @@ fn sp_required_response_signatures_return_unsupported_without_default_crypto(
     let mut validation = sp_validation_without_crypto();
     validation.response_signatures = ResponseSignaturePolicy::RequireSigned;
 
-    assert_unsupported(sp_config_builder()?.validation(validation).build());
+    assert_unsupported(&sp_config_builder()?.validation(validation).build());
     Ok(())
 }
 
@@ -291,7 +291,7 @@ fn sp_signed_authn_requests_return_unsupported_without_default_crypto(
     let mut validation = sp_validation_without_crypto();
     validation.authn_request_signing = AuthnRequestSigningPolicy::Sign;
 
-    assert_unsupported(sp_config_builder()?.validation(validation).build());
+    assert_unsupported(&sp_config_builder()?.validation(validation).build());
     Ok(())
 }
 
@@ -301,7 +301,7 @@ fn sp_encrypted_assertions_return_unsupported_without_default_crypto(
     let mut xml = XmlPolicy::default();
     xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 
-    assert_unsupported(sp_config_builder()?.xml(xml).build());
+    assert_unsupported(&sp_config_builder()?.xml(xml).build());
     Ok(())
 }
 
@@ -313,7 +313,7 @@ fn idp_required_authn_request_signatures_return_unsupported_without_default_cryp
         ..Default::default()
     };
 
-    assert_unsupported(idp_config_builder()?.validation(validation).build());
+    assert_unsupported(&idp_config_builder()?.validation(validation).build());
     Ok(())
 }
 
@@ -323,7 +323,7 @@ fn idp_encrypted_assertions_return_unsupported_without_default_crypto(
     let mut xml = XmlPolicy::default();
     xml.encryption.assertions = AssertionEncryptionPolicy::EncryptAssertions;
 
-    assert_unsupported(idp_config_builder()?.xml(xml).build());
+    assert_unsupported(&idp_config_builder()?.xml(xml).build());
     Ok(())
 }
 
@@ -333,7 +333,7 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
     let (sp, idp, sp_descriptor, idp_descriptor) = typed_protocol_facades()?;
 
     assert_unsupported(
-        sp.start_slo(
+        &sp.start_slo(
             &idp_descriptor,
             LogoutSubject::new(NameId::new("alice@example.com"))
                 .with_session_index(saml_rs::SessionIndex::try_new("_session")?),
@@ -349,7 +349,7 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
             STANDARD.encode(xml),
         )])
     };
-    assert_unsupported(sp.receive_slo(
+    assert_unsupported(&sp.receive_slo(
         &idp_descriptor,
         request_from(
             idp_descriptor.entity_id().as_str(),
@@ -357,7 +357,7 @@ fn typed_facade_crypto_required_paths_return_unsupported_without_default_crypto(
         ),
         typed_validation(),
     ));
-    assert_unsupported(idp.receive_slo(
+    assert_unsupported(&idp.receive_slo(
         &sp_descriptor,
         request_from(
             sp_descriptor.entity_id().as_str(),
@@ -404,7 +404,7 @@ fn unsigned_login_request_redirect_decoding_still_works() -> Result<(), Box<dyn 
 
 #[test]
 fn signing_login_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
-    assert_unsupported(sp(true)?.create_login_request(
+    assert_unsupported(&sp(true)?.create_login_request(
         &idp(true)?,
         Binding::Post,
         &LoginRequestOptions::default(),
@@ -414,7 +414,7 @@ fn signing_login_request_returns_unsupported() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn signed_login_response_creation_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
-    assert_unsupported(idp(false)?.create_login_response(
+    assert_unsupported(&idp(false)?.create_login_response(
         &sp(false)?,
         Binding::Post,
         &User::new("user@example.com"),
@@ -437,12 +437,12 @@ fn encrypted_assertion_parse_path_returns_unsupported() {
         ..FlowOptions::new(Binding::Post, ParserType::SamlResponse)
     };
 
-    assert_unsupported(flow(&options, &request));
+    assert_unsupported(&flow(&options, &request));
 }
 
 #[test]
 fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
-    assert_unsupported(create_logout_request(
+    assert_unsupported(&create_logout_request(
         &EntitySetting::default(),
         sp(false)?.metadata.as_metadata(),
         idp(false)?.metadata.as_metadata(),
@@ -456,7 +456,7 @@ fn signed_logout_request_returns_unsupported() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn signed_logout_response_returns_unsupported() -> Result<(), Box<dyn std::error::Error>> {
-    assert_unsupported(create_logout_response(
+    assert_unsupported(&create_logout_response(
         &EntitySetting::default(),
         idp(false)?.metadata.as_metadata(),
         sp(false)?.metadata.as_metadata(),

@@ -12,10 +12,10 @@ const ROOT: &str = "<r xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\">";
 const SIGNATURE_ERROR: &str =
     "HTTP-Redirect must remove a protocol XML signature and attach a detached signature";
 
-fn assert_limit(result: Result<String, SamlError>, limit: ResourceLimit, maximum: usize) {
+fn assert_limit(result: &Result<String, SamlError>, limit: ResourceLimit, maximum: usize) {
     assert!(
         matches!(
-            &result,
+            result,
             Err(SamlError::LimitExceeded { limit: actual, maximum: actual_maximum, .. })
                 if *actual == limit && *actual_maximum == maximum
         ),
@@ -67,7 +67,7 @@ fn redirect_byte_limit_accepts_boundary_and_precedes_element_depth_and_signature
             build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
             build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
         ] {
-            assert_limit(result, ResourceLimit::XmlBytes, limits.max_bytes);
+            assert_limit(&result, ResourceLimit::XmlBytes, limits.max_bytes);
         }
     }
     Ok(())
@@ -91,7 +91,7 @@ fn redirect_element_limit_counts_start_and_empty_elements() -> Result<(), Box<dy
             build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
             build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
         ] {
-            assert_limit(result, ResourceLimit::XmlElements, limits.max_elements);
+            assert_limit(&result, ResourceLimit::XmlElements, limits.max_elements);
         }
     }
     Ok(())
@@ -118,7 +118,7 @@ fn redirect_depth_limit_counts_open_elements_but_not_empty_elements(
             build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
             build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
         ] {
-            assert_limit(result, ResourceLimit::XmlDepth, limits.max_depth);
+            assert_limit(&result, ResourceLimit::XmlDepth, limits.max_depth);
         }
     }
     Ok(())
@@ -143,7 +143,7 @@ fn redirect_element_limit_includes_detached_signature_subtree(
             build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
             build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
         ] {
-            assert_limit(result, ResourceLimit::XmlElements, limits.max_elements);
+            assert_limit(&result, ResourceLimit::XmlElements, limits.max_elements);
         }
     }
     Ok(())
@@ -171,7 +171,7 @@ fn redirect_depth_limit_includes_detached_signature_subtree(
         build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
         build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
     ] {
-        assert_limit(result, ResourceLimit::XmlDepth, limits.max_depth);
+        assert_limit(&result, ResourceLimit::XmlDepth, limits.max_depth);
     }
     Ok(())
 }
@@ -189,7 +189,7 @@ fn redirect_element_limit_precedes_depth_limit() {
         build_redirect_url(ENDPOINT, ParserType::SamlRequest, &xml, None),
         build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
     ] {
-        assert_limit(result, ResourceLimit::XmlElements, limits.max_elements);
+        assert_limit(&result, ResourceLimit::XmlElements, limits.max_elements);
     }
 }
 
@@ -205,7 +205,7 @@ fn redirect_namespace_binding_limit_is_a_resource_limit() {
         build_redirect_octet(ParserType::SamlRequest, &xml, None, "sig-alg"),
     ] {
         assert_limit(
-            result,
+            &result,
             ResourceLimit::XmlNamespaceBindings,
             limits.max_attributes_per_element,
         );

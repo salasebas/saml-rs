@@ -33,7 +33,7 @@ pub struct ExtractorField {
 }
 
 fn to_vec(items: &[&str]) -> Vec<String> {
-    items.iter().map(|s| s.to_string()).collect()
+    items.iter().map(ToString::to_string).collect()
 }
 
 impl ExtractorField {

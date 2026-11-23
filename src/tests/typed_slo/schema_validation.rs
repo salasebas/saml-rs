@@ -1,14 +1,13 @@
 use super::*;
 
 #[test]
-fn receive_slo_requires_one_direct_principal_identifier_before_replay(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn receive_slo_requires_one_direct_principal_identifier_before_replay() {
     let role = LocalSloRole::Idp;
     let binding = LogoutBinding::Post;
     let xml = logout_request_xml(
         "_logout",
         sender_entity_id(role),
-        Some(role.endpoint(binding)?),
+        Some(role.endpoint(binding)),
     );
     let name_id = "<saml:NameID>alice@example.com</saml:NameID>";
     for (case, identifiers) in [
@@ -46,7 +45,6 @@ fn receive_slo_requires_one_direct_principal_identifier_before_replay(
         );
         assert!(cache.seen.is_empty(), "{case}: stored the invalid request");
     }
-    Ok(())
 }
 
 #[test]

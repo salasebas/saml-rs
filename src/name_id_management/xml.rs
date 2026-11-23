@@ -1,5 +1,6 @@
 //! `ManageNameIDRequest` and `ManageNameIDResponse` XML for every binding.
 
+use crate::config::NameIdFormat;
 use crate::constants::{name_id_format, namespace};
 use crate::entity::now_iso8601;
 use crate::error::SamlError;
@@ -46,7 +47,7 @@ pub(crate) fn render_request(
     let name_id = request.name_id;
     let format = name_id
         .format()
-        .map(|format| format.as_uri())
+        .map(NameIdFormat::as_uri)
         .or(match request.requester {
             Requester::IdentityProvider => request.default_format,
             Requester::ServiceProvider => None,

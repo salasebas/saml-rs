@@ -12,7 +12,7 @@ use crate::binding::{
     build_simplesign_octet, decode_base64_with_limit, encode_base64, single_parameter,
 };
 use crate::constants::{url_params, Binding};
-use crate::error::{utf8_err, SamlError};
+use crate::error::SamlError;
 use crate::flow::HttpRequest;
 use crate::model::{AuthnRequest, LogoutRequest, LogoutResponse, SsoResponse};
 use crate::name_id_management::{ManageNameIdRequest, ManageNameIdResponse};
@@ -548,8 +548,7 @@ fn simplesign_octet_from_fields(
 ) -> Result<String, SamlError> {
     let message_name = expected_message.param_name();
     let encoded = validate_form_message_kind(fields, expected_message)?;
-    let raw_xml = String::from_utf8(decode_base64_with_limit(encoded, limits.max_bytes)?)
-        .map_err(utf8_err)?;
+    let raw_xml = crate::xml::decode_utf8(decode_base64_with_limit(encoded, limits.max_bytes)?)?;
     let sig_alg =
         field_value(fields, url_params::SIG_ALG)?.ok_or(SamlError::MissingBindingParameter {
             name: url_params::SIG_ALG,

@@ -1,9 +1,6 @@
-use super::AlgorithmPolicy;
-#[cfg(crypto)]
-use super::KeyEncryptionAlgorithm;
+use super::{AlgorithmPolicy, KeyEncryptionAlgorithm};
 use crate::error::SamlError;
 
-#[cfg(crypto)]
 pub(super) fn validate_algorithms(algorithms: &AlgorithmPolicy) -> Result<(), SamlError> {
     if let KeyEncryptionAlgorithm::RsaOaep { digest, mgf } = &algorithms.key_encryption {
         let params = bergshamra::crypto::keytransport::OaepParams {
@@ -25,10 +22,5 @@ pub(super) fn validate_algorithms(algorithms: &AlgorithmPolicy) -> Result<(), Sa
             ));
         }
     }
-    Ok(())
-}
-
-#[cfg(not(crypto))]
-pub(super) fn validate_algorithms(_algorithms: &AlgorithmPolicy) -> Result<(), SamlError> {
     Ok(())
 }

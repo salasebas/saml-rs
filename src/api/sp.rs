@@ -211,7 +211,7 @@ impl ServiceProvider {
         let outbound = Outbound::<AuthnRequest>::from_context(context)?;
         let pending = PendingAuthnRequest::new(
             outbound.id().clone(),
-            outbound.relay_state().cloned(),
+            options.relay_state,
             idp.entity_id().clone(),
             acs,
         );

@@ -308,6 +308,7 @@ fn enforce_reference_transforms(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
 pub(super) enum SignatureSelection {
     First,
     All,

@@ -156,7 +156,7 @@ fn parse_response(response: String, request_id: &str) -> Result<(), SamlError> {
     Ok(())
 }
 
-fn parse_raw_response(response: String, request_id: &str) -> Result<(), SamlError> {
+fn parse_raw_response(response: &str, request_id: &str) -> Result<(), SamlError> {
     let sp = sp()?;
     let idp = idp()?;
     let request = HttpRequest::post(vec![(
@@ -248,7 +248,7 @@ fn error_taxonomy_unsigned_post_response_returns_signature_missing(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let response = response_xml(&unsigned_response_template(), &ResponseShape::default());
 
-    match parse_raw_response(response, "_request123") {
+    match parse_raw_response(&response, "_request123") {
         Err(SamlError::SignatureMissing) => Ok(()),
         other => Err(format!("expected SignatureMissing, got {other:?}").into()),
     }

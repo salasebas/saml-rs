@@ -457,6 +457,7 @@ fn stored_message(xml: &str) -> Result<(String, String), SamlError> {
     Ok((payload.to_owned(), element.local_name))
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum ArtifactResolveSigning {
     Unsigned,
     Signed,
@@ -788,9 +789,6 @@ mod tests {
     #[test]
     fn schema_callback_participates_in_artifact_resolution_equality(
     ) -> Result<(), Box<dyn std::error::Error>> {
-        fn validate(_: &str) -> Result<(), String> {
-            Ok(())
-        }
         let unchecked = ArtifactResolution {
             request: SoapRequest::try_new(
                 crate::EndpointUrl::try_new("https://idp.example.com/artifact")?,
@@ -806,7 +804,7 @@ mod tests {
             schema_validator: None,
         };
         let checked = ArtifactResolution {
-            schema_validator: Some(validate),
+            schema_validator: Some(|_| Ok(())),
             ..unchecked.clone()
         };
         assert_ne!(unchecked, checked);

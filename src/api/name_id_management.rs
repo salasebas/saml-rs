@@ -93,9 +93,14 @@ impl IdentityProvider {
         options: StartNameIdManagement,
         channel: SoapChannel,
     ) -> Result<StartedNameIdManagement, SamlError> {
+        let StartNameIdManagement {
+            relay_state,
+            identifier_encryption,
+            ..
+        } = options;
         crate::logout::reject_soap_relay_state(
             Binding::Soap,
-            options.relay_state.as_ref().map(RelayState::as_str),
+            relay_state.as_ref().map(RelayState::as_str),
         )?;
         sp.ensure_valid_at(SystemTime::now())?;
         name_id_management::start(
@@ -103,7 +108,7 @@ impl IdentityProvider {
             sp,
             name_id,
             change,
-            options.identifier_encryption,
+            identifier_encryption,
             channel,
         )
     }

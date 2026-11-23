@@ -36,8 +36,7 @@ fn confirmation_attributes_with_the_same_local_name_use_the_first_value(
 }
 
 #[test]
-fn unsolicited_duplicate_data_uses_the_first_child_with_a_request_id(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn unsolicited_duplicate_data_uses_the_first_child_with_a_request_id() {
     let xml = r#"<Response><Assertion><Subject>
         <SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
             <SubjectConfirmationData/>
@@ -54,5 +53,4 @@ fn unsolicited_duplicate_data_uses_the_first_child_with_a_request_id(
         reject_unsolicited_bearer_in_response_to(&empty_first, XmlLimits::default()),
         Err(SamlError::InResponseToMismatch { .. })
     ));
-    Ok(())
 }

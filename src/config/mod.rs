@@ -4,6 +4,7 @@ mod algorithms;
 mod builders;
 mod credentials;
 mod descriptors;
+#[cfg(crypto)]
 mod encryption;
 mod entity_setting;
 mod metadata_signature_shape;

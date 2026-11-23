@@ -572,7 +572,7 @@ impl ReceiveNameIdManagement {
         self
     }
 
-    pub(super) fn transport(&self) -> PeerEndpointTransport {
+    pub(super) fn into_transport(self) -> PeerEndpointTransport {
         self.transport
     }
 }
@@ -602,7 +602,7 @@ impl RespondNameIdManagement {
         self
     }
 
-    pub(super) fn transport(&self) -> PeerEndpointTransport {
+    pub(super) fn into_transport(self) -> PeerEndpointTransport {
         self.transport
     }
 }

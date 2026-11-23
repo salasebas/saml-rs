@@ -9,7 +9,7 @@ use crate::config::{AssertionElementEncryption, XmlSignatureProfile};
 use crate::config::{HmacSecret, X509Credential};
 use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
-use crate::error::{utf8_err, SamlError};
+use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::{ClockSkew, StatusMessage};
 use crate::util::Value;
@@ -398,7 +398,7 @@ impl<'a> ReceivedMessage<'a> {
             Binding::Artifact | Binding::Soap => return Err(unsupported_binding(binding)),
         };
         xml_limits.check_input_bytes(bytes.len())?;
-        let xml = String::from_utf8(bytes).map_err(utf8_err)?;
+        let xml = crate::xml::decode_utf8(bytes)?;
         Ok(Self {
             request,
             binding,

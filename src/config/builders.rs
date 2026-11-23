@@ -656,10 +656,15 @@ impl IdpConfigBuilder {
 }
 
 fn validate_shared_policy(
-    algorithms: &AlgorithmPolicy,
+    _credentials: &Credentials,
+    _algorithms: &AlgorithmPolicy,
     templates: &TemplatePolicy,
 ) -> Result<(), SamlError> {
-    super::encryption::validate_algorithms(algorithms)?;
+    #[cfg(crypto)]
+    {
+        crate::crypto::keys::check_credentials(_credentials)?;
+        super::encryption::validate_algorithms(_algorithms)?;
+    }
     validate_tag_prefixes(
         &templates.tag_prefix_protocol,
         &templates.tag_prefix_assertion,
@@ -674,10 +679,9 @@ fn validate_shared_policy(
 }
 
 fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
+    #[cfg(not(crypto))]
     validate_sp_crypto_support(config)?;
-    #[cfg(crypto)]
-    crate::crypto::keys::check_credentials(&config.credentials)?;
-    validate_shared_policy(&config.algorithms, &config.templates)?;
+    validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)?;
     #[cfg(crypto)]
     if authn_request_signing_enabled(config.validation.authn_request_signing) {
         validate_signing_credentials(&config.credentials, config.algorithms.signature.as_uri())?;
@@ -691,10 +695,9 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
 }
 
 fn validate_idp_policy(config: &IdpConfigBuilder) -> Result<(), SamlError> {
+    #[cfg(not(crypto))]
     validate_idp_crypto_support(config)?;
-    #[cfg(crypto)]
-    crate::crypto::keys::check_credentials(&config.credentials)?;
-    validate_shared_policy(&config.algorithms, &config.templates)
+    validate_shared_policy(&config.credentials, &config.algorithms, &config.templates)
 }
 
 fn validated_idp_issuance_lifetime(
@@ -729,11 +732,6 @@ fn validate_signing_credentials(
     Ok(())
 }
 
-#[cfg(crypto)]
-fn validate_sp_crypto_support(_config: &SpConfigBuilder) -> Result<(), SamlError> {
-    Ok(())
-}
-
 #[cfg(not(crypto))]
 fn validate_sp_crypto_support(config: &SpConfigBuilder) -> Result<(), SamlError> {
     if sp_config_requires_crypto(config) {
@@ -741,11 +739,6 @@ fn validate_sp_crypto_support(config: &SpConfigBuilder) -> Result<(), SamlError>
             "selected SP config policy requires a crypto provider feature".into(),
         ));
     }
-    Ok(())
-}
-
-#[cfg(crypto)]
-fn validate_idp_crypto_support(_config: &IdpConfigBuilder) -> Result<(), SamlError> {
     Ok(())
 }
 

@@ -562,10 +562,10 @@ fn verified(
     }
 }
 
-fn assert_xml_signature_failure(result: Result<SignatureVerification, SamlError>) {
+fn assert_xml_signature_failure(result: &Result<SignatureVerification, SamlError>) {
     assert!(
         matches!(
-            &result,
+            result,
             Err(SamlError::SignatureVerification {
                 reason: SignatureVerificationReason::XmlSignature,
             })
@@ -584,7 +584,7 @@ fn detailed_verification_rejects_invalid_first_signature_before_later_assertion_
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
     );
-    assert_xml_signature_failure(result);
+    assert_xml_signature_failure(&result);
     Ok(())
 }
 
@@ -605,7 +605,7 @@ fn detailed_verification_rejects_an_untrusted_response_signature(
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
     );
-    assert_xml_signature_failure(result);
+    assert_xml_signature_failure(&result);
     Ok(())
 }
 
@@ -658,7 +658,7 @@ fn invalid_extra_response_signature_is_rejected_under_every_profile(
         XmlSignatureProfile::ExcludeWeakAlgorithms,
         XmlSignatureProfile::StrictRsaSha2,
     ] {
-        assert_xml_signature_failure(verify_under(profile));
+        assert_xml_signature_failure(&verify_under(profile));
     }
     Ok(())
 }
@@ -891,7 +891,7 @@ fn rolling_cert_rejects_signer_outside_the_trusted_keys() -> Result<(), Box<dyn 
         XmlLimits::default(),
         XmlSignatureProfile::AllowWeakAlgorithms,
     );
-    assert_xml_signature_failure(detailed);
+    assert_xml_signature_failure(&detailed);
     Ok(())
 }
 
@@ -934,7 +934,7 @@ fn rolling_certs_and_hmac_secret_verify_only_with_their_own_key(
         base64.into_bytes(),
         pem.into_bytes(),
     ] {
-        assert_xml_signature_failure(verify(&sign_hmac(&forged_key)?));
+        assert_xml_signature_failure(&verify(&sign_hmac(&forged_key)?));
     }
     Ok(())
 }

@@ -12,7 +12,7 @@ use super::{policy::encrypted_data_algorithm, work};
 use crate::config::{AssertionElementEncryption, X509Credential};
 use crate::constants::{key_encryption_algorithm, namespace};
 use crate::entity::EntitySetting;
-use crate::error::{crypto_err, utf8_err, xml_err, SamlError};
+use crate::error::{crypto_err, xml_err, SamlError};
 use crate::flow::{FlowOptions, MessageAuthentication};
 use crate::xml::dom::{self, XmlLimits};
 use bergshamra::keys::Key;
@@ -471,7 +471,7 @@ pub(super) fn encrypted_wrapper(
 ) -> Result<String, SamlError> {
     // The whole wrapper is decrypted so that an `EncryptedKey` beside
     // `EncryptedData`, named by a `RetrievalMethod`, resolves (E43).
-    String::from_utf8(namespace_complete(document, element)?).map_err(utf8_err)
+    crate::xml::decode_utf8(namespace_complete(document, element)?)
 }
 
 /// `EncryptedElementType`: one `EncryptedData`, then any `EncryptedKey`.
