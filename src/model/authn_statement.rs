@@ -68,8 +68,9 @@ impl AuthnStatement {
     /// `AuthnInstant`: the time at which the identity provider authenticated
     /// the subject. An accepted statement always has one.
     ///
-    /// The service provider keeps the text as received. It does not parse the
-    /// text or compare it with other instants.
+    /// An accepted value is a UTC `xs:dateTime` ending in `Z`, normalized
+    /// according to XML Schema whitespace rules. The service provider does
+    /// not compare it with other instants.
     pub fn authn_instant(&self) -> &SamlInstant {
         &self.authn_instant
     }

@@ -40,33 +40,76 @@ fn browser_sso_rejects_a_statement_missing_authn_context_without_a_schema_valida
 
 const MISSING_AUTHN_INSTANT: &str =
     "AuthnStatement is missing required unqualified attribute AuthnInstant";
+const NON_UTC_AUTHN_INSTANT: &str =
+    "AuthnStatement AuthnInstant must use the SAML-conformant UTC xs:dateTime form ending in Z";
+
+fn with_authn_instant_attribute(
+    xml: &str,
+    attribute: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let statement = xml
+        .find("<saml:AuthnStatement ")
+        .ok_or("missing AuthnStatement")?;
+    let start = xml[statement..]
+        .find(" AuthnInstant=\"")
+        .ok_or("missing AuthnInstant")?
+        + statement;
+    let value_start = start + " AuthnInstant=\"".len();
+    let end = xml[value_start..]
+        .find('"')
+        .ok_or("unterminated AuthnInstant")?
+        + value_start
+        + 1;
+    let mut replaced = xml.to_string();
+    replaced.replace_range(start..end, attribute);
+    Ok(replaced)
+}
 
 #[test]
 fn browser_sso_rejects_a_statement_missing_authn_instant_without_a_schema_validator(
 ) -> Result<(), Box<dyn std::error::Error>> {
     for unsolicited in [false, true] {
         let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
-        let xml = response_xml(&exchange.response_fields)?;
-        let statement = xml
-            .find("<saml:AuthnStatement ")
-            .ok_or("missing AuthnStatement")?;
-        let start = xml[statement..]
-            .find(" AuthnInstant=\"")
-            .ok_or("missing AuthnInstant")?
-            + statement;
-        let value_start = start + " AuthnInstant=\"".len();
-        let end = xml[value_start..]
-            .find('"')
-            .ok_or("unterminated AuthnInstant")?
-            + value_start
-            + 1;
-        let mut omitted = xml.clone();
-        omitted.replace_range(start..end, "");
+        let omitted = with_authn_instant_attribute(&response_xml(&exchange.response_fields)?, "")?;
         expect_error(
             accept(&exchange, &resigned(&omitted)?),
             |err| matches!(err, SamlError::ProtocolProfile(message) if message == MISSING_AUTHN_INSTANT),
         )?;
     }
+    Ok(())
+}
+
+#[test]
+fn browser_sso_rejects_an_authn_instant_that_is_not_a_saml_utc_date_time(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let xml = response_xml(&exchange.response_fields)?;
+    for value in ["not-a-time", "2014-07-17T01:01:48+00:00"] {
+        let replaced = with_authn_instant_attribute(&xml, &format!(" AuthnInstant=\"{value}\""))?;
+        expect_error(
+            accept(&exchange, &resigned(&replaced)?),
+            |err| matches!(err, SamlError::ProtocolProfile(message) if message == NON_UTC_AUTHN_INSTANT),
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn browser_sso_reports_the_collapsed_authn_instant() -> Result<(), Box<dyn std::error::Error>> {
+    let exchange = exchange_for(SpValidationPolicy::default(), false)?;
+    let padded = with_authn_instant_attribute(
+        &response_xml(&exchange.response_fields)?,
+        " AuthnInstant=\" 2014-07-17T01:01:48Z \"",
+    )?;
+    let session = accept(&exchange, &resigned(&padded)?)?;
+    assert_eq!(
+        session
+            .authn_statements()
+            .iter()
+            .map(|statement| statement.authn_instant().as_str())
+            .collect::<Vec<_>>(),
+        ["2014-07-17T01:01:48Z"]
+    );
     Ok(())
 }
 

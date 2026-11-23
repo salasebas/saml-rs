@@ -12,12 +12,30 @@ use crate::error::SamlError;
 use crate::util::Value;
 use crate::validator::conditions_time_window;
 use crate::xml::fields::{attribute, authn_request, authn_statement, login_response};
-use crate::xml::{dom, xs_boolean, xs_unsigned_short, XmlLimits};
+use crate::xml::{dom, parse_saml_utc_date_time, xs_boolean, xs_unsigned_short, XmlLimits};
 
 pub(super) fn required_str<'a>(extract: &'a Value, path: &str) -> Result<&'a str, SamlError> {
     extract
         .get_str(path)
         .ok_or_else(|| SamlError::Invalid(format!("missing extracted field {path}")))
+}
+
+pub(super) fn required_saml_utc_instant(
+    value: Option<&str>,
+    element: &str,
+    attribute: &str,
+) -> Result<SamlInstant, SamlError> {
+    let value = value.ok_or_else(|| {
+        SamlError::ProtocolProfile(format!(
+            "{element} is missing required unqualified attribute {attribute}"
+        ))
+    })?;
+    let value = parse_saml_utc_date_time(value).ok_or_else(|| {
+        SamlError::ProtocolProfile(format!(
+            "{element} {attribute} must use the SAML-conformant UTC xs:dateTime form ending in Z"
+        ))
+    })?;
+    SamlInstant::try_new(value)
 }
 
 pub(super) fn optional_request_id(
@@ -229,15 +247,11 @@ pub(super) fn authn_statements_from_extract(
                 optional_authn_statement_str(statement, authn_statement::SESSION_INDEX)?
                     .map(SessionIndex::try_new)
                     .transpose()?;
-            let authn_instant =
-                optional_authn_statement_str(statement, authn_statement::AUTHN_INSTANT)?
-                    .ok_or_else(|| {
-                        SamlError::ProtocolProfile(
-                            "AuthnStatement is missing required unqualified attribute AuthnInstant"
-                                .into(),
-                        )
-                    })
-                    .and_then(SamlInstant::try_new)?;
+            let authn_instant = required_saml_utc_instant(
+                optional_authn_statement_str(statement, authn_statement::AUTHN_INSTANT)?,
+                "AuthnStatement",
+                "AuthnInstant",
+            )?;
             let not_on_or_after =
                 optional_authn_statement_str(statement, authn_statement::SESSION_NOT_ON_OR_AFTER)?
                     .map(SamlInstant::try_new)
