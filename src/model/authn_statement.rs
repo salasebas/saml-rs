@@ -12,7 +12,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthnStatement {
     session_index: Option<SessionIndex>,
-    authn_instant: Option<SamlInstant>,
+    authn_instant: SamlInstant,
     session_not_on_or_after: Option<SamlInstant>,
     authn_context: AuthnContext,
     subject_locality: Option<SubjectLocality>,
@@ -36,7 +36,7 @@ pub(crate) fn earliest_authn_session_expiration<'a>(
 impl AuthnStatement {
     pub(super) fn new(
         session_index: Option<SessionIndex>,
-        authn_instant: Option<SamlInstant>,
+        authn_instant: SamlInstant,
         session_not_on_or_after: Option<SamlInstant>,
         children: StatementChildren,
     ) -> Self {
@@ -65,9 +65,13 @@ impl AuthnStatement {
         self.session_index.as_ref()
     }
 
-    /// AuthnInstant, when present.
-    pub fn authn_instant(&self) -> Option<&SamlInstant> {
-        self.authn_instant.as_ref()
+    /// `AuthnInstant`: the time at which the identity provider authenticated
+    /// the subject. An accepted statement always has one.
+    ///
+    /// The service provider keeps the text as received. It does not parse the
+    /// text or compare it with other instants.
+    pub fn authn_instant(&self) -> &SamlInstant {
+        &self.authn_instant
     }
 
     /// `SessionNotOnOrAfter`, when present: the instant after which the

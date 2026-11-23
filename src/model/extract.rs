@@ -231,8 +231,13 @@ pub(super) fn authn_statements_from_extract(
                     .transpose()?;
             let authn_instant =
                 optional_authn_statement_str(statement, authn_statement::AUTHN_INSTANT)?
-                    .map(SamlInstant::try_new)
-                    .transpose()?;
+                    .ok_or_else(|| {
+                        SamlError::ProtocolProfile(
+                            "AuthnStatement is missing required unqualified attribute AuthnInstant"
+                                .into(),
+                        )
+                    })
+                    .and_then(SamlInstant::try_new)?;
             let not_on_or_after =
                 optional_authn_statement_str(statement, authn_statement::SESSION_NOT_ON_OR_AFTER)?
                     .map(SamlInstant::try_new)

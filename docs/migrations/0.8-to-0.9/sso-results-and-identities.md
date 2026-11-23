@@ -410,3 +410,46 @@ If a configured schema validator rejects the document, the service provider
 returns `SamlError::Invalid` from that callback. If the document reaches the
 built-in statement reader, a repeated locality in the selected assertion
 returns `SamlError::ProtocolProfile`.
+
+## Send `AuthnInstant` in every statement
+
+**Affects:** service providers whose identity provider omits the
+`AuthnInstant` attribute of an `AuthnStatement`, and code that calls
+`authn_instant()` on an `AuthnStatement`.
+
+Ask the identity provider to send `AuthnInstant` in each statement, as the
+assertion schema requires. Before the upgrade, the service provider accepted a
+statement without it, and `authn_instant()` returned `None`.
+
+If a configured schema validator rejects the document, the service provider
+returns `SamlError::Invalid` from that callback. If the document reaches the
+built-in statement reader, `finish_sso`, `accept_unsolicited_sso`, and
+`finish_paos_sso` return `SamlError::ProtocolProfile` when a statement of the
+selected assertion has no `AuthnInstant`.
+
+`AuthnStatement::authn_instant()` returns `&SamlInstant` instead of
+`Option<&SamlInstant>`. Remove the `None` case.
+
+Before the upgrade:
+
+```rust,ignore
+let instant = session
+	.authn_session()
+	.authn_instant()
+	.map(SamlInstant::as_str);
+```
+
+After the upgrade:
+
+```rust
+# fn read(session: &saml_rs::SsoSession) {
+use saml_rs::{AuthnStatement, SamlInstant};
+
+let instant = session
+	.authn_statements()
+	.first()
+	.map(AuthnStatement::authn_instant)
+	.map(SamlInstant::as_str);
+# let _ = instant;
+# }
+```
