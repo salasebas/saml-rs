@@ -11,10 +11,9 @@ use crate::model::{authn_statement_not_on_or_after_values, earliest_authn_sessio
 use crate::util::Value;
 use crate::validator::{conditions_time_window, TimeWindow};
 use crate::xml::dom::{self, reader_err, Node};
-use crate::xml::{extract_with_limits, fields, XmlLimits};
+use crate::xml::{extract_with_limits, fields, parse_saml_utc_instant, XmlLimits};
 use quick_xml::events::Event;
 use quick_xml::reader::NsReader;
-use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 
 const BEARER_SUBJECT_CONFIRMATION_METHOD: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
@@ -197,8 +196,8 @@ fn node_has_bearer(assertion: &Node) -> bool {
 
 /// Latest bearer `SubjectConfirmationData@NotOnOrAfter` of `confirmations`.
 ///
-/// The latest value that parses as an instant wins. An unparsed value is
-/// returned only when no bearer value parses.
+/// The latest value that is a SAML UTC instant wins. Another value is
+/// returned only when no bearer value is one.
 pub(crate) fn latest_bearer_not_on_or_after<'a>(
     confirmations: impl IntoIterator<Item = &'a Node>,
 ) -> Option<String> {
@@ -216,8 +215,8 @@ pub(crate) fn latest_bearer_not_on_or_after<'a>(
         else {
             continue;
         };
-        match OffsetDateTime::parse(value, &Rfc3339) {
-            Ok(instant) => {
+        match parse_saml_utc_instant(value) {
+            Some(instant) => {
                 let replace = latest
                     .as_ref()
                     .is_none_or(|(current, _)| *current < instant);
@@ -225,7 +224,7 @@ pub(crate) fn latest_bearer_not_on_or_after<'a>(
                     latest = Some((instant, value.to_string()));
                 }
             }
-            Err(_) => unparsed = Some(value.to_string()),
+            None => unparsed = Some(value.to_string()),
         }
     }
     latest.map(|(_, value)| value).or(unparsed)

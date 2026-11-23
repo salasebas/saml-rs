@@ -833,7 +833,7 @@ fn typed_validation_context_replay_expiration_uses_earliest_authn_statement(
 }
 
 #[test]
-fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_closed(
+fn typed_validation_context_unrepresentable_authn_statement_expiration_fails_replay_closed(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = session_flow();
     remove_extract_keys(&mut flow, &["conditions", "subjectConfirmation"]);
@@ -846,7 +846,7 @@ fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_cl
             ]),
             value_object(vec![
                 ("authnInstant", value_str("2026-07-04T12:00:00Z")),
-                ("sessionNotOnOrAfter", value_str("not-a-time")),
+                ("sessionNotOnOrAfter", value_str("10000-01-01T00:00:00Z")),
             ]),
         ]),
     );

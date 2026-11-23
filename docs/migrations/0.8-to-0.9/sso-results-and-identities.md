@@ -459,3 +459,36 @@ let instant = session
 # let _ = instant;
 # }
 ```
+
+## Send UTC time bounds in every assertion
+
+**Affects:** service providers whose identity provider writes a
+`Conditions@NotBefore`, `Conditions@NotOnOrAfter`, bearer
+`SubjectConfirmationData@NotBefore` or `NotOnOrAfter`, or
+`AuthnStatement@SessionNotOnOrAfter` in a form other than a UTC `xs:dateTime`
+ending in `Z`.
+
+Ask the identity provider to write these bounds in the same UTC form as
+`IssueInstant`, such as `2026-01-01T12:00:00Z`. SAML Core requires UTC for
+every SAML time value. Before the upgrade, the service provider read each
+bound as RFC 3339. It accepted an offset form such as
+`2026-01-01T13:00:00+01:00` and compared it as that instant. It also accepted
+a space or another character in place of `T`, and a lowercase `z`.
+
+An identity provider that writes the response `IssueInstant` in an offset form
+was already rejected. Only one that writes `IssueInstant` in UTC and a bound
+in another form is affected.
+
+The service provider now returns the error that it returned before for a
+bound it could not read:
+
+| Bound | Error |
+| --- | --- |
+| `Conditions@NotBefore` or `Conditions@NotOnOrAfter` | `SamlError::TimeWindowInvalid` with `TimeWindowField::Conditions` |
+| `AuthnStatement@SessionNotOnOrAfter` | `SamlError::TimeWindowInvalid` with `TimeWindowField::SessionNotOnOrAfter` |
+| Bearer `SubjectConfirmationData@NotBefore` or `NotOnOrAfter` | The confirmation is not satisfied. When it is the assertion's only `SubjectConfirmation`, `SamlError::SubjectConfirmationInvalid` with `SubjectConfirmationReason::TimeWindowInvalid` |
+
+A bound with leading or trailing XML Schema whitespace is now accepted.
+`SsoSession::not_before()`, `SsoSession::not_on_or_after()`, and
+`AuthnStatement::session_not_on_or_after()` return it with that whitespace
+removed, as for `IssueInstant`. The API is unchanged.
