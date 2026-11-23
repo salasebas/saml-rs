@@ -1,4 +1,4 @@
-use crate::artifact::{self, IssuedArtifacts};
+use crate::artifact::{self, ArtifactStore};
 use crate::browser::{ArtifactDelivery, Inbound, Outbound, SsoRequestBinding};
 use crate::config::{IdpConfig, SpDescriptor};
 use crate::constants::Binding;
@@ -21,7 +21,7 @@ pub(super) enum ResponseTransport<'a> {
     /// The browser action carries the response.
     Browser,
     /// The response is stored, and the browser action carries its artifact.
-    Artifact(ArtifactDelivery, &'a mut IssuedArtifacts),
+    Artifact(ArtifactDelivery, &'a mut dyn ArtifactStore),
 }
 
 /// A SAML identity provider built from an [`IdpConfig`].
@@ -406,24 +406,23 @@ impl IdentityProvider {
                     in_response_to,
                     overrides,
                 )?;
-                let artifact = artifact::issue_sso_response(
+                let (artifact, entry) = artifact::prepare_sso_response(
                     &self.engine().metadata,
                     sp,
                     &rendered.xml,
                     delivery.endpoint_index(),
                     issued,
                 )?;
-                Outbound::<SsoResponse>::artifact(
+                let outbound = Outbound::<SsoResponse>::artifact(
                     rendered.id,
                     relay_state,
                     &acs,
                     &artifact,
                     delivery.encoding(),
-                )
-                .map(|outbound| outbound.with_session_index(rendered.session_index))
-                .inspect_err(|_| {
-                    issued.remove(&artifact);
-                })
+                )?
+                .with_session_index(rendered.session_index);
+                issued.store(&artifact, entry)?;
+                Ok(outbound)
             }
         }
     }

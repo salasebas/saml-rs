@@ -1,5 +1,5 @@
 use crate::artifact::{
-    self, AnsweredArtifact, Artifact, ArtifactResolution, ArtifactResolveSigning, IssuedArtifacts,
+    self, AnsweredArtifact, Artifact, ArtifactResolution, ArtifactResolveSigning, ArtifactStore,
 };
 use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
@@ -26,15 +26,17 @@ impl IdentityProvider {
     /// Returns [`SamlError::Xml`] when `protocol_xml` is not one well-formed
     /// element or the element contains a processing instruction. Returns
     /// [`SamlError::ProtocolProfile`] when the element is outside the SAML
-    /// protocol namespace, and another [`SamlError`] when metadata has no
-    /// SOAP `ArtifactResolutionService` at `endpoint_index` or the artifact
-    /// value is already outstanding.
+    /// protocol namespace, [`SamlError::ArtifactStoreUnavailable`] when
+    /// `issued` cannot store the artifact, and another [`SamlError`] when
+    /// metadata has no SOAP `ArtifactResolutionService` at `endpoint_index`,
+    /// the artifact expiration overflows the supported time range, or the
+    /// artifact value is already outstanding.
     pub fn issue_artifact(
         &self,
         service_provider: &SpDescriptor,
         protocol_xml: &str,
         endpoint_index: u16,
-        issued: &mut IssuedArtifacts,
+        issued: &mut (impl ArtifactStore + ?Sized),
     ) -> Result<Artifact, SamlError> {
         service_provider.ensure_valid_at(SystemTime::now())?;
         artifact::issue(
@@ -51,7 +53,8 @@ impl IdentityProvider {
     /// The `<Response>` is stored in `issued` for `sp`, and the returned
     /// browser action carries its artifact and RelayState to the assertion
     /// consumer. Send that action with
-    /// [`Outbound::headers`](crate::Outbound::headers). Pass `issued` to
+    /// [`Outbound::headers`](crate::Outbound::headers). Pass `issued` (or
+    /// another node's handle to the same shared [`ArtifactStore`]) to
     /// [`Self::answer_artifact_resolve`] when the service provider resolves
     /// the artifact.
     ///
@@ -64,10 +67,12 @@ impl IdentityProvider {
     /// Returns [`SamlError`] when the service provider publishes no
     /// HTTP-Artifact assertion consumer the request allows, this identity
     /// provider's metadata has no SOAP `ArtifactResolutionService` at the
-    /// delivery's index, or [`Self::respond_sso`] would fail, including
-    /// [`SamlError::Invalid`] for an [`SsoOutcome::Failure`] with a top-level
-    /// `Success` status. Returns [`SamlError::ProtocolProfile`] when
-    /// [`RespondSso::relay_state`] is set and `request` carried `RelayState`.
+    /// delivery's index, `issued` fails with
+    /// [`SamlError::ArtifactStoreUnavailable`], or [`Self::respond_sso`] would
+    /// fail, including [`SamlError::Invalid`] for an [`SsoOutcome::Failure`]
+    /// with a top-level `Success` status. Returns
+    /// [`SamlError::ProtocolProfile`] when [`RespondSso::relay_state`] is set
+    /// and `request` carried `RelayState`.
     ///
     /// # Examples
     ///
@@ -102,9 +107,9 @@ impl IdentityProvider {
         request: &Received<AuthnRequest>,
         outcome: impl Into<SsoOutcome>,
         options: RespondSso<ArtifactDelivery>,
-        issued: &mut IssuedArtifacts,
+        mut issued: &mut (impl ArtifactStore + ?Sized),
     ) -> Result<Outbound<SsoResponse>, SamlError> {
-        let transport = ResponseTransport::Artifact(options.delivery, issued);
+        let transport = ResponseTransport::Artifact(options.delivery, &mut issued);
         self.issue_sso(
             sp,
             Some(request),
@@ -128,23 +133,25 @@ impl IdentityProvider {
         sp: &SpDescriptor,
         outcome: impl Into<SsoOutcome>,
         options: RespondSso<ArtifactDelivery>,
-        issued: &mut IssuedArtifacts,
+        mut issued: &mut (impl ArtifactStore + ?Sized),
     ) -> Result<Outbound<SsoResponse>, SamlError> {
-        let transport = ResponseTransport::Artifact(options.delivery, issued);
+        let transport = ResponseTransport::Artifact(options.delivery, &mut issued);
         self.issue_sso(sp, None, &outcome.into(), options.delivered(transport))
     }
 
     /// Answer `ArtifactResolve` with `ArtifactResponse`.
     ///
     /// The protocol message is included only when `presenter` is the service
-    /// provider the artifact was issued to and `channel` supplies the protection
-    /// that message requires. [`AnsweredArtifact::release`] says whether the
+    /// provider the artifact was issued to, `channel` supplies the protection
+    /// that message requires, and `issued` atomically consumes the matching
+    /// outstanding entry. [`AnsweredArtifact::release`] says whether the
     /// response includes the message. An unknown artifact, a different
-    /// destination or presenter, or insufficient channel protection gets
-    /// `Success` without the message. An unsupported newer version gets
-    /// `VersionMismatch`, with `RequestVersionTooHigh` for a newer major version.
-    /// A present XML signature must cover the `ArtifactResolve` and verify
-    /// against `presenter`'s signing keys before the request can be processed.
+    /// destination or presenter, insufficient channel protection, or a race
+    /// lost to another responder gets `Success` without the message. An
+    /// unsupported newer version gets `VersionMismatch`, with
+    /// `RequestVersionTooHigh` for a newer major version. A present XML
+    /// signature must cover the `ArtifactResolve` and verify against
+    /// `presenter`'s signing keys before the request can be processed.
     ///
     /// # Errors
     ///
@@ -154,9 +161,11 @@ impl IdentityProvider {
     /// value or has a second `Issuer`, or the required `ID`, `Version`, or UTC
     /// `IssueInstant` fails validation. A version below 2.0 also returns
     /// [`SamlError::ProtocolProfile`].
-    /// An invalid signature returns a verification error and leaves the
-    /// artifact outstanding. A present signature without a crypto provider
-    /// returns [`SamlError::Unsupported`].
+    /// Returns [`SamlError::ArtifactStoreUnavailable`] when `issued` fails
+    /// during lookup, clock read, or atomic consume, without releasing an
+    /// unconsumed message. An invalid signature returns a verification error
+    /// and leaves the artifact outstanding. A present signature without a
+    /// crypto provider returns [`SamlError::Unsupported`].
     ///
     /// # Examples
     ///
@@ -221,7 +230,7 @@ impl IdentityProvider {
         &self,
         presenter: &SpDescriptor,
         request_envelope: &str,
-        issued: &mut IssuedArtifacts,
+        issued: &mut (impl ArtifactStore + ?Sized),
         channel: SoapChannel,
     ) -> Result<AnsweredArtifact, SamlError> {
         presenter.ensure_valid_at(SystemTime::now())?;

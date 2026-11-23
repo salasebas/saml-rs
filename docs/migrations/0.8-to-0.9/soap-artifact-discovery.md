@@ -186,6 +186,25 @@ let artifact = idp.issue_artifact(&sp, &logout_request_xml, 0, &mut issued)?;
 To answer an `AuthnRequest` with an artifact, keep using
 `respond_sso_artifact`, which builds and stores the `<Response>`.
 
+## Pass an `ArtifactStore` to artifact issuing and resolution
+
+**Affects:** identity providers that wrap `IssuedArtifacts` in a custom
+`DerefMut<Target = IssuedArtifacts>` type and relied on implicit deref
+coercion when calling `issue_artifact`, `respond_sso_artifact`,
+`initiate_sso_artifact`, or `answer_artifact_resolve`.
+
+**Before:** those four methods accepted only `&mut IssuedArtifacts`.
+
+**Now:** they accept `&mut (impl ArtifactStore + ?Sized)`. `IssuedArtifacts`,
+`Box<T>`, `MutexGuard<'_, T>`, `RwLockWriteGuard<'_, T>`, `RefMut<'_, T>`,
+`&Mutex<IssuedArtifacts>`, and `Arc<Mutex<IssuedArtifacts>>` all implement
+`ArtifactStore`, so existing callers passing those types continue to work.
+Clustered deployments can pass a shared `ArtifactStore` implementation instead.
+
+**Upgrade:** if a helper is generic over `G: DerefMut<Target = IssuedArtifacts>`
+or wraps `IssuedArtifacts` in a custom smart pointer, dereference explicitly
+(`&mut *wrapper`) or implement `ArtifactStore` for the wrapper.
+
 ## Resolve an artifact with a channel and a validation context
 
 **Affects:** service providers that call `Saml<Sp>::resolve_artifact`.

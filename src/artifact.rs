@@ -4,12 +4,12 @@
 //! answers `ArtifactResolve`. The service provider sends that request and
 //! returns the protocol message from `ArtifactResponse`.
 
-use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant};
-
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine;
 use sha1::{Digest, Sha1};
+
+mod store;
+pub use store::{ArtifactChannelRequirement, ArtifactStore, IssuedArtifact, IssuedArtifacts};
 
 use crate::binding::sign_soap_message;
 use crate::config::{
@@ -94,81 +94,6 @@ impl Artifact {
     /// `EndpointIndex` of the issuer's `ArtifactResolutionService`.
     pub fn endpoint_index(&self) -> u16 {
         self.endpoint_index
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RequiredChannel {
-    Authenticated,
-    Confidential,
-}
-
-/// Artifacts an identity provider has issued and not yet resolved.
-///
-/// An artifact resolves only within its lifetime. Each issue drops the
-/// artifacts issued more than one lifetime ago, so memory holds only the
-/// artifacts of the last lifetime.
-#[derive(Debug)]
-pub struct IssuedArtifacts {
-    lifetime: Duration,
-    entries: HashMap<String, IssuedEntry>,
-    oldest_first: VecDeque<(Instant, String)>,
-}
-
-#[derive(Debug)]
-struct IssuedEntry {
-    issued_at: Instant,
-    service_provider: String,
-    message_xml: String,
-    required_channel: RequiredChannel,
-}
-
-impl IssuedArtifacts {
-    /// Outstanding artifacts that each resolve for `lifetime` after issue.
-    ///
-    /// Choose the shortest `lifetime` in which the service provider receives
-    /// the artifact and sends `ArtifactResolve`. A later `ArtifactResolve`
-    /// gets Success without the message. The replay retention the service
-    /// provider passes to [`ServiceProvider::resolve_artifact`](crate::ServiceProvider::resolve_artifact)
-    /// should be longer. A zero `lifetime` resolves nothing.
-    pub fn expire_after(lifetime: Duration) -> Self {
-        Self {
-            lifetime,
-            entries: HashMap::new(),
-            oldest_first: VecDeque::new(),
-        }
-    }
-
-    /// Discard `artifact` and its stored message without returning it.
-    ///
-    /// Returns whether the artifact was outstanding. A later `ArtifactResolve`
-    /// for it gets Success without the message.
-    pub fn remove(&mut self, artifact: &Artifact) -> bool {
-        let now = Instant::now();
-        self.entries
-            .remove(artifact.as_str())
-            .is_some_and(|entry| now.saturating_duration_since(entry.issued_at) < self.lifetime)
-    }
-
-    fn insert(&mut self, artifact: String, entry: IssuedEntry) {
-        while self
-            .oldest_first
-            .front()
-            .is_some_and(|(at, _)| entry.issued_at.saturating_duration_since(*at) >= self.lifetime)
-        {
-            if let Some((_, expired)) = self.oldest_first.pop_front() {
-                self.entries.remove(&expired);
-            }
-        }
-        self.oldest_first
-            .push_back((entry.issued_at, artifact.clone()));
-        self.entries.insert(artifact, entry);
-    }
-
-    fn outstanding(&self, artifact: &str, now: Instant) -> Option<&IssuedEntry> {
-        self.entries
-            .get(artifact)
-            .filter(|entry| now.saturating_duration_since(entry.issued_at) < self.lifetime)
     }
 }
 
@@ -366,83 +291,82 @@ impl ResolvedProtocolMessage {
     }
 }
 
-pub(crate) fn issue(
+pub(crate) fn issue<S: ArtifactStore + ?Sized>(
     metadata: &IdpMetadata,
     service_provider: &SpDescriptor,
     protocol_xml: &str,
     endpoint_index: u16,
-    issued: &mut IssuedArtifacts,
+    issued: &mut S,
 ) -> Result<Artifact, SamlError> {
     let (message_xml, local_name) = stored_message(protocol_xml)?;
     let required_channel = if local_name == "Response" {
-        RequiredChannel::Confidential
+        ArtifactChannelRequirement::Confidential
     } else {
-        RequiredChannel::Authenticated
+        ArtifactChannelRequirement::Authenticated
     };
-    store(
+    let (artifact, entry) = prepare_entry(
         metadata,
         service_provider,
         message_xml,
         required_channel,
         endpoint_index,
         issued,
-    )
+    )?;
+    issued.store(&artifact, entry)?;
+    Ok(artifact)
 }
 
-pub(crate) fn issue_sso_response(
+pub(crate) fn prepare_sso_response<S: ArtifactStore + ?Sized>(
     metadata: &IdpMetadata,
     service_provider: &SpDescriptor,
     response_xml: &str,
     endpoint_index: u16,
-    issued: &mut IssuedArtifacts,
-) -> Result<Artifact, SamlError> {
+    issued: &S,
+) -> Result<(Artifact, IssuedArtifact), SamlError> {
     let (message_xml, local_name) = stored_message(response_xml)?;
     if local_name != "Response" {
         return Err(SamlError::ProtocolProfile(
             "Web Browser SSO artifact message must be a protocol Response".into(),
         ));
     }
-    store(
+    prepare_entry(
         metadata,
         service_provider,
         message_xml,
-        RequiredChannel::Confidential,
+        ArtifactChannelRequirement::Confidential,
         endpoint_index,
         issued,
     )
 }
 
-fn store(
+fn prepare_entry<S: ArtifactStore + ?Sized>(
     metadata: &IdpMetadata,
     service_provider: &SpDescriptor,
     message_xml: String,
-    required_channel: RequiredChannel,
+    required_channel: ArtifactChannelRequirement,
     endpoint_index: u16,
-    issued: &mut IssuedArtifacts,
-) -> Result<Artifact, SamlError> {
+    issued: &S,
+) -> Result<(Artifact, IssuedArtifact), SamlError> {
     let entity_id = metadata
         .as_metadata()
         .entity_id()
         .ok_or_else(|| SamlError::MissingMetadata("entityID".into()))?;
     let _service = soap_service(metadata, endpoint_index)?;
+    let now = issued.now()?;
+    let lifetime = issued.lifetime()?;
+    let expires_at = now.checked_add(lifetime).ok_or_else(|| {
+        SamlError::Invalid("artifact expiration overflows supported time range".into())
+    })?;
     let source_id: [u8; SOURCE_ID_LEN] = Sha1::digest(entity_id.as_bytes()).into();
     let encoded = encode_artifact(endpoint_index, source_id, message_handle());
-    if issued.entries.contains_key(&encoded) {
-        return Err(SamlError::Invalid(
-            "artifact value is already outstanding".into(),
-        ));
-    }
     let artifact = Artifact::try_new(encoded)?;
-    issued.insert(
-        artifact.as_str().to_string(),
-        IssuedEntry {
-            issued_at: Instant::now(),
-            service_provider: service_provider.entity_id().as_str().to_string(),
-            message_xml,
-            required_channel,
-        },
+    let entry = IssuedArtifact::new(
+        service_provider.entity_id().clone(),
+        message_xml,
+        required_channel,
+        expires_at,
     );
-    Ok(artifact)
+    Ok((artifact, entry))
 }
 
 fn stored_message(xml: &str) -> Result<(String, String), SamlError> {
@@ -472,7 +396,7 @@ pub(crate) fn resolve(
     setting: &EntitySetting,
     signing: ArtifactResolveSigning,
 ) -> Result<ArtifactResolution, SamlError> {
-    if !channel_allows(channel, RequiredChannel::Confidential) {
+    if !channel_allows(channel, ArtifactChannelRequirement::Confidential) {
         return Err(SamlError::SoapChannelProtection);
     }
     let idp_entity_id = identity_provider.entity_id().as_str();
@@ -533,11 +457,11 @@ pub(crate) fn resolve(
     })
 }
 
-pub(crate) fn answer(
+pub(crate) fn answer<S: ArtifactStore + ?Sized>(
     metadata: &IdpMetadata,
     presenter: &SpDescriptor,
     request_envelope: &str,
-    issued: &mut IssuedArtifacts,
+    issued: &mut S,
     channel: SoapChannel,
     setting: &EntitySetting,
 ) -> Result<AnsweredArtifact, SamlError> {
@@ -593,40 +517,45 @@ pub(crate) fn answer(
     if artifact.source_id != source_id {
         return success_without(ArtifactWithheld::NotOutstanding);
     }
-    let message_xml = {
-        let Some(entry) = issued.outstanding(artifact.as_str(), Instant::now()) else {
-            return success_without(ArtifactWithheld::NotOutstanding);
-        };
-        if let Ok(service) = soap_service(metadata, artifact.endpoint_index()) {
-            if let Some(destination) = request.destination.as_deref() {
-                if destination != service.location() {
-                    return success_without(ArtifactWithheld::DestinationMismatch);
-                }
-            }
-        } else {
-            return success_without(ArtifactWithheld::NotOutstanding);
-        }
-        if !channel_allows(channel, entry.required_channel) {
-            return success_without(ArtifactWithheld::InsufficientChannelProtection);
-        }
-        let presenter_id = presenter.entity_id().as_str();
-        let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
-            issuer.value == presenter_id && issuer_format_is_entity(issuer.format.as_deref())
-        });
-        if !issuer_matches || presenter_id != entry.service_provider {
-            return success_without(ArtifactWithheld::DifferentPresenter);
-        }
-        entry.message_xml.clone()
+    let Some(entry) = issued.lookup(&artifact)? else {
+        return success_without(ArtifactWithheld::NotOutstanding);
     };
+    if entry.expires_at() <= issued.now()? {
+        return success_without(ArtifactWithheld::NotOutstanding);
+    }
+    if let Ok(service) = soap_service(metadata, artifact.endpoint_index()) {
+        if let Some(destination) = request.destination.as_deref() {
+            if destination != service.location() {
+                return success_without(ArtifactWithheld::DestinationMismatch);
+            }
+        }
+    } else {
+        return success_without(ArtifactWithheld::NotOutstanding);
+    }
+    if !channel_allows(channel, entry.required_channel()) {
+        return success_without(ArtifactWithheld::InsufficientChannelProtection);
+    }
+    let presenter_id = presenter.entity_id().as_str();
+    let issuer_matches = request.issuer.as_ref().is_some_and(|issuer| {
+        issuer.value == presenter_id && issuer_format_is_entity(issuer.format.as_deref())
+    });
+    if !issuer_matches || presenter_id != entry.service_provider().as_str() {
+        return success_without(ArtifactWithheld::DifferentPresenter);
+    }
     let response = answered(
         &prefixes,
         &entity_id,
         &request.id,
         &Status::success(),
-        Some(&message_xml),
+        Some(entry.message_xml()),
         ArtifactRelease::Returned,
     )?;
-    issued.entries.remove(artifact.as_str());
+    if entry.expires_at() <= issued.now()? {
+        return success_without(ArtifactWithheld::NotOutstanding);
+    }
+    if !issued.consume(&artifact, &entry)? {
+        return success_without(ArtifactWithheld::NotOutstanding);
+    }
     Ok(response)
 }
 
@@ -662,11 +591,11 @@ fn answered(
     })
 }
 
-fn channel_allows(channel: SoapChannel, required: RequiredChannel) -> bool {
+fn channel_allows(channel: SoapChannel, required: ArtifactChannelRequirement) -> bool {
     let authenticated = channel.authenticates_peer();
     match required {
-        RequiredChannel::Authenticated => authenticated,
-        RequiredChannel::Confidential => {
+        ArtifactChannelRequirement::Authenticated => authenticated,
+        ArtifactChannelRequirement::Confidential => {
             authenticated && channel.confidentiality() == MessageConfidentiality::Protected
         }
     }
@@ -816,28 +745,5 @@ mod tests {
         };
         assert_ne!(checked, other_request);
         Ok(())
-    }
-
-    #[test]
-    fn issued_artifacts_resolve_and_are_kept_only_for_the_lifetime() {
-        let lifetime = Duration::from_secs(60);
-        let start = Instant::now();
-        let entry = |issued_at| IssuedEntry {
-            issued_at,
-            service_provider: "sp".into(),
-            message_xml: String::new(),
-            required_channel: RequiredChannel::Authenticated,
-        };
-        let mut issued = IssuedArtifacts::expire_after(lifetime);
-        for n in 0u32..1_000 {
-            issued.insert(n.to_string(), entry(start));
-        }
-        let before = start + lifetime - Duration::from_secs(1);
-        assert!(issued.outstanding("0", before).is_some());
-        assert!(issued.outstanding("0", start + lifetime).is_none());
-
-        issued.insert("new".into(), entry(start + lifetime));
-        assert_eq!(issued.entries.keys().collect::<Vec<_>>(), ["new"]);
-        assert_eq!(issued.oldest_first.len(), 1);
     }
 }
