@@ -267,10 +267,9 @@ fn identity_provider_does_not_issue_an_identifier_attribute_that_breaks_the_prof
         vec![identifier(PAIRWISE_ID, &["alice@Example.org"])],
         vec![identifier(SUBJECT_ID, &["Alice@example.org"])],
         vec![Attribute::from(SubjectId::try_new("alice@EXAMPLE.ORG")?)],
-        vec![Attribute::new(
-            SUBJECT_ID,
-            values(&["alice.smith@example.org"]),
-        )],
+        vec![Attribute::new(SUBJECT_ID, values(&["alice@example.org"]))],
+        vec![Attribute::new(PAIRWISE_ID, values(&["alice@example.org"]))
+            .with_name_format(AttributeNameFormat::Unspecified)],
         vec![
             identifier(PAIRWISE_ID, &["alice@example.org"]),
             Attribute::new(PAIRWISE_ID, values(&["bob@example.org"]))

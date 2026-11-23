@@ -91,15 +91,17 @@ them as `Attribute::from(SubjectId)` and `Attribute::from(PairwiseId)`. The
 service provider reads them with `SsoSession::subject_id` and
 `SsoSession::pairwise_id`.
 
-This page does not claim either conformance clause of the profile (§4). Both
-also need the §3.5.2 `<shibmd:Scope>` extension of identity provider metadata
-and scope filtering against it, which the crate does not read or write. The
-§3.5.1 `subject-id:req` entity attribute is in
+This page does not claim either conformance clause of the profile (§4).
+Clause 1 also needs the identity provider's generated metadata to publish
+`<shibmd:Scope>` (§3.5.2). Clause 2 also needs the service provider to accept
+values only in the scopes that the identity provider's metadata lists. The
+crate does neither. The `subject-id:req` entity attribute that clause 2 asks a
+service provider's metadata generator to support (§3.5.1) is in
 [Metadata and replay](metadata-and-replay.md#entity-attributes).
 
 | Rule | Actor | Direction | Level |
 | --- | --- | --- | --- |
-| The attribute has the profile's `Name` and the `uri` `NameFormat` | Identity provider and service provider | Generate and accept Response | Mandatory. §3.3 and §3.4 name `urn:oasis:names:tc:SAML:attribute:subject-id` and `urn:oasis:names:tc:SAML:attribute:pairwise-id` with the `uri` name format, published as `constants::attribute_name`. `Attribute::from(SubjectId)` and `Attribute::from(PairwiseId)` write that `NameFormat`. Library reading: an attribute with that `Name` and no `NameFormat`, or the unspecified one, is the same identifier, because Core §2.7.3.1 gives an absent `NameFormat` the unspecified meaning, and Shibboleth SP maps such an attribute to a `uri` rule. The identity provider checks it with the rows below, and the service provider reads it. Another `NameFormat` names a different attribute, as for [entity attributes](metadata-and-replay.md#entity-attributes) |
+| The attribute has the profile's `Name` and the `uri` `NameFormat` | Identity provider and service provider | Generate and accept Response | Mandatory. §3.3 and §3.4 name `urn:oasis:names:tc:SAML:attribute:subject-id` and `urn:oasis:names:tc:SAML:attribute:pairwise-id` with the `uri` name format, published as `constants::attribute_name`. `Attribute::from(SubjectId)` and `Attribute::from(PairwiseId)` write that `NameFormat`. Library reading: an attribute with that `Name` and no `NameFormat`, or the unspecified one, is the same identifier, because Core §2.7.3.1 gives an absent `NameFormat` the unspecified meaning, and Shibboleth SP maps such an attribute to a `uri` rule. The service provider reads it. The identity provider returns `SamlError::Invalid` for it, so a response carries these identifiers only with the `uri` `NameFormat`. Another `NameFormat` names a different attribute, as for [entity attributes](metadata-and-replay.md#entity-attributes), and the identity provider writes it as given |
 | The attribute has exactly one `<AttributeValue>`, and an assertion carries it once | Identity provider | Generate Response | Mandatory. §3.3.1, and §3.2 limits each attribute to a single value in an assertion. A response whose attribute has no value or several values, or whose assertion has a second matching attribute, returns `SamlError::Invalid` before it is signed |
 | The value is `uniqueID@scope` | Identity provider | Generate Response | Mandatory. §3.3.1: a unique ID of 1 to 127 ASCII letters, digits, `=`, and `-`, and a scope of 1 to 127 ASCII letters, digits, `-`, and `.`, each starting with a letter or a digit. `SubjectId::try_new` and `PairwiseId::try_new` return `SamlError::Invalid` for any other text, including surrounding whitespace. A response whose attribute value breaks the grammar returns `SamlError::Invalid`, whichever constructor made the attribute |
 | The `<AttributeValue>` has no `xsi:type` | Identity provider | Generate Response | Recommended. §3.3.1: `xsi:type` `SHOULD` be absent and `MUST` be `xs:string` when present. Typed responses write these values without `xsi:type`. Other attributes keep the `xs:string` type |

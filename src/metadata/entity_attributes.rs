@@ -133,13 +133,9 @@ impl EntityAttributes {
     }
 
     fn named(&self, name: &'static str) -> impl Iterator<Item = &Attribute> {
-        self.0.iter().filter(move |attribute| {
-            attribute.name() == name
-                && matches!(
-                    attribute.name_format(),
-                    None | Some(AttributeNameFormat::Uri | AttributeNameFormat::Unspecified)
-                )
-        })
+        self.0
+            .iter()
+            .filter(move |attribute| attribute.matches_uri_name(name))
     }
 
     fn values(&self, name: &'static str) -> Vec<&str> {

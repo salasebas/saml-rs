@@ -220,7 +220,7 @@ fn received_value<'a>(
 ) -> Result<Option<&'a str>, SamlError> {
     let matching: Vec<&Attribute> = attributes
         .iter()
-        .filter(|attribute| is_attribute(attribute, name))
+        .filter(|attribute| attribute.matches_uri_name(name))
         .collect();
     if matching.is_empty() {
         return Ok(None);
@@ -239,7 +239,7 @@ fn received_value<'a>(
 
 /// Whether `attribute` is `subject-id` or `pairwise-id`.
 pub(crate) fn is_subject_identifier(attribute: &Attribute) -> bool {
-    is_attribute(attribute, SUBJECT_ID) || is_attribute(attribute, PAIRWISE_ID)
+    attribute.matches_uri_name(SUBJECT_ID) || attribute.matches_uri_name(PAIRWISE_ID)
 }
 
 /// Check the `subject-id` and `pairwise-id` attributes of an assertion the
@@ -248,20 +248,25 @@ pub(crate) fn is_subject_identifier(attribute: &Attribute) -> bool {
 /// # Errors
 ///
 /// Returns [`SamlError::Invalid`] when either attribute occurs more than once,
-/// does not have exactly one value, has a value that is not `uniqueID@scope`,
-/// has a scope with an upper case letter, or has a unique ID with both upper
-/// and lower case letters.
+/// has the `unspecified` `NameFormat` or none, does not have exactly one value,
+/// has a value that is not `uniqueID@scope`, has a scope with an upper case
+/// letter, or has a unique ID with both upper and lower case letters.
 pub(crate) fn check_issued_subject_identifiers(attributes: &[Attribute]) -> Result<(), SamlError> {
     for name in [SUBJECT_ID, PAIRWISE_ID] {
         let mut issued = attributes
             .iter()
-            .filter(|attribute| is_attribute(attribute, name));
+            .filter(|attribute| attribute.matches_uri_name(name));
         let Some(attribute) = issued.next() else {
             continue;
         };
         if issued.next().is_some() {
             return Err(SamlError::Invalid(format!(
                 "an assertion carries at most one `{name}` attribute"
+            )));
+        }
+        if attribute.name_format() != Some(&AttributeNameFormat::Uri) {
+            return Err(SamlError::Invalid(format!(
+                "`{name}` attribute must have the uri NameFormat"
             )));
         }
         let [value] = attribute.values() else {
@@ -288,14 +293,4 @@ pub(crate) fn check_issued_subject_identifiers(attributes: &[Attribute]) -> Resu
         }
     }
     Ok(())
-}
-
-/// Whether `attribute` is the attribute `name`: its `NameFormat` is `uri`,
-/// `unspecified`, or absent.
-fn is_attribute(attribute: &Attribute, name: &str) -> bool {
-    attribute.name() == name
-        && matches!(
-            attribute.name_format(),
-            None | Some(AttributeNameFormat::Uri | AttributeNameFormat::Unspecified)
-        )
 }
