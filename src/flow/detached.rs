@@ -126,7 +126,9 @@ pub(super) fn verify_detached(
     let get = |k: &'static str| -> Result<Option<&str>, SamlError> {
         match binding {
             Binding::Redirect => request.query_get(k),
-            _ => request.body_get(k),
+            Binding::SimpleSign | Binding::Post | Binding::Artifact | Binding::Soap => {
+                request.body_get(k)
+            }
         }
     };
     let signature = get("Signature")?.ok_or(SamlError::SignatureMissing)?;

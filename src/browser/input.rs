@@ -353,7 +353,12 @@ fn logout_http_request(
         Transport::Soap { envelope, .. } => {
             soap_request(&envelope, expected_message, limits, schema_validator)
         }
-        other => http_request_from_transport(other, expected_message, limits),
+        transport @ (Transport::Redirect { .. }
+        | Transport::Post { .. }
+        | Transport::SimpleSign { .. }
+        | Transport::Artifact { .. }) => {
+            http_request_from_transport(transport, expected_message, limits)
+        }
     }
 }
 
