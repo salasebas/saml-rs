@@ -582,7 +582,8 @@ status code. The identity provider sets `NotOnOrAfter` through
 `IdpConfigBuilder::issuance_lifetime`. Service provider requests omit
 `NotOnOrAfter`.
 
-Move a custom `Reason` URI to `StartSlo::with_reason`. Custom `Consent`,
-`Extensions`, `StatusMessage`, and `StatusDetail` have no typed outbound
-equivalent. Keep the `TemplatePolicy` fields for XML prefixes and embedded
-signature placement if you use them.
+Move a custom `Reason` URI to `StartSlo::with_reason`. Move plain-text
+`StatusMessage` content to `RespondSlo::with_status_message`. Custom `Consent`,
+`Extensions`, and `StatusDetail` have no typed outbound equivalent. Keep the
+`TemplatePolicy` fields for XML prefixes and embedded signature placement if
+you use them.

@@ -362,6 +362,7 @@ impl StartSlo {
 #[derive(Debug, Clone)]
 pub struct RespondSlo {
     pub(super) binding: LogoutBinding,
+    pub(super) status_message: Option<String>,
     transport: PeerEndpointTransport,
 }
 
@@ -395,8 +396,20 @@ impl RespondSlo {
     fn new(binding: LogoutBinding) -> Self {
         Self {
             binding,
+            status_message: None,
             transport: PeerEndpointTransport::default(),
         }
+    }
+
+    /// Set the plain-text `StatusMessage` sent to the peer.
+    ///
+    /// Choose text suitable for the peer to see. The element is omitted by
+    /// default. A later call replaces the previous message.
+    /// The text must contain only XML 1.0 characters.
+    #[must_use]
+    pub fn with_status_message(mut self, message: impl Into<String>) -> Self {
+        self.status_message = Some(message.into());
+        self
     }
 
     /// Allow a service provider to deliver this LogoutResponse to an `http`

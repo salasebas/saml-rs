@@ -87,7 +87,12 @@ impl XmlWriter {
         self.write(Event::Empty(elem));
     }
 
-    pub(crate) fn status(&mut self, prefixes: &Prefixes<'_>, status: &Status) {
+    pub(crate) fn status(
+        &mut self,
+        prefixes: &Prefixes<'_>,
+        status: &Status,
+        message: Option<&str>,
+    ) {
         let status_name = prefixes.protocol("Status");
         let code = prefixes.protocol("StatusCode");
         let top_level = [("Value", status.top_level().as_uri())];
@@ -98,6 +103,9 @@ impl XmlWriter {
             self.end(&code);
         } else {
             self.empty(&code, &top_level);
+        }
+        if let Some(message) = message {
+            self.text_element(&prefixes.protocol("StatusMessage"), &[], message);
         }
         self.end(&status_name);
     }

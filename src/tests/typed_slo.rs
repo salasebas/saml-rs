@@ -6,6 +6,9 @@ mod schema_validation;
 #[path = "typed_slo/reason.rs"]
 mod reason;
 
+#[path = "typed_slo/status_message.rs"]
+mod status_message;
+
 mod prefixes;
 
 #[path = "typed_slo/version_refusals.rs"]

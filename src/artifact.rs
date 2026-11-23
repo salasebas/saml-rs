@@ -586,7 +586,7 @@ fn answered(
         ],
     );
     writer.text_element(&prefixes.assertion("Issuer"), &[], issuer);
-    writer.status(prefixes, status);
+    writer.status(prefixes, status, None);
     if let Some(message_xml) = message_xml {
         writer.raw(message_xml);
     }
