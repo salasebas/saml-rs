@@ -18,8 +18,8 @@ use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
 use crate::model::{EndpointUrl, ReplayKey, RequestVersionMismatch, SamlValidationContext, Status};
 use crate::soap::{
-    read_soap_body, read_soap_status_response, MessageConfidentiality, SoapChannel, SoapRequest,
-    SoapResponse,
+    read_soap_body, read_soap_status_response, reject_processing_instructions,
+    MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse,
 };
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fragment::standalone_element;
@@ -426,10 +426,9 @@ fn stored_message(xml: &str) -> Result<(String, String), SamlError> {
             "stored artifact message must be a SAML protocol element".into(),
         ));
     }
-    Ok((
-        xml[element.start..element.end].to_string(),
-        element.local_name,
-    ))
+    let payload = &xml[element.start..element.end];
+    reject_processing_instructions(payload)?;
+    Ok((payload.to_owned(), element.local_name))
 }
 
 pub(crate) fn resolve(

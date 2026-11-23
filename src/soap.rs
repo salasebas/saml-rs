@@ -4,7 +4,7 @@
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{Namespace, ResolveResult};
-use quick_xml::reader::NsReader;
+use quick_xml::reader::{NsReader, Reader};
 
 use crate::constants::namespace;
 use crate::error::{xml_err, SamlError};
@@ -138,11 +138,13 @@ impl SoapRequest {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when `protocol_xml` is not a single element.
+    /// Returns [`SamlError`] when `protocol_xml` cannot be parsed as one
+    /// element. A processing instruction inside the element returns
+    /// [`SamlError::Xml`]. A leading XML declaration is allowed.
     pub fn try_new(endpoint: EndpointUrl, protocol_xml: &str) -> Result<Self, SamlError> {
         Ok(Self {
             endpoint,
-            envelope: envelope(&single_element(protocol_xml)?),
+            envelope: envelope(outbound_element(protocol_xml)?),
         })
     }
 
@@ -177,10 +179,12 @@ impl SoapResponse {
     ///
     /// # Errors
     ///
-    /// Returns [`SamlError`] when `protocol_xml` is not a single element.
+    /// Returns [`SamlError`] when `protocol_xml` cannot be parsed as one
+    /// element. A processing instruction inside the element returns
+    /// [`SamlError::Xml`]. A leading XML declaration is allowed.
     pub fn try_new(protocol_xml: &str) -> Result<Self, SamlError> {
         Ok(Self {
-            envelope: envelope(&single_element(protocol_xml)?),
+            envelope: envelope(outbound_element(protocol_xml)?),
         })
     }
 
@@ -318,12 +322,36 @@ fn envelope(element_xml: &str) -> String {
     writer.finish()
 }
 
-fn single_element(xml: &str) -> Result<String, SamlError> {
-    let document = dom::parse_document(xml, crate::XmlLimits::default())?;
-    if document.root.end < document.root.start || document.root.end > xml.len() {
-        return Err(SamlError::xml("protocol element is incomplete"));
+fn outbound_element(xml: &str) -> Result<&str, SamlError> {
+    let document = dom::parse_document(xml, XmlLimits::default())?;
+    let element = xml
+        .get(document.root.start..document.root.end)
+        .ok_or_else(|| SamlError::xml("protocol element is incomplete"))?;
+    reject_processing_instructions(element)?;
+    Ok(element)
+}
+
+pub(crate) fn reject_processing_instructions(element_xml: &str) -> Result<(), SamlError> {
+    let mut reader = Reader::from_str(element_xml);
+    loop {
+        match reader.read_event().map_err(xml_err)? {
+            Event::PI(_) => {
+                return Err(SamlError::xml(
+                    "processing instructions are not allowed inside a SOAP payload",
+                ));
+            }
+            Event::Eof => return Ok(()),
+            Event::Start(_)
+            | Event::End(_)
+            | Event::Empty(_)
+            | Event::Text(_)
+            | Event::CData(_)
+            | Event::Comment(_)
+            | Event::Decl(_)
+            | Event::DocType(_)
+            | Event::GeneralRef(_) => {}
+        }
     }
-    Ok(xml[document.root.start..document.root.end].to_string())
 }
 
 struct NamedNamespace {
@@ -519,15 +547,47 @@ mod tests {
 
     #[test]
     fn soap_channel_round_trips_another_protocol_element() -> Result<(), SamlError> {
-        let logout = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#;
-        let endpoint = EndpointUrl::try_new("https://idp.example.com/artifact")?;
-        let request = SoapRequest::try_new(endpoint, logout)?;
-        let message = SoapProtocolMessage::from_envelope(request.envelope())?;
+        let logout = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"><!-- <?example?> --><NameID xmlns="urn:oasis:names:tc:SAML:2.0:assertion">user@example.com</NameID></samlp:LogoutRequest>"#;
+        let xml = format!(r#"<?xml version="1.0"?><?before?>{logout}<?after?>"#);
+        let endpoint = EndpointUrl::try_new("https://idp.example.com/logout")?;
+        let request = SoapRequest::try_new(endpoint, &xml)?;
+        let envelope = request.envelope();
+        assert!(envelope.contains(logout));
+        assert!(!envelope.contains("<?before?>"));
+        assert!(!envelope.contains("<?after?>"));
+        let message = SoapProtocolMessage::from_envelope(envelope)?;
 
         assert_eq!(message.local_name(), "LogoutRequest");
         assert_eq!(message.namespace(), "urn:oasis:names:tc:SAML:2.0:protocol");
         assert!(message.xml().contains("ID=\"_logout\""));
         Ok(())
+    }
+
+    #[test]
+    fn soap_request_rejects_a_processing_instruction_in_the_payload() -> Result<(), SamlError> {
+        let xml = r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">
+            <?trace correlation="request-1"?>
+            <NameID xmlns="urn:oasis:names:tc:SAML:2.0:assertion">user@example.com</NameID>
+        </samlp:LogoutRequest>"#;
+        let endpoint = EndpointUrl::try_new("https://idp.example.com/logout")?;
+        let request = SoapRequest::try_new(endpoint, xml);
+        assert!(matches!(request, Err(SamlError::Xml { .. })), "{request:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn soap_response_rejects_a_processing_instruction_in_a_nested_element() {
+        let xml = r#"<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="_response" InResponseTo="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">
+            <samlp:Status>
+                <?trace correlation="request-1"?>
+                <samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/>
+            </samlp:Status>
+        </samlp:LogoutResponse>"#;
+        let response = SoapResponse::try_new(xml);
+        assert!(
+            matches!(response, Err(SamlError::Xml { .. })),
+            "{response:?}"
+        );
     }
 
     #[test]

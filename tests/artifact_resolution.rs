@@ -446,6 +446,22 @@ fn identity_provider_metadata_publishes_the_soap_resolution_service(
 }
 
 #[test]
+fn artifact_issue_rejects_xml_that_cannot_be_sent_over_soap(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    let message = format!(
+        r#"<samlp:LogoutRequest xmlns:samlp="{PROTOCOL}" xmlns:saml="{ASSERTION}" ID="_logout" Version="2.0" IssueInstant="2024-01-01T00:00:00Z">
+            <?trace correlation="request-1"?>
+            <saml:NameID>user@example.com</saml:NameID>
+        </samlp:LogoutRequest>"#
+    );
+    let result = issue(&parties, &message, &mut issued);
+    assert!(matches!(result, Err(SamlError::Xml { .. })), "{result:?}");
+    Ok(())
+}
+
+#[test]
 fn duplicate_resolution_indexes_are_rejected() -> Result<(), Box<dyn std::error::Error>> {
     let location = EndpointUrl::try_new(RESOLUTION_URL)?;
     let other = EndpointUrl::try_new("https://idp.example.com/artifact-other")?;
