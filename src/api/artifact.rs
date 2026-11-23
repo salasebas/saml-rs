@@ -22,8 +22,9 @@ impl IdentityProvider {
     /// # Errors
     ///
     /// Returns [`SamlError::Xml`] when `protocol_xml` is not one well-formed
-    /// element, [`SamlError::ProtocolProfile`] when that element is outside the
-    /// SAML protocol namespace, and another [`SamlError`] when metadata has no
+    /// element or the element contains a processing instruction. Returns
+    /// [`SamlError::ProtocolProfile`] when the element is outside the SAML
+    /// protocol namespace, and another [`SamlError`] when metadata has no
     /// SOAP `ArtifactResolutionService` at `endpoint_index` or the artifact
     /// value is already outstanding.
     pub fn issue_artifact(

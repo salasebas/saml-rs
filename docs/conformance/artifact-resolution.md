@@ -22,6 +22,7 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Reject whitespace in the value passed to `Artifact::try_new`. The SOAP reader first trims whitespace around the `Artifact` text | Library policy: strict decoding does not silently skip characters outside the alphabet (RFC 4648 §3.3), while RFC 2045 permits whitespace. | Bindings §3.6.4 | Always |
 | Associate the stored message with the service provider it is for | Mandatory | Core §3.5.3, Profiles §4.1.4.4 | Always |
 | Store only one element in the SAML protocol namespace | Library policy: `ArtifactResolution::finish` rejects any other payload, so another element could never be resolved. | Bindings §3.6 | Always |
+| Reject processing instructions inside the element before issuing an artifact | Library policy: the stored element must be deliverable in a SOAP response when the artifact resolves. | SOAP 1.1 §3 | Always |
 
 ## ArtifactResolve
 
@@ -102,6 +103,7 @@ write and read envelopes for artifact resolution,
 | --- | --- | --- | --- |
 | Accept only the SOAP 1.1 envelope namespace | Mandatory | Bindings §3.2.2 | Always |
 | Carry one SAML request or response in the `Body`, with no other `Body` element, and reject a body with none, several, or extra elements | Mandatory | Bindings §3.2.2.1, E19, SOAP 1.1 §4.3 | Always |
+| Emit requests and responses without processing instructions | Mandatory | [SOAP 1.1 §3](https://www.w3.org/TR/2000/NOTE-SOAP-20000508/#_Toc478383492) | Always |
 | Treat only attributes in the SOAP 1.1 envelope namespace as `actor` and `mustUnderstand` | Mandatory | SOAP 1.1 §4.2.2, §4.2.3 | Always |
 | Process only header entries addressed to this endpoint: no `actor`, or `http://schemas.xmlsoap.org/soap/actor/next`. Ignore entries for other actors | Mandatory | SOAP 1.1 §4.2.2 | Always |
 | Refuse a local header entry with `mustUnderstand="1"` that the endpoint does not process | Mandatory | SOAP 1.1 §4.2.3 | Always |
