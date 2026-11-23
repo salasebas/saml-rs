@@ -177,6 +177,65 @@ fn sp_metadata_rejects_more_acs_endpoints_than_indexes() {
 }
 
 #[test]
+fn idp_metadata_rejects_duplicate_artifact_resolution_index() -> TestResult {
+    let service = |location: &str| -> Result<_, SamlError> {
+        Ok(crate::ArtifactResolutionService::new(
+            1,
+            crate::EndpointUrl::try_new(location)?,
+        ))
+    };
+    let cfg = IdpMetadataInput {
+        entity_id: "https://idp.example.com/metadata".into(),
+        single_sign_on_service: vec![Endpoint::new(Binding::Redirect, "https://idp/sso")],
+        artifact_resolution_service: vec![
+            service("https://idp/ars-a")?,
+            service("https://idp/ars-b")?,
+        ],
+        ..Default::default()
+    };
+
+    let result = generate_idp_metadata(&cfg);
+
+    assert!(matches!(
+        result,
+        Err(SamlError::Invalid(message))
+            if message == "duplicate ArtifactResolutionService index 1"
+    ));
+    Ok(())
+}
+
+#[test]
+fn metadata_writes_only_absolute_endpoint_locations() -> TestResult {
+    let sp = |location: &str| {
+        generate_sp_metadata(&SpMetadataInput {
+            entity_id: "https://sp.example.com/metadata".into(),
+            assertion_consumer_service: vec![Endpoint::new(Binding::Post, location)],
+            ..Default::default()
+        })
+    };
+    let idp = |location: &str| {
+        generate_idp_metadata(&IdpMetadataInput {
+            entity_id: "https://idp.example.com/metadata".into(),
+            single_sign_on_service: vec![Endpoint::new(Binding::Redirect, location)],
+            ..Default::default()
+        })
+    };
+
+    assert!(matches!(
+        sp("/acs"),
+        Err(SamlError::Invalid(message))
+            if message == "AssertionConsumerService Location must be an absolute URI reference"
+    ));
+    assert!(matches!(
+        idp("/sso"),
+        Err(SamlError::Invalid(message))
+            if message == "SingleSignOnService Location must be an absolute URI reference"
+    ));
+    assert!(sp("urn:example:acs")?.contains(r#"Location="urn:example:acs""#));
+    Ok(())
+}
+
+#[test]
 fn metadata_writes_is_default_only_on_indexed_endpoints() -> TestResult {
     let default = |binding, location: &str| Endpoint {
         is_default: true,

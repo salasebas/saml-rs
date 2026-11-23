@@ -1,5 +1,4 @@
 use core::str::FromStr;
-use std::collections::HashSet;
 use std::time::SystemTime;
 
 use crate::browser::{
@@ -273,19 +272,6 @@ impl IdpMetadataConfig {
             error_url: None,
             entity_attributes: Vec::new(),
         }
-    }
-
-    pub(super) fn ensure_unique_artifact_resolution_indexes(&self) -> Result<(), SamlError> {
-        let mut seen_indexes = HashSet::new();
-        for service in &self.artifact_resolution_services {
-            if !seen_indexes.insert(service.index()) {
-                return Err(SamlError::Invalid(format!(
-                    "duplicate ArtifactResolutionService index {}",
-                    service.index()
-                )));
-            }
-        }
-        Ok(())
     }
 
     /// `<NameIDFormat>` values advertised by the IdP.

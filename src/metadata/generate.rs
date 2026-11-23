@@ -11,6 +11,7 @@ use crate::metadata::lifetime::{LifetimeAttributes, MetadataLifetime};
 use crate::metadata::write::MetadataWriter;
 use crate::model::{validate_name_id_format, Attribute};
 use crate::util::normalize_cert_string;
+use crate::xml::any_uri::is_absolute_uri_reference;
 
 /// A protocol endpoint (`SingleSignOnService` / `SingleLogoutService` / ACS).
 ///
@@ -20,7 +21,7 @@ use crate::util::normalize_cert_string;
 pub struct Endpoint {
     /// Protocol binding.
     pub binding: Binding,
-    /// Endpoint URL.
+    /// Endpoint `Location`, an absolute URI reference.
     pub location: String,
     /// ACS index for `AssertionConsumerService`; ignored for other endpoint kinds.
     ///
@@ -164,16 +165,30 @@ fn write_name_id_formats(w: &mut MetadataWriter, formats: &[String]) -> Result<(
     Ok(())
 }
 
-fn write_endpoints(w: &mut MetadataWriter, name: &str, endpoints: &[Endpoint]) {
+fn endpoint_location<'a>(name: &str, location: &'a str) -> Result<&'a str, SamlError> {
+    if !is_absolute_uri_reference(location) {
+        return Err(SamlError::Invalid(format!(
+            "{name} Location must be an absolute URI reference"
+        )));
+    }
+    Ok(location)
+}
+
+fn write_endpoints(
+    w: &mut MetadataWriter,
+    name: &str,
+    endpoints: &[Endpoint],
+) -> Result<(), SamlError> {
     for endpoint in endpoints {
         w.empty(
             name,
             &[
                 ("Binding", endpoint.binding.urn()),
-                ("Location", endpoint.location.as_str()),
+                ("Location", endpoint_location(name, &endpoint.location)?),
             ],
         );
     }
+    Ok(())
 }
 
 fn assertion_consumer_service_indexes(endpoints: &[Endpoint]) -> Result<Vec<u16>, SamlError> {
@@ -223,7 +238,10 @@ fn write_assertion_consumer_service(
             attrs.push(("isDefault", "true"));
         }
         attrs.push(("Binding", endpoint.binding.urn()));
-        attrs.push(("Location", endpoint.location.as_str()));
+        attrs.push((
+            "Location",
+            endpoint_location("AssertionConsumerService", &endpoint.location)?,
+        ));
         w.empty("AssertionConsumerService", &attrs);
     }
     Ok(())
@@ -232,18 +250,29 @@ fn write_assertion_consumer_service(
 fn write_artifact_resolution_service(
     w: &mut MetadataWriter,
     endpoints: &[crate::ArtifactResolutionService],
-) {
+) -> Result<(), SamlError> {
+    let mut indexes = HashSet::new();
     for endpoint in endpoints {
+        if !indexes.insert(endpoint.index()) {
+            return Err(SamlError::Invalid(format!(
+                "duplicate ArtifactResolutionService index {}",
+                endpoint.index()
+            )));
+        }
         let index = endpoint.index().to_string();
         w.empty(
             "ArtifactResolutionService",
             &[
                 ("index", index.as_str()),
                 ("Binding", Binding::Soap.urn()),
-                ("Location", endpoint.location().as_str()),
+                (
+                    "Location",
+                    endpoint_location("ArtifactResolutionService", endpoint.location().as_str())?,
+                ),
             ],
         );
     }
+    Ok(())
 }
 
 fn bool_str(value: bool) -> &'static str {
@@ -263,10 +292,10 @@ fn bool_str(value: bool) -> &'static str {
 /// Returns [`SamlError::MissingMetadata`] when the config has no
 /// `AssertionConsumerService` endpoint.
 /// Returns [`SamlError::Invalid`] when the `entityID` is not an absolute URI
-/// reference of at most 1024 characters, when a `<NameIDFormat>` it writes is
-/// not an absolute URI reference, when two `AssertionConsumerService`
-/// endpoints set the same [`Endpoint::index`], or when there are more of them
-/// than `unsignedShort` indexes. Also returns [`SamlError::Invalid`] for an
+/// reference of at most 1024 characters, when a `<NameIDFormat>` or an
+/// endpoint `Location` it writes is not an absolute URI reference, when two
+/// `AssertionConsumerService` endpoints set the same [`Endpoint::index`], or
+/// when there are more of them than `unsignedShort` indexes. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
 /// and for an entity attribute whose `NameFormat` is not an absolute URI
@@ -298,8 +327,8 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
     }
     w.start("SPSSODescriptor", &role_attributes);
     write_key_descriptors(&mut w, &cfg.signing_certs, &cfg.encrypt_certs);
-    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service);
-    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service);
+    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service)?;
+    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service)?;
     if cfg.name_id_format.is_empty() {
         w.text_element("NameIDFormat", name_id_format::EMAIL_ADDRESS);
     } else {
@@ -321,8 +350,9 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
 /// Returns [`SamlError::MissingMetadata`] when the config has no
 /// `SingleSignOnService` endpoint.
 /// Returns [`SamlError::Invalid`] when the `entityID` is not an absolute URI
-/// reference of at most 1024 characters, or when a `<NameIDFormat>` it writes
-/// is not an absolute URI reference. Also returns [`SamlError::Invalid`] for an
+/// reference of at most 1024 characters, when a `<NameIDFormat>` or an
+/// endpoint `Location` it writes is not an absolute URI reference, or when two
+/// `ArtifactResolutionService` endpoints share an index. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
 /// and for an entity attribute whose `NameFormat` is not an absolute URI
@@ -356,11 +386,11 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError
     }
     w.start("IDPSSODescriptor", &role_attributes);
     write_key_descriptors(&mut w, &cfg.signing_certs, &cfg.encrypt_certs);
-    write_artifact_resolution_service(&mut w, &cfg.artifact_resolution_service);
-    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service);
-    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service);
+    write_artifact_resolution_service(&mut w, &cfg.artifact_resolution_service)?;
+    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service)?;
+    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service)?;
     write_name_id_formats(&mut w, &cfg.name_id_format)?;
-    write_endpoints(&mut w, "SingleSignOnService", &cfg.single_sign_on_service);
+    write_endpoints(&mut w, "SingleSignOnService", &cfg.single_sign_on_service)?;
     w.end("IDPSSODescriptor");
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
     w.end("EntityDescriptor");
