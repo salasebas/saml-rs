@@ -11,6 +11,7 @@ use crate::error::{crypto_err, xml_err, SamlError};
 use crate::util::normalize_cert_string;
 use crate::xml::dom::{self, Node};
 use crate::xml::name::validate_namespace_prefix;
+use crate::xml::signature_placement::signature_reference_path;
 use bergshamra::keys::Key;
 use bergshamra::{sign, DsigContext, KeysManager};
 use quick_xml::events::Event;
@@ -31,36 +32,17 @@ fn find_assertion(root: &Node) -> Option<&Node> {
     root.children.iter().find(|c| c.local_name == "Assertion")
 }
 
-/// Extract the `local-name()` chain from an absolute XPath, e.g.
-/// `/*[local-name(.)='Response']/*[local-name(.)='Issuer']` → `["Response","Issuer"]`.
-fn parse_local_names(xpath: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    let mut rest = xpath;
-    let needle = "local-name(.)='";
-    while let Some(i) = rest.find(needle) {
-        rest = &rest[i + needle.len()..];
-        match rest.find('\'') {
-            Some(end) => {
-                names.push(rest[..end].to_string());
-                rest = &rest[end + 1..];
-            }
-            None => break,
-        }
-    }
-    names
-}
-
-/// Resolve an absolute local-name path from the document root.
-fn resolve_path<'a>(root: &'a Node, names: &[String]) -> Option<&'a Node> {
-    let (first, rest) = names.split_first()?;
-    if &root.local_name != first {
+fn resolve_path<'a>(node: &'a Node, names: &[&str]) -> Option<&'a Node> {
+    let (&name, rest) = names.split_first()?;
+    if node.local_name != name {
         return None;
     }
-    let mut current = root;
-    for name in rest {
-        current = current.children.iter().find(|c| &c.local_name == name)?;
+    if rest.is_empty() {
+        return Some(node);
     }
-    Some(current)
+    node.children
+        .iter()
+        .find_map(|child| resolve_path(child, rest))
 }
 
 /// Insert `signature` into `xml` at `action` relative to `node`.
@@ -195,7 +177,7 @@ fn embed_signature(
 
     let (node, action) = match config.and_then(|c| c.reference.as_deref()) {
         Some(reference) => {
-            let names = parse_local_names(reference);
+            let names = signature_reference_path(reference)?;
             let node = resolve_path(&doc.root, &names)
                 .ok_or_else(|| SamlError::Invalid("signatureConfig reference not found".into()))?;
             (node, config.map(|c| c.action).unwrap_or_default())
@@ -474,6 +456,25 @@ mod tests {
         assert!(signed.contains("<ds2:Signature"));
         let (verified, _) = verify_signature(&signed, &[SP_CERT.to_string()])?;
         assert!(verified, "custom-prefix signature should verify");
+        Ok(())
+    }
+
+    #[test]
+    fn signature_reference_uses_first_complete_path() -> Result<(), Box<dyn std::error::Error>> {
+        let xml = r#"<LogoutResponse xmlns="urn:oasis:names:tc:SAML:2.0:protocol">
+            <Extensions xmlns:ext="urn:example">
+                <ext:Group/>
+                <ext:Group><ext:Marker choice="first"/></ext:Group>
+                <ext:Group><ext:Marker choice="second"/></ext:Group>
+            </Extensions>
+        </LogoutResponse>"#;
+        let doc = dom::parse_document(xml, crate::XmlLimits::default())?;
+        let path = signature_reference_path(concat!(
+            "/*[local-name(.)='LogoutResponse']/*[local-name(.)='Extensions']",
+            "/*[local-name(.)='Group']/*[local-name(.)='Marker']",
+        ))?;
+        let anchor = resolve_path(&doc.root, &path).ok_or("no placement anchor")?;
+        assert_eq!(anchor.attr("choice"), Some("first"));
         Ok(())
     }
 

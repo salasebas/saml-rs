@@ -521,6 +521,26 @@ XML NCName` in place of `contains an invalid character`. A prefix such as
 **Upgrade:** choose an NCName that does not begin with `xml`, such as `ds` or
 `saml2`, and update a check that compares the old message.
 
+## Update custom signature placement paths
+
+If you set `TemplatePolicy::signature_config` with a custom `reference`,
+both configuration builders now return `SamlError::Invalid` for unsupported
+paths. Previously, signing could ignore an extra predicate or path step and
+place the signature relative to a different element.
+
+Set `reference` to `None` to place the signature after the signed element's
+`Issuer`. Keep your `prefix` if you set one. For example, replace a response
+path that used a namespace predicate on `Issuer` with `reference = None` when
+the intended position is right after the response's issuer.
+
+To keep an explicit anchor, write one or more steps in the exact form
+`/*[local-name(.)='NCName']`, with no extra whitespace. For example, use
+`/*[local-name(.)='Response']/*[local-name(.)='Issuer']`. Use the document
+element as the first step and direct children for the remaining steps.
+Prefixes, namespace predicates, indexes, and descendant steps are
+unsupported. The signer uses the first element that matches the complete
+path in document order. A path that matches nothing still fails at signing.
+
 ## Update consumers that match literal SAML prefixes
 
 If you set `TemplatePolicy::tag_prefix_protocol` or `tag_prefix_assertion`,
