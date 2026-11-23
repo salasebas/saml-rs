@@ -329,9 +329,9 @@ pub(crate) fn decrypt_assertion_elements(
 ///
 /// # Errors
 ///
-/// Returns [`SamlError::ProtocolProfile`] unless the request carries exactly
-/// one `<BaseID>`, `<NameID>`, or `<EncryptedID>`, and that one is an
-/// `<EncryptedID>`. The plaintext must be one identifier element.
+/// Call with a validated request whose identifier is an `<EncryptedID>`.
+/// Returns [`SamlError::ProtocolProfile`] if there is no single `<EncryptedID>`
+/// or its plaintext is not one identifier element.
 pub(crate) fn decrypt_logout_request_encrypted_id(
     xml: &str,
     enc_keys: &[Key],
@@ -339,14 +339,10 @@ pub(crate) fn decrypt_logout_request_encrypted_id(
     limits: XmlLimits,
 ) -> Result<Option<String>, SamlError> {
     let decrypted = decrypt_selected(xml, limits, enc_keys.len(), options, |document| {
-        let mut identifiers = Vec::new();
-        for name in ["BaseID", "NameID", "EncryptedID"] {
-            identifiers.extend(root_children(document, namespace::ASSERTION, name)?);
-        }
         let encrypted_ids = root_children(document, namespace::ASSERTION, "EncryptedID")?;
-        let ([_], [encrypted_id]) = (&identifiers[..], &encrypted_ids[..]) else {
+        let [encrypted_id] = encrypted_ids.as_slice() else {
             return Err(SamlError::ProtocolProfile(
-                "LogoutRequest requires one BaseID, NameID, or EncryptedID".into(),
+                "LogoutRequest decryption requires one EncryptedID".into(),
             ));
         };
         let kind = LOGOUT_REQUEST_ENCRYPTED_ID;

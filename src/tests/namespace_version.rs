@@ -161,7 +161,9 @@ fn logout_request_xml(issue_instant: Option<&str>, not_on_or_after: Option<&str>
         .map(|value| format!(r#" NotOnOrAfter="{value}""#))
         .unwrap_or_default();
     format!(
-        r#"<p:LogoutRequest xmlns:p="{PROTOCOL_NS}" ID="_request" Version="2.0"{issue_instant}{not_on_or_after}/>"#
+        r#"<p:LogoutRequest xmlns:p="{PROTOCOL_NS}" xmlns:a="{ASSERTION_NS}" ID="_request" Version="2.0"{issue_instant}{not_on_or_after}>
+<a:NameID>alice</a:NameID>
+</p:LogoutRequest>"#
     )
 }
 
@@ -884,9 +886,7 @@ fn all_parser_roots_accept_version_2() -> Result<(), Box<dyn std::error::Error>>
         ),
         (
             ParserType::LogoutRequest,
-            format!(
-                r#"<p:LogoutRequest xmlns:p="{PROTOCOL_NS}" ID="_id" Version="2.0" IssueInstant="2024-01-01T00:00:00Z"/>"#
-            ),
+            logout_request_xml(Some("2024-01-01T00:00:00Z"), None),
         ),
         (
             ParserType::LogoutResponse,

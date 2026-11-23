@@ -1,6 +1,55 @@
 use super::*;
 
 #[test]
+fn receive_slo_requires_one_direct_principal_identifier_before_replay(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let role = LocalSloRole::Idp;
+    let binding = LogoutBinding::Post;
+    let xml = logout_request_xml(
+        "_logout",
+        sender_entity_id(role),
+        Some(role.endpoint(binding)?),
+    );
+    let name_id = "<saml:NameID>alice@example.com</saml:NameID>";
+    for (case, identifiers) in [
+        ("missing", String::new()),
+        (
+            "nested",
+            format!(
+                r#"<samlp:Extensions><other:Context xmlns:other="urn:example:extension">{name_id}</other:Context></samlp:Extensions>"#
+            ),
+        ),
+        (
+            "foreign namespace",
+            r#"<other:BaseID xmlns:other="urn:example:extension"/>"#.into(),
+        ),
+        ("repeated", name_id.repeat(2)),
+        (
+            "mixed plaintext",
+            format!(
+                r#"{name_id}<saml:BaseID xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:other="urn:example:extension" xsi:type="other:AccountId">opaque</saml:BaseID>"#
+            ),
+        ),
+    ] {
+        let mut cache = RecordingReplayCache::default();
+        let result = receive_crafted_logout_request(
+            &xml.replace(name_id, &identifiers),
+            binding,
+            role,
+            RequestProtection::Signed,
+            validation_with_cache(&mut cache),
+        );
+        assert!(
+            matches!(result, Err(SamlError::ProtocolProfile(_))),
+            "{case}: expected ProtocolProfile, got {:?}",
+            result.err()
+        );
+        assert!(cache.seen.is_empty(), "{case}: stored the invalid request");
+    }
+    Ok(())
+}
+
+#[test]
 fn schema_policy_covers_both_logout_soap_directions() -> Result<(), Box<dyn std::error::Error>> {
     fn reject_envelope(xml: &str) -> Result<(), String> {
         let document = roxmltree::Document::parse(xml).map_err(|error| error.to_string())?;
