@@ -53,6 +53,7 @@ fn sp_metadata_input(config: &SpConfigBuilder) -> SpMetadataInput {
         organization: metadata.organization().cloned(),
         contacts: metadata.contacts().to_vec(),
         error_url: metadata.error_url().map(str::to_string),
+        entity_attributes: metadata.entity_attributes().to_vec(),
     }
 }
 
@@ -86,6 +87,7 @@ fn idp_metadata_input(config: &IdpConfigBuilder) -> IdpMetadataInput {
         organization: metadata.organization().cloned(),
         contacts: metadata.contacts().to_vec(),
         error_url: metadata.error_url().map(str::to_string),
+        entity_attributes: metadata.entity_attributes().to_vec(),
     }
 }
 

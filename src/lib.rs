@@ -461,7 +461,10 @@ pub use error::{
     SubjectConfirmationReason, TimeWindowField,
 };
 pub use http_header::HttpHeader;
-pub use metadata::{ContactPerson, ContactType, LocalizedValue, MetadataLifetime, Organization};
+pub use metadata::{
+    ContactPerson, ContactType, EntityAttributes, LocalizedValue, MetadataLifetime, Organization,
+    SubjectIdRequirement,
+};
 pub use model::{
     AssertionId, Attribute, AttributeNameFormat, AttributeValue, Attributes, AudienceRestriction,
     AuthnContext, AuthnContextComparison, AuthnContextReference, AuthnContextReferenceKind,

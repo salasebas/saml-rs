@@ -33,6 +33,7 @@ fn sp_metadata_round_trips() -> Result<(), Box<dyn std::error::Error>> {
         organization: None,
         contacts: Vec::new(),
         error_url: None,
+        entity_attributes: Vec::new(),
     };
     let xml = generate_sp_metadata(&cfg)?;
     let parsed = SpMetadata::from_xml(&xml)?;

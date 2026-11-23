@@ -124,6 +124,25 @@ pub mod attribute_name_format {
     pub const BASIC: &str = "urn:oasis:names:tc:SAML:2.0:attrname-format:basic";
 }
 
+/// `Name`s of the entity attributes that metadata publishes in
+/// `mdattr:EntityAttributes`.
+///
+/// Publish each one with [`attribute_name_format::URI`].
+pub mod entity_attribute {
+    /// Entity categories the entity belongs to. Each value is a category URI.
+    pub const ENTITY_CATEGORY: &str = "http://macedir.org/entity-category";
+    /// Entity categories whose peers the entity supports. Each value is a
+    /// category URI.
+    pub const ENTITY_CATEGORY_SUPPORT: &str = "http://macedir.org/entity-category-support";
+    /// Assurance frameworks the identity provider is certified under, such as
+    /// `https://refeds.org/sirtfi`. Each value is a framework URI.
+    pub const ASSURANCE_CERTIFICATION: &str =
+        "urn:oasis:names:tc:SAML:attribute:assurance-certification";
+    /// Subject identifier a relying party requires. See
+    /// [`SubjectIdRequirement`](crate::SubjectIdRequirement).
+    pub const SUBJECT_ID_REQUIREMENT: &str = "urn:oasis:names:tc:SAML:profiles:subject-id:req";
+}
+
 /// AuthnContext class references (`namespace.authnContextClassRef`).
 pub mod authn_context_class_ref {
     /// Unspecified class.

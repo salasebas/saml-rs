@@ -6,9 +6,10 @@ use crate::config::validate_entity_id_syntax;
 use crate::constants::{name_id_format, namespace, Binding};
 use crate::error::SamlError;
 use crate::metadata::description::{validate_description, write_description};
+use crate::metadata::entity_attributes::{validate_entity_attributes, write_entity_attributes};
 use crate::metadata::lifetime::{LifetimeAttributes, MetadataLifetime};
 use crate::metadata::write::MetadataWriter;
-use crate::model::validate_name_id_format;
+use crate::model::{validate_name_id_format, Attribute};
 use crate::util::normalize_cert_string;
 
 /// A protocol endpoint (`SingleSignOnService` / `SingleLogoutService` / ACS).
@@ -76,6 +77,9 @@ pub struct SpMetadataInput {
     pub contacts: Vec<crate::metadata::ContactPerson>,
     /// Error information URI on the SSO role descriptor. `None` omits it.
     pub error_url: Option<String>,
+    /// Entity attributes, in publication order, written in one
+    /// `mdattr:EntityAttributes`. Empty writes no `Extensions`.
+    pub entity_attributes: Vec<Attribute>,
 }
 
 /// IdP metadata generation input.
@@ -110,6 +114,9 @@ pub struct IdpMetadataInput {
     pub contacts: Vec<crate::metadata::ContactPerson>,
     /// Error information URI on the SSO role descriptor. `None` omits it.
     pub error_url: Option<String>,
+    /// Entity attributes, in publication order, written in one
+    /// `mdattr:EntityAttributes`. Empty writes no `Extensions`.
+    pub entity_attributes: Vec<Attribute>,
 }
 
 fn write_entity_descriptor_start(
@@ -261,7 +268,9 @@ fn bool_str(value: bool) -> &'static str {
 /// endpoints set the same [`Endpoint::index`], or when there are more of them
 /// than `unsignedShort` indexes. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
-/// email URI, a non-absolute organization or error URI, or text XML cannot carry.
+/// email URI, a non-absolute organization or error URI, or text XML cannot carry,
+/// and for an entity attribute whose `NameFormat` is not an absolute URI
+/// reference, whose basic name is not an XML name, or whose text XML cannot carry.
 pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> {
     if cfg.assertion_consumer_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -274,8 +283,10 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
         &cfg.contacts,
         cfg.error_url.as_deref(),
     )?;
+    validate_entity_attributes(&cfg.entity_attributes)?;
     let mut w = MetadataWriter::new();
     write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
+    write_entity_attributes(&mut w, &cfg.entity_attributes);
     let mut role_attributes = vec![
         ("AuthnRequestsSigned", bool_str(cfg.authn_requests_signed)),
         ("WantAssertionsSigned", bool_str(cfg.want_assertions_signed)),
@@ -312,7 +323,9 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
 /// reference of at most 1024 characters, or when a `<NameIDFormat>` it writes
 /// is not an absolute URI reference. Also returns [`SamlError::Invalid`] for an
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
-/// email URI, a non-absolute organization or error URI, or text XML cannot carry.
+/// email URI, a non-absolute organization or error URI, or text XML cannot carry,
+/// and for an entity attribute whose `NameFormat` is not an absolute URI
+/// reference, whose basic name is not an XML name, or whose text XML cannot carry.
 pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -325,8 +338,10 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError
         &cfg.contacts,
         cfg.error_url.as_deref(),
     )?;
+    validate_entity_attributes(&cfg.entity_attributes)?;
     let mut w = MetadataWriter::new();
     write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
+    write_entity_attributes(&mut w, &cfg.entity_attributes);
     let mut role_attributes = vec![
         (
             "WantAuthnRequestsSigned",

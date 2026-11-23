@@ -1,4 +1,7 @@
 use crate::constants::attribute_name_format;
+use crate::error::SamlError;
+use crate::xml::any_uri::is_absolute_uri_reference;
+use crate::xml::name::is_name;
 
 /// A single SAML attribute value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,7 +126,7 @@ impl Attribute {
         self
     }
 
-    pub(super) fn received(
+    pub(crate) fn received(
         name: &str,
         name_format: Option<&str>,
         friendly_name: Option<&str>,
@@ -163,6 +166,30 @@ impl Attribute {
     /// Attribute values, in order.
     pub fn values(&self) -> &[AttributeValue] {
         &self.values
+    }
+
+    /// Check the `Name` and `NameFormat` this attribute would be written with.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] when the `NameFormat` is not an absolute
+    /// URI reference, or a basic attribute name is not an `xs:Name`.
+    pub(crate) fn check_writable(&self) -> Result<(), SamlError> {
+        if let Some(name_format) = self.name_format.as_ref().map(AttributeNameFormat::as_uri) {
+            if !is_absolute_uri_reference(name_format) {
+                return Err(SamlError::Invalid(format!(
+                    "attribute `{}` NameFormat must be an absolute URI reference with at least one non-whitespace character",
+                    self.name
+                )));
+            }
+        }
+        if self.name_format == Some(AttributeNameFormat::Basic) && !is_name(&self.name) {
+            return Err(SamlError::Invalid(format!(
+                "basic attribute name `{}` is not an XML name",
+                self.name
+            )));
+        }
+        Ok(())
     }
 }
 

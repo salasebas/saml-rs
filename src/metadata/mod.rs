@@ -3,6 +3,7 @@
 pub(crate) mod description;
 mod description_read;
 mod endpoints;
+mod entity_attributes;
 mod generate;
 mod idp;
 mod lifetime;
@@ -12,6 +13,7 @@ mod validity;
 mod write;
 
 pub use description::{ContactPerson, ContactType, LocalizedValue, Organization};
+pub use entity_attributes::{EntityAttributes, SubjectIdRequirement};
 pub use generate::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
@@ -29,6 +31,7 @@ use std::ops::Range;
 use crate::constants::{namespace, Binding, CertUse};
 use crate::error::SamlError;
 use crate::util::Value;
+use crate::xml::protocol_element::SamlElement;
 use crate::xml::{dom, extract_with_limits, ExtractorField};
 
 const MULTIPLE_ENTITY_DESCRIPTORS: &str = "metadata has more than one EntityDescriptor";
@@ -230,6 +233,7 @@ pub struct Metadata {
     valid_until_bounds: Vec<String>,
     signing_flags: SigningFlags,
     description: description_read::EntityDescription,
+    entity_attributes: Vec<SamlElement>,
 }
 
 impl Metadata {
@@ -311,6 +315,9 @@ impl Metadata {
             valid_until_bounds: descriptors.valid_until_bounds,
             signing_flags: descriptors.signing_flags,
             description: description_read::EntityDescription::read(xml, entity, limits)?,
+            entity_attributes: entity_attributes::read_bound_attributes(
+                xml, &roots, entity, limits,
+            )?,
         })
     }
 
@@ -346,6 +353,18 @@ impl Metadata {
     /// Import itself does not reject these descriptions.
     pub fn contacts(&self) -> Result<Vec<ContactPerson>, SamlError> {
         self.description.contacts()
+    }
+
+    /// Read the attributes that `mdattr:EntityAttributes` binds to the entity,
+    /// including those of the enclosing `EntitiesDescriptor` elements,
+    /// without changing the XML.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::Invalid`] for an attribute without `Name`. Import
+    /// itself does not reject entity attributes.
+    pub fn entity_attributes(&self) -> Result<EntityAttributes, SamlError> {
+        entity_attributes::entity_attributes(&self.entity_attributes)
     }
 
     /// `<NameIDFormat>` values of the SSO role descriptors read, in document
