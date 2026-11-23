@@ -11,6 +11,7 @@ import * as stableConformance from './versions/stable/conformance.mjs';
 import { sidebar as stableSidebar } from './versions/stable/sidebar.mjs';
 
 const isNext = process.env.SAML_DOCS === 'next';
+const site = 'https://samlrs.vercel.app';
 const base = isNext ? nextBase : '/';
 const docsDir = new URL(isNext ? './src/content/docs/' : './versions/stable/docs/', import.meta.url);
 const recordsDir = new URL(isNext ? '../docs/conformance/' : './versions/stable/conformance/', import.meta.url);
@@ -21,7 +22,7 @@ function docLinks() {
 		name: 'saml-doc-links',
 		hooks: {
 			'astro:config:setup'({ config }) {
-				config.markdown.processor?.options?.mdastPlugins?.push(rewriteDocLinks({ docsDir, base }));
+				config.markdown.processor?.options?.mdastPlugins?.push(rewriteDocLinks({ docsDir, base, site }));
 			},
 		},
 	};
@@ -29,7 +30,7 @@ function docLinks() {
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://samlrs.vercel.app',
+	site,
 	base,
 	outDir: isNext ? './dist/next' : './dist',
 	redirects: isNext ? {

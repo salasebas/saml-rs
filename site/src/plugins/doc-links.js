@@ -1,23 +1,27 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { docsPath } from '../docs-version.mjs';
+import { docsPath, nextBase } from '../docs-version.mjs';
 
-/** Turn a file-relative `../page.md` link into the Starlight route. */
-export function rewriteDocLinks({ docsDir, base }) {
+export function rewriteDocLinks({ docsDir, base, site }) {
 	const docsRoot = fileURLToPath(docsDir);
 	return {
 		name: 'rewrite-doc-links',
 		link(node, ctx) {
-			const route = toRoute(node.url, ctx.fileURL, docsRoot);
-			if (route) ctx.setProperty(node, 'url', docsPath(base, route));
+			const route = toRoute(node.url, ctx.fileURL, docsRoot, site);
+			if (!route) return;
+			const [pathname] = route.split(/[?#]/, 1);
+			const href = pathname === nextBase || pathname.startsWith(`${nextBase}/`) ? route : docsPath(base, route);
+			ctx.setProperty(node, 'url', href);
 		},
 	};
 }
 
-function toRoute(url, fileURL, docsRoot) {
+function toRoute(url, fileURL, docsRoot, site) {
 	if (!fileURL || !url) return null;
 	if (url.startsWith('/')) return url;
-	if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('#')) return null;
+	const absolute = URL.parse(url);
+	if (absolute) return absolute.origin === site ? `${absolute.pathname}${absolute.search}${absolute.hash}` : null;
+	if (url.startsWith('#')) return null;
 
 	const hashAt = url.indexOf('#');
 	const href = hashAt === -1 ? url : url.slice(0, hashAt);

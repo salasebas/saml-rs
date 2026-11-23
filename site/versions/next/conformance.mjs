@@ -2,7 +2,7 @@ export const pages = {
 	'artifact-resolution.md': {
 		title: 'Artifact resolution',
 		description:
-			'Rules for typed artifact resolution over SOAP: issue_artifact, answer_artifact_resolve, and resolve_artifact.',
+			'Rules for issuing, resolving, and answering artifacts over SOAP, including how the SP can sign an artifact resolution request.',
 	},
 	'identifiers.md': {
 		title: 'SAML-defined identifiers',
@@ -37,7 +37,7 @@ export const pages = {
 	'web-browser-sso-acceptance.md': {
 		title: 'SSO acceptance',
 		description:
-			'Inbound rules for typed Web Browser SSO: service-provider `finish_sso` and `accept_unsolicited_sso`, and identity-provider `receive_sso`.',
+			'Inbound Web Browser SSO rules for the SP and IdP, including how an SP selects a trusted IdP for unsolicited HTTP-POST.',
 	},
 	'web-browser-sso-artifact.md': {
 		title: 'HTTP-Artifact response',

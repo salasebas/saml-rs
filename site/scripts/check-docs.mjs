@@ -45,6 +45,13 @@ test('home and guide links stay in their version', async () => {
 	}
 });
 
+test('an absolute link to the docs site follows the current version', async () => {
+	const acceptance = await page('next/reference/conformance/web-browser-sso-acceptance/');
+	const main = acceptance.match(/<main\b[\s\S]*?<\/main>/)?.[0];
+	assert.ok(main?.includes('href="/next/explanation/validation-presets/"'));
+	await page('next/explanation/validation-presets/');
+});
+
 test('the version dropdown is in the guide sidebar or home header and marks the current version', async () => {
 	for (const prefix of ['', 'next/']) {
 		const guide = await page(`${prefix}guides/service-provider-sso/`);
