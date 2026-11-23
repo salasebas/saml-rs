@@ -107,6 +107,7 @@ pub(crate) mod authn_statement {
 pub(crate) mod attribute {
     pub(crate) const NAME: &str = "name";
     pub(crate) const NAME_FORMAT: &str = "nameFormat";
+    pub(crate) const FRIENDLY_NAME: &str = "friendlyName";
     pub(crate) const VALUES: &str = "attributeValue";
 }
 
@@ -313,7 +314,7 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
             login_response::ATTRIBUTE_ELEMENTS,
             &["Assertion", "AttributeStatement", "Attribute"],
         )
-        .attrs(&["Name", "NameFormat"])
+        .attrs(&["Name", "NameFormat", "FriendlyName"])
         .child_texts(&["AttributeValue"])
         .with_shortcut(assertion),
     ]

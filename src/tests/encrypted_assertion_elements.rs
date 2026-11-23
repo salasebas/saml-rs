@@ -144,7 +144,8 @@ fn alice() -> NameId {
 fn attributes() -> Attributes {
     Attributes::new(vec![
         Attribute::new("mail", vec![AttributeValue::new("alice@example.com")])
-            .with_name_format(AttributeNameFormat::Basic),
+            .with_name_format(AttributeNameFormat::Basic)
+            .with_friendly_name("Email address"),
         Attribute::new(
             "eduPersonAffiliation",
             vec![AttributeValue::new("member"), AttributeValue::new("staff")],

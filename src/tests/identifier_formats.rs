@@ -207,7 +207,8 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
         Attribute::new("displayName", values(&["Alice Example"]))
             .with_name_format(AttributeNameFormat::Unspecified),
         Attribute::new(MAIL_OID, values(&["a@example.com"]))
-            .with_name_format(AttributeNameFormat::Uri),
+            .with_name_format(AttributeNameFormat::Uri)
+            .with_friendly_name("mail"),
         Attribute::new("eduPersonAffiliation", values(&["member", "staff"]))
             .with_name_format(AttributeNameFormat::Basic),
         Attribute::new("role", values(&["admin"]))
@@ -231,6 +232,7 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
         assert!(tag.contains(&format!("NameFormat=\"{format}\"")), "{tag}");
     }
     assert!(!attribute_tag(&exchange.xml, "locale")?.contains("NameFormat"));
+    assert!(attribute_tag(&exchange.xml, MAIL_OID)?.contains("FriendlyName=\"mail\""));
     assert_eq!(
         attribute_tag(&exchange.xml, "groups")?,
         "<saml:Attribute Name=\"groups\"/>"
@@ -270,6 +272,11 @@ fn identity_provider_produces_and_service_provider_consumes_each_attribute_name_
     let locale = attribute(&exchange.session, "locale")?;
     assert_eq!(locale.name_format(), None);
     assert_eq!(locale.values(), values(&["en"]).as_slice());
+    assert_eq!(
+        attribute(&exchange.session, MAIL_OID)?.friendly_name(),
+        Some("mail")
+    );
+    assert_eq!(locale.friendly_name(), None);
     Ok(())
 }
 
@@ -502,12 +509,18 @@ fn service_provider_keeps_one_attribute_for_each_name_and_name_format(
 fn service_provider_keeps_every_value_of_repeated_attribute_elements(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let attributes = Attributes::new(vec![
-        Attribute::new("role", values(&["a1"])).with_name_format(AttributeNameFormat::Basic),
-        Attribute::new("role", values(&["b1", "b2"])).with_name_format(AttributeNameFormat::Basic),
+        Attribute::new("role", values(&["a1"]))
+            .with_name_format(AttributeNameFormat::Basic)
+            .with_friendly_name("Role"),
+        Attribute::new("role", values(&["b1", "b2"]))
+            .with_name_format(AttributeNameFormat::Basic)
+            .with_friendly_name("Roles"),
         Attribute::new("group", values(&["g1", "g2"])).with_name_format(AttributeNameFormat::Basic),
         Attribute::new("group", values(&["g3"])).with_name_format(AttributeNameFormat::Basic),
         Attribute::new("uid", values(&["alice"])),
-        Attribute::new("uid", values(&["al"])).with_name_format(AttributeNameFormat::Unspecified),
+        Attribute::new("uid", values(&["al"]))
+            .with_name_format(AttributeNameFormat::Unspecified)
+            .with_friendly_name("User ID"),
         Attribute::new("uid", values(&["0001"]))
             .with_name_format(AttributeNameFormat::Custom(DEPLOYMENT_FORMAT.to_string())),
     ]);
@@ -521,7 +534,8 @@ fn service_provider_keeps_every_value_of_repeated_attribute_elements(
         exchange.session.attributes().as_slice(),
         [
             Attribute::new("role", values(&["a1", "b1", "b2"]))
-                .with_name_format(AttributeNameFormat::Basic),
+                .with_name_format(AttributeNameFormat::Basic)
+                .with_friendly_name("Role"),
             Attribute::new("group", values(&["g1", "g2", "g3"]))
                 .with_name_format(AttributeNameFormat::Basic),
             Attribute::new("uid", values(&["alice", "al"])),
