@@ -91,7 +91,7 @@
 | `RespondSlo::status` or `RespondNameIdManagement::status` | Removed; pass the `&Status` to the operation | [Response status](typed-operations.md#pass-the-response-status-to-respond_slo-and-respond_name_id_management_redirect) |
 | `respond_slo` or `respond_name_id_management_redirect` without a status argument | Takes a `&Status` after the request | [Response status](typed-operations.md#pass-the-response-status-to-respond_slo-and-respond_name_id_management_redirect) |
 | `ReceivedNameIdManagement` or `ReceivedNameIdManagementRedirect` | Renamed `NameIdManagementReceipt` and `NameIdManagementRedirectReceipt` | [Receipts](typed-operations.md#match-nameidmanagementreceipt) |
-| `StartPaosSso`, `StartedPaosSso`, `PendingPaosSso`, `PendingPaosSsoSnapshot`, `PaosHttpResponse`, `SoapFault`, `check_paos_client_headers`, or a `*_paos_sso` operation | Removed with Enhanced Client/Proxy SSO | [ECP removal](ecp-removal.md) |
+| `StartPaosSso`, `StartedPaosSso`, `PendingPaosSso`, `PendingPaosSsoSnapshot`, `PaosClientRequest`, `PaosAuthnRequest`, `PaosSsoResponse`, `RespondPaosSso`, `PaosHttpResponse`, `SoapFault`, `paos_soap_fault`, or a `*_paos_sso` operation | Removed with Enhanced Client/Proxy SSO | [ECP removal](ecp-removal.md) |
 | `Saml<Idp>::remember_identity_provider` | Renamed `common_domain_cookie` | [Discovery cookie](typed-operations.md#build-the-discovery-cookie-with-common_domain_cookie) |
 | `SamlError::StatusNotSuccess { top, second }`, `ReplayDetected { key }` as a string, `UndefinedBinding`, `UndefinedStatus`, `Xml(message)`, `Crypto(message)`, `Base64(error)`, `Deflate(error)`, or `?` from a `base64::DecodeError` or `std::io::Error` into `SamlError` | Typed payloads, new variants, and no third-party `From` | [Typed errors](errors.md) |
 

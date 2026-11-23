@@ -2,23 +2,25 @@
 
 [How to upgrade from 0.8 to 0.9](README.md)
 
-**Affects:** service providers that call `start_paos_sso`, `finish_paos_sso`,
-or `finish_paos_sso_with_outstanding_logout`, identity providers that call
-`receive_paos_sso` or `respond_paos_sso`, and deployments that store a
+**Affects:** service providers that call `Saml<Sp>::start_paos_sso`,
+`finish_paos_sso`, or `finish_paos_sso_with_outstanding_logout`, identity
+providers that call `Saml<Idp>::receive_paos_sso`, `respond_paos_sso`,
+`reject_paos_sso`, or `paos_soap_fault`, and deployments that store a
 `PendingPaosSsoSnapshot`.
 
 **Before:** both roles ran Enhanced Client/Proxy (ECP) login. The service
 provider used PAOS and the identity provider used SOAP.
 
-**Now:** ECP and its PAOS binding are removed, with these items:
+**Now:** ECP and its PAOS binding are removed, with these 0.8 items:
 
 - `StartPaosSso`, `StartedPaosSso`, `PendingPaosSso`, and
   `PendingPaosSsoSnapshot`
-- `PaosHttpResponse` and `SoapFault`
-- `check_paos_client_headers`
-- `ServiceProvider::start_paos_sso`, `finish_paos_sso`, and
+- `PaosClientRequest`, `PaosAuthnRequest`, and `PaosSsoResponse`
+- `RespondPaosSso`, `PaosHttpResponse`, and `SoapFault`
+- `Saml<Sp>::start_paos_sso`, `finish_paos_sso`, and
   `finish_paos_sso_with_outstanding_logout`
-- `IdentityProvider::receive_paos_sso` and `respond_paos_sso`
+- `Saml<Idp>::receive_paos_sso`, `respond_paos_sso`, `reject_paos_sso`, and
+  `paos_soap_fault`
 
 Browser SSO, SOAP Single Logout, SOAP artifact resolution, and SOAP name
 identifier management are unchanged.
