@@ -22,6 +22,15 @@ gone.
 | A pattern that lists every field of a `SamlError` variant, or code that builds a variant such as `SamlError::IssuerMismatch { .. }` | Variants with fields are non-exhaustive | [End field patterns with `..`](#end-field-patterns-with-) |
 | `saml_rs::error::SignatureVerificationReason` and the other reason enums | Also exported at the crate root | [Import the reason enums](#import-the-reason-enums-from-the-crate-root) |
 
+## Handle IdP lookup errors for unsolicited HTTP-POST
+
+If you adopt `ServiceProvider::accept_unsolicited_sso_with_resolver`, match
+`SamlError::IdpResolution { reason, .. }` to distinguish missing, ambiguous,
+invalid, and unknown issuers. The lookup uses the message's unauthenticated
+issuer. Resolve it against your configured trusted IdPs. Keep using
+`ServiceProvider::accept_unsolicited_sso` when you already know which
+`IdpDescriptor` to use.
+
 ## Read the status from `StatusNotSuccess`
 
 `StatusNotSuccess` carries the same `Status` that `SsoOutcome::Failure` takes

@@ -10,6 +10,32 @@ use crate::model::{
 };
 use std::fmt;
 
+/// Why an unsolicited HTTP-POST response could not be matched to a trusted IdP.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum IdpResolutionReason {
+    /// No eligible issuer was present.
+    MissingIssuer,
+    /// More than one issuer element was present where one was expected, or
+    /// the plaintext assertions named different issuers.
+    AmbiguousIssuer,
+    /// An eligible issuer did not have the form of a SAML entity identifier.
+    InvalidIssuer,
+    /// The configured resolver returned no descriptor for the issuer.
+    UnknownEntityId,
+}
+
+impl fmt::Display for IdpResolutionReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingIssuer => f.write_str("missing issuer"),
+            Self::AmbiguousIssuer => f.write_str("ambiguous issuer"),
+            Self::InvalidIssuer => f.write_str("invalid issuer"),
+            Self::UnknownEntityId => f.write_str("unknown issuer"),
+        }
+    }
+}
+
 /// Reason a required SAML signature verification failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -313,6 +339,13 @@ pub enum SamlError {
         expected: String,
         /// Actual issuer value extracted from the message, when available.
         actual: Option<String>,
+    },
+    /// An unsolicited HTTP-POST response could not be matched to a trusted IdP.
+    #[error("could not resolve the identity provider: {reason}")]
+    #[non_exhaustive]
+    IdpResolution {
+        /// What prevented lookup of the identity provider.
+        reason: IdpResolutionReason,
     },
     /// Response `Destination` does not match the expected recipient URL.
     #[error("destination mismatch: expected {expected}, got {actual:?}")]

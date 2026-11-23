@@ -30,6 +30,8 @@ mod embedded;
 mod error_response;
 mod response_issuer;
 
+pub(crate) use response_issuer::issuer_for_idp_resolution;
+
 #[cfg(crypto)]
 use detached::verify_detached;
 #[cfg(crypto)]
@@ -363,33 +365,54 @@ fn default_fields(
     })
 }
 
-fn decode_message(
+pub(crate) struct ReceivedMessage<'a> {
+    request: &'a HttpRequest,
     binding: Binding,
-    parser_type: ParserType,
-    request: &HttpRequest,
-    redirect_inflate_max_bytes: usize,
-    xml_limits: XmlLimits,
-) -> Result<String, SamlError> {
-    let direction = parser_type.query_param();
-    let bytes = match binding {
-        Binding::Redirect => {
-            let content = request
-                .query_get(direction)?
-                .ok_or_else(|| missing_binding_parameter(direction))?;
-            let redirect_max_bytes = redirect_inflate_max_bytes.min(xml_limits.max_bytes);
-            let compressed = decode_base64_with_limit(content, redirect_max_bytes)?;
-            deflate_raw_decode(&compressed, redirect_max_bytes)?
-        }
-        Binding::Post | Binding::SimpleSign => {
-            let content = request
-                .body_get(direction)?
-                .ok_or_else(|| missing_binding_parameter(direction))?;
-            decode_base64_with_limit(content, xml_limits.max_bytes)?
-        }
-        Binding::Artifact | Binding::Soap => return Err(unsupported_binding(binding)),
-    };
-    xml_limits.check_input_bytes(bytes.len())?;
-    String::from_utf8(bytes).map_err(utf8_err)
+    xml: String,
+}
+
+impl<'a> ReceivedMessage<'a> {
+    pub(crate) fn decode(
+        binding: Binding,
+        parser_type: ParserType,
+        request: &'a HttpRequest,
+        redirect_inflate_max_bytes: usize,
+        xml_limits: XmlLimits,
+    ) -> Result<Self, SamlError> {
+        let direction = parser_type.query_param();
+        let bytes = match binding {
+            Binding::Redirect => {
+                let content = request
+                    .query_get(direction)?
+                    .ok_or_else(|| missing_binding_parameter(direction))?;
+                let redirect_max_bytes = redirect_inflate_max_bytes.min(xml_limits.max_bytes);
+                let compressed = decode_base64_with_limit(content, redirect_max_bytes)?;
+                deflate_raw_decode(&compressed, redirect_max_bytes)?
+            }
+            Binding::Post | Binding::SimpleSign => {
+                let content = request
+                    .body_get(direction)?
+                    .ok_or_else(|| missing_binding_parameter(direction))?;
+                decode_base64_with_limit(content, xml_limits.max_bytes)?
+            }
+            Binding::Artifact | Binding::Soap => return Err(unsupported_binding(binding)),
+        };
+        xml_limits.check_input_bytes(bytes.len())?;
+        let xml = String::from_utf8(bytes).map_err(utf8_err)?;
+        Ok(Self {
+            request,
+            binding,
+            xml,
+        })
+    }
+
+    pub(crate) fn binding(&self) -> Binding {
+        self.binding
+    }
+
+    pub(crate) fn xml(&self) -> &str {
+        &self.xml
+    }
 }
 
 #[cfg(not(crypto))]
@@ -685,16 +708,37 @@ fn flow_inner(
     response_signature: ResponseSignatureRequirement,
     signed_destination: SignedMessageDestination,
 ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
-    let binding = opts.binding;
-    let parser_type = opts.parser_type;
-
-    let xml = decode_message(
-        binding,
-        parser_type,
+    let received = ReceivedMessage::decode(
+        opts.binding,
+        opts.parser_type,
         request,
         opts.redirect_inflate_max_bytes,
         opts.xml_limits,
     )?;
+    validate_received_message(
+        opts,
+        received,
+        expected_recipient,
+        assertion_signature,
+        response_signature,
+        signed_destination,
+    )
+}
+
+pub(crate) fn validate_received_message(
+    opts: &FlowOptions<'_>,
+    received: ReceivedMessage<'_>,
+    expected_recipient: Option<&str>,
+    assertion_signature: AssertionSignatureRequirement,
+    response_signature: ResponseSignatureRequirement,
+    signed_destination: SignedMessageDestination,
+) -> Result<FlowResultWithSignatureEvidence, SamlError> {
+    let ReceivedMessage {
+        request,
+        binding,
+        xml,
+    } = received;
+    let parser_type = opts.parser_type;
     let document = crate::schema::document(&xml, opts.xml_limits, opts.schema_validator)?;
     validate_protocol_profile(&xml, parser_type, opts.xml_limits)?;
     if parser_type == ParserType::LogoutRequest

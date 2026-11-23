@@ -1,7 +1,9 @@
 # Web Browser SSO acceptance rules
 
 Inbound rules for typed Web Browser SSO cover `ServiceProvider::finish_sso`,
-`ServiceProvider::accept_unsolicited_sso`, and `IdentityProvider::receive_sso`.
+`ServiceProvider::accept_unsolicited_sso`,
+`ServiceProvider::accept_unsolicited_sso_with_resolver`, and
+`IdentityProvider::receive_sso`.
 `SpValidationPolicy` and `IdpValidationPolicy` select the options. The
 [validation presets](https://samlrs.vercel.app/explanation/validation-presets/)
 list their defaults.
@@ -13,12 +15,14 @@ difference.
 
 ## Service provider
 
-`finish_sso` and `accept_unsolicited_sso` apply every row that names no other
-entry point. The SP compares a received `Issuer` as described in
+`finish_sso` and both unsolicited SSO entry points apply the relevant rows
+for their binding. The SP compares a received `Issuer` as described in
 [entity identifiers](identifiers.md#entity-identifiers).
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
+| For unsolicited HTTP-POST, select a configured IdP by the direct SAML response issuer. When the response is unsigned and omits its issuer, use the common issuer of its plaintext assertions. Verify the message with the selected IdP | Optional | Profiles §4.1.4.2, §4.1.4.3, §4.1.5, E17 | `accept_unsolicited_sso_with_resolver` |
+| Require an unambiguous entity identifier for IdP lookup | Library policy: the SP needs one usable key to select the credentials for verification. | Core §2.2.5, §8.3.6, Profiles §4.1.4.2, E17 | `accept_unsolicited_sso_with_resolver` |
 | In the first bearer assertion, require `AuthnInstant`, exactly one direct SAML `AuthnContext`, and at most one direct SAML `SubjectLocality` in each `AuthnStatement` | Mandatory | Core §2.7.2, `AuthnStatementType` | Always |
 | Require each such `AuthnInstant` to be a UTC `xs:dateTime`. A leap second is accepted, as for `IssueInstant` | Mandatory | Core §1.3.3, §2.7.2, `AuthnStatementType` | Always |
 | Expose the context and locality of each accepted statement. Keep references and authorities in document order and collapse URI whitespace | Optional | Core §2.7.2, §2.7.2.1, §2.7.2.2 | `AuthnStatement::authn_context`, `AuthnStatement::subject_locality` |
@@ -48,7 +52,7 @@ entry point. The SP compares a received `Issuer` as described in
 | Reject the whole response if any assertion's `Issuer` differs from the responding identity provider's entity ID | Library policy: all assertion IDs recorded for one session must belong to the same identity provider. | Profiles §4.1.4.2, §4.1.4.3, E26 | Always |
 | Reject assertions that differ in principal: `NameID` value, `Format`, `NameQualifier`, or `SPNameQualifier`. An omitted `Format` is `unspecified` | Library policy: it ties the assertion IDs recorded for one session to one subject, and the SP has no mapping between different identifiers for one principal. | Profiles §4.1.4.2, E26, Core §2.2.2 | Always |
 | With a replay cache, store every direct assertion ID. Use each sibling's latest bearer expiration plus skew, or the selected assertion's replay deadline when the sibling has no bearer expiration | Library policy: reason not recorded. | Profiles §4.1.4.5 | `ReplayPolicy::RequireCache` |
-| Reject a present `Response` `Issuer` other than the identity provider's entity ID. A response without one is accepted | Library policy: otherwise the SP would accept a session from a response whose `Issuer` was never compared. | Profiles §4.1.4.2, E17, Core §3.2.2 | Always |
+| Reject a present `Response` issuer other than the IdP's entity ID. An omitted issuer is accepted with a supplied descriptor, or by the resolver only through the plaintext fallback above | Library policy: compare any present issuer before accepting the session. | Profiles §4.1.4.2, E17, Core §3.2.2 | Always |
 | Reject a second direct `Issuer` on the `Response` | Mandatory | Core §3.2.2, `StatusResponseType` | Always |
 | Reject a `Response` or `Assertion` `IssueInstant` that is not UTC. A leap second is accepted | Mandatory | Core §1.3.3 | Always |
 | Read each bearer time bound only as a UTC `xs:dateTime`: `Conditions@NotBefore` and `NotOnOrAfter`, bearer `SubjectConfirmationData@NotBefore` and `NotOnOrAfter`, and `AuthnStatement@SessionNotOnOrAfter`. A value with an offset or no time zone fails its check | Mandatory | Core §1.3.3, §2.4.1.2, §2.5.1, §2.7.2, E79 | Always |

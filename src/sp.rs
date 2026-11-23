@@ -6,8 +6,8 @@ use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::flow::{
-    flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
-    FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, ResponseSignatureRequirement,
+    validate_received_message, AssertionSignatureRequirement, FlowOptions,
+    FlowResultWithSignatureEvidence, HttpRequest, ReceivedMessage, ResponseSignatureRequirement,
     SignatureCheck, SignedMessageDestination,
 };
 use crate::idp;
@@ -284,17 +284,29 @@ impl Engine {
         ))
     }
 
+    pub(crate) fn decode_login_response<'a>(
+        &self,
+        binding: Binding,
+        request: &'a HttpRequest,
+    ) -> Result<ReceivedMessage<'a>, SamlError> {
+        ReceivedMessage::decode(
+            binding,
+            ParserType::SamlResponse,
+            request,
+            self.setting.redirect_inflate_max_bytes,
+            self.setting.xml_limits,
+        )
+    }
+
     pub(crate) fn parse_unsolicited_login_response_at(
         &self,
         idp: &idp::Engine,
-        binding: Binding,
-        request: &HttpRequest,
+        received: ReceivedMessage<'_>,
         options: LoginResponseParseOptions<'_>,
     ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
         self.parse_login_response_inner_with_signature_evidence(
             idp,
-            binding,
-            request,
+            received,
             LoginResponseCorrelation::Unsolicited,
             options,
         )
@@ -303,8 +315,7 @@ impl Engine {
     pub(crate) fn parse_login_response_with_request_id_at(
         &self,
         idp: &idp::Engine,
-        binding: Binding,
-        request: &HttpRequest,
+        received: ReceivedMessage<'_>,
         request_id: &str,
         options: LoginResponseParseOptions<'_>,
     ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
@@ -313,8 +324,7 @@ impl Engine {
         }
         self.parse_login_response_inner_with_signature_evidence(
             idp,
-            binding,
-            request,
+            received,
             LoginResponseCorrelation::MessageId(request_id),
             options,
         )
@@ -323,11 +333,11 @@ impl Engine {
     fn parse_login_response_inner_with_signature_evidence(
         &self,
         idp: &idp::Engine,
-        binding: Binding,
-        request: &HttpRequest,
+        received: ReceivedMessage<'_>,
         correlation: LoginResponseCorrelation<'_>,
         options: LoginResponseParseOptions<'_>,
     ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
+        let binding = received.binding();
         let signing_certs = idp
             .metadata
             .as_metadata()
@@ -344,7 +354,7 @@ impl Engine {
                 .assertion_consumer_location(binding)
                 .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
         };
-        let result = flow_with_expected_recipient_and_signature_evidence(
+        let result = validate_received_message(
             &FlowOptions {
                 signature_check: SignatureCheck::Require,
                 require_audience_restriction: self.setting.require_audience_restriction,
@@ -370,8 +380,8 @@ impl Engine {
                 expected_in_response_to,
                 ..FlowOptions::new(binding, ParserType::SamlResponse)
             },
-            request,
-            recipient.as_str(),
+            received,
+            Some(recipient.as_str()),
             if self.setting.want_assertions_signed {
                 AssertionSignatureRequirement::Direct
             } else {
