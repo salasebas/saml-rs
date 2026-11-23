@@ -47,6 +47,7 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
+| Verify a present `ArtifactResolve` signature over the SOAP body message using the expected SP's signing keys before acting on the request | Mandatory | Core §3.2.1, §5.4.1–§5.4.2 | Always |
 | Answer an understood `ArtifactResolve` with status Success, and omit the message for an unauthorized presenter or an artifact that is not outstanding | Mandatory | Bindings §3.6.6, Core §3.5.3, Profiles §5.3.2 | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
@@ -78,6 +79,9 @@ Profiles §4.1.4.4 governs a Web Browser SSO `<Response>` delivered by artifact.
 Both parties read `Issuer` as described in [entity identifiers](identifiers.md#entity-identifiers).
 The requester reads the [status codes](web-browser-sso-acceptance.md#status-codes)
 using XML Schema whitespace collapse.
+Unsigned messages can use the required SOAP channel protection. A present XML
+signature requires a crypto provider and uses the receiver's XML signature
+profile. Web SSO applies its own checks to the dereferenced response.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -85,6 +89,7 @@ using XML Schema whitespace collapse.
 | Require `ID`, `Version` `2.0`, and a UTC `IssueInstant` | Mandatory | `StatusResponseType`, Core §3.2.2, §1.3.3 | Always |
 | Require exactly one `Status` | Mandatory | `StatusResponseType` | Always |
 | Require the response `InResponseTo` to equal the pending request ID | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2 | Always |
+| Verify a present `ArtifactResponse` signature over the SOAP body message using the expected IdP's signing keys before reporting its status or returning its message | Mandatory | Core §3.2.2, §5.4.1–§5.4.2 | Always |
 | Reject an `ArtifactResponse` with more than one message element | Mandatory | `ArtifactResponseType` | Always |
 | Return a message only from a Success status that carries one | Library policy: reason not recorded. | Profiles §5.3.2, Core §3.5.3 | Always |
 | Require an `Issuer` equal to the identity provider that omits `Format` or sets it to `entity` | Library policy: the requester attributes the responder by this `Issuer` together with `SoapChannel`, so without it `finish` would return a message not attributed to the artifact issuer. | Profiles §5.4.2 | Always |
@@ -128,6 +133,6 @@ write and read envelopes for artifact resolution,
 
 - Browser delivery of an artifact: [HTTP-Artifact response](web-browser-sso-artifact.md).
 - `AuthnRequest` over HTTP-Artifact. Optional, Bindings §3.6.
-- Signing `ArtifactResolve` or `ArtifactResponse`. Optional, Profiles §5.3.1, §5.3.2.
+- Signing outbound `ArtifactResolve` or `ArtifactResponse`. Optional, Profiles §5.3.1, §5.3.2.
 - The assertion query/request profile over SOAP. Requirements vary by query and operational mode. Profiles §6, Conformance §3.2 Table 4.
 - The IdP operational mode and the SP operational mode: [IdP and SP operational modes](idp-sp-operational-modes.md).
