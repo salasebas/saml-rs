@@ -270,7 +270,8 @@ fn bool_str(value: bool) -> &'static str {
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
 /// and for an entity attribute whose `NameFormat` is not an absolute URI
-/// reference, whose basic name is not an XML name, or whose text XML cannot carry.
+/// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
+/// name, or whose text XML cannot carry.
 pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> {
     if cfg.assertion_consumer_service.is_empty() {
         return Err(SamlError::MissingMetadata(
@@ -325,7 +326,8 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
 /// incomplete organization, an invalid XML Schema language tag, a non-`mailto:`
 /// email URI, a non-absolute organization or error URI, or text XML cannot carry,
 /// and for an entity attribute whose `NameFormat` is not an absolute URI
-/// reference, whose basic name is not an XML name, or whose text XML cannot carry.
+/// reference, whose [`crate::AttributeNameFormat::Basic`] name is not an XML
+/// name, or whose text XML cannot carry.
 pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError> {
     if cfg.single_sign_on_service.is_empty() {
         return Err(SamlError::MissingMetadata(
