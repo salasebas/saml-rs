@@ -263,6 +263,9 @@ fn write_attribute_statement(
         if let Some(name_format) = name_format {
             attrs.push(("NameFormat", name_format));
         }
+        if let Some(friendly_name) = attribute.friendly_name() {
+            attrs.push(("FriendlyName", friendly_name));
+        }
         if attribute.values().is_empty() {
             writer.empty(&attribute_name, &attrs);
             continue;

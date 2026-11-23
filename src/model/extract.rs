@@ -135,7 +135,7 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
             "extracted attributes are missing attributeNameFormats".into(),
         ));
     }
-    let mut attributes: Vec<(&str, Option<&str>, Vec<AttributeValue>)> = Vec::new();
+    let mut attributes: Vec<Attribute> = Vec::new();
     let mut positions: HashMap<(&str, &str), usize> = HashMap::new();
     for element in elements {
         let name = element.get_str(attribute::NAME).ok_or_else(|| {
@@ -144,6 +144,7 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
             )
         })?;
         let name_format = element.get_str(attribute::NAME_FORMAT);
+        let friendly_name = element.get_str(attribute::FRIENDLY_NAME);
         let values = element
             .get(attribute::VALUES)
             .map(value_strings)
@@ -157,17 +158,19 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
             name_format.unwrap_or(attribute_name_format::UNSPECIFIED),
         );
         match positions.get(&identity) {
-            Some(&position) => attributes[position].2.extend(values),
+            Some(&position) => attributes[position].extend_values(values),
             None => {
                 positions.insert(identity, attributes.len());
-                attributes.push((name, name_format, values.collect()));
+                attributes.push(Attribute::received(
+                    name,
+                    name_format,
+                    friendly_name,
+                    values.collect(),
+                ));
             }
         }
     }
-    Ok(attributes
-        .into_iter()
-        .map(|(name, name_format, values)| Attribute::received(name, name_format, values))
-        .collect())
+    Ok(Attributes::new(attributes))
 }
 
 pub(super) fn subject_confirmations_from_extract(extract: &Value) -> Vec<SubjectConfirmation> {

@@ -55,26 +55,30 @@ impl AttributeNameFormat {
     }
 }
 
-/// A SAML `<Attribute>`: a name, an optional `NameFormat`, and its values.
+/// A SAML `<Attribute>`: a name, an optional `NameFormat`, an optional
+/// `FriendlyName`, and its values.
 ///
 /// # Examples
 ///
 /// ```
 /// use saml_rs::{Attribute, AttributeNameFormat, AttributeValue};
 ///
-/// let groups = Attribute::new(
-///     "groups",
-///     [AttributeValue::new("staff"), AttributeValue::new("admins")],
+/// let mail = Attribute::new(
+///     "urn:oid:0.9.2342.19200300.100.1.3",
+///     [AttributeValue::new("alice@example.com")],
 /// )
-/// .with_name_format(AttributeNameFormat::Basic);
+/// .with_name_format(AttributeNameFormat::Uri)
+/// .with_friendly_name("mail");
 ///
-/// assert_eq!(groups.name_format(), Some(&AttributeNameFormat::Basic));
-/// assert_eq!(groups.values().len(), 2);
+/// assert_eq!(mail.name_format(), Some(&AttributeNameFormat::Uri));
+/// assert_eq!(mail.friendly_name(), Some("mail"));
+/// assert_eq!(mail.values().len(), 1);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute {
     name: String,
     name_format: Option<AttributeNameFormat>,
+    friendly_name: Option<String>,
     values: Vec<AttributeValue>,
 }
 
@@ -88,6 +92,7 @@ impl Attribute {
         Self {
             name: name.into(),
             name_format: None,
+            friendly_name: None,
             values: values.into_iter().collect(),
         }
     }
@@ -108,16 +113,32 @@ impl Attribute {
         self
     }
 
+    /// Replace the `FriendlyName`, a human-readable form of the name such as
+    /// `mail` for an OID name.
+    ///
+    /// A friendly name labels the attribute and does not identify it.
+    /// [`Attributes::get_by_friendly_name`] finds an attribute by its label.
+    pub fn with_friendly_name(mut self, friendly_name: impl Into<String>) -> Self {
+        self.friendly_name = Some(friendly_name.into());
+        self
+    }
+
     pub(super) fn received(
         name: &str,
         name_format: Option<&str>,
+        friendly_name: Option<&str>,
         values: Vec<AttributeValue>,
     ) -> Self {
         Self {
             name: name.to_string(),
             name_format: name_format.map(AttributeNameFormat::from_uri),
+            friendly_name: friendly_name.map(str::to_string),
             values,
         }
+    }
+
+    pub(super) fn extend_values(&mut self, values: impl IntoIterator<Item = AttributeValue>) {
+        self.values.extend(values);
     }
 
     /// Attribute name.
@@ -132,6 +153,11 @@ impl Attribute {
     /// [`AttributeNameFormat::as_uri`] gives the URI.
     pub fn name_format(&self) -> Option<&AttributeNameFormat> {
         self.name_format.as_ref()
+    }
+
+    /// `FriendlyName`, when the attribute carries one.
+    pub fn friendly_name(&self) -> Option<&str> {
+        self.friendly_name.as_deref()
     }
 
     /// Attribute values, in order.
@@ -186,6 +212,37 @@ impl Attributes {
     /// pair, so the same name can appear more than once.
     pub fn get(&self, name: &str) -> Option<&Attribute> {
         self.0.iter().find(|attribute| attribute.name() == name)
+    }
+
+    /// Find the first attribute whose `FriendlyName` is `friendly_name`.
+    ///
+    /// A friendly name is a label, not an identifier. The identity provider
+    /// chooses it, attributes with different names can share it, and it can
+    /// equal the name of another attribute. Select an attribute whose values
+    /// decide access by its [`Attribute::name`] and [`Attribute::name_format`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use saml_rs::{Attribute, AttributeValue, Attributes};
+    ///
+    /// let attributes = Attributes::new([
+    ///     Attribute::new("mail", [AttributeValue::new("shared@example.com")]),
+    ///     Attribute::new(
+    ///         "urn:oid:0.9.2342.19200300.100.1.3",
+    ///         [AttributeValue::new("alice@example.com")],
+    ///     )
+    ///     .with_friendly_name("mail"),
+    /// ]);
+    ///
+    /// let labelled = attributes.get_by_friendly_name("mail");
+    /// assert_eq!(labelled.map(Attribute::name), Some("urn:oid:0.9.2342.19200300.100.1.3"));
+    /// assert_eq!(attributes.first_value("mail"), Some("shared@example.com"));
+    /// ```
+    pub fn get_by_friendly_name(&self, friendly_name: &str) -> Option<&Attribute> {
+        self.0
+            .iter()
+            .find(|attribute| attribute.friendly_name() == Some(friendly_name))
     }
 
     /// The first value of the attribute [`Self::get`] finds for `name`.

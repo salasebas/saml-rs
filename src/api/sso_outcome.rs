@@ -38,10 +38,10 @@ impl SsoAssertion {
 
     /// Replace the attributes of the assertion's `AttributeStatement`.
     ///
-    /// Each attribute is written with its `Name`, its `NameFormat` when it has
-    /// one, and one `xs:string` `AttributeValue` for each value. An attribute
-    /// without values is written without `AttributeValue`. An empty collection
-    /// writes no `AttributeStatement`.
+    /// Each attribute is written with its `Name`, its `NameFormat` and
+    /// `FriendlyName` when it has them, and one `xs:string` `AttributeValue`
+    /// for each value. An attribute without values is written without
+    /// `AttributeValue`. An empty collection writes no `AttributeStatement`.
     ///
     /// The response is rejected when a `NameFormat` is not an absolute URI
     /// reference, or when an [`crate::AttributeNameFormat::Basic`] name is not an

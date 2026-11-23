@@ -55,7 +55,7 @@ let name_id = session.name_id().value();
 
 With the `serde` feature, the snapshot serializes to JSON for your session store. `finish_sso` trusts the snapshot to name the request the response answers, so keep it on the server, or authenticate it when the browser carries it. The stored format is in [Cargo features](../reference/features.md#serialize-pending-snapshots-with-serde).
 
-`session.attributes()` holds the attributes of the assertion. `first_value("mail")` returns the first value of the first attribute named `mail`. `Attribute::name_format()` is the attribute's `AttributeNameFormat`, and is `None` when the identity provider sent no `NameFormat`. A persistent or transient name identifier is reported as it was sent. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
+`session.attributes()` holds the attributes of the assertion. `first_value("mail")` returns the first value of the first attribute named `mail`. `Attribute::name_format()` is the attribute's `AttributeNameFormat`, and is `None` when the identity provider sent no `NameFormat`. `Attribute::friendly_name()` is its `FriendlyName`, and `get_by_friendly_name("mail")` finds the first attribute with that label. The identity provider chooses the label, and two attributes can share it, so select an attribute that decides access by its `Name` and `NameFormat`. A persistent or transient name identifier is reported as it was sent. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
 `start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. All three constructors enforce the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
