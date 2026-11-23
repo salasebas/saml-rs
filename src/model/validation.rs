@@ -146,7 +146,9 @@ pub trait ReplayCache {
     /// Return [`SamlError::ReplayDetected`] for a duplicate key. If your
     /// store cannot check or retain a key, return [`SamlError::ReplayCacheUnavailable`]
     /// with the cause. Use this error when a new assertion key reaches its
-    /// deadline before your store can record it.
+    /// deadline before your store can record it. A deadline already passed by
+    /// the validation clock never reaches your cache: the library returns
+    /// [`SamlError::TimeWindowInvalid`] instead.
     fn check_and_store(&mut self, key: ReplayKey, expires_at: SystemTime) -> Result<(), SamlError>;
 }
 

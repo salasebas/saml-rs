@@ -179,9 +179,12 @@ Keep the cache across requests. For multiple nodes or protection across
 restarts, use durable storage that checks and inserts each ID atomically.
 If you implement `ReplayCache`, return `SamlError::ReplayCacheUnavailable`
 with the cause when your store cannot retain an assertion ID through its
-deadline. For a new assertion ID already expired at
-insertion, `InMemoryReplayCache` now returns `TimeWindowInvalid` with
-`TimeWindowField::ReplayExpiration`.
+deadline. `InMemoryReplayCache` now returns that error for a new assertion
+ID whose deadline its clock has passed. Before, it accepted the ID without
+storing it. A deadline that the validation clock has passed returns
+`TimeWindowInvalid` before the cache is called, so the cache error appears
+only when the cache clock is ahead of the validation clock. To avoid it,
+give the cache the same time source as your `SamlValidationContext`.
 
 ## Update replay keys and cache access
 
