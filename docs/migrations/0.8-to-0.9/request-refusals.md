@@ -12,9 +12,8 @@ Pass its `refusal` to `respond_slo_refusal` with the same peer descriptor
 and `RespondSlo` options you use for `respond_slo`. Send the resulting
 `Outbound<LogoutResponse>` on the selected binding.
 
-The response echoes the request's RelayState on browser bindings. It uses
-the built-in XML writer so it can include the required subordinate status
-even when you configured a custom logout-response template.
+The response echoes the request's RelayState on browser bindings and includes
+the subordinate status when required by the request version.
 
 ## Name identifier management
 

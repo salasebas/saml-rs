@@ -1,14 +1,10 @@
-use quick_xml::events::Event;
-use quick_xml::Reader;
-
 use crate::constants::namespace;
 use crate::entity::EntitySetting;
-use crate::error::{xml_err, SamlError};
+use crate::error::SamlError;
 use crate::metadata::Metadata;
 use crate::model::Status;
-use crate::template::{render_template, validate_tag_prefixes};
 use crate::xml::write::{Prefixes, XmlWriter};
-use crate::xml::{utf8_bom_len, OutboundNameIdQualifiers};
+use crate::xml::OutboundNameIdQualifiers;
 
 pub(crate) fn issuer_of(setting: &EntitySetting, meta: &Metadata) -> String {
     setting
@@ -32,7 +28,7 @@ pub(crate) struct LogoutRequestAttributes<'a> {
     pub(crate) reason: Option<&'a str>,
 }
 
-pub(super) fn render_default_logout_response(
+pub(super) fn render_logout_response(
     setting: &EntitySetting,
     id: &str,
     issue_instant: &str,
@@ -41,14 +37,11 @@ pub(super) fn render_default_logout_response(
     issuer: &str,
     status: &Status,
 ) -> Result<String, SamlError> {
-    validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
-
-    let protocol_prefix = &setting.tag_prefix_protocol;
-    let assertion_prefix = &setting.tag_prefix_assertion;
-    let root_name = format!("{protocol_prefix}:LogoutResponse");
-    let issuer_name = format!("{assertion_prefix}:Issuer");
-    let xmlns_protocol = format!("xmlns:{protocol_prefix}");
-    let xmlns_assertion = format!("xmlns:{assertion_prefix}");
+    let prefixes = Prefixes::of(setting)?;
+    let root_name = prefixes.protocol("LogoutResponse");
+    let issuer_name = prefixes.assertion("Issuer");
+    let xmlns_protocol = prefixes.xmlns_protocol();
+    let xmlns_assertion = prefixes.xmlns_assertion();
     let mut attrs = vec![
         (xmlns_protocol.as_str(), namespace::PROTOCOL),
         (xmlns_assertion.as_str(), namespace::ASSERTION),
@@ -66,24 +59,9 @@ pub(super) fn render_default_logout_response(
     let mut writer = XmlWriter::new();
     writer.start(&root_name, &attrs);
     writer.text_element(&issuer_name, &[], issuer);
-    write_logout_status(&mut writer, protocol_prefix, status);
+    writer.status(&prefixes, status);
     writer.end(&root_name);
     Ok(writer.finish())
-}
-
-fn write_logout_status(writer: &mut XmlWriter, protocol_prefix: &str, status: &Status) {
-    let status_name = format!("{protocol_prefix}:Status");
-    let status_code_name = format!("{protocol_prefix}:StatusCode");
-    writer.start(&status_name, &[]);
-    match status.subordinate() {
-        Some(subordinate) => {
-            writer.start(&status_code_name, &[("Value", status.top_level().as_uri())]);
-            writer.empty(&status_code_name, &[("Value", subordinate.as_uri())]);
-            writer.end(&status_code_name);
-        }
-        None => writer.empty(&status_code_name, &[("Value", status.top_level().as_uri())]),
-    }
-    writer.end(&status_name);
 }
 
 pub(crate) fn render_logout_request(
@@ -100,58 +78,13 @@ pub(crate) fn render_logout_request(
         not_on_or_after,
         reason,
     } = attributes;
-    if let Some(template) = setting.logout_request_template.as_deref() {
-        if subject.session_indexes.len() > 1 {
-            return Err(SamlError::Unsupported(
-                "custom LogoutRequest templates cannot render multiple SessionIndex values".into(),
-            ));
-        }
-        let mut replacements = vec![
-            ("ID", Some(id.to_owned())),
-            ("IssueInstant", Some(issue_instant.to_owned())),
-            ("Destination", Some(destination.to_owned())),
-            ("Issuer", Some(issuer.to_owned())),
-            ("NameIDFormat", name_id_format.map(str::to_string)),
-            ("NameID", Some(subject.name_id.to_string())),
-            (
-                "NameQualifier",
-                subject.qualifiers.name_qualifier.map(str::to_string),
-            ),
-            (
-                "SPNameQualifier",
-                subject.qualifiers.sp_name_qualifier.map(str::to_string),
-            ),
-            (
-                "SPProvidedID",
-                subject.qualifiers.sp_provided_id.map(str::to_string),
-            ),
-            (
-                "SessionIndex",
-                subject
-                    .session_indexes
-                    .first()
-                    .map(|value| (*value).to_string()),
-            ),
-        ];
-        if let Some(expiration) = not_on_or_after {
-            replacements.push(("NotOnOrAfter", Some(expiration.to_owned())));
-        }
-        let xml = render_template(template, Prefixes::of(setting)?, &replacements)?;
-        return match reason {
-            Some(reason) => add_template_reason(xml, reason),
-            None => Ok(xml),
-        };
-    }
-    validate_tag_prefixes(&setting.tag_prefix_protocol, &setting.tag_prefix_assertion)?;
-
-    let protocol_prefix = &setting.tag_prefix_protocol;
-    let assertion_prefix = &setting.tag_prefix_assertion;
-    let root_name = format!("{protocol_prefix}:LogoutRequest");
-    let issuer_name = format!("{assertion_prefix}:Issuer");
-    let name_id_name = format!("{assertion_prefix}:NameID");
-    let session_index_name = format!("{protocol_prefix}:SessionIndex");
-    let xmlns_protocol = format!("xmlns:{protocol_prefix}");
-    let xmlns_assertion = format!("xmlns:{assertion_prefix}");
+    let prefixes = Prefixes::of(setting)?;
+    let root_name = prefixes.protocol("LogoutRequest");
+    let issuer_name = prefixes.assertion("Issuer");
+    let name_id_name = prefixes.assertion("NameID");
+    let session_index_name = prefixes.protocol("SessionIndex");
+    let xmlns_protocol = prefixes.xmlns_protocol();
+    let xmlns_assertion = prefixes.xmlns_assertion();
 
     let mut attrs = vec![
         (xmlns_protocol.as_str(), namespace::PROTOCOL),
@@ -194,26 +127,4 @@ pub(crate) fn render_logout_request(
     }
     writer.end(&root_name);
     Ok(writer.finish())
-}
-
-fn add_template_reason(mut xml: String, reason: &str) -> Result<String, SamlError> {
-    let bom_len = utf8_bom_len(&xml);
-    let mut reader = Reader::from_str(&xml);
-    loop {
-        let before = usize::try_from(reader.buffer_position()).map_err(xml_err)?;
-        match reader.read_event().map_err(xml_err)? {
-            Event::Start(root) => {
-                if root.try_get_attribute("Reason").map_err(xml_err)?.is_none() {
-                    let mut root = root.into_owned();
-                    root.push_attribute(("Reason", reason));
-                    let after = usize::try_from(reader.buffer_position()).map_err(xml_err)?;
-                    xml.replace_range(bom_len + before + 1..bom_len + after - 1, &root);
-                }
-                break;
-            }
-            Event::Empty(_) | Event::Eof => break,
-            _ => {}
-        }
-    }
-    Ok(xml)
 }

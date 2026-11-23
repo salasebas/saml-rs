@@ -52,11 +52,9 @@ context defaults to the `unspecified` class.
 
 Both roles sign logout requests. An SP returns `SamlError::ProtocolProfile` if
 it starts logout without a session index or sends a browser logout request or
-response to an HTTP endpoint without selecting `allow_http()`. Custom SP logout
-request templates are also checked before signing. A template with an
-unexpanded `NotOnOrAfter`, a different NameID format, or a missing requested
-qualifier fails with `SamlError::ProtocolProfile`. Preserve the subject and
-session indexes supplied by the caller, or use the built-in renderer.
+response to an HTTP endpoint without selecting `allow_http()`. If your
+configuration uses custom XML, see how to
+[replace logout templates with typed operations](config.md#replace-logout-templates-with-typed-operations).
 
 **Upgrade:** remove the producer-rule setters, `StartSlo::signing` and the
 `LogoutSigning` import. Supply signing credentials and enable a document-crypto
@@ -182,10 +180,7 @@ is the outcome only when it is true:
   not recognize, it passes `Status::requester()` or `Status::responder()`,
   optionally with `SubordinateStatusCode::unknown_principal()`.
 
-In every other case, pass an error status. A logout-response template
-substitutes only the top-level code. Keep the `{StatusCode}` placeholder so
-the rendered response carries the code you passed. `respond_slo` checks the
-rendered code and rejects a subordinate code when a template is set.
+In every other case, pass an error status.
 
 **Upgrade:** move the status from the options to the argument. Where the call
 set no status, pass the status that reports what happened.

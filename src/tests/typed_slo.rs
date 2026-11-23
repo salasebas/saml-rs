@@ -6,7 +6,7 @@ mod schema_validation;
 #[path = "typed_slo/reason.rs"]
 mod reason;
 
-mod template_prefixes;
+mod prefixes;
 
 #[path = "typed_slo/version_refusals.rs"]
 mod version_refusals;
@@ -56,8 +56,7 @@ use saml_rs::{
     ReplayCache, ReplayPolicy, RespondSlo, RespondSso, SamlError, SamlValidationContext,
     ServiceProvider, SessionIndex, SloEndpoint, SoapChannel, SoapProtocolMessage, SoapRequest,
     SoapResponse, SpConfig, SpDescriptor, SpValidationPolicy, SsoAssertion, SsoEndpoint,
-    SsoSession, StartSlo, Status, SubordinateStatusCode, TemplatePolicy,
-    MAX_RECEIVED_RELAY_STATE_BYTES,
+    SsoSession, StartSlo, Status, SubordinateStatusCode, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -138,49 +137,6 @@ impl LocalSloRole {
     }
 }
 
-const BAD_LOGOUT_RESPONSE_TEMPLATE: &str = r#"
-<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-    ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}"
-    Destination="{Destination}" InResponseTo="_wrong">
-    <saml:Issuer>{Issuer}</saml:Issuer>
-    <samlp:Status>
-        <samlp:StatusCode Value="{StatusCode}"/>
-    </samlp:Status>
-</samlp:LogoutResponse>
-"#;
-
-const CUSTOM_LOGOUT_REQUEST_TEMPLATE: &str = r#"
-<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-    ID="{ID}" Version="2.0" IssueInstant="__ISSUE_INSTANT__"__NOT_ON_OR_AFTER__
-    Destination="{Destination}">
-    <saml:Issuer>{Issuer}</saml:Issuer>
-    <saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID>
-    <samlp:SessionIndex>{SessionIndex}</samlp:SessionIndex>
-</samlp:LogoutRequest>
-"#;
-
-const SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE: &str = r#"
-<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-    ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}"
-    NotOnOrAfter="{NotOnOrAfter}" Destination="{Destination}">
-    <saml:Issuer>{Issuer}</saml:Issuer>
-    <saml:NameID Format="{NameIDFormat}">{NameID}</saml:NameID>
-    <samlp:SessionIndex>{SessionIndex}</samlp:SessionIndex>
-</samlp:LogoutRequest>
-"#;
-
-fn logout_request_template(issue_instant: &str, not_on_or_after: Option<&str>) -> String {
-    let not_on_or_after = not_on_or_after
-        .map(|value| format!(r#" NotOnOrAfter="{value}""#))
-        .unwrap_or_default();
-    CUSTOM_LOGOUT_REQUEST_TEMPLATE
-        .replace("__ISSUE_INSTANT__", issue_instant)
-        .replace("__NOT_ON_OR_AFTER__", &not_on_or_after)
-}
-
 fn signing_sp_validation() -> SpValidationPolicy {
     SpValidationPolicy {
         assertions: AssertionSignaturePolicy::RequireSigned,
@@ -198,23 +154,15 @@ fn signed_authn_request_idp_validation() -> IdpValidationPolicy {
 }
 
 fn sp_config() -> Result<SpConfig, SamlError> {
-    sp_config_with_validation_and_logout_request_template(signing_sp_validation(), None)
+    sp_config_with_validation(signing_sp_validation())
 }
 
 fn sp_config_with_validation(validation: SpValidationPolicy) -> Result<SpConfig, SamlError> {
-    sp_config_with_validation_and_logout_request_template(validation, None)
-}
-
-fn sp_config_with_validation_and_logout_request_template(
-    validation: SpValidationPolicy,
-    template: Option<&str>,
-) -> Result<SpConfig, SamlError> {
-    sp_config_builder(validation, template)?.build()
+    sp_config_builder(validation)?.build()
 }
 
 fn sp_config_builder(
     validation: SpValidationPolicy,
-    template: Option<&str>,
 ) -> Result<saml_rs::SpConfigBuilder, SamlError> {
     Ok(SpConfig::builder(
         EntityId::try_new(SP_ENTITY_ID)?,
@@ -225,15 +173,7 @@ fn sp_config_builder(
     .slo_endpoint(SloEndpoint::simple_sign(SP_SLO_SIMPLESIGN)?)
     .slo_endpoint(SloEndpoint::soap(SP_SLO_SOAP)?)
     .credentials(signing_credentials())
-    .validation(validation)
-    .templates(TemplatePolicy {
-        logout_request_template: template.map(str::to_string),
-        ..TemplatePolicy::default()
-    }))
-}
-
-fn sp_config_with_logout_request_template(template: &str) -> Result<SpConfig, SamlError> {
-    sp_config_with_validation_and_logout_request_template(signing_sp_validation(), Some(template))
+    .validation(validation))
 }
 
 fn idp_config() -> Result<IdpConfig, SamlError> {
@@ -241,19 +181,11 @@ fn idp_config() -> Result<IdpConfig, SamlError> {
 }
 
 fn idp_config_with_validation(validation: IdpValidationPolicy) -> Result<IdpConfig, SamlError> {
-    idp_config_with_validation_and_logout_request_template(validation, None)
-}
-
-fn idp_config_with_validation_and_logout_request_template(
-    validation: IdpValidationPolicy,
-    template: Option<&str>,
-) -> Result<IdpConfig, SamlError> {
-    idp_config_builder(validation, template)?.build()
+    idp_config_builder(validation)?.build()
 }
 
 fn idp_config_builder(
     validation: IdpValidationPolicy,
-    template: Option<&str>,
 ) -> Result<saml_rs::IdpConfigBuilder, SamlError> {
     Ok(IdpConfig::builder(
         EntityId::try_new(IDP_ENTITY_ID)?,
@@ -264,16 +196,11 @@ fn idp_config_builder(
     .slo_endpoint(SloEndpoint::simple_sign(IDP_SLO_SIMPLESIGN)?)
     .slo_endpoint(SloEndpoint::soap(IDP_SLO_SOAP)?)
     .credentials(signing_credentials())
-    .validation(validation)
-    .templates(TemplatePolicy {
-        logout_request_template: template.map(str::to_string),
-        ..TemplatePolicy::default()
-    }))
+    .validation(validation))
 }
 
 fn idp_config_with_issuance(
     lifetime: Duration,
-    logout_request_template: Option<String>,
     credentials: Credentials,
     validation: IdpValidationPolicy,
 ) -> Result<IdpConfig, SamlError> {
@@ -288,39 +215,7 @@ fn idp_config_with_issuance(
     .credentials(credentials)
     .issuance_lifetime(lifetime)
     .validation(validation)
-    .templates(TemplatePolicy {
-        logout_request_template,
-        ..TemplatePolicy::default()
-    })
     .build()
-}
-
-fn idp_config_with_logout_response_template(
-    logout_response_template: String,
-) -> Result<IdpConfig, SamlError> {
-    IdpConfig::builder(
-        EntityId::try_new(IDP_ENTITY_ID)?,
-        SsoEndpoint::post(IDP_SSO_POST)?,
-    )
-    .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-    .credentials(signing_credentials())
-    .validation(signed_authn_request_idp_validation())
-    .templates(TemplatePolicy {
-        logout_response_template: Some(logout_response_template),
-        ..TemplatePolicy::default()
-    })
-    .build()
-}
-
-fn bad_template_idp_config() -> Result<IdpConfig, SamlError> {
-    idp_config_with_logout_response_template(BAD_LOGOUT_RESPONSE_TEMPLATE.to_string())
-}
-
-fn bad_profile_template_idp_config() -> Result<IdpConfig, SamlError> {
-    idp_config_with_logout_response_template(BAD_LOGOUT_RESPONSE_TEMPLATE.replace(
-        r#"IssueInstant="{IssueInstant}""#,
-        r#"IssueInstant="not-a-date""#,
-    ))
 }
 
 fn facades() -> Result<(saml_rs::ServiceProvider, saml_rs::IdentityProvider), SamlError> {
@@ -515,29 +410,26 @@ enum RequestProtection {
     Unsigned,
 }
 
-fn receive_custom_logout_request(
-    template: &str,
+fn receive_signed_logout_request_with_expiration(
     binding: LogoutBinding,
-    receiver_role: LocalSloRole,
-    protection: RequestProtection,
+    expiration: &str,
     validation: SamlValidationContext<'_>,
 ) -> Result<Received<LogoutRequest>, SamlError> {
-    let xml = logout_fixture_xml(template, receiver_role, binding)?;
-    receive_crafted_logout_request(&xml, binding, receiver_role, protection, validation)
+    let xml = logout_request_with_expiration(LocalSloRole::Idp.endpoint(binding)?, expiration);
+    receive_crafted_logout_request(
+        &xml,
+        binding,
+        LocalSloRole::Idp,
+        RequestProtection::Signed,
+        validation,
+    )
 }
 
-fn logout_fixture_xml(
-    template: &str,
-    receiver_role: LocalSloRole,
-    binding: LogoutBinding,
-) -> Result<String, SamlError> {
-    Ok(template
-        .replace("{ID}", "_fixture")
-        .replace("{Destination}", receiver_role.endpoint(binding)?)
-        .replace("{Issuer}", sender_entity_id(receiver_role))
-        .replace("{NameIDFormat}", NameIdFormat::EmailAddress.as_uri())
-        .replace("{NameID}", "alice@example.com")
-        .replace("{SessionIndex}", "_session123"))
+fn logout_request_with_expiration(destination: &str, expiration: &str) -> String {
+    logout_request_xml("_fixture", SP_ENTITY_ID, Some(destination)).replace(
+        r#"IssueInstant="2000-01-01T00:00:00Z""#,
+        &format!(r#"IssueInstant="2000-01-01T00:00:00Z" NotOnOrAfter="{expiration}""#),
+    )
 }
 
 fn sender_entity_id(receiver_role: LocalSloRole) -> &'static str {
@@ -857,26 +749,6 @@ fn outbound_xml<Message>(
         OutboundDelivery::SoapRequest(request) => Ok(soap_body_xml(request.envelope())?),
         OutboundDelivery::SoapResponse(response) => Ok(soap_body_xml(response.envelope())?),
     }
-}
-
-fn start_idp_slo_with_template(template: String) -> Result<StartedSloResult, SamlError> {
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(300),
-        Some(template),
-        Credentials::default(),
-        IdpValidationPolicy::default(),
-    )?);
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    match idp.start_slo(&sp_descriptor, subject()?, StartSlo::post()) {
-        Ok(_) => Ok(StartedSloResult::Succeeded),
-        Err(error) => Ok(StartedSloResult::Failed(error)),
-    }
-}
-
-enum StartedSloResult {
-    Succeeded,
-    Failed(SamlError),
 }
 
 struct SloExchange {
@@ -1273,7 +1145,7 @@ fn typed_facade_receive_slo_checks_logout_request_replay() -> Result<(), Box<dyn
 #[test]
 fn typed_facade_rejects_expired_signed_logout_request_before_replay_for_all_bindings(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T12:00:00Z"));
+    let expiration = "2026-07-15T12:00:00Z";
     for binding in ALL_LOGOUT_BINDINGS {
         let mut cache = RecordingReplayCache::default();
         let validation = SamlValidationContext::new(
@@ -1281,13 +1153,7 @@ fn typed_facade_rejects_expired_signed_logout_request_before_replay_for_all_bind
             ReplayPolicy::RequireCache(&mut cache),
         )
         .with_clock_skew(ClockSkew::strict());
-        match receive_custom_logout_request(
-            &template,
-            binding,
-            LocalSloRole::Idp,
-            RequestProtection::Signed,
-            validation,
-        ) {
+        match receive_signed_logout_request_with_expiration(binding, expiration, validation) {
             Err(SamlError::TimeWindowInvalid { field }) => {
                 assert_eq!(field, TimeWindowField::LogoutRequestNotOnOrAfter);
                 assert!(cache.seen.is_empty());
@@ -1306,23 +1172,19 @@ fn typed_facade_rejects_expired_signed_logout_request_before_replay_for_all_bind
 #[test]
 fn new_validation_context_allows_five_minutes_on_logout_request_not_on_or_after(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let within = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T11:55:01Z"));
-    let boundary = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T11:55:00Z"));
+    let within = "2026-07-15T11:55:01Z";
+    let boundary = "2026-07-15T11:55:00Z";
     let now = system_time("2026-07-15T12:00:00Z")?;
 
-    receive_custom_logout_request(
-        &within,
+    receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
-        LocalSloRole::Idp,
-        RequestProtection::Signed,
+        within,
         SamlValidationContext::new(now, ReplayPolicy::Disabled),
     )?;
 
-    match receive_custom_logout_request(
-        &boundary,
+    match receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
-        LocalSloRole::Idp,
-        RequestProtection::Signed,
+        boundary,
         SamlValidationContext::new(now, ReplayPolicy::Disabled),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -1338,13 +1200,11 @@ fn new_validation_context_allows_five_minutes_on_logout_request_not_on_or_after(
 
 #[test]
 fn clock_skew_strict_allows_no_logout_request_skew() -> Result<(), Box<dyn std::error::Error>> {
-    let template = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T11:59:00Z"));
+    let expiration = "2026-07-15T11:59:00Z";
 
-    match receive_custom_logout_request(
-        &template,
+    match receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
-        LocalSloRole::Idp,
-        RequestProtection::Signed,
+        expiration,
         SamlValidationContext::new(system_time("2026-07-15T12:00:00Z")?, ReplayPolicy::Disabled)
             .with_clock_skew(ClockSkew::strict()),
     ) {
@@ -1359,24 +1219,20 @@ fn clock_skew_strict_allows_no_logout_request_skew() -> Result<(), Box<dyn std::
 #[test]
 fn explicit_clock_skew_replaces_logout_request_five_minute_default(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let within = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T11:59:01Z"));
-    let beyond = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T11:59:00Z"));
+    let within = "2026-07-15T11:59:01Z";
+    let beyond = "2026-07-15T11:59:00Z";
     let now = system_time("2026-07-15T12:00:00Z")?;
     let skew = ClockSkew::from_millis(0, 60_000);
 
-    receive_custom_logout_request(
-        &within,
+    receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
-        LocalSloRole::Idp,
-        RequestProtection::Signed,
+        within,
         SamlValidationContext::new(now, ReplayPolicy::Disabled).with_clock_skew(skew),
     )?;
 
-    match receive_custom_logout_request(
-        &beyond,
+    match receive_signed_logout_request_with_expiration(
         LogoutBinding::Post,
-        LocalSloRole::Idp,
-        RequestProtection::Signed,
+        beyond,
         SamlValidationContext::new(now, ReplayPolicy::Disabled).with_clock_skew(skew),
     ) {
         Err(SamlError::TimeWindowInvalid { field }) => {
@@ -1525,13 +1381,11 @@ fn typed_facades_reject_unsigned_browser_logout_requests() -> Result<(), Box<dyn
 #[test]
 fn typed_facade_rejects_qualified_logout_request_destination(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template = logout_request_template("2000-01-01T00:00:00Z", None).replace(
-        r#"Destination="{Destination}""#,
-        r#"samlp:Destination="{Destination}""#,
-    );
+    let xml = logout_request_xml("_qualified_destination", SP_ENTITY_ID, Some(IDP_SLO_POST))
+        .replace(" Destination=", " samlp:Destination=");
 
-    match receive_custom_logout_request(
-        &template,
+    match receive_crafted_logout_request(
+        &xml,
         LogoutBinding::Post,
         LocalSloRole::Idp,
         RequestProtection::Signed,
@@ -1552,7 +1406,7 @@ fn typed_facade_rejects_qualified_logout_request_destination(
 #[test]
 fn typed_facade_receive_slo_uses_not_on_or_after_deadline_without_generic_retention(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T12:01:00Z"));
+    let expiration = "2026-07-15T12:01:00Z";
     let mut cache = RecordingReplayCache::default();
     let validation = SamlValidationContext::new(
         system_time("2026-07-15T12:00:00Z")?,
@@ -1560,13 +1414,8 @@ fn typed_facade_receive_slo_uses_not_on_or_after_deadline_without_generic_retent
     )
     .with_clock_skew(ClockSkew::from_millis(0, 30_000));
 
-    let received = receive_custom_logout_request(
-        &template,
-        LogoutBinding::Post,
-        LocalSloRole::Idp,
-        RequestProtection::Signed,
-        validation,
-    )?;
+    let received =
+        receive_signed_logout_request_with_expiration(LogoutBinding::Post, expiration, validation)?;
     let replay_key = format!("logout_request_id:{}", received.message().id().as_str());
     assert_eq!(
         cache.seen.get(&replay_key),
@@ -1589,10 +1438,10 @@ fn typed_facade_receive_slo_uses_not_on_or_after_deadline_without_generic_retent
 #[test]
 fn typed_facade_replay_deadline_includes_not_on_or_after_skew(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template = logout_request_template("2000-01-01T00:00:00Z", Some("2026-07-15T12:01:00Z"));
+    let expiration = "2026-07-15T12:01:00Z";
     let (sp, idp) = facades()?;
     let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-    let xml = logout_fixture_xml(&template, LocalSloRole::Idp, LogoutBinding::Post)?;
+    let xml = logout_request_with_expiration(IDP_SLO_POST, expiration);
     let input = signed_logout_request_input(&xml, LogoutBinding::Post)?;
     let first_now = system_time("2026-07-15T12:00:00Z")?;
     let clock = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(
@@ -1998,7 +1847,6 @@ fn typed_session_authority_slo_uses_configured_expiration_for_every_binding(
         let sp = ServiceProvider::new(sp_config()?);
         let idp = IdentityProvider::new(idp_config_with_issuance(
             lifetime,
-            None,
             signing_credentials(),
             signed_authn_request_idp_validation(),
         )?);
@@ -2048,7 +1896,6 @@ fn typed_session_authority_slo_signatures_cover_expiration_for_every_binding(
         let sp = ServiceProvider::new(sp_config()?);
         let idp = IdentityProvider::new(idp_config_with_issuance(
             Duration::from_secs(13 * 60),
-            None,
             signing_credentials(),
             signed_authn_request_idp_validation(),
         )?);
@@ -2085,7 +1932,6 @@ fn one_typed_idp_issuance_lifetime_drives_sso_and_slo_expiration(
     let sp = ServiceProvider::new(sp_config()?);
     let idp = IdentityProvider::new(idp_config_with_issuance(
         lifetime,
-        None,
         signing_credentials(),
         signed_authn_request_idp_validation(),
     )?);
@@ -2163,7 +2009,6 @@ fn typed_session_authority_slo_preserves_configured_subsecond_expiration(
     let sp = ServiceProvider::new(sp_config()?);
     let idp = IdentityProvider::new(idp_config_with_issuance(
         lifetime,
-        None,
         signing_credentials(),
         signed_authn_request_idp_validation(),
     )?);
@@ -2269,13 +2114,19 @@ fn typed_session_participant_slo_keeps_generated_expiration_unset_for_every_bind
 }
 
 #[test]
-fn typed_session_participant_rejects_an_unexpanded_expiration(
+fn typed_receive_slo_rejects_a_malformed_request_expiration(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let template = logout_request_template("{IssueInstant}", Some("{NotOnOrAfter}"));
-    let sp = ServiceProvider::new(sp_config_with_logout_request_template(&template)?);
-    let idp = IdentityProvider::new(idp_config()?);
-    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-    let result = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post());
+    let xml = logout_request_xml("_bad_expiration", SP_ENTITY_ID, Some(IDP_SLO_POST)).replace(
+        r#"Version="2.0""#,
+        r#"Version="2.0" NotOnOrAfter="not-a-date""#,
+    );
+    let result = receive_crafted_logout_request(
+        &xml,
+        LogoutBinding::Post,
+        LocalSloRole::Idp,
+        RequestProtection::Signed,
+        validation(),
+    );
     assert!(
         matches!(result, Err(SamlError::ProtocolProfile(message)) if message.contains("LogoutRequest NotOnOrAfter"))
     );
@@ -2283,16 +2134,11 @@ fn typed_session_participant_rejects_an_unexpanded_expiration(
 }
 
 #[test]
-fn typed_session_authority_slo_reports_issuance_expiration_overflow_before_rendering(
+fn typed_session_authority_slo_rejects_issuance_expiration_overflow(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let malformed_template = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
-        "Destination=\"{Destination}\"",
-        "Corrupt=\"<\" Destination=\"{Destination}\"",
-    );
     let sp = ServiceProvider::new(sp_config()?);
     let idp = IdentityProvider::new(idp_config_with_issuance(
         Duration::from_secs(i64::MAX as u64),
-        Some(malformed_template),
         Credentials::default(),
         IdpValidationPolicy::default(),
     )?);
@@ -2308,50 +2154,13 @@ fn typed_session_authority_slo_reports_issuance_expiration_overflow_before_rende
 }
 
 #[test]
-fn typed_session_authority_custom_logout_template_placeholder_succeeds(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(7 * 60),
-        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
-        signing_credentials(),
-        signed_authn_request_idp_validation(),
-    )?);
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
-    let received = sp.receive_slo(
-        &idp_descriptor,
-        logout_request_input(&started.outbound, LogoutBinding::Post)?,
-        validation(),
-    )?;
-
-    assert_eq!(
-        received
-            .message()
-            .not_on_or_after()
-            .map(|value| value.as_str()),
-        started
-            .pending
-            .not_on_or_after()
-            .map(|value| value.as_str())
-    );
-    Ok(())
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_escapes_subject_values(
+fn typed_session_authority_logout_request_round_trips_escaped_subject_values(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let name_id = "alice<&\"'@example.com";
     let session_index = "session<&\"'index";
     let subject = LogoutSubject::new(NameId::new(name_id))
         .with_session_index(SessionIndex::try_new(session_index)?);
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(7 * 60),
-        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
-        signing_credentials(),
-        signed_authn_request_idp_validation(),
-    )?);
+    let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
 
     let started = idp.start_slo(&sp_descriptor, subject, StartSlo::post())?;
@@ -2387,84 +2196,17 @@ fn typed_session_authority_custom_logout_template_escapes_subject_values(
 }
 
 #[test]
-fn typed_session_authority_custom_logout_template_rejects_unmodeled_name_id_qualifiers(
+fn typed_receive_slo_accepts_a_signed_request_with_extensions(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    for qualifier in ["NameQualifier", "SPNameQualifier", "SPProvidedID"] {
-        let template = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
-            "Format=\"{NameIDFormat}\"",
-            &format!("Format=\"{{NameIDFormat}}\" {qualifier}=\"unexpected\""),
-        );
-        assert_session_authority_template_rejected_before_signing(template)?;
-    }
-    Ok(())
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_rejects_owned_identity_mutations_before_signing(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let templates = [
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace("{ID}", "_wrong"),
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
-            .replace("{IssueInstant}", "2030-01-01T00:00:00Z"),
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
-            .replace("{Destination}", "https://wrong.example.com/slo"),
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace("{Issuer}", "wrong-issuer"),
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace("{NameID}", "wrong-name-id"),
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace("{SessionIndex}", "wrong-session"),
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
-            .replace(
-                "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"",
-                "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\"",
-            )
-            .replace(
-                "    <saml:NameID",
-                "    <ds:Signature/>\n    <saml:NameID",
-            ),
-    ];
-    for template in templates {
-        match start_idp_slo_with_template(template)? {
-            StartedSloResult::Failed(SamlError::MissingKey(name)) => {
-                return Err(format!(
-                    "template reached signing key lookup instead of failing validation: {name}"
-                )
-                .into())
-            }
-            StartedSloResult::Failed(_) => {}
-            StartedSloResult::Succeeded => {
-                return Err("expected template validation failure before signing".into())
-            }
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_preserves_valid_extensions(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let template = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
-        .replace(
-            "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"",
-            "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" xmlns:ext=\"urn:example:logout\"",
-        )
-        .replace(
-            "    <saml:NameID",
-            "    <samlp:Extensions><ext:Audit>preserve-me</ext:Audit></samlp:Extensions>\n    <saml:NameID",
-        );
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(7 * 60),
-        Some(template),
-        signing_credentials(),
-        signed_authn_request_idp_validation(),
-    )?);
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-
-    let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
-    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-    assert!(xml.contains("<ext:Audit>preserve-me</ext:Audit>"));
-    let received = sp.receive_slo(
-        &idp_descriptor,
-        logout_request_input(&started.outbound, LogoutBinding::Post)?,
+    let xml = logout_request_xml("_extended", IDP_ENTITY_ID, Some(SP_SLO_POST)).replace(
+        "</saml:Issuer>",
+        r#"</saml:Issuer><samlp:Extensions><ext:Audit xmlns:ext="urn:example:logout">preserve-me</ext:Audit></samlp:Extensions>"#,
+    );
+    let received = receive_crafted_logout_request(
+        &xml,
+        LogoutBinding::Post,
+        LocalSloRole::Sp,
+        RequestProtection::Signed,
         validation(),
     )?;
     assert_eq!(
@@ -2472,181 +2214,6 @@ fn typed_session_authority_custom_logout_template_preserves_valid_extensions(
         Some("alice@example.com")
     );
     Ok(())
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_rejects_misplaced_child_elements(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let with_example_namespace = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
-        "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"",
-        "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" xmlns:ext=\"urn:example:logout\"",
-    );
-    let leaf_child =
-        "LogoutRequest Issuer, NameID, and SessionIndex must not contain child elements";
-    let saml_extension = "Extensions direct children must use a namespace not defined by SAML";
-    let cases = [
-        (
-            with_example_namespace.replace("{Issuer}</saml:Issuer>", "{Issuer}<ext:Note/></saml:Issuer>"),
-            leaf_child,
-        ),
-        (
-            with_example_namespace.replace("{NameID}</saml:NameID>", "{NameID}<ext:Note/></saml:NameID>"),
-            leaf_child,
-        ),
-        (
-            with_example_namespace.replace(
-                "{SessionIndex}</samlp:SessionIndex>",
-                "{SessionIndex}<ext:Note/></samlp:SessionIndex>",
-            ),
-            leaf_child,
-        ),
-        (
-            SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
-                "    <saml:NameID",
-                "    <samlp:Extensions><saml:Audience>https://sp.example.com</saml:Audience></samlp:Extensions>\n    <saml:NameID",
-            ),
-            saml_extension,
-        ),
-    ];
-    for (template, expected) in cases {
-        match start_idp_slo_with_template(template)? {
-            StartedSloResult::Failed(SamlError::ProtocolProfile(message))
-                if message == expected => {}
-            StartedSloResult::Failed(error) => {
-                return Err(format!("expected `{expected}`, got {error:?}").into())
-            }
-            StartedSloResult::Succeeded => {
-                return Err(format!("expected `{expected}`, got a started logout").into())
-            }
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_allows_omitted_unspecified_name_id_format(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let template =
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(" Format=\"{NameIDFormat}\"", "");
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(7 * 60),
-        Some(template),
-        signing_credentials(),
-        signed_authn_request_idp_validation(),
-    )?);
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-
-    let started = idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
-    let received = sp.receive_slo(
-        &idp_descriptor,
-        logout_request_input(&started.outbound, LogoutBinding::Post)?,
-        validation(),
-    )?;
-    assert_eq!(received.message().name_id().and_then(NameId::format), None);
-    Ok(())
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_requires_explicit_name_id_format(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let template =
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(" Format=\"{NameIDFormat}\"", "");
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(
-        IdpConfig::builder(
-            EntityId::try_new(IDP_ENTITY_ID)?,
-            SsoEndpoint::post(IDP_SSO_POST)?,
-        )
-        .slo_endpoint(SloEndpoint::post(IDP_SLO_POST)?)
-        .name_id_format(NameIdFormat::EmailAddress)
-        .credentials(Credentials::default())
-        .issuance_lifetime(Duration::from_secs(7 * 60))
-        .validation(IdpValidationPolicy::default())
-        .templates(TemplatePolicy {
-            logout_request_template: Some(template),
-            ..TemplatePolicy::default()
-        })
-        .build()?,
-    );
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-
-    match idp.start_slo(&sp_descriptor, subject()?, StartSlo::post()) {
-        Err(SamlError::ProtocolProfile(message)) if message.contains("missing expected Format") => {
-            Ok(())
-        }
-        other => Err(format!(
-            "expected missing explicit NameID Format before signing, got {other:?}"
-        )
-        .into()),
-    }
-}
-
-fn assert_session_authority_template_rejected_before_signing(
-    template: String,
-) -> Result<(), Box<dyn std::error::Error>> {
-    match start_idp_slo_with_template(template)? {
-        StartedSloResult::Failed(
-            SamlError::ProtocolProfile(_) | SamlError::Xml { .. } | SamlError::Invalid(_),
-        ) => Ok(()),
-        StartedSloResult::Failed(other) => Err(format!(
-            "expected template validation failure before signing, got {other:?}"
-        )
-        .into()),
-        StartedSloResult::Succeeded => Err("expected template validation failure".into()),
-    }
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_rejects_omitted_expiration(
-) -> Result<(), Box<dyn std::error::Error>> {
-    assert_session_authority_template_rejected_before_signing(
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
-            .replace("\n    NotOnOrAfter=\"{NotOnOrAfter}\"", ""),
-    )
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_rejects_duplicate_expiration(
-) -> Result<(), Box<dyn std::error::Error>> {
-    assert_session_authority_template_rejected_before_signing(
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
-            "NotOnOrAfter=\"{NotOnOrAfter}\"",
-            "NotOnOrAfter=\"{NotOnOrAfter}\" NotOnOrAfter=\"{NotOnOrAfter}\"",
-        ),
-    )
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_rejects_qualified_expiration(
-) -> Result<(), Box<dyn std::error::Error>> {
-    assert_session_authority_template_rejected_before_signing(
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
-            .replace(
-                "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\"",
-                "xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" xmlns:x=\"urn:example:qualified\"",
-            )
-            .replace("NotOnOrAfter=", "x:NotOnOrAfter="),
-    )
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_rejects_malformed_xml(
-) -> Result<(), Box<dyn std::error::Error>> {
-    assert_session_authority_template_rejected_before_signing(
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace(
-            "Destination=\"{Destination}\"",
-            "Corrupt=\"<\" Destination=\"{Destination}\"",
-        ),
-    )
-}
-
-#[test]
-fn typed_session_authority_custom_logout_template_rejects_hard_coded_expiration(
-) -> Result<(), Box<dyn std::error::Error>> {
-    assert_session_authority_template_rejected_before_signing(
-        SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.replace("{NotOnOrAfter}", "2000-01-01T00:00:00Z"),
-    )
 }
 
 #[test]
@@ -3257,53 +2824,6 @@ fn typed_facade_slo_rejects_a_repeated_relay_state_on_redirect(
     Ok(())
 }
 
-#[test]
-fn typed_facade_rejects_custom_logout_response_in_response_to_mismatch(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(bad_template_idp_config()?);
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let request_input = Inbound::post(post_fields(&started.outbound)?);
-    let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-
-    match idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        &Status::success(),
-        RespondSlo::post(),
-    ) {
-        Err(SamlError::InResponseToMismatch { expected, actual }) => {
-            assert_eq!(expected.as_deref(), Some(received.message().id().as_str()));
-            assert_eq!(actual.as_deref(), Some("_wrong"));
-            Ok(())
-        }
-        other => Err(format!("expected InResponseToMismatch, got {other:?}").into()),
-    }
-}
-
-#[test]
-fn typed_facade_rejects_custom_logout_response_profile_before_correlation(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(bad_profile_template_idp_config()?);
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let request_input = Inbound::post(post_fields(&started.outbound)?);
-    let received = idp.receive_slo(&sp_descriptor, request_input, validation())?;
-
-    match idp.respond_slo(&sp_descriptor, &received, &Status::success(), RespondSlo::post()) {
-        Err(SamlError::ProtocolProfile(message))
-            if message.contains(
-                "LogoutResponse IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z",
-            ) =>
-        {
-            Ok(())
-        }
-        other => Err(format!("expected custom LogoutResponse profile error, got {other:?}").into()),
-    }
-}
-
 fn status_element(xml: &str) -> Result<&str, Box<dyn std::error::Error>> {
     let start = xml.find("<samlp:Status>").ok_or("missing Status")?;
     let rest = &xml[start..];
@@ -3505,47 +3025,6 @@ fn typed_logout_response_rejects_invalid_subordinate_status_uris(
 }
 
 #[test]
-fn typed_logout_response_template_carries_only_the_top_level_status(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_logout_response_template(
-        saml_rs::config::LOGOUT_RESPONSE_TEMPLATE.to_string(),
-    )?);
-    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-    let received = idp.receive_slo(
-        &sp_descriptor,
-        logout_request_input(&started.outbound, LogoutBinding::Post)?,
-        validation(),
-    )?;
-
-    let response = idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        &Status::version_mismatch(),
-        RespondSlo::post(),
-    )?;
-    let response_xml = outbound_xml(&response, "SAMLResponse")?;
-    let status = status_element(&response_xml)?;
-    assert!(status.contains("urn:oasis:names:tc:SAML:2.0:status:VersionMismatch"));
-    assert_eq!(status.matches("<samlp:StatusCode").count(), 1);
-
-    match idp.respond_slo(
-        &sp_descriptor,
-        &received,
-        &Status::success().with_subordinate(SubordinateStatusCode::partial_logout()),
-        RespondSlo::post(),
-    ) {
-        Err(SamlError::Invalid(message))
-            if message.contains("cannot carry a subordinate status code") =>
-        {
-            Ok(())
-        }
-        other => Err(format!("expected template subordinate rejection, got {other:?}").into()),
-    }
-}
-
-#[test]
 fn typed_receive_slo_returns_principal_and_every_session_index(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (sp, idp) = facades()?;
@@ -3598,59 +3077,10 @@ fn typed_receive_slo_returns_principal_and_every_session_index(
     Ok(())
 }
 
-#[test]
-fn typed_logout_response_template_must_carry_the_supplied_top_level_status(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let success_template = saml_rs::config::LOGOUT_RESPONSE_TEMPLATE
-        .replace("{StatusCode}", saml_rs::constants::status_code::SUCCESS);
-    let over_default_limits =
-        "x".repeat(saml_rs::XmlLimits::default().max_attribute_value_bytes + 1);
-    let over_default_limits_template = success_template.replace(
-        "<samlp:Status>",
-        &format!(
-            r#"<samlp:Extensions><x:Note xmlns:x="urn:example:note" value="{over_default_limits}"/></samlp:Extensions><samlp:Status>"#
-        ),
-    );
-    let cases = [
-        (success_template, RespondSlo::post()),
-        (over_default_limits_template, RespondSlo::redirect()),
-    ];
-
-    for (template, options) in cases {
-        let sp = ServiceProvider::new(sp_config()?);
-        let idp = IdentityProvider::new(idp_config_with_logout_response_template(template)?);
-        let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-        let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
-        let received = idp.receive_slo(
-            &sp_descriptor,
-            logout_request_input(&started.outbound, LogoutBinding::Post)?,
-            validation(),
-        )?;
-
-        match idp.respond_slo(&sp_descriptor, &received, &Status::responder(), options) {
-            Err(SamlError::Invalid(message))
-                if message.contains("did not carry the supplied top-level status code") => {}
-            other => return Err(format!("expected template status mismatch, got {other:?}").into()),
-        }
-    }
-    Ok(())
-}
-
 const QUALIFIED_NAME_ID: &str = "pseudonym-7f3a";
 const QUALIFIED_NAME_QUALIFIER: &str = "https://idp.example.com/metadata";
 const QUALIFIED_SP_NAME_QUALIFIER: &str = "https://sp.example.com/metadata";
 const QUALIFIED_SP_PROVIDED_ID: &str = "sp-alias-42";
-
-const QUALIFIED_LOGOUT_REQUEST_TEMPLATE: &str = r#"
-<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
-    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-    ID="{ID}" Version="2.0" IssueInstant="{IssueInstant}"
-    NotOnOrAfter="{NotOnOrAfter}" Destination="{Destination}">
-    <saml:Issuer>{Issuer}</saml:Issuer>
-    <saml:NameID NameQualifier="{NameQualifier}" SPNameQualifier="{SPNameQualifier}" Format="{NameIDFormat}" SPProvidedID="{SPProvidedID}">{NameID}</saml:NameID>
-    <samlp:SessionIndex>{SessionIndex}</samlp:SessionIndex>
-</samlp:LogoutRequest>
-"#;
 
 fn qualified_subject() -> Result<LogoutSubject, SamlError> {
     Ok(LogoutSubject::new(
@@ -3835,12 +3265,6 @@ fn typed_logout_request_keeps_whitespace_in_a_name_id_format(
     // space to %20, so these are absolute URI references.
     let (sp, idp) = facades()?;
     let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
-    let template_idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(300),
-        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
-        signing_credentials(),
-        IdpValidationPolicy::default(),
-    )?);
     for format in [
         "urn:example:a\tb",
         "urn:example:a\nb",
@@ -3848,11 +3272,6 @@ fn typed_logout_request_keeps_whitespace_in_a_name_id_format(
         " urn:example:c ",
     ] {
         for started in [
-            template_idp.start_slo(
-                &sp_descriptor,
-                custom_format_subject(format)?,
-                StartSlo::post(),
-            )?,
             idp.start_slo(
                 &sp_descriptor,
                 custom_format_subject(format)?,
@@ -3923,108 +3342,6 @@ fn typed_session_authority_logout_request_without_any_format_omits_format_like_t
     let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
     assert_eq!(logout_request_name_id(&xml)?, without_format);
 
-    let template_idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(300),
-        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
-        signing_credentials(),
-        IdpValidationPolicy::default(),
-    )?);
-    let started = template_idp.start_slo(&sp_descriptor, subject()?, StartSlo::post())?;
-    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-    assert_eq!(logout_request_name_id(&xml)?, without_format);
-    Ok(())
-}
-
-#[test]
-fn typed_slo_logout_request_template_renders_name_id_qualifiers(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(300),
-        Some(QUALIFIED_LOGOUT_REQUEST_TEMPLATE.to_string()),
-        signing_credentials(),
-        IdpValidationPolicy::default(),
-    )?);
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-
-    let started = idp.start_slo(&sp_descriptor, qualified_subject()?, StartSlo::post())?;
-    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-    assert_eq!(
-        logout_request_name_id(&xml)?,
-        (QUALIFIED_NAME_ID.to_string(), qualified_name_id_attrs()),
-    );
-
-    let started = idp.start_slo(
-        &sp_descriptor,
-        LogoutSubject::new(NameId::new(QUALIFIED_NAME_ID).with_format(NameIdFormat::Persistent))
-            .with_session_index(SessionIndex::try_new("_session123")?),
-        StartSlo::post(),
-    )?;
-    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-    assert_eq!(
-        logout_request_name_id(&xml)?,
-        (
-            QUALIFIED_NAME_ID.to_string(),
-            vec![(
-                "Format".to_string(),
-                NameIdFormat::Persistent.as_uri().to_string()
-            )],
-        ),
-    );
-    Ok(())
-}
-
-#[test]
-fn typed_slo_logout_request_template_without_qualifier_placeholders_fails_closed(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = ServiceProvider::new(sp_config()?);
-    let idp = IdentityProvider::new(idp_config_with_issuance(
-        Duration::from_secs(300),
-        Some(SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE.to_string()),
-        signing_credentials(),
-        IdpValidationPolicy::default(),
-    )?);
-    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
-
-    let result = idp.start_slo(&sp_descriptor, qualified_subject()?, StartSlo::post());
-    assert!(
-        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message.contains("NameQualifier")),
-        "{result:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn typed_slo_logout_request_template_fixed_format_must_match_a_subject_without_format(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let idp = IdentityProvider::new(idp_config()?);
-    let start = |format: &NameIdFormat| -> Result<_, Box<dyn std::error::Error>> {
-        let template = SESSION_AUTHORITY_LOGOUT_REQUEST_TEMPLATE
-            .replace("\n    NotOnOrAfter=\"{NotOnOrAfter}\"", "")
-            .replace("{NameIDFormat}", format.as_uri());
-        let sp = ServiceProvider::new(sp_config_with_logout_request_template(&template)?);
-        let (_, idp_descriptor) = descriptors(&sp, &idp)?;
-        Ok(sp.start_slo(&idp_descriptor, subject()?, StartSlo::post()))
-    };
-
-    let started = start(&NameIdFormat::Unspecified)??;
-    let xml = outbound_xml(&started.outbound, "SAMLRequest")?;
-    assert_eq!(
-        logout_request_name_id(&xml)?,
-        (
-            "alice@example.com".to_string(),
-            vec![(
-                "Format".to_string(),
-                NameIdFormat::Unspecified.as_uri().to_string()
-            )],
-        ),
-    );
-
-    let result = start(&NameIdFormat::EmailAddress)?;
-    assert!(
-        matches!(&result, Err(SamlError::ProtocolProfile(message)) if message.contains("NameID Format")),
-        "{result:?}"
-    );
     Ok(())
 }
 
@@ -4464,12 +3781,12 @@ fn soap_slo_envelopes_are_read_under_the_configured_xml_limits(
         ..saml_rs::XmlPolicy::default()
     };
     let sp = ServiceProvider::new(
-        sp_config_builder(signing_sp_validation(), None)?
+        sp_config_builder(signing_sp_validation())?
             .xml(xml)
             .build()?,
     );
     let idp = IdentityProvider::new(
-        idp_config_builder(signed_authn_request_idp_validation(), None)?
+        idp_config_builder(signed_authn_request_idp_validation())?
             .xml(xml)
             .build()?,
     );

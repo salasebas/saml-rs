@@ -16,6 +16,7 @@ use common::signing_credentials;
 
 use std::time::SystemTime;
 
+use crate::tests::template::fill_template;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::name_id_format::{PERSISTENT, TRANSIENT};
@@ -27,7 +28,6 @@ use saml_rs::metadata::{
     generate_idp_metadata, generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput,
 };
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::tests::engine::fill_template;
 use saml_rs::{
     AcsEndpoint, AssertionSignaturePolicy, Attribute, AttributeNameFormat, AttributeValue,
     Attributes, AudienceValidationPolicy, EntityId, FormField, IdentityProvider, IdpConfig,
@@ -784,7 +784,7 @@ fn accept_peer_response(
                 ("InResponseTo", request_id.clone()),
                 ("AuthnStatement", String::new()),
             ],
-        )?;
+        );
         Ok((id, xml.replacen("{AttributeStatement}", statement, 1)))
     };
     let context = idp

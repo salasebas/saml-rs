@@ -63,12 +63,12 @@ fn schema_policy_covers_both_logout_soap_directions() -> Result<(), Box<dyn std:
         ..saml_rs::XmlPolicy::default()
     };
     let sp = ServiceProvider::new(
-        sp_config_builder(signing_sp_validation(), None)?
+        sp_config_builder(signing_sp_validation())?
             .xml(xml)
             .build()?,
     );
     let rejecting_idp = IdentityProvider::new(
-        idp_config_builder(signed_authn_request_idp_validation(), None)?
+        idp_config_builder(signed_authn_request_idp_validation())?
             .xml(xml)
             .build()?,
     );
@@ -130,12 +130,12 @@ fn schema_policy_covers_both_logout_post_directions() -> Result<(), Box<dyn std:
     };
     let (sp, idp) = facades()?;
     let rejecting_idp = IdentityProvider::new(
-        idp_config_builder(signed_authn_request_idp_validation(), None)?
+        idp_config_builder(signed_authn_request_idp_validation())?
             .xml(xml)
             .build()?,
     );
     let rejecting_sp = ServiceProvider::new(
-        sp_config_builder(signing_sp_validation(), None)?
+        sp_config_builder(signing_sp_validation())?
             .xml(xml)
             .build()?,
     );

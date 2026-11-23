@@ -7,6 +7,8 @@
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
+use crate::tests::template::fill_template;
+use crate::tests::template::LoginResponseAttribute;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::binding::{deflate_raw_decode, deflate_raw_encode, MAX_DEFLATE_RAW_DECODE_BYTES};
@@ -20,8 +22,6 @@ use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
-use saml_rs::template::LoginResponseAttribute;
-use saml_rs::tests::engine::fill_template;
 use saml_rs::tests::engine::redirect_query;
 use saml_rs::tests::engine::LogoutUser;
 use saml_rs::tests::engine::{
@@ -209,10 +209,10 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> Result<(String, S
     let id = "_8e8dc5f69a98cc4c1ff3427e5ce34606fd672f91e6".to_string();
     let now = iso8601_offset(-60);
     let later = iso8601_offset(300);
-    let attributes = crate::template::build_attribute_statement(
+    let attributes = crate::tests::template::build_attribute_statement(
         &[attr("mail", "user.email"), attr("name", "user.name")],
-        crate::template::ATTRIBUTE_TEMPLATE,
-        crate::template::ATTRIBUTE_STATEMENT_TEMPLATE,
+        crate::tests::template::ATTRIBUTE_TEMPLATE,
+        crate::tests::template::ATTRIBUTE_STATEMENT_TEMPLATE,
     );
     let template = template.replacen("{AttributeStatement}", &attributes, 1);
     let xml = fill_template(
@@ -243,7 +243,7 @@ fn fill_response(template: &str, idp_id: &str, email: &str) -> Result<(String, S
             ("attrUserEmail", email.to_string()),
             ("attrUserName", "user name".into()),
         ],
-    )?;
+    );
     Ok((id, xml))
 }
 

@@ -5,9 +5,7 @@ use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
 use crate::error::{utf8_err, SamlError};
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, Status};
-use crate::template::render_template;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
-use crate::xml::write::Prefixes;
 use crate::xml::{
     validate_logout_request_outbound, validate_logout_response_outbound, OutboundLogoutExpiration,
     OutboundLogoutRequestExpectation, OutboundLogoutRequestValidation, OutboundLogoutValidation,
@@ -15,7 +13,7 @@ use crate::xml::{
 
 use super::encrypted_id::encrypt_name_id_for_peer;
 use super::rendering::{
-    issuer_of, render_default_logout_response, render_logout_request, LogoutRequestAttributes,
+    issuer_of, render_logout_request, render_logout_response, LogoutRequestAttributes,
     LogoutRequestSubject,
 };
 
@@ -159,7 +157,6 @@ pub(crate) struct LogoutResponseInput<'a> {
     pub(crate) in_response_to: Option<&'a str>,
     pub(crate) relay_state: Option<&'a str>,
     pub(crate) status: &'a Status,
-    pub(crate) template: Option<&'a str>,
 }
 
 pub(crate) struct RenderedLogoutResponse {
@@ -179,7 +176,6 @@ impl LogoutResponseInput<'_> {
             in_response_to,
             relay_state,
             status,
-            template,
         } = *self;
         reject_soap_relay_state(binding, relay_state)?;
         // A SOAP response returns on the requester's own HTTP exchange, so it has
@@ -196,36 +192,15 @@ impl LogoutResponseInput<'_> {
         let id = generate_id();
         let issue_instant = now_iso8601();
         let issuer = issuer_of(init_setting, init_meta);
-        let xml = if let Some(template) = template {
-            if status.subordinate().is_some() {
-                return Err(SamlError::Invalid(
-                    "LogoutResponse template StatusCode placeholder cannot carry a subordinate status code"
-                        .into(),
-                ));
-            }
-            render_template(
-                template,
-                Prefixes::of(init_setting)?,
-                &[
-                    ("ID", Some(id.clone())),
-                    ("IssueInstant", Some(issue_instant)),
-                    ("Destination", destination.clone()),
-                    ("Issuer", Some(issuer.clone())),
-                    ("StatusCode", Some(status.top_level().as_uri().to_string())),
-                    ("InResponseTo", in_response_to.map(str::to_string)),
-                ],
-            )?
-        } else {
-            render_default_logout_response(
-                init_setting,
-                &id,
-                &issue_instant,
-                destination.as_deref(),
-                in_response_to,
-                &issuer,
-                status,
-            )?
-        };
+        let xml = render_logout_response(
+            init_setting,
+            &id,
+            &issue_instant,
+            destination.as_deref(),
+            in_response_to,
+            &issuer,
+            status,
+        )?;
         validate_logout_response_outbound(
             &xml,
             &id,

@@ -258,7 +258,7 @@ fn validate_root_child(
                 OutboundLogoutRequestValidation::AfterEmbeddedSigning(_)
             ) {
                 return Err(profile_error(
-                    "outbound LogoutRequest templates must not contain a root ds:Signature before library signing",
+                    "outbound LogoutRequest must not contain a root ds:Signature before library signing",
                 ));
             }
             state.root_stage = RootStage::AfterSignature;

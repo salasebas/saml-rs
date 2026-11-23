@@ -6,7 +6,21 @@ use quick_xml::Writer;
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::model::Status;
-use crate::template::validate_tag_prefixes;
+use crate::xml::name::validate_namespace_prefix;
+
+pub(crate) fn validate_tag_prefixes(
+    protocol_prefix: &str,
+    assertion_prefix: &str,
+) -> Result<(), SamlError> {
+    validate_namespace_prefix("protocol tag prefix", protocol_prefix)?;
+    validate_namespace_prefix("assertion tag prefix", assertion_prefix)?;
+    if protocol_prefix == assertion_prefix {
+        return Err(SamlError::Invalid(
+            "protocol and assertion tag prefixes must differ".into(),
+        ));
+    }
+    Ok(())
+}
 
 /// Namespace prefixes for the protocol and assertion elements.
 #[derive(Clone, Copy)]
@@ -26,14 +40,6 @@ impl<'a> Prefixes<'a> {
 
     pub(crate) fn xmlns_protocol(&self) -> String {
         format!("xmlns:{}", self.protocol)
-    }
-
-    pub(crate) fn replacement(self, template_prefix: &str) -> Option<&'a str> {
-        match template_prefix {
-            "samlp" if self.protocol != "samlp" => Some(self.protocol),
-            "saml" if self.assertion != "saml" => Some(self.assertion),
-            _ => None,
-        }
     }
 
     pub(crate) fn xmlns_assertion(&self) -> String {

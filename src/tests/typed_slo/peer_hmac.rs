@@ -26,7 +26,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
             ..AlgorithmPolicy::default()
         };
         let sp = ServiceProvider::new(
-            sp_config_builder(signing_sp_validation(), None)?
+            sp_config_builder(signing_sp_validation())?
                 .algorithms(hmac.clone())
                 .credentials(
                     Credentials::default().with_hmac_secret(HmacSecret::try_new(sp_secret)?),
@@ -34,7 +34,7 @@ fn receive_and_finish_use_only_the_peer_hmac_secret() -> Result<(), Box<dyn std:
                 .build()?,
         );
         let idp = IdentityProvider::new(
-            idp_config_builder(signed_authn_request_idp_validation(), None)?
+            idp_config_builder(signed_authn_request_idp_validation())?
                 .algorithms(hmac)
                 .credentials(
                     Credentials::default().with_hmac_secret(HmacSecret::try_new(idp_secret)?),

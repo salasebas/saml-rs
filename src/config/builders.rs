@@ -9,9 +9,9 @@ use crate::error::SamlError;
 use crate::idp;
 use crate::metadata::MetadataLifetime;
 use crate::sp;
-use crate::template::validate_tag_prefixes;
 use crate::xml::name::validate_namespace_prefix;
 use crate::xml::signature_placement::signature_reference_path;
+use crate::xml::write::validate_tag_prefixes;
 
 use super::algorithms::NameIdFormat;
 use super::credentials::Credentials;
@@ -279,7 +279,7 @@ impl SpConfigBuilder {
         self
     }
 
-    /// Set template policy.
+    /// Set the XML prefixes and embedded-signature placement.
     pub fn templates(mut self, templates: TemplatePolicy) -> Self {
         self.templates = templates;
         self
@@ -605,7 +605,7 @@ impl IdpConfigBuilder {
         self
     }
 
-    /// Set template policy.
+    /// Set the XML prefixes and embedded-signature placement.
     pub fn templates(mut self, templates: TemplatePolicy) -> Self {
         self.templates = templates;
         self

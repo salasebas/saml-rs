@@ -144,4 +144,3 @@ Every request, response, and assertion the crate generates takes its `ID` this w
 | Generate an `xs:ID` with a pairwise collision probability of at most 2^-128 | Mandatory | Core §1.3.4 | Always |
 | Keep the pairwise collision probability at most 2^-160 | Recommended | Core §1.3.4 | Always |
 | Use the enclosing assertion's `ID` as the `SessionIndex` when the identity provider publishes Single Logout metadata | Recommended | Core §2.7.2 | Always |
-| Reject a logout template that changes the generated message `ID` | Library policy: reason not recorded. | Core §1.3.4 | `logout_request_template`, `logout_response_template` |

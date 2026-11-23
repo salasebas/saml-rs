@@ -100,29 +100,6 @@ pub struct EntitySetting {
     /// must differ
     /// from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// Custom `<LogoutRequest>` template (`None` uses the default).
-    ///
-    /// Typed Session Authority generation requires a complete unqualified
-    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute.
-    ///
-    /// Typed generation fills `{NameQualifier}`, `{SPNameQualifier}`, and
-    /// `{SPProvidedID}` from the logout subject's `NameID`, and
-    /// `{NameIDFormat}` with the `Format` sent for it. An attribute whose
-    /// complete value is one of these placeholders is omitted when there is
-    /// no value for it.
-    ///
-    /// Both roles reject a template whose `NameID`
-    /// attributes differ from the ones sent for the subject.
-    pub logout_request_template: Option<String>,
-    /// Custom `<LogoutResponse>` template (`None` uses the default).
-    ///
-    /// After prefix and placeholder substitution, the final outbound XML must
-    /// satisfy the enforced LogoutResponse structure, issuer, destination, and
-    /// request-correlation requirements. A root `<ds:Signature>` is rejected
-    /// before signing so the library owns signature construction. When
-    /// `InResponseTo` is `None`, an attribute whose complete value is the
-    /// `{InResponseTo}` placeholder is omitted.
-    pub logout_response_template: Option<String>,
     /// Custom embedded-signature placement/prefix (`None` uses the default).
     pub signature_config: Option<SignatureConfig>,
     /// XML-DSig transforms applied to signed references (default
@@ -195,8 +172,6 @@ impl fmt::Debug for EntitySetting {
             .field("schema_validator", &self.schema_validator)
             .field("tag_prefix_protocol", &self.tag_prefix_protocol)
             .field("tag_prefix_assertion", &self.tag_prefix_assertion)
-            .field("logout_request_template", &self.logout_request_template)
-            .field("logout_response_template", &self.logout_response_template)
             .field("signature_config", &self.signature_config)
             .field("transformation_algorithms", &self.transformation_algorithms)
             .finish()
@@ -291,8 +266,6 @@ impl Default for EntitySetting {
             schema_validator: None,
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            logout_request_template: None,
-            logout_response_template: None,
             signature_config: None,
             transformation_algorithms: vec![
                 transform_algorithm::ENVELOPED_SIGNATURE.to_string(),

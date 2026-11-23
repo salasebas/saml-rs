@@ -591,8 +591,7 @@ impl Default for AlgorithmPolicy {
     }
 }
 
-/// Logout templates, XML tag prefixes, and embedded-signature placement that
-/// both roles use.
+/// XML tag prefixes and embedded-signature placement for both roles.
 ///
 /// Start from [`Default`](Default::default) and assign the fields you change.
 #[derive(Debug, Clone)]
@@ -602,9 +601,7 @@ pub struct TemplatePolicy {
     /// default.
     ///
     /// Applies to protocol elements the entity generates across bindings.
-    /// Logout templates use
-    /// this prefix for elements written with `samlp`. Artifact resolution
-    /// preserves the prefixes in the stored message.
+    /// Artifact resolution preserves the prefixes in the stored message.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_assertion`.
@@ -614,42 +611,11 @@ pub struct TemplatePolicy {
     ///
     /// Applies to assertion elements the entity generates across bindings,
     /// including the encrypted assertion wrapper.
-    /// Logout templates use this prefix for elements written with `saml`.
     /// Artifact resolution preserves the prefixes in the stored message.
     ///
     /// Must be an XML NCName that does not begin with `xml` in any case, and
     /// must differ from `tag_prefix_protocol`.
     pub tag_prefix_assertion: String,
-    /// Logout request template.
-    ///
-    /// Typed Session Authority generation requires a complete unqualified
-    /// `NotOnOrAfter="{NotOnOrAfter}"` root attribute. Typed SP generation does
-    /// not synthesize the attribute.
-    ///
-    /// `{NameQualifier}`, `{SPNameQualifier}`, and `{SPProvidedID}` are filled
-    /// from the logout subject's `NameID`, and `{NameIDFormat}` with the
-    /// `Format` sent for it. An attribute whose complete value is one of these
-    /// placeholders is omitted when there is no value for it.
-    ///
-    /// The template must be well-formed XML before its placeholders are
-    /// filled. Creating a logout request returns `SamlError::Xml` when the
-    /// template's tags or attributes cannot be read.
-    ///
-    /// Both roles reject a template whose `NameID` attributes differ from the subject.
-    pub logout_request_template: Option<String>,
-    /// Logout response template.
-    ///
-    /// After prefix and placeholder substitution, the final outbound XML must
-    /// satisfy the enforced LogoutResponse structure, issuer, destination, and
-    /// request-correlation requirements. A root `<ds:Signature>` is rejected
-    /// before signing so the library owns signature construction. When
-    /// `InResponseTo` is `None`, an attribute whose complete value is the
-    /// `{InResponseTo}` placeholder is omitted.
-    ///
-    /// The template must be well-formed XML before its placeholders are
-    /// filled. Creating a logout response returns `SamlError::Xml` when the
-    /// template's tags or attributes cannot be read.
-    pub logout_response_template: Option<String>,
     /// Embedded-signature placement and prefix.
     ///
     /// The prefix must be an XML NCName that does not begin with `xml` in
@@ -662,8 +628,6 @@ impl Default for TemplatePolicy {
         Self {
             tag_prefix_protocol: "samlp".to_string(),
             tag_prefix_assertion: "saml".to_string(),
-            logout_request_template: None,
-            logout_response_template: None,
             signature_config: None,
         }
     }

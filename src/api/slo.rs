@@ -128,8 +128,6 @@ impl ServiceProvider {
     /// IdP descriptor, IdP metadata cannot be parsed, relay state is invalid,
     /// a compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
-    /// A logout-response template substitutes only the top-level code, so a
-    /// subordinate code in `status` is rejected when a template is set.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
     /// Browser bindings also reject an
@@ -396,8 +394,6 @@ impl IdentityProvider {
     /// SP descriptor, SP metadata cannot be parsed, relay state is invalid, a
     /// compatible logout endpoint or signing key is missing, the selected
     /// binding is unsupported, or logout response creation fails.
-    /// A logout-response template substitutes only the top-level code, so a
-    /// subordinate code in `status` is rejected when a template is set.
     /// [`RespondSlo::soap`] returns [`SamlError::ProtocolProfile`] when the
     /// request carried RelayState.
     ///
@@ -684,13 +680,12 @@ fn respond_slo_impl(
     options: RespondSlo,
     transport: LogoutResponseTransport,
 ) -> Result<Outbound<LogoutResponse>, SamlError> {
-    let (issuer, in_response_to, relay_state, status, template) = match response_to {
+    let (issuer, in_response_to, relay_state, status) = match response_to {
         LogoutResponseTo::Request { request, status } => (
             request.message().issuer(),
             request.message().id(),
             request.relay_state(),
             status,
-            local_setting.logout_response_template.as_deref(),
         ),
         LogoutResponseTo::Refusal(refusal) => {
             logout_response_binding(Binding::from(options.binding), refusal.binding)?;
@@ -699,7 +694,6 @@ fn respond_slo_impl(
                 &refusal.id,
                 refusal.relay_state.as_ref(),
                 refusal.status(),
-                None,
             )
         }
     };
@@ -720,7 +714,6 @@ fn respond_slo_impl(
         in_response_to: Some(in_response_to.as_str()),
         relay_state: relay_state.map(RelayState::as_str),
         status,
-        template,
     })?;
     Outbound::<LogoutResponse>::echoing_received_relay_state(context)
 }

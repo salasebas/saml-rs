@@ -2,6 +2,7 @@
 #![cfg(crypto)]
 #![allow(clippy::unwrap_used)]
 
+use crate::tests::template::fill_template;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::signature_algorithm::RSA_SHA256;
@@ -13,7 +14,6 @@ use saml_rs::idp;
 use saml_rs::idp::LoginResponseOptions;
 use saml_rs::metadata::{Endpoint, IdpMetadataInput, SpMetadataInput};
 use saml_rs::sp;
-use saml_rs::tests::engine::fill_template;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 use saml_rs::SamlError;
 
@@ -125,7 +125,7 @@ fn response_for_audience_restrictions(
                 ("InResponseTo", "_req1".into()),
                 ("AuthnStatement", String::new()),
             ],
-        )?;
+        );
         Ok((id, xml))
     };
     Ok(idp
@@ -201,7 +201,7 @@ fn response_for_subject_confirmation(
                 ),
                 ("AuthnStatement", String::new()),
             ],
-        )?;
+        );
         Ok((id, xml))
     };
     Ok(idp
@@ -262,7 +262,7 @@ fn response_for_destination(
                 ("InResponseTo", "_req1".into()),
                 ("AuthnStatement", String::new()),
             ],
-        )?;
+        );
         Ok((id, xml))
     };
     Ok(idp
