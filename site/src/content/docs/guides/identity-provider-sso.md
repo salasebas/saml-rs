@@ -118,6 +118,17 @@ let response = idp.respond_sso(
 
 A `Basic` name that is not an XML name is rejected.
 
+To identify the subject with the `subject-id` or `pairwise-id` attribute, create a `SubjectId` or `PairwiseId` from its `uniqueID@scope` text and add it with `Attribute::from`. `try_new` rejects text outside the profile's syntax. The response is rejected when the scope has an upper case letter.
+
+```rust
+let attributes = Attributes::new([
+    Attribute::from(SubjectId::try_new("idm123456789@example.com")?),
+    Attribute::from(PairwiseId::try_new(format!("{unique_id}@example.com"))?),
+]);
+```
+
+Give each subject one stable `pairwise-id` value for each service provider, and a different value for every other service provider. The `PairwiseId` documentation shows one way to derive `unique_id`.
+
 `NameId::generate_transient()` returns a new opaque value on every call. For a persistent identifier, call `NameId::generate_persistent()` once for a principal and service provider, store the value, and pass it to `NameId::persistent(stored)` on later responses. Do not issue a stored value for another principal. `NameId::new` takes any value and `with_format` takes any format, but a persistent or transient value longer than 256 characters is rejected when the response is generated. `with_name_qualifier`, `with_sp_name_qualifier`, and `with_sp_provided_id` set the qualifier attributes. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
 ## Discovery cookie

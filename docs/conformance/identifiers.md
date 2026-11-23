@@ -13,6 +13,9 @@ of the provider the crate configures, and of its peers.
 [Generated message and assertion identifiers](#generated-message-and-assertion-identifiers)
 covers the `ID` of every message and assertion the crate generates, in every
 flow.
+[Subject identifier attributes](#subject-identifier-attributes) covers the
+`subject-id` and `pairwise-id` attributes in the same Web Browser SSO
+operations.
 
 Normative text is Conformance Requirements §3.3, SAML Core §1.3.2, §1.3.4,
 §2.2.2, §2.7.3.1, §8.2, and §8.3, and Metadata §2.2.1, as corrected by Approved
@@ -76,6 +79,38 @@ any other `Format` URI.
 | A persistent value is not shared in clear text with other providers, is not logged without controls, and is not a non-opaque value | Deployment | Use of the identifier | Mandatory for the deployment. Core §8.3.7. This crate writes no log. Who receives the value and where it is stored are outside the crate |
 | `NameId::new` takes any value for the persistent and transient formats | Identity provider | Generate Response | Library behaviour. The response still enforces the 256-character limit. Randomness, opacity, and non-reassignment cannot be checked on a value the caller supplies: `NameId::generate_transient` and `NameId::generate_persistent` produce values that meet them |
 | A persistent or transient `<NameID>` is accepted when it parses | Service provider on a `Response`, identity provider on a requested `<Subject>` | Accept | No receiver rule. Conformance §3.3 places Core §8.3.7 and §8.3.8 on the producer. A value longer than 256 characters, or one that resembles a username, is accepted and reported as it was sent. Core §8.3.8 says a relying party `SHOULD` treat a transient value as opaque and temporary. That is the application's use of the value |
+
+## Subject identifier attributes
+
+The [SAML V2.0 Subject Identifier Attributes Profile Version 1.0](https://docs.oasis-open.org/security/saml-subject-id-attr/v1.0/cs01/saml-subject-id-attr-v1.0-cs01.html)
+§3.3 defines `subject-id`, a value the same for every relying party, and §3.4
+defines `pairwise-id`, a value for one relying party. §3.4.1 gives
+`pairwise-id` the syntax and handling rules of §3.3.1, so each row applies to
+both. `SubjectId` and `PairwiseId` hold the values. The identity provider adds
+them as `Attribute::from(SubjectId)` and `Attribute::from(PairwiseId)`. The
+service provider reads them with `SsoSession::subject_id` and
+`SsoSession::pairwise_id`.
+
+This page does not claim either conformance clause of the profile (§4). Both
+also need metadata the crate does not read or write: the §3.5.2
+`<shibmd:Scope>` extension of identity provider metadata, scope filtering
+against it, and the §3.5.1 `subject-id:req` entity attribute of service
+provider metadata.
+
+| Rule | Actor | Direction | Level |
+| --- | --- | --- | --- |
+| The attribute has the profile's `Name` and the `uri` `NameFormat` | Identity provider and service provider | Generate and accept Response | Mandatory. §3.3 and §3.4 name `urn:oasis:names:tc:SAML:attribute:subject-id` and `urn:oasis:names:tc:SAML:attribute:pairwise-id` with the `uri` name format, published as `constants::attribute_name`. Errata 05 E49 identifies an attribute by `Name` and `NameFormat` together, so an attribute with that `Name` and another `NameFormat`, or none, is not the identifier: the identity provider writes it as given, and the service provider does not read it as one |
+| The attribute has exactly one `<AttributeValue>`, and an assertion carries it once | Identity provider | Generate Response | Mandatory. §3.3.1, and §3.2 limits each attribute to a single value in an assertion. A response whose attribute has no value or several values, or whose assertion has a second attribute with the same `Name`, returns `SamlError::Invalid` before it is signed |
+| The value is `uniqueID@scope` | Identity provider | Generate Response | Mandatory. §3.3.1: a unique ID of 1 to 127 ASCII letters, digits, `=`, and `-`, and a scope of 1 to 127 ASCII letters, digits, `-`, and `.`, each starting with a letter or a digit. `SubjectId::try_new` and `PairwiseId::try_new` return `SamlError::Invalid` for any other text, including surrounding whitespace. A response whose attribute value breaks the grammar returns `SamlError::Invalid`, whichever constructor made the attribute |
+| The `<AttributeValue>` has no `xsi:type` | Identity provider | Generate Response | Recommended. §3.3.1: `xsi:type` `SHOULD` be absent and `MUST` be `xs:string` when present. Typed responses write these values without `xsi:type`. Other attributes keep the `xs:string` type |
+| The scope is lower case | Identity provider | Generate Response | Recommended. §3.3.1 and §3.5.2. A response whose scope has an upper case letter returns `SamlError::Invalid`. No option relaxes it. §3.5.2 matches a scope against `<shibmd:Scope>` case-sensitively, so a relying party that filters scopes drops a value whose case differs from the published scope |
+| The unique ID is all upper case or all lower case | Identity provider | Generate Response | Recommended. §3.3.1. Not checked. Library behaviour: the unique ID often comes from data of each subject, so a check would fail the logins of some subjects while the others succeed. A relying party compares values without case, so a mixed-case unique ID still identifies one subject |
+| The value is bound to one subject and is never reassigned. A `pairwise-id` value is stable for one relying party, differs between relying parties, and does not map to the subject's other identifiers | Identity provider | Generate Response | Mandatory for the deployment. §3.3.2 and §3.4.2. The caller derives the value and stores what it needs. The `PairwiseId` documentation shows a keyed-hash derivation in lowercase hexadecimal. §3.4.3 warns that Base64 is not safe, because two of its values can differ only in case |
+| Leading and trailing XML whitespace of the value is removed before it is parsed or compared | Service provider | Accept Response | Mandatory. §3.3.1. The space, tab, line feed, and carriage return are removed. `SubjectId::as_str` and `PairwiseId::as_str` return the rest as it was sent |
+| Values that differ only in case are the same | Service provider and identity provider | Compare | Mandatory. §3.3.1. `SubjectId` and `PairwiseId` equality and `Hash` ignore ASCII case. `as_str` keeps the case of the value |
+| An identifier attribute that is not exactly one value in the §3.3.1 grammar is an error | Service provider | Accept Response | Library behaviour. §3.3.1 binds the attribute's form and states no receiver rejection, so the response is accepted and the attribute stays in `SsoSession::attributes`. `SsoSession::subject_id` and `SsoSession::pairwise_id` return `SamlError::ProtocolProfile` for it, because it is not an identifier. Several `<Attribute>` elements with the same `Name` and `NameFormat` are one attribute with every value |
+| A received value whose `xsi:type` is not `xs:string` is read by its text | Service provider | Accept Response | No receiver rule. The `xsi:type` rule of §3.3.1 binds the producer |
+| A value whose scope the issuer may not assert is discarded | Service provider | Accept Response | Recommended. §3.5.2. Not implemented: the crate does not read `<shibmd:Scope>`. The application checks `scope()` against `SsoSession::issuer` before it trusts the value |
 
 ## Entity identifiers
 

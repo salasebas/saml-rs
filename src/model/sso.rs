@@ -8,6 +8,7 @@ use super::extract::{
 };
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
 use super::subject::{NameId, SubjectConfirmation};
+use super::subject_identifier::{PairwiseId, SubjectId};
 use super::validation::system_time_from_offset_datetime;
 use super::{
     earliest_authn_session_expiration, LogoutSubject, RelayState, ReplayKey, ReplayPolicy,
@@ -168,6 +169,46 @@ impl SsoSession {
     /// first element.
     pub fn attributes(&self) -> &Attributes {
         &self.attributes
+    }
+
+    /// The `subject-id` attribute of the assertion, when it has one.
+    ///
+    /// This is the attribute named
+    /// [`crate::constants::attribute_name::SUBJECT_ID`] with the `uri`
+    /// `NameFormat`. An attribute with that name and another `NameFormat` is
+    /// not read. Leading and trailing XML whitespace of the value is removed.
+    ///
+    /// The scope is not checked against the issuer. Before you trust the
+    /// value, confirm that [`Self::issuer`] may assert identifiers in
+    /// [`SubjectId::scope`]. Otherwise one identity provider can name the
+    /// subjects of another.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::ProtocolProfile`] when the attribute does not have
+    /// exactly one value, or the value is not `uniqueID@scope`.
+    pub fn subject_id(&self) -> Result<Option<SubjectId>, SamlError> {
+        SubjectId::received(&self.attributes)
+    }
+
+    /// The `pairwise-id` attribute of the assertion, when it has one.
+    ///
+    /// This is the attribute named
+    /// [`crate::constants::attribute_name::PAIRWISE_ID`] with the `uri`
+    /// `NameFormat`. An attribute with that name and another `NameFormat` is
+    /// not read. Leading and trailing XML whitespace of the value is removed.
+    ///
+    /// The scope is not checked against the issuer. Before you trust the
+    /// value, confirm that [`Self::issuer`] may assert identifiers in
+    /// [`PairwiseId::scope`]. Otherwise one identity provider can name the
+    /// subjects of another.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::ProtocolProfile`] when the attribute does not have
+    /// exactly one value, or the value is not `uniqueID@scope`.
+    pub fn pairwise_id(&self) -> Result<Option<PairwiseId>, SamlError> {
+        PairwiseId::received(&self.attributes)
     }
 
     /// The `<AuthnStatement>` elements of the assertion, in document order.

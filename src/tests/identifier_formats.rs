@@ -101,7 +101,7 @@ fn descriptors(
     ))
 }
 
-fn alice() -> NameId {
+pub(super) fn alice() -> NameId {
     NameId::new("alice@example.com")
 }
 
@@ -134,14 +134,14 @@ fn name_id_element(xml: &str) -> Result<&str, Box<dyn std::error::Error>> {
     Ok(&rest[..end])
 }
 
-struct Exchange {
-    xml: String,
-    session: SsoSession,
+pub(super) struct Exchange {
+    pub(super) xml: String,
+    pub(super) session: SsoSession,
 }
 
 /// SP-initiated SSO over HTTP-POST: the identity provider answers with
 /// `assertion` and `options`, and the service provider accepts the response.
-fn exchange(
+pub(super) fn exchange(
     assertion: SsoAssertion,
     options: RespondSso,
 ) -> Result<Exchange, Box<dyn std::error::Error>> {
@@ -165,7 +165,7 @@ fn exchange(
     Ok(Exchange { xml, session })
 }
 
-fn respond(
+pub(super) fn respond(
     assertion: SsoAssertion,
     options: RespondSso,
 ) -> Result<Outbound<SsoResponse>, SamlError> {
@@ -175,7 +175,7 @@ fn respond(
     idp.initiate_sso(&sp_descriptor, assertion, options)
 }
 
-fn values(values: &[&str]) -> Vec<AttributeValue> {
+pub(super) fn values(values: &[&str]) -> Vec<AttributeValue> {
     values.iter().copied().map(AttributeValue::new).collect()
 }
 
@@ -404,7 +404,7 @@ fn accept_peer_attributes(
     accept_peer_attribute_statement(&writer.finish())
 }
 
-fn accept_peer_attribute_statement(
+pub(super) fn accept_peer_attribute_statement(
     statement: &str,
 ) -> Result<SsoSession, Box<dyn std::error::Error>> {
     accept_peer_response(
