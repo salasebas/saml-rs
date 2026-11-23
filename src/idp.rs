@@ -2,8 +2,8 @@
 
 use crate::constants::{Binding, ParserType};
 use crate::entity::{
-    capture_idp_issuance_window, format_saml_utc_date_time, generate_id, BindingContext,
-    EntitySetting, IdpIssuanceWindow, User,
+    capture_idp_issuance_window, format_idp_issuance_instant, format_saml_utc_date_time,
+    generate_id, BindingContext, EntitySetting, IdpIssuanceWindow, User,
 };
 use crate::error::SamlError;
 use crate::flow::{FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, SignatureCheck};
@@ -47,6 +47,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
     pub(crate) authn_instant: Option<SystemTime>,
+    pub(crate) session_not_on_or_after: Option<SystemTime>,
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
     pub(crate) requested_subject: Option<&'a RequestedSubject>,
@@ -96,6 +97,7 @@ struct LoginResponseRendering<'a> {
     typed_attributes: &'a [Attribute],
     authn_context: Option<&'a AuthnContextReference>,
     authn_instant: Option<SystemTime>,
+    session_not_on_or_after: Option<SystemTime>,
     requested_authn_context: Option<&'a RequestedAuthnContext>,
     requested_name_id_policy: Option<&'a NameIdPolicy>,
     requested_subject: Option<&'a RequestedSubject>,
@@ -216,6 +218,10 @@ impl Engine {
             Some(authenticated) => written_authn_instant(authenticated, &window)?,
             None => window.issue_instant.clone(),
         };
+        let session_not_on_or_after = rendering
+            .session_not_on_or_after
+            .map(written_session_not_on_or_after)
+            .transpose()?;
         let id = generate_id();
         let assertion_id = generate_id();
         let audience = sp
@@ -253,6 +259,7 @@ impl Engine {
             in_response_to,
             authn_statement: login_response::AuthnStatementXml {
                 authn_instant: &authn_instant,
+                session_not_on_or_after: session_not_on_or_after.as_deref(),
                 session_index: session_index.as_ref().map(SessionIndex::as_str),
                 authn_context: &authn_context,
             },
@@ -355,6 +362,7 @@ impl Engine {
                 typed_attributes: overrides.typed_attributes,
                 authn_context: overrides.authn_context,
                 authn_instant: overrides.authn_instant,
+                session_not_on_or_after: overrides.session_not_on_or_after,
                 requested_authn_context: overrides.requested_authn_context,
                 requested_name_id_policy: overrides.requested_name_id_policy,
                 requested_subject: overrides.requested_subject,
@@ -635,6 +643,21 @@ fn written_authn_instant(
         )));
     }
     Ok(written)
+}
+
+fn written_session_not_on_or_after(deadline: SystemTime) -> Result<String, SamlError> {
+    let deadline = offset_datetime_from_system_time(deadline)
+        .ok()
+        .filter(|instant| (1..=9999).contains(&instant.year()))
+        .ok_or_else(|| {
+            SamlError::Invalid(
+                "SessionNotOnOrAfter is outside the supported SAML time range".into(),
+            )
+        })?;
+    Ok(format_idp_issuance_instant(
+        deadline,
+        deadline.nanosecond() != 0,
+    ))
 }
 
 #[cfg(crypto)]

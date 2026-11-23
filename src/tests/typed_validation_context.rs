@@ -258,21 +258,38 @@ fn typed_validation_context_expired_session_not_on_or_after_uses_fixed_clock(
 #[test]
 fn typed_validation_context_repeated_session_applies_skew_after_raw_minimum(
 ) -> Result<(), Box<dyn std::error::Error>> {
+    const EARLIEST: &str = "2024-12-31T23:59:30.1234567891Z";
+    let statement = |bound: &str| {
+        format!(
+            "<saml:AuthnStatement AuthnInstant=\"2024-12-31T23:00:00Z\"{bound}><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:Password</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>"
+        )
+    };
+    let unbounded = statement("");
+    let earlier = statement(&format!(" SessionNotOnOrAfter=\"{EARLIEST}\""));
     let xml = xml_with_late_subject_and_conditions()
         .replace(
             "SessionNotOnOrAfter=\"2024-07-17T09:01:48Z\"",
-            "SessionNotOnOrAfter=\"2024-12-31T23:59:30Z\"",
+            "SessionNotOnOrAfter=\"2024-12-31T23:59:30.1234567892Z\"",
         )
         .replacen(
             "</saml:AuthnStatement>",
-            "</saml:AuthnStatement><saml:AuthnStatement AuthnInstant=\"2024-12-31T23:00:00Z\" SessionNotOnOrAfter=\"2025-01-01T00:10:00Z\" SessionIndex=\"_later\"/>",
+            &format!("</saml:AuthnStatement>{unbounded}{earlier}"),
             1,
         );
     let validation =
         SamlValidationContext::new(instant("2025-01-01T00:00:00Z")?, ReplayPolicy::Disabled)
             .with_clock_skew(ClockSkew::from_millis(0, 60_000));
 
-    parse_response_at(&xml, &validation)?;
+    for deadline in [EARLIEST, "2024-12-31T23:59:30Z"] {
+        let flow = parse_response_at(&xml.replace(EARLIEST, deadline), &validation)?;
+        let session = SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)?;
+        assert_eq!(
+            session
+                .session_not_on_or_after()
+                .map(|value| value.as_str()),
+            Some(deadline)
+        );
+    }
     Ok(())
 }
 

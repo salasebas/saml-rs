@@ -61,6 +61,21 @@ With the `serde` feature, the snapshot serializes to JSON for your session store
 
 `start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. All three constructors enforce the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
+## Cap the application session
+
+After SSO succeeds, set your local session's expiry to the earlier of your application's deadline and the deadline from `session.session_not_on_or_after()`. The method returns the earliest `SessionNotOnOrAfter` in the consumed assertion before validation clock skew. If the identity provider sent no deadline, use your application's deadline.
+
+```rust
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+
+let expires_at = match session.session_not_on_or_after() {
+	Some(bound) => local_deadline.min(OffsetDateTime::parse(bound.as_str(), &Rfc3339)?),
+	None => local_deadline,
+};
+```
+
+This example uses the `time` crate with the `parsing` feature and an `OffsetDateTime` for `local_deadline`. If `expires_at` has already passed, require a new login before you create a local session. Use `session.not_on_or_after()` for the assertion's `Conditions@NotOnOrAfter`.
+
 ## Replay
 
 HTTP-POST SSO requires `ReplayPolicy::RequireCache`. Reuse the cache across requests. If several nodes accept logins, use shared storage that atomically records each identifier. A duplicate, a missing cache, or a storage failure prevents acceptance. The rules are in [Metadata and replay](../reference/conformance/metadata-and-replay.md).

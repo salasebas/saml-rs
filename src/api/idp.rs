@@ -332,6 +332,7 @@ impl IdentityProvider {
             typed_attributes,
             authn_context,
             authn_instant,
+            session_not_on_or_after,
         } = outcome.parts()?;
         if let Some(request) = request {
             ensure_entity_id(request.message().issuer(), sp.entity_id())?;
@@ -367,6 +368,7 @@ impl IdentityProvider {
             typed_attributes,
             authn_context,
             authn_instant,
+            session_not_on_or_after,
             requested_authn_context: request
                 .and_then(|request| request.message().requested_authn_context()),
             requested_name_id_policy: request

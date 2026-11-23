@@ -14,6 +14,7 @@ const BEARER_CONFIRMATION: &str = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
 
 pub(super) struct AuthnStatementXml<'a> {
     pub(super) authn_instant: &'a str,
+    pub(super) session_not_on_or_after: Option<&'a str>,
     pub(super) session_index: Option<&'a str>,
     pub(super) authn_context: &'a AuthnContextReference,
 }
@@ -190,6 +191,9 @@ fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &Authn
     let mut attrs = vec![("AuthnInstant", statement.authn_instant)];
     if let Some(session_index) = statement.session_index {
         attrs.push(("SessionIndex", session_index));
+    }
+    if let Some(deadline) = statement.session_not_on_or_after {
+        attrs.push(("SessionNotOnOrAfter", deadline));
     }
     writer.start(&name, &attrs);
     writer.start(&qname(prefix, "AuthnContext"), &[]);

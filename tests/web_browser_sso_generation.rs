@@ -13,6 +13,7 @@ use common::signing_credentials;
 use post_validation::post_validation;
 
 use std::time::{Duration, SystemTime};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -331,6 +332,72 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
 }
 
 #[test]
+fn typed_sso_response_round_trips_the_session_deadline() -> Result<(), Box<dyn std::error::Error>> {
+    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+    let deadline = SystemTime::UNIX_EPOCH + Duration::new(now.as_secs() + 3600, 500_000_000);
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation(), false)?;
+    let (sp_descriptor, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_sso(&idp_descriptor, StartSso::post())?;
+    let received = idp.receive_sso(
+        &sp_descriptor,
+        Inbound::post(started.outbound.post_form()?.fields().to_vec()),
+        validation(),
+    )?;
+    let response = idp.respond_sso(
+        &sp_descriptor,
+        &received,
+        SsoAssertion::new(principal()).session_not_on_or_after(deadline),
+        RespondSso::post(),
+    )?;
+    assert_eq!(
+        response_xml(&response)?
+            .matches(" SessionNotOnOrAfter=")
+            .count(),
+        1
+    );
+    let session = sp.finish_sso(
+        &idp_descriptor,
+        &started.pending,
+        Inbound::post(response.post_form()?.fields().to_vec()),
+        post_validation(&mut Default::default()),
+    )?;
+    let received_deadline = session
+        .session_not_on_or_after()
+        .ok_or("missing session deadline")?;
+    assert_eq!(
+        SystemTime::from(OffsetDateTime::parse(received_deadline.as_str(), &Rfc3339)?),
+        deadline
+    );
+    Ok(())
+}
+
+#[test]
+fn typed_sso_rejects_a_session_deadline_in_year_zero() -> Result<(), Box<dyn std::error::Error>> {
+    let year_zero = time::Date::from_calendar_date(0, time::Month::January, 1)?
+        .midnight()
+        .assume_utc();
+    let Some(deadline) = SystemTime::UNIX_EPOCH.checked_sub(Duration::from_secs(
+        year_zero.unix_timestamp().unsigned_abs(),
+    )) else {
+        return Ok(());
+    };
+    let sp = sp_with(signing_sp_validation())?;
+    let idp = idp_with(signed_authn_request_idp_validation(), false)?;
+    let (sp_descriptor, _) = descriptors(&sp, &idp)?;
+    let response = idp.initiate_sso(
+        &sp_descriptor,
+        SsoAssertion::new(principal()).session_not_on_or_after(deadline),
+        RespondSso::post(),
+    );
+    assert!(matches!(
+        response,
+        Err(SamlError::Invalid(message)) if message.contains("SessionNotOnOrAfter")
+    ));
+    Ok(())
+}
+
+#[test]
 fn typed_unsolicited_sso_omits_in_response_to() -> Result<(), Box<dyn std::error::Error>> {
     let sp = sp_with(signing_sp_validation())?;
     let idp = idp_with(signed_authn_request_idp_validation(), false)?;
@@ -343,6 +410,7 @@ fn typed_unsolicited_sso_omits_in_response_to() -> Result<(), Box<dyn std::error
     let xml = response_xml(&response)?;
 
     assert!(!xml.contains("InResponseTo"));
+    assert!(!xml.contains("SessionNotOnOrAfter"));
     assert!(xml.contains("<saml:AuthnStatement "));
     assert!(xml.contains(&format!("<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>")));
     assert_generated_instants_have_no_leap_second(&xml)?;
@@ -353,6 +421,7 @@ fn typed_unsolicited_sso_omits_in_response_to() -> Result<(), Box<dyn std::error
         post_validation(&mut Default::default()),
     )?;
     assert_eq!(session.in_response_to(), None);
+    assert_eq!(session.session_not_on_or_after(), None);
     assert_eq!(session.name_id().value(), "alice@example.com");
     Ok(())
 }

@@ -348,7 +348,10 @@ pub(crate) fn capture_idp_issuance_window(
     })
 }
 
-fn format_idp_issuance_instant(t: time::OffsetDateTime, preserve_subseconds: bool) -> String {
+pub(crate) fn format_idp_issuance_instant(
+    t: time::OffsetDateTime,
+    preserve_subseconds: bool,
+) -> String {
     if preserve_subseconds {
         format!(
             "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:09}Z",
