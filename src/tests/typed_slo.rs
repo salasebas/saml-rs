@@ -12,6 +12,7 @@ mod reason;
 mod status_message;
 
 mod prefixes;
+mod session_matching;
 
 #[path = "typed_slo/version_refusals.rs"]
 mod version_refusals;

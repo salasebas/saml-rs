@@ -59,6 +59,34 @@ application session. Then redirect the browser to `url` or return the POST form.
 This flow ends at dispatch for the SP. It returns no pending state for
 `finish_slo`. This crate supports the SP initiator role for the extension.
 
+### Receive a logout from the IdP
+
+When the SP accepts a sign-in, store `session.issuer()` and the value from
+`session.logout_subject()` with the application session. Keep the full `NameID`
+and every `SessionIndex` in the subject.
+
+Verify the logout request with `ServiceProvider::receive_slo`. For each
+candidate in your session store, pass the issuer and subject from that
+candidate's accepted sign-in to `matches_sp_session`.
+
+```rust
+use saml_rs::Inbound;
+
+let received = sp.receive_slo(&idp, Inbound::post(request_fields), validation)?;
+if received.matches_sp_session(&stored_assertion_issuer, &stored_logout_subject) {
+    invalidate_session(session_key)?;
+}
+```
+
+With no `SessionIndex`, the request can match every session with the same
+assertion issuer and `NameID`. Use the same check for each candidate. A `BaseID`
+or an identifier that could not be decrypted gives no match. Use
+`ServiceProvider::respond_slo` to report the outcome after processing every
+candidate.
+
+Use `OutstandingLogout` during SSO to check an assertion that arrives after a
+logout request.
+
 ## Identity provider
 
 1. Call `receive_slo` with the browser fields from the `LogoutRequest`.
