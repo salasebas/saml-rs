@@ -4,6 +4,8 @@
 
 Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding. [HTTP-Artifact response](web-browser-sso-artifact.md) covers delivery of a stored response, and [acceptance rules](web-browser-sso-acceptance.md) cover the receiving side. [Validation presets](https://samlrs.vercel.app/explanation/validation-presets/) list the defaults of the options below.
 
+[SimpleSign CD-04 §2.4](https://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-binding-simplesign-cd-04.html) makes the detached signature optional. For Web SSO messages that need no detached signature, use HTTP-POST if the peer supports it. The [Single Logout profile](single-logout.md) has its own authentication requirements.
+
 ## Service provider AuthnRequest
 
 `start_sso` builds the request for HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign.
@@ -16,8 +18,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Write `Destination` as the URL the user agent is sent to. A signed request needs it, and the crate writes it on every request | Mandatory | Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
 | Limit `RelayState` to 80 bytes | Mandatory | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | `RelayState::try_new` |
 | Sign a request over HTTP-Redirect by removing any protocol `ds:Signature`, DEFLATE-encoding the XML, and signing `SAMLRequest`, `RelayState` when present, then `SigAlg` | Mandatory | Bindings §3.4.4.1 | `SpValidationPolicy::authn_requests` |
-| Sign a request over SimpleSign as the raw XML octets, then `RelayState` when present, then `SigAlg`. An XML signature inside the message stays | Mandatory | CD-04 §2.4, §2.5 | `SpValidationPolicy::authn_requests` |
-| Sign every SimpleSign request | Library policy: reason not recorded. | CD-04 §2.4, §2.7.2 | `SpValidationPolicy::authn_requests` |
+| When signing a SimpleSign request, sign the raw XML, then `RelayState` when present, then `SigAlg`. Preserve any XML signature | Mandatory | CD-04 §2.4, §2.5 | Always |
+| Require `SigAlg` and `Signature` to send an `AuthnRequest` over SimpleSign | Library policy: choosing SimpleSign commits the SP to authenticating the request and binding any `RelayState` to it. | CD-04 §2.4, §2.7.2 | Always |
 | Sign the request, and publish `AuthnRequestsSigned="true"` in the service provider metadata | Optional | Profiles §4.1.4.1, Bindings §3.4.5.2, §3.5.5.2, Metadata §2.4.4, E7 | `SpValidationPolicy::authn_requests` |
 | Refuse to build an unsigned request when the identity provider publishes `WantAuthnRequestsSigned` as `true` or `1` | Library policy: E7 does not require the refusal, but the service provider can reasonably expect the identity provider to reject an unsigned request. | Metadata §2.4.3, E7 | `SpValidationPolicy::authn_requests` |
 | Write `ForceAuthn` | Optional | Core §3.4.1 | `StartSso::force_authn` |
@@ -77,8 +79,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Limit a `RelayState` the identity provider chooses to 80 bytes | Mandatory | Bindings §3.5.3, CD-04 §2.3 | `RespondSso::relay_state` |
 | Protect each assertion over HTTP-POST by a signature on the assertion or on the `Response` | Mandatory | Profiles §4.1.4.5, §4.1.3.5, E26, E93 | Always |
 | Protect each assertion in a stored HTTP-Artifact response with an assertion or `Response` signature | Optional | Profiles §4.1.3.5, E93 | Always |
-| Sign a response over HTTP-POST-SimpleSign as the raw XML octets, then `RelayState` when present, then `SigAlg`. An assertion signature stays | Mandatory | CD-04 §2.4, §2.5 | Always |
-| Sign every SimpleSign response | Library policy: reason not recorded. | CD-04 §2.4, §2.7.2 | Always |
+| When signing a SimpleSign response, sign the raw XML, then `RelayState` when present, then `SigAlg`. Preserve any XML signatures | Mandatory | CD-04 §2.4, §2.5 | Always |
+| Require `SigAlg` and `Signature` to send any `Response` over SimpleSign, including an error response | Library policy: the detached signature authenticates the response and binds any `RelayState` to it. | CD-04 §2.4, §2.7.2 | Always |
 | Sign the `Response` that contains a CBC-encrypted assertion | Recommended | Profiles §4.1.3.5, E93 | `RespondSso::allow_unsigned_encrypted_cbc` |
 | Return `Cache-Control: no-cache, no-store` and `Pragma: no-cache` for the POST form and the SimpleSign form | Recommended | Bindings §3.5.5.1, CD-04 §2.7.1 | Always |
 

@@ -81,8 +81,10 @@ entry point. The SP compares a received `Issuer` as described in
 | Reject a second `RelayState` value | Library policy: saml-rs compares, reports, or echoes only one value, and a caller's framework may read another. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Require the session `RelayState` to equal the pending request's when the request supplied one, empty or not | Library policy: Bindings §3.5.5.2 warns that an attacker can swap the `RelayState` values of two valid POST responses. | Bindings §3.4.3, §3.5.3, §3.5.5.2, CD-04 §2.3 | `finish_sso` |
 | Accept a `RelayState` the identity provider adds when the request carried none, and on an unsolicited response | Optional | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
-| Verify a SimpleSign signature over the raw XML, then `RelayState` when present, then `SigAlg`. An absent `RelayState` is omitted | Mandatory | CD-04 §2.5, §2.6 | Always |
-| Require `SigAlg` on every SimpleSign `Response`, and `Signature` unless the status is not `Success` | Library policy: reason not recorded. | CD-04 §2.4 | Always |
+| When verifying a SimpleSign signature, use the raw XML, then `RelayState` when present, then `SigAlg` | Mandatory | CD-04 §2.5, §2.6 | Always |
+| Require `SigAlg` on every SimpleSign `Response` | Library policy: the SP keeps the selected binding and uses `SigAlg` to reconstruct the signature input. | CD-04 §2.4, §2.5, §2.10 | Always |
+| Require a verified detached signature on a successful SimpleSign `Response`, even if it carries an XML signature | Library policy: the detached signature authenticates the full response and covers any `RelayState`. | CD-04 §2.4, §2.7.2 | Always |
+| For a SimpleSign error `Response`, allow `Signature` to be absent only if neither the response nor its assertions carry an XML signature | Library policy: unsigned errors cannot establish sessions. Verify signatures before reporting a signed error's status. | CD-04 §2.4, §2.6, Profiles §4.1.4.3 | Always |
 | Ignore ASCII whitespace in the message and the detached `Signature` value, and reject any other character outside the base64 alphabet | Library policy: Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered. | Bindings §3.4.4.1, §3.5.4, RFC 2045 §6.8 | Always |
 
 ### Status codes
@@ -112,8 +114,8 @@ identifier management, and artifact resolution.
 | Reject an unsigned `AuthnRequest` from a service provider when any SAML 2.0 `SPSSODescriptor` for it sets `AuthnRequestsSigned` to true, and do not fulfill it | Mandatory | Metadata §2.4.4, E7 | Always |
 | Reject MD5, RIPEMD-160, and RSA keys shorter than 2048 bits | Library policy: see [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys). | XMLDSig 1.1 §6.2, Conformance §4.1 | `XmlSignatureProfile::AllowWeakAlgorithms` relaxes it |
 | Verify a signature on an `AuthnRequest` against the SP's signing credentials. The request has at most one direct `ds:Signature`. Redirect also verifies the query signature, and SimpleSign the detached signature when present, even when the request also carries an XML signature | Mandatory | Core §3.2.1, Bindings §3.4.4.1, CD-04 §2.4–2.6, §2.10 | Always |
-| Treat a SimpleSign `AuthnRequest` with neither `Signature` nor `SigAlg` as HTTP-POST, so the configured policy applies | Optional | CD-04 §2.10 | Always |
-| Reject a SimpleSign `AuthnRequest` that carries only one of `Signature` and `SigAlg` | Library policy: reason not recorded. | CD-04 §2.5, §2.10 | Always |
+| Parse a SimpleSign `AuthnRequest` with neither `Signature` nor `SigAlg` as HTTP-POST and apply the same request signature policy. Use the original binding to select the endpoint for the `Destination` check | Optional | CD-04 §2.10 | Always |
+| Reject a SimpleSign `AuthnRequest` that carries only one of `Signature` and `SigAlg` | Library policy: either field signals a detached signature, which requires both fields to verify. | CD-04 §2.4, §2.5, §2.10 | Always |
 | Reject an `IssueInstant` that is not UTC. A leap second is accepted | Mandatory | Core §1.3.3 | Always |
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Library policy: Core §1.3.3 defines no maximum age, and the limit can reject a conformant request. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
 | Compare a present `Destination` with the receiving `SingleSignOnService` `Location` after collapsing XML whitespace. Require it on a signed request. `ResponseLocation` is unused | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
@@ -130,7 +132,7 @@ identifier management, and artifact resolution.
 | Reject a received `RelayState` longer than 4096 bytes | Library policy: a resource limit on unauthenticated input. The bindings limit the sender to 80 bytes and set no receiver rule. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Reject a second `RelayState` value | Library policy: saml-rs compares, reports, or echoes only one value, and a caller's framework may read another. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Verify an HTTP-Redirect signature over `SAMLRequest`, then `RelayState` when present, then `SigAlg`, using the original URL-encoded values. Raw-inflate the message after base64 decoding | Mandatory | Bindings §3.4.4.1 | Always |
-| Verify a SimpleSign signature over the raw XML, then `RelayState` when present, then `SigAlg`. An absent `RelayState` is omitted | Mandatory | CD-04 §2.5, §2.6 | Always |
+| When verifying a SimpleSign signature, use the raw XML, then `RelayState` when present, then `SigAlg` | Mandatory | CD-04 §2.5, §2.6 | Always |
 | Ignore ASCII whitespace in the message and the detached `Signature` value, and reject any other character outside the base64 alphabet | Library policy: Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered. | Bindings §3.4.4.1, §3.5.4, RFC 2045 §6.8 | Always |
 
 ### Not implemented in the identity provider
