@@ -11,7 +11,10 @@ use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine;
 use sha1::{Digest, Sha1};
 
-use crate::config::{HmacSecret, IdpDescriptor, SpDescriptor, XmlSignatureProfile};
+use crate::binding::sign_soap_message;
+use crate::config::{
+    HmacSecret, IdpDescriptor, SignatureConfig, SpDescriptor, XmlSignatureProfile,
+};
 use crate::constants::{namespace, CertUse};
 use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
@@ -454,6 +457,11 @@ fn stored_message(xml: &str) -> Result<(String, String), SamlError> {
     Ok((payload.to_owned(), element.local_name))
 }
 
+pub(crate) enum ArtifactResolveSigning {
+    Unsigned,
+    Signed,
+}
+
 pub(crate) fn resolve(
     requester_entity_id: &str,
     identity_provider: &IdpDescriptor,
@@ -461,6 +469,7 @@ pub(crate) fn resolve(
     channel: SoapChannel,
     validation: &mut SamlValidationContext<'_>,
     setting: &EntitySetting,
+    signing: ArtifactResolveSigning,
 ) -> Result<ArtifactResolution, SamlError> {
     if !channel_allows(channel, RequiredChannel::Confidential) {
         return Err(SamlError::SoapChannelProtection);
@@ -489,8 +498,22 @@ pub(crate) fn resolve(
     writer.text_element(&prefixes.assertion("Issuer"), &[], requester_entity_id);
     writer.text_element(&prefixes.protocol("Artifact"), &[], artifact.as_str());
     writer.end(&prefixes.protocol("ArtifactResolve"));
-    let request =
-        SoapRequest::try_new(EndpointUrl::try_new(service.location())?, &writer.finish())?;
+    let xml = writer.finish();
+    let xml = match signing {
+        ArtifactResolveSigning::Unsigned => xml,
+        ArtifactResolveSigning::Signed => {
+            let signature_config =
+                setting
+                    .signature_config
+                    .as_ref()
+                    .map(|config| SignatureConfig {
+                        prefix: config.prefix.clone(),
+                        ..SignatureConfig::default()
+                    });
+            sign_soap_message(setting, &xml, signature_config.as_ref())?
+        }
+    };
+    let request = SoapRequest::try_new(EndpointUrl::try_new(service.location())?, &xml)?;
     validation.check_and_store_message_replay(ReplayKey::Artifact(artifact.clone()))?;
     Ok(ArtifactResolution {
         request,

@@ -1,4 +1,6 @@
-use crate::artifact::{self, AnsweredArtifact, Artifact, ArtifactResolution, IssuedArtifacts};
+use crate::artifact::{
+    self, AnsweredArtifact, Artifact, ArtifactResolution, ArtifactResolveSigning, IssuedArtifacts,
+};
 use crate::browser::{ArtifactDelivery, Outbound};
 use crate::config::{IdpDescriptor, SpDescriptor};
 use crate::model::{AuthnRequest, Received, SamlValidationContext, SsoResponse};
@@ -235,7 +237,10 @@ impl IdentityProvider {
 }
 
 impl ServiceProvider {
-    /// Send `ArtifactResolve` to the identity provider's `ArtifactResolutionService`.
+    /// Prepare an unsigned `ArtifactResolve` for the identity provider's `ArtifactResolutionService`.
+    ///
+    /// For an identity provider that requires a signed request, use
+    /// [`Self::resolve_artifact_with_signed_request`].
     ///
     /// The endpoint comes from the artifact's endpoint index in the identity
     /// provider metadata. Post [`ArtifactResolution::request`] with the
@@ -275,7 +280,76 @@ impl ServiceProvider {
         identity_provider: &IdpDescriptor,
         artifact: &Artifact,
         channel: SoapChannel,
+        validation: SamlValidationContext<'_>,
+    ) -> Result<ArtifactResolution, SamlError> {
+        self.prepare_artifact_resolution(
+            identity_provider,
+            artifact,
+            channel,
+            validation,
+            ArtifactResolveSigning::Unsigned,
+        )
+    }
+
+    /// Prepare an enveloped XML signature on the SOAP `ArtifactResolve` request.
+    ///
+    /// Use this when the identity provider requires a signed request. The
+    /// service provider signs the protocol element with its configured signing
+    /// credential and algorithm. The signature follows `Issuer` and uses the
+    /// configured signature prefix, if present.
+    ///
+    /// The endpoint, channel protection, replay policy, and response handling
+    /// follow [`Self::resolve_artifact`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::resolve_artifact`]. Signing returns
+    /// [`SamlError::Unsupported`] without a crypto provider,
+    /// [`SamlError::MissingKey`] for a missing signing credential, or another
+    /// [`SamlError`] if the credential cannot sign the request. A signing
+    /// failure leaves the artifact available to retry in the requester cache.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use saml_rs::{
+    ///     Artifact, ArtifactResolution, IdpDescriptor, SamlError, SamlValidationContext,
+    ///     ServiceProvider, SoapChannel,
+    /// };
+    ///
+    /// fn prepare_request(
+    ///     sp: &ServiceProvider,
+    ///     keycloak: &IdpDescriptor,
+    ///     artifact: &Artifact,
+    ///     channel: SoapChannel,
+    ///     validation: SamlValidationContext<'_>,
+    /// ) -> Result<ArtifactResolution, SamlError> {
+    ///     sp.resolve_artifact_with_signed_request(keycloak, artifact, channel, validation)
+    /// }
+    /// ```
+    pub fn resolve_artifact_with_signed_request(
+        &self,
+        identity_provider: &IdpDescriptor,
+        artifact: &Artifact,
+        channel: SoapChannel,
+        validation: SamlValidationContext<'_>,
+    ) -> Result<ArtifactResolution, SamlError> {
+        self.prepare_artifact_resolution(
+            identity_provider,
+            artifact,
+            channel,
+            validation,
+            ArtifactResolveSigning::Signed,
+        )
+    }
+
+    fn prepare_artifact_resolution(
+        &self,
+        identity_provider: &IdpDescriptor,
+        artifact: &Artifact,
+        channel: SoapChannel,
         mut validation: SamlValidationContext<'_>,
+        signing: ArtifactResolveSigning,
     ) -> Result<ArtifactResolution, SamlError> {
         identity_provider.ensure_valid_at(validation.now())?;
         let entity_id = self
@@ -291,6 +365,7 @@ impl ServiceProvider {
             channel,
             &mut validation,
             &self.engine().setting,
+            signing,
         )
     }
 }
