@@ -15,6 +15,7 @@ use crate::model::{
 use crate::xml::OutboundNameIdQualifiers;
 use std::time::SystemTime;
 
+use super::options::PeerEndpointTransport;
 use super::raw_mapping::{
     ensure_entity_id, ensure_https_endpoint, ensure_relay_state, relay_state_from_input, RawPeer,
 };
@@ -486,7 +487,7 @@ fn start_slo_impl(
         enforce_participant_https(
             peer.metadata,
             options.binding,
-            options.allows_http(),
+            options.transport(),
             EndpointDirection::Request,
         )?;
     }
@@ -609,7 +610,7 @@ fn respond_slo_impl(
         enforce_participant_https(
             peer.metadata,
             options.binding,
-            options.allows_http(),
+            options.transport(),
             EndpointDirection::Response,
         )?;
     }
@@ -682,18 +683,21 @@ enum LogoutResponseTransport {
 fn enforce_participant_https(
     peer_metadata: &Metadata,
     binding: LogoutBinding,
-    allow_http: bool,
+    transport: PeerEndpointTransport,
     direction: EndpointDirection,
 ) -> Result<(), SamlError> {
     match binding {
         LogoutBinding::Soap => return Ok(()),
         LogoutBinding::Redirect | LogoutBinding::Post | LogoutBinding::SimpleSign => {}
     }
-    if allow_http {
-        return Ok(());
+    match transport {
+        PeerEndpointTransport::AllowHttp => Ok(()),
+        PeerEndpointTransport::RequireHttps => {
+            let destination =
+                peer_logout_endpoint(peer_metadata, Binding::from(binding), direction)?;
+            ensure_https_endpoint(&destination, "Single Logout", "SingleLogoutService")
+        }
     }
-    let destination = peer_logout_endpoint(peer_metadata, Binding::from(binding), direction)?;
-    ensure_https_endpoint(&destination, "Single Logout", "SingleLogoutService")
 }
 
 fn peer_logout_endpoint(

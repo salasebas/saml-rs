@@ -6,7 +6,7 @@ use crate::entity::{
     EntitySetting, IdpIssuanceWindow, User,
 };
 use crate::error::SamlError;
-use crate::flow::{FlowOptions, FlowResult, HttpRequest, SignatureCheck};
+use crate::flow::{FlowOptions, FlowResultWithSignatureEvidence, HttpRequest, SignatureCheck};
 use crate::metadata::{generate_idp_metadata, IdpMetadata, IdpMetadataInput};
 use crate::model::{
     validate_issued_name_id_length, validate_name_id_format, Attribute, AuthnContextReference,
@@ -50,8 +50,30 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) requested_authn_context: Option<&'a RequestedAuthnContext>,
     pub(crate) requested_name_id_policy: Option<&'a NameIdPolicy>,
     pub(crate) requested_subject: Option<&'a RequestedSubject>,
-    pub(crate) want_message_signed: Option<bool>,
+    pub(crate) response_signature: Option<ResponseMessageSignature>,
     pub(crate) transformation_algorithms: Option<&'a [String]>,
+}
+
+/// When an identity provider signs a login `<Response>` it sends over
+/// HTTP-POST.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResponseMessageSignature {
+    /// Sign the `<Response>`.
+    Always,
+    /// Sign the `<Response>` when the service provider does not want its
+    /// assertions signed.
+    UnlessAssertionsSigned,
+}
+
+impl ResponseMessageSignature {
+    /// The signature that the `want_message_signed` setting of `sp` asks for.
+    pub(crate) fn requested_by(sp: &sp::Engine) -> Self {
+        if sp.setting.want_message_signed {
+            Self::Always
+        } else {
+            Self::UnlessAssertionsSigned
+        }
+    }
 }
 
 pub(crate) struct RenderedLoginResponse {
@@ -339,21 +361,26 @@ impl Engine {
                 requested_subject: overrides.requested_subject,
             },
         )?;
+        let transforms = overrides
+            .transformation_algorithms
+            .unwrap_or(&sp.setting.transformation_algorithms);
         let error_response = overrides
             .status
             .is_some_and(|status| status.top_level() != TopLevelStatusCode::Success);
-        let signed = self.finalize_login_response(
-            sp,
-            binding,
-            &rendered.xml,
-            error_response,
-            overrides
-                .want_message_signed
-                .unwrap_or(sp.setting.want_message_signed),
-            overrides
-                .transformation_algorithms
-                .unwrap_or(&sp.setting.transformation_algorithms),
-        )?;
+        let signed = if error_response {
+            self.finalize_error_response(binding, &rendered.xml, transforms)?
+        } else {
+            let response_signature = overrides
+                .response_signature
+                .unwrap_or_else(|| ResponseMessageSignature::requested_by(sp));
+            self.finalize_login_response(
+                sp,
+                binding,
+                &rendered.xml,
+                response_signature,
+                transforms,
+            )?
+        };
         let relay = options.relay_state.map(str::to_string);
         let (context, signature, sig_alg) =
             self.bind_response(binding, &signed, &acs, relay.as_deref())?;
@@ -416,14 +443,48 @@ impl Engine {
         ))
     }
 
+    /// The error `<Response>` `raw`, which carries no assertion, signed when
+    /// it is sent over HTTP-POST.
+    #[cfg(crypto)]
+    fn finalize_error_response(
+        &self,
+        binding: Binding,
+        raw: &str,
+        transforms: &[String],
+    ) -> Result<String, SamlError> {
+        let credential = crate::crypto::SigningCredential::from_setting(&self.setting)?;
+        credential.require_certificate()?;
+        if binding != Binding::Post {
+            return Ok(raw.to_string());
+        }
+        credential.sign_xml(
+            raw,
+            true,
+            &self.setting.request_signature_algorithm,
+            transforms,
+            self.setting.signature_config.as_ref(),
+        )
+    }
+
+    #[cfg(not(crypto))]
+    fn finalize_error_response(
+        &self,
+        _binding: Binding,
+        _raw: &str,
+        _transforms: &[String],
+    ) -> Result<String, SamlError> {
+        Err(SamlError::Unsupported(
+            "createLoginResponse requires a crypto provider feature".into(),
+        ))
+    }
+
     #[cfg(crypto)]
     pub(crate) fn finalize_login_response(
         &self,
         sp: &sp::Engine,
         binding: Binding,
         raw: &str,
-        error_response: bool,
-        want_message_signed: bool,
+        response_signature: ResponseMessageSignature,
         transforms: &[String],
     ) -> Result<String, SamlError> {
         use crate::crypto::{
@@ -436,25 +497,14 @@ impl Engine {
         let sig_alg = &self.setting.request_signature_algorithm;
 
         let mut xml = raw.to_string();
-        if error_response {
-            // HTTP-POST signs the Response. There is no assertion to sign.
-            if binding == Binding::Post {
-                xml = credential.sign_xml(
-                    &xml,
-                    true,
-                    sig_alg,
-                    transforms,
-                    self.setting.signature_config.as_ref(),
-                )?;
-            }
-            return Ok(xml);
-        }
-
         let want_assertions_signed = sp.metadata.want_assertions_signed();
         // POST embeds an XML-DSig message signature; redirect/SimpleSign use a
         // detached query signature added later in `bind_response`.
-        let sign_message =
-            binding == Binding::Post && (want_message_signed || !want_assertions_signed);
+        let sign_message = binding == Binding::Post
+            && match response_signature {
+                ResponseMessageSignature::Always => true,
+                ResponseMessageSignature::UnlessAssertionsSigned => !want_assertions_signed,
+            };
 
         // step: encrypt identifiers and attributes -> sign assertion -> (encrypt) -> sign message
         let element_encryption = self.setting.assertion_element_encryption;
@@ -509,8 +559,7 @@ impl Engine {
         _sp: &sp::Engine,
         _binding: Binding,
         _raw: &str,
-        _error_response: bool,
-        _want_message_signed: bool,
+        _response_signature: ResponseMessageSignature,
         _transforms: &[String],
     ) -> Result<String, SamlError> {
         Err(SamlError::Unsupported(
@@ -525,7 +574,7 @@ impl Engine {
         request: &HttpRequest,
         now: SystemTime,
         clock_skew: ClockSkew,
-    ) -> Result<(FlowResult, bool), SamlError> {
+    ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
         self.parse_login_request_at_inner(sp, binding, request, Some(now), clock_skew)
     }
 
@@ -536,7 +585,7 @@ impl Engine {
         request: &HttpRequest,
         now: Option<SystemTime>,
         clock_skew: ClockSkew,
-    ) -> Result<(FlowResult, bool), SamlError> {
+    ) -> Result<FlowResultWithSignatureEvidence, SamlError> {
         let signing_certs = sp
             .metadata
             .as_metadata()

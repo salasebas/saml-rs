@@ -2,63 +2,47 @@
 //! assertions it carries encrypted are decrypted and verified.
 
 use super::{
-    AssertionSignatureRequirement, FlowOptions, PreparedMessage, ResponseSignatureRequirement,
-    VerifiedXmlSignatureEvidence,
+    AssertionSignatureRequirement, FlowOptions, MessageAuthentication, PreparedMessage,
+    ResponseSignatureRequirement, VerifiedXmlSignatureEvidence,
 };
 use crate::assertion_acceptance::first_login_assertion_xml;
 use crate::constants::ParserType;
+use crate::crypto::verify::{SignatureVerification, VerifiedSignedContent};
 use crate::encrypted_elements::{decrypt_assertions, encrypted_assertion_key};
-use crate::error::{SamlError, SignatureVerificationReason};
+use crate::error::SamlError;
 use crate::xml::dom::Node;
-
-#[derive(Debug)]
-struct EmbeddedSignatureEvidence {
-    signature_present: bool,
-    verified: bool,
-    verified_node: Option<String>,
-    assertion_directly_covered: bool,
-    response_covered: bool,
-    verified_xml_signatures: Vec<VerifiedXmlSignatureEvidence>,
-}
-
-fn required_xml_signature_failed(signature_present: bool) -> SamlError {
-    if signature_present {
-        SamlError::SignatureVerification {
-            reason: SignatureVerificationReason::XmlSignature,
-        }
-    } else {
-        SamlError::SignatureMissing
-    }
-}
 
 fn verify_embedded_signature(
     xml: &str,
     opts: &FlowOptions<'_>,
-) -> Result<EmbeddedSignatureEvidence, SamlError> {
-    let verification = crate::crypto::verify::verify_signatures_detailed_with_profile(
+) -> Result<SignatureVerification, SamlError> {
+    crate::crypto::verify::verify_signatures_detailed_with_profile(
         xml,
         opts.signing_certs,
         opts.hmac_secret,
         opts.xml_limits,
         opts.xml_signatures,
-    )?;
-    let verified_xml_signatures = verification
-        .verified_embedded_signatures()
+    )
+}
+
+fn xml_signature_evidence(verified: &VerifiedSignedContent) -> Vec<VerifiedXmlSignatureEvidence> {
+    verified
+        .signatures()
         .iter()
         .map(|signature| VerifiedXmlSignatureEvidence {
             algorithm_uri: signature.algorithm_uri().to_string(),
             assertion_directly_covered: signature.assertion_directly_covered(),
             response_covered: signature.response_covered(),
         })
-        .collect();
-    Ok(EmbeddedSignatureEvidence {
-        signature_present: verification.signature_present(),
-        verified: verification.verified(),
-        assertion_directly_covered: verification.assertion_directly_covered(),
-        response_covered: verification.response_covered(),
-        verified_node: verification.into_signed_content(),
-        verified_xml_signatures,
-    })
+        .collect()
+}
+
+fn response_authentication(verified: &VerifiedSignedContent) -> MessageAuthentication {
+    if verified.response_covered() {
+        MessageAuthentication::Authenticated
+    } else {
+        MessageAuthentication::Unauthenticated
+    }
 }
 
 pub(super) fn verify_present_signatures(
@@ -87,29 +71,31 @@ fn verify_decrypted_assertions(
         .position(|assertion| Some(assertion.as_str()) == consumed_assertion);
     let mut verified_xml_signatures = Vec::new();
     for (index, assertion) in assertions.iter().enumerate() {
-        let evidence = verify_embedded_signature(assertion, opts)?;
-        if !evidence.verified {
-            return Err(required_xml_signature_failed(evidence.signature_present));
-        }
-        require_direct_assertion_coverage(
-            AssertionSignatureRequirement::Direct,
-            evidence.assertion_directly_covered,
-        )?;
+        let verified = verify_embedded_signature(assertion, opts)?.require_verified()?;
+        require_direct_assertion_coverage(&verified)?;
         if consumed == Some(index) {
-            verified_xml_signatures.extend(evidence.verified_xml_signatures);
+            verified_xml_signatures.extend(xml_signature_evidence(&verified));
         }
     }
     Ok(verified_xml_signatures)
 }
 
-fn require_direct_assertion_coverage(
-    assertion_signature: AssertionSignatureRequirement,
-    assertion_directly_covered: bool,
-) -> Result<(), SamlError> {
-    if assertion_signature == AssertionSignatureRequirement::Direct && !assertion_directly_covered {
-        return Err(SamlError::AssertionSignatureRequired);
+fn require_direct_assertion_coverage(verified: &VerifiedSignedContent) -> Result<(), SamlError> {
+    if verified.assertion_directly_covered() {
+        Ok(())
+    } else {
+        Err(SamlError::AssertionSignatureRequired)
     }
-    Ok(())
+}
+
+fn meet_assertion_signature_requirement(
+    requirement: AssertionSignatureRequirement,
+    verified: &VerifiedSignedContent,
+) -> Result<(), SamlError> {
+    match requirement {
+        AssertionSignatureRequirement::Direct => require_direct_assertion_coverage(verified),
+        AssertionSignatureRequirement::Compatible => Ok(()),
+    }
 }
 
 fn response_signature_is_required(
@@ -135,17 +121,13 @@ pub(super) fn verify_and_prepare(
     assertion_signature: AssertionSignatureRequirement,
     response_signature: ResponseSignatureRequirement,
 ) -> Result<PreparedMessage, SamlError> {
-    let evidence = verify_embedded_signature(&xml, opts)?;
-    if response_signature_is_required(response_signature, &xml)? {
-        if !evidence.verified {
-            return Err(required_xml_signature_failed(evidence.signature_present));
-        }
-        if !evidence.response_covered {
-            return Err(SamlError::SignedReferenceMismatch);
-        }
-    }
-    if let Some(key) = encrypted_assertion_key(root, parser_type, opts) {
-        if !evidence.verified {
+    let verification = verify_embedded_signature(&xml, opts)?;
+    let response_signature_required = response_signature_is_required(response_signature, &xml)?;
+    let key = encrypted_assertion_key(root, parser_type, opts);
+    let verified = match (verification, key) {
+        (SignatureVerification::Absent | SignatureVerification::Unverified, Some(key))
+            if !response_signature_required =>
+        {
             return prepare_decrypted_then_verified(
                 &xml,
                 key,
@@ -154,24 +136,28 @@ pub(super) fn verify_and_prepare(
                 assertion_signature,
             );
         }
-        if let Some(node) = evidence.verified_node.as_deref() {
-            let signed_content = if evidence.response_covered {
-                xml.as_str()
-            } else {
-                node
-            };
-            return prepare_verified_then_decrypted(
-                signed_content,
-                &evidence,
-                root,
-                key,
-                parser_type,
-                opts,
-                assertion_signature,
-            );
-        }
+        (verification, _) => verification.require_verified()?,
+    };
+    if response_signature_required && !verified.response_covered() {
+        return Err(SamlError::SignedReferenceMismatch);
     }
-    prepare_verified(xml, evidence, parser_type, assertion_signature)
+    let Some(key) = key else {
+        return prepare_verified(xml, verified, parser_type, assertion_signature);
+    };
+    let signed_content = if verified.response_covered() {
+        xml.as_str()
+    } else {
+        verified.content()
+    };
+    prepare_verified_then_decrypted(
+        signed_content,
+        &verified,
+        root,
+        key,
+        parser_type,
+        opts,
+        assertion_signature,
+    )
 }
 
 fn prepare_decrypted_then_verified(
@@ -182,22 +168,19 @@ fn prepare_decrypted_then_verified(
     assertion_signature: AssertionSignatureRequirement,
 ) -> Result<PreparedMessage, SamlError> {
     let (content, _) = decrypt_assertions(xml, key, parser_type, opts)?;
-    let evidence = verify_embedded_signature(&content, opts)?;
-    if !evidence.verified {
-        return Err(required_xml_signature_failed(evidence.signature_present));
-    }
-    require_direct_assertion_coverage(assertion_signature, evidence.assertion_directly_covered)?;
+    let verified = verify_embedded_signature(&content, opts)?.require_verified()?;
+    meet_assertion_signature_requirement(assertion_signature, &verified)?;
     Ok(PreparedMessage {
         saml_content: content,
-        assertion: evidence.verified_node,
-        message_authenticated: false,
-        verified_xml_signatures: evidence.verified_xml_signatures,
+        verified_xml_signatures: xml_signature_evidence(&verified),
+        assertion: Some(verified.into_content()),
+        authentication: MessageAuthentication::Unauthenticated,
     })
 }
 
 fn prepare_verified_then_decrypted(
     signed_content: &str,
-    evidence: &EmbeddedSignatureEvidence,
+    verified: &VerifiedSignedContent,
     root: &Node,
     key: &str,
     parser_type: ParserType,
@@ -206,7 +189,7 @@ fn prepare_verified_then_decrypted(
 ) -> Result<PreparedMessage, SamlError> {
     let (content, assertions) = decrypt_assertions(signed_content, key, parser_type, opts)?;
     let assertion = first_login_assertion_xml(&content, opts.xml_limits)?;
-    let mut verified_xml_signatures = evidence.verified_xml_signatures.clone();
+    let mut verified_xml_signatures = xml_signature_evidence(verified);
     let consumed_was_decrypted = assertions
         .iter()
         .any(|decrypted| Some(decrypted.as_str()) == assertion.as_deref());
@@ -222,10 +205,7 @@ fn prepare_verified_then_decrypted(
                 .iter()
                 .any(|child| child.local_name == "Assertion");
             if carries_plaintext_assertion {
-                require_direct_assertion_coverage(
-                    assertion_signature,
-                    evidence.assertion_directly_covered,
-                )?;
+                require_direct_assertion_coverage(verified)?;
             }
             verified_xml_signatures.extend(verify_decrypted_assertions(
                 &assertions,
@@ -242,39 +222,35 @@ fn prepare_verified_then_decrypted(
     Ok(PreparedMessage {
         assertion,
         saml_content: content,
-        message_authenticated: evidence.response_covered,
+        authentication: response_authentication(verified),
         verified_xml_signatures,
     })
 }
 
 fn prepare_verified(
     xml: String,
-    evidence: EmbeddedSignatureEvidence,
+    verified: VerifiedSignedContent,
     parser_type: ParserType,
     assertion_signature: AssertionSignatureRequirement,
 ) -> Result<PreparedMessage, SamlError> {
-    if !evidence.verified {
-        return Err(required_xml_signature_failed(evidence.signature_present));
-    }
-    require_direct_assertion_coverage(assertion_signature, evidence.assertion_directly_covered)?;
+    meet_assertion_signature_requirement(assertion_signature, &verified)?;
+    let verified_xml_signatures = xml_signature_evidence(&verified);
     match parser_type {
         ParserType::SamlResponse => Ok(PreparedMessage {
             saml_content: xml,
-            assertion: evidence.verified_node,
-            message_authenticated: evidence.response_covered,
-            verified_xml_signatures: evidence.verified_xml_signatures,
+            authentication: response_authentication(&verified),
+            assertion: Some(verified.into_content()),
+            verified_xml_signatures,
         }),
         ParserType::SamlRequest
         | ParserType::LogoutRequest
         | ParserType::LogoutResponse
         | ParserType::ManageNameIdRequest
         | ParserType::ManageNameIdResponse => Ok(PreparedMessage {
-            saml_content: evidence
-                .verified_node
-                .ok_or(SamlError::SignedReferenceMismatch)?,
+            saml_content: verified.into_content(),
             assertion: None,
-            message_authenticated: true,
-            verified_xml_signatures: evidence.verified_xml_signatures,
+            authentication: MessageAuthentication::Authenticated,
+            verified_xml_signatures,
         }),
     }
 }

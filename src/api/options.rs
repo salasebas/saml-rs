@@ -1,5 +1,6 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
+use crate::idp::ResponseMessageSignature;
 use crate::model::{RelayState, RequestedAuthnContext};
 
 pub use crate::model::{ForceAuthn, IsPassive};
@@ -219,18 +220,22 @@ impl<Delivery> RespondSso<Delivery> {
         self
     }
 
-    pub(super) fn should_sign_response(
+    pub(super) fn response_signature(
         &self,
         assertion_encrypted: bool,
         data_encryption_algorithm: &str,
-    ) -> bool {
+    ) -> ResponseMessageSignature {
+        let encrypted_cbc = assertion_encrypted
+            && crate::constants::is_xml_encryption_cbc_algorithm(data_encryption_algorithm);
         match self.response_signing {
-            ResponseSigning::FollowEncryptedCbcRecommendation => {
-                assertion_encrypted
-                    && crate::constants::is_xml_encryption_cbc_algorithm(data_encryption_algorithm)
+            ResponseSigning::Always => ResponseMessageSignature::Always,
+            ResponseSigning::FollowEncryptedCbcRecommendation if encrypted_cbc => {
+                ResponseMessageSignature::Always
             }
-            ResponseSigning::Always => true,
-            ResponseSigning::AllowUnsignedEncryptedCbc => false,
+            ResponseSigning::FollowEncryptedCbcRecommendation
+            | ResponseSigning::AllowUnsignedEncryptedCbc => {
+                ResponseMessageSignature::UnlessAssertionsSigned
+            }
         }
     }
 }
@@ -238,18 +243,12 @@ impl<Delivery> RespondSso<Delivery> {
 /// HTTPS recommendation for a message the user agent carries to a peer
 /// endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum PeerEndpointTransport {
+pub(super) enum PeerEndpointTransport {
     /// Send the user agent to an `https` peer endpoint.
     #[default]
     RequireHttps,
     /// Allow an `http` peer endpoint.
     AllowHttp,
-}
-
-impl PeerEndpointTransport {
-    fn allows_http(self) -> bool {
-        matches!(self, Self::AllowHttp)
-    }
 }
 
 /// Options for issuing a signed LogoutRequest. A service provider must
@@ -337,8 +336,8 @@ impl StartSlo {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -396,8 +395,8 @@ impl RespondSlo {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -460,8 +459,8 @@ impl StartNameIdManagement {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -491,8 +490,8 @@ impl ReceiveNameIdManagement {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }
 
@@ -521,7 +520,7 @@ impl RespondNameIdManagement {
         self
     }
 
-    pub(super) fn allows_http(&self) -> bool {
-        self.transport.allows_http()
+    pub(super) fn transport(&self) -> PeerEndpointTransport {
+        self.transport
     }
 }

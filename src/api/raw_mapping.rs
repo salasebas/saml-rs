@@ -4,7 +4,7 @@ use crate::browser::{
 use crate::config::{EntityId, HmacSecret, IdpDescriptor, SpDescriptor};
 use crate::constants::{url_params, Binding};
 use crate::idp;
-use crate::metadata::Metadata;
+use crate::metadata::{DefaultMarking, Metadata};
 use crate::model::RelayState;
 use crate::sp;
 use std::time::SystemTime;
@@ -92,11 +92,10 @@ pub(super) fn selected_acs(
     Ok(marked_default(acs, endpoint.is_default))
 }
 
-fn marked_default(acs: AcsEndpoint, is_default: bool) -> AcsEndpoint {
-    if is_default {
-        acs.with_default()
-    } else {
-        acs
+fn marked_default(acs: AcsEndpoint, is_default: DefaultMarking) -> AcsEndpoint {
+    match is_default {
+        DefaultMarking::Default => acs.with_default(),
+        DefaultMarking::Unmarked | DefaultMarking::NotDefault => acs,
     }
 }
 

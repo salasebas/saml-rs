@@ -582,17 +582,18 @@ impl IdentityProvider {
             "SAMLRequest".into(),
             crate::binding::encode_base64(body.element_xml.as_bytes()),
         )]);
-        let (flow, message_authenticated) = self.engine().parse_login_request_at(
+        let received = self.engine().parse_login_request_at(
             raw_sp,
             crate::constants::Binding::Post,
             &http,
             validation.now(),
             validation.clock_skew(),
         )?;
+        let authentication = received.authentication();
         let flow = super::requested_subject::decrypt_requested_subject(
-            flow,
+            received.into_flow_result(),
             &self.engine().setting,
-            message_authenticated,
+            authentication,
         )?;
         let authn = AuthnRequest::try_from_paos_flow(flow)?;
         if let Some(destination) = authn.destination() {
@@ -677,9 +678,9 @@ impl IdentityProvider {
             ResponseAcsBindings::Paos,
         )?)?;
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
-        let sign_encrypted_cbc = {
+        let response_signature = {
             let setting = &self.engine().setting;
-            super::options::RespondSso::post().should_sign_response(
+            super::options::RespondSso::post().response_signature(
                 setting.is_assertion_encrypted,
                 &setting.data_encryption_algorithm,
             )
@@ -696,7 +697,7 @@ impl IdentityProvider {
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
             requested_subject: request.message().requested_subject(),
-            want_message_signed: Some(sign_encrypted_cbc),
+            response_signature: Some(response_signature),
             transformation_algorithms: None,
         };
         let issued = self.engine().render_posted_sso_response(

@@ -170,6 +170,6 @@ fn run_logout_flow(
             )?;
             Ok(result.into_parts().0)
         }
-        None => Ok(flow_with_authentication(options, request)?.0),
+        None => Ok(flow_with_authentication(options, request)?.into_flow_result()),
     }
 }

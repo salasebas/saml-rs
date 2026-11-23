@@ -25,7 +25,6 @@ pub(crate) use decrypt::{
     carries_encrypted_assertion_elements, decrypt_assertion_elements,
     decrypt_assertions_with_limits, decrypt_authn_request_encrypted_id,
     decrypt_logout_request_encrypted_id, decrypt_root_child, AssertionDecryptionOptions,
-    RequestAuthentication,
 };
 #[cfg(test)]
 pub(crate) use encrypt::encrypt_assertion;

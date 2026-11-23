@@ -12,6 +12,7 @@ use super::{policy::encrypted_data_algorithm, work};
 use crate::config::{AssertionElementEncryption, X509Credential};
 use crate::constants::{key_encryption_algorithm, namespace};
 use crate::error::{crypto_err, utf8_err, xml_err, SamlError};
+use crate::flow::MessageAuthentication;
 use crate::xml::dom::{self, XmlLimits};
 use bergshamra::keys::Key;
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeKind};
@@ -198,13 +199,6 @@ pub(crate) fn decrypt_root_child(
     })
 }
 
-/// Whether a verified signature covers a received request.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RequestAuthentication {
-    Authenticated,
-    Unauthenticated,
-}
-
 /// `xml` with the `<EncryptedID>` of the `<Subject>` of its `<AuthnRequest>`
 /// replaced by the `<NameID>` it carries, decrypted with the private key in
 /// `key_pem` or one of `additional`.
@@ -224,7 +218,7 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
     additional: &[X509Credential],
     options: AssertionDecryptionOptions,
     limits: XmlLimits,
-    authentication: RequestAuthentication,
+    authentication: MessageAuthentication,
 ) -> Result<Option<String>, SamlError> {
     let decrypted = decrypt_selected(
         xml,
@@ -241,8 +235,8 @@ pub(crate) fn decrypt_authn_request_encrypted_id(
                 return Ok(None);
             };
             match authentication {
-                RequestAuthentication::Authenticated => {}
-                RequestAuthentication::Unauthenticated => {
+                MessageAuthentication::Authenticated => {}
+                MessageAuthentication::Unauthenticated => {
                     if !uses_gcm(document, encrypted_id) {
                         return Ok(None);
                     }

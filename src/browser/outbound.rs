@@ -319,12 +319,7 @@ impl Outbound<SsoResponse> {
 
 impl Outbound<AuthnRequest> {
     pub(crate) fn from_context(raw_context: BindingContext) -> Result<Self, SamlError> {
-        outbound_from_context(
-            raw_context,
-            true,
-            MessageField::Request,
-            RelayState::try_new,
-        )
+        outbound_from_context(raw_context, MessageField::Request, RelayState::try_new)
     }
 }
 
@@ -332,12 +327,12 @@ impl Outbound<SsoResponse> {
     pub(crate) fn echoing_received_relay_state(
         raw_context: BindingContext,
     ) -> Result<Self, SamlError> {
-        outbound_from_context(
-            raw_context,
-            false,
-            MessageField::Response,
-            RelayState::received,
-        )
+        if raw_context.binding == Binding::Redirect {
+            return Err(SamlError::UnsupportedBinding {
+                binding: Binding::Redirect,
+            });
+        }
+        outbound_from_context(raw_context, MessageField::Response, RelayState::received)
     }
 }
 
@@ -349,12 +344,7 @@ impl Outbound<LogoutRequest> {
             let request = SoapRequest::try_new(endpoint, &raw_context.context)?;
             return soap_outbound(raw_context, OutboundAction::SoapRequest(request));
         }
-        outbound_from_context(
-            raw_context,
-            true,
-            MessageField::Request,
-            RelayState::try_new,
-        )
+        outbound_from_context(raw_context, MessageField::Request, RelayState::try_new)
     }
 }
 
@@ -374,7 +364,7 @@ impl Outbound<LogoutResponse> {
             let response = SoapResponse::try_new(&raw_context.context)?;
             return soap_outbound(raw_context, OutboundAction::SoapResponse(response));
         }
-        outbound_from_context(raw_context, true, MessageField::Response, relay_state)
+        outbound_from_context(raw_context, MessageField::Response, relay_state)
     }
 }
 
@@ -399,12 +389,7 @@ fn soap_outbound<Message>(
 
 impl Outbound<ManageNameIdRequest> {
     pub(crate) fn from_context(raw_context: BindingContext) -> Result<Self, SamlError> {
-        outbound_from_context(
-            raw_context,
-            true,
-            MessageField::Request,
-            RelayState::try_new,
-        )
+        outbound_from_context(raw_context, MessageField::Request, RelayState::try_new)
     }
 }
 
@@ -412,12 +397,7 @@ impl Outbound<ManageNameIdResponse> {
     pub(crate) fn echoing_received_relay_state(
         raw_context: BindingContext,
     ) -> Result<Self, SamlError> {
-        outbound_from_context(
-            raw_context,
-            true,
-            MessageField::Response,
-            RelayState::received,
-        )
+        outbound_from_context(raw_context, MessageField::Response, RelayState::received)
     }
 }
 
@@ -425,7 +405,6 @@ type RelayStateConstructor = fn(String) -> Result<RelayState, SamlError>;
 
 fn outbound_from_context<Message>(
     raw_context: BindingContext,
-    allow_redirect: bool,
     expected_message: MessageField,
     relay_state: RelayStateConstructor,
 ) -> Result<Outbound<Message>, SamlError> {
@@ -438,11 +417,6 @@ fn outbound_from_context<Message>(
         .transpose()?;
     match raw_context.binding {
         Binding::Redirect => {
-            if !allow_redirect {
-                return Err(SamlError::UnsupportedBinding {
-                    binding: Binding::Redirect,
-                });
-            }
             EndpointUrl::try_new(raw_context.context.clone())?;
             validate_redirect_message_kind(&raw_context.context, expected_message)?;
             Ok(Outbound {

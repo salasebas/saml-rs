@@ -614,34 +614,54 @@ pub(crate) fn verify_present_signatures(
     reject_present_signature_that_does_not_verify(&prepared, &document, &results)
 }
 
+/// What [`verify_signatures_detailed_with_profile`] found in a document.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SignatureVerification {
-    signature_present: bool,
-    verified: bool,
-    signed_content: Option<String>,
-    assertion_directly_covered: bool,
-    response_covered: bool,
-    verified_embedded_signatures: Vec<VerifiedEmbeddedSignature>,
+pub(crate) enum SignatureVerification {
+    /// The document carries no SAML signature.
+    Absent,
+    /// The document carries a signature, and no verified signature covers
+    /// the content it accepts.
+    Unverified,
+    /// Verified signatures cover the content.
+    Verified(VerifiedSignedContent),
 }
 
 impl SignatureVerification {
-    fn unverified(signature_present: bool) -> Self {
-        Self {
-            signature_present,
-            verified: false,
-            signed_content: None,
-            assertion_directly_covered: false,
-            response_covered: false,
-            verified_embedded_signatures: Vec::new(),
+    /// The verified content of a document whose signature is required.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::SignatureMissing`] when the document carries no
+    /// signature, and [`SamlError::SignatureVerification`] when its signature
+    /// does not verify.
+    pub(crate) fn require_verified(self) -> Result<VerifiedSignedContent, SamlError> {
+        match self {
+            Self::Verified(verified) => Ok(verified),
+            Self::Absent => Err(SamlError::SignatureMissing),
+            Self::Unverified => Err(SamlError::SignatureVerification {
+                reason: SignatureVerificationReason::XmlSignature,
+            }),
         }
     }
+}
 
-    pub(crate) fn signature_present(&self) -> bool {
-        self.signature_present
+/// The content that verified signatures cover, and which parts of the
+/// document they cover.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VerifiedSignedContent {
+    content: String,
+    assertion_directly_covered: bool,
+    response_covered: bool,
+    signatures: Vec<VerifiedEmbeddedSignature>,
+}
+
+impl VerifiedSignedContent {
+    pub(crate) fn content(&self) -> &str {
+        &self.content
     }
 
-    pub(crate) fn verified(&self) -> bool {
-        self.verified
+    pub(crate) fn into_content(self) -> String {
+        self.content
     }
 
     pub(crate) fn assertion_directly_covered(&self) -> bool {
@@ -652,12 +672,8 @@ impl SignatureVerification {
         self.response_covered
     }
 
-    pub(crate) fn verified_embedded_signatures(&self) -> &[VerifiedEmbeddedSignature] {
-        &self.verified_embedded_signatures
-    }
-
-    pub(crate) fn into_signed_content(self) -> Option<String> {
-        self.signed_content
+    pub(crate) fn signatures(&self) -> &[VerifiedEmbeddedSignature] {
+        &self.signatures
     }
 }
 
@@ -676,7 +692,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
         profile,
     )?
     else {
-        return Ok(SignatureVerification::unverified(false));
+        return Ok(SignatureVerification::Absent);
     };
     let root = &prepared.dom.root;
     let protocol_response = prepared.protocol_response;
@@ -688,7 +704,7 @@ pub(crate) fn verify_signatures_detailed_with_profile(
     let results = verify_all_signatures(&prepared.context, &document, xml, profile)?;
     let results = if root.local_name == "AuthnRequest" {
         let Some(signature) = verified_authn_request_signature(&document, &results) else {
-            return Ok(SignatureVerification::unverified(true));
+            return Ok(SignatureVerification::Unverified);
         };
         std::slice::from_ref(signature)
     } else {
@@ -729,16 +745,14 @@ pub(crate) fn verify_signatures_detailed_with_profile(
         let assertion_directly_covered =
             assertion_is_directly_covered(root, &targets, protocol_response);
         let response_covered = protocol_response && target_matches_node(&targets, root);
-        return Ok(SignatureVerification {
-            signature_present: true,
-            verified: true,
-            signed_content: Some(verified_content(root, xml, &targets, protocol_response)?),
+        return Ok(SignatureVerification::Verified(VerifiedSignedContent {
+            content: verified_content(root, xml, &targets, protocol_response)?,
             assertion_directly_covered,
             response_covered,
-            verified_embedded_signatures,
-        });
+            signatures: verified_embedded_signatures,
+        }));
     }
-    Ok(SignatureVerification::unverified(true))
+    Ok(SignatureVerification::Unverified)
 }
 
 /// The signed metadata of `xml` when its signature verifies under `profile`

@@ -89,8 +89,7 @@ fn typed_sp_metadata_reserves_explicit_acs_indexes() -> TestResult {
         binding: Binding::Post,
         location: location.into(),
         index: Some(index),
-        is_default: false,
-        is_default_false: false,
+        is_default: crate::metadata::DefaultMarking::Unmarked,
     };
     assert_eq!(
         parsed.assertion_consumer_service_by_index(0)?,

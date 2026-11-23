@@ -3,6 +3,7 @@ use crate::browser::{ArtifactDelivery, Inbound, Outbound, SsoRequestBinding};
 use crate::config::{IdpConfig, SpDescriptor};
 use crate::constants::Binding;
 use crate::discovery::{self, CommonDomainCookie, RememberIdentityProvider};
+use crate::flow::MessageAuthentication;
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
 use crate::model::{
     AuthnRequest, Received, RelayState, ReplayKey, SamlValidationContext, SsoResponse,
@@ -107,16 +108,21 @@ impl IdentityProvider {
         let binding = SsoRequestBinding::try_from(input.binding())?;
         let raw_sp = raw_sp_descriptor(sp, validation.now())?;
         let (encoding, request) = input.into_http_request(self.engine().setting.xml_limits)?;
-        let (flow, message_authenticated) = self.engine().parse_login_request_at(
+        let received = self.engine().parse_login_request_at(
             raw_sp,
             encoding,
             &request,
             validation.now(),
             validation.clock_skew(),
         )?;
-        let flow = decrypt_requested_subject(flow, &self.engine().setting, message_authenticated)?;
+        let authentication = received.authentication();
+        let flow = decrypt_requested_subject(
+            received.into_flow_result(),
+            &self.engine().setting,
+            authentication,
+        )?;
         let authn = AuthnRequest::from_flow(flow)?;
-        if authn.destination().is_some() || message_authenticated {
+        if authn.destination().is_some() || authentication == MessageAuthentication::Authenticated {
             let locations = self
                 .engine()
                 .metadata
@@ -326,7 +332,7 @@ impl IdentityProvider {
             ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         }
         let idp_setting = &self.engine().setting;
-        let sign_response = options.should_sign_response(
+        let response_signature = options.response_signature(
             idp_setting.is_assertion_encrypted,
             &idp_setting.data_encryption_algorithm,
         );
@@ -365,7 +371,7 @@ impl IdentityProvider {
             requested_name_id_policy: request
                 .and_then(|request| request.message().name_id_policy()),
             requested_subject: request.and_then(|request| request.message().requested_subject()),
-            want_message_signed: Some(sign_response),
+            response_signature: Some(response_signature),
             transformation_algorithms: None,
         };
         match options.delivery {

@@ -149,18 +149,10 @@ fn write_key_descriptors(w: &mut MetadataWriter, signing: &[String], encrypt: &[
     }
 }
 
-fn write_name_id_formats(
-    w: &mut MetadataWriter,
-    formats: &[String],
-    default_to_email: bool,
-) -> Result<(), SamlError> {
-    if !formats.is_empty() {
-        for format in formats {
-            validate_name_id_format(Some(format))?;
-            w.text_element("NameIDFormat", format);
-        }
-    } else if default_to_email {
-        w.text_element("NameIDFormat", name_id_format::EMAIL_ADDRESS);
+fn write_name_id_formats(w: &mut MetadataWriter, formats: &[String]) -> Result<(), SamlError> {
+    for format in formats {
+        validate_name_id_format(Some(format))?;
+        w.text_element("NameIDFormat", format);
     }
     Ok(())
 }
@@ -296,7 +288,11 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
     write_key_descriptors(&mut w, &cfg.signing_certs, &cfg.encrypt_certs);
     write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service);
     write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service);
-    write_name_id_formats(&mut w, &cfg.name_id_format, true)?;
+    if cfg.name_id_format.is_empty() {
+        w.text_element("NameIDFormat", name_id_format::EMAIL_ADDRESS);
+    } else {
+        write_name_id_formats(&mut w, &cfg.name_id_format)?;
+    }
     write_assertion_consumer_service(&mut w, &cfg.assertion_consumer_service)?;
     w.end("SPSSODescriptor");
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
@@ -346,7 +342,7 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError
     write_artifact_resolution_service(&mut w, &cfg.artifact_resolution_service);
     write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service);
     write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service);
-    write_name_id_formats(&mut w, &cfg.name_id_format, false)?;
+    write_name_id_formats(&mut w, &cfg.name_id_format)?;
     write_endpoints(&mut w, "SingleSignOnService", &cfg.single_sign_on_service);
     w.end("IDPSSODescriptor");
     write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);

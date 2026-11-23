@@ -218,11 +218,18 @@ pub(crate) enum SignedMessageDestination {
     Optional,
 }
 
+/// Whether a verified signature covers the whole received message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MessageAuthentication {
+    Authenticated,
+    Unauthenticated,
+}
+
 #[derive(Debug)]
 struct PreparedMessage {
     saml_content: String,
     assertion: Option<String>,
-    message_authenticated: bool,
+    authentication: MessageAuthentication,
     verified_xml_signatures: Vec<VerifiedXmlSignatureEvidence>,
 }
 
@@ -240,7 +247,7 @@ impl PreparedMessage {
         Ok(Self {
             saml_content: xml,
             assertion,
-            message_authenticated: false,
+            authentication: MessageAuthentication::Unauthenticated,
             verified_xml_signatures: Vec::new(),
         })
     }
@@ -287,7 +294,7 @@ pub struct FlowResult {
 pub(crate) struct FlowResultWithSignatureEvidence {
     flow_result: FlowResult,
     verified_xml_signatures: Vec<VerifiedXmlSignatureEvidence>,
-    message_authenticated: bool,
+    authentication: MessageAuthentication,
 }
 
 impl FlowResultWithSignatureEvidence {
@@ -295,11 +302,11 @@ impl FlowResultWithSignatureEvidence {
         (self.flow_result, self.verified_xml_signatures)
     }
 
-    pub(crate) fn message_authenticated(&self) -> bool {
-        self.message_authenticated
+    pub(crate) fn authentication(&self) -> MessageAuthentication {
+        self.authentication
     }
 
-    fn into_flow_result(self) -> FlowResult {
+    pub(crate) fn into_flow_result(self) -> FlowResult {
         self.flow_result
     }
 
@@ -396,7 +403,7 @@ fn validate_message_destination(
     parser_type: ParserType,
     extracted: &Value,
     expected_recipient: Option<&str>,
-    message_authenticated: bool,
+    authentication: MessageAuthentication,
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
     let Some(expected) = expected_recipient else {
@@ -413,7 +420,7 @@ fn validate_message_destination(
     };
     // SAML Bindings 2.0 §§3.4.5.2 and 3.5.5.2, and SimpleSign §2.4,
     // require Destination on a signed message received through these bindings.
-    if message_authenticated
+    if authentication == MessageAuthentication::Authenticated
         && signed_destination == SignedMessageDestination::Required
         && destination.is_none()
     {
@@ -433,7 +440,7 @@ fn validate_context(
     extracted: &Value,
     opts: &FlowOptions<'_>,
     expected_recipient: Option<&str>,
-    message_authenticated: bool,
+    authentication: MessageAuthentication,
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
     if let Some(expected) = opts.from_issuer {
@@ -473,7 +480,7 @@ fn validate_context(
         parser_type,
         extracted,
         expected_recipient,
-        message_authenticated,
+        authentication,
         signed_destination,
     )?;
     if parser_type == ParserType::SamlResponse {
@@ -564,7 +571,7 @@ fn prepare_after_detached_signature(
     Ok(PreparedMessage {
         assertion: first_login_assertion_xml(&saml_content, opts.xml_limits)?,
         saml_content,
-        message_authenticated: false,
+        authentication: MessageAuthentication::Unauthenticated,
         verified_xml_signatures: Vec::new(),
     })
 }
@@ -591,7 +598,7 @@ fn decrypt_assertion_elements(
         .ok_or_else(|| SamlError::MissingKey("decryption_key".into()))?;
     crate::encrypted_elements::require_one_assertion_unless_message_authenticated(
         &prepared.saml_content,
-        prepared.message_authenticated,
+        prepared.authentication,
         opts.xml_limits,
     )?;
     let (saml_content, assertion) = crate::encrypted_elements::decrypt_verified_assertion_elements(
@@ -667,7 +674,7 @@ fn flow_inner(
             )?;
             (
                 PreparedMessage {
-                    message_authenticated: true,
+                    authentication: MessageAuthentication::Authenticated,
                     ..prepared
                 },
                 Some(sig_alg),
@@ -694,7 +701,7 @@ fn flow_inner(
     let PreparedMessage {
         saml_content,
         assertion,
-        message_authenticated,
+        authentication,
         verified_xml_signatures,
     } = decrypt_assertion_elements(prepared, parser_type, verify_signature, opts)?;
 
@@ -706,7 +713,7 @@ fn flow_inner(
         &extracted,
         opts,
         expected_recipient,
-        message_authenticated,
+        authentication,
         signed_destination,
     )?;
 
@@ -717,7 +724,7 @@ fn flow_inner(
             sig_alg,
         },
         verified_xml_signatures,
-        message_authenticated,
+        authentication,
     })
 }
 
@@ -725,17 +732,15 @@ fn flow_inner(
 pub(crate) fn flow_with_authentication(
     opts: &FlowOptions<'_>,
     request: &HttpRequest,
-) -> Result<(FlowResult, bool), SamlError> {
-    let result = flow_inner(
+) -> Result<FlowResultWithSignatureEvidence, SamlError> {
+    flow_inner(
         opts,
         request,
         None,
         AssertionSignatureRequirement::Compatible,
         ResponseSignatureRequirement::Optional,
         SignedMessageDestination::Required,
-    )?;
-    let message_authenticated = result.message_authenticated();
-    Ok((result.into_flow_result(), message_authenticated))
+    )
 }
 
 pub(crate) fn flow_with_expected_recipient_and_signature_evidence(
