@@ -8,6 +8,10 @@ use std::{
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 /// Clock skew applied to SAML time-window checks.
+///
+/// Skew moves each bound of a window on its own. It never opens an assertion
+/// `Conditions` or a bearer `SubjectConfirmationData` whose `NotBefore` is
+/// not earlier than its `NotOnOrAfter`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockSkew {
     not_before_ms: i64,
