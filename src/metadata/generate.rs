@@ -186,7 +186,7 @@ fn assertion_consumer_service_indexes(endpoints: &[Endpoint]) -> Result<Vec<u16>
             )));
         }
     }
-    let indexes: Vec<Option<u16>> = endpoints
+    let positional: Vec<Option<u16>> = endpoints
         .iter()
         .enumerate()
         .map(|(position, endpoint)| {
@@ -197,16 +197,19 @@ fn assertion_consumer_service_indexes(endpoints: &[Endpoint]) -> Result<Vec<u16>
             })
         })
         .collect();
-    let used: HashSet<u16> = indexes.iter().flatten().copied().collect();
+    let used: HashSet<u16> = positional.iter().flatten().copied().collect();
     let mut unused = (0..=u16::MAX).filter(|index| !used.contains(index));
-    indexes
-        .into_iter()
-        .map(|index| {
-            index.or_else(|| unused.next()).ok_or_else(|| {
+    let mut indexes = Vec::with_capacity(positional.len());
+    for index in positional {
+        let index = match index {
+            Some(index) => index,
+            None => unused.next().ok_or_else(|| {
                 SamlError::Invalid("more AssertionConsumerService endpoints than indexes".into())
-            })
-        })
-        .collect()
+            })?,
+        };
+        indexes.push(index);
+    }
+    Ok(indexes)
 }
 
 fn write_assertion_consumer_service(
