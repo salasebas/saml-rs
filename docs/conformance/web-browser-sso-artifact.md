@@ -54,6 +54,7 @@ For the SP and SP Lite columns, the claim covers only sessions where an XML sign
 | Store the bearer assertion `ID` only when the caller passes a replay cache | Library policy: Profiles §4.1.4.5 states the replay duty for HTTP-POST only. | Profiles §4.1.4.5 | `ReplayPolicy` |
 | Accept an IdP-supplied `RelayState` on an unsolicited artifact response or when the request carried none | Optional | Bindings §3.6.3.1, Profiles §4.1.5 | Always |
 | Allow the SP to refuse unsolicited responses | Recommended | Profiles §4.1.5, E90 | Do not call `accept_unsolicited_sso` |
+| Expose a login error diagnostic only if an XML signature covers the inner `Response` and its issuer, recipient, and correlation checks pass | Library policy: evidence for the resolution exchange alone cannot authorize disclosure of login diagnostics. | Core §3.2.2.3, Bindings §3.6.4, Profiles §4.1.4.4 | Always |
 
 The artifact value, the mutually authenticated, integrity-protected, and confidential SOAP dereference, single use of the received artifact, and release only to the service provider the response was issued to are in [artifact resolution](artifact-resolution.md). Signature verification, `Recipient` and `NotOnOrAfter`, `InResponseTo`, audience, conditions, and clock skew are the HTTP-POST rows in [acceptance](web-browser-sso-acceptance.md). A status other than `Success` establishes no session. See the shared [status code rule](web-browser-sso-acceptance.md#status-codes).
 

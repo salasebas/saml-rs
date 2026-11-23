@@ -238,8 +238,8 @@ impl ServiceProvider {
     /// receiving URL; or when replay
     /// validation detects a duplicate or expired message. Browser responses require a verified signature.
     /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
-    /// only after the signature, issuer, `InResponseTo`, and destination
-    /// checks pass.
+    /// after authentication and the issuer, correlation, and recipient checks.
+    /// The error carries the peer's operator diagnostic when present.
     ///
     /// # Examples
     ///
@@ -516,8 +516,8 @@ impl IdentityProvider {
     /// receiving URL; or when replay
     /// validation detects a duplicate or expired message. Browser responses require a verified signature.
     /// A status other than `Success` returns [`SamlError::StatusNotSuccess`]
-    /// only after the signature, issuer, `InResponseTo`, and destination
-    /// checks pass.
+    /// after authentication and the issuer, correlation, and recipient checks.
+    /// The error carries the peer's operator diagnostic when present.
     ///
     /// # Examples
     ///
@@ -805,7 +805,7 @@ fn finish_slo_impl(
     let receipt = LogoutReceipt::of_input(&input)?;
     let request =
         input.into_http_request(local_setting.xml_limits, local_setting.schema_validator)?;
-    let flow = parse_logout_response_at(
+    let parsed = parse_logout_response_at(
         local_setting,
         peer.metadata,
         receipt,
@@ -818,7 +818,7 @@ fn finish_slo_impl(
             peer.hmac_secret,
         ),
     )?;
-    let response = LogoutResponse::from_flow(flow)?;
+    let response = LogoutResponse::from_flow(parsed.flow, parsed.status_message)?;
     validation.check_and_store_message_replay(ReplayKey::LogoutResponse(response.id().clone()))?;
     Ok(LogoutCompleted::new(response, relay_state))
 }

@@ -11,10 +11,11 @@ use crate::constants::{Binding, CertUse, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::{utf8_err, SamlError};
 use crate::metadata::Metadata;
-use crate::model::ClockSkew;
+use crate::model::{ClockSkew, StatusMessage};
 use crate::util::Value;
 use crate::validator::{check_status, logout_request_not_on_or_after_deadline};
 use crate::xml::any_uri::collapse_whitespace;
+use crate::xml::protocol_element::{parse_saml_with_limits, read_status_message};
 use crate::xml::signature_placement::saml_signature_candidates;
 use crate::xml::{
     extract_with_limits, fields, validate_protocol_profile, ExtractorField, XmlLimits,
@@ -432,9 +433,6 @@ fn validate_message_destination(
     authentication: MessageAuthentication,
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
-    let Some(expected) = expected_recipient else {
-        return Ok(());
-    };
     let destination = match parser_type {
         ParserType::SamlResponse
         | ParserType::LogoutResponse
@@ -443,6 +441,23 @@ fn validate_message_destination(
             extracted.get_str(fields::request::DESTINATION)
         }
         ParserType::SamlRequest => return Ok(()),
+    };
+    validate_destination(
+        destination,
+        expected_recipient,
+        authentication,
+        signed_destination,
+    )
+}
+
+fn validate_destination(
+    destination: Option<&str>,
+    expected_recipient: Option<&str>,
+    authentication: MessageAuthentication,
+    signed_destination: SignedMessageDestination,
+) -> Result<(), SamlError> {
+    let Some(expected) = expected_recipient else {
+        return Ok(());
     };
     // SAML Bindings 2.0 §§3.4.5.2 and 3.5.5.2, and SimpleSign §2.4,
     // require Destination on a signed message received through these bindings.
@@ -458,6 +473,27 @@ fn validate_message_destination(
         return Err(SamlError::destination_mismatch(expected, destination));
     }
     Ok(())
+}
+
+pub(crate) fn correlated_status_message(
+    xml: &str,
+    limits: XmlLimits,
+    expected_in_response_to: Option<&str>,
+    expected_recipient: Option<&str>,
+    signed_destination: SignedMessageDestination,
+) -> Option<StatusMessage> {
+    let response = parse_saml_with_limits(xml, limits).ok()?;
+    if response.attr("InResponseTo") != expected_in_response_to {
+        return None;
+    }
+    validate_destination(
+        response.attr("Destination"),
+        expected_recipient,
+        MessageAuthentication::Authenticated,
+        signed_destination,
+    )
+    .ok()?;
+    read_status_message(response)
 }
 
 fn validate_context(
@@ -524,11 +560,12 @@ fn validate_context(
         )?;
     }
     match parser_type {
-        ParserType::LogoutResponse | ParserType::ManageNameIdResponse => {
+        ParserType::ManageNameIdResponse => {
             check_status(saml_content, parser_type, opts.xml_limits)
         }
         ParserType::SamlResponse
         | ParserType::SamlRequest
+        | ParserType::LogoutResponse
         | ParserType::LogoutRequest
         | ParserType::ManageNameIdRequest => Ok(()),
     }
@@ -670,7 +707,7 @@ fn flow_inner(
     }
     if parser_type == ParserType::SamlResponse {
         if let Err(status) = check_status(&xml, parser_type, opts.xml_limits) {
-            error_response::validate_error_response(
+            let status_message = error_response::validate_error_response(
                 opts,
                 request,
                 binding,
@@ -679,7 +716,7 @@ fn flow_inner(
                 expected_recipient,
                 signed_destination,
             )?;
-            return Err(status);
+            return Err(status.with_status_message(status_message));
         }
     }
 
@@ -789,4 +826,40 @@ pub(crate) fn flow_with_expected_recipient_and_signature_evidence(
         response_signature,
         signed_destination,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correlated_status_message_reads_unqualified_response_attributes() {
+        let destination = "https://sp.example.com/acs";
+        let message = "MFA provider unavailable";
+        for (in_response_to_attr, destination_attr, expected) in [
+            ("InResponseTo", "Destination", Some(message)),
+            ("other:InResponseTo", "Destination", None),
+            ("InResponseTo", "other:Destination", None),
+        ] {
+            let xml = format!(
+                r#"<Response xmlns="urn:oasis:names:tc:SAML:2.0:protocol"
+                    xmlns:other="urn:example:other"
+                    {in_response_to_attr}="_login" {destination_attr}="{destination}">
+                    <Status><StatusMessage>{message}</StatusMessage></Status>
+                </Response>"#
+            );
+            let diagnostic = correlated_status_message(
+                &xml,
+                XmlLimits::default(),
+                Some("_login"),
+                Some(destination),
+                SignedMessageDestination::Required,
+            );
+            assert_eq!(
+                diagnostic.as_ref().map(StatusMessage::as_str),
+                expected,
+                "{in_response_to_attr}, {destination_attr}",
+            );
+        }
+    }
 }

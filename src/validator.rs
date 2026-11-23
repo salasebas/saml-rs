@@ -276,7 +276,7 @@ mod tests {
         check_status(RESPONSE, ParserType::SamlRequest, XmlLimits::default())?;
 
         match check_status(FAILED, ParserType::SamlResponse, XmlLimits::default()) {
-            Err(SamlError::StatusNotSuccess { status }) => {
+            Err(SamlError::StatusNotSuccess { status, .. }) => {
                 assert_eq!(status.top_level(), TopLevelStatusCode::Requester);
                 assert_eq!(
                     status.subordinate().map(SubordinateStatusCode::as_uri),

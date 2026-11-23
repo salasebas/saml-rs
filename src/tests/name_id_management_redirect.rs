@@ -447,7 +447,7 @@ fn responder_echoes_a_received_relay_state_up_to_the_receive_limit() -> TestResu
 
 fn assert_unknown_principal(finished: Result<Option<RelayState>, SamlError>) -> TestResult {
     match finished {
-        Err(SamlError::StatusNotSuccess { status }) => {
+        Err(SamlError::StatusNotSuccess { status, .. }) => {
             assert_eq!(status.top_level().as_uri(), status_code::REQUESTER);
             assert_eq!(
                 status
@@ -1064,7 +1064,7 @@ fn error_status_is_reported_only_for_an_authenticated_matching_response() -> Tes
     let matching = signed_response_input(&sp_error_response_xml(request_id))?;
     match idp.finish_name_id_management_redirect(&sp_peer, &started.pending, matching, validation())
     {
-        Err(SamlError::StatusNotSuccess { status })
+        Err(SamlError::StatusNotSuccess { status, .. })
             if status.top_level().as_uri() == status_code::REQUESTER =>
         {
             Ok(())

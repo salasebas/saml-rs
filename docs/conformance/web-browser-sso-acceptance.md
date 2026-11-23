@@ -97,6 +97,18 @@ identifier management, and artifact resolution.
 | --- | --- | --- | --- |
 | Collapse XML whitespace in both `StatusCode` values before comparing or reporting them | Mandatory | Core §3.2.2.2, `StatusCodeType`, [XML Schema Part 2 §4.3.6](https://www.w3.org/TR/xmlschema-2/#rf-whiteSpace) | Always |
 
+### Operator diagnostics
+
+These rules apply to SP receipt of non-success HTTP-POST and
+HTTP-POST-SimpleSign `Response` messages. For HTTP-Artifact, see
+[artifact acceptance](web-browser-sso-artifact.md#service-provider-receipt).
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Read one nonempty, text-only protocol `StatusMessage` directly under `Status`. Omit diagnostics with attributes, child elements, or ambiguous cardinality | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | Always |
+| Expose the diagnostic after issuer and recipient checks only if a response signature or detached SimpleSign signature covers it | Library policy: the text must be attributable to the peer. | Core §3.2.2, Bindings §3.5.5.2, CD-04 §2.4 | Always |
+| For solicited errors, expose the diagnostic only when `InResponseTo` and any requested `RelayState` match. For unsolicited errors, require an absent `InResponseTo` to expose it | Library policy: attach the text only to an error attributable to the current exchange. | Core §3.2.2, Bindings §3.5.3, CD-04 §2.3 | Always |
+
 ### Not implemented in the service provider
 
 - Check of the bearer `Address` against the client address. Optional, Profiles §4.1.4.3.

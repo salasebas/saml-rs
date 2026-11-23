@@ -109,6 +109,7 @@ shared [status code rule](web-browser-sso-acceptance.md#status-codes).
 | Accept a `RelayState`, an empty one included, that the responder adds to a request that carried none | Optional | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Return a status other than `Success` as an error | Library policy: no OASIS rule orders the checks, so an unauthenticated or unrelated error response must not be reported as a status. | Core §3.2.2.2 | `finish_slo` |
 | Return the optional subordinate status code on a successful response, including `PartialLogout` | Optional | Core §3.2.2.2, §3.7.3.2 | `LogoutCompleted::response`, `LogoutResponse::status` |
+| Return one nonempty, text-only protocol `StatusMessage` directly under the authenticated and correlated response's `Status`. Omit diagnostics with attributes, child elements, or ambiguous cardinality | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType`, Profiles §4.4.4.2 | `finish_slo` |
 | Require exactly one direct `BaseID`, `NameID`, or `EncryptedID` child in the SAML assertion namespace on every supported binding | Mandatory | Core §3.7.1, `LogoutRequestType` | Always |
 | Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Allow the validation-context clock skew on `LogoutRequest` `NotOnOrAfter`, five minutes by default | Recommended | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew` |

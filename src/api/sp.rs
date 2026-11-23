@@ -246,10 +246,11 @@ impl ServiceProvider {
     /// other than `Success` returns [`SamlError::StatusNotSuccess`] once all present
     /// signatures verify and the issuer and destination checks pass. An error
     /// response can omit `InResponseTo`. If present, it must match the pending
-    /// request ID. An error response does not need a signature. Only a
-    /// validated success reaches the comparison with the pending request's
-    /// `RelayState`. A successful HTTP-Artifact response with no XML signature
-    /// on the `Response` or on each assertion returns [`SamlError::SignatureMissing`].
+    /// request ID. An error response can be unsigned. Its operator diagnostic
+    /// requires a signature over the response, a matching `InResponseTo`,
+    /// and the pending request's `RelayState` if it carried one. A successful
+    /// HTTP-Artifact response with no XML signature on the `Response` or on
+    /// each assertion returns [`SamlError::SignatureMissing`].
     /// An `Attribute` without an unqualified `Name` returns
     /// [`SamlError::ProtocolProfile`]. The `Conditions` time window returns
     /// [`SamlError::TimeWindowInvalid`] when both bounds are present and
@@ -345,8 +346,10 @@ impl ServiceProvider {
     /// `SubjectConfirmationData` carries an `InResponseTo` attribute, including
     /// an empty one. A status other than `Success` returns
     /// [`SamlError::StatusNotSuccess`] once all present signatures verify and
-    /// the issuer and destination checks pass. An error response does not need
-    /// a signature. Returns [`SamlError::RecipientEndpointNotPublished`] when
+    /// the issuer and destination checks pass. An error response can be
+    /// unsigned. Its operator diagnostic requires a signature over the response
+    /// and an absent `InResponseTo`.
+    /// Returns [`SamlError::RecipientEndpointNotPublished`] when
     /// the supplied recipient endpoint is not an assertion consumer published
     /// for the incoming binding. An `Attribute` without an unqualified `Name`
     /// returns [`SamlError::ProtocolProfile`]. The assertion time window rules
@@ -407,14 +410,19 @@ impl ServiceProvider {
         let relay_state = relay_state_from_input(&input)?;
         let peer_idp = idp_engine_at(idp, validation.now())?;
         let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
-        let flow = self.engine().parse_login_response_with_request_id_at(
+        let parsed = self.engine().parse_login_response_with_request_id_at(
             peer_idp,
             parse.binding,
             &parse.request,
             pending.request_id().as_str(),
             parse.options(validation, pending.acs().location().as_str()),
-        )?;
-        ensure_relay_state(pending.relay_state(), relay_state.as_ref())?;
+        );
+        let relay_state_check = ensure_relay_state(pending.relay_state(), relay_state.as_ref());
+        let flow = parsed.map_err(|error| match relay_state_check {
+            Ok(()) => error,
+            Err(_) => error.with_status_message(None),
+        })?;
+        relay_state_check?;
         validation.check_sso_replay_policy(pending.acs().binding())?;
         session_from_verified_flow(flow, relay_state)
     }

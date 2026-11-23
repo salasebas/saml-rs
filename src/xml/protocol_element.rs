@@ -2,7 +2,7 @@
 
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
-use crate::model::{SamlInstant, Status};
+use crate::model::{SamlInstant, Status, StatusMessage};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::XmlLimits;
 pub(crate) use crate::xml::dom::{
@@ -110,4 +110,22 @@ pub(crate) fn read_status(response: &SamlElement) -> Result<Status, SamlError> {
         .find(|child| child.is(namespace::PROTOCOL, "StatusCode"))
         .and_then(|child| child.attr("Value"));
     Status::received(top, second)
+}
+
+pub(crate) fn read_status_message(response: SamlElement) -> Option<StatusMessage> {
+    let status = sole_protocol_child(response, "Status")?;
+    let message = sole_protocol_child(status, "StatusMessage")?;
+    if !message.children.is_empty() || !message.attrs.is_empty() || message.text.is_empty() {
+        return None;
+    }
+    Some(StatusMessage(message.text))
+}
+
+fn sole_protocol_child(parent: SamlElement, name: &str) -> Option<SamlElement> {
+    let mut matches = parent
+        .children
+        .into_iter()
+        .filter(|child| child.is(namespace::PROTOCOL, name));
+    let child = matches.next()?;
+    matches.next().is_none().then_some(child)
 }

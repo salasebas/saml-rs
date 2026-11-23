@@ -468,9 +468,10 @@ pub use model::{
     NameIdCreationRequest, NameIdPolicy, OutstandingLogout, PairwiseId, Received,
     RefusedLogoutRequest, RelayState, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy,
     RequestedAuthnContext, RequestedSubject, RequestedSubjectIdentifier, SamlInstant,
-    SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, SubjectConfirmation,
-    SubjectId, SubjectLocality, SubordinateStatusCode, TopLevelStatusCode, VerifiedXmlSignature,
-    VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTES,
+    SamlValidationContext, SessionIndex, SsoResponse, SsoSession, Status, StatusMessage,
+    SubjectConfirmation, SubjectId, SubjectLocality, SubordinateStatusCode, TopLevelStatusCode,
+    VerifiedXmlSignature, VerifiedXmlSignatureCoverage, MAX_RECEIVED_RELAY_STATE_BYTES,
+    MAX_RELAY_STATE_BYTES,
 };
 pub use name_id_management::{
     ManageNameIdRequest, ManageNameIdResponse, NameIdChange, NameIdManagementReceipt,

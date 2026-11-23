@@ -5,6 +5,8 @@ use super::common;
 use super::post_validation::post_validation;
 #[path = "typed_sso/authn_request_signatures.rs"]
 mod authn_request_signatures;
+#[path = "typed_sso/status_message.rs"]
+mod status_message;
 use saml_rs::tests::engine::LogoutUser;
 use saml_rs::tests::engine::{IdpMessages, SpMessages};
 
@@ -1855,7 +1857,9 @@ fn typed_finish_sso_reports_a_signed_refusal_when_relay_state_is_missing(
         Inbound::post(exchange.response_fields),
         validation(),
     ) {
-        Err(SamlError::StatusNotSuccess { status: received }) => assert_eq!(received, status),
+        Err(SamlError::StatusNotSuccess {
+            status: received, ..
+        }) => assert_eq!(received, status),
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
     Ok(())
@@ -2033,7 +2037,7 @@ fn typed_finish_sso_reports_an_unsigned_error_status_with_or_without_in_response
 
     for (case, xml) in [("present", xml), ("absent", without_in_response_to)] {
         match finish_sso_with_response_xml(&exchange, &xml) {
-            Err(SamlError::StatusNotSuccess { status }) => {
+            Err(SamlError::StatusNotSuccess { status, .. }) => {
                 assert_eq!(status, auth_failed_status()?, "InResponseTo {case}");
             }
             other => {
@@ -2119,7 +2123,9 @@ fn typed_finish_sso_reports_a_signed_error_status_when_assertions_are_encrypted(
         Inbound::post(response_fields.clone()),
         validation(),
     ) {
-        Err(SamlError::StatusNotSuccess { status }) => assert_eq!(status, auth_failed_status()?),
+        Err(SamlError::StatusNotSuccess { status, .. }) => {
+            assert_eq!(status, auth_failed_status()?)
+        }
         other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
     }
 
@@ -2242,7 +2248,7 @@ fn typed_finish_sso_does_not_decrypt_an_assertion_in_a_signed_error_response(
         Inbound::post(fields),
         validation(),
     ) {
-        Err(SamlError::StatusNotSuccess { status }) => {
+        Err(SamlError::StatusNotSuccess { status, .. }) => {
             assert_eq!(status, auth_failed_status()?);
             Ok(())
         }
@@ -2372,7 +2378,7 @@ fn typed_finish_sso_verifies_a_simplesign_signature_before_error_status(
     };
 
     match finish(exchange.response_fields.clone()) {
-        Err(SamlError::StatusNotSuccess { status }) => {
+        Err(SamlError::StatusNotSuccess { status, .. }) => {
             assert_eq!(status.top_level().as_uri(), status_code::RESPONDER);
             assert_eq!(
                 status

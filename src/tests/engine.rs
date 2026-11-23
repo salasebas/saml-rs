@@ -370,6 +370,7 @@ pub(crate) fn parse_logout_response(
         request_id,
         LogoutFlowValidation::typed(None, SystemTime::now(), ClockSkew::strict(), None),
     )
+    .map(|parsed| parsed.flow)
 }
 
 /// The ID and XML of a login `<Response>` written from the response template.

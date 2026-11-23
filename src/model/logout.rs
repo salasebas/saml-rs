@@ -3,7 +3,7 @@ use super::extract::{
     required_str, saml_utc_instant, session_indexes_from_value,
 };
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
-use super::status::{RequestVersionMismatch, Status};
+use super::status::{RequestVersionMismatch, Status, StatusMessage};
 use super::subject::NameId;
 use super::{EndpointUrl, RelayState};
 use crate::browser::LogoutBinding;
@@ -198,6 +198,7 @@ pub struct LogoutResponse {
     in_response_to: Option<MessageId>,
     destination: Option<EndpointUrl>,
     status: Status,
+    status_message: Option<StatusMessage>,
 }
 
 impl LogoutResponse {
@@ -235,10 +236,20 @@ impl LogoutResponse {
     pub fn status(&self) -> &Status {
         &self.status
     }
+
+    /// Return the authenticated peer's operator diagnostic, when present.
+    ///
+    /// Debug output omits this text.
+    pub fn status_message(&self) -> Option<&str> {
+        self.status_message.as_ref().map(StatusMessage::as_str)
+    }
 }
 
 impl LogoutResponse {
-    pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
+    pub(crate) fn from_flow(
+        raw_flow: FlowResult,
+        status_message: Option<StatusMessage>,
+    ) -> Result<Self, SamlError> {
         let id = MessageId::try_new(required_str(&raw_flow.extract, response::ID)?)?;
         let issue_instant = required_saml_utc_instant(
             raw_flow.extract.get_str(response::ISSUE_INSTANT),
@@ -256,6 +267,7 @@ impl LogoutResponse {
             in_response_to,
             destination,
             status,
+            status_message,
         })
     }
 }

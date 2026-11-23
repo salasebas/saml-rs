@@ -5,7 +5,9 @@
 
 use crate::config::NameIdFormat;
 use crate::constants::Binding;
-use crate::model::{RefusedLogoutRequest, RelayState, ReplayKey, Status, SubordinateStatusCode};
+use crate::model::{
+    RefusedLogoutRequest, RelayState, ReplayKey, Status, StatusMessage, SubordinateStatusCode,
+};
 use std::fmt;
 
 /// Reason a required SAML signature verification failed.
@@ -411,6 +413,8 @@ pub enum SamlError {
     StatusNotSuccess {
         /// Top-level and subordinate status codes.
         status: Status,
+        /// Operator diagnostic from a verified login or logout response, when available.
+        status_message: Option<StatusMessage>,
     },
     /// The authenticated LogoutRequest requires a version mismatch response.
     #[error("logout request has an unsupported newer SAML version")]
@@ -531,6 +535,13 @@ pub enum SamlError {
 }
 
 impl SamlError {
+    pub(crate) fn with_status_message(mut self, message: Option<StatusMessage>) -> Self {
+        if let Self::StatusNotSuccess { status_message, .. } = &mut self {
+            *status_message = message;
+        }
+        self
+    }
+
     pub(crate) fn xml(message: impl Into<String>) -> Self {
         Self::Xml {
             message: message.into(),
