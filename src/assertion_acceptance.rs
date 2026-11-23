@@ -51,7 +51,7 @@ pub(crate) fn accept_response_assertions(
 ) -> Result<(), SamlError> {
     reject_unrecognized_conditions(response_xml, opts.xml_limits)?;
     let document = dom::parse_document(response_xml, opts.xml_limits)?;
-    let assertions = direct_assertions(&document.root);
+    let assertions: Vec<_> = document.root.children_named("Assertion").collect();
     let [first, ..] = assertions.as_slice() else {
         return Err(SamlError::AssertionMissing);
     };
@@ -105,7 +105,7 @@ pub(crate) fn reject_unsolicited_bearer_in_response_to(
     limits: XmlLimits,
 ) -> Result<(), SamlError> {
     let document = dom::parse_document(response_xml, limits)?;
-    for assertion in direct_assertions(&document.root) {
+    for assertion in document.root.children_named("Assertion") {
         for confirmation in subject_confirmations(assertion) {
             let request_id = confirmation
                 .children
@@ -136,12 +136,11 @@ pub(crate) fn first_login_assertion_xml(
 /// The direct `<Assertion>` of `response` that a login session reads: the
 /// first with a bearer `SubjectConfirmation`, or else the first.
 pub(crate) fn consumed_assertion(response: &Node) -> Option<&Node> {
-    let assertions = direct_assertions(response);
+    let mut assertions = response.children_named("Assertion").peekable();
+    let first = assertions.peek().copied()?;
     assertions
-        .iter()
         .find(|assertion| node_has_bearer(assertion))
-        .or_else(|| assertions.first())
-        .copied()
+        .or(Some(first))
 }
 
 /// Replay identity of one direct assertion in an already accepted response.
@@ -165,7 +164,7 @@ pub(crate) fn assertion_replays(
     let nodes = if document.root.local_name == "Assertion" {
         vec![&document.root]
     } else {
-        direct_assertions(&document.root)
+        document.root.children_named("Assertion").collect()
     };
     Ok(nodes
         .into_iter()
@@ -233,13 +232,6 @@ pub(crate) fn latest_bearer_not_on_or_after<'a>(
         }
     }
     latest.map(|(_, value)| value).or(unparsed)
-}
-
-fn direct_assertions(root: &Node) -> Vec<&Node> {
-    root.children
-        .iter()
-        .filter(|child| child.local_name == "Assertion")
-        .collect()
 }
 
 fn issuer_text(assertion: &Node) -> Option<&str> {

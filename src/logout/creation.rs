@@ -1,3 +1,4 @@
+use crate::binding::sign_message;
 use crate::config::IdentifierEncryptionPolicy;
 use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting};
@@ -16,7 +17,6 @@ use super::rendering::{
     issuer_of, render_default_logout_response, render_logout_request, LogoutRequestSubject,
     LogoutRequestTimeAttributes,
 };
-use super::signing::sign_browser_message;
 
 pub(crate) struct CreatedLogoutRequest {
     pub(crate) context: BindingContext,
@@ -118,7 +118,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         OutboundLogoutRequestValidation::BeforeSigning,
     )?;
     let xml = encrypt_name_id_for_peer(xml, name_id_encryption, init_setting, target_meta)?;
-    let (context, signature, sig_alg) = sign_browser_message(
+    let signed = sign_message(
         init_setting,
         binding,
         &xml,
@@ -126,7 +126,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         relay_state,
         ParserType::LogoutRequest,
     )?;
-    if let Some(signed_xml) = embedded_signed_xml(binding, &context)? {
+    if let Some(signed_xml) = embedded_signed_xml(binding, &signed.content)? {
         validate_logout_request_outbound(
             &signed_xml,
             &expectation,
@@ -134,16 +134,7 @@ pub(crate) fn create_logout_request_for_subject_inner(
         )?;
     }
     Ok(CreatedLogoutRequest {
-        context: BindingContext {
-            id,
-            context,
-            relay_state: relay_state.map(str::to_string),
-            entity_endpoint: destination,
-            binding,
-            request_type: "SAMLRequest",
-            signature,
-            sig_alg,
-        },
+        context: signed.bind(id, destination, relay_state),
         not_on_or_after: not_on_or_after.map(str::to_string),
     })
 }
@@ -251,7 +242,7 @@ pub(crate) fn create_logout_response_inner(
         issuer,
     } = input.render()?;
     let endpoint = destination.as_deref().unwrap_or_default();
-    let (context, signature, sig_alg) = sign_browser_message(
+    let signed = sign_message(
         input.init_setting,
         input.binding,
         &xml,
@@ -259,7 +250,7 @@ pub(crate) fn create_logout_response_inner(
         input.relay_state,
         ParserType::LogoutResponse,
     )?;
-    if let Some(signed_xml) = embedded_signed_xml(input.binding, &context)? {
+    if let Some(signed_xml) = embedded_signed_xml(input.binding, &signed.content)? {
         validate_logout_response_outbound(
             &signed_xml,
             &id,
@@ -270,16 +261,7 @@ pub(crate) fn create_logout_response_inner(
             OutboundLogoutValidation::AfterEmbeddedSigning,
         )?;
     }
-    Ok(BindingContext {
-        id,
-        context,
-        signature,
-        sig_alg,
-        relay_state: input.relay_state.map(str::to_owned),
-        entity_endpoint: destination.unwrap_or_default(),
-        binding: input.binding,
-        request_type: "SAMLResponse",
-    })
+    Ok(signed.bind(id, destination.unwrap_or_default(), input.relay_state))
 }
 
 /// The signed XML an embedded-signature binding carries.

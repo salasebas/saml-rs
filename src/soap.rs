@@ -6,11 +6,13 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{Namespace, ResolveResult};
 use quick_xml::reader::NsReader;
 
+use crate::constants::namespace;
 use crate::error::{xml_err, SamlError};
 use crate::http_header::{HttpHeader, CACHE_CONTROL, PRAGMA};
 use crate::model::EndpointUrl;
 use crate::xml::dom::{self, reader_err, Node};
 use crate::xml::fragment::standalone_element;
+use crate::xml::protocol_element::{parse_saml_with_limits, SamlElement};
 use crate::xml::write::XmlWriter;
 use crate::xml::XmlLimits;
 
@@ -261,6 +263,37 @@ pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBo
         namespace: child_namespace.namespace,
         xml: standalone_element(envelope, child.start, child.end)?,
     })
+}
+
+pub(crate) fn read_soap_status_response(
+    envelope: &str,
+    limits: XmlLimits,
+    schema_validator: Option<crate::SchemaValidator>,
+    expected_body: &str,
+    wrong_body_error: &str,
+    request_id: &str,
+) -> Result<(String, SamlElement), SamlError> {
+    let body = read_soap_body(envelope, limits)?;
+    crate::schema::validate(envelope, schema_validator)?;
+    if body.local_name != expected_body || body.namespace != namespace::PROTOCOL {
+        return Err(SamlError::ProtocolProfile(wrong_body_error.into()));
+    }
+    let response = parse_saml_with_limits(&body.xml, limits)?;
+    if response.required_attr("Version")? != "2.0" {
+        return Err(SamlError::ProtocolProfile(format!(
+            "{expected_body} Version must be 2.0"
+        )));
+    }
+    response.required_attr("ID")?;
+    response.required_issue_instant()?;
+    let in_response_to = response.attr("InResponseTo");
+    if in_response_to != Some(request_id) {
+        return Err(SamlError::in_response_to_mismatch(
+            Some(request_id),
+            in_response_to,
+        ));
+    }
+    Ok((body.xml, response))
 }
 
 /// The `Body` of an envelope whose children are an optional `Header` and one

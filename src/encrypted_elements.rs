@@ -19,12 +19,7 @@ pub(crate) fn require_one_assertion_unless_message_authenticated(
         MessageAuthentication::Unauthenticated => {}
     }
     let document = crate::xml::dom::parse_document(saml_content, limits)?;
-    let assertions = document
-        .root
-        .children
-        .iter()
-        .filter(|child| child.local_name == "Assertion")
-        .count();
+    let assertions = document.root.children_named("Assertion").count();
     if assertions > 1 {
         return Err(SamlError::Unsupported(
             "EncryptedID or EncryptedAttribute in several assertions requires a signed Response"
@@ -56,21 +51,14 @@ pub(crate) fn decrypt_verified_assertion_elements(
     opts: &FlowOptions<'_>,
 ) -> Result<(String, Option<String>), SamlError> {
     use crate::constants::ParserType;
-    use crate::crypto::{
-        enc::{decrypt_assertion_elements, AssertionDecryptionOptions},
-        keys::load_decryption_keys,
-    };
+    use crate::crypto::{enc::decrypt_assertion_elements, keys::load_decryption_keys};
     use crate::xml::validate_protocol_profile;
 
     let keys = load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?;
-    let options = AssertionDecryptionOptions {
-        allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
-        max_decryption_work: opts.max_decryption_work,
-    };
     let content = decrypt_assertion_elements(
         saml_content,
         &keys,
-        options,
+        opts.into(),
         opts.xml_limits,
         opts.assertion_elements,
     )?;
@@ -85,14 +73,6 @@ pub(crate) fn decrypt_verified_assertion_elements(
     Ok((content, assertion))
 }
 
-/// Direct `<Assertion>` children of the response root.
-#[cfg(crypto)]
-fn direct_assertions(root: &crate::xml::dom::Node) -> impl Iterator<Item = &crate::xml::dom::Node> {
-    root.children
-        .iter()
-        .filter(|child| child.local_name == "Assertion")
-}
-
 /// Position of the consumed `assertion` among the direct assertions of
 /// `response`, which contains its source.
 #[cfg(crypto)]
@@ -105,7 +85,10 @@ fn direct_assertion_position(
         .find(assertion)
         .ok_or(SamlError::SignedReferenceMismatch)?;
     let document = crate::xml::dom::parse_document(response, limits)?;
-    let position = direct_assertions(&document.root).position(|node| node.start == start);
+    let position = document
+        .root
+        .children_named("Assertion")
+        .position(|node| node.start == start);
     position.ok_or(SamlError::SignedReferenceMismatch)
 }
 
@@ -116,7 +99,9 @@ fn direct_assertion(
     limits: XmlLimits,
 ) -> Result<String, SamlError> {
     let document = crate::xml::dom::parse_document(response, limits)?;
-    let node = direct_assertions(&document.root)
+    let node = document
+        .root
+        .children_named("Assertion")
         .nth(position)
         .ok_or(SamlError::SignedReferenceMismatch)?;
     Ok(response[node.start..node.end].to_string())
@@ -160,18 +145,12 @@ pub(crate) fn decrypt_assertions(
     parser_type: ParserType,
     opts: &FlowOptions<'_>,
 ) -> Result<(String, Vec<String>), SamlError> {
-    use crate::crypto::{
-        enc::{decrypt_assertions_with_limits, AssertionDecryptionOptions},
-        keys::load_decryption_keys,
-    };
+    use crate::crypto::{enc::decrypt_assertions_with_limits, keys::load_decryption_keys};
 
     let (content, assertions) = decrypt_assertions_with_limits(
         xml,
         &load_decryption_keys(key_pem, opts.decrypt_key_pass, opts.additional_decrypt_keys)?,
-        AssertionDecryptionOptions {
-            allow_rsa15_key_transport_decryption: opts.allow_rsa15_key_transport_decryption,
-            max_decryption_work: opts.max_decryption_work,
-        },
+        opts.into(),
         opts.xml_limits,
     )?;
     crate::schema::document(&content, opts.xml_limits, opts.schema_validator)?;

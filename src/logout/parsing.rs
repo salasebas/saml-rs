@@ -1,6 +1,6 @@
 use crate::browser::{Inbound, Transport};
 use crate::config::HmacSecret;
-use crate::constants::{Binding, CertUse, ParserType};
+use crate::constants::{Binding, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::flow::{
@@ -15,7 +15,7 @@ use std::time::SystemTime;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LogoutFlowValidation<'a> {
     expected_recipient: Option<&'a str>,
-    now: Option<SystemTime>,
+    now: SystemTime,
     clock_skew: ClockSkew,
     peer_hmac_secret: Option<&'a HmacSecret>,
 }
@@ -31,7 +31,7 @@ impl<'a> LogoutFlowValidation<'a> {
     ) -> Self {
         Self {
             expected_recipient,
-            now: Some(now),
+            now,
             clock_skew,
             peer_hmac_secret,
         }
@@ -89,7 +89,6 @@ pub(crate) fn parse_logout_request_at(
     request: &HttpRequest,
     validation: LogoutFlowValidation<'_>,
 ) -> Result<FlowResult, SamlError> {
-    let signing_certs = from_meta.x509_certificates(CertUse::Signing);
     run_logout_flow(
         &FlowOptions {
             binding: Some(receipt.decode_as),
@@ -97,18 +96,13 @@ pub(crate) fn parse_logout_request_at(
             defer_logout_request_version: true,
             signature_check: receipt.signature,
             require_audience_restriction: true,
-            xml_signatures: self_setting.xml_signatures,
-            from_issuer: from_meta.entity_id(),
-            signing_certs,
-            hmac_secret: validation.peer_hmac_secret,
-            clock_skew: validation.clock_skew,
-            now: validation.now,
-            redirect_inflate_max_bytes: self_setting.redirect_inflate_max_bytes,
-            xml_limits: self_setting.xml_limits,
-            schema_validator: self_setting.schema_validator,
-            expected_audience: None,
-            expected_in_response_to: None,
-            ..FlowOptions::default()
+            ..FlowOptions::for_peer(
+                self_setting,
+                from_meta,
+                validation.peer_hmac_secret,
+                validation.now,
+                validation.clock_skew,
+            )
         },
         request,
         validation.expected_recipient,
@@ -127,25 +121,20 @@ pub(crate) fn parse_logout_response_at(
     if request_id.is_empty() {
         return Err(SamlError::InvalidInResponseTo);
     }
-    let signing_certs = from_meta.x509_certificates(CertUse::Signing);
     run_logout_flow(
         &FlowOptions {
             binding: Some(receipt.decode_as),
             parser_type: Some(ParserType::LogoutResponse),
             signature_check: receipt.signature,
             require_audience_restriction: true,
-            xml_signatures: self_setting.xml_signatures,
-            from_issuer: from_meta.entity_id(),
-            signing_certs,
-            hmac_secret: validation.peer_hmac_secret,
-            clock_skew: validation.clock_skew,
-            now: validation.now,
-            redirect_inflate_max_bytes: self_setting.redirect_inflate_max_bytes,
-            xml_limits: self_setting.xml_limits,
-            schema_validator: self_setting.schema_validator,
-            expected_audience: None,
             expected_in_response_to: Some(request_id),
-            ..FlowOptions::default()
+            ..FlowOptions::for_peer(
+                self_setting,
+                from_meta,
+                validation.peer_hmac_secret,
+                validation.now,
+                validation.clock_skew,
+            )
         },
         request,
         validation.expected_recipient,

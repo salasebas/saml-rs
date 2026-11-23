@@ -31,7 +31,7 @@ fn decrypted(
     authentication: MessageAuthentication,
 ) -> Result<Option<FlowResult>, crate::error::SamlError> {
     use crate::constants::ParserType;
-    use crate::crypto::enc::{decrypt_authn_request_encrypted_id, AssertionDecryptionOptions};
+    use crate::crypto::enc::decrypt_authn_request_encrypted_id;
 
     let Some(key_pem) = setting.enc_private_key.as_deref() else {
         return Ok(None);
@@ -41,10 +41,7 @@ fn decrypted(
         key_pem,
         setting.enc_private_key_pass.as_deref(),
         &setting.additional_decryption_keys,
-        AssertionDecryptionOptions {
-            allow_rsa15_key_transport_decryption: setting.allow_rsa15_key_transport_decryption,
-            max_decryption_work: setting.max_decryption_work,
-        },
+        setting.into(),
         setting.xml_limits,
         authentication,
     )?

@@ -17,10 +17,12 @@ use crate::entity::{generate_id, now_iso8601, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::IdpMetadata;
 use crate::model::{EndpointUrl, ReplayKey, RequestVersionMismatch, SamlValidationContext, Status};
-use crate::soap::{read_soap_body, MessageConfidentiality, SoapChannel, SoapRequest, SoapResponse};
+use crate::soap::{
+    read_soap_body, read_soap_status_response, MessageConfidentiality, SoapChannel, SoapRequest,
+    SoapResponse,
+};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::fragment::standalone_element;
-use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml, parse_saml_with_limits, read_status, PartyName,
     SamlElement,
@@ -266,34 +268,14 @@ impl ArtifactResolution {
     /// Returns [`SamlError::ArtifactNotReturned`] when a `Success` response
     /// carries no protocol message.
     pub fn finish(&self, response_envelope: &str) -> Result<ResolvedProtocolMessage, SamlError> {
-        let body = read_soap_body(response_envelope, self.xml_limits)?;
-        crate::schema::validate(response_envelope, self.schema_validator)?;
-        if body.local_name != "ArtifactResponse" || body.namespace != namespace::PROTOCOL {
-            return Err(SamlError::ProtocolProfile(
-                "SOAP body must be an ArtifactResponse".into(),
-            ));
-        }
-        let response = parse_saml_with_limits(&body.xml, self.xml_limits)?;
-        let version = response.required_attr("Version")?;
-        if version != "2.0" {
-            return Err(SamlError::ProtocolProfile(
-                "ArtifactResponse Version must be 2.0".into(),
-            ));
-        }
-        let _response_id = response.required_attr("ID")?;
-        let response_instant = response.required_attr("IssueInstant")?;
-        if parse_saml_utc_date_time(&response_instant).is_none() {
-            return Err(SamlError::ProtocolProfile(
-                "ArtifactResponse IssueInstant must be a UTC xs:dateTime".into(),
-            ));
-        }
-        let in_response_to = response.attr("InResponseTo");
-        if in_response_to != Some(self.request_id.as_str()) {
-            return Err(SamlError::in_response_to_mismatch(
-                Some(&self.request_id),
-                in_response_to,
-            ));
-        }
+        let (body_xml, response) = read_soap_status_response(
+            response_envelope,
+            self.xml_limits,
+            self.schema_validator,
+            "ArtifactResponse",
+            "SOAP body must be an ArtifactResponse",
+            &self.request_id,
+        )?;
         let issuer = issuer(&response)
             .ok_or_else(|| SamlError::issuer_mismatch(&self.identity_provider, None))?;
         if issuer.value != self.identity_provider {
@@ -318,7 +300,7 @@ impl ArtifactResolution {
         }
         Ok(ResolvedProtocolMessage {
             local_name: message.local_name.clone(),
-            xml: standalone_element(&body.xml, message.start, message.end)?,
+            xml: standalone_element(&body_xml, message.start, message.end)?,
             identity_provider: self.identity_provider.clone(),
             artifact: self.artifact.clone(),
         })
@@ -678,12 +660,7 @@ fn parse_resolve(xml: &str, limits: XmlLimits) -> Result<ResolveRequest, SamlErr
     }
     let id = element.required_attr("ID")?;
     let version = element.required_attr("Version")?;
-    let issue_instant = element.required_attr("IssueInstant")?;
-    if parse_saml_utc_date_time(&issue_instant).is_none() {
-        return Err(SamlError::ProtocolProfile(
-            "ArtifactResolve IssueInstant must be a UTC xs:dateTime".into(),
-        ));
-    }
+    element.required_issue_instant()?;
     let artifact = element
         .children
         .iter()

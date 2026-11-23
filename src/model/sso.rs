@@ -3,8 +3,8 @@ use super::audience_restriction::AudienceRestriction;
 use super::authn_statement::AuthnStatement;
 use super::extract::{
     attributes_from_extract, audience_restrictions_from_extract, authn_statements_from_extract,
-    conditions_instants, optional_request_id, required_saml_utc_instant, required_str,
-    subject_confirmations_from_extract,
+    conditions_instants, name_id_from_extract, optional_request_id, required_saml_utc_instant,
+    required_str, subject_confirmations_from_extract,
 };
 use super::identifiers::{AssertionId, MessageId, SamlInstant};
 use super::subject::{NameId, SubjectConfirmation};
@@ -15,7 +15,7 @@ use super::{
     SamlValidationContext,
 };
 use crate::assertion_acceptance::{assertion_replays, latest_bearer_not_on_or_after};
-use crate::config::{EntityId, NameIdFormat};
+use crate::config::EntityId;
 use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
 use crate::xml::fields::{login_response, name_id, response};
@@ -479,17 +479,9 @@ impl SsoSession {
             login_response::ASSERTION_ISSUER,
         )?)?;
         let in_response_to = optional_request_id(&raw_flow.extract, response::IN_RESPONSE_TO)?;
-        let name_id_format = raw_flow
-            .extract
-            .get_str(name_id::FORMAT)
-            .map(NameIdFormat::from_uri);
-        let name_id_qualifier = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
-        let name_id = NameId::received(
+        let name_id = name_id_from_extract(
+            &raw_flow.extract,
             required_str(&raw_flow.extract, name_id::VALUE)?,
-            name_id_format,
-            name_id_qualifier(name_id::NAME_QUALIFIER),
-            name_id_qualifier(name_id::SP_NAME_QUALIFIER),
-            name_id_qualifier(name_id::SP_PROVIDED_ID),
         );
         let subject_confirmations = subject_confirmations_from_extract(&raw_flow.extract);
         let attributes = attributes_from_extract(&raw_flow.extract)?;

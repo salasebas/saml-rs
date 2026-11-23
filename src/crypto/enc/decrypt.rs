@@ -11,8 +11,9 @@ use super::{
 use super::{policy::encrypted_data_algorithm, work};
 use crate::config::{AssertionElementEncryption, X509Credential};
 use crate::constants::{key_encryption_algorithm, namespace};
+use crate::entity::EntitySetting;
 use crate::error::{crypto_err, utf8_err, xml_err, SamlError};
-use crate::flow::MessageAuthentication;
+use crate::flow::{FlowOptions, MessageAuthentication};
 use crate::xml::dom::{self, XmlLimits};
 use bergshamra::keys::Key;
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeKind};
@@ -44,6 +45,24 @@ impl Default for AssertionDecryptionOptions {
         Self {
             allow_rsa15_key_transport_decryption: false,
             max_decryption_work: crate::constants::DEFAULT_MAX_DECRYPTION_WORK,
+        }
+    }
+}
+
+impl From<&EntitySetting> for AssertionDecryptionOptions {
+    fn from(setting: &EntitySetting) -> Self {
+        Self {
+            allow_rsa15_key_transport_decryption: setting.allow_rsa15_key_transport_decryption,
+            max_decryption_work: setting.max_decryption_work,
+        }
+    }
+}
+
+impl From<&FlowOptions<'_>> for AssertionDecryptionOptions {
+    fn from(options: &FlowOptions<'_>) -> Self {
+        Self {
+            allow_rsa15_key_transport_decryption: options.allow_rsa15_key_transport_decryption,
+            max_decryption_work: options.max_decryption_work,
         }
     }
 }

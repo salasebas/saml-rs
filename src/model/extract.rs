@@ -5,15 +5,15 @@ use super::audience_restriction::AudienceRestriction;
 use super::authn_statement::AuthnStatement;
 use super::endpoint::EndpointUrl;
 use super::identifiers::{MessageId, SamlInstant, SessionIndex};
-use super::subject::{NameIdPolicy, SubjectConfirmation};
+use super::subject::{NameId, NameIdPolicy, SubjectConfirmation};
 use crate::config::{EntityId, NameIdFormat};
 use crate::constants::attribute_name_format;
 use crate::error::{SamlError, TimeWindowField};
 use crate::util::Value;
 use crate::validator::conditions_time_window;
 use crate::xml::any_uri::collapse_whitespace;
-use crate::xml::fields::{attribute, authn_request, authn_statement, login_response};
-use crate::xml::{dom, parse_saml_utc_date_time, xs_boolean, xs_unsigned_short, XmlLimits};
+use crate::xml::fields::{attribute, authn_request, authn_statement, login_response, name_id};
+use crate::xml::{dom, xs_boolean, xs_unsigned_short, XmlLimits};
 
 pub(super) fn required_str<'a>(extract: &'a Value, path: &str) -> Result<&'a str, SamlError> {
     extract
@@ -31,12 +31,19 @@ pub(super) fn required_saml_utc_instant(
             "{element} is missing required unqualified attribute {attribute}"
         ))
     })?;
-    let value = parse_saml_utc_date_time(value).ok_or_else(|| {
+    saml_utc_instant(value, element, attribute)
+}
+
+pub(super) fn saml_utc_instant(
+    value: &str,
+    element: &str,
+    attribute: &str,
+) -> Result<SamlInstant, SamlError> {
+    SamlInstant::parse_utc(value).ok_or_else(|| {
         SamlError::ProtocolProfile(format!(
             "{element} {attribute} must use the SAML-conformant UTC xs:dateTime form ending in Z"
         ))
-    })?;
-    SamlInstant::try_new(value)
+    })
 }
 
 pub(super) fn optional_request_id(
@@ -75,8 +82,7 @@ pub(super) fn optional_u16(extract: &Value, path: &str) -> Result<Option<u16>, S
 /// A time bound that passed the time-window check, with XML Schema whitespace
 /// collapsed.
 fn checked_time_bound(value: &str, field: TimeWindowField) -> Result<SamlInstant, SamlError> {
-    let value = parse_saml_utc_date_time(value).ok_or(SamlError::TimeWindowInvalid { field })?;
-    SamlInstant::try_new(value)
+    SamlInstant::parse_utc(value).ok_or(SamlError::TimeWindowInvalid { field })
 }
 
 pub(super) fn conditions_instants(
@@ -88,6 +94,17 @@ pub(super) fn conditions_instants(
         window.not_before.map(bound).transpose()?,
         window.not_on_or_after.map(bound).transpose()?,
     ))
+}
+
+pub(super) fn name_id_from_extract(extract: &Value, value: &str) -> NameId {
+    let qualifier = |field| extract.get_str(field).map(str::to_owned);
+    NameId::received(
+        value,
+        extract.get_str(name_id::FORMAT).map(NameIdFormat::from_uri),
+        qualifier(name_id::NAME_QUALIFIER),
+        qualifier(name_id::SP_NAME_QUALIFIER),
+        qualifier(name_id::SP_PROVIDED_ID),
+    )
 }
 
 pub(super) fn name_id_policy_from_extract(

@@ -11,12 +11,13 @@ use crate::entity::{generate_id, EntitySetting};
 use crate::error::SamlError;
 use crate::metadata::{EndpointDirection, Metadata};
 use crate::model::{
-    EndpointUrl, MessageId, NameId, Received, ReplayKey, RequestVersionMismatch, SamlInstant,
+    EndpointUrl, MessageId, NameId, Received, ReplayKey, RequestVersionMismatch,
     SamlValidationContext, Status, SubordinateStatusCode,
 };
-use crate::soap::{read_soap_body, SoapChannel, SoapRequest, SoapResponse};
+use crate::soap::{
+    read_soap_body, read_soap_status_response, SoapChannel, SoapRequest, SoapResponse,
+};
 use crate::xml::any_uri::collapse_whitespace;
-use crate::xml::parse_saml_utc_date_time;
 use crate::xml::protocol_element::{
     issuer, issuer_format_is_entity, parse_saml_with_limits, read_status, SamlElement,
 };
@@ -238,28 +239,14 @@ impl StartedNameIdManagement {
     /// not a `ManageNameIDResponse` from that service provider for this
     /// request.
     pub fn finish(&self, response_envelope: &str) -> Result<(), SamlError> {
-        let body = read_soap_body(response_envelope, self.xml_limits)?;
-        crate::schema::validate(response_envelope, self.schema_validator)?;
-        if body.local_name != "ManageNameIDResponse" || body.namespace != namespace::PROTOCOL {
-            return Err(SamlError::ProtocolProfile(
-                "SOAP body must be a ManageNameIDResponse".into(),
-            ));
-        }
-        let response = parse_saml_with_limits(&body.xml, self.xml_limits)?;
-        if response.required_attr("Version")? != "2.0" {
-            return Err(SamlError::ProtocolProfile(
-                "ManageNameIDResponse Version must be 2.0".into(),
-            ));
-        }
-        response.required_attr("ID")?;
-        require_utc_instant(&response)?;
-        let in_response_to = response.attr("InResponseTo");
-        if in_response_to != Some(self.request_id.as_str()) {
-            return Err(SamlError::in_response_to_mismatch(
-                Some(&self.request_id),
-                in_response_to,
-            ));
-        }
+        let (_, response) = read_soap_status_response(
+            response_envelope,
+            self.xml_limits,
+            self.schema_validator,
+            "ManageNameIDResponse",
+            "SOAP body must be a ManageNameIDResponse",
+            &self.request_id,
+        )?;
         require_peer_issuer(&response, &self.service_provider)?;
         require_one_status_code(&response)?;
         read_status(&response)?.require_success()
@@ -341,7 +328,7 @@ pub(crate) fn receive(
     let request = parse_saml_with_limits(&body.xml, idp.setting.xml_limits)?;
     let id = MessageId::try_new(request.required_attr("ID")?)?;
     let version = request.required_attr("Version")?;
-    let issue_instant = require_utc_instant(&request)?;
+    let issue_instant = request.required_issue_instant()?;
     let sp_entity_id = service_provider.entity_id();
     if request
         .children
@@ -562,17 +549,6 @@ fn name_id(element: &SamlElement) -> NameId {
         attr("SPNameQualifier"),
         attr("SPProvidedID"),
     )
-}
-
-fn require_utc_instant(element: &SamlElement) -> Result<SamlInstant, SamlError> {
-    let instant = element.required_attr("IssueInstant")?;
-    let instant = parse_saml_utc_date_time(&instant).ok_or_else(|| {
-        SamlError::ProtocolProfile(format!(
-            "{} IssueInstant must be a UTC xs:dateTime",
-            element.local_name
-        ))
-    })?;
-    SamlInstant::try_new(instant)
 }
 
 fn require_peer_issuer(element: &SamlElement, expected: &str) -> Result<(), SamlError> {

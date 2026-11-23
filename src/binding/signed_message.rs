@@ -1,18 +1,46 @@
 #[cfg(crypto)]
 use crate::binding::encode_base64;
 use crate::constants::{Binding, ParserType};
-use crate::entity::EntitySetting;
+use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
 
+pub(crate) struct SignedMessage {
+    pub(crate) content: String,
+    signature: Option<String>,
+    sig_alg: Option<String>,
+    binding: Binding,
+    parser_type: ParserType,
+}
+
+impl SignedMessage {
+    pub(crate) fn bind(
+        self,
+        id: String,
+        destination: String,
+        relay_state: Option<&str>,
+    ) -> BindingContext {
+        BindingContext {
+            id,
+            context: self.content,
+            signature: self.signature,
+            sig_alg: self.sig_alg,
+            relay_state: relay_state.map(str::to_owned),
+            entity_endpoint: destination,
+            binding: self.binding,
+            request_type: self.parser_type.query_param(),
+        }
+    }
+}
+
 #[cfg(crypto)]
-pub(crate) fn sign_browser_message(
+pub(crate) fn sign_message(
     setting: &EntitySetting,
     binding: Binding,
     xml: &str,
     destination: &str,
     relay: Option<&str>,
     parser_type: ParserType,
-) -> Result<(String, Option<String>, Option<String>), SamlError> {
+) -> Result<SignedMessage, SamlError> {
     use crate::binding::sign_detached_message;
     use crate::constants::transform_algorithm;
     use crate::crypto::SigningCredential;
@@ -34,7 +62,7 @@ pub(crate) fn sign_browser_message(
             setting.signature_config.as_ref(),
         )
     };
-    match binding {
+    let (content, signature, sig_alg) = match binding {
         Binding::Redirect | Binding::SimpleSign => sign_detached_message(
             &credential,
             binding,
@@ -60,18 +88,25 @@ pub(crate) fn sign_browser_message(
         Binding::Artifact => Err(SamlError::UnsupportedBinding {
             binding: Binding::Artifact,
         }),
-    }
+    }?;
+    Ok(SignedMessage {
+        content,
+        signature,
+        sig_alg,
+        binding,
+        parser_type,
+    })
 }
 
 #[cfg(not(crypto))]
-pub(crate) fn sign_browser_message(
+pub(crate) fn sign_message(
     _setting: &EntitySetting,
     _binding: Binding,
     _xml: &str,
     _destination: &str,
     _relay: Option<&str>,
     _parser_type: ParserType,
-) -> Result<(String, Option<String>, Option<String>), SamlError> {
+) -> Result<SignedMessage, SamlError> {
     Err(SamlError::Unsupported(
         "signing logout messages requires a crypto provider feature".into(),
     ))

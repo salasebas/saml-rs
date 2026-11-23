@@ -98,22 +98,14 @@ pub(crate) fn decrypt_encrypted_id(
 
 #[cfg(crypto)]
 fn decrypt(xml: &str, key_pem: &str, setting: &EntitySetting) -> Result<Option<String>, SamlError> {
-    use crate::crypto::enc::{decrypt_logout_request_encrypted_id, AssertionDecryptionOptions};
+    use crate::crypto::enc::decrypt_logout_request_encrypted_id;
 
     let keys = crate::crypto::keys::load_decryption_keys(
         key_pem,
         setting.enc_private_key_pass.as_deref(),
         &setting.additional_decryption_keys,
     )?;
-    decrypt_logout_request_encrypted_id(
-        xml,
-        &keys,
-        AssertionDecryptionOptions {
-            allow_rsa15_key_transport_decryption: setting.allow_rsa15_key_transport_decryption,
-            max_decryption_work: setting.max_decryption_work,
-        },
-        setting.xml_limits,
-    )
+    decrypt_logout_request_encrypted_id(xml, &keys, setting.into(), setting.xml_limits)
 }
 
 #[cfg(not(crypto))]
