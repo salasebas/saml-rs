@@ -6,10 +6,11 @@ use super::{
     ReferenceResolutionReason, SamlError, VerifyResult, XmlSignatureProfile,
 };
 use crate::constants::transform_algorithm;
+use bergshamra::c14n::C14nMode;
 use bergshamra::core::algorithm;
 use bergshamra::dsig::verify::verify_all_document_with_source;
 
-fn exactly_one_dsig_child(
+pub(super) fn exactly_one_dsig_child(
     document: &BergshamraDocument<'_>,
     parent: BergshamraNodeId,
     local_name: &str,
@@ -240,12 +241,47 @@ pub(super) fn enforce_strict_profile_on_verified_signature(
     }) {
         return Err(SamlError::AlgorithmUnsupported);
     }
-    enforce_reference_transforms(document, reference)
+    enforce_strict_reference_transforms(document, reference)
 }
 
-pub(super) fn enforce_reference_transforms(
+pub(super) fn enforce_message_signature_reference(
+    document: &BergshamraDocument<'_>,
+    signature: BergshamraNodeId,
+    id: &str,
+) -> Result<(), SamlError> {
+    let signed_info = exactly_one_dsig_child(document, signature, bergshamra_ns::node::SIGNED_INFO)
+        .ok_or(SamlError::SignedReferenceMismatch)?;
+    let reference = exactly_one_dsig_child(document, signed_info, bergshamra_ns::node::REFERENCE)
+        .ok_or(SamlError::SignedReferenceMismatch)?;
+    let target = document
+        .element(reference)
+        .and_then(|element| element.get_attribute(bergshamra_ns::attr::URI))
+        .and_then(|uri| uri.strip_prefix('#'));
+    if target != Some(id) {
+        return Err(SamlError::SignedReferenceMismatch);
+    }
+    enforce_reference_transforms(document, reference, |algorithm| {
+        algorithm == transform_algorithm::ENVELOPED_SIGNATURE
+            || C14nMode::from_uri(algorithm).is_some()
+    })
+}
+
+fn enforce_strict_reference_transforms(
     document: &BergshamraDocument<'_>,
     reference: BergshamraNodeId,
+) -> Result<(), SamlError> {
+    enforce_reference_transforms(document, reference, |algorithm| {
+        matches!(
+            algorithm,
+            transform_algorithm::ENVELOPED_SIGNATURE | transform_algorithm::EXC_C14N
+        )
+    })
+}
+
+fn enforce_reference_transforms(
+    document: &BergshamraDocument<'_>,
+    reference: BergshamraNodeId,
+    allows_transform: impl Fn(&str) -> bool,
 ) -> Result<(), SamlError> {
     for transforms in document.child_elements_by_name_ns(
         reference,
@@ -261,10 +297,9 @@ pub(super) fn enforce_reference_transforms(
                 continue;
             };
             if !element.matches_name_ns(bergshamra_ns::DSIG, bergshamra_ns::node::TRANSFORM)
-                || !matches!(
-                    element.get_attribute(bergshamra_ns::attr::ALGORITHM),
-                    Some(transform_algorithm::ENVELOPED_SIGNATURE | transform_algorithm::EXC_C14N)
-                )
+                || !element
+                    .get_attribute(bergshamra_ns::attr::ALGORITHM)
+                    .is_some_and(&allows_transform)
             {
                 return Err(SamlError::AlgorithmUnsupported);
             }
@@ -317,7 +352,7 @@ pub(super) fn preflight_signature_processing(
                     .unwrap_or_default();
                 verified_target_from_uri(uri)?;
                 if profile == XmlSignatureProfile::StrictRsaSha2 {
-                    enforce_reference_transforms(document, reference)?;
+                    enforce_strict_reference_transforms(document, reference)?;
                 }
             }
         }

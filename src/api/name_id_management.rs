@@ -119,10 +119,11 @@ impl IdentityProvider {
     /// or with an `EncryptedID` or `NewEncryptedID` that cannot be decrypted.
     ///
     /// `sp` is the service provider the deployment authenticated on
-    /// `channel`. `validation` selects the receiving endpoint when this
-    /// identity provider publishes more than one, applies its
-    /// `ManageNameIDRequest` age policy, and stores the request `ID` for
-    /// replay detection.
+    /// `channel`. A present XML signature must cover the request and verify
+    /// against `sp`'s signing keys. `validation` selects the receiving endpoint
+    /// when this identity provider publishes more than one, applies its
+    /// `ManageNameIDRequest` age policy, and stores the request `ID` for replay
+    /// detection.
     ///
     /// # Errors
     ///

@@ -33,6 +33,8 @@ mod metadata_role_keys;
 mod metadata_trust;
 mod name_id_management_encryption;
 mod name_id_management_redirect;
+#[cfg(crypto)]
+mod name_id_management_soap_signatures;
 mod namespace_version;
 mod no_default_features;
 pub(crate) mod policies_without_crypto;

@@ -16,7 +16,7 @@ use crate::xml::protocol_element::{parse_saml_with_limits, SamlElement};
 use crate::xml::write::XmlWriter;
 use crate::xml::XmlLimits;
 
-const SOAP_NAMESPACE: &str = "http://schemas.xmlsoap.org/soap/envelope/";
+pub(crate) const SOAP_NAMESPACE: &str = "http://schemas.xmlsoap.org/soap/envelope/";
 pub(crate) const SOAP_ACTOR_NEXT: &str = "http://schemas.xmlsoap.org/soap/actor/next";
 const CONTENT_TYPE: HttpHeader = HttpHeader::new("Content-Type", "text/xml; charset=utf-8");
 pub(crate) const RESPONSE_CACHE_CONTROL: HttpHeader = HttpHeader::new(
@@ -245,6 +245,7 @@ pub(crate) struct SoapBody {
     pub(crate) local_name: String,
     pub(crate) namespace: String,
     pub(crate) xml: String,
+    pub(crate) message_start: usize,
 }
 
 /// Read the single SAML element of a SOAP 1.1 body.
@@ -266,6 +267,7 @@ pub(crate) fn read_soap_body(envelope: &str, limits: XmlLimits) -> Result<SoapBo
         local_name: child.local_name.clone(),
         namespace: child_namespace.namespace,
         xml: standalone_element(envelope, child.start, child.end)?,
+        message_start: child.start,
     })
 }
 
@@ -276,7 +278,7 @@ pub(crate) fn read_soap_status_response(
     expected_body: &str,
     wrong_body_error: &str,
     request_id: &str,
-) -> Result<(String, SamlElement), SamlError> {
+) -> Result<(SoapBody, SamlElement), SamlError> {
     let body = read_soap_body(envelope, limits)?;
     crate::schema::validate(envelope, schema_validator)?;
     if body.local_name != expected_body || body.namespace != namespace::PROTOCOL {
@@ -297,7 +299,7 @@ pub(crate) fn read_soap_status_response(
             in_response_to,
         ));
     }
-    Ok((body.xml, response))
+    Ok((body, response))
 }
 
 /// The `Body` of an envelope whose children are an optional `Header` and one

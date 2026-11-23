@@ -50,6 +50,10 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Report a status other than `Success` as an error | Library policy: only `Success` confirms the change, and the caller needs the peer's refusal status. | Core §3.6.3 | Always |
 | Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.2 binds the responder, and the requester attributes the response to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.2 | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel`, attested at start | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
+| Verify the message signature when present, including on a protected channel | Library policy: the receiver rejects a signature it cannot verify before trusting the response status. | Core §3.2.2, Profiles §4.5.4.2 | Always |
+| Require the verified signature to reference the response's `ID` | Mandatory | Core §5.4.2 | Always |
+| Allow enveloped signature and canonicalization transforms | Library policy: a signature must cover the entire response. | Core §5.4.4 | Always |
+| Use the SP's configured signing keys and require channel protection for signed responses as well | Library policy: the caller binds the response to the authenticated peer and its pending SOAP exchange. | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel`, SP metadata or HMAC secret |
 
 ## SOAP: ManageNameIDRequest from the service provider
 
@@ -64,7 +68,10 @@ and [status code](web-browser-sso-acceptance.md#status-codes) rules.
 | Answer a newer authenticated request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version | Mandatory | Core §4.1.3.2 | `NameIdManagementRefusal::VersionMismatch` |
 | Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.4.1 | `SoapChannel` |
-| Refuse a request when the `SoapChannel` does not authenticate the requester, even if it is signed. A present XML signature is not verified | Library policy: Profiles §4.5.3.1 also accepts a signature, but this identity provider verifies none on this message. | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel` |
+| Verify the message signature when present, including on a protected channel | Library policy: the receiver rejects a signature it cannot verify before passing a change to the caller. | Core §3.2.1, Profiles §4.5.4.1 | Always |
+| Require the verified signature to reference the request's `ID` | Mandatory | Core §5.4.2 | Always |
+| Allow enveloped signature and canonicalization transforms | Library policy: a signature must cover the entire request. | Core §5.4.4 | Always |
+| Use the SP's configured signing keys and require channel protection for signed requests as well | Library policy: the caller binds the receipt to the SP it authenticated on the SOAP channel. | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel`, SP metadata or HMAC secret |
 | Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.1 binds the requester, and the responder ties the change to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.1 | Always |
 | Compare a present `Destination` with the receiving SOAP `ManageNameIDService` after collapsing XML whitespace. Accept an absent value | Mandatory | Core §3.2.1, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require at most one `Issuer`, `ds:Signature`, and `Extensions` in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate`, with text-only `NameID` and `NewID` and an empty `Terminate` | Mandatory | `RequestAbstractType`, `ManageNameIDRequestType`, `TerminateType` | Always |
@@ -203,7 +210,6 @@ The caller owns these rules, and the crate keeps no identifier state or sessions
 - Name identifier management over HTTP-POST and HTTP-Artifact. Optional, Profiles §4.5.3.1.
 - SOAP name identifier management at the service provider. Optional, Conformance Table 2.
 - Signing outbound SOAP management messages. Optional, Profiles §§4.5.3.1-2.
-- Verifying an XML signature present on an inbound SOAP `ManageNameIDRequest` or `ManageNameIDResponse`. Optional, Profiles §§4.5.3.1-2. The signature is ignored.
 - A responder that adds `RelayState` to a request that had none. Optional, Bindings §3.4.3.
 - Checking a present `Destination` on a SOAP `ManageNameIDResponse`. Mandatory, Core §3.2.2. The synchronous `finish` API has no receiving URL and skips this check.
 - Name identifier mapping over SOAP. Mandatory for the Extended IdP and SP, Conformance Table 3.
