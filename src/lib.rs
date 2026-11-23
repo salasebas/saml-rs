@@ -454,8 +454,8 @@ pub use crypto::{
 };
 pub use discovery::{CommonDomainCookie, CommonDomainCookieLifetime, RememberIdentityProvider};
 pub use error::{
-    ReferenceResolutionReason, ResourceLimit, SamlError, SignatureVerificationReason,
-    SubjectConfirmationReason, TimeWindowField,
+    IdpResolutionReason, ReferenceResolutionReason, ResourceLimit, SamlError,
+    SignatureVerificationReason, SubjectConfirmationReason, TimeWindowField,
 };
 pub use http_header::HttpHeader;
 pub use metadata::{

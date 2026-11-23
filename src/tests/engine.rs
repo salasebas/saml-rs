@@ -87,8 +87,7 @@ impl SpMessages for sp::Engine {
         Ok(self
             .parse_login_response_with_request_id_at(
                 idp,
-                binding,
-                request,
+                self.decode_login_response(binding, request)?,
                 request_id,
                 LoginResponseParseOptions::at(SystemTime::now(), ClockSkew::strict()),
             )?
@@ -105,8 +104,7 @@ impl SpMessages for sp::Engine {
         Ok(self
             .parse_unsolicited_login_response_at(
                 idp,
-                binding,
-                request,
+                self.decode_login_response(binding, request)?,
                 LoginResponseParseOptions::at(SystemTime::now(), ClockSkew::strict()),
             )?
             .into_parts()

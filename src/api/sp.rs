@@ -3,7 +3,11 @@ use crate::browser::{
 };
 use crate::config::{IdpDescriptor, SpConfig};
 use crate::constants::Binding;
-use crate::flow::{FlowResultWithSignatureEvidence, HttpRequest, SignedMessageDestination};
+use crate::error::IdpResolutionReason;
+use crate::flow::{
+    issuer_for_idp_resolution, FlowResultWithSignatureEvidence, HttpRequest, ReceivedMessage,
+    SignedMessageDestination,
+};
 use crate::model::{
     AuthnRequest, OutstandingLogout, RelayState, SamlValidationContext, SsoResponse, SsoSession,
     VerifiedXmlSignature,
@@ -364,6 +368,90 @@ impl ServiceProvider {
         self.finish_validated_session(session, &mut validation, None)
     }
 
+    /// Accept an IdP-initiated HTTP-POST response from a configured identity provider.
+    ///
+    /// The resolver receives the exact, unauthenticated entity ID from the
+    /// response issuer. When an unsigned response omits its issuer and contains
+    /// only plaintext assertions, each assertion must name the same issuer.
+    /// Use the ID only to select a descriptor from an existing trust
+    /// configuration. The normal unsolicited SSO checks authenticate the response
+    /// or its assertions with that descriptor before returning a session.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::{collections::HashMap, time::SystemTime};
+    /// use saml_rs::{
+    ///     FormField, IdpDescriptor, InMemoryReplayCache, Inbound, ReplayPolicy,
+    ///     SamlError, SamlValidationContext, ServiceProvider, SsoSession,
+    /// };
+    ///
+    /// fn receive_login(
+    ///     sp: &ServiceProvider,
+    ///     trusted_idps: &HashMap<String, IdpDescriptor>,
+    ///     fields: Vec<FormField>,
+    ///     replay_cache: &mut InMemoryReplayCache,
+    /// ) -> Result<SsoSession, SamlError> {
+    ///     let validation =
+    ///         SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(replay_cache));
+    ///     sp.accept_unsolicited_sso_with_resolver(
+    ///         Inbound::post(fields),
+    ///         validation,
+    ///         |issuer| trusted_idps.get(issuer),
+    ///     )
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SamlError::UnsupportedBinding`] for bindings other than
+    /// HTTP-POST and [`SamlError::IdpResolution`] when the issuer is missing,
+    /// ambiguous, invalid, or absent from the resolver. Returns
+    /// [`SamlError::IssuerMismatch`] if the returned descriptor has a different
+    /// entity ID. The validation errors of [`Self::accept_unsolicited_sso`]
+    /// also apply.
+    pub fn accept_unsolicited_sso_with_resolver<'idp>(
+        &self,
+        input: Inbound<SsoResponse>,
+        mut validation: SamlValidationContext<'_>,
+        resolve_idp: impl FnOnce(&str) -> Option<&'idp IdpDescriptor>,
+    ) -> Result<SsoSession, SamlError> {
+        let binding = input.binding();
+        if binding != Binding::Post {
+            return Err(SamlError::UnsupportedBinding { binding });
+        }
+        let relay_state = relay_state_from_input(&input)?;
+        let engine = self.engine();
+        let parse = ResponseParseInput {
+            binding,
+            request: input.into_http_request(engine.setting.xml_limits)?,
+            signed_destination: SignedMessageDestination::Required,
+        };
+        let received = engine.decode_login_response(parse.binding, &parse.request)?;
+        let issuer = issuer_for_idp_resolution(received.xml(), engine.setting.xml_limits)?;
+        let idp = resolve_idp(&issuer).ok_or(SamlError::IdpResolution {
+            reason: IdpResolutionReason::UnknownEntityId,
+        })?;
+        if issuer != idp.entity_id().as_str() {
+            return Err(SamlError::issuer_mismatch(
+                idp.entity_id().as_str(),
+                Some(&issuer),
+            ));
+        }
+        let peer_idp = idp_engine_at(idp, validation.now())?;
+        let binding = SsoResponseBinding::Post;
+        let expected_recipient = self.unsolicited_recipient(binding, &validation)?;
+        let session = self.validate_unsolicited_response(
+            peer_idp,
+            received,
+            parse.options(&validation, &expected_recipient),
+            binding,
+            relay_state,
+            &validation,
+        )?;
+        self.finish_validated_session(session, &mut validation, None)
+    }
+
     /// Accept an IdP-initiated SSO response and apply an [`OutstandingLogout`].
     ///
     /// # Errors
@@ -412,8 +500,8 @@ impl ServiceProvider {
         let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
         let parsed = self.engine().parse_login_response_with_request_id_at(
             peer_idp,
-            parse.binding,
-            &parse.request,
+            self.engine()
+                .decode_login_response(parse.binding, &parse.request)?,
             pending.request_id().as_str(),
             parse.options(validation, pending.acs().location().as_str()),
         );
@@ -436,22 +524,47 @@ impl ServiceProvider {
         let relay_state = relay_state_from_input(&input)?;
         let binding = SsoResponseBinding::try_from(input.binding())?;
         let peer_idp = idp_engine_at(idp, validation.now())?;
+        let expected_recipient = self.unsolicited_recipient(binding, validation)?;
+        let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
+        self.validate_unsolicited_response(
+            peer_idp,
+            self.engine()
+                .decode_login_response(parse.binding, &parse.request)?,
+            parse.options(validation, &expected_recipient),
+            binding,
+            relay_state,
+            validation,
+        )
+    }
+
+    fn unsolicited_recipient(
+        &self,
+        binding: SsoResponseBinding,
+        validation: &SamlValidationContext<'_>,
+    ) -> Result<String, SamlError> {
         let metadata = &self.engine().metadata;
-        let expected_recipient = match validation.recipient_endpoint() {
+        match validation.recipient_endpoint() {
             Some(_) => validation.resolve_recipient_endpoint(
                 &metadata.assertion_consumer_service_locations(Binding::from(binding)),
-            )?,
+            ),
             None => metadata
                 .assertion_consumer_location(Binding::from(binding))
-                .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?,
-        };
-        let parse = ResponseParseInput::try_new(idp, input, self.engine().setting.xml_limits)?;
-        let flow = self.engine().parse_unsolicited_login_response_at(
-            peer_idp,
-            parse.binding,
-            &parse.request,
-            parse.options(validation, &expected_recipient),
-        )?;
+                .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into())),
+        }
+    }
+
+    fn validate_unsolicited_response(
+        &self,
+        peer_idp: &crate::idp::Engine,
+        received: ReceivedMessage<'_>,
+        options: LoginResponseParseOptions<'_>,
+        binding: SsoResponseBinding,
+        relay_state: Option<RelayState>,
+        validation: &SamlValidationContext<'_>,
+    ) -> Result<SsoSession, SamlError> {
+        let flow = self
+            .engine()
+            .parse_unsolicited_login_response_at(peer_idp, received, options)?;
         validation.check_sso_replay_policy(binding)?;
         session_from_verified_flow(flow, relay_state)
     }
