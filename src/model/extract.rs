@@ -211,9 +211,20 @@ pub(super) fn authn_statements_from_extract(
     extract: &Value,
     saml_content: &str,
 ) -> Result<Vec<AuthnStatement>, SamlError> {
-    let sessions: Vec<AuthnStatement> = authn_statement_values(extract)?
+    let statements = authn_statement_values(extract)?;
+    if statements.is_empty() {
+        return Ok(Vec::new());
+    }
+    let children = super::authn_details::statement_children(extract, saml_content)?;
+    if statements.len() != children.len() {
+        return Err(SamlError::Invalid(
+            "extracted AuthnStatement count does not match the assertion".into(),
+        ));
+    }
+    statements
         .into_iter()
-        .map(|statement| {
+        .zip(children)
+        .map(|(statement, children)| {
             let session_index =
                 optional_authn_statement_str(statement, authn_statement::SESSION_INDEX)?
                     .map(SessionIndex::try_new)
@@ -230,16 +241,10 @@ pub(super) fn authn_statements_from_extract(
                 session_index,
                 authn_instant,
                 not_on_or_after,
+                children,
             ))
         })
-        .collect::<Result<_, SamlError>>()?;
-    if matches!(
-        extract.get(login_response::AUTHN_STATEMENT),
-        None | Some(Value::Null)
-    ) {
-        return Ok(sessions);
-    }
-    super::authn_details::attach_statement_details(extract, saml_content, sessions)
+        .collect()
 }
 
 pub(super) fn audience_restrictions_from_extract(

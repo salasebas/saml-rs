@@ -11,6 +11,7 @@ use saml_rs::tests::engine::LogoutUser;
 mod peer_hmac;
 
 use super::replay_cache;
+use super::sso_flow_document::set_authn_statements;
 
 use replay_cache::RecordingReplayCache;
 
@@ -932,42 +933,39 @@ fn value_object(entries: Vec<(&str, Value)>) -> Value {
 }
 
 fn sso_session() -> Result<SsoSession, SamlError> {
-    SsoSession::try_from_with_verified_xml_signatures(
-        FlowResult {
-            saml_content: "<samlp:Response/>".to_string(),
-            sig_alg: None,
-            extract: value_object(vec![
-                (
-                    "response",
-                    value_object(vec![
-                        ("id", value_str("_response123")),
-                        ("issueInstant", value_str("2024-01-01T00:00:00Z")),
-                    ]),
-                ),
-                (
-                    "assertion",
-                    value_object(vec![
-                        ("id", value_str("_assertion123")),
-                        ("issueInstant", value_str("2024-01-01T00:00:01Z")),
-                    ]),
-                ),
-                ("issuer", value_str(IDP_ENTITY_ID)),
-                ("nameID", value_str("alice@example.com")),
-                (
-                    "sessionIndex",
-                    Value::Array(vec![
-                        value_object(vec![
-                            ("sessionIndex", value_str("_session123")),
-                            ("authnInstant", value_str("2026-07-04T12:00:00Z")),
-                        ]),
-                        value_object(vec![("sessionIndex", value_str("_session456"))]),
-                    ]),
-                ),
+    let mut flow = FlowResult {
+        saml_content: "<samlp:Response/>".to_string(),
+        sig_alg: None,
+        extract: value_object(vec![
+            (
+                "response",
+                value_object(vec![
+                    ("id", value_str("_response123")),
+                    ("issueInstant", value_str("2024-01-01T00:00:00Z")),
+                ]),
+            ),
+            (
+                "assertion",
+                value_object(vec![
+                    ("id", value_str("_assertion123")),
+                    ("issueInstant", value_str("2024-01-01T00:00:01Z")),
+                ]),
+            ),
+            ("issuer", value_str(IDP_ENTITY_ID)),
+            ("nameID", value_str("alice@example.com")),
+        ]),
+    };
+    set_authn_statements(
+        &mut flow,
+        Value::Array(vec![
+            value_object(vec![
+                ("sessionIndex", value_str("_session123")),
+                ("authnInstant", value_str("2026-07-04T12:00:00Z")),
             ]),
-        },
-        Vec::new(),
-        None,
-    )
+            value_object(vec![("sessionIndex", value_str("_session456"))]),
+        ]),
+    );
+    SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)
 }
 
 #[test]
@@ -3989,7 +3987,7 @@ fn typed_slo_logout_request_template_fixed_format_must_match_a_subject_without_f
 fn typed_slo_subject_from_sso_session_keeps_name_id_qualifiers(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let assertion = format!(
-        r#"<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_assertion123" Version="2.0" IssueInstant="2024-01-01T00:00:01Z"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer><saml:Subject><saml:NameID NameQualifier="{QUALIFIED_NAME_QUALIFIER}" SPNameQualifier="{QUALIFIED_SP_NAME_QUALIFIER}" Format="{format}" SPProvidedID="{QUALIFIED_SP_PROVIDED_ID}">{QUALIFIED_NAME_ID}</saml:NameID></saml:Subject><saml:AuthnStatement AuthnInstant="2024-01-01T00:00:00Z" SessionIndex="_session123"/></saml:Assertion>"#,
+        r#"<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_assertion123" Version="2.0" IssueInstant="2024-01-01T00:00:01Z"><saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer><saml:Subject><saml:NameID NameQualifier="{QUALIFIED_NAME_QUALIFIER}" SPNameQualifier="{QUALIFIED_SP_NAME_QUALIFIER}" Format="{format}" SPProvidedID="{QUALIFIED_SP_PROVIDED_ID}">{QUALIFIED_NAME_ID}</saml:NameID></saml:Subject><saml:AuthnStatement AuthnInstant="2024-01-01T00:00:00Z" SessionIndex="_session123"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement></saml:Assertion>"#,
         format = NameIdFormat::Persistent.as_uri(),
     );
     let response = format!(

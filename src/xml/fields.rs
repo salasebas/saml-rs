@@ -83,7 +83,6 @@ pub(crate) mod login_response {
     pub(crate) const AUDIENCE: &str = "audience";
     pub(crate) const AUDIENCE_RESTRICTION: &str = "audienceRestriction";
     pub(crate) const SUBJECT_CONFIRMATION: &str = "subjectConfirmation";
-    pub(crate) const AUTHN_STATEMENT: &str = "authnStatement";
     /// One [`super::authn_statement`] object per `<AuthnStatement>`.
     pub(crate) const AUTHN_STATEMENTS: &str = "sessionIndex";
     pub(crate) const ATTRIBUTES: &str = "attributes";
@@ -295,12 +294,6 @@ pub fn login_response_fields(assertion: &str) -> Vec<ExtractorField> {
         ExtractorField::new(
             login_response::SUBJECT_CONFIRMATION,
             &["Assertion", "Subject", "SubjectConfirmation"],
-        )
-        .with_context()
-        .with_shortcut(assertion),
-        ExtractorField::new(
-            login_response::AUTHN_STATEMENT,
-            &["Assertion", "AuthnStatement"],
         )
         .with_context()
         .with_shortcut(assertion),

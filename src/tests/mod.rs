@@ -43,6 +43,7 @@ mod redirect_inflate_limit;
 mod redirect_xml_limits;
 mod robustness;
 mod simplesign_xml_limits;
+mod sso_flow_document;
 mod sso_response_issuer;
 mod typed_config;
 mod typed_models;

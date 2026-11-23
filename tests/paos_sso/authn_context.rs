@@ -39,7 +39,7 @@ fn exactly_requested_authn_context_is_checked_and_written() -> Result<(), Box<dy
         session
             .authn_statements()
             .first()
-            .and_then(|statement| statement.authn_context())
+            .map(saml_rs::AuthnStatement::authn_context)
             .and_then(|context| context.class_reference())
             .map(AuthnContextReference::uri),
         Some(SMARTCARD),

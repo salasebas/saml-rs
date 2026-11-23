@@ -1,3 +1,4 @@
+use super::sso_flow_document::set_authn_statements;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use saml_rs::constants::Binding;
@@ -837,20 +838,20 @@ fn minimal_sso_flow_with_issue_instants(
     if let Some(issue_instant) = assertion_issue_instant {
         assertion.push(("issueInstant", value_str(issue_instant)));
     }
-    let mut extract = value_object(vec![
-        ("response", value_object(response)),
-        ("assertion", value_object(assertion)),
-        ("issuer", value_str("https://idp.example.com/metadata")),
-        ("nameID", value_str("alice@example.com")),
-    ]);
-    if let Some(authn_statements) = authn_statements {
-        extract.insert("sessionIndex", authn_statements);
-    }
-    FlowResult {
+    let mut flow = FlowResult {
         saml_content: "<samlp:Response/>".to_string(),
         sig_alg: None,
-        extract,
+        extract: value_object(vec![
+            ("response", value_object(response)),
+            ("assertion", value_object(assertion)),
+            ("issuer", value_str("https://idp.example.com/metadata")),
+            ("nameID", value_str("alice@example.com")),
+        ]),
+    };
+    if let Some(authn_statements) = authn_statements {
+        set_authn_statements(&mut flow, authn_statements);
     }
+    flow
 }
 
 #[test]
@@ -1170,7 +1171,7 @@ fn typed_models_sso_session_rejects_attributes_without_their_elements() {
 #[test]
 fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let flow = FlowResult {
+    let mut flow = FlowResult {
         saml_content: "<samlp:Response/>".to_string(),
         sig_alg: Some("sig-alg".to_string()),
         extract: value_object(vec![
@@ -1213,14 +1214,6 @@ fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
                 ]),
             ),
             (
-                "sessionIndex",
-                value_object(vec![
-                    ("sessionIndex", value_str("_session123")),
-                    ("authnInstant", value_str("2026-07-04T12:00:00Z")),
-                    ("sessionNotOnOrAfter", value_str("2026-07-04T13:00:00Z")),
-                ]),
-            ),
-            (
                 "conditions",
                 value_object(vec![
                     ("notBefore", value_str("2026-07-04T11:59:00Z")),
@@ -1234,6 +1227,14 @@ fn typed_models_sso_session_from_flow_result_preserves_multi_valued_attributes(
             ),
         ]),
     };
+    set_authn_statements(
+        &mut flow,
+        value_object(vec![
+            ("sessionIndex", value_str("_session123")),
+            ("authnInstant", value_str("2026-07-04T12:00:00Z")),
+            ("sessionNotOnOrAfter", value_str("2026-07-04T13:00:00Z")),
+        ]),
+    );
 
     let session = SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)?;
     let affiliation = session

@@ -1,6 +1,7 @@
 //! `ReplayPolicy::Disabled` skips replay checks.
 
 use super::replay_cache::RecordingReplayCache;
+use super::sso_flow_document::set_authn_statements;
 
 use std::time::{Duration, SystemTime};
 
@@ -133,7 +134,7 @@ fn bearer_subject_confirmation(not_on_or_after: &str) -> Value {
 }
 
 fn session_flow_with_ids(response_id: &str, assertion_id: &str) -> FlowResult {
-    FlowResult {
+    let mut flow = FlowResult {
         saml_content: "<samlp:Response/>".to_string(),
         sig_alg: None,
         extract: value_object(vec![
@@ -158,19 +159,20 @@ fn session_flow_with_ids(response_id: &str, assertion_id: &str) -> FlowResult {
                 bearer_subject_confirmation("2026-07-04T14:00:00Z"),
             ),
             (
-                "sessionIndex",
-                value_object(vec![
-                    ("sessionIndex", value_str("_session123")),
-                    ("authnInstant", value_str("2026-07-04T12:00:00Z")),
-                    ("sessionNotOnOrAfter", value_str("2026-07-04T13:30:00Z")),
-                ]),
-            ),
-            (
                 "conditions",
                 value_object(vec![("notOnOrAfter", value_str("2026-07-04T13:00:00Z"))]),
             ),
         ]),
-    }
+    };
+    set_authn_statements(
+        &mut flow,
+        value_object(vec![
+            ("sessionIndex", value_str("_session123")),
+            ("authnInstant", value_str("2026-07-04T12:00:00Z")),
+            ("sessionNotOnOrAfter", value_str("2026-07-04T13:30:00Z")),
+        ]),
+    );
+    flow
 }
 
 fn session_flow() -> FlowResult {
@@ -564,8 +566,8 @@ fn typed_validation_context_replay_cache_stores_new_keys() -> Result<(), Box<dyn
 fn require_cache_keeps_assertion_id_until_subject_confirmation_not_on_or_after(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = session_flow();
-    flow.extract.insert(
-        "sessionIndex",
+    set_authn_statements(
+        &mut flow,
         value_object(vec![
             ("sessionIndex", value_str("_earlier")),
             ("authnInstant", value_str("2026-07-04T12:00:00Z")),
@@ -799,8 +801,8 @@ fn typed_validation_context_replay_expiration_uses_earliest_authn_statement(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = session_flow();
     remove_extract_keys(&mut flow, &["conditions", "subjectConfirmation"]);
-    flow.extract.insert(
-        "sessionIndex",
+    set_authn_statements(
+        &mut flow,
         Value::Array(vec![
             value_object(vec![
                 ("sessionIndex", value_str("_later")),
@@ -833,8 +835,8 @@ fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_cl
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = session_flow();
     remove_extract_keys(&mut flow, &["conditions", "subjectConfirmation"]);
-    flow.extract.insert(
-        "sessionIndex",
+    set_authn_statements(
+        &mut flow,
         Value::Array(vec![
             value_object(vec![(
                 "sessionNotOnOrAfter",
