@@ -212,9 +212,10 @@ impl Status {
             TopLevelStatusCode::Success => Ok(()),
             TopLevelStatusCode::Requester
             | TopLevelStatusCode::Responder
-            | TopLevelStatusCode::VersionMismatch => {
-                Err(SamlError::StatusNotSuccess { status: self })
-            }
+            | TopLevelStatusCode::VersionMismatch => Err(SamlError::StatusNotSuccess {
+                status: self,
+                status_message: None,
+            }),
         }
     }
 
@@ -235,5 +236,24 @@ impl Status {
     /// Subordinate status code, when one was supplied.
     pub fn subordinate(&self) -> Option<&SubordinateStatusCode> {
         self.subordinate.as_ref()
+    }
+}
+
+/// Operator diagnostic from the peer's authenticated SAML response.
+///
+/// Read the peer's text explicitly with [`Self::as_str`]. Debug output omits it.
+#[derive(Clone, PartialEq, Eq)]
+pub struct StatusMessage(pub(crate) String);
+
+impl StatusMessage {
+    /// Return the peer's diagnostic as XML-decoded text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for StatusMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StatusMessage").finish_non_exhaustive()
     }
 }

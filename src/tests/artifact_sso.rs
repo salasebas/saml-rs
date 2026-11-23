@@ -24,9 +24,9 @@ use saml_rs::{
     MessageConfidentiality, MessageIntegrity, MetadataTrustPolicy, NameId, NameIdFormat, Outbound,
     PartyAuthentication, PendingAuthnRequest, Received, RelayState, ReplayPolicy,
     ResolvedProtocolMessage, RespondSso, SamlError, SamlValidationContext, ServiceProvider,
-    SoapChannel, SpConfig, SpConfigBuilder, SpDescriptor, SsoAssertion, SsoEndpoint, SsoOutcome,
-    SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status, SubordinateStatusCode,
-    TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
+    SoapChannel, SoapResponse, SpConfig, SpConfigBuilder, SpDescriptor, SsoAssertion, SsoEndpoint,
+    SsoOutcome, SsoResponse, SsoResponseBinding, SsoSession, StartSso, Status, StatusMessage,
+    SubordinateStatusCode, TransformAlgorithm, MAX_RECEIVED_RELAY_STATE_BYTES,
 };
 #[cfg(not(feature = "crypto-fips"))]
 use saml_rs::{
@@ -541,7 +541,11 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
         validation(),
     );
     match result {
-        Err(SamlError::StatusNotSuccess { status }) => {
+        Err(SamlError::StatusNotSuccess {
+            status,
+            status_message,
+        }) => {
+            assert!(status_message.is_none());
             assert_eq!(
                 status.top_level().as_uri(),
                 "urn:oasis:names:tc:SAML:2.0:status:Responder"
@@ -554,6 +558,84 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
             );
         }
         other => return Err(format!("expected a status error, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn artifact_error_exposes_only_diagnostic_signed_by_inner_response(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parties = parties()?;
+    let (pending, _) = requested(&parties, None)?;
+    let diagnostic = "MFA provider unavailable";
+    let xml = format!(
+        r#"<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_artifact_error" Version="2.0" IssueInstant="2025-01-01T00:00:00Z" InResponseTo="{}">
+        <saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>
+        <samlp:Status>
+            <samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Responder">
+                <samlp:StatusCode Value="{AUTHN_FAILED}"/>
+            </samlp:StatusCode>
+            <samlp:StatusMessage>{diagnostic}</samlp:StatusMessage>
+        </samlp:Status>
+        </samlp:Response>"#,
+        pending.request_id().as_str()
+    );
+    let signed_inner = sign_response(&xml)?;
+    let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
+    for (payload, sign_outer, expected) in [
+        (&signed_inner, false, Some(diagnostic)),
+        (&xml, false, None),
+        (&xml, true, None),
+    ] {
+        let artifact = parties
+            .idp
+            .issue_artifact(&parties.sp_metadata, payload, 0, &mut issued)?;
+        let delivered =
+            DeliveredArtifact::from_form(&[FormField::new("SAMLart", artifact.as_str())])?;
+        let resolution = parties.sp.resolve_artifact(
+            &parties.idp_metadata,
+            delivered.artifact(),
+            confidential(),
+            validation(),
+        )?;
+        let answer = parties.idp.answer_artifact_resolve(
+            &parties.sp_metadata,
+            resolution.request().envelope(),
+            &mut issued,
+            confidential(),
+        )?;
+        let envelope = answer.response().envelope();
+        let resolved = if sign_outer {
+            let doc = roxmltree::Document::parse(envelope)?;
+            let outer = doc
+                .descendants()
+                .find(|node| {
+                    node.has_tag_name((saml_rs::constants::namespace::PROTOCOL, "ArtifactResponse"))
+                })
+                .ok_or("missing ArtifactResponse")?;
+            let signed = sign_response(&envelope[outer.range()])?;
+            resolution.finish(SoapResponse::try_new(&signed)?.envelope())?
+        } else {
+            resolution.finish(envelope)?
+        };
+        let result = parties.sp.finish_sso(
+            &parties.idp_metadata,
+            &pending,
+            Inbound::artifact(delivered, resolved),
+            validation(),
+        );
+        let Err(SamlError::StatusNotSuccess {
+            status,
+            status_message,
+        }) = result
+        else {
+            return Err(format!("expected StatusNotSuccess, got {result:?}").into());
+        };
+        assert_eq!(
+            status,
+            Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?)
+        );
+        assert_eq!(status_message.as_ref().map(StatusMessage::as_str), expected);
     }
     Ok(())
 }

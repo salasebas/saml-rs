@@ -2527,7 +2527,11 @@ fn typed_facade_finish_slo_reports_signed_correlated_error_status(
         Inbound::post(exchange.response_fields),
         validation(),
     ) {
-        Err(SamlError::StatusNotSuccess { status }) => {
+        Err(SamlError::StatusNotSuccess {
+            status,
+            status_message,
+        }) => {
+            assert!(status_message.is_none());
             assert_eq!(
                 status.top_level().as_uri(),
                 saml_rs::constants::status_code::RESPONDER
@@ -2548,6 +2552,12 @@ fn typed_facade_finish_slo_reports_signed_correlated_error_status(
 fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange_answered_with(&refused_logout_status())?;
+    let response = exchange.idp.respond_slo(
+        &exchange.sp_descriptor,
+        &exchange.received,
+        &refused_logout_status(),
+        RespondSlo::post().status_message("Local session store unavailable"),
+    )?;
     let mut snapshot: PendingLogoutRequestSnapshot = exchange.pending.snapshot();
     snapshot.request_id = "_different_logout".to_string();
     let wrong_pending = PendingLogoutRequest::from_snapshot(snapshot)?;
@@ -2555,7 +2565,7 @@ fn typed_facade_finish_slo_checks_in_response_to_before_error_status(
     match exchange.sp.finish_slo(
         &exchange.idp_descriptor,
         &wrong_pending,
-        Inbound::post(exchange.response_fields),
+        Inbound::post(post_fields(&response)?),
         validation(),
     ) {
         Err(SamlError::InResponseToMismatch { expected, actual }) => {
@@ -2586,6 +2596,10 @@ fn typed_facade_finish_slo_requires_signature_before_error_status(
         .replace(
             saml_rs::constants::status_code::SUCCESS,
             saml_rs::constants::status_code::REQUESTER,
+        )
+        .replace(
+            "</samlp:Status>",
+            "<samlp:StatusMessage>Local session store unavailable</samlp:StatusMessage></samlp:Status>",
         );
         match sp.finish_slo(
             &idp_descriptor,
@@ -2985,7 +2999,7 @@ fn typed_logout_response_carries_caller_defined_subordinate_status(
             Inbound::post(post_fields(&response)?),
             validation(),
         ) {
-            Err(SamlError::StatusNotSuccess { status }) => {
+            Err(SamlError::StatusNotSuccess { status, .. }) => {
                 assert_eq!(
                     status.top_level().as_uri(),
                     saml_rs::constants::status_code::REQUESTER

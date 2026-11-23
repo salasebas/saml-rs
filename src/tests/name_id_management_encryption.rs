@@ -483,7 +483,7 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
         validation(),
     );
     match error {
-        Err(SamlError::StatusNotSuccess { status })
+        Err(SamlError::StatusNotSuccess { status, .. })
             if status.top_level().as_uri() == status_code::REQUESTER
                 && status
                     .subordinate()

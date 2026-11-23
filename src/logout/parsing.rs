@@ -4,12 +4,14 @@ use crate::constants::{Binding, ParserType};
 use crate::entity::EntitySetting;
 use crate::error::SamlError;
 use crate::flow::{
-    flow_with_authentication, flow_with_expected_recipient_and_signature_evidence,
-    AssertionSignatureRequirement, FlowOptions, FlowResult, HttpRequest,
-    ResponseSignatureRequirement, SignatureCheck, SignedMessageDestination,
+    correlated_status_message, flow_with_authentication,
+    flow_with_expected_recipient_and_signature_evidence, AssertionSignatureRequirement,
+    FlowOptions, FlowResult, HttpRequest, ResponseSignatureRequirement, SignatureCheck,
+    SignedMessageDestination,
 };
 use crate::metadata::Metadata;
-use crate::model::ClockSkew;
+use crate::model::{ClockSkew, StatusMessage};
+use crate::validator::check_status;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone, Copy)]
@@ -110,6 +112,11 @@ pub(crate) fn parse_logout_request_at(
     )
 }
 
+pub(crate) struct ParsedLogoutResponse {
+    pub(crate) flow: FlowResult,
+    pub(crate) status_message: Option<StatusMessage>,
+}
+
 pub(crate) fn parse_logout_response_at(
     self_setting: &EntitySetting,
     from_meta: &Metadata,
@@ -117,11 +124,11 @@ pub(crate) fn parse_logout_response_at(
     request: &HttpRequest,
     request_id: &str,
     validation: LogoutFlowValidation<'_>,
-) -> Result<FlowResult, SamlError> {
+) -> Result<ParsedLogoutResponse, SamlError> {
     if request_id.is_empty() {
         return Err(SamlError::InvalidInResponseTo);
     }
-    run_logout_flow(
+    let flow = run_logout_flow(
         &FlowOptions {
             signature_check: receipt.signature,
             require_audience_restriction: true,
@@ -139,7 +146,26 @@ pub(crate) fn parse_logout_response_at(
         request,
         validation.expected_recipient,
         receipt.signed_destination,
-    )
+    )?;
+    let status = check_status(
+        &flow.saml_content,
+        ParserType::LogoutResponse,
+        self_setting.xml_limits,
+    );
+    let status_message = correlated_status_message(
+        &flow.saml_content,
+        self_setting.xml_limits,
+        Some(request_id),
+        validation.expected_recipient,
+        receipt.signed_destination,
+    );
+    match status {
+        Ok(()) => Ok(ParsedLogoutResponse {
+            flow,
+            status_message,
+        }),
+        Err(error) => Err(error.with_status_message(status_message)),
+    }
 }
 
 fn run_logout_flow(

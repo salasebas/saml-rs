@@ -1571,8 +1571,10 @@ fn typed_models_logout_request_from_flow_result_exposes_session_indexes(
 #[test]
 fn typed_models_logout_response_from_flow_result_exposes_correlation(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let response =
-        LogoutResponse::from_flow(logout_response_flow(Some(" \t\n2024-01-01T00:00:00Z\r ")))?;
+    let response = LogoutResponse::from_flow(
+        logout_response_flow(Some(" \t\n2024-01-01T00:00:00Z\r ")),
+        None,
+    )?;
 
     assert_eq!(response.id().as_str(), "_logout_response123");
     assert_eq!(response.issue_instant().as_str(), "2024-01-01T00:00:00Z");
@@ -1621,7 +1623,7 @@ fn logout_response_flow(issue_instant: Option<&str>) -> FlowResult {
 #[test]
 fn typed_models_logout_response_rejects_missing_issue_instant_with_profile_context() {
     assert!(matches!(
-        LogoutResponse::from_flow(logout_response_flow(None)),
+        LogoutResponse::from_flow(logout_response_flow(None), None),
         Err(SamlError::ProtocolProfile(message))
             if message.contains("LogoutResponse is missing required unqualified attribute IssueInstant")
     ));
@@ -1636,7 +1638,7 @@ fn typed_models_logout_response_rejects_missing_status_with_profile_context(
     };
     fields.retain(|(key, _)| key != "statusCode");
 
-    match LogoutResponse::from_flow(flow) {
+    match LogoutResponse::from_flow(flow, None) {
         Err(SamlError::ProtocolProfile(message))
             if message.contains("LogoutResponse is missing required Status/StatusCode") =>
         {
@@ -1649,7 +1651,7 @@ fn typed_models_logout_response_rejects_missing_status_with_profile_context(
 #[test]
 fn typed_models_logout_response_rejects_malformed_issue_instant_with_profile_context() {
     assert!(matches!(
-        LogoutResponse::from_flow(logout_response_flow(Some("not-an-instant"))),
+        LogoutResponse::from_flow(logout_response_flow(Some("not-an-instant")), None),
         Err(SamlError::ProtocolProfile(message))
             if message.contains("LogoutResponse IssueInstant must use the SAML-conformant UTC xs:dateTime form ending in Z")
     ));

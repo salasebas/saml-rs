@@ -50,7 +50,7 @@ pub use relay::{RelayState, MAX_RECEIVED_RELAY_STATE_BYTES, MAX_RELAY_STATE_BYTE
 pub use replay_cache::InMemoryReplayCache;
 pub use sso::{SsoResponse, SsoSession, VerifiedXmlSignature, VerifiedXmlSignatureCoverage};
 pub(crate) use status::RequestVersionMismatch;
-pub use status::{Status, SubordinateStatusCode, TopLevelStatusCode};
+pub use status::{Status, StatusMessage, SubordinateStatusCode, TopLevelStatusCode};
 pub use subject::{
     NameId, NameIdCreationRequest, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier,
     SubjectConfirmation,
