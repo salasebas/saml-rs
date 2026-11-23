@@ -73,23 +73,30 @@ impl TimeWindow<'_> {
     ///
     /// The `NotBefore` skew and the `NotOnOrAfter` skew are added to their
     /// bounds. When neither bound is present the window contains every
-    /// instant. A present bound that is not a SAML UTC `xs:dateTime` ending in
-    /// `Z`, or that `time` cannot represent, fails closed. A `NotOnOrAfter`
-    /// bound whose skew passes the maximum supported instant is treated as not
-    /// expired, and one whose skew passes the minimum supported instant is
-    /// treated as expired. A `NotBefore` bound that cannot be shifted inside
-    /// the supported range fails closed.
+    /// instant. A window whose `NotBefore` is not earlier than its
+    /// `NotOnOrAfter` contains no instant, whatever the skew. A present bound
+    /// that is not a SAML UTC `xs:dateTime` ending in `Z`, or that `time`
+    /// cannot represent, fails closed. A `NotOnOrAfter` bound whose skew
+    /// passes the maximum supported instant is treated as not expired, and one
+    /// whose skew passes the minimum supported instant is treated as expired.
+    /// A `NotBefore` bound that cannot be shifted inside the supported range
+    /// fails closed.
     pub(crate) fn contains(self, now: OffsetDateTime, skew: ClockSkew) -> bool {
-        let not_before_has_passed = self.not_before.is_none_or(|value| {
-            parse_saml_utc_instant(value)
-                .is_some_and(|bound| not_before_has_elapsed(bound, skew.not_before_millis(), now))
+        let not_before = self.not_before.map(parse_saml_utc_instant);
+        let not_on_or_after = self.not_on_or_after.map(parse_saml_utc_instant);
+        let begins_before_it_ends = not_before
+            .flatten()
+            .zip(not_on_or_after.flatten())
+            .is_none_or(|(not_before, not_on_or_after)| not_before < not_on_or_after);
+        let not_before_has_passed = not_before.is_none_or(|bound| {
+            bound.is_some_and(|bound| not_before_has_elapsed(bound, skew.not_before_millis(), now))
         });
-        let not_on_or_after_is_ahead = self.not_on_or_after.is_none_or(|value| {
-            parse_saml_utc_instant(value).is_some_and(|bound| {
+        let not_on_or_after_is_ahead = not_on_or_after.is_none_or(|bound| {
+            bound.is_some_and(|bound| {
                 not_on_or_after_is_open(bound, skew.not_on_or_after_millis(), now)
             })
         });
-        not_before_has_passed && not_on_or_after_is_ahead
+        begins_before_it_ends && not_before_has_passed && not_on_or_after_is_ahead
     }
 }
 
@@ -244,6 +251,26 @@ mod tests {
     }
 
     #[test]
+    fn skew_does_not_open_a_window_that_ends_before_it_begins(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let now = OffsetDateTime::parse("2026-10-10T00:00:00Z", &Rfc3339)?;
+        let skew = ClockSkew::five_minutes();
+
+        assert!(
+            !window(Some("2026-10-10T00:00:00Z"), Some("2026-10-10T00:00:00Z")).contains(now, skew)
+        );
+        assert!(
+            !window(Some("2026-10-10T00:01:00Z"), Some("2026-10-09T23:59:00Z")).contains(now, skew)
+        );
+        assert!(window(
+            Some("2026-10-10T00:00:00Z"),
+            Some("2026-10-10T00:00:00.001Z")
+        )
+        .contains(now, skew));
+        Ok(())
+    }
+
+    #[test]
     fn status_success_and_two_tier_failure() -> Result<(), Box<dyn std::error::Error>> {
         check_status(RESPONSE, ParserType::SamlResponse, XmlLimits::default())?;
         // request types are skipped
@@ -289,10 +316,12 @@ mod tests {
         assert!(
             !window(Some(maximum), None).contains(now, ClockSkew::from_millis(five_minutes_ms, 0))
         );
-        assert!(!window(Some(maximum), Some(maximum)).contains(
-            now,
-            ClockSkew::from_millis(five_minutes_ms, five_minutes_ms)
-        ));
+        assert!(
+            !window(Some("9999-12-31T23:59:58Z"), Some(maximum)).contains(
+                now,
+                ClockSkew::from_millis(five_minutes_ms, five_minutes_ms)
+            )
+        );
         assert!(!window(None, Some("2020-01-01T00:00:00Z"))
             .contains(now, ClockSkew::from_millis(0, -1_000_000_000_000_000)));
         assert!(window(None, Some(maximum)).contains(now, ClockSkew::strict()));

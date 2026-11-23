@@ -492,3 +492,27 @@ A bound with leading or trailing XML Schema whitespace is now accepted.
 `SsoSession::not_before()`, `SsoSession::not_on_or_after()`, and
 `AuthnStatement::session_not_on_or_after()` return it with that whitespace
 removed, as for `IssueInstant`. The API is unchanged.
+
+## Send a `NotBefore` earlier than `NotOnOrAfter`
+
+**Affects:** service providers whose identity provider writes an assertion
+`Conditions`, or a bearer `SubjectConfirmationData`, with a `NotBefore` equal
+to or later than its `NotOnOrAfter`.
+
+Ask the identity provider to write a `Conditions@NotBefore` earlier than
+`Conditions@NotOnOrAfter`, as SAML Core requires. The Web Browser SSO profile
+does not let the identity provider write `NotBefore` on a bearer
+`SubjectConfirmationData`, so ask it to omit that attribute. Before the
+upgrade, the service provider applied the clock skew to each bound on its
+own. With the default five minutes, it accepted such an assertion while the
+validation instant was inside both widened bounds, for up to ten minutes.
+
+The service provider now rejects the element at every instant and under
+every `ClockSkew`:
+
+| Element | Error |
+| --- | --- |
+| `Conditions` | `SamlError::TimeWindowInvalid` with `TimeWindowField::Conditions` |
+| Bearer `SubjectConfirmationData` | The confirmation is not satisfied. When it is the assertion's only `SubjectConfirmation`, `SamlError::SubjectConfirmationInvalid` with `SubjectConfirmationReason::TimeWindowInvalid` |
+
+The errors are the ones an expired window returns. The API is unchanged.

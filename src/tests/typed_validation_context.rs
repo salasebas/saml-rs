@@ -495,6 +495,37 @@ fn bearer_subject_confirmation_not_before_allows_five_minutes(
 }
 
 #[test]
+fn equal_not_before_and_not_on_or_after_fail_within_the_default_skew(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let validation = context_at(SKEW_NOW)?;
+
+    match parse_response_at(
+        &xml_with_time_window(SKEW_NOW, SKEW_NOW, FAR_FUTURE, FAR_FUTURE),
+        &validation,
+    ) {
+        Err(SamlError::TimeWindowInvalid { field, .. }) => {
+            assert_eq!(field, TimeWindowField::Conditions);
+        }
+        other => {
+            return Err(format!("expected an empty Conditions window, got {other:?}").into());
+        }
+    }
+
+    let empty_bearer_window =
+        xml_with_time_window("2020-01-01T00:00:00Z", FAR_FUTURE, SKEW_NOW, FAR_FUTURE).replace(
+            "<saml:SubjectConfirmationData ",
+            &format!("<saml:SubjectConfirmationData NotBefore=\"{SKEW_NOW}\" "),
+        );
+    match parse_response_at(&empty_bearer_window, &validation) {
+        Err(SamlError::SubjectConfirmationInvalid { reason, .. }) => {
+            assert_eq!(reason, SubjectConfirmationReason::TimeWindowInvalid);
+            Ok(())
+        }
+        other => Err(format!("expected an empty bearer window, got {other:?}").into()),
+    }
+}
+
+#[test]
 fn explicit_clock_skew_replaces_five_minute_default() -> Result<(), Box<dyn std::error::Error>> {
     let validation = context_at(SKEW_NOW)?.with_clock_skew(ClockSkew::from_millis(-60_000, 60_000));
 
