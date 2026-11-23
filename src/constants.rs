@@ -267,17 +267,26 @@ pub fn digest_for_signature(sig_alg: &str) -> Option<&'static str> {
 }
 
 /// XML data encryption algorithm URIs.
+///
+/// Algorithm support depends on the configured crypto provider and features.
 pub mod data_encryption_algorithm {
     /// AES-128-CBC.
-    pub const AES_128: &str = "http://www.w3.org/2001/04/xmlenc#aes128-cbc";
+    pub const AES_128_CBC: &str = "http://www.w3.org/2001/04/xmlenc#aes128-cbc";
     /// AES-256-CBC.
-    pub const AES_256: &str = "http://www.w3.org/2001/04/xmlenc#aes256-cbc";
+    pub const AES_256_CBC: &str = "http://www.w3.org/2001/04/xmlenc#aes256-cbc";
     /// Triple DES CBC.
-    pub const TRIPLE_DES: &str = "http://www.w3.org/2001/04/xmlenc#tripledes-cbc";
+    pub const TRIPLE_DES_CBC: &str = "http://www.w3.org/2001/04/xmlenc#tripledes-cbc";
     /// AES-128-GCM.
     pub const AES_128_GCM: &str = "http://www.w3.org/2009/xmlenc11#aes128-gcm";
     /// AES-256-GCM.
     pub const AES_256_GCM: &str = "http://www.w3.org/2009/xmlenc11#aes256-gcm";
+
+    /// Alias for [`AES_128_CBC`].
+    pub const AES_128: &str = AES_128_CBC;
+    /// Alias for [`AES_256_CBC`].
+    pub const AES_256: &str = AES_256_CBC;
+    /// Alias for [`TRIPLE_DES_CBC`].
+    pub const TRIPLE_DES: &str = TRIPLE_DES_CBC;
 }
 
 /// AES-GCM, the XML Encryption 1.1 block encryption that authenticates
@@ -295,10 +304,10 @@ pub(crate) fn is_xml_encryption_gcm_algorithm(algorithm: &str) -> bool {
 pub(crate) fn is_xml_encryption_cbc_algorithm(algorithm: &str) -> bool {
     matches!(
         algorithm,
-        data_encryption_algorithm::AES_128
+        data_encryption_algorithm::AES_128_CBC
             | "http://www.w3.org/2001/04/xmlenc#aes192-cbc"
-            | data_encryption_algorithm::AES_256
-            | data_encryption_algorithm::TRIPLE_DES
+            | data_encryption_algorithm::AES_256_CBC
+            | data_encryption_algorithm::TRIPLE_DES_CBC
     )
 }
 

@@ -116,9 +116,9 @@ impl DataEncryptionAlgorithm {
     /// Return the XML-Enc algorithm URI.
     pub fn as_uri(&self) -> &str {
         match self {
-            Self::Aes128Cbc => data_encryption_algorithm::AES_128,
-            Self::Aes256Cbc => data_encryption_algorithm::AES_256,
-            Self::TripleDesCbc => data_encryption_algorithm::TRIPLE_DES,
+            Self::Aes128Cbc => data_encryption_algorithm::AES_128_CBC,
+            Self::Aes256Cbc => data_encryption_algorithm::AES_256_CBC,
+            Self::TripleDesCbc => data_encryption_algorithm::TRIPLE_DES_CBC,
             Self::Aes128Gcm => data_encryption_algorithm::AES_128_GCM,
             Self::Aes256Gcm => data_encryption_algorithm::AES_256_GCM,
             Self::Custom(uri) => uri.as_str(),

@@ -228,7 +228,7 @@ impl Default for EntitySetting {
         Self {
             entity_id: None,
             request_signature_algorithm: signature_algorithm::RSA_SHA256.to_string(),
-            data_encryption_algorithm: data_encryption_algorithm::AES_256.to_string(),
+            data_encryption_algorithm: data_encryption_algorithm::AES_256_CBC.to_string(),
             key_encryption_algorithm: key_encryption_algorithm::RSA_OAEP_MGF1P.to_string(),
             rsa_oaep_parameters: None,
             allow_create: false,
