@@ -15,7 +15,7 @@ use crate::model::{
 };
 use crate::sp;
 use crate::validator::offset_datetime_from_system_time;
-use crate::xml::write::validate_tag_prefixes;
+use crate::xml::write::Prefixes;
 use crate::xml::OutboundNameIdQualifiers;
 
 mod login_response;
@@ -44,6 +44,7 @@ pub(crate) struct LoginResponseOverrides<'a> {
     pub(crate) name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     pub(crate) issuance_lifetime: Option<time::Duration>,
     pub(crate) status: Option<&'a Status>,
+    pub(crate) status_message: Option<&'a str>,
     pub(crate) typed_attributes: &'a [Attribute],
     pub(crate) authn_context: Option<&'a AuthnContextReference>,
     pub(crate) authn_instant: Option<SystemTime>,
@@ -94,6 +95,7 @@ struct LoginResponseRendering<'a> {
     name_id_qualifiers: OutboundNameIdQualifiers<'a>,
     issuance_lifetime: time::Duration,
     status: Option<&'a Status>,
+    status_message: Option<&'a str>,
     typed_attributes: &'a [Attribute],
     authn_context: Option<&'a AuthnContextReference>,
     authn_instant: Option<SystemTime>,
@@ -187,18 +189,17 @@ impl Engine {
         acs: &str,
         rendering: LoginResponseRendering<'_>,
     ) -> Result<RenderedLoginResponse, SamlError> {
-        validate_tag_prefixes(
-            &self.setting.tag_prefix_protocol,
-            &self.setting.tag_prefix_assertion,
-        )?;
+        let prefixes = Prefixes::of(&self.setting)?;
         let in_response_to = in_response_to.filter(|id| !id.is_empty());
         let fallback_status = Status::success();
         let status = rendering.status.unwrap_or(&fallback_status);
         if status.top_level() != TopLevelStatusCode::Success {
             return self.render_error_response(
+                prefixes,
                 acs,
                 in_response_to,
                 status,
+                rendering.status_message,
                 rendering.issuance_lifetime,
             );
         }
@@ -240,8 +241,7 @@ impl Engine {
             .then(|| SessionIndex::try_new(assertion_id.as_str()))
             .transpose()?;
         let response = LoginResponseXml {
-            protocol_prefix: &self.setting.tag_prefix_protocol,
-            assertion_prefix: &self.setting.tag_prefix_assertion,
+            prefixes,
             response_id: &id,
             assertion_id: &assertion_id,
             issue_instant: &window.issue_instant,
@@ -275,22 +275,24 @@ impl Engine {
 
     fn render_error_response(
         &self,
+        prefixes: Prefixes<'_>,
         acs: &str,
         in_response_to: Option<&str>,
         status: &Status,
+        status_message: Option<&str>,
         issuance_lifetime: time::Duration,
     ) -> Result<RenderedLoginResponse, SamlError> {
         let window = capture_idp_issuance_window(issuance_lifetime)?;
         let id = generate_id();
         let issuer = self.entity_id();
         let xml = render_error_login_response(&ErrorLoginResponseXml {
-            protocol_prefix: &self.setting.tag_prefix_protocol,
-            assertion_prefix: &self.setting.tag_prefix_assertion,
+            prefixes,
             response_id: &id,
             issue_instant: &window.issue_instant,
             destination: acs,
             issuer: &issuer,
             status,
+            status_message,
             in_response_to,
         })?;
         Ok(RenderedLoginResponse {
@@ -359,6 +361,7 @@ impl Engine {
                     .issuance_lifetime
                     .unwrap_or(time::Duration::seconds(300)),
                 status: overrides.status,
+                status_message: overrides.status_message,
                 typed_attributes: overrides.typed_attributes,
                 authn_context: overrides.authn_context,
                 authn_instant: overrides.authn_instant,

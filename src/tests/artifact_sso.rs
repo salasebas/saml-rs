@@ -519,45 +519,46 @@ fn an_error_response_is_resolved_the_same_way_and_establishes_no_session(
     let (pending, request) = requested(&parties, None)?;
 
     let mut issued = IssuedArtifacts::expire_after(ARTIFACT_LIFETIME);
-    let response = parties.idp.respond_sso_artifact(
-        &parties.sp_metadata,
-        &request,
-        SsoOutcome::Failure(
-            Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?),
-        ),
-        RespondSso::artifact(ArtifactDelivery::redirect(0)),
-        &mut issued,
-    )?;
+    let status =
+        Status::responder().with_subordinate(SubordinateStatusCode::try_new(AUTHN_FAILED)?);
+    let diagnostic = " Passkey <required> & unavailable\r\nTry again. ";
+    for expected_diagnostic in [None, Some(diagnostic)] {
+        let options = RespondSso::artifact(ArtifactDelivery::redirect(0));
+        let options = match expected_diagnostic {
+            Some(diagnostic) => options.status_message(diagnostic),
+            None => options,
+        };
+        let response = parties.idp.respond_sso_artifact(
+            &parties.sp_metadata,
+            &request,
+            SsoOutcome::Failure(status.clone()),
+            options,
+            &mut issued,
+        )?;
 
-    let delivered = delivered_by(&response)?;
-    let resolved = resolve(&parties, &delivered, &mut issued)?;
-    assert_eq!(resolved.local_name(), "Response");
-    assert!(!resolved.xml().contains("Assertion"));
+        let delivered = delivered_by(&response)?;
+        let resolved = resolve(&parties, &delivered, &mut issued)?;
+        assert_eq!(resolved.local_name(), "Response");
+        assert!(!resolved.xml().contains("Assertion"));
 
-    let result = parties.sp.finish_sso(
-        &parties.idp_metadata,
-        &pending,
-        Inbound::artifact(delivered, resolved),
-        validation(),
-    );
-    match result {
-        Err(SamlError::StatusNotSuccess {
-            status,
-            status_message,
-        }) => {
-            assert!(status_message.is_none());
-            assert_eq!(
-                status.top_level().as_uri(),
-                "urn:oasis:names:tc:SAML:2.0:status:Responder"
-            );
-            assert_eq!(
-                status
-                    .subordinate()
-                    .map(saml_rs::SubordinateStatusCode::as_uri),
-                Some(AUTHN_FAILED)
-            );
+        match parties.sp.finish_sso(
+            &parties.idp_metadata,
+            &pending,
+            Inbound::artifact(delivered, resolved),
+            validation(),
+        ) {
+            Err(SamlError::StatusNotSuccess {
+                status: received,
+                status_message,
+            }) => {
+                assert_eq!(received, status);
+                assert_eq!(
+                    status_message.as_ref().map(StatusMessage::as_str),
+                    expected_diagnostic
+                );
+            }
+            other => return Err(format!("expected a status error, got {other:?}").into()),
         }
-        other => return Err(format!("expected a status error, got {other:?}").into()),
     }
     Ok(())
 }

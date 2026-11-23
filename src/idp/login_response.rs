@@ -4,7 +4,7 @@ use crate::model::{
     check_issued_subject_identifiers, is_subject_identifier, Attribute, AttributeNameFormat,
     AuthnContextReference, AuthnContextReferenceKind, Status,
 };
-use crate::xml::write::XmlWriter;
+use crate::xml::write::{Prefixes, XmlWriter};
 use crate::xml::OutboundNameIdQualifiers;
 
 const VERSION: &str = "2.0";
@@ -20,8 +20,7 @@ pub(super) struct AuthnStatementXml<'a> {
 }
 
 pub(super) struct LoginResponseXml<'a> {
-    pub(super) protocol_prefix: &'a str,
-    pub(super) assertion_prefix: &'a str,
+    pub(super) prefixes: Prefixes<'a>,
     pub(super) response_id: &'a str,
     pub(super) assertion_id: &'a str,
     pub(super) issue_instant: &'a str,
@@ -45,10 +44,12 @@ pub(super) struct LoginResponseXml<'a> {
 pub(super) fn render_default_login_response(
     input: &LoginResponseXml<'_>,
 ) -> Result<String, SamlError> {
-    let response_name = qname(input.protocol_prefix, "Response");
-    let protocol_xmlns = format!("xmlns:{}", input.protocol_prefix);
-    let assertion_xmlns = format!("xmlns:{}", input.assertion_prefix);
-    let assertion_name = qname(input.assertion_prefix, "Assertion");
+    let prefixes = &input.prefixes;
+    let assertion_prefix = prefixes.assertion_prefix();
+    let response_name = prefixes.protocol("Response");
+    let protocol_xmlns = prefixes.xmlns_protocol();
+    let assertion_xmlns = prefixes.xmlns_assertion();
+    let assertion_name = prefixes.assertion("Assertion");
 
     let mut response_attrs = vec![
         (protocol_xmlns.as_str(), namespace::PROTOCOL),
@@ -64,8 +65,8 @@ pub(super) fn render_default_login_response(
 
     let mut writer = XmlWriter::new();
     writer.start(&response_name, &response_attrs);
-    writer.text_element(&qname(input.assertion_prefix, "Issuer"), &[], input.issuer);
-    write_status(&mut writer, input.protocol_prefix, input.status);
+    writer.text_element(&prefixes.assertion("Issuer"), &[], input.issuer);
+    writer.status(prefixes, input.status, None);
 
     writer.start(
         &assertion_name,
@@ -76,8 +77,8 @@ pub(super) fn render_default_login_response(
             ("IssueInstant", input.issue_instant),
         ],
     );
-    writer.text_element(&qname(input.assertion_prefix, "Issuer"), &[], input.issuer);
-    writer.start(&qname(input.assertion_prefix, "Subject"), &[]);
+    writer.text_element(&prefixes.assertion("Issuer"), &[], input.issuer);
+    writer.start(&prefixes.assertion("Subject"), &[]);
     let name_id_attrs: Vec<(&str, &str)> = [
         ("NameQualifier", input.name_id_qualifiers.name_qualifier),
         (
@@ -90,13 +91,9 @@ pub(super) fn render_default_login_response(
     .into_iter()
     .filter_map(|(name, value)| value.map(|value| (name, value)))
     .collect();
-    writer.text_element(
-        &qname(input.assertion_prefix, "NameID"),
-        &name_id_attrs,
-        input.name_id,
-    );
+    writer.text_element(&prefixes.assertion("NameID"), &name_id_attrs, input.name_id);
     writer.start(
-        &qname(input.assertion_prefix, "SubjectConfirmation"),
+        &prefixes.assertion("SubjectConfirmation"),
         &[("Method", BEARER_CONFIRMATION)],
     );
     let mut confirmation_attrs = vec![
@@ -107,50 +104,55 @@ pub(super) fn render_default_login_response(
         confirmation_attrs.push(("InResponseTo", in_response_to));
     }
     writer.empty(
-        &qname(input.assertion_prefix, "SubjectConfirmationData"),
+        &prefixes.assertion("SubjectConfirmationData"),
         &confirmation_attrs,
     );
-    writer.end(&qname(input.assertion_prefix, "SubjectConfirmation"));
-    writer.end(&qname(input.assertion_prefix, "Subject"));
+    writer.end(&prefixes.assertion("SubjectConfirmation"));
+    writer.end(&prefixes.assertion("Subject"));
     writer.start(
-        &qname(input.assertion_prefix, "Conditions"),
+        &prefixes.assertion("Conditions"),
         &[
             ("NotBefore", input.conditions_not_before),
             ("NotOnOrAfter", input.conditions_not_on_or_after),
         ],
     );
-    writer.start(&qname(input.assertion_prefix, "AudienceRestriction"), &[]);
-    writer.text_element(
-        &qname(input.assertion_prefix, "Audience"),
-        &[],
-        input.audience,
-    );
-    writer.end(&qname(input.assertion_prefix, "AudienceRestriction"));
-    writer.end(&qname(input.assertion_prefix, "Conditions"));
-    write_authn_statement(&mut writer, input.assertion_prefix, &input.authn_statement);
-    write_attribute_statement(&mut writer, input.assertion_prefix, input.typed_attributes)?;
+    writer.start(&prefixes.assertion("AudienceRestriction"), &[]);
+    writer.text_element(&prefixes.assertion("Audience"), &[], input.audience);
+    writer.end(&prefixes.assertion("AudienceRestriction"));
+    writer.end(&prefixes.assertion("Conditions"));
+    write_authn_statement(&mut writer, assertion_prefix, &input.authn_statement);
+    write_attribute_statement(&mut writer, assertion_prefix, input.typed_attributes)?;
     writer.end(&assertion_name);
     writer.end(&response_name);
     Ok(writer.finish())
 }
 
 pub(super) struct ErrorLoginResponseXml<'a> {
-    pub(super) protocol_prefix: &'a str,
-    pub(super) assertion_prefix: &'a str,
+    pub(super) prefixes: Prefixes<'a>,
     pub(super) response_id: &'a str,
     pub(super) issue_instant: &'a str,
     pub(super) destination: &'a str,
     pub(super) issuer: &'a str,
     pub(super) status: &'a Status,
+    pub(super) status_message: Option<&'a str>,
     pub(super) in_response_to: Option<&'a str>,
 }
 
 pub(super) fn render_error_login_response(
     input: &ErrorLoginResponseXml<'_>,
 ) -> Result<String, SamlError> {
-    let response_name = qname(input.protocol_prefix, "Response");
-    let protocol_xmlns = format!("xmlns:{}", input.protocol_prefix);
-    let assertion_xmlns = format!("xmlns:{}", input.assertion_prefix);
+    if input
+        .status_message
+        .is_some_and(|message| !message.chars().all(crate::xml::is_xml_char))
+    {
+        return Err(SamlError::Invalid(
+            "login status message contains characters forbidden in XML 1.0".into(),
+        ));
+    }
+    let prefixes = &input.prefixes;
+    let response_name = prefixes.protocol("Response");
+    let protocol_xmlns = prefixes.xmlns_protocol();
+    let assertion_xmlns = prefixes.xmlns_assertion();
     let mut response_attrs = vec![
         (protocol_xmlns.as_str(), namespace::PROTOCOL),
         (assertion_xmlns.as_str(), namespace::ASSERTION),
@@ -165,25 +167,10 @@ pub(super) fn render_error_login_response(
 
     let mut writer = XmlWriter::new();
     writer.start(&response_name, &response_attrs);
-    writer.text_element(&qname(input.assertion_prefix, "Issuer"), &[], input.issuer);
-    write_status(&mut writer, input.protocol_prefix, input.status);
+    writer.text_element(&prefixes.assertion("Issuer"), &[], input.issuer);
+    writer.status(prefixes, input.status, input.status_message);
     writer.end(&response_name);
     Ok(writer.finish())
-}
-
-fn write_status(writer: &mut XmlWriter, protocol_prefix: &str, status: &Status) {
-    let status_name = qname(protocol_prefix, "Status");
-    let status_code_name = qname(protocol_prefix, "StatusCode");
-    writer.start(&status_name, &[]);
-    match status.subordinate() {
-        Some(subordinate) => {
-            writer.start(&status_code_name, &[("Value", status.top_level().as_uri())]);
-            writer.empty(&status_code_name, &[("Value", subordinate.as_uri())]);
-            writer.end(&status_code_name);
-        }
-        None => writer.empty(&status_code_name, &[("Value", status.top_level().as_uri())]),
-    }
-    writer.end(&status_name);
 }
 
 fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &AuthnStatementXml<'_>) {

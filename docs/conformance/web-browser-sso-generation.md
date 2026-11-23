@@ -44,6 +44,8 @@ Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Erra
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Write an error `Response` with the status the caller passes and no assertion | Mandatory | Profiles §4.1.4.1, §4.1.4.2, Core §3.4.1.4 | `SsoOutcome::Failure` |
+| Write caller-supplied plain text as `StatusMessage` after the complete `StatusCode` in a failed login `Response` before signing. Omit empty or unset text | Optional | Core §3.2.2.1, §3.2.2.3, `StatusType` | `RespondSso::status_message` |
+| Write only characters permitted in XML 1.0 in `StatusMessage` | Mandatory | [XML 1.0 §2.2](https://www.w3.org/TR/xml/#charsets) | Always |
 | Write a `Success` response only with an assertion, and reject `SsoOutcome::Failure` with a top-level `Success` status | Mandatory | Profiles §4.1.4.2, E26 | Always |
 | Write an unsolicited error `Response` | Library policy: an identity provider can report the failure of a login it started, or answer a request it could not read. | Profiles §4.1.4.2, §4.1.5 | `initiate_sso`, `initiate_sso_artifact` |
 | Sign an error `Response` over HTTP-POST | Library policy: the profile's signing rule covers assertions, and a signed message carries `Destination`. | Profiles §4.1.3.5, §4.1.4.5, E26, E93, Bindings §3.5.5.2 | Always |
