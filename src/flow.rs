@@ -660,9 +660,9 @@ fn validate_message_destination(
     let destination = match parser_type {
         ParserType::SamlResponse
         | ParserType::LogoutResponse
-        | ParserType::ManageNameIdResponse => extracted.get_str("response.destination"),
+        | ParserType::ManageNameIdResponse => extracted.get_str(fields::response::DESTINATION),
         ParserType::LogoutRequest | ParserType::ManageNameIdRequest => {
-            extracted.get_str("request.destination")
+            extracted.get_str(fields::request::DESTINATION)
         }
         ParserType::SamlRequest => return Ok(()),
     };
@@ -692,7 +692,15 @@ fn validate_context(
     signed_destination: SignedMessageDestination,
 ) -> Result<(), SamlError> {
     if let Some(expected) = opts.from_issuer {
-        let actual = extracted.get_str("issuer");
+        let issuer = match parser_type {
+            ParserType::SamlResponse => fields::login_response::ASSERTION_ISSUER,
+            ParserType::SamlRequest
+            | ParserType::LogoutRequest
+            | ParserType::LogoutResponse
+            | ParserType::ManageNameIdRequest
+            | ParserType::ManageNameIdResponse => fields::ISSUER,
+        };
+        let actual = extracted.get_str(issuer);
         if actual != Some(expected) {
             if parser_type == ParserType::SamlResponse
                 && actual.is_none()
@@ -712,7 +720,7 @@ fn validate_context(
     );
     if is_response {
         validate_in_response_to(
-            extracted.get_str("response.inResponseTo"),
+            extracted.get_str(fields::response::IN_RESPONSE_TO),
             opts.expected_in_response_to,
         )?;
     }

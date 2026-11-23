@@ -401,7 +401,9 @@ impl Engine {
             options.signed_destination,
         )?;
         if let LoginResponseCorrelation::Unsolicited = correlation {
-            let in_response_to = result.extract().get_str("response.inResponseTo");
+            let in_response_to = result
+                .extract()
+                .get_str(crate::xml::fields::response::IN_RESPONSE_TO);
             if in_response_to.is_some() {
                 return Err(SamlError::in_response_to_mismatch(None, in_response_to));
             }

@@ -38,7 +38,7 @@ pub(crate) fn logout_request_not_on_or_after_deadline(
     now: OffsetDateTime,
     not_on_or_after_skew_ms: i64,
 ) -> Result<Option<OffsetDateTime>, SamlError> {
-    let Some(value) = extracted.get_str("request.notOnOrAfter") else {
+    let Some(value) = extracted.get_str(fields::request::NOT_ON_OR_AFTER) else {
         return Ok(None);
     };
     let normalized = parse_saml_utc_date_time(value).ok_or(SamlError::TimeWindowInvalid {
@@ -134,7 +134,7 @@ fn not_on_or_after_is_open(bound: OffsetDateTime, drift_ms: i64, now: OffsetDate
 }
 
 pub(crate) fn conditions_time_window(extracted: &Value) -> Result<TimeWindow<'_>, SamlError> {
-    match extracted.get("conditions") {
+    match extracted.get(fields::login_response::CONDITIONS) {
         None => Ok(TimeWindow {
             not_before: None,
             not_on_or_after: None,
@@ -144,8 +144,8 @@ pub(crate) fn conditions_time_window(extracted: &Value) -> Result<TimeWindow<'_>
             not_on_or_after: None,
         }),
         Some(conditions @ Value::Object(_)) => Ok(TimeWindow {
-            not_before: conditions.get_str("notBefore"),
-            not_on_or_after: conditions.get_str("notOnOrAfter"),
+            not_before: conditions.get_str(fields::conditions::NOT_BEFORE),
+            not_on_or_after: conditions.get_str(fields::conditions::NOT_ON_OR_AFTER),
         }),
         Some(Value::Array(_) | Value::Null | Value::Str(_)) => Err(SamlError::Invalid(
             "Assertion Conditions must be absent or occur exactly once".into(),
@@ -174,10 +174,10 @@ pub fn check_status(
     };
     let result = extract_with_limits(content, &fields, limits)?;
     let top = result
-        .get_str("top")
+        .get_str(fields::status::TOP)
         .filter(|top| !top.is_empty())
         .ok_or(SamlError::StatusMissing)?;
-    Status::received(top, result.get_str("second"))?.require_success()
+    Status::received(top, result.get_str(fields::status::SECOND))?.require_success()
 }
 
 #[cfg(test)]

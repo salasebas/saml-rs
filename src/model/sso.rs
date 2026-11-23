@@ -16,6 +16,7 @@ use crate::assertion_acceptance::{assertion_replays, latest_bearer_not_on_or_aft
 use crate::config::{EntityId, NameIdFormat};
 use crate::error::{SamlError, TimeWindowField};
 use crate::flow::FlowResult;
+use crate::xml::fields::{login_response, name_id, response};
 use crate::xml::{dom, parse_saml_utc_date_time, XmlLimits};
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
@@ -406,25 +407,34 @@ impl SsoSession {
         verified_xml_signatures: Vec<VerifiedXmlSignature>,
         relay_state: Option<RelayState>,
     ) -> Result<Self, SamlError> {
-        let response_id = MessageId::try_new(required_str(&raw_flow.extract, "response.id")?)?;
+        let response_id = MessageId::try_new(required_str(&raw_flow.extract, response::ID)?)?;
         let response_issue_instant =
-            issue_instant_from_extract(&raw_flow.extract, "response.issueInstant", "Response")?;
-        let assertion_id = AssertionId::try_new(required_str(&raw_flow.extract, "assertion.id")?)?;
-        let assertion_issue_instant =
-            issue_instant_from_extract(&raw_flow.extract, "assertion.issueInstant", "Assertion")?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
-        let in_response_to = optional_request_id(&raw_flow.extract, "response.inResponseTo")?;
+            issue_instant_from_extract(&raw_flow.extract, response::ISSUE_INSTANT, "Response")?;
+        let assertion_id = AssertionId::try_new(required_str(
+            &raw_flow.extract,
+            login_response::ASSERTION_ID,
+        )?)?;
+        let assertion_issue_instant = issue_instant_from_extract(
+            &raw_flow.extract,
+            login_response::ASSERTION_ISSUE_INSTANT,
+            "Assertion",
+        )?;
+        let issuer = EntityId::try_new(required_str(
+            &raw_flow.extract,
+            login_response::ASSERTION_ISSUER,
+        )?)?;
+        let in_response_to = optional_request_id(&raw_flow.extract, response::IN_RESPONSE_TO)?;
         let name_id_format = raw_flow
             .extract
-            .get_str("nameIDFormat")
+            .get_str(name_id::FORMAT)
             .map(NameIdFormat::from_uri);
         let name_id_qualifier = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
         let name_id = NameId::received(
-            required_str(&raw_flow.extract, "nameID")?,
+            required_str(&raw_flow.extract, name_id::VALUE)?,
             name_id_format,
-            name_id_qualifier("nameIDQualifiers.nameQualifier"),
-            name_id_qualifier("nameIDQualifiers.spNameQualifier"),
-            name_id_qualifier("nameIDQualifiers.spProvidedId"),
+            name_id_qualifier(name_id::NAME_QUALIFIER),
+            name_id_qualifier(name_id::SP_NAME_QUALIFIER),
+            name_id_qualifier(name_id::SP_PROVIDED_ID),
         );
         let subject_confirmations = subject_confirmations_from_extract(&raw_flow.extract);
         let attributes = attributes_from_extract(&raw_flow.extract)?;

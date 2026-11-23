@@ -83,7 +83,10 @@ pub(crate) fn decrypt_encrypted_id(
         &crate::xml::fields::logout_request_fields(),
         setting.xml_limits,
     )?;
-    if extract.get_str("nameID").is_none() {
+    if extract
+        .get_str(crate::xml::fields::name_id::VALUE)
+        .is_none()
+    {
         return Ok(request);
     }
     LogoutRequest::from_flow(FlowResult {

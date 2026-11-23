@@ -8,6 +8,7 @@ use super::{EndpointUrl, RelayState};
 use crate::config::{EntityId, NameIdFormat};
 use crate::error::SamlError;
 use crate::flow::FlowResult;
+use crate::xml::fields::{logout_request, logout_response, name_id, request, response, ISSUER};
 use crate::xml::parse_saml_utc_date_time;
 
 /// Subject data used to issue a Single Logout request.
@@ -114,10 +115,10 @@ impl LogoutRequest {
 
 impl LogoutRequest {
     pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
-        let id = MessageId::try_new(required_str(&raw_flow.extract, "request.id")?)?;
+        let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
         let issue_instant = logout_request_instant_from_extract(
             &raw_flow.extract,
-            "issueInstant",
+            request::ISSUE_INSTANT,
             "IssueInstant",
             true,
         )?
@@ -128,26 +129,27 @@ impl LogoutRequest {
         })?;
         let not_on_or_after = logout_request_instant_from_extract(
             &raw_flow.extract,
-            "notOnOrAfter",
+            request::NOT_ON_OR_AFTER,
             "NotOnOrAfter",
             false,
         )?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
+        let issuer = EntityId::try_new(required_str(&raw_flow.extract, ISSUER)?)?;
         let name_id_attribute = |field: &str| raw_flow.extract.get_str(field).map(str::to_string);
-        let name_id = raw_flow.extract.get_str("nameID").map(|value| {
+        let name_id = raw_flow.extract.get_str(name_id::VALUE).map(|value| {
             NameId::received(
                 value,
                 raw_flow
                     .extract
-                    .get_str("nameIDFormat")
+                    .get_str(name_id::FORMAT)
                     .map(NameIdFormat::from_uri),
-                name_id_attribute("nameIDQualifiers.nameQualifier"),
-                name_id_attribute("nameIDQualifiers.spNameQualifier"),
-                name_id_attribute("nameIDQualifiers.spProvidedId"),
+                name_id_attribute(name_id::NAME_QUALIFIER),
+                name_id_attribute(name_id::SP_NAME_QUALIFIER),
+                name_id_attribute(name_id::SP_PROVIDED_ID),
             )
         });
-        let session_indexes = session_indexes_from_value(raw_flow.extract.get("sessionIndex"))?;
-        let destination = optional_endpoint(&raw_flow.extract, "request.destination")?;
+        let session_indexes =
+            session_indexes_from_value(raw_flow.extract.get(logout_request::SESSION_INDEXES))?;
+        let destination = optional_endpoint(&raw_flow.extract, request::DESTINATION)?;
         Ok(Self {
             id,
             issue_instant,
@@ -163,12 +165,11 @@ impl LogoutRequest {
 
 fn logout_request_instant_from_extract(
     extract: &crate::util::Value,
-    extract_field: &str,
+    path: &str,
     attribute: &str,
     required: bool,
 ) -> Result<Option<SamlInstant>, SamlError> {
-    let path = format!("request.{extract_field}");
-    let Some(value) = extract.get_str(&path) else {
+    let Some(value) = extract.get_str(path) else {
         if required {
             return Err(SamlError::ProtocolProfile(format!(
                 "LogoutRequest is missing required unqualified attribute {attribute}"
@@ -233,11 +234,11 @@ impl LogoutResponse {
 
 impl LogoutResponse {
     pub(crate) fn from_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
-        let id = MessageId::try_new(required_str(&raw_flow.extract, "response.id")?)?;
+        let id = MessageId::try_new(required_str(&raw_flow.extract, response::ID)?)?;
         let issue_instant = issue_instant_from_extract(&raw_flow.extract)?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
-        let in_response_to = optional_request_id(&raw_flow.extract, "response.inResponseTo")?;
-        let destination = optional_endpoint(&raw_flow.extract, "response.destination")?;
+        let issuer = EntityId::try_new(required_str(&raw_flow.extract, ISSUER)?)?;
+        let in_response_to = optional_request_id(&raw_flow.extract, response::IN_RESPONSE_TO)?;
+        let destination = optional_endpoint(&raw_flow.extract, response::DESTINATION)?;
         let status = status_from_extract(&raw_flow.extract)?;
         Ok(Self {
             id,
@@ -251,14 +252,21 @@ impl LogoutResponse {
 }
 
 fn status_from_extract(extract: &crate::util::Value) -> Result<Status, SamlError> {
-    let top_level = extract.get_str("statusCode").ok_or_else(|| {
-        SamlError::ProtocolProfile("LogoutResponse is missing required Status/StatusCode".into())
-    })?;
-    Status::received(top_level, extract.get_str("subordinateStatusCode"))
+    let top_level = extract
+        .get_str(logout_response::STATUS_CODE)
+        .ok_or_else(|| {
+            SamlError::ProtocolProfile(
+                "LogoutResponse is missing required Status/StatusCode".into(),
+            )
+        })?;
+    Status::received(
+        top_level,
+        extract.get_str(logout_response::SUBORDINATE_STATUS_CODE),
+    )
 }
 
 fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstant, SamlError> {
-    let issue_instant = extract.get_str("response.issueInstant").ok_or_else(|| {
+    let issue_instant = extract.get_str(response::ISSUE_INSTANT).ok_or_else(|| {
         SamlError::ProtocolProfile(
             "LogoutResponse is missing required unqualified attribute IssueInstant".into(),
         )

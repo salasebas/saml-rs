@@ -2,6 +2,7 @@ use crate::constants::authn_context_class_ref;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
+use crate::xml::fields::authn_request;
 
 /// Whether an [`AuthnContextReference`] names a class or a declaration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -207,7 +208,7 @@ impl RequestedAuthnContext {
 pub(super) fn requested_authn_context_from_extract(
     extract: &Value,
 ) -> Result<Option<RequestedAuthnContext>, SamlError> {
-    match extract.get("requestedAuthnContext") {
+    match extract.get(authn_request::REQUESTED_AUTHN_CONTEXT) {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::Str(_)) => {}
         Some(Value::Array(_) | Value::Object(_)) => {
@@ -217,12 +218,12 @@ pub(super) fn requested_authn_context_from_extract(
         }
     }
     let comparison = extract
-        .get_str("requestedAuthnContextComparison")
+        .get_str(authn_request::REQUESTED_AUTHN_CONTEXT_COMPARISON)
         .map(AuthnContextComparison::from_attribute)
         .transpose()?
         .unwrap_or(AuthnContextComparison::Exact);
-    let classes = reference_texts(extract, "authnContextClassRef");
-    let declarations = reference_texts(extract, "authnContextDeclRef");
+    let classes = reference_texts(extract, authn_request::AUTHN_CONTEXT_CLASS_REF);
+    let declarations = reference_texts(extract, authn_request::AUTHN_CONTEXT_DECL_REF);
     let mut references = parsed_references(AuthnContextReferenceKind::Class, &classes);
     references.extend(parsed_references(
         AuthnContextReferenceKind::Declaration,

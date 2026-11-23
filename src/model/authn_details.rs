@@ -101,7 +101,7 @@ pub(super) fn attach_statement_details(
     use crate::xml::protocol_element::parse_saml_with_limits;
 
     let document = parse_saml_with_limits(xml, XmlLimits::unbounded())?;
-    let assertion_id = extract.get_str("assertion.id");
+    let assertion_id = extract.get_str(crate::xml::fields::login_response::ASSERTION_ID);
     let assertion = std::iter::once(&document)
         .chain(document.children.iter())
         .find(|element| {

@@ -11,6 +11,7 @@ use crate::config::{EntityId, NameIdFormat};
 use crate::constants::Binding;
 use crate::error::SamlError;
 use crate::flow::FlowResult;
+use crate::xml::fields::{authn_request, request, ISSUER};
 use crate::xml::{parse_saml_utc_date_time, xs_boolean};
 
 /// `ForceAuthn` on an `<AuthnRequest>` (Core §3.4.1).
@@ -172,7 +173,7 @@ impl AuthnRequest {
     /// One that names HTTP-Artifact is rejected.
     pub(crate) fn try_from_paos_flow(raw_flow: FlowResult) -> Result<Self, SamlError> {
         Self::from_flow_with(raw_flow, |extract| {
-            if extract.get_str("request.protocolBinding") == Some(PAOS_BINDING) {
+            if extract.get_str(request::PROTOCOL_BINDING) == Some(PAOS_BINDING) {
                 return Ok(None);
             }
             match optional_response_binding(extract)? {
@@ -189,17 +190,18 @@ impl AuthnRequest {
         raw_flow: FlowResult,
         response_binding: fn(&crate::util::Value) -> Result<Option<SsoResponseBinding>, SamlError>,
     ) -> Result<Self, SamlError> {
-        let id = MessageId::try_new(required_str(&raw_flow.extract, "request.id")?)?;
+        let id = MessageId::try_new(required_str(&raw_flow.extract, request::ID)?)?;
         let issue_instant = issue_instant_from_extract(&raw_flow.extract)?;
-        let issuer = EntityId::try_new(required_str(&raw_flow.extract, "issuer")?)?;
-        let destination = optional_endpoint(&raw_flow.extract, "request.destination")?;
-        let acs_url = optional_endpoint(&raw_flow.extract, "request.assertionConsumerServiceUrl")?;
+        let issuer = EntityId::try_new(required_str(&raw_flow.extract, ISSUER)?)?;
+        let destination = optional_endpoint(&raw_flow.extract, request::DESTINATION)?;
+        let acs_url =
+            optional_endpoint(&raw_flow.extract, request::ASSERTION_CONSUMER_SERVICE_URL)?;
         let protocol_binding = response_binding(&raw_flow.extract)?;
-        let acs_index = optional_u16(&raw_flow.extract, "request.assertionConsumerServiceIndex")?;
+        let acs_index = optional_u16(&raw_flow.extract, request::ASSERTION_CONSUMER_SERVICE_INDEX)?;
         let name_id_policy = name_id_policy_from_extract(&raw_flow.extract)?;
-        let force_authn = optional_flag(&raw_flow.extract, "request.forceAuthn", "ForceAuthn")?
+        let force_authn = optional_flag(&raw_flow.extract, request::FORCE_AUTHN, "ForceAuthn")?
             .map(ForceAuthn::from_bool);
-        let passive = optional_flag(&raw_flow.extract, "request.isPassive", "IsPassive")?
+        let passive = optional_flag(&raw_flow.extract, request::IS_PASSIVE, "IsPassive")?
             .map(IsPassive::from_bool);
         let requested_subject = requested_subject_from_extract(&raw_flow.extract)?;
         let requested_authn_context = requested_authn_context_from_extract(&raw_flow.extract)?;
@@ -216,7 +218,7 @@ impl AuthnRequest {
             passive,
             provider_name: raw_flow
                 .extract
-                .get_str("request.providerName")
+                .get_str(request::PROVIDER_NAME)
                 .map(str::to_string),
             requested_subject,
             requested_authn_context,
@@ -244,20 +246,39 @@ fn optional_flag(
 fn requested_subject_from_extract(
     extract: &crate::util::Value,
 ) -> Result<Option<RequestedSubject>, SamlError> {
-    if single_text(extract, "requestedSubject", "AuthnRequest Subject")?.is_none() {
+    if single_text(
+        extract,
+        authn_request::REQUESTED_SUBJECT,
+        "AuthnRequest Subject",
+    )?
+    .is_none()
+    {
         return Ok(None);
     }
     let identifier = requested_identifier(extract)?;
-    let confirmations = subject_confirmations_at(extract, "requestedSubjectConfirmation");
+    let confirmations =
+        subject_confirmations_at(extract, authn_request::REQUESTED_SUBJECT_CONFIRMATION);
     Ok(Some(RequestedSubject::new(identifier, confirmations)))
 }
 
 fn requested_identifier(
     extract: &crate::util::Value,
 ) -> Result<RequestedSubjectIdentifier, SamlError> {
-    let name_id = single_text(extract, "requestedNameId", "AuthnRequest NameID")?;
-    let base_id = single_text(extract, "requestedBaseId", "AuthnRequest BaseID")?;
-    let encrypted_id = single_text(extract, "requestedEncryptedId", "AuthnRequest EncryptedID")?;
+    let name_id = single_text(
+        extract,
+        authn_request::REQUESTED_NAME_ID,
+        "AuthnRequest NameID",
+    )?;
+    let base_id = single_text(
+        extract,
+        authn_request::REQUESTED_BASE_ID,
+        "AuthnRequest BaseID",
+    )?;
+    let encrypted_id = single_text(
+        extract,
+        authn_request::REQUESTED_ENCRYPTED_ID,
+        "AuthnRequest EncryptedID",
+    )?;
     let identifiers = [name_id, base_id, encrypted_id]
         .into_iter()
         .filter(Option::is_some)
@@ -284,16 +305,28 @@ fn requested_identifier(
 fn name_id_from_extract(extract: &crate::util::Value, value: &str) -> Result<NameId, SamlError> {
     let format = single_text(
         extract,
-        "requestedNameIdFormat",
+        authn_request::REQUESTED_NAME_ID_FORMAT,
         "AuthnRequest NameID Format",
     )?
     .map(NameIdFormat::from_uri);
     Ok(NameId::received(
         value.to_string(),
         format,
-        optional_attribute(extract, "requestedNameQualifier", "NameQualifier")?,
-        optional_attribute(extract, "requestedSpNameQualifier", "SPNameQualifier")?,
-        optional_attribute(extract, "requestedSpProvidedId", "SPProvidedID")?,
+        optional_attribute(
+            extract,
+            authn_request::REQUESTED_NAME_QUALIFIER,
+            "NameQualifier",
+        )?,
+        optional_attribute(
+            extract,
+            authn_request::REQUESTED_SP_NAME_QUALIFIER,
+            "SPNameQualifier",
+        )?,
+        optional_attribute(
+            extract,
+            authn_request::REQUESTED_SP_PROVIDED_ID,
+            "SPProvidedID",
+        )?,
     ))
 }
 
@@ -320,7 +353,7 @@ fn single_text<'a>(
 }
 
 fn issue_instant_from_extract(extract: &crate::util::Value) -> Result<SamlInstant, SamlError> {
-    let issue_instant = extract.get_str("request.issueInstant").ok_or_else(|| {
+    let issue_instant = extract.get_str(request::ISSUE_INSTANT).ok_or_else(|| {
         SamlError::ProtocolProfile(
             "AuthnRequest is missing required unqualified attribute IssueInstant".into(),
         )
@@ -339,7 +372,7 @@ const PAOS_BINDING: &str = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS";
 fn optional_response_binding(
     extract: &crate::util::Value,
 ) -> Result<Option<SsoResponseBinding>, SamlError> {
-    let Some(protocol_binding) = extract.get_str("request.protocolBinding") else {
+    let Some(protocol_binding) = extract.get_str(request::PROTOCOL_BINDING) else {
         return Ok(None);
     };
     let binding = Binding::from_urn(protocol_binding).ok_or_else(|| {

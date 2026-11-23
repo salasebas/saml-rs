@@ -13,7 +13,7 @@ use saml_rs::crypto::{sign_saml_xml, verify_signature};
 use saml_rs::flow::{FlowOptions, HttpRequest, SignatureCheck};
 use saml_rs::tests::engine::flow;
 use saml_rs::util::normalize_cert_string;
-use saml_rs::xml::{extract, ExtractorField};
+use saml_rs::xml::{extract, fields, ExtractorField};
 use saml_rs::{constants::Binding, constants::ParserType, SamlError};
 
 const PRIVKEY: &str = include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
@@ -126,7 +126,7 @@ fn xsw_authn_request_reference_must_cover_consumed_root() -> Result<(), Box<dyn 
             "flow must not consume attacker AuthnRequest ACS: {:?}",
             result
                 .extract
-                .get_str("request.assertionConsumerServiceURL")
+                .get_str(fields::request::ASSERTION_CONSUMER_SERVICE_URL)
         )
         .into()),
         other => Err(format!("unexpected flow result: {other:?}").into()),
