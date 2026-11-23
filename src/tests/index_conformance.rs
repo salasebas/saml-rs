@@ -106,7 +106,10 @@ fn idp_with_multiple_signing_and_encryption_certificates() -> Result<(), Box<dyn
             entity_id: "https://idp".into(),
             signing_certs: vec![IDP_CERT.into(), IDP_CERT2.into()],
             encrypt_certs: vec![IDP_ENC_CERT.into(), IDP_ENC_CERT.into()],
-            single_sign_on_service: vec![Endpoint::new(Binding::Post, "idp.example.com/sso")],
+            single_sign_on_service: vec![Endpoint::new(
+                Binding::Post,
+                "https://idp.example.com/sso",
+            )],
             ..Default::default()
         },
         EntitySetting::default(),

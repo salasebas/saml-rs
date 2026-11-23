@@ -22,12 +22,12 @@ fn sp_config() -> SpMetadataInput {
         entity_id: "https://sp.example.com/metadata".into(),
         name_id_format: vec!["urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress".into()],
         assertion_consumer_service: vec![
-            Endpoint::new(Binding::Post, "sp.example.com/acs"),
-            Endpoint::new(Binding::Redirect, "sp.example.com/acs"),
+            Endpoint::new(Binding::Post, "https://sp.example.com/acs"),
+            Endpoint::new(Binding::Redirect, "https://sp.example.com/acs"),
         ],
         single_logout_service: vec![
-            Endpoint::new(Binding::Post, "sp.example.com/slo"),
-            Endpoint::new(Binding::Redirect, "sp.example.com/slo"),
+            Endpoint::new(Binding::Post, "https://sp.example.com/slo"),
+            Endpoint::new(Binding::Redirect, "https://sp.example.com/slo"),
         ],
         ..Default::default()
     }
@@ -37,12 +37,12 @@ fn idp_config() -> IdpMetadataInput {
     IdpMetadataInput {
         entity_id: "https://idp.example.com/metadata".into(),
         single_sign_on_service: vec![
-            Endpoint::new(Binding::Post, "idp.example.com/sso"),
-            Endpoint::new(Binding::Redirect, "idp.example.com/sso"),
+            Endpoint::new(Binding::Post, "https://idp.example.com/sso"),
+            Endpoint::new(Binding::Redirect, "https://idp.example.com/sso"),
         ],
         single_logout_service: vec![
-            Endpoint::new(Binding::Post, "idp.example.com/sso/slo"),
-            Endpoint::new(Binding::Redirect, "idp.example.com/sso/slo"),
+            Endpoint::new(Binding::Post, "https://idp.example.com/sso/slo"),
+            Endpoint::new(Binding::Redirect, "https://idp.example.com/sso/slo"),
         ],
         ..Default::default()
     }
@@ -172,7 +172,7 @@ fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std
         idp.metadata
             .single_sign_on_location(Binding::Post)
             .as_deref(),
-        Some("idp.example.com/sso")
+        Some("https://idp.example.com/sso")
     );
     Ok(())
 }

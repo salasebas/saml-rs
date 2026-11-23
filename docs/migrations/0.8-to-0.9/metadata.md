@@ -24,6 +24,12 @@ still, when the first message was rendered.
 `IDPSSODescriptor` with no `SingleSignOnService`. The metadata schema requires
 at least one of each.
 
+Both generators wrote an endpoint `Location` as given, including a relative
+reference such as `/acs`. `generate_idp_metadata` also wrote two
+`ArtifactResolutionService` endpoints with the same index. Core §1.3.2
+requires an absolute URI reference, and Metadata §2.2.3 requires a unique
+index.
+
 **Now:** `build()` returns each of these errors, with the same `SamlError`
 variant and message. `ServiceProvider::new` and `IdentityProvider::new`,
 which replace `Saml::sp` and `Saml::idp`, take the built config and return
@@ -31,7 +37,10 @@ the provider without a `Result`. `generate_sp_metadata` returns
 `SamlError::MissingMetadata("AssertionConsumerService")` and
 `generate_idp_metadata` returns
 `SamlError::MissingMetadata("SingleSignOnService")` for a config without that
-endpoint.
+endpoint. Both generators return `SamlError::Invalid` for an endpoint
+`Location` that is not an absolute URI reference. `generate_idp_metadata` also
+returns `SamlError::Invalid` for two `ArtifactResolutionService` endpoints
+with the same index. `IdpConfigBuilder::build` already returned that error.
 
 **Upgrade:** handle these errors where you call `build()`. A config with a
 bad tag prefix that never sent a message now fails to build, so fix the
@@ -56,7 +65,8 @@ let config = IdpConfig::builder(entity_id, sso)
 ```
 
 Add an endpoint to every `SpMetadataInput` and `IdpMetadataInput` you pass
-to the generators:
+to the generators. Write each `Endpoint::location` as an absolute URL, and
+give each `ArtifactResolutionService` its own index:
 
 ```rust
 let mut input = SpMetadataInput::default();

@@ -617,7 +617,6 @@ impl IdpConfigBuilder {
     ///   absolute URI reference, or a `validUntil` outside the years 0001
     ///   through 9999.
     pub fn build(self) -> Result<IdpConfig, SamlError> {
-        self.metadata.ensure_unique_artifact_resolution_indexes()?;
         let issuance_lifetime = validated_idp_issuance_lifetime(self.issuance_lifetime)?;
         let engine = self.engine()?;
         validate_idp_policy(&self)?;
