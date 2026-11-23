@@ -87,8 +87,9 @@ work in the repo, not restate the README.
 
 ## Checks
 
-Run the narrowest checks that cover the touched code plus plausible side
-effects:
+For Rust changes, check formatting, run Clippy, and run the smallest test
+suite that covers the change and its side effects. Clippy and the test runs
+must pass with zero warnings. Report the commands, results, and warning count.
 
 ```bash
 cargo fmt --all --check
