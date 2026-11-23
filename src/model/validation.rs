@@ -422,17 +422,14 @@ impl<'a> SamlValidationContext<'a> {
         key: ReplayKey,
         derived_deadline: Option<OffsetDateTime>,
     ) -> Result<(), SamlError> {
-        if matches!(&self.replay, ReplayPolicy::Disabled) {
+        let Some(deadline) = derived_deadline else {
+            return self.check_and_store_message_replay(key);
+        };
+        let ReplayPolicy::RequireCache(cache) = &mut self.replay else {
             return Ok(());
-        }
-        let expires_at = derived_deadline
-            .map(system_time_from_offset_datetime)
-            .transpose()?
-            .map_or_else(|| self.message_replay_expires_at(), Ok)?;
-        match &mut self.replay {
-            ReplayPolicy::Disabled => Ok(()),
-            ReplayPolicy::RequireCache(cache) => cache.check_and_store(key, expires_at),
-        }
+        };
+        let expires_at = system_time_from_offset_datetime(deadline)?;
+        cache.check_and_store(key, expires_at)
     }
 
     fn message_replay_expires_at(&self) -> Result<SystemTime, SamlError> {
