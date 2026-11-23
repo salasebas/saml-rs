@@ -70,13 +70,29 @@ fn hmac_secret_is_at_least_the_sha1_output_length() {
     assert!(HmacSecret::try_new([0_u8; HmacSecret::MIN_LEN]).is_ok());
 }
 
+/// The second line of `pem`: base64 of the key or certificate, which no
+/// `Debug` output may show.
+fn pem_body(pem: &str) -> Result<&str, String> {
+    pem.lines()
+        .nth(1)
+        .ok_or_else(|| "PEM fixture has no body".to_string())
+}
+
 #[test]
-fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError> {
+fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), Box<dyn std::error::Error>> {
+    const SIGNING_KEY: &str =
+        include_str!("../../tests/fixtures/key/sp/privkey.unencrypted.pkcs8.pem");
+    const SIGNING_CERT: &str =
+        include_str!("../../tests/fixtures/key/sp/cert.unencrypted.pkcs8.cer");
+    const DECRYPTION_KEY: &str =
+        include_str!("../../tests/fixtures/key/idp/provider_matrix_privkey.pkcs8.pem");
+    const DECRYPTION_CERT: &str = include_str!("../../tests/fixtures/key/idp/cert.cer");
+    // An unencrypted key loads with any passphrase.
     let credentials = Credentials::default()
         .with_signing_credential(
             X509Credential::new(
-                CertificatePem::new("dummy-signing-certificate-for-credentials-debug-test"),
-                PrivateKeyPem::new("dummy-signing-key-for-credentials-debug-test"),
+                CertificatePem::new(SIGNING_CERT),
+                PrivateKeyPem::new(SIGNING_KEY),
             )
             .with_passphrase(Passphrase::new(
                 "dummy-signing-pass-for-credentials-debug-test",
@@ -84,13 +100,19 @@ fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError
         )
         .with_decryption_credential(
             X509Credential::new(
-                CertificatePem::new("dummy-certificate-for-credentials-debug-test"),
-                PrivateKeyPem::new("dummy-decryption-key-for-credentials-debug-test"),
+                CertificatePem::new(DECRYPTION_CERT),
+                PrivateKeyPem::new(DECRYPTION_KEY),
             )
             .with_passphrase(Passphrase::new(
                 "dummy-decryption-pass-for-credentials-debug-test",
             )),
         );
+    let material = [
+        pem_body(SIGNING_KEY)?,
+        pem_body(SIGNING_CERT)?,
+        pem_body(DECRYPTION_KEY)?,
+        pem_body(DECRYPTION_CERT)?,
+    ];
 
     let sp = SpConfig::builder(
         EntityId::try_new("https://sp.example.com/metadata")?,
@@ -118,6 +140,9 @@ fn typed_config_credentials_debug_redacts_every_secret() -> Result<(), SamlError
     ] {
         assert!(debug.contains("redacted"), "{debug}");
         assert!(!debug.contains("for-credentials-debug-test"), "{debug}");
+        for body in material {
+            assert!(!debug.contains(body), "{debug}");
+        }
     }
     Ok(())
 }

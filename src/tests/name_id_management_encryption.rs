@@ -70,23 +70,33 @@ fn encrypted() -> StartNameIdManagement {
         .identifier_encryption(IdentifierEncryptionPolicy::EncryptIdentifiers)
 }
 
-/// A service provider that publishes `encryption_cert` and decrypts with its
-/// own key.
-fn sp_publishing(encryption_cert: &str) -> Result<saml_rs::ServiceProvider, SamlError> {
+/// A service provider that publishes `encryption_cert`, the certificate of
+/// `decryption_key`.
+fn sp_with(
+    encryption_cert: &str,
+    decryption_key: &str,
+) -> Result<saml_rs::ServiceProvider, SamlError> {
     Ok(ServiceProvider::new(
         SpConfig::builder(
             EntityId::try_new(SP_ENTITY_ID)?,
             AcsEndpoint::post("https://sp.example.com/acs")?,
         )
         .manage_name_id_redirect_service(EndpointUrl::try_new(SP_MANAGE)?)
-        .credentials(credentials(encryption_cert, SP_DECRYPTION_KEY))
+        .credentials(credentials(encryption_cert, decryption_key))
         .validation(SpValidationPolicy::default())
         .build()?,
     ))
 }
 
 fn sp() -> Result<saml_rs::ServiceProvider, SamlError> {
-    sp_publishing(SP_ENCRYPTION_CERT)
+    sp_with(SP_ENCRYPTION_CERT, SP_DECRYPTION_KEY)
+}
+
+/// The service provider's descriptor with the identity provider's encryption
+/// certificate in place of its own, so the service provider holds no key for
+/// what is encrypted for it.
+fn sp_descriptor_with_foreign_encryption_certificate() -> Result<SpDescriptor, SamlError> {
+    sp_descriptor(&sp_with(IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY)?)
 }
 
 fn idp() -> Result<saml_rs::IdentityProvider, SamlError> {
@@ -326,8 +336,11 @@ fn identity_provider_decrypts_identifiers_made_for_either_published_certificate(
             ),
         ),
     )?;
-    for encryption_cert in [IDP_ENCRYPTION_CERT, IDP_NEXT_ENCRYPTION_CERT] {
-        let published = idp_with(credentials(encryption_cert, IDP_DECRYPTION_KEY))?;
+    for (encryption_cert, decryption_key) in [
+        (IDP_ENCRYPTION_CERT, IDP_DECRYPTION_KEY),
+        (IDP_NEXT_ENCRYPTION_CERT, IDP_NEXT_DECRYPTION_KEY),
+    ] {
+        let published = idp_with(credentials(encryption_cert, decryption_key))?;
         let started = sp.start_name_id_management_redirect(
             &idp_descriptor(&published)?,
             &alice(),
@@ -431,10 +444,12 @@ fn identity_provider_encrypts_a_soap_request_and_decrypts_one_over_soap() -> Tes
 
 #[test]
 fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() -> TestResult {
-    // The service provider publishes a certificate whose key it does not hold.
-    let sp = sp_publishing(IDP_ENCRYPTION_CERT)?;
+    let sp = sp()?;
     let idp = idp()?;
-    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let (sp_peer, idp_peer) = (
+        sp_descriptor_with_foreign_encryption_certificate()?,
+        idp_descriptor(&idp)?,
+    );
     let started = idp.start_name_id_management_redirect(
         &sp_peer,
         &alice(),
@@ -482,10 +497,12 @@ fn an_identifier_encrypted_for_another_key_is_answered_with_unknown_principal() 
 
 #[test]
 fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() -> TestResult {
-    // The service provider publishes a certificate whose key it does not hold.
-    let sp = sp_publishing(IDP_ENCRYPTION_CERT)?;
+    let sp = sp()?;
     let idp = idp()?;
-    let (sp_peer, idp_peer) = (sp_descriptor(&sp)?, idp_descriptor(&idp)?);
+    let (sp_peer, idp_peer) = (
+        sp_descriptor_with_foreign_encryption_certificate()?,
+        idp_descriptor(&idp)?,
+    );
     let started = idp.start_name_id_management_redirect(
         &sp_peer,
         &alice(),
@@ -528,14 +545,14 @@ fn a_replayed_or_stale_request_is_rejected_before_its_identifier_is_decrypted() 
 
 #[test]
 fn the_answer_to_a_refused_request_goes_to_an_http_endpoint_only_when_allowed() -> TestResult {
-    let sp = sp_publishing(IDP_ENCRYPTION_CERT)?;
+    let sp = sp()?;
     let idp = idp()?;
     let http_idp_peer = idp_descriptor_from(
         &idp.metadata_xml()
             .replace(IDP_MANAGE, "http://idp.example.com/manage-name-id"),
     )?;
     let started = idp.start_name_id_management_redirect(
-        &sp_descriptor(&sp)?,
+        &sp_descriptor_with_foreign_encryption_certificate()?,
         &alice(),
         &NameIdChange::Terminate,
         encrypted(),

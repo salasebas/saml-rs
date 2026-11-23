@@ -359,6 +359,20 @@ fn next_decryption_key() -> X509Credential {
     )
 }
 
+/// Service provider metadata whose encryption certificate is
+/// `encryption_cert`, which may name a key that no service provider holds.
+fn metadata_publishing(encryption_cert: &str) -> Result<String, SamlError> {
+    let published = sp_with_credentials(
+        XmlEncryptionPolicy::default(),
+        sp_validation(),
+        signing_credentials().with_decryption_credential(next_decryption_key()),
+    )?;
+    Ok(published.metadata_xml().replace(
+        &normalize_cert_string(NEXT_CERT),
+        &normalize_cert_string(encryption_cert),
+    ))
+}
+
 /// SSO in which the identity provider encrypts for `encryption_cert` and the
 /// service provider decrypts with `sp_credentials`.
 fn exchange_encrypted_for(
@@ -371,16 +385,13 @@ fn exchange_encrypted_for(
         sp_validation(),
         sp_credentials,
     )?;
-    let published = sp_with_credentials(
-        XmlEncryptionPolicy::default(),
-        sp_validation(),
-        signing_credentials().with_decryption_credential(X509Credential::new(
-            CertificatePem::new(encryption_cert),
-            PrivateKeyPem::new(PRIVKEY),
-        )),
-    )?;
     let idp = idp(encryption)?;
-    let (sp_descriptor, idp_descriptor) = descriptors(&published, &idp)?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let sp_descriptor = SpDescriptor::from_metadata_xml(
+        EntityId::try_new(SP_ENTITY_ID)?,
+        &metadata_publishing(encryption_cert)?,
+        MetadataTrustPolicy::AllowUnsigned,
+    )?;
     exchange_between(&sp, &sp_descriptor, &idp, &idp_descriptor)
 }
 

@@ -1,7 +1,7 @@
 //! Key, certificate and KeyInfo helpers backed by the selected `bergshamra`
 //! provider.
 
-use crate::config::{HmacSecret, X509Credential};
+use crate::config::{CertificatePem, Credentials, HmacSecret, Passphrase, X509Credential};
 use crate::error::{crypto_err, SamlError};
 use crate::util::normalize_cert_string;
 #[cfg(test)]
@@ -12,6 +12,80 @@ use bergshamra::keys::Key;
 pub(crate) fn read_private_key(pem: &str, password: Option<&str>) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
     load_pem_auto(pem.as_bytes(), password).map_err(crypto_err)
+}
+
+/// Check that every key and certificate in `credentials` loads, and that the
+/// key of each signing and decryption credential is the private key of its
+/// certificate.
+pub(crate) fn check_credentials(credentials: &Credentials) -> Result<(), SamlError> {
+    if let Some(credential) = credentials.signing_credential() {
+        check_credential(credential, "signing credential")?;
+    }
+    for (index, certificate) in credentials
+        .additional_signing_certificates()
+        .iter()
+        .enumerate()
+    {
+        load_published_certificate(
+            certificate,
+            &format!("additional signing certificate at index {index}"),
+        )?;
+    }
+    for (index, credential) in credentials.decryption_credentials().iter().enumerate() {
+        check_credential(
+            credential,
+            &format!("decryption credential at index {index}"),
+        )?;
+    }
+    Ok(())
+}
+
+fn check_credential(credential: &X509Credential, name: &str) -> Result<(), SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    let key = load_pem_auto(
+        credential.key().as_str().as_bytes(),
+        credential.passphrase().map(Passphrase::as_str),
+    )
+    .map_err(|error| credential_error(name, "the private key does not load", error))?;
+    if !key.has_private_key() {
+        return Err(SamlError::crypto(format!(
+            "{name}: the private key PEM holds only a public key"
+        )));
+    }
+    let certificate = load_published_certificate(credential.certificate(), name)?;
+    if public_key(&key, name)? != public_key(&certificate, name)? {
+        return Err(SamlError::crypto(format!(
+            "{name}: the private key does not match the certificate"
+        )));
+    }
+    Ok(())
+}
+
+fn load_published_certificate(certificate: &CertificatePem, name: &str) -> Result<Key, SamlError> {
+    super::provider::ensure_crypto_provider_initialized()?;
+    let published = normalize_cert_string(certificate.as_str());
+    let pem = to_cert_pem(&published)
+        .ok_or_else(|| SamlError::crypto(format!("{name}: the certificate does not load")))?;
+    load_x509_cert_pem(pem.as_bytes())
+        .map_err(|error| credential_error(name, "the certificate does not load", error))
+}
+
+/// The SubjectPublicKeyInfo of `key`, encoded by the selected provider.
+fn public_key(key: &Key, name: &str) -> Result<Vec<u8>, SamlError> {
+    key.data
+        .export_public()
+        .map_err(|error| credential_error(name, "the public key does not export", error))
+}
+
+fn credential_error(
+    name: &str,
+    problem: &str,
+    source: impl std::error::Error + Send + Sync + 'static,
+) -> SamlError {
+    SamlError::Crypto {
+        message: format!("{name}: {problem}"),
+        source: Some(Box::new(source)),
+    }
 }
 
 /// The decryption key `pem`, then each of `additional`, in the order they are
@@ -39,13 +113,14 @@ pub(crate) fn load_hmac_secret(secret: &HmacSecret) -> Result<Key, SamlError> {
 }
 
 /// Wrap a bare base64 certificate (as found in metadata) into a PEM block.
-fn to_cert_pem(cert: &str) -> Result<String, SamlError> {
+/// Returns `None` when the bare certificate is not ASCII text.
+fn to_cert_pem(cert: &str) -> Option<String> {
     if cert.contains("BEGIN CERTIFICATE") {
-        return Ok(cert.to_string());
+        return Some(cert.to_string());
     }
     let b64 = normalize_cert_string(cert);
     if !b64.is_ascii() {
-        return Err(SamlError::crypto("certificate is not base64 text"));
+        return None;
     }
     let mut body = String::new();
     let mut i = 0;
@@ -55,7 +130,7 @@ fn to_cert_pem(cert: &str) -> Result<String, SamlError> {
         body.push('\n');
         i = end;
     }
-    Ok(format!(
+    Some(format!(
         "-----BEGIN CERTIFICATE-----\n{body}-----END CERTIFICATE-----\n"
     ))
 }
@@ -63,7 +138,9 @@ fn to_cert_pem(cert: &str) -> Result<String, SamlError> {
 /// Load an X.509 certificate (PEM or bare base64) as a verification key.
 pub(crate) fn load_certificate(cert: &str) -> Result<Key, SamlError> {
     super::provider::ensure_crypto_provider_initialized()?;
-    load_x509_cert_pem(to_cert_pem(cert)?.as_bytes()).map_err(crypto_err)
+    let pem =
+        to_cert_pem(cert).ok_or_else(|| SamlError::crypto("certificate is not base64 text"))?;
+    load_x509_cert_pem(pem.as_bytes()).map_err(crypto_err)
 }
 
 /// Build a `<ds:KeyInfo><ds:X509Data><ds:X509Certificate>` block from a

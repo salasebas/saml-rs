@@ -287,6 +287,9 @@ impl SpConfigBuilder {
     ///   attributes are invalid;
     /// - the selected policy needs a credential that is not set, or crypto
     ///   that a build without a crypto provider lacks;
+    /// - with a crypto provider, a key or certificate in the credentials does
+    ///   not load, a key holds only a public key, or a key does not match its
+    ///   certificate ([`SamlError::Crypto`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
@@ -610,6 +613,9 @@ impl IdpConfigBuilder {
     ///   range;
     /// - the selected policy requires crypto that a build without a crypto
     ///   provider lacks;
+    /// - with a crypto provider, a key or certificate in the credentials does
+    ///   not load, a key holds only a public key, or a key does not match its
+    ///   certificate ([`SamlError::Crypto`]);
     /// - the crypto provider does not support the selected combination of
     ///   RSA-OAEP digest and mask generation function;
     /// - a tag prefix or the `SignatureConfig` prefix is not an XML NCName or
@@ -652,6 +658,8 @@ fn validate_shared_policy(
 
 fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
     validate_sp_crypto_support(config)?;
+    #[cfg(crypto)]
+    crate::crypto::keys::check_credentials(&config.credentials)?;
     validate_shared_policy(&config.algorithms, &config.templates)?;
     if authn_request_signing_enabled(config.validation.authn_requests) {
         validate_signing_credentials(&config.credentials, &config.algorithms.signature)?;
@@ -666,6 +674,8 @@ fn validate_sp_policy(config: &SpConfigBuilder) -> Result<(), SamlError> {
 
 fn validate_idp_policy(config: &IdpConfigBuilder) -> Result<(), SamlError> {
     validate_idp_crypto_support(config)?;
+    #[cfg(crypto)]
+    crate::crypto::keys::check_credentials(&config.credentials)?;
     validate_shared_policy(&config.algorithms, &config.templates)
 }
 
