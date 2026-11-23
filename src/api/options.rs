@@ -1,5 +1,6 @@
 use crate::browser::{ArtifactDelivery, LogoutBinding, SsoRequestBinding, SsoResponseBinding};
 use crate::config::IdentifierEncryptionPolicy;
+use crate::idp::ResponseMessageSignature;
 use crate::model::{RelayState, RequestedAuthnContext};
 
 pub use crate::model::{ForceAuthn, IsPassive};
@@ -219,18 +220,22 @@ impl<Delivery> RespondSso<Delivery> {
         self
     }
 
-    pub(super) fn should_sign_response(
+    pub(super) fn response_signature(
         &self,
         assertion_encrypted: bool,
         data_encryption_algorithm: &str,
-    ) -> bool {
+    ) -> ResponseMessageSignature {
+        let encrypted_cbc = assertion_encrypted
+            && crate::constants::is_xml_encryption_cbc_algorithm(data_encryption_algorithm);
         match self.response_signing {
-            ResponseSigning::FollowEncryptedCbcRecommendation => {
-                assertion_encrypted
-                    && crate::constants::is_xml_encryption_cbc_algorithm(data_encryption_algorithm)
+            ResponseSigning::Always => ResponseMessageSignature::Always,
+            ResponseSigning::FollowEncryptedCbcRecommendation if encrypted_cbc => {
+                ResponseMessageSignature::Always
             }
-            ResponseSigning::Always => true,
-            ResponseSigning::AllowUnsignedEncryptedCbc => false,
+            ResponseSigning::FollowEncryptedCbcRecommendation
+            | ResponseSigning::AllowUnsignedEncryptedCbc => {
+                ResponseMessageSignature::UnlessAssertionsSigned
+            }
         }
     }
 }

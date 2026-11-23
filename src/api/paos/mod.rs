@@ -678,9 +678,9 @@ impl IdentityProvider {
             ResponseAcsBindings::Paos,
         )?)?;
         let raw_sp = raw_sp_descriptor(sp, SystemTime::now())?;
-        let sign_encrypted_cbc = {
+        let response_signature = {
             let setting = &self.engine().setting;
-            super::options::RespondSso::post().should_sign_response(
+            super::options::RespondSso::post().response_signature(
                 setting.is_assertion_encrypted,
                 &setting.data_encryption_algorithm,
             )
@@ -697,7 +697,7 @@ impl IdentityProvider {
             requested_authn_context: request.message().requested_authn_context(),
             requested_name_id_policy: request.message().name_id_policy(),
             requested_subject: request.message().requested_subject(),
-            want_message_signed: Some(sign_encrypted_cbc),
+            response_signature: Some(response_signature),
             transformation_algorithms: None,
         };
         let issued = self.engine().render_posted_sso_response(

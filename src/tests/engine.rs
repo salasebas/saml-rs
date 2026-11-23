@@ -8,7 +8,7 @@ use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, User};
 use crate::error::SamlError;
 use crate::flow::{flow_with_authentication, FlowOptions, FlowResult, HttpRequest};
-use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides};
+use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides, ResponseMessageSignature};
 use crate::logout::{
     create_logout_response_inner, issuer_of, parse_logout_request_at, parse_logout_response_at,
     reject_soap_relay_state, render_logout_request, sign_browser_message, LogoutFlowValidation,
@@ -178,12 +178,16 @@ impl IdpMessages for idp::Engine {
             .assertion_consumer_location(binding)
             .ok_or_else(|| SamlError::MissingMetadata("AssertionConsumerService".into()))?;
         let (id, xml) = render(LOGIN_RESPONSE_TEMPLATE);
+        let response_signature = if sp.setting.want_message_signed {
+            ResponseMessageSignature::Always
+        } else {
+            ResponseMessageSignature::UnlessAssertionsSigned
+        };
         let signed = self.finalize_login_response(
             sp,
             binding,
             &xml,
-            false,
-            sp.setting.want_message_signed,
+            response_signature,
             &sp.setting.transformation_algorithms,
         )?;
         let (context, signature, sig_alg) = self.bind_response(binding, &signed, &acs, None)?;

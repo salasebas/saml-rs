@@ -333,7 +333,7 @@ impl IdentityProvider {
             ensure_entity_id(request.message().issuer(), sp.entity_id())?;
         }
         let idp_setting = &self.engine().setting;
-        let sign_response = options.should_sign_response(
+        let response_signature = options.response_signature(
             idp_setting.is_assertion_encrypted,
             &idp_setting.data_encryption_algorithm,
         );
@@ -372,7 +372,7 @@ impl IdentityProvider {
             requested_name_id_policy: request
                 .and_then(|request| request.message().name_id_policy()),
             requested_subject: request.and_then(|request| request.message().requested_subject()),
-            want_message_signed: Some(sign_response),
+            response_signature: Some(response_signature),
             transformation_algorithms: None,
         };
         match options.delivery {
