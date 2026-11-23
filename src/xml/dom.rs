@@ -213,7 +213,7 @@ enum ParseMode {
     Fragment,
 }
 
-fn is_xml_whitespace_char(ch: char) -> bool {
+pub(crate) fn is_xml_whitespace_char(ch: char) -> bool {
     matches!(ch, ' ' | '\t' | '\r' | '\n')
 }
 

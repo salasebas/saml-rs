@@ -143,6 +143,16 @@ pub mod entity_attribute {
     pub const SUBJECT_ID_REQUIREMENT: &str = "urn:oasis:names:tc:SAML:profiles:subject-id:req";
 }
 
+/// `Name`s of the assertion attributes that identify the subject.
+///
+/// Send each one with [`attribute_name_format::URI`].
+pub mod attribute_name {
+    /// The general purpose subject identifier, [`crate::SubjectId`].
+    pub const SUBJECT_ID: &str = "urn:oasis:names:tc:SAML:attribute:subject-id";
+    /// The pairwise subject identifier, [`crate::PairwiseId`].
+    pub const PAIRWISE_ID: &str = "urn:oasis:names:tc:SAML:attribute:pairwise-id";
+}
+
 /// AuthnContext class references (`namespace.authnContextClassRef`).
 pub mod authn_context_class_ref {
     /// Unspecified class.

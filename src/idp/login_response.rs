@@ -1,7 +1,8 @@
 use crate::constants::namespace;
 use crate::error::SamlError;
 use crate::model::{
-    Attribute, AttributeNameFormat, AuthnContextReference, AuthnContextReferenceKind, Status,
+    check_issued_subject_identifiers, is_subject_identifier, Attribute, AttributeNameFormat,
+    AuthnContextReference, AuthnContextReferenceKind, Status,
 };
 use crate::xml::write::XmlWriter;
 use crate::xml::OutboundNameIdQualifiers;
@@ -206,12 +207,14 @@ fn write_authn_statement(writer: &mut XmlWriter, prefix: &str, statement: &Authn
 }
 
 /// Write `attributes` as one `<AttributeStatement>`. No attributes writes
-/// nothing.
+/// nothing. A `subject-id` or `pairwise-id` value has no `xsi:type`.
 ///
 /// # Errors
 ///
 /// Returns [`SamlError::Invalid`] when a `NameFormat` is not an absolute URI
-/// reference, or a basic attribute name is not an `xs:Name`.
+/// reference, a basic attribute name is not an `xs:Name`, or a `subject-id`
+/// or `pairwise-id` attribute fails
+/// [`check_issued_subject_identifiers`].
 fn write_attribute_statement(
     writer: &mut XmlWriter,
     prefix: &str,
@@ -220,6 +223,7 @@ fn write_attribute_statement(
     if attributes.is_empty() {
         return Ok(());
     }
+    check_issued_subject_identifiers(attributes)?;
     let statement_name = qname(prefix, "AttributeStatement");
     let attribute_name = qname(prefix, "Attribute");
     let value_name = qname(prefix, "AttributeValue");
@@ -233,7 +237,7 @@ fn write_attribute_statement(
     } else {
         ("xmlns:xsi", "xsi:type")
     };
-    let value_attrs = [
+    let string_value_attrs = [
         (schema_declaration, XMLNS_XS),
         (instance_declaration, XMLNS_XSI),
         (type_attribute, string_type),
@@ -253,9 +257,14 @@ fn write_attribute_statement(
             writer.empty(&attribute_name, &attrs);
             continue;
         }
+        let value_attrs: &[(&str, &str)] = if is_subject_identifier(attribute) {
+            &[]
+        } else {
+            &string_value_attrs
+        };
         writer.start(&attribute_name, &attrs);
         for value in attribute.values() {
-            writer.text_element(&value_name, &value_attrs, value.as_str());
+            writer.text_element(&value_name, value_attrs, value.as_str());
         }
         writer.end(&attribute_name);
     }

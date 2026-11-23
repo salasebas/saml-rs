@@ -185,7 +185,9 @@ impl IdentityProvider {
     /// `encrypted` and identifier encryption is disabled.
     ///
     /// For an assertion, it also returns [`SamlError`] when a basic attribute
-    /// name is not an XML name, its format is not an absolute URI, the
+    /// name is not an XML name, its format is not an absolute URI, a
+    /// `subject-id` or `pairwise-id` attribute breaks the rules of
+    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes), the
     /// persistent or transient `NameId` is longer than 256 characters, the
     /// NameID format is not an absolute URI reference,
     /// [`SsoAssertion::with_authn_context`](crate::SsoAssertion::with_authn_context) does not meet an exact
@@ -253,7 +255,9 @@ impl IdentityProvider {
     /// overflows the supported timestamp range, or response creation fails.
     ///
     /// For an assertion, it also returns [`SamlError`] when a basic attribute
-    /// name is not an XML name, its format is not an absolute URI,
+    /// name is not an XML name, its format is not an absolute URI, a
+    /// `subject-id` or `pairwise-id` attribute breaks the rules of
+    /// [`SsoAssertion::with_attributes`](crate::SsoAssertion::with_attributes),
     /// [`SsoAssertion::with_authn_instant`](crate::SsoAssertion::with_authn_instant) is
     /// later than the response `IssueInstant`,
     /// or is before year 1, or the persistent or transient `NameId` is longer

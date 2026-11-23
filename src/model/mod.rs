@@ -19,6 +19,7 @@ mod replay_cache;
 mod sso;
 mod status;
 mod subject;
+mod subject_identifier;
 mod validation;
 
 pub(crate) use authn_statement::earliest_authn_session_expiration;
@@ -26,6 +27,7 @@ pub(crate) use extract::authn_statement_not_on_or_after_values;
 pub(crate) use subject::{
     is_name_id_format, validate_issued_name_id_length, validate_name_id_format,
 };
+pub(crate) use subject_identifier::{check_issued_subject_identifiers, is_subject_identifier};
 
 pub use attributes::{Attribute, AttributeNameFormat, AttributeValue, Attributes};
 pub use audience_restriction::AudienceRestriction;
@@ -48,6 +50,7 @@ pub use subject::{
     NameId, NameIdCreationRequest, NameIdPolicy, RequestedSubject, RequestedSubjectIdentifier,
     SubjectConfirmation,
 };
+pub use subject_identifier::{PairwiseId, SubjectId};
 pub use validation::{
     ClockSkew, ReplayCache, ReplayKey, ReplayPolicy, RequestAgePolicy, SamlValidationContext,
 };

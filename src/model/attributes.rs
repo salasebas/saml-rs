@@ -168,6 +168,17 @@ impl Attribute {
         &self.values
     }
 
+    /// Whether this is the attribute `name` that a specification defines with
+    /// the `uri` `NameFormat`: its `NameFormat` is `uri`, `unspecified`, or
+    /// absent.
+    pub(crate) fn matches_uri_name(&self, name: &str) -> bool {
+        self.name == name
+            && matches!(
+                self.name_format,
+                None | Some(AttributeNameFormat::Uri | AttributeNameFormat::Unspecified)
+            )
+    }
+
     /// Check the `Name` and `NameFormat` this attribute would be written with.
     ///
     /// # Errors

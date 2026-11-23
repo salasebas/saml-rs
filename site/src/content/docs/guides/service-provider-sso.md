@@ -57,6 +57,8 @@ With the `serde` feature, the snapshot serializes to JSON for your session store
 
 `session.attributes()` holds the attributes of the assertion. `first_value("mail")` returns the first value of the first attribute named `mail`. `Attribute::name_format()` is the attribute's `AttributeNameFormat`, and is `None` when the identity provider sent no `NameFormat`. `Attribute::friendly_name()` is its `FriendlyName`, and `get_by_friendly_name("mail")` finds the first attribute with that label. The identity provider chooses the label, and two attributes can share it, so select an attribute that decides access by its `Name` and `NameFormat`. A persistent or transient name identifier is reported as it was sent. The rules are in [SAML-defined identifiers](../reference/conformance/identifiers.md).
 
+`session.subject_id()` and `session.pairwise_id()` return the `subject-id` and `pairwise-id` attributes as a `SubjectId` and a `PairwiseId`. Each returns `None` when the assertion does not have the attribute, and `SamlError::ProtocolProfile` when the value is malformed. Two values that differ only in case are equal. Another identity provider can send the same `pairwise-id` value for another subject, so key an account on the issuer together with the value. The library does not check the scope against the identity provider. Before you trust the value, confirm that `session.issuer()` may assert identifiers in its `scope()`.
+
 `start_sso` also accepts `StartSso::post()` and `StartSso::simple_sign()`. All three constructors enforce the producer rules in [SSO generation](../reference/conformance/web-browser-sso-generation.md).
 
 ## Replay
