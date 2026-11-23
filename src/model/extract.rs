@@ -11,6 +11,7 @@ use crate::constants::attribute_name_format;
 use crate::error::SamlError;
 use crate::util::Value;
 use crate::validator::conditions_time_window;
+use crate::xml::fields::{attribute, authn_request, authn_statement, login_response};
 use crate::xml::{dom, xs_boolean, xs_unsigned_short, XmlLimits};
 
 pub(super) fn required_str<'a>(extract: &'a Value, path: &str) -> Result<&'a str, SamlError> {
@@ -65,13 +66,13 @@ pub(super) fn name_id_policy_from_extract(
     extract: &Value,
 ) -> Result<Option<NameIdPolicy>, SamlError> {
     let format = extract
-        .get_str("nameIDPolicy.format")
+        .get_str(authn_request::NAME_ID_POLICY_FORMAT)
         .map(NameIdFormat::from_uri);
     let sp_name_qualifier = extract
-        .get_str("nameIDPolicy.spNameQualifier")
+        .get_str(authn_request::NAME_ID_POLICY_SP_NAME_QUALIFIER)
         .map(str::to_string);
     let allow_create = extract
-        .get_str("nameIDPolicy.allowCreate")
+        .get_str(authn_request::NAME_ID_POLICY_ALLOW_CREATE)
         .map(parse_bool)
         .transpose()?;
     Ok(NameIdPolicy::from_parsed(
@@ -99,13 +100,13 @@ fn value_strings(value: &Value) -> Vec<String> {
 }
 
 pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, SamlError> {
-    let elements: Vec<&Value> = match extract.get("attributeNameFormats") {
+    let elements: Vec<&Value> = match extract.get(login_response::ATTRIBUTE_ELEMENTS) {
         Some(Value::Array(elements)) => elements.iter().collect(),
         Some(element @ Value::Object(_)) => vec![element],
         Some(Value::Null | Value::Str(_)) | None => Vec::new(),
     };
     if elements.is_empty()
-        && matches!(extract.get("attributes"), Some(Value::Object(entries)) if !entries.is_empty())
+        && matches!(extract.get(login_response::ATTRIBUTES), Some(Value::Object(entries)) if !entries.is_empty())
     {
         return Err(SamlError::Invalid(
             "extracted attributes are missing attributeNameFormats".into(),
@@ -114,14 +115,14 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
     let mut attributes: Vec<(&str, Option<&str>, Vec<AttributeValue>)> = Vec::new();
     let mut positions: HashMap<(&str, &str), usize> = HashMap::new();
     for element in elements {
-        let name = element.get_str("name").ok_or_else(|| {
+        let name = element.get_str(attribute::NAME).ok_or_else(|| {
             SamlError::ProtocolProfile(
                 "Attribute is missing required unqualified attribute Name".into(),
             )
         })?;
-        let name_format = element.get_str("nameFormat");
+        let name_format = element.get_str(attribute::NAME_FORMAT);
         let values = element
-            .get("attributeValue")
+            .get(attribute::VALUES)
             .map(value_strings)
             .ok_or_else(|| {
                 SamlError::Invalid("extracted Attribute is missing attributeValue".into())
@@ -147,7 +148,7 @@ pub(super) fn attributes_from_extract(extract: &Value) -> Result<Attributes, Sam
 }
 
 pub(super) fn subject_confirmations_from_extract(extract: &Value) -> Vec<SubjectConfirmation> {
-    subject_confirmations_at(extract, "subjectConfirmation")
+    subject_confirmations_at(extract, login_response::SUBJECT_CONFIRMATION)
 }
 
 pub(super) fn subject_confirmations_at(extract: &Value, path: &str) -> Vec<SubjectConfirmation> {
@@ -163,7 +164,7 @@ pub(super) fn subject_confirmations_at(extract: &Value, path: &str) -> Vec<Subje
 }
 
 fn authn_statement_values(extract: &Value) -> Result<Vec<&Value>, SamlError> {
-    match extract.get("sessionIndex") {
+    match extract.get(login_response::AUTHN_STATEMENTS) {
         Some(value @ Value::Object(_)) => Ok(vec![value]),
         Some(Value::Array(values)) => values
             .iter()
@@ -199,7 +200,9 @@ pub(crate) fn authn_statement_not_on_or_after_values(
 ) -> Result<Vec<&str>, SamlError> {
     authn_statement_values(extract)?
         .into_iter()
-        .map(|statement| optional_authn_statement_str(statement, "sessionNotOnOrAfter"))
+        .map(|statement| {
+            optional_authn_statement_str(statement, authn_statement::SESSION_NOT_ON_OR_AFTER)
+        })
         .filter_map(Result::transpose)
         .collect()
 }
@@ -211,15 +214,18 @@ pub(super) fn authn_statements_from_extract(
     let sessions: Vec<AuthnStatement> = authn_statement_values(extract)?
         .into_iter()
         .map(|statement| {
-            let session_index = optional_authn_statement_str(statement, "sessionIndex")?
-                .map(SessionIndex::try_new)
-                .transpose()?;
-            let authn_instant = optional_authn_statement_str(statement, "authnInstant")?
-                .map(SamlInstant::try_new)
-                .transpose()?;
-            let not_on_or_after = optional_authn_statement_str(statement, "sessionNotOnOrAfter")?
-                .map(SamlInstant::try_new)
-                .transpose()?;
+            let session_index =
+                optional_authn_statement_str(statement, authn_statement::SESSION_INDEX)?
+                    .map(SessionIndex::try_new)
+                    .transpose()?;
+            let authn_instant =
+                optional_authn_statement_str(statement, authn_statement::AUTHN_INSTANT)?
+                    .map(SamlInstant::try_new)
+                    .transpose()?;
+            let not_on_or_after =
+                optional_authn_statement_str(statement, authn_statement::SESSION_NOT_ON_OR_AFTER)?
+                    .map(SamlInstant::try_new)
+                    .transpose()?;
             Ok(AuthnStatement::new(
                 session_index,
                 authn_instant,
@@ -227,7 +233,10 @@ pub(super) fn authn_statements_from_extract(
             ))
         })
         .collect::<Result<_, SamlError>>()?;
-    if matches!(extract.get("authnStatement"), None | Some(Value::Null)) {
+    if matches!(
+        extract.get(login_response::AUTHN_STATEMENT),
+        None | Some(Value::Null)
+    ) {
         return Ok(sessions);
     }
     super::authn_details::attach_statement_details(extract, saml_content, sessions)
@@ -236,7 +245,7 @@ pub(super) fn authn_statements_from_extract(
 pub(super) fn audience_restrictions_from_extract(
     extract: &Value,
 ) -> Result<Vec<AudienceRestriction>, SamlError> {
-    let Some(value) = extract.get("audienceRestriction") else {
+    let Some(value) = extract.get(login_response::AUDIENCE_RESTRICTION) else {
         return Ok(Vec::new());
     };
     value_strings(value)
