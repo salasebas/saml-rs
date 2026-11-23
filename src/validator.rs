@@ -162,7 +162,6 @@ pub fn check_status(
     let result = extract_with_limits(content, &fields, limits)?;
     let top = result
         .get_str(fields::status::TOP)
-        .filter(|top| !top.is_empty())
         .ok_or(SamlError::StatusMissing)?;
     Status::received(top, result.get_str(fields::status::SECOND))?.require_success()
 }
@@ -285,6 +284,29 @@ mod tests {
                 );
             }
             other => return Err(format!("expected StatusNotSuccess, got {other:?}").into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn received_top_level_status_compares_the_any_uri_value() -> Result<(), SamlError> {
+        let success = crate::constants::status_code::SUCCESS;
+        let padded = RESPONSE.replace(success, &format!("&#9;{success} &#13;"));
+        check_status(&padded, ParserType::SamlResponse, XmlLimits::default())?;
+
+        let different = padded.replace(success, "urn:example:status:Success");
+        assert!(matches!(
+            check_status(&different, ParserType::SamlResponse, XmlLimits::default()),
+            Err(SamlError::ProtocolProfile(_))
+        ));
+
+        for empty in ["", " &#9;"] {
+            let xml = RESPONSE.replace(success, empty);
+            let result = check_status(&xml, ParserType::SamlResponse, XmlLimits::default());
+            assert!(
+                matches!(result, Err(SamlError::StatusMissing)),
+                "{result:?}"
+            );
         }
         Ok(())
     }

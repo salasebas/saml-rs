@@ -2906,6 +2906,40 @@ fn typed_facade_finish_slo_returns_partial_logout_under_success(
 }
 
 #[test]
+fn typed_facade_finish_slo_returns_the_any_uri_value_of_a_subordinate_status(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp) = facades()?;
+    let (_, idp_descriptor) = descriptors(&sp, &idp)?;
+    let started = sp.start_slo(&idp_descriptor, subject()?, StartSlo::post())?;
+    let success = saml_rs::constants::status_code::SUCCESS;
+    let partial_logout = saml_rs::constants::status_code::PARTIAL_LOGOUT;
+    let xml = logout_response_xml(
+        "_padded_subordinate_status",
+        IDP_ENTITY_ID,
+        started.pending.request_id().as_str(),
+        Some(SP_SLO_POST),
+    )
+    .replace(
+        &format!(r#"<samlp:StatusCode Value="{success}"/>"#),
+        &format!(
+            r#"<samlp:StatusCode Value="{success}"><samlp:StatusCode Value=" {partial_logout}&#9;"/></samlp:StatusCode>"#
+        ),
+    );
+    let completed = sp.finish_slo(
+        &idp_descriptor,
+        &started.pending,
+        signed_logout_response_input(&xml, LogoutBinding::Post)?,
+        validation(),
+    )?;
+
+    assert_eq!(
+        completed.response().status(),
+        &Status::success().with_subordinate(SubordinateStatusCode::partial_logout())
+    );
+    Ok(())
+}
+
+#[test]
 fn typed_facade_finish_slo_reports_signed_correlated_error_status(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exchange = sp_started_exchange_answered_with(&refused_logout_status())?;

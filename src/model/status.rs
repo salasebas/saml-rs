@@ -1,6 +1,6 @@
 use crate::constants::status_code;
 use crate::error::SamlError;
-use crate::xml::any_uri::is_absolute_uri_reference;
+use crate::xml::any_uri::{collapse_whitespace, is_absolute_uri_reference};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RequestVersionMismatch {
@@ -33,9 +33,9 @@ impl RequestVersionMismatch {
         let status = Status::version_mismatch();
         match self {
             Self::SameMajor => status,
-            Self::NewerMajor => status.with_subordinate(SubordinateStatusCode::received(
-                status_code::REQUEST_VERSION_TOO_HIGH,
-            )),
+            Self::NewerMajor => status.with_subordinate(SubordinateStatusCode {
+                uri: status_code::REQUEST_VERSION_TOO_HIGH.to_string(),
+            }),
         }
     }
 }
@@ -83,7 +83,7 @@ impl TopLevelStatusCode {
 ///
 /// [`Self::partial_logout`] is Core §3.7.3.2 `PartialLogout`. Other absolute
 /// URIs go through [`Self::try_new`]. A code read from a received response
-/// holds the peer's `Value` unchanged.
+/// holds the peer's `Value` with XML Schema `anyURI` whitespace collapsed.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubordinateStatusCode {
     uri: String,
@@ -140,12 +140,6 @@ impl SubordinateStatusCode {
         Ok(Self { uri })
     }
 
-    pub(crate) fn received(uri: &str) -> Self {
-        Self {
-            uri: uri.to_string(),
-        }
-    }
-
     /// URI carried in the nested `StatusCode/@Value`.
     pub fn as_uri(&self) -> &str {
         &self.uri
@@ -189,9 +183,13 @@ impl Status {
 
     /// Status read from a received message.
     ///
-    /// An empty subordinate value is read as absent.
+    /// A subordinate value that collapses to an empty string is read as absent.
     pub(crate) fn received(top_level: &str, subordinate: Option<&str>) -> Result<Self, SamlError> {
-        let top_level = TopLevelStatusCode::from_uri(top_level).ok_or_else(|| {
+        let uri = collapse_whitespace(top_level);
+        if uri.is_empty() {
+            return Err(SamlError::StatusMissing);
+        }
+        let top_level = TopLevelStatusCode::from_uri(&uri).ok_or_else(|| {
             SamlError::ProtocolProfile(format!(
                 "top-level StatusCode {top_level} is not a SAML top-level status code"
             ))
@@ -199,8 +197,9 @@ impl Status {
         Ok(Self {
             top_level,
             subordinate: subordinate
-                .filter(|subordinate| !subordinate.is_empty())
-                .map(SubordinateStatusCode::received),
+                .map(collapse_whitespace)
+                .filter(|uri| !uri.is_empty())
+                .map(|uri| SubordinateStatusCode { uri }),
         })
     }
 
