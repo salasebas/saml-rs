@@ -422,7 +422,7 @@ pub enum SamlError {
         refusal: Box<RefusedLogoutRequest>,
     },
     /// The authenticated PAOS AuthnRequest was refused with a SAML response.
-    #[error("PAOS authentication request refused: {source}")]
+    #[error("PAOS authentication request refused")]
     #[non_exhaustive]
     PaosRequestRefused {
         /// Age or replay validation error.

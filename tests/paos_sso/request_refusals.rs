@@ -65,6 +65,45 @@ fn authenticated_age_and_replay_refusals_reach_the_sp_as_saml_errors(
 }
 
 #[test]
+fn unsigned_requests_get_local_age_and_replay_errors() -> Result<(), Box<dyn std::error::Error>> {
+    let (sp, idp, sp_descriptor, idp_descriptor) = parties()?;
+    let endpoint = EndpointUrl::try_new(IDP_SOAP)?;
+    let started = sp.start_paos_sso(
+        &idp_descriptor,
+        StartPaosSso::new(endpoint.clone()).allow_unsigned_authn_request(),
+    )?;
+    let (_, request) = enhanced_client_takes_authn_request(started.http_response.envelope())?;
+    let expired = SamlValidationContext::new(
+        SystemTime::now() + Duration::from_secs(3600),
+        ReplayPolicy::Disabled,
+    )
+    .with_authn_request_age(RequestAgePolicy::Bounded {
+        max_age: Duration::from_secs(60),
+    });
+    assert!(matches!(
+        idp.receive_paos_sso(&sp_descriptor, &request, &endpoint, expired),
+        Err(SamlError::TimeWindowInvalid {
+            field: TimeWindowField::AuthnRequestIssueInstant,
+            ..
+        })
+    ));
+
+    let mut cache = InMemoryReplayCache::new();
+    let receive = |cache: &mut InMemoryReplayCache| {
+        let validation =
+            SamlValidationContext::new(SystemTime::now(), ReplayPolicy::RequireCache(cache))
+                .with_replay_retention(Duration::from_secs(300));
+        idp.receive_paos_sso(&sp_descriptor, &request, &endpoint, validation)
+    };
+    receive(&mut cache)?;
+    assert!(matches!(
+        receive(&mut cache),
+        Err(SamlError::ReplayDetected { .. })
+    ));
+    Ok(())
+}
+
+#[test]
 fn a_paos_refusal_uses_the_receive_clock_for_sp_metadata() -> Result<(), Box<dyn std::error::Error>>
 {
     let (_, idp, _, idp_descriptor) = parties()?;
