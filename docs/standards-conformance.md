@@ -19,6 +19,25 @@ A schema takes precedence over a schema listing in prose. A binding or
 profile can narrow or add to Core. A draft is a target only for a feature that
 is explicitly experimental.
 
+SAML builds on general specifications such as SOAP 1.1, XML Signature, XML
+Schema, and HTTP. Where a SAML document states a rule for the same point, the
+SAML rule governs. Where SAML says nothing, the general specification governs.
+WS-I Basic Profile 1.1 is not part of SAML. Follow it only as library policy,
+for interoperability, when SOAP 1.1 allows both forms. For example:
+
+- Bindings §3.2.2 allows only SOAP 1.1. Under §3.2.2.1, as changed by E19,
+  the requester puts one SAML request in the `Body`, and the responder returns
+  one SAML response or a SOAP fault. Both narrow SOAP 1.1, so SAML governs.
+- SOAP 1.1 §§4.2.2 and 4.2.3 govern which headers a receiver processes.
+  Profiles §4.2.4 adds `actor` and `mustUnderstand` values only for the ECP
+  and PAOS headers it defines.
+- SOAP 1.1 §4 allows namespace-qualified elements after the `Body`. WS-I R1011
+  forbids them, and rejecting them is library policy.
+- Bindings §3.2.3 lets the requester send the OASIS URI as `SOAPAction` and
+  forbids the responder from depending on the header. Its §3.2.3.5 example
+  writes the URI without quotes. SOAP 1.1 §6.1.1 and WS-I R1109 quote it, so
+  sending it bare is library policy.
+
 ## Classify the rule
 
 A keyword alone does not classify a rule. Name the actor (producer, receiver,
@@ -34,6 +53,10 @@ reject it. When a rule's condition holds, apply the rule at its stated level: a
 receiver still compares an optional `Destination` when it is present.
 
 ## Implement the level
+
+Conformance §1.2 applies the RFC 2119 keywords to every SAML V2.0
+specification. The first three levels map those keywords to crate behaviour.
+The fourth covers what no keyword decides.
 
 - **Mandatory** (`MUST`, `REQUIRED`, `SHALL`, and their negations): every API
   that claims the behaviour enforces it, no policy disables it, and a required
@@ -54,9 +77,20 @@ element or one step of a flow does not claim the whole profile.
 
 ## Record it
 
-Each claimed flow has a record in `docs/conformance/`, one row per rule: the
-rule, its level, the section that states it, and the option that controls it.
-The site publishes these records.
+Each claimed flow has a record in `docs/conformance/`. The
+[conformance index](../site/src/content/docs/reference/conformance.md) lists
+the records and the APIs each one covers, so open only the record you need.
+The site publishes them.
+
+A record has one table row per rule, with four columns:
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| What the crate does | `Mandatory`, `Recommended`, `Optional`, or `Library policy: <reason>.` | The section, erratum, or schema type that states the rule. For library policy, the section that leaves the point open, or `—` | The option that changes it, or `Always` |
+
+A row stays near 300 characters. Section headings name the actor and the
+APIs, so the rows do not repeat them. `SamlError` variants and the order of
+checks belong in the rustdoc of the API that returns them, not in a record.
 
 A library-policy row states its reason in one sentence: why the looser rule
 cannot be applied. A row without a reason is an open question, not a decision.
