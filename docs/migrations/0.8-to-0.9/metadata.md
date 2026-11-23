@@ -41,6 +41,9 @@ endpoint. Both generators return `SamlError::Invalid` for an endpoint
 `Location` that is not an absolute URI reference. `generate_idp_metadata` also
 returns `SamlError::Invalid` for two `ArtifactResolutionService` endpoints
 with the same index. `IdpConfigBuilder::build` already returned that error.
+`SpConfigBuilder::build` and `IdpConfigBuilder::build` return the `Location`
+error for an `EndpointUrl` that is not an absolute URI reference, such as
+`https://sp.example.com/a[b]`. `EndpointUrl::try_new` still accepts that URL.
 
 **Upgrade:** handle these errors where you call `build()`. A config with a
 bad tag prefix that never sent a message now fails to build, so fix the
@@ -65,8 +68,10 @@ let config = IdpConfig::builder(entity_id, sso)
 ```
 
 Add an endpoint to every `SpMetadataInput` and `IdpMetadataInput` you pass
-to the generators. Write each `Endpoint::location` as an absolute URL, and
-give each `ArtifactResolutionService` its own index:
+to the generators. Write each `Endpoint::location` as an absolute URI
+reference, and give each `ArtifactResolutionService` its own index. In an
+endpoint URL, percent-encode a character that the error names, such as
+`https://sp.example.com/a%5Bb%5D`:
 
 ```rust
 let mut input = SpMetadataInput::default();

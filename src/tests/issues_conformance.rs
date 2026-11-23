@@ -6,7 +6,9 @@ use saml_rs::binding::{deflate_raw_decode, MAX_DEFLATE_RAW_DECODE_BYTES};
 use saml_rs::constants::{Binding, ParserType};
 use saml_rs::entity::EntitySetting;
 use saml_rs::idp;
-use saml_rs::metadata::{generate_sp_metadata, Endpoint, IdpMetadataInput, SpMetadataInput};
+use saml_rs::metadata::{
+    generate_sp_metadata, Endpoint, IdpMetadata, IdpMetadataInput, SpMetadataInput,
+};
 use saml_rs::sp;
 use saml_rs::sp::LoginRequestOptions;
 use saml_rs::tests::engine::SpMessages;
@@ -167,12 +169,13 @@ fn issue_87_existence_check_for_signature() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn issue_91_idp_single_sign_on_service_from_metadata() -> Result<(), Box<dyn std::error::Error>> {
-    let idp = idp::Engine::from_config(&idp_config(), EntitySetting::default())?;
+    let metadata = IdpMetadata::from_xml(&format!(
+        r#"<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com/metadata"><IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><SingleSignOnService Binding="{}" Location="idp.example.com/sso"/></IDPSSODescriptor></EntityDescriptor>"#,
+        Binding::Post.urn()
+    ))?;
     assert_eq!(
-        idp.metadata
-            .single_sign_on_location(Binding::Post)
-            .as_deref(),
-        Some("https://idp.example.com/sso")
+        metadata.single_sign_on_location(Binding::Post).as_deref(),
+        Some("idp.example.com/sso")
     );
     Ok(())
 }
