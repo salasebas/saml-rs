@@ -7,8 +7,10 @@ use crate::binding::{
 };
 use crate::config::{AssertionElementEncryption, XmlSignatureProfile};
 use crate::config::{HmacSecret, X509Credential};
-use crate::constants::{Binding, ParserType};
+use crate::constants::{Binding, CertUse, ParserType};
+use crate::entity::EntitySetting;
 use crate::error::{utf8_err, SamlError};
+use crate::metadata::Metadata;
 use crate::model::ClockSkew;
 use crate::util::Value;
 use crate::validator::{check_status, logout_request_not_on_or_after_deadline};
@@ -187,7 +189,28 @@ impl<'a> Default for FlowOptions<'a> {
     }
 }
 
-impl FlowOptions<'_> {
+impl<'a> FlowOptions<'a> {
+    pub(crate) fn for_peer(
+        setting: &EntitySetting,
+        peer: &'a Metadata,
+        hmac_secret: Option<&'a HmacSecret>,
+        now: SystemTime,
+        clock_skew: ClockSkew,
+    ) -> Self {
+        Self {
+            redirect_inflate_max_bytes: setting.redirect_inflate_max_bytes,
+            xml_limits: setting.xml_limits,
+            schema_validator: setting.schema_validator,
+            xml_signatures: setting.xml_signatures,
+            from_issuer: peer.entity_id(),
+            signing_certs: peer.x509_certificates(CertUse::Signing),
+            hmac_secret,
+            clock_skew,
+            now: Some(now),
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn validation_now(&self) -> Result<OffsetDateTime, SamlError> {
         self.now.map_or_else(
             || Ok(OffsetDateTime::now_utc()),

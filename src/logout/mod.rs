@@ -4,7 +4,6 @@ mod creation;
 mod encrypted_id;
 mod parsing;
 mod rendering;
-mod signing;
 
 #[cfg(test)]
 mod tests;
@@ -20,4 +19,3 @@ pub(crate) use parsing::{
 pub(crate) use rendering::LogoutRequestSubject;
 #[cfg(test)]
 pub(crate) use rendering::{issuer_of, render_logout_request, LogoutRequestTimeAttributes};
-pub(crate) use signing::sign_browser_message;

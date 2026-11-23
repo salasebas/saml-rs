@@ -85,9 +85,7 @@ fn encrypt(xml: &str, setting: &EntitySetting, peer: &Metadata) -> Result<String
 
 #[cfg(crypto)]
 fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<String, SamlError> {
-    use crate::crypto::enc::{
-        decrypt_root_child, AssertionDecryptionOptions, MANAGED_NAME_ID, NEW_ID,
-    };
+    use crate::crypto::enc::{decrypt_root_child, MANAGED_NAME_ID, NEW_ID};
     use crate::crypto::keys::load_decryption_keys;
 
     let key_pem = setting
@@ -103,16 +101,7 @@ fn decrypt(xml: &str, child: EncryptedChild, setting: &EntitySetting) -> Result<
         EncryptedChild::EncryptedId => MANAGED_NAME_ID,
         EncryptedChild::NewEncryptedId => NEW_ID,
     };
-    decrypt_root_child(
-        xml,
-        kind,
-        &keys,
-        AssertionDecryptionOptions {
-            allow_rsa15_key_transport_decryption: setting.allow_rsa15_key_transport_decryption,
-            max_decryption_work: setting.max_decryption_work,
-        },
-        setting.xml_limits,
-    )
+    decrypt_root_child(xml, kind, &keys, setting.into(), setting.xml_limits)
 }
 
 #[cfg(not(crypto))]

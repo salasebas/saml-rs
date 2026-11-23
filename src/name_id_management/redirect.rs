@@ -2,11 +2,12 @@
 
 use std::time::SystemTime;
 
+use crate::binding::sign_message;
 use crate::browser::NameIdManagementBinding;
 use crate::config::EntityId;
 use crate::config::HmacSecret;
 use crate::config::IdentifierEncryptionPolicy;
-use crate::constants::{Binding, CertUse, ParserType};
+use crate::constants::{Binding, ParserType};
 use crate::entity::{BindingContext, EntitySetting};
 use crate::error::SamlError;
 use crate::flow::{
@@ -14,7 +15,6 @@ use crate::flow::{
     FlowOptions, FlowResult, HttpRequest, ResponseSignatureRequirement, SignatureCheck,
     SignedMessageDestination,
 };
-use crate::logout::sign_browser_message;
 use crate::metadata::Metadata;
 use crate::model::{
     ClockSkew, MessageId, ReplayKey, RequestVersionMismatch, SamlInstant, SamlValidationContext,
@@ -25,8 +25,8 @@ use crate::xml::XmlLimits;
 
 use super::xml::{render_request, render_response, RequestXml, ResponseXml};
 use super::{
-    identifier_and_change, plaintext_content, protect_request, require_one_status_code,
-    require_utc_instant, Change, Identifier, ManageNameIdRequest, Refusal,
+    identifier_and_change, plaintext_content, protect_request, require_one_status_code, Change,
+    Identifier, ManageNameIdRequest, Refusal,
 };
 
 /// The receiving endpoint and clock for an inbound message.
@@ -142,7 +142,7 @@ pub(crate) fn request_from_flow(
 ) -> Result<UndecryptedRequest, SamlError> {
     let request = parse_saml_with_limits(&flow.saml_content, setting.xml_limits)?;
     let id = MessageId::try_new(request.required_attr("ID")?)?;
-    let issue_instant = require_utc_instant(&request)?;
+    let issue_instant = request.required_issue_instant()?;
     let issuer = issuer(&request).ok_or_else(|| {
         SamlError::ProtocolProfile("ManageNameIDRequest is missing Issuer".into())
     })?;
@@ -216,24 +216,20 @@ fn parse_signed(
     expected_in_response_to: Option<&str>,
     validation: InboundValidation<'_>,
 ) -> Result<FlowResult, SamlError> {
-    let signing_certs = peer_meta.x509_certificates(CertUse::Signing);
     let options = FlowOptions {
         binding: Some(Binding::from(NameIdManagementBinding::Redirect)),
         parser_type: Some(parser_type),
         // SAML Profiles 2.0 §4.5.3.1 and §4.5.3.2 require a signed message on
         // HTTP-Redirect.
         signature_check: SignatureCheck::Require,
-        xml_signatures: setting.xml_signatures,
-        from_issuer: peer_meta.entity_id(),
-        signing_certs,
-        clock_skew: validation.clock_skew,
-        now: Some(validation.now),
-        redirect_inflate_max_bytes: setting.redirect_inflate_max_bytes,
-        xml_limits: setting.xml_limits,
-        schema_validator: setting.schema_validator,
         expected_in_response_to,
-        hmac_secret: validation.peer_hmac_secret,
-        ..FlowOptions::default()
+        ..FlowOptions::for_peer(
+            setting,
+            peer_meta,
+            validation.peer_hmac_secret,
+            validation.now,
+            validation.clock_skew,
+        )
     };
     Ok(flow_with_expected_recipient_and_signature_evidence(
         &options,
@@ -256,16 +252,11 @@ fn bind_signed(
     parser_type: ParserType,
 ) -> Result<BindingContext, SamlError> {
     let binding = Binding::from(NameIdManagementBinding::Redirect);
-    let (context, signature, sig_alg) =
-        sign_browser_message(setting, binding, xml, destination, relay_state, parser_type)?;
-    Ok(BindingContext {
-        id,
-        context,
-        relay_state: relay_state.map(str::to_string),
-        entity_endpoint: destination.to_string(),
-        binding,
-        request_type: parser_type.query_param(),
-        signature,
-        sig_alg,
-    })
+    Ok(
+        sign_message(setting, binding, xml, destination, relay_state, parser_type)?.bind(
+            id,
+            destination.to_owned(),
+            relay_state,
+        ),
+    )
 }

@@ -19,13 +19,13 @@ use crate::error::{crypto_err, xml_err, SamlError};
 use bergshamra::c14n::{canonicalize_doc, C14nMode};
 use bergshamra::xml::{uppsala, Document as XmlDocument, NodeId, NodeSet};
 
-#[cfg(all(test, not(feature = "crypto-fips")))]
-pub(crate) use decrypt::decrypt_assertion_with_limits;
 pub(crate) use decrypt::{
     carries_encrypted_assertion_elements, decrypt_assertion_elements,
     decrypt_assertions_with_limits, decrypt_authn_request_encrypted_id,
-    decrypt_logout_request_encrypted_id, decrypt_root_child, AssertionDecryptionOptions,
+    decrypt_logout_request_encrypted_id, decrypt_root_child,
 };
+#[cfg(all(test, not(feature = "crypto-fips")))]
+pub(crate) use decrypt::{decrypt_assertion_with_limits, AssertionDecryptionOptions};
 #[cfg(test)]
 pub(crate) use encrypt::encrypt_assertion;
 pub(crate) use encrypt::{

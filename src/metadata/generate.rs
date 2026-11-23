@@ -9,6 +9,7 @@ use crate::metadata::description::{validate_description, write_description};
 use crate::metadata::entity_attributes::{validate_entity_attributes, write_entity_attributes};
 use crate::metadata::lifetime::{LifetimeAttributes, MetadataLifetime};
 use crate::metadata::write::MetadataWriter;
+use crate::metadata::{ContactPerson, Organization};
 use crate::model::{validate_name_id_format, Attribute};
 use crate::util::normalize_cert_string;
 use crate::xml::any_uri::is_absolute_uri_reference;
@@ -120,11 +121,18 @@ pub struct IdpMetadataInput {
     pub entity_attributes: Vec<Attribute>,
 }
 
-fn write_entity_descriptor_start(
-    w: &mut MetadataWriter,
+fn generate_entity_descriptor(
     entity_id: &str,
     lifetime: Option<MetadataLifetime>,
-) -> Result<(), SamlError> {
+    organization: Option<&Organization>,
+    contacts: &[ContactPerson],
+    error_url: Option<&str>,
+    entity_attributes: &[Attribute],
+    write_role: impl FnOnce(&mut MetadataWriter) -> Result<(), SamlError>,
+) -> Result<String, SamlError> {
+    validate_entity_id_syntax(entity_id)?;
+    validate_description(organization, contacts, error_url)?;
+    validate_entity_attributes(entity_attributes)?;
     let lifetime = LifetimeAttributes::new(lifetime)?;
     let mut attributes = vec![("entityID", entity_id)];
     attributes.extend(lifetime.attributes());
@@ -133,8 +141,13 @@ fn write_entity_descriptor_start(
         ("xmlns:assertion", namespace::ASSERTION),
         ("xmlns:ds", namespace::DSIG),
     ]);
+    let mut w = MetadataWriter::new();
     w.start("EntityDescriptor", &attributes);
-    Ok(())
+    write_entity_attributes(&mut w, entity_attributes);
+    write_role(&mut w)?;
+    write_description(&mut w, organization, contacts);
+    w.end("EntityDescriptor");
+    Ok(w.finish())
 }
 
 fn write_key_descriptor(w: &mut MetadataWriter, use_: &str, cert: &str) {
@@ -307,16 +320,18 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
             "AssertionConsumerService".to_string(),
         ));
     }
-    validate_entity_id_syntax(&cfg.entity_id)?;
-    validate_description(
+    generate_entity_descriptor(
+        &cfg.entity_id,
+        cfg.lifetime,
         cfg.organization.as_ref(),
         &cfg.contacts,
         cfg.error_url.as_deref(),
-    )?;
-    validate_entity_attributes(&cfg.entity_attributes)?;
-    let mut w = MetadataWriter::new();
-    write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
-    write_entity_attributes(&mut w, &cfg.entity_attributes);
+        &cfg.entity_attributes,
+        |w| write_sp_role(w, cfg),
+    )
+}
+
+fn write_sp_role(w: &mut MetadataWriter, cfg: &SpMetadataInput) -> Result<(), SamlError> {
     let mut role_attributes = vec![
         ("AuthnRequestsSigned", bool_str(cfg.authn_requests_signed)),
         ("WantAssertionsSigned", bool_str(cfg.want_assertions_signed)),
@@ -326,19 +341,17 @@ pub fn generate_sp_metadata(cfg: &SpMetadataInput) -> Result<String, SamlError> 
         role_attributes.push(("errorURL", error_url));
     }
     w.start("SPSSODescriptor", &role_attributes);
-    write_key_descriptors(&mut w, &cfg.signing_certs, &cfg.encrypt_certs);
-    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service)?;
-    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service)?;
+    write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs);
+    write_endpoints(w, "SingleLogoutService", &cfg.single_logout_service)?;
+    write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_service)?;
     if cfg.name_id_format.is_empty() {
         w.text_element("NameIDFormat", name_id_format::EMAIL_ADDRESS);
     } else {
-        write_name_id_formats(&mut w, &cfg.name_id_format)?;
+        write_name_id_formats(w, &cfg.name_id_format)?;
     }
-    write_assertion_consumer_service(&mut w, &cfg.assertion_consumer_service)?;
+    write_assertion_consumer_service(w, &cfg.assertion_consumer_service)?;
     w.end("SPSSODescriptor");
-    write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
-    w.end("EntityDescriptor");
-    Ok(w.finish())
+    Ok(())
 }
 
 /// Generate IdP metadata XML with role children in schema order.
@@ -364,16 +377,18 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError
             "SingleSignOnService".to_string(),
         ));
     }
-    validate_entity_id_syntax(&cfg.entity_id)?;
-    validate_description(
+    generate_entity_descriptor(
+        &cfg.entity_id,
+        cfg.lifetime,
         cfg.organization.as_ref(),
         &cfg.contacts,
         cfg.error_url.as_deref(),
-    )?;
-    validate_entity_attributes(&cfg.entity_attributes)?;
-    let mut w = MetadataWriter::new();
-    write_entity_descriptor_start(&mut w, &cfg.entity_id, cfg.lifetime)?;
-    write_entity_attributes(&mut w, &cfg.entity_attributes);
+        &cfg.entity_attributes,
+        |w| write_idp_role(w, cfg),
+    )
+}
+
+fn write_idp_role(w: &mut MetadataWriter, cfg: &IdpMetadataInput) -> Result<(), SamlError> {
     let mut role_attributes = vec![
         (
             "WantAuthnRequestsSigned",
@@ -385,16 +400,14 @@ pub fn generate_idp_metadata(cfg: &IdpMetadataInput) -> Result<String, SamlError
         role_attributes.push(("errorURL", error_url));
     }
     w.start("IDPSSODescriptor", &role_attributes);
-    write_key_descriptors(&mut w, &cfg.signing_certs, &cfg.encrypt_certs);
-    write_artifact_resolution_service(&mut w, &cfg.artifact_resolution_service)?;
-    write_endpoints(&mut w, "SingleLogoutService", &cfg.single_logout_service)?;
-    write_endpoints(&mut w, "ManageNameIDService", &cfg.manage_name_id_service)?;
-    write_name_id_formats(&mut w, &cfg.name_id_format)?;
-    write_endpoints(&mut w, "SingleSignOnService", &cfg.single_sign_on_service)?;
+    write_key_descriptors(w, &cfg.signing_certs, &cfg.encrypt_certs);
+    write_artifact_resolution_service(w, &cfg.artifact_resolution_service)?;
+    write_endpoints(w, "SingleLogoutService", &cfg.single_logout_service)?;
+    write_endpoints(w, "ManageNameIDService", &cfg.manage_name_id_service)?;
+    write_name_id_formats(w, &cfg.name_id_format)?;
+    write_endpoints(w, "SingleSignOnService", &cfg.single_sign_on_service)?;
     w.end("IDPSSODescriptor");
-    write_description(&mut w, cfg.organization.as_ref(), &cfg.contacts);
-    w.end("EntityDescriptor");
-    Ok(w.finish())
+    Ok(())
 }
 
 #[cfg(test)]

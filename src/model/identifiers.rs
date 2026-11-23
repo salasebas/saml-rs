@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::error::SamlError;
+use crate::xml::parse_saml_utc_date_time;
 
 macro_rules! non_empty_text {
     ($(#[$type_doc:meta])* $name:ident, $label:literal) => {
@@ -69,3 +70,9 @@ non_empty_text!(
     SessionIndex,
     "SessionIndex"
 );
+
+impl SamlInstant {
+    pub(crate) fn parse_utc(value: &str) -> Option<Self> {
+        parse_saml_utc_date_time(value).map(|normalized| Self(normalized.to_owned()))
+    }
+}

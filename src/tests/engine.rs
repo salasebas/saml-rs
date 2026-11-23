@@ -4,6 +4,7 @@
 
 use std::time::SystemTime;
 
+use crate::binding::sign_message;
 use crate::constants::{Binding, ParserType};
 use crate::entity::{generate_id, now_iso8601, BindingContext, EntitySetting, User};
 use crate::error::SamlError;
@@ -11,8 +12,8 @@ use crate::flow::{flow_with_authentication, FlowOptions, FlowResult, HttpRequest
 use crate::idp::{self, LoginResponseOptions, LoginResponseOverrides, ResponseMessageSignature};
 use crate::logout::{
     create_logout_response_inner, issuer_of, parse_logout_request_at, parse_logout_response_at,
-    reject_soap_relay_state, render_logout_request, sign_browser_message, LogoutFlowValidation,
-    LogoutReceipt, LogoutRequestSubject, LogoutRequestTimeAttributes, LogoutResponseInput,
+    reject_soap_relay_state, render_logout_request, LogoutFlowValidation, LogoutReceipt,
+    LogoutRequestSubject, LogoutRequestTimeAttributes, LogoutResponseInput,
 };
 use crate::metadata::Metadata;
 use crate::model::{validate_name_id_format, ClockSkew, Status};
@@ -280,24 +281,24 @@ pub(crate) fn create_logout_request_with_id(
         name_id_format,
     )?;
     let kind = ParserType::LogoutRequest;
-    let (context, signature, sig_alg) = if want_signed {
-        sign_browser_message(init_setting, binding, &xml, &destination, relay_state, kind)?
-    } else {
-        (
-            unsigned_context(binding, &xml, &destination, kind, relay_state)?,
-            None,
-            None,
-        )
-    };
+    if want_signed {
+        return Ok(
+            sign_message(init_setting, binding, &xml, &destination, relay_state, kind)?.bind(
+                id,
+                destination,
+                relay_state,
+            ),
+        );
+    }
     Ok(BindingContext {
         id,
-        context,
-        signature,
-        sig_alg,
+        context: unsigned_context(binding, &xml, &destination, kind, relay_state)?,
+        signature: None,
+        sig_alg: None,
         binding,
         entity_endpoint: destination,
         relay_state: relay_state.map(str::to_owned),
-        request_type: "SAMLRequest",
+        request_type: kind.query_param(),
     })
 }
 

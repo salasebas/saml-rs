@@ -2,7 +2,7 @@
 
 use crate::constants::{name_id_format, namespace};
 use crate::error::SamlError;
-use crate::model::Status;
+use crate::model::{SamlInstant, Status};
 use crate::xml::any_uri::collapse_whitespace;
 use crate::xml::dom::XmlLimits;
 pub(crate) use crate::xml::dom::{
@@ -38,6 +38,16 @@ impl SamlElement {
 
     pub(crate) fn is(&self, namespace: &str, local_name: &str) -> bool {
         self.namespace == namespace && self.local_name == local_name
+    }
+
+    pub(crate) fn required_issue_instant(&self) -> Result<SamlInstant, SamlError> {
+        let instant = self.required_attr("IssueInstant")?;
+        SamlInstant::parse_utc(&instant).ok_or_else(|| {
+            SamlError::ProtocolProfile(format!(
+                "{} IssueInstant must be a UTC xs:dateTime",
+                self.local_name
+            ))
+        })
     }
 }
 
