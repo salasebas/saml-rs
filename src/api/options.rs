@@ -80,8 +80,6 @@ impl StartSso {
 
     /// Set `IsPassive`. When required, the IdP and user agent must not take
     /// visible control of the user interface. Omitted by default.
-    ///
-    /// Requires the built-in AuthnRequest renderer.
     pub fn passive(mut self, passive: IsPassive) -> Self {
         self.passive = Some(passive);
         self
@@ -92,15 +90,13 @@ impl StartSso {
     /// The name may be empty and may contain any character XML 1.0 allows.
     /// [`ServiceProvider::start_sso`](crate::ServiceProvider::start_sso) returns
     /// [`SamlError::Invalid`](crate::SamlError::Invalid) for a name with a
-    /// character XML 1.0 forbids. Requires the built-in AuthnRequest renderer.
+    /// character XML 1.0 forbids.
     pub fn provider_name(mut self, provider_name: impl Into<String>) -> Self {
         self.provider_name = Some(provider_name.into());
         self
     }
 
     /// Request authentication contexts in preference order. Omitted by default.
-    ///
-    /// Requires the built-in AuthnRequest renderer.
     pub fn requested_authn_context(mut self, context: RequestedAuthnContext) -> Self {
         self.requested_authn_context = Some(context);
         self
