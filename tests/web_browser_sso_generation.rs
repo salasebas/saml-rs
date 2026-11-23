@@ -316,7 +316,7 @@ fn typed_sso_response_writes_the_caller_authentication_instant(
         session
             .authn_statements()
             .first()
-            .and_then(|statement| statement.authn_instant()),
+            .map(saml_rs::AuthnStatement::authn_instant),
         Some(&SamlInstant::try_new(AUTHENTICATED)?)
     );
 

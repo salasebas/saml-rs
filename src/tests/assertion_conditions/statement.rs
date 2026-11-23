@@ -38,6 +38,38 @@ fn browser_sso_rejects_a_statement_missing_authn_context_without_a_schema_valida
     Ok(())
 }
 
+const MISSING_AUTHN_INSTANT: &str =
+    "AuthnStatement is missing required unqualified attribute AuthnInstant";
+
+#[test]
+fn browser_sso_rejects_a_statement_missing_authn_instant_without_a_schema_validator(
+) -> Result<(), Box<dyn std::error::Error>> {
+    for unsolicited in [false, true] {
+        let exchange = exchange_for(SpValidationPolicy::default(), unsolicited)?;
+        let xml = response_xml(&exchange.response_fields)?;
+        let statement = xml
+            .find("<saml:AuthnStatement ")
+            .ok_or("missing AuthnStatement")?;
+        let start = xml[statement..]
+            .find(" AuthnInstant=\"")
+            .ok_or("missing AuthnInstant")?
+            + statement;
+        let value_start = start + " AuthnInstant=\"".len();
+        let end = xml[value_start..]
+            .find('"')
+            .ok_or("unterminated AuthnInstant")?
+            + value_start
+            + 1;
+        let mut omitted = xml.clone();
+        omitted.replace_range(start..end, "");
+        expect_error(
+            accept(&exchange, &resigned(&omitted)?),
+            |err| matches!(err, SamlError::ProtocolProfile(message) if message == MISSING_AUTHN_INSTANT),
+        )?;
+    }
+    Ok(())
+}
+
 const SCHEMA_REJECTION: &str = "schema rejected repeated SubjectLocality";
 const REPEATED_LOCALITY: &str = "AuthnStatement has more than one SubjectLocality";
 

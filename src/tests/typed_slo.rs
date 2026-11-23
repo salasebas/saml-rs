@@ -962,7 +962,10 @@ fn sso_session() -> Result<SsoSession, SamlError> {
                 ("sessionIndex", value_str("_session123")),
                 ("authnInstant", value_str("2026-07-04T12:00:00Z")),
             ]),
-            value_object(vec![("sessionIndex", value_str("_session456"))]),
+            value_object(vec![
+                ("sessionIndex", value_str("_session456")),
+                ("authnInstant", value_str("2026-07-04T12:00:00Z")),
+            ]),
         ]),
     );
     SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)

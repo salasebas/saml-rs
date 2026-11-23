@@ -806,10 +806,12 @@ fn typed_validation_context_replay_expiration_uses_earliest_authn_statement(
         Value::Array(vec![
             value_object(vec![
                 ("sessionIndex", value_str("_later")),
+                ("authnInstant", value_str("2026-07-04T12:00:00Z")),
                 ("sessionNotOnOrAfter", value_str("2026-07-04T13:30:00Z")),
             ]),
             value_object(vec![
                 ("sessionIndex", value_str("_earlier")),
+                ("authnInstant", value_str("2026-07-04T12:00:00Z")),
                 ("sessionNotOnOrAfter", value_str("2026-07-04T12:30:00Z")),
             ]),
         ]),
@@ -838,11 +840,14 @@ fn typed_validation_context_malformed_authn_statement_expiration_fails_replay_cl
     set_authn_statements(
         &mut flow,
         Value::Array(vec![
-            value_object(vec![(
-                "sessionNotOnOrAfter",
-                value_str("2026-07-04T13:30:00Z"),
-            )]),
-            value_object(vec![("sessionNotOnOrAfter", value_str("not-a-time"))]),
+            value_object(vec![
+                ("authnInstant", value_str("2026-07-04T12:00:00Z")),
+                ("sessionNotOnOrAfter", value_str("2026-07-04T13:30:00Z")),
+            ]),
+            value_object(vec![
+                ("authnInstant", value_str("2026-07-04T12:00:00Z")),
+                ("sessionNotOnOrAfter", value_str("not-a-time")),
+            ]),
         ]),
     );
     let session = SsoSession::try_from_with_verified_xml_signatures(flow, Vec::new(), None)?;

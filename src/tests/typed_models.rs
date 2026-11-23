@@ -1297,7 +1297,7 @@ fn typed_models_sso_session_preserves_repeated_authn_statements_in_order(
         .map(|authn| {
             (
                 authn.session_index().map(|value| value.as_str()),
-                authn.authn_instant().map(SamlInstant::as_str),
+                authn.authn_instant().as_str(),
                 authn.session_not_on_or_after().map(SamlInstant::as_str),
             )
         })
@@ -1308,12 +1308,12 @@ fn typed_models_sso_session_preserves_repeated_authn_statements_in_order(
         vec![
             (
                 Some("_session1"),
-                Some("2026-07-04T12:00:00Z"),
+                "2026-07-04T12:00:00Z",
                 Some("2026-07-04T13:00:00Z")
             ),
             (
                 Some("_session2"),
-                Some("2026-07-04T12:05:00Z"),
+                "2026-07-04T12:05:00Z",
                 Some("2026-07-04T12:30:00Z")
             ),
         ]
