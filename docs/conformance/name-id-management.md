@@ -2,6 +2,9 @@
 
 Rules for typed name identifier management, over SOAP at the identity provider (`IdentityProvider::start_name_id_management`, `StartedNameIdManagement::finish`, `receive_name_id_management`, `respond_name_id_management`) and over HTTP-Redirect at either provider (`start_name_id_management_redirect`, `receive_name_id_management_redirect`, `respond_name_id_management_redirect`, `finish_name_id_management_redirect` on `IdentityProvider` and `ServiceProvider`). Normative text is Core §§3.2 and 3.6, Profiles §4.5, Bindings §§3.2 and 3.4, and Metadata §2.4.2, as corrected by Approved Errata 05 (E8, E11, E12, E14, E19, E43, E55). Conformance Requirements Table 2 makes HTTP-Redirect `MUST` for the IdP and SP, SOAP `MUST` for the IdP and `OPTIONAL` for the SP, and every cell `MUST NOT` for IdP Lite and SP Lite, and this record does not claim the IdP or SP operational mode. SOAP envelope, header, and transport rules are in [Artifact resolution](artifact-resolution.md#soap-envelope-rules). `NameID` format and length rules are in [Identifiers](identifiers.md#name-identifier-formats).
 
+Both bindings use the shared [issuer](identifiers.md#entity-identifiers)
+and [status code](web-browser-sso-acceptance.md#status-codes) rules.
+
 ## Turning the protocol on
 
 | Rule | Level | Section | Option |
@@ -44,6 +47,7 @@ Rules for typed name identifier management, over SOAP at the identity provider (
 | Accept only response version `2.0` | Library policy: reason not recorded. | Core §4.1.3.2 | Always |
 | Require the response `InResponseTo` to equal the pending request ID, including on an error response | Library policy: a missing or different value cannot identify this response as the answer to the pending request. | Core §3.2.1, §3.2.2 | Always |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
+| Report a status other than `Success` as an error | Library policy: only `Success` confirms the change, and the caller needs the peer's refusal status. | Core §3.6.3 | Always |
 | Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.2 binds the responder, and the requester attributes the response to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.2 | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel`, attested at start | Mandatory | Profiles §4.5.3.2, §4.5.4.2 | `SoapChannel` |
 
@@ -57,13 +61,14 @@ Rules for typed name identifier management, over SOAP at the identity provider (
 | Require `ID`, `Version`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
-| Return top-level `VersionMismatch` for a version incompatibility | Mandatory | Core §4.1.3.2 | `NameIdManagementRefusal::VersionMismatch` |
+| Answer a newer authenticated request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version | Mandatory | Core §4.1.3.2 | `NameIdManagementRefusal::VersionMismatch` |
+| Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Authenticate the sending party and protect message integrity. The crate uses a mutually authenticated, integrity-protected `SoapChannel` | Mandatory | Profiles §4.5.4.1 | `SoapChannel` |
 | Refuse a request when the `SoapChannel` does not authenticate the requester, even if it is signed. A present XML signature is not verified | Library policy: Profiles §4.5.3.1 also accepts a signature, but this identity provider verifies none on this message. | Profiles §4.5.3.1, §4.5.4.1 | `SoapChannel` |
 | Require an `Issuer` equal to the service provider, with `Format` omitted or `entity` | Library policy: Profiles §4.5.4.1 binds the requester, and the responder ties the change to the service provider by that `Issuer` and the `SoapChannel`. | Profiles §4.5.4.1 | Always |
-| Compare a present `Destination` with the receiving SOAP `ManageNameIDService`, and accept an absent one | Mandatory | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
+| Compare a present `Destination` with the receiving SOAP `ManageNameIDService` after collapsing XML whitespace. Accept an absent value | Mandatory | Core §3.2.1, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require at most one `Issuer`, `ds:Signature`, and `Extensions` in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate`, with text-only `NameID` and `NewID` and an empty `Terminate` | Mandatory | `RequestAbstractType`, `ManageNameIDRequestType`, `TerminateType` | Always |
-| Bound the `IssueInstant` age | Library policy: the age window can reject a stale replay after its request ID expires from the cache. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`, `RequestAgePolicy::Bounded`. Disabled by default. To cover the full window, retain request IDs for at least `max_age` plus both clock-skew tolerances |
+| Answer an authenticated request outside the configured age window with `Requester` and leave its ID out of the replay cache | Library policy: the age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
 | Reject a repeated request `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 | Accept a persistent `NameID` without its qualifiers | Library policy: the receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
 
@@ -108,17 +113,21 @@ Rules for typed name identifier management, over SOAP at the identity provider (
 | --- | --- | --- | --- |
 | Reject an unsigned request | Library policy: the Redirect signature authenticates the peer and protects the message across the browser redirect. | Profiles §4.5.3.1, §4.5.4.1 | Always. An HMAC signature uses the secret from `with_hmac_secret` on the peer descriptor |
 | Require an `Issuer` equal to the peer descriptor's entity ID | Library policy: Profiles §4.5.4.1 requires an `Issuer` and does not name the descriptor, and the signature is verified with that descriptor's keys, so the change is attributed to it. | Profiles §4.5.4.1 | Always |
-| Require `Destination` on the signed request, equal to the receiving `ManageNameIDService` | Mandatory | Core §3.2.1, Bindings §3.4.5.2 | `SamlValidationContext::with_recipient_endpoint` |
+| Require `Destination` on the signed request. Compare it with the receiving `ManageNameIDService` after collapsing XML whitespace | Mandatory | Core §3.2.1, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require `ID`, `Version`, and a UTC `IssueInstant` | Mandatory | `RequestAbstractType`, Core §1.3.3 | Always |
 | Require at most one `Issuer`, `ds:Signature`, and `Extensions` in that order, then one `NameID` or `EncryptedID`, then one `NewID`, `NewEncryptedID`, or `Terminate`, with text-only `NameID` and `NewID` and an empty `Terminate` | Mandatory | `RequestAbstractType`, `ManageNameIDRequestType`, `TerminateType` | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
-| Return a signed top-level `VersionMismatch` for a version incompatibility | Mandatory | Core §4.1.3.2, Profiles §4.5.3.2 | `NameIdManagementRefusal::VersionMismatch` |
-| Bound the `IssueInstant` age | Library policy: the age window can reject a stale replay after its request ID expires from the cache. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`, `RequestAgePolicy::Bounded`. Disabled by default. To cover the full window, retain request IDs for at least `max_age` plus both clock-skew tolerances |
+| Answer a newer authenticated request version with signed `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version | Mandatory | Core §4.1.3.2, Profiles §4.5.3.2 | `NameIdManagementRefusal::VersionMismatch` |
+| Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
+| Answer an authenticated 2.0 request outside the configured age window with signed `Requester`, before replay storage and decryption | Library policy: the age window limits acceptance after replay storage expires. | Core §1.3.3 | `SamlValidationContext::with_manage_name_id_request_age`. Disabled by default |
 | Accept a persistent `NameID` without its qualifiers | Library policy: the receiver preserves the identifier as sent, including absent qualifiers. | Core §3.6.3 | Always |
 | Reject a repeated request `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 | Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
 | Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
+
+With an enabled age window, retain request IDs for at least `max_age` plus
+both clock-skew tolerances to cover the full window on either binding.
 
 ## HTTP-Redirect: ManageNameIDResponse
 
@@ -149,8 +158,9 @@ Rules for typed name identifier management, over SOAP at the identity provider (
 | Require the `RelayState` the request carried, and accept any when it carried none | Library policy: Bindings §3.4.3 binds the responder, and another transaction's state must not complete this one. | Bindings §3.4.3 | Always |
 | Accept a received `RelayState` over 80 bytes, up to 4096 bytes | Library policy: Bindings §3.4.3 binds the creator and gives the receiver no rule, and the 4096-byte bound limits unauthenticated input. | Bindings §3.4.3 | `MAX_RECEIVED_RELAY_STATE_BYTES` |
 | Reject a repeated `RelayState` parameter | Library policy: Bindings §3.4.3 defines one value per message and no receiver rule, and saml-rs compares and echoes one value while a caller's framework may read another. | Bindings §3.4.3 | Always |
-| Require `Destination` on the signed response, equal to this provider's response location | Mandatory | Core §3.2.2, Bindings §3.4.5.2 | `SamlValidationContext::with_recipient_endpoint` |
+| Require `Destination` on the signed response. Compare it with this provider's response location after collapsing XML whitespace | Mandatory | Core §3.2.2, Bindings §3.4.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require one `Status` with one direct `StatusCode` | Mandatory | `StatusResponseType`, `StatusType` | Always |
+| Report a status other than `Success` after verifying the signature, issuer, request ID, and destination | Library policy: failed authentication or correlation takes precedence over a reported status. | Core §3.2.2.2 | Always |
 | Reject a repeated response `ID` | Library policy: retaining the ID prevents the same message from being accepted twice during the retention period. | — | `ReplayPolicy::RequireCache`, `SamlValidationContext::with_replay_retention` |
 
 ## EncryptedID and NewEncryptedID
@@ -196,6 +206,5 @@ The caller owns these rules, and the crate keeps no identifier state or sessions
 - Verifying an XML signature present on an inbound SOAP `ManageNameIDRequest` or `ManageNameIDResponse`. Optional, Profiles §§4.5.3.1-2. The signature is ignored.
 - A responder that adds `RelayState` to a request that had none. Optional, Bindings §3.4.3.
 - Checking a present `Destination` on a SOAP `ManageNameIDResponse`. Mandatory, Core §3.2.2. The synchronous `finish` API has no receiving URL and skips this check.
-- Version negotiation for other major versions. Mandatory, Core §4.1.3.2. Refusals use `Version` `2.0` and omit `RequestVersionTooHigh`.
 - Name identifier mapping over SOAP. Mandatory for the Extended IdP and SP, Conformance Table 3.
 - The IdP operational mode and the SP operational mode.

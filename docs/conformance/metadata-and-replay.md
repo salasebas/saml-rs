@@ -46,6 +46,7 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | Choose the default of an indexed set as the first endpoint with `isDefault` true, else the first without `isDefault` false, else the first | Mandatory | Metadata §2.2.3, E37 | Always |
 | For an `AssertionConsumerService` lookup without a binding, select the default within the first matching SAML 2.0 SP role | Library policy: reason not recorded. | Metadata §2.3.2 | Always |
 | Require unqualified `Binding`, `Location`, and an `unsignedShort` `index` on each `ArtifactResolutionService` | Mandatory | Metadata §2.2.2, §2.2.3 | `IdpMetadata::artifact_resolution_services` |
+| Reject duplicate `ArtifactResolutionService` indexes within one `IDPSSODescriptor` | Mandatory | Metadata §2.2.3 | `IdpMetadata::artifact_resolution_services` |
 | Reject an empty `Binding` or `Location` after whitespace collapse | Library policy: reason not recorded. | Core §1.3.2, Metadata §2.2.2 | `IdpMetadata::artifact_resolution_services` |
 
 ## Metadata validity
@@ -64,6 +65,9 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 
 ## Generating metadata
 
+The SP and IdP build metadata with `generate_sp_metadata` and
+`generate_idp_metadata`, including when their typed configuration builders run.
+
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Write role descriptor children in schema order: `KeyDescriptor`, `ArtifactResolutionService` (IdP only), `SingleLogoutService`, `ManageNameIDService`, `NameIDFormat`, then `SingleSignOnService` or `AssertionConsumerService` | Mandatory | Metadata §2.4.1 to §2.4.4 | Always |
@@ -76,13 +80,20 @@ The peer descriptors read the role the peer acts in. `Metadata::parse` has no ro
 | Write each `NameIDFormat` as an absolute URI reference | Mandatory | Metadata §2.4.2, Core §1.3.2 | Always |
 | Write an `emailAddress` `NameIDFormat` when a service provider configures none | Library policy: reason not recorded. | Metadata §2.4.2 | `name_id_format`, `name_id_formats` |
 | Write at least one `SingleSignOnService` in an `IDPSSODescriptor` and one `AssertionConsumerService` in an `SPSSODescriptor` | Mandatory | `IDPSSODescriptorType`, `SPSSODescriptorType`, Metadata §2.4.3, §2.4.4 | Always |
+| Write an absolute URI reference as each endpoint's `Location` | Mandatory | Metadata §2.2.2, Core §1.3.2 | Always |
 | Write a unique `index` on each `AssertionConsumerService` | Mandatory | Metadata §2.2.3 | Always |
+| Write a unique `index` on each `ArtifactResolutionService` in an `IDPSSODescriptor` | Mandatory | Metadata §2.2.3 | Always |
 | Write `isDefault` only on indexed endpoints. The generator supports the flag on `AssertionConsumerService` | Mandatory | Metadata §2.2.2, §2.2.3 | `Endpoint::is_default` |
 | Write `validUntil`, `cacheDuration`, or both on the root `EntityDescriptor`. `validUntil` is UTC, truncated to whole seconds | Mandatory | Metadata §2.3.2 | `MetadataLifetime` |
 | Write `cacheDuration="PT86400S"` when no lifetime is configured | Library policy: a daily refresh target without a fixed expiration for metadata generated once at config build. | Metadata §2.3.2, E94 | `metadata_lifetime` on `SpConfigBuilder` and `IdpConfigBuilder` |
 | Publish several signing `KeyDescriptor` elements | Optional | Metadata §2.4.1, E68 | `Credentials::with_additional_signing_certificate` |
 | Publish several encryption `KeyDescriptor` elements | Optional | Metadata §2.4.1, E68 | `Credentials::with_decryption_credential` |
+| With a crypto provider, load the signing and decryption keys and all their certificates, including additional signing certificates. Check that each private key matches its certificate | Library policy: peers use the published certificates to verify signatures and encrypt messages. | Metadata §2.4.1.1 | `SpConfigBuilder::build`, `IdpConfigBuilder::build` |
 | Allow decryption with any locally configured key published for encryption. Keys are tried in the order added | Recommended | E68 | `Credentials::with_decryption_credential` |
+
+The metadata generators accept absolute URI references for endpoint locations.
+Typed endpoints use `EndpointUrl`, which requires HTTP or HTTPS. Import
+preserves relative locations.
 
 ## Entity attributes
 
@@ -114,6 +125,8 @@ application's.
 ## Replay
 
 The service provider requires a caller-owned `ReplayCache` for HTTP-POST SSO responses. Artifact and name identifier management replay rows are in [Artifact resolution](artifact-resolution.md) and [Name identifier management](name-id-management.md).
+The `ReplayCache` contract defines the result when an assertion deadline
+passes before storage.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -122,7 +135,7 @@ The service provider requires a caller-owned `ReplayCache` for HTTP-POST SSO res
 | For each direct bearer assertion, use its latest UTC bearer deadline. Ignore an unparseable deadline if another parses. Storage fails when none parses | Library policy: it keeps the identifier at least as long as the confirmation that satisfied the checks. | Profiles §4.1.4.3 | Always |
 | Also store the `Response` `ID` until the earliest of `Conditions@NotOnOrAfter`, the bearer confirmation, and each `SessionNotOnOrAfter`, plus skew | Library policy: reason not recorded. | — | `ReplayPolicy::RequireCache` |
 | Store bearer assertion `ID`s for HTTP-POST-SimpleSign or HTTP-Artifact when a cache is supplied | Library policy: Profiles §4.1.4.5 states the duty for HTTP POST only, and Security considerations §7.1.1.4 defers replay countermeasures to the binding. | Profiles §4.1.4.5 | `ReplayPolicy::RequireCache` |
-| Store the `ID` of an `AuthnRequest` in `receive_sso` and `receive_paos_sso`, and of a `LogoutResponse` in `finish_slo`, for `with_replay_retention` | Library policy: Web Browser SSO and Single Logout require no identifier cache. | — | `ReplayPolicy::RequireCache` |
+| Store the `ID` of an `AuthnRequest` in `receive_sso`, and of a `LogoutResponse` in `finish_slo`, for `with_replay_retention` | Library policy: Web Browser SSO and Single Logout require no identifier cache for these messages. | — | `ReplayPolicy::RequireCache` |
 | Store the `ID` of a `LogoutRequest` in `receive_slo` until its `NotOnOrAfter` plus skew, or for `with_replay_retention` when it has none | Library policy: Single Logout requires no identifier cache. | — | `ReplayPolicy::RequireCache` |
 | Treat `OneTimeUse` as always valid and never retain the assertion for later use | Mandatory | Core §2.5.1.5 | Always |
 | Use an assertion that carries `OneTimeUse` immediately | Recommended | Core §2.5.1.5 | Always |
@@ -141,4 +154,3 @@ The service provider requires a caller-owned `ReplayCache` for HTTP-POST SSO res
 - For Metadata §4 resolution, publishers must provide document integrity and consumers must validate any XML signature present. Mandatory, Metadata §4.3.3, §4.3.3.2. Server-authenticated transport is recommended, Metadata §4, §4.3.3.3.
 - Base caching of resolved metadata on `cacheDuration`. Mandatory for a consumer that caches, E94.
 - Check that an `entityID` is unique across a deployment. Mandatory for the publisher, Metadata §2.2.1.
-- Require bearer assertion replay protection when consuming a PAOS response. Mandatory, Profiles §4.2.3.8, §4.1.4.5.

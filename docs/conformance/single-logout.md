@@ -43,11 +43,12 @@
 
 ## LogoutResponse
 
-`respond_slo` on either role.
+`respond_slo` and `respond_slo_refusal` on either role.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Answer a `LogoutRequest` with a `LogoutResponse` | Mandatory | Core §3.7.2, Profiles §4.4.3.4, §4.4.3.5 | `respond_slo` |
+| Answer an authenticated newer request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version | Mandatory | Core §4.1.3.1, §4.1.3.2, Profiles §4.4.3.4, §4.4.3.5 | `respond_slo_refusal` |
 | Write `Issuer` without `Format` or with the `entity` format | Mandatory | Profiles §4.4.4.2 | Always |
 | Write `ID`, `Version` `2.0`, a UTC `IssueInstant` without a leap second, and `InResponseTo` equal to the request `ID` | Mandatory | `StatusResponseType`, Core §3.2.2, §1.3.3 | Always |
 | Sign the response on HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires the responder to authenticate by signing, so for logout it is mandatory | Mandatory | Profiles §4.4.3.4, §4.4.4.2, CD-04 §2.4 | Always |
@@ -63,6 +64,9 @@
 
 ## Logout acceptance
 
+`receive_slo` and `finish_slo` on both roles. Response recipients apply the
+shared [status code rule](web-browser-sso-acceptance.md#status-codes).
+
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Require a verified signature on a `LogoutRequest` received over HTTP-Redirect, HTTP-POST, or HTTP-POST-SimpleSign. CD-04 §2.4 makes the SimpleSign signature optional, but the profile requires authentication by signing | Mandatory | Core §3.7.3.1, §3.7.3.2, Profiles §4.4.3.1, §4.4.4.1, CD-04 §2.4 | `receive_slo` |
@@ -70,7 +74,7 @@
 | Reject an `IssueInstant` that is not a UTC `xs:dateTime` | Mandatory | Core §1.3.3 | Always |
 | Accept an `IssueInstant` with a leap second | Library policy: Core §1.3.3 binds the producer only. | Core §1.3.3 | Always |
 | Reject a `LogoutRequest` `NotOnOrAfter` the runtime clock cannot represent, a leap second included | Library policy: the expiration check fails closed on a value it cannot compare. | Core §1.3.3, §3.7.1 | Always |
-| For browser messages and SOAP requests, compare a present `Destination` with the receiving URL supplied by `with_recipient_endpoint` or inferred from the unique published endpoint for that binding and direction | Mandatory | Core §3.2.1, §3.2.2 | `SamlValidationContext::with_recipient_endpoint` |
+| For browser messages and SOAP requests, compare a present `Destination` after collapsing XML whitespace. Use the supplied receiving URL or infer the unique published endpoint for the binding and direction | Mandatory | Core §3.2.1, §3.2.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Require `Destination` on a signed message from a browser binding | Mandatory | Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
 | Accept only a receiving URL published in the local role descriptor for the binding and direction, and reject several published URLs without an explicit one | Library policy: reason not recorded. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
 | Accept a response over any of HTTP-Redirect, HTTP-POST, and HTTP-POST-SimpleSign that the local metadata publishes, after a request sent over one of them. Compare `Destination` with the local `SingleLogoutService` of the arrival binding | Optional | Profiles §4.4.3.4, §4.4.3.5 | Always |
@@ -79,6 +83,9 @@
 | Require the returned `RelayState` to equal the one the request carried, an empty value included | Library policy: Bindings §3.5.5.2 leaves the association with the form's `RelayState` unprotected under an HTTP-POST XML signature. | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Accept a `RelayState`, an empty one included, that the responder adds to a request that carried none | Optional | Bindings §3.4.3, §3.5.3, CD-04 §2.3 | Always |
 | Return a status other than `Success` as an error | Library policy: no OASIS rule orders the checks, so an unauthenticated or unrelated error response must not be reported as a status. | Core §3.2.2.2 | `finish_slo` |
+| Return the optional subordinate status code on a successful response, including `PartialLogout` | Optional | Core §3.2.2.2, §3.7.3.2 | `LogoutCompleted::response`, `LogoutResponse::status` |
+| Require exactly one direct `BaseID`, `NameID`, or `EncryptedID` child in the SAML assertion namespace on every supported binding | Mandatory | Core §3.7.1, `LogoutRequestType` | Always |
+| Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Allow the validation-context clock skew on `LogoutRequest` `NotOnOrAfter`, five minutes by default | Recommended | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew` |
 | Discard a `LogoutRequest` at or after its skew-adjusted `NotOnOrAfter` | Library policy: Core §3.7.1 only permits discarding an expired request. | Core §3.7.1 | `ClockSkew` |
 | Apply the [signature algorithm profile](xml-security-algorithms.md#weak-algorithms-and-keys) to an embedded signature and a detached `SigAlg`, including the mandatory logout signatures | Library policy: hardening beyond the default exclusions. | — | `XmlSignatureProfile::StrictRsaSha2` |
@@ -94,7 +101,6 @@
 | Encrypt with the first certificate in peer metadata whose `KeyDescriptor` has `use="encryption"` or omits `use` | Optional | Profiles §4.4.5, Metadata §2.4.1.1, E62 | `StartSlo::identifier_encryption` |
 | Process a received `EncryptedID` with the local decryption key, whatever the `XmlEncryptionPolicy`, and accept a plaintext `NameID` | Mandatory | Conformance §3.4 | Always |
 | Accept an authenticated request whose `EncryptedID` no configured key decrypts, RSA-v1.5 key transport not allowed included, without a `NameID`. A key that fails to load is an error | Library policy: Core §3.7.2 requires the recipient to answer, so an undecryptable identifier must not block the answer. | Core §3.7.2, §3.7.3.2 | Always |
-| Reject an `EncryptedID` request that also carries another `BaseID`, `NameID`, or `EncryptedID` | Mandatory | `LogoutRequestType` | Always |
 | Require the plaintext to be one `NameID` or `BaseID` in the assertion namespace. For a `BaseID`, return the authenticated request without a `NameID` | Library policy: Core §2.2.4 allows extension types, and the library cannot interpret extension element names. | Core §2.2.4 | Always |
 | Decrypt only an authenticated request, and after replay storage when a replay cache is supplied | Library policy: unauthenticated ciphertext never reaches the decryptor. | — | Always |
 | Match later assertions to the decrypted `NameID` through `OutstandingLogout` | Mandatory | Core §3.7.3.1 | `ServiceProvider::finish_sso_with_outstanding_logout` |
@@ -127,7 +133,7 @@ Typed logout send and receive use HTTP-Redirect, HTTP-POST, and HTTP-POST-Simple
 | Authenticate a received `LogoutRequest` or `LogoutResponse`. Require its XML signature unless the channel attests mutual authentication and integrity, and verify a present signature either way | Mandatory | Core §3.7.3.1, Profiles §4.4.4.1, §4.4.4.2 | `Inbound::soap`, `SoapChannel` |
 | Reject `RelayState` on a SOAP message | Library policy: the SOAP binding has no place to carry it, so a value is rejected rather than dropped. | Bindings §3.2 | `StartSlo::relay_state` |
 | Set the request `Destination` to the peer SOAP `SingleLogoutService` `Location` | Optional | Core §3.2.1 | Always |
-| Compare a present `LogoutRequest` `Destination` with the local SOAP `SingleLogoutService`, and accept a signed request without one | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2 | `SamlValidationContext::with_recipient_endpoint` |
+| Compare a present `LogoutRequest` `Destination` with the local SOAP `SingleLogoutService` after collapsing XML whitespace. Accept a signed SOAP request without it | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, XML Schema Part 2 §4.3.6 | `SamlValidationContext::with_recipient_endpoint` |
 | Omit `Destination` from the `LogoutResponse`, and reject a template that writes one | Optional | Core §3.2.2 | Always |
 | Do not compare a present `LogoutResponse` `Destination` | Library policy: a SOAP response arrives on the exchange the requester opened, so no local endpoint received it. | Core §3.2.2 | Always |
 | Publish a SOAP `SingleLogoutService`, and do not read its `ResponseLocation` | Recommended | Bindings §3.2.3.4, Profiles §4.4.5 | `SloEndpoint::soap` |

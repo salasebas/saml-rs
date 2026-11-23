@@ -147,6 +147,10 @@ impl SubordinateStatusCode {
 }
 
 /// Top-level `StatusCode` and an optional subordinate code.
+///
+/// When reading a response, the crate collapses XML whitespace in both code
+/// values. An empty top-level value returns [`SamlError::StatusMissing`].
+/// An empty subordinate value is treated as absent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
     top_level: TopLevelStatusCode,

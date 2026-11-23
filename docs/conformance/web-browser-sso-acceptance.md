@@ -1,22 +1,32 @@
 # Web Browser SSO acceptance rules
 
-Inbound rules for typed Web Browser SSO: `ServiceProvider::finish_sso`, `accept_unsolicited_sso`, and `finish_paos_sso`, and `IdentityProvider::receive_sso` and `receive_paos_sso`. `SpValidationPolicy` and `IdpValidationPolicy` select the options, and the [validation presets](https://samlrs.vercel.app/explanation/validation-presets/) page lists their defaults.
+Inbound rules for typed Web Browser SSO cover `ServiceProvider::finish_sso`,
+`ServiceProvider::accept_unsolicited_sso`, and `IdentityProvider::receive_sso`.
+`SpValidationPolicy` and `IdpValidationPolicy` select the options. The
+[validation presets](https://samlrs.vercel.app/explanation/validation-presets/)
+list their defaults.
 Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding.
-[Single Logout](single-logout.md), [metadata trust and replay](metadata-and-replay.md), [Enhanced Client/Proxy](enhanced-client-proxy.md), and [HTTP-Artifact](web-browser-sso-artifact.md) have their own records. Artifact acceptance follows the HTTP-POST rows except where the HTTP-Artifact record specifies a difference. Each row applies to its stated binding and flow. PAOS uses the pending request for correlation and carries relay state in the SOAP header.
+[Single Logout](single-logout.md), [metadata trust and replay](metadata-and-replay.md),
+and [HTTP-Artifact](web-browser-sso-artifact.md) have their own records.
+Artifact acceptance follows the HTTP-POST rows where its record specifies no
+difference.
 
 ## Service provider
 
-`finish_sso` and `accept_unsolicited_sso` apply every row that names no other entry point. `finish_paos_sso` parses its SOAP body as an HTTP-POST response and applies the same rows except those about form fields.
+`finish_sso` and `accept_unsolicited_sso` apply every row that names no other
+entry point. The SP compares a received `Issuer` as described in
+[entity identifiers](identifiers.md#entity-identifiers).
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | In the first bearer assertion, require `AuthnInstant`, exactly one direct SAML `AuthnContext`, and at most one direct SAML `SubjectLocality` in each `AuthnStatement` | Mandatory | Core §2.7.2, `AuthnStatementType` | Always |
 | Require each such `AuthnInstant` to be a UTC `xs:dateTime`. A leap second is accepted, as for `IssueInstant` | Mandatory | Core §1.3.3, §2.7.2, `AuthnStatementType` | Always |
+| Expose the context and locality of each accepted statement. Keep references and authorities in document order and collapse URI whitespace | Optional | Core §2.7.2, §2.7.2.1, §2.7.2.2 | `AuthnStatement::authn_context`, `AuthnStatement::subject_locality` |
 | Reject the whole response when a statement of the first bearer assertion breaks either rule above | Library policy: `SsoSession` reads its statements from the first bearer assertion, so the SP does not fall back to another one. | Profiles §4.1.4.3, E26 | Always |
 | Require a signature directly on each `Assertion` | Library policy: reason not recorded. | Profiles §4.1.4.5, E26 | `AssertionSignaturePolicy::RequireSigned` |
 | Require a signature covering every successful `Response` | Library policy: reason not recorded. | Profiles §4.1.4.5, E26 | `ResponseSignaturePolicy::RequireSigned` |
 | Require a signature on the `Response` when an `EncryptedAssertion` uses CBC | Recommended | Core §6.2, Profiles §4.1.3.5, E93 | `ResponseSignaturePolicy::AllowUnsignedEncryptedCbc` relaxes it |
-| For HTTP-POST and PAOS, require an XML signature on the successful `Response` or on each assertion. Several assertions need a signed `Response` or a signature on every assertion | Mandatory | Profiles §4.1.4.5, §4.2.5, E26, E93 | Always |
+| For HTTP-POST, require an XML signature on the successful `Response` or on each assertion | Mandatory | Profiles §4.1.4.5, E26, E93 | Always |
 | Verify every signature on the `Response` and on its assertions, including decrypted ones. A signature that fails rejects the response even when another verifies | Mandatory | Profiles §4.1.4.3, E26 | Always |
 | Reject MD5, RIPEMD-160, and RSA keys shorter than 2048 bits | Library policy: see [weak algorithms and keys](xml-security-algorithms.md#weak-algorithms-and-keys). | XMLDSig 1.1 §6.2, Conformance §4.1 | `XmlSignatureProfile::AllowWeakAlgorithms` relaxes it |
 | Do not require the RSA-SHA2 XML signature profile | Library policy: Conformance §4.1 requires RSAwithSHA1, and Core §5.4.4 does not require a verifier to reject other transforms. | Conformance §4.1, Core §5.4.4 | `XmlSignatureProfile::StrictRsaSha2` requires it |
@@ -31,7 +41,7 @@ Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by 
 | Resolve an `EncryptedKey` embedded in `EncryptedData` or named by a `ds:RetrievalMethod` of type `EncryptedKey` | Recommended | Core §6.2, E43 | Always |
 | Reject a `Conditions` child that is not understood | Mandatory | Core §2.5.1.1 | Always |
 | Accept `OneTimeUse` and `ProxyRestriction`. The SP keeps no assertion for later use and issues no later assertion | Mandatory | Core §2.5.1.5, §2.5.1.6 | Always |
-| Reject a bearer assertion when any `AudienceRestriction` does not name the SP's entity ID among its audiences | Mandatory | Core §2.5.1.1, §2.5.1.4, E46 | Always |
+| Reject a bearer assertion when any `AudienceRestriction` lacks the SP's entity ID among its whitespace-collapsed `Audience` values | Mandatory | Core §2.5.1.1, §2.5.1.4, E46, XML Schema Part 2 §4.3.6 | Always |
 | Require an `AudienceRestriction` in each bearer assertion | Library policy: the deployment requires explicit audience targeting. | Profiles §4.1.4.2, E26 | `AudienceValidationPolicy::RequireRestriction` |
 | Evaluate each assertion with a bearer `SubjectConfirmation` on its own: bearer confirmation, audience, and `Conditions` window | Mandatory | Profiles §4.1.4.3, E26 | Always |
 | Permit an additional non-bearer assertion alongside a confirmed bearer assertion. Apply the shared issuer, principal, conditions-child, and signature rules to it | Library policy: reason not recorded. | Profiles §4.1.4.2, E26 | Always |
@@ -43,21 +53,24 @@ Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by 
 | Reject a `Response` or `Assertion` `IssueInstant` that is not UTC. A leap second is accepted | Mandatory | Core §1.3.3 | Always |
 | Read each bearer time bound only as a UTC `xs:dateTime`: `Conditions@NotBefore` and `NotOnOrAfter`, bearer `SubjectConfirmationData@NotBefore` and `NotOnOrAfter`, and `AuthnStatement@SessionNotOnOrAfter`. A value with an offset or no time zone fails its check | Mandatory | Core §1.3.3, §2.4.1.2, §2.5.1, §2.7.2, E79 | Always |
 | Fail the check of a UTC bound that the runtime cannot compare with the clock: a year outside 0001 through 9999, `24:00:00`, or a leap second outside the last minute of a UTC month | Library policy: such a value cannot be compared with the clock. | Core §1.3.3 | Always |
-| Verify that a bearer confirmation's `NotOnOrAfter` has not passed, its `Recipient` matches the assertion consumer URL, and, for a solicited response, `InResponseTo` equals the request ID. One satisfied confirmation confirms the assertion | Mandatory | Profiles §4.1.4.3, E26 | Always |
+| Identify bearer confirmations by the bearer URI after collapsing XML whitespace in `Method`. Use the same comparison for assertion selection, confirmation, and replay expiry | Mandatory | Core §1.3.2, §2.4.1.1, `SubjectConfirmationType`, Profiles §4.1.4.3, E26 | Always |
+| Verify that a bearer confirmation's `NotOnOrAfter` has not passed and its whitespace-collapsed `Recipient` matches the assertion consumer URL. For a solicited response, also match `InResponseTo` to the request ID | Mandatory | Profiles §4.1.4.3, E26, XML Schema Part 2 §4.3.6 | Always |
+| Accept one satisfied confirmation as sufficient to confirm the assertion | Mandatory | Profiles §4.1.4.3, E26 | Always |
 | Reject a bearer confirmation without `NotOnOrAfter` | Library policy: reason not recorded. | Profiles §4.1.4.2, §4.1.4.3, E26 | Always |
 | Require a successful solicited `Response` to carry the pending request ID in `InResponseTo` | Library policy: otherwise an assertion with a matching bearer confirmation could complete a pending login inside a response whose own request correlation is missing or inconsistent. | Core §3.2.2, Profiles §4.1.4.3, E26 | Always |
 | Reject an `InResponseTo` on the bearer confirmation of an unsolicited response, empty or not | Mandatory | Profiles §4.1.4.3, E26 | Always |
 | Reject a response-level `InResponseTo` on an unsolicited `Success` response, empty or not | Library policy: Profiles §4.1.4.3 names only the bearer confirmation, and a reply tied to a request must pass the pending request's correlation checks. | Core §3.2.2, Profiles §4.1.5 | Always |
 | Reject a bearer confirmation whose `NotBefore` has not been reached, after skew. A `NotBefore` that has been reached is accepted | Mandatory | Core §2.4.1.2, Profiles §4.1.4.2, E26 | Always |
 | Reject a namespace-qualified `NotBefore` on `SubjectConfirmationData` | Library policy: it cannot be read as the SAML attribute. | Core §2.4.1.2 | Always |
+| Require `NotBefore` to precede `NotOnOrAfter` when both appear in `Conditions` or bearer `SubjectConfirmationData`. Compare the bounds before applying clock skew | Mandatory | Core §2.4.1.2, §2.5.1.1, §2.5.1.2, E92 | Always |
 | Allow five minutes of clock skew on `NotBefore` and `NotOnOrAfter` | Recommended | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew`, `ClockSkew::strict` |
 | For `Conditions` and bearer confirmation, treat an upper bound shifted past year 9999 as open and reject an unrepresentable shifted `NotBefore`. Reject an unrepresentable shifted session or replay deadline | Library policy: the runtime cannot represent the shifted instant. | Core §1.3.3, E92 | `SamlValidationContext::with_clock_skew` |
 | Reject an assertion whose earliest `SessionNotOnOrAfter`, widened by the `NotOnOrAfter` skew, has passed | Library policy: reason not recorded. | Profiles §4.1.4.3, E26, E79 | `SamlValidationContext::with_clock_skew` |
-| Reject a later assertion for the same principal and session as a caller-supplied unexpired outstanding logout. `NameID` values must match, and no `SessionIndex` matches every session | Mandatory | Core §3.3.4, §3.7.3.1 | `finish_sso_with_outstanding_logout`, `accept_unsolicited_sso_with_outstanding_logout`, `finish_paos_sso_with_outstanding_logout` |
+| Reject a later assertion for the same principal and session as a caller-supplied unexpired outstanding logout. `NameID` values must match, and no `SessionIndex` matches every session | Mandatory | Core §3.3.4, §3.7.3.1 | `finish_sso_with_outstanding_logout`, `accept_unsolicited_sso_with_outstanding_logout` |
 | Compare a typed `Format` after collapsing XML whitespace. An omitted or `unspecified` `Format` compares values only | Mandatory | Core §2.2.2, §3.3.4, E60 | Same methods |
 | Apply the `NotOnOrAfter` skew to the logout deadline, and exclude the deadline itself | Mandatory | Core §3.7.3.1 | Same methods |
 | Ignore `NameQualifier`, `SPNameQualifier`, and `SPProvidedID` when comparing the principal of an outstanding logout | Library policy: reason not recorded. | Core §3.3.4 | Always |
-| Compare a present `Destination` with the URL that received the response, and require it on a signed response. `finish_sso` compares with the pending request's assertion consumer URL | Mandatory | Core §3.2.2, Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4 | Always |
+| Compare a present `Destination` with the receiving URL after collapsing XML whitespace. Require it on a signed browser POST response. `finish_sso` uses the pending request's assertion consumer URL | Mandatory | Core §3.2.2, Bindings §3.5.5.2, CD-04 §2.4, XML Schema Part 2 §4.3.6 | Always |
 | Compare a present unsolicited `Destination` with the receiving assertion consumer URL. Each bearer assertion needs one satisfied confirmation whose `Recipient` matches that URL | Mandatory | Core §3.2.2, Profiles §4.1.3, §4.1.4.3, E26 | `SamlValidationContext::with_recipient_endpoint` |
 | Reject a supplied recipient endpoint that this SP does not publish as an `AssertionConsumerService` for the incoming binding | Library policy: the URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this SP does not operate for that binding. | Core §3.2.2 | `SamlValidationContext::with_recipient_endpoint` |
 | Without a supplied URL, expect the default `AssertionConsumerService` for the incoming binding | Library policy: the library is not told which endpoint received the response. | Profiles §4.1.5 | `SamlValidationContext::with_recipient_endpoint` |
@@ -72,6 +85,15 @@ Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by 
 | Require `SigAlg` on every SimpleSign `Response`, and `Signature` unless the status is not `Success` | Library policy: reason not recorded. | CD-04 §2.4 | Always |
 | Ignore ASCII whitespace in the message and the detached `Signature` value, and reject any other character outside the base64 alphabet | Library policy: Bindings §3.4.4.1 requires the sender to remove whitespace and §3.5.4 allows only line wrapping, so any other character means the value was altered. | Bindings §3.4.4.1, §3.5.4, RFC 2045 §6.8 | Always |
 
+### Status codes
+
+This rule applies to response recipients in SSO, Single Logout, name
+identifier management, and artifact resolution.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Collapse XML whitespace in both `StatusCode` values before comparing or reporting them | Mandatory | Core §3.2.2.2, `StatusCodeType`, [XML Schema Part 2 §4.3.6](https://www.w3.org/TR/xmlschema-2/#rf-whiteSpace) | Always |
+
 ### Not implemented in the service provider
 
 - Check of the bearer `Address` against the client address. Optional, Profiles §4.1.4.3.
@@ -81,7 +103,8 @@ Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by 
 
 ## Identity provider
 
-`receive_sso` and `receive_paos_sso` read `IdpValidationPolicy.authn_requests` and `IdpValidationPolicy.xml_signatures`.
+`receive_sso` reads `IdpValidationPolicy.authn_requests` and
+`IdpValidationPolicy.xml_signatures`.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
@@ -93,11 +116,12 @@ Normative text is SAML Core 2.0, Profiles 2.0, and Bindings 2.0 as corrected by 
 | Reject a SimpleSign `AuthnRequest` that carries only one of `Signature` and `SigAlg` | Library policy: reason not recorded. | CD-04 §2.5, §2.10 | Always |
 | Reject an `IssueInstant` that is not UTC. A leap second is accepted | Mandatory | Core §1.3.3 | Always |
 | Accept an `AuthnRequest` `IssueInstant` from now − `max_age` − past tolerance through now + future tolerance, inclusive. A positive `NotOnOrAfter` skew supplies the past tolerance, and a negative `NotBefore` skew supplies the future tolerance | Library policy: Core §1.3.3 defines no maximum age, and the limit can reject a conformant request. | Core §1.3.3 | `SamlValidationContext::with_authn_request_age`, `RequestAgePolicy::Bounded` |
-| In `receive_sso`, compare a present `Destination` with the `SingleSignOnService` `Location` that received the request, and require it on a signed request. `ResponseLocation` is unused. PAOS is in [Enhanced Client/Proxy](enhanced-client-proxy.md) | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
+| Compare a present `Destination` with the receiving `SingleSignOnService` `Location` after collapsing XML whitespace. Require it on a signed request. `ResponseLocation` is unused | Mandatory | Core §3.2.1, Bindings §3.4.5.2, §3.5.5.2, CD-04 §2.4, Metadata §2.2.2, E41 | `SamlValidationContext::with_recipient_endpoint` |
 | When checking `Destination` in `receive_sso`, reject a supplied receiving URL that is not published for the incoming binding, and several published URLs without an explicit one | Library policy: the URL is caller input, and the restriction keeps a value derived from the request from naming an endpoint this identity provider does not operate for that binding. | Core §3.2.1 | `SamlValidationContext::with_recipient_endpoint` |
-| Require `AssertionConsumerServiceURL` or `AssertionConsumerServiceIndex` to name an assertion consumer of the service provider, when the response is issued | Mandatory | Profiles §4.1.4.1 | Always |
+| When issuing a response, require the requested `AssertionConsumerServiceIndex` or `AssertionConsumerServiceURL` to name the SP's assertion consumer. Collapse XML whitespace in the URL before comparing | Mandatory | Profiles §4.1.4.1, `AuthnRequestType`, XML Schema Part 2 §4.3.6 | Always |
 | Expose `ForceAuthn`, `IsPassive`, `RequestedAuthnContext`, the requested `Subject`, and `NameIDPolicy`. Presence never rejects the request, and the caller decides how to authenticate. A `Subject` with no identifier means the presenter | Optional | Core §3.4.1, §3.4.1.1, §3.4.1.4, E45, E75 | Always |
 | Allow at most one `RequestedAuthnContext`. Require one or more assertion-namespace references, all class or all declaration. Keep them in request order, most preferred first. An optional unqualified `Comparison` is `exact`, `minimum`, `maximum`, or `better`, and defaults to `exact` | Mandatory | Core §3.3.2.2.1, E45, `RequestedAuthnContextType` | Always |
+| Read context references with XML whitespace collapsed, including relative references | Library policy: Core §1.3.2 requires absolute URI references from the producer. | Core §1.3.2, XML Schema Part 2 §4.3.6 | `AuthnRequest::requested_authn_context` |
 | Read `ForceAuthn`, `IsPassive`, and `AllowCreate` as `xs:boolean` and `AssertionConsumerServiceIndex` as `xs:unsignedShort`, with XML whitespace collapsed. Reject another value or a qualified attribute | Mandatory | `AuthnRequestType`, `NameIDPolicyType`, XML Schema Part 2 §3.2.2, §3.3.23, §4.3.6 | Always |
 | Reject a qualified `Format`, `SPNameQualifier`, or `AllowCreate` on `NameIDPolicy`, and a qualified `Format`, `NameQualifier`, `SPNameQualifier`, or `SPProvidedID` on the requested `NameID` | Mandatory | Core §2.2.2, §3.4.1.1, `NameIDType`, `NameIDPolicyType` | Always |
 | Reject a second `Subject`, a second identifier, or an identifier in a foreign namespace in a requested `Subject` | Mandatory | Core §3.4.1, `SubjectType` | Always |

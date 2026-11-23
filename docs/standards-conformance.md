@@ -28,9 +28,8 @@ for interoperability, when SOAP 1.1 allows both forms. For example:
 - Bindings §3.2.2 allows only SOAP 1.1. Under §3.2.2.1, as changed by E19,
   the requester puts one SAML request in the `Body`, and the responder returns
   one SAML response or a SOAP fault. Both narrow SOAP 1.1, so SAML governs.
-- SOAP 1.1 §§4.2.2 and 4.2.3 govern which headers a receiver processes.
-  Profiles §4.2.4 adds `actor` and `mustUnderstand` values only for the ECP
-  and PAOS headers it defines.
+- SOAP 1.1 §§4.2.2 and 4.2.3 govern which headers a receiver processes in
+  the [supported SOAP flows](conformance/artifact-resolution.md#soap-envelope-rules).
 - SOAP 1.1 §4 allows namespace-qualified elements after the `Body`. WS-I R1011
   forbids them, and rejecting them is library policy.
 - Bindings §3.2.3 lets the requester send the OASIS URI as `SOAPAction` and

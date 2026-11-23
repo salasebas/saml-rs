@@ -27,7 +27,7 @@ The identity provider writes `<Attribute>` elements with `SsoAssertion::with_att
 | Omit `AttributeStatement` when the assertion has no attributes | Mandatory | Core §2.7.3, `AttributeStatementType` | Always |
 | Omit `AttributeValue` for an attribute without values | Mandatory | Core §2.7.3.1 | Always |
 | Write each value as its own `AttributeValue` | Recommended | Core §2.7.3.1 | Always |
-| When an attribute has several values and any declares `xsi:type`, give every value the same datatype. The writer uses `xs:string` | Mandatory | Core §2.7.3.1 | Always |
+| When an attribute has several values and any declares `xsi:type`, give every value the same datatype. The writer uses `xs:string` when it declares a type | Mandatory | Core §2.7.3.1 | Always |
 | Write a `FriendlyName` only when the caller sets one, XML-escaped. Any string of XML characters is written, the empty string included | Optional | Core §2.7.3.1 | `Attribute::with_friendly_name` |
 | Write no `AttributeStatement` in an error `Response` | Mandatory | Profiles §4.1.4.2 | `SsoOutcome::Failure` |
 | Support every Core §8.2 `NameFormat` on input | Mandatory | Conformance §3.3, Core §8.2 | `Attribute::name_format` |
@@ -37,6 +37,50 @@ The identity provider writes `<Attribute>` elements with `SsoAssertion::with_att
 | Accept `Name=""`, and a `basic` name that is not an `xs:Name` | Library policy: Core §8.2.3 binds the producer, and the schema types `Name` as `xs:string`. | Core §8.2.3 | Always |
 | Report a received `NameFormat` as sent, whether or not it is an absolute URI reference | Library policy: Core §1.3.2 binds the writer. | Core §1.3.2 | Always |
 | Merge `<Attribute>` elements with the same `Name` and `NameFormat` into one `Attribute`, in document order, whatever their `FriendlyName` values. Treat an omitted `NameFormat` as `unspecified`, and report the `NameFormat` and `FriendlyName` of the first element | Library policy: E49 identifies an attribute by `NameFormat` and `Name` together, and the standard does not define how repeated elements combine. | Core §2.7.3.1, E49 | Always |
+
+## Subject identifier attributes
+
+The [Subject Identifier Attributes Profile](https://docs.oasis-open.org/security/saml-subject-id-attr/v1.0/cs01/saml-subject-id-attr-v1.0-cs01.html)
+defines a general-purpose identifier in §3.3 and a pairwise identifier in
+§3.4. Both use the same syntax.
+
+### Identity provider
+
+The identity provider writes these attributes with `SsoAssertion::with_attributes`.
+`Attribute::from(SubjectId)` and `Attribute::from(PairwiseId)` supply the profile
+name and format.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Write the profile's `subject-id` or `pairwise-id` name with the `uri` `NameFormat` | Mandatory | Subject Identifier §3.3, §3.4 | `SsoAssertion::with_attributes` |
+| Write each of these attributes at most once per assertion, with exactly one value | Mandatory | Subject Identifier §3.2, §3.3.1, §3.4.1 | Always |
+| Write a `uniqueID@scope` value. Each part starts with an ASCII letter or digit and has 1 to 127 characters. The unique ID also allows `=` and `-`. The scope also allows `-` and `.` | Mandatory | Subject Identifier §3.3.1, §3.4.1 | `SubjectId::try_new`, `PairwiseId::try_new` |
+| Omit `xsi:type` from these values | Recommended | Subject Identifier §3.3.1, §3.4.1 | Always |
+| Write the scope in lowercase | Recommended | Subject Identifier §3.3.1, §3.5.2 | Always |
+| Write the unique ID entirely in uppercase or entirely in lowercase | Recommended | Subject Identifier §3.3.1, §3.4.1 | Always |
+| Bind a value to one subject and never reassign it. For a pairwise value, keep it stable within each relying party, vary it across relying parties, and prevent mapping to a non-pairwise identifier | Mandatory | Subject Identifier §3.3.2, §3.4.2 | Caller |
+
+`PairwiseId` documents a derivation that uses lowercase hexadecimal. The
+profile warns against Base64 because identifier equality ignores case.
+
+### Service provider
+
+`SsoSession::subject_id` and `SsoSession::pairwise_id` interpret the attributes
+in an accepted assertion. The raw values remain in `SsoSession::attributes`.
+
+| Rule | Level | Section | Option |
+| --- | --- | --- | --- |
+| Match each attribute by its profile name and the `uri` format. Also accept an omitted or `unspecified` format for that name | Library policy: this follows the URI attribute mapping in Shibboleth SP. | Subject Identifier §3.3, §3.4, Core §2.7.3.1 | Always |
+| Remove leading and trailing XML whitespace before parsing an identifier value | Mandatory | Subject Identifier §3.3.1, §3.4.1 | Always |
+| Compare identifier values without regard to ASCII case. The value returned by `as_str` preserves its case | Mandatory | Subject Identifier §3.3.1, §3.4.1 | Always |
+| Require exactly one value across matching attributes, in the profile grammar, when the caller reads the identifier | Library policy: the typed accessor needs one identifier. | Subject Identifier §3.2, §3.3.1 | `SsoSession::subject_id`, `SsoSession::pairwise_id` |
+| Read a received identifier by its text regardless of `xsi:type` | Library policy: the type requirement applies to the producer. | Subject Identifier §3.3.1 | Always |
+
+Neither conformance clause of the profile is claimed. The identity provider
+cannot publish `<shibmd:Scope>` (§4.1). The service provider publishes
+[`subject-id:req`](metadata-and-replay.md#entity-attributes), and the caller
+owns scope authorization because the crate cannot filter by `<shibmd:Scope>`
+(§3.5.2 and §4.2).
 
 ## Name identifier formats
 
@@ -87,6 +131,8 @@ The identity provider and service provider write their own `entityID` and `Issue
 | --- | --- | --- | --- |
 | Reject an own entity identifier that is not an absolute URI reference of at most 1024 characters | Mandatory | Core §8.3.6, §1.3.2, Metadata §2.2.1 | `SpConfigBuilder::build`, `IdpConfigBuilder::build`, `generate_sp_metadata`, `generate_idp_metadata` |
 | Reject an own entity identifier that the `anyURI` whitespace collapse would change | Library policy: an `Issuer` is an `xs:string` that a peer reads without collapsing it. | Core §8.3.6 | Always |
+| Compare a received `Issuer` with the expected entity ID exactly, including in SOAP | Mandatory | Core §1.3.1, `NameIDType` | Always |
+| Read an `Issuer`'s `Format` with [XML Schema whitespace collapse](https://www.w3.org/TR/xmlschema-2/#rf-whiteSpace) where the flow checks that format | Mandatory | `NameIDType`, XML Schema Part 2 §4.3.6 | Always |
 | Accept a peer entity identifier that is not an absolute URI reference or is longer than 1024 characters | Library policy: Core §8.3.6 and §1.3.2 bind the writer, so `EntityId::try_new` rejects only a value without a non-whitespace character. | Core §8.3.6, Metadata §2.2.1 | `EntityId::try_new` |
 
 ## Generated message and assertion identifiers

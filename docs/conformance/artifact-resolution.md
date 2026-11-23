@@ -49,12 +49,13 @@ Browser delivery of a Web SSO artifact is in [HTTP-Artifact response](web-browse
 | Answer an understood `ArtifactResolve` with status Success, and omit the message for an unauthorized presenter or an artifact that is not outstanding | Mandatory | Bindings §3.6.6, Core §3.5.3, Profiles §5.3.2 | Always |
 | Reject an unsupported major request version | Mandatory | Core §4.1.3.1 | Always |
 | Reject a higher minor request version | Optional | Core §4.1.3.1 | Always |
-| Report an incompatible request version with top-level `VersionMismatch`, and keep the artifact outstanding | Mandatory | Core §4.1.3.2 | Always |
+| Answer a newer request version with `VersionMismatch`. Add `RequestVersionTooHigh` for a newer major version and keep the artifact outstanding | Mandatory | Core §4.1.3.2 | Always |
+| Return an error for an older request version that forbids a SAML 2.0 response | Mandatory | Core §4.1.3.2 | Always |
 | Return the message only to the service provider it was issued to, authenticated by `SoapChannel` | Mandatory | Core §3.5.3, Bindings §3.6.5.2, Profiles §4.1.4.4 | Always |
-| Treat a missing `Issuer`, or one whose `Format` is not omitted or `entity`, as an unauthorized presenter | Library policy: the presenter check compares that `Issuer` with the service provider the artifact was issued to. | Profiles §5.4.1, Bindings §3.6.6 | Always |
+| Treat a missing or different `Issuer`, or one with a format other than omitted or `entity`, as an unauthorized presenter | Library policy: the presenter check ties the request to the service provider the artifact was issued to. | Profiles §5.4.1, Bindings §3.6.6 | Always |
 | Return the stored message at most once | Mandatory | Core §3.5.3, Bindings §3.6.5.2 | Always |
 | Keep an outstanding artifact after withholding its message | Library policy: the intended recipient can still resolve it within its lifetime. | Core §3.5.3 | Always |
-| Withhold the message when a present `Destination` is not this endpoint | Mandatory | Core §3.2.1 | Always |
+| Withhold the message when a present `Destination`, after XML whitespace collapse, differs from this endpoint | Mandatory | Core §3.2.1, `RequestAbstractType`, XML Schema Part 2 §4.3.6 | Always |
 | Expire the artifact after the configured lifetime. The issuer should choose the shortest practical lifetime | Recommended | Core §3.5.3 | `IssuedArtifacts::expire_after` |
 | Include the artifact issuer's entity ID in `Issuer` and omit `Format` or set it to `entity` | Mandatory | Profiles §5.4.2 | Always |
 | Set `InResponseTo` to the request `ID` | Mandatory | Core §3.2.2, §3.5.3 | Always |
@@ -73,6 +74,10 @@ Profiles §4.1.4.4 governs a Web Browser SSO `<Response>` delivered by artifact.
 
 `ArtifactResolution::finish` and `ServiceProvider::resolve_artifact` are the requester.
 
+Both parties read `Issuer` as described in [entity identifiers](identifiers.md#entity-identifiers).
+The requester reads the [status codes](web-browser-sso-acceptance.md#status-codes)
+using XML Schema whitespace collapse.
+
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |
 | Reject a SOAP body that is not an `ArtifactResponse` | Mandatory | Core §3.5.2 | Always |
@@ -87,7 +92,11 @@ Profiles §4.1.4.4 governs a Web Browser SSO `<Response>` delivered by artifact.
 
 ## SOAP envelope rules
 
-`SoapRequest`, `SoapResponse`, and `SoapProtocolMessage::from_envelope` write and read the envelope for artifact resolution, [Single Logout](single-logout.md#soap-binding), [name identifier management](name-id-management.md), and the SOAP side of [ECP](enhanced-client-proxy.md). SAML narrows SOAP 1.1 where a row says so. SAML is silent on `actor` and `mustUnderstand`, so SOAP 1.1 governs them.
+`SoapRequest`, `SoapResponse`, and `SoapProtocolMessage::from_envelope`
+write and read envelopes for artifact resolution,
+[Single Logout](single-logout.md#soap-binding), and
+[name identifier management](name-id-management.md). SOAP 1.1 governs
+`actor` and `mustUnderstand` in these flows.
 
 | Rule | Level | Section | Option |
 | --- | --- | --- | --- |

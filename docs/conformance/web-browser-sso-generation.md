@@ -1,6 +1,6 @@
 # Web Browser SSO generation rules
 
-`ServiceProvider::start_sso` writes the `AuthnRequest`. `IdentityProvider::respond_sso`, `initiate_sso`, `respond_sso_artifact`, and `initiate_sso_artifact` write the `Response`, and `respond_paos_sso` writes the same assertion for ECP (Profiles §4.2.3.6).
+`ServiceProvider::start_sso` writes the `AuthnRequest`. `IdentityProvider::respond_sso`, `initiate_sso`, `respond_sso_artifact`, and `initiate_sso_artifact` write the `Response`.
 
 Normative text is Core, Profiles, and Bindings 2.0 as corrected by Approved Errata 05, and the HTTP-POST-SimpleSign CD-04 binding. [HTTP-Artifact response](web-browser-sso-artifact.md) covers delivery of a stored response, and [acceptance rules](web-browser-sso-acceptance.md) cover the receiving side. [Validation presets](https://samlrs.vercel.app/explanation/validation-presets/) list the defaults of the options below.
 

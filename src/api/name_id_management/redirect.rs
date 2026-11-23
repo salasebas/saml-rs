@@ -104,9 +104,11 @@ impl ServiceProvider {
     /// of later assertions. An `EncryptedID` or `NewEncryptedID` is decrypted
     /// with this service provider's decryption key. A
     /// [`NameIdManagementReceipt::Refused`] already carries the browser
-    /// action that answers the request: one of those elements does not
-    /// decrypt, or the `Version` is not `2.0`. That action goes to the
-    /// identity provider's `ManageNameIDService` under `options`.
+    /// action that answers the request. It reports a decryption failure, a
+    /// request outside the configured age window, or an unsupported newer
+    /// version. A newer major version adds `RequestVersionTooHigh` to
+    /// `VersionMismatch`. The action goes to the identity provider's
+    /// `ManageNameIDService` under `options`.
     ///
     /// # Errors
     ///
@@ -116,8 +118,7 @@ impl ServiceProvider {
     /// HTTP-Redirect `ManageNameIDService` or several without
     /// [`SamlValidationContext::with_recipient_endpoint`], the message is
     /// malformed, its version is too low for a SAML 2.0 response, or replay
-    /// validation detects a duplicate. A request that falls outside the
-    /// configured age window returns [`NameIdManagementReceipt::Refused`]. Returns
+    /// validation detects a duplicate. Returns
     /// [`SamlError::ProtocolProfile`] when a refused request would be answered
     /// at an `http` endpoint and
     /// [`ReceiveNameIdManagement::allow_http`] is not
